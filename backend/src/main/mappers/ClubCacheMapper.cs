@@ -1,6 +1,6 @@
-using backend.main.models.enums;
-using backend.main.models.core;
 using backend.main.dtos;
+using backend.main.models.core;
+using backend.main.models.enums;
 
 namespace backend.main.Mappers
 {

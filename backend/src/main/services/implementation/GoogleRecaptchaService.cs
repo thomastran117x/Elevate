@@ -1,6 +1,8 @@
 using System.Text.Json;
-using backend.main.services.interfaces;
+
 using backend.main.dtos.responses.external;
+using backend.main.services.interfaces;
+
 using Polly.CircuitBreaker;
 
 namespace backend.main.services.implementations

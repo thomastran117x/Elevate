@@ -5,21 +5,39 @@ namespace backend.main.dtos.responses.external
     public class TurnstileSiteverifyResponse
     {
         [JsonPropertyName("success")]
-        public bool Success { get; set; }
+        public bool Success
+        {
+            get; set;
+        }
 
         [JsonPropertyName("challenge_ts")]
-        public string? ChallengeTs { get; set; }
+        public string? ChallengeTs
+        {
+            get; set;
+        }
 
         [JsonPropertyName("hostname")]
-        public string? Hostname { get; set; }
+        public string? Hostname
+        {
+            get; set;
+        }
 
         [JsonPropertyName("error-codes")]
-        public string[]? ErrorCodes { get; set; }
+        public string[]? ErrorCodes
+        {
+            get; set;
+        }
 
         [JsonPropertyName("action")]
-        public string? Action { get; set; }
+        public string? Action
+        {
+            get; set;
+        }
 
         [JsonPropertyName("cdata")]
-        public string? Cdata { get; set; }
+        public string? Cdata
+        {
+            get; set;
+        }
     }
 }

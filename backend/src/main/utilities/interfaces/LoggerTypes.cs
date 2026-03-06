@@ -10,7 +10,10 @@ namespace backend.main.utilities.interfaces
 
     public sealed class LoggerOptions
     {
-        public bool EnableFileLogging { get; set; }
+        public bool EnableFileLogging
+        {
+            get; set;
+        }
         public LogLevel MinFileLevel { get; set; } = LogLevel.Warn;
         public string LogDirectory { get; set; } = "";
         public bool UseUtcTimestamps { get; set; } = true;

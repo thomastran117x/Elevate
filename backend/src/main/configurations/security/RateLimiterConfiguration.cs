@@ -1,11 +1,13 @@
 using System.Security.Claims;
 using System.Threading.RateLimiting;
+
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace backend.main.configurations.security
-{    public static class RateLimiterConfiguration
+{
+    public static class RateLimiterConfiguration
     {
         private const int PermitLimit = 100;
         private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);

@@ -2,10 +2,22 @@ namespace backend.main.models.other
 {
     public class OAuthUser
     {
-        public string Id { get; set; }
-        public string Email { get; set; }
-        public string Name { get; set; }
-        public string Provider { get; set; }
+        public string Id
+        {
+            get; set;
+        }
+        public string Email
+        {
+            get; set;
+        }
+        public string Name
+        {
+            get; set;
+        }
+        public string Provider
+        {
+            get; set;
+        }
         public OAuthUser(string Id, string Email, string Name, string Provider)
         {
             this.Id = Id;

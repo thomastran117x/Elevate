@@ -1,6 +1,6 @@
-using backend.main.repositories.interfaces;
-using backend.main.models.core;
 using backend.main.configurations.resource.database;
+using backend.main.models.core;
+using backend.main.repositories.interfaces;
 
 using Microsoft.EntityFrameworkCore;
 

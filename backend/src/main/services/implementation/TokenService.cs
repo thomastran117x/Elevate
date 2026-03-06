@@ -3,15 +3,15 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 
+using backend.main.configurations.environment;
 using backend.main.exceptions.http;
+using backend.main.models.core;
 using backend.main.services.interfaces;
+using backend.main.utilities.implementation;
 
 using Microsoft.IdentityModel.Tokens;
 
 using Newtonsoft.Json;
-using backend.main.configurations.environment;
-using backend.main.models.core;
-using backend.main.utilities.implementation;
 
 namespace backend.main.services.implementation
 {

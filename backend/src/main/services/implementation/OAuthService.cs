@@ -1,16 +1,15 @@
 using System.IdentityModel.Tokens.Jwt;
 
-using backend.main.services.interfaces;
+using backend.main.configurations.environment;
 using backend.main.exceptions.http;
-
+using backend.main.models.other;
+using backend.main.services.interfaces;
 
 using Google.Apis.Auth;
 
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
-using backend.main.models.other;
-using backend.main.configurations.environment;
 
 namespace backend.main.services.implementation
 {

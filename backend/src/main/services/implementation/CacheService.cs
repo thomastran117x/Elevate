@@ -1,6 +1,6 @@
 
-using backend.main.services.interfaces;
 using backend.main.configurations.resource.redis;
+using backend.main.services.interfaces;
 
 using StackExchange.Redis;
 

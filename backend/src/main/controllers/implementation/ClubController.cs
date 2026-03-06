@@ -1,14 +1,14 @@
-using backend.main.models.other;
+using backend.main.configurations.security;
 using backend.main.dtos.requests.club;
 using backend.main.dtos.responses.club;
 using backend.main.dtos.responses.general;
-using backend.main.services.interfaces;
 using backend.main.models.core;
+using backend.main.models.other;
+using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using backend.main.configurations.security;
 
 namespace backend.main.implementation.controllers
 {

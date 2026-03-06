@@ -1,14 +1,14 @@
+using backend.main.configurations.security;
 using backend.main.dtos.requests.events;
 using backend.main.dtos.responses.events;
 using backend.main.dtos.responses.general;
 using backend.main.exceptions.http;
-using backend.main.services.interfaces;
 using backend.main.Mappers;
+using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using backend.main.configurations.security;
 
 namespace backend.main.implementation.controllers
 {

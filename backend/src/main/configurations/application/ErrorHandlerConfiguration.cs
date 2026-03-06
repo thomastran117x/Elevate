@@ -47,5 +47,5 @@ namespace backend.main.configurations.application
                 await context.Response.WriteAsJsonAsync(result?.Value);
             }
         }
-    } 
+    }
 }

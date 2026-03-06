@@ -1,9 +1,9 @@
-using backend.main.utilities.implementation;
-using backend.main.utilities.interfaces;
-using backend.main.configurations.security;
+using backend.main.configurations.application;
 using backend.main.configurations.resource.database;
 using backend.main.configurations.resource.redis;
-using backend.main.configurations.application;
+using backend.main.configurations.security;
+using backend.main.utilities.implementation;
+using backend.main.utilities.interfaces;
 
 using Serilog;
 

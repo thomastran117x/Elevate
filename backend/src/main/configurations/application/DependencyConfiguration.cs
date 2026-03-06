@@ -1,11 +1,11 @@
+using backend.main.publishers.implementation;
+using backend.main.publishers.interfaces;
 using backend.main.repositories.implementation;
 using backend.main.repositories.interfaces;
 using backend.main.services.implementation;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
 using backend.main.utilities.interfaces;
-using backend.main.publishers.interfaces;
-using backend.main.publishers.implementation;
 
 namespace backend.main.configurations.application
 {

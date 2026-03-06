@@ -1,11 +1,13 @@
 using System.Net;
+
+using backend.main.services.implementations;
+using backend.main.services.interfaces;
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 
-using backend.main.services.interfaces;
-using backend.main.services.implementations;
 using Polly;
 
 namespace backend.main.configurations.application
@@ -70,11 +72,15 @@ namespace backend.main.configurations.application
                                 return ValueTask.FromResult(true);
 
                             var resp = outcome.Result;
-                            if (resp is null) return ValueTask.FromResult(false);
+                            if (resp is null)
+                                return ValueTask.FromResult(false);
 
-                            if ((int)resp.StatusCode >= 500) return ValueTask.FromResult(true);
-                            if (resp.StatusCode == HttpStatusCode.RequestTimeout) return ValueTask.FromResult(true);
-                            if (resp.StatusCode == HttpStatusCode.TooManyRequests) return ValueTask.FromResult(true);
+                            if ((int)resp.StatusCode >= 500)
+                                return ValueTask.FromResult(true);
+                            if (resp.StatusCode == HttpStatusCode.RequestTimeout)
+                                return ValueTask.FromResult(true);
+                            if (resp.StatusCode == HttpStatusCode.TooManyRequests)
+                                return ValueTask.FromResult(true);
 
                             return ValueTask.FromResult(false);
                         },
@@ -115,10 +121,13 @@ namespace backend.main.configurations.application
                                 return ValueTask.FromResult(true);
 
                             var resp = outcome.Result;
-                            if (resp is null) return ValueTask.FromResult(false);
+                            if (resp is null)
+                                return ValueTask.FromResult(false);
 
-                            if ((int)resp.StatusCode >= 500) return ValueTask.FromResult(true);
-                            if (resp.StatusCode == HttpStatusCode.RequestTimeout) return ValueTask.FromResult(true);
+                            if ((int)resp.StatusCode >= 500)
+                                return ValueTask.FromResult(true);
+                            if (resp.StatusCode == HttpStatusCode.RequestTimeout)
+                                return ValueTask.FromResult(true);
 
                             return ValueTask.FromResult(false);
                         },
