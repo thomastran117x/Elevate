@@ -1,167 +1,103 @@
 using System.Net;
-
-using backend.main.services.implementations;
-using backend.main.services.interfaces;
-
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
+using backend.main.http;
 using Microsoft.Extensions.Http.Resilience;
-using Microsoft.Extensions.Logging;
-
 using Polly;
 
 namespace backend.main.configurations.application
 {
     public static class WebConfiguration
     {
-        private const string CaptchaPipelineName = "captcha-pipeline";
+        private const string ResiliencePipeline = "external-api-pipeline";
 
         public static IServiceCollection AddWebConfiguration(
             this IServiceCollection services,
-            IConfiguration config)
+            IConfiguration config
+        )
         {
-            services.AddCaptchaClient(config);
+            services.AddExternalApiClient(config);
             return services;
         }
 
-        private static IServiceCollection AddCaptchaClient(
+        private static void AddExternalApiClient(
             this IServiceCollection services,
-            IConfiguration config)
+            IConfiguration config
+        )
         {
-            var captchaTimeoutSeconds =
-                config.GetValue<int?>("GoogleCaptcha:TimeoutSeconds") ?? 5;
+            var timeoutSeconds = config.GetValue<int?>("ExternalApi:TimeoutSeconds") ?? 10;
 
-            var retries =
-                config.GetValue<int?>("GoogleCaptcha:Retry:Count") ?? 2;
+            var maxRetries = config.GetValue<int?>("ExternalApi:Retry:MaxAttempts") ?? 3;
 
-            var retryBaseDelayMs =
-                config.GetValue<int?>("GoogleCaptcha:Retry:BaseDelayMs") ?? 200;
-
-            var failuresBeforeBreak =
-                config.GetValue<int?>("GoogleCaptcha:Breaker:FailuresBeforeBreak") ?? 5;
-
-            var breakSeconds =
-                config.GetValue<int?>("GoogleCaptcha:Breaker:BreakSeconds") ?? 45;
+            var baseDelayMs = config.GetValue<int?>("ExternalApi:Retry:BaseDelayMs") ?? 200;
 
             services
-                .AddHttpClient<ICaptchaService, GoogleCaptchaService>(client =>
+                .AddHttpClient<IExternalApiClient, ExternalApiClient>(client =>
                 {
-                    client.BaseAddress = new Uri("https://www.google.com/");
-                    client.Timeout = TimeSpan.FromSeconds(captchaTimeoutSeconds);
+                    client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
                 })
-                .AddResilienceHandler(CaptchaPipelineName, (builder, context) =>
-                {
-                    var loggerFactory = context.ServiceProvider.GetRequiredService<ILoggerFactory>();
-                    var logger = loggerFactory.CreateLogger("CaptchaHttpClient");
-
-                    builder.AddRetry(new HttpRetryStrategyOptions
+                .AddResilienceHandler(
+                    ResiliencePipeline,
+                    (builder, context) =>
                     {
-                        MaxRetryAttempts = retries,
-                        Delay = TimeSpan.FromMilliseconds(retryBaseDelayMs),
-                        BackoffType = DelayBackoffType.Linear,
-                        UseJitter = true,
+                        var loggerFactory =
+                            context.ServiceProvider.GetRequiredService<ILoggerFactory>();
+                        var logger = loggerFactory.CreateLogger("ExternalApiClient");
 
-                        ShouldHandle = static args =>
-                        {
-                            var outcome = args.Outcome;
+                        builder.AddRetry(
+                            new HttpRetryStrategyOptions
+                            {
+                                MaxRetryAttempts = maxRetries,
+                                Delay = TimeSpan.FromMilliseconds(baseDelayMs),
+                                BackoffType = DelayBackoffType.Exponential,
+                                UseJitter = true,
 
-                            if (outcome.Exception is HttpRequestException)
-                                return ValueTask.FromResult(true);
+                                ShouldHandle = static args =>
+                                {
+                                    var outcome = args.Outcome;
 
-                            if (outcome.Exception is TaskCanceledException)
-                                return ValueTask.FromResult(true);
+                                    if (
+                                        outcome.Exception
+                                        is HttpRequestException
+                                            or TaskCanceledException
+                                    )
+                                        return ValueTask.FromResult(true);
 
-                            var resp = outcome.Result;
-                            if (resp is null)
-                                return ValueTask.FromResult(false);
+                                    var resp = outcome.Result;
+                                    if (resp is null)
+                                        return ValueTask.FromResult(false);
 
-                            if ((int)resp.StatusCode >= 500)
-                                return ValueTask.FromResult(true);
-                            if (resp.StatusCode == HttpStatusCode.RequestTimeout)
-                                return ValueTask.FromResult(true);
-                            if (resp.StatusCode == HttpStatusCode.TooManyRequests)
-                                return ValueTask.FromResult(true);
+                                    if ((int)resp.StatusCode >= 500)
+                                        return ValueTask.FromResult(true);
+                                    if (resp.StatusCode == HttpStatusCode.RequestTimeout)
+                                        return ValueTask.FromResult(true);
+                                    if (resp.StatusCode == HttpStatusCode.TooManyRequests)
+                                        return ValueTask.FromResult(true);
 
-                            return ValueTask.FromResult(false);
-                        },
+                                    return ValueTask.FromResult(false);
+                                },
 
-                        OnRetry = args =>
-                        {
-                            var reason =
-                                args.Outcome.Exception?.Message ??
-                                (args.Outcome.Result is not null ? $"HTTP {(int)args.Outcome.Result.StatusCode}" : "Unknown");
+                                OnRetry = args =>
+                                {
+                                    var reason =
+                                        args.Outcome.Exception?.Message
+                                        ?? (
+                                            args.Outcome.Result is not null
+                                                ? $"HTTP {(int)args.Outcome.Result.StatusCode}"
+                                                : "Unknown"
+                                        );
 
-                            logger.LogWarning(
-                                "[Captcha] Retry {Attempt} after {Delay}ms due to {Reason}",
-                                args.AttemptNumber,
-                                (int)args.RetryDelay.TotalMilliseconds,
-                                reason
-                            );
+                                    logger.LogWarning(
+                                        "[ExternalApi] Retry {Attempt} after {Delay}ms — {Reason}",
+                                        args.AttemptNumber,
+                                        (int)args.RetryDelay.TotalMilliseconds,
+                                        reason
+                                    );
 
-                            return ValueTask.CompletedTask;
-                        }
-                    });
-
-                    builder.AddCircuitBreaker(new HttpCircuitBreakerStrategyOptions
-                    {
-                        FailureRatio = 1.0,
-                        MinimumThroughput = failuresBeforeBreak,
-                        SamplingDuration = TimeSpan.FromSeconds(30),
-
-                        BreakDuration = TimeSpan.FromSeconds(breakSeconds),
-
-                        ShouldHandle = static args =>
-                        {
-                            var outcome = args.Outcome;
-
-                            if (outcome.Exception is HttpRequestException)
-                                return ValueTask.FromResult(true);
-
-                            if (outcome.Exception is TaskCanceledException)
-                                return ValueTask.FromResult(true);
-
-                            var resp = outcome.Result;
-                            if (resp is null)
-                                return ValueTask.FromResult(false);
-
-                            if ((int)resp.StatusCode >= 500)
-                                return ValueTask.FromResult(true);
-                            if (resp.StatusCode == HttpStatusCode.RequestTimeout)
-                                return ValueTask.FromResult(true);
-
-                            return ValueTask.FromResult(false);
-                        },
-
-                        OnOpened = args =>
-                        {
-                            var reason =
-                                args.Outcome.Exception?.Message ??
-                                (args.Outcome.Result is not null ? $"HTTP {(int)args.Outcome.Result.StatusCode}" : "Unknown");
-
-                            logger.LogError(
-                                "[Captcha] Circuit OPEN for {BreakSeconds}s. Last failure: {Reason}",
-                                (int)args.BreakDuration.TotalSeconds,
-                                reason
-                            );
-
-                            return ValueTask.CompletedTask;
-                        },
-
-                        OnClosed = _ =>
-                        {
-                            logger.LogInformation("[Captcha] Circuit RESET. Resuming calls.");
-                            return ValueTask.CompletedTask;
-                        },
-
-                        OnHalfOpened = _ =>
-                        {
-                            logger.LogInformation("[Captcha] Circuit HALF-OPEN. Testing a request.");
-                            return ValueTask.CompletedTask;
-                        }
-                    });
-                });
-
-            return services;
+                                    return ValueTask.CompletedTask;
+                                },
+                            }
+                        );
+                    }
+                );
         }
     }
 }

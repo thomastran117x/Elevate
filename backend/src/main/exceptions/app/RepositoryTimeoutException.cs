@@ -1,6 +1,6 @@
 using backend.main.exceptions.http;
 
-namespace backend.main.errors.app
+namespace backend.main.exceptions.app
 {
     public class RepositoryTimeoutException : GatewayTimeoutException
     {

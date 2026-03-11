@@ -1,7 +1,9 @@
+using backend.main.attributes.repository;
 using backend.main.publishers.implementation;
 using backend.main.publishers.interfaces;
 using backend.main.repositories.implementation;
 using backend.main.repositories.interfaces;
+using backend.main.repositories.resilience;
 using backend.main.services.implementation;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
@@ -13,6 +15,8 @@ namespace backend.main.configurations.application
     {
         public static IServiceCollection AddApplicationServices(this IServiceCollection services)
         {
+            services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
+            services.AddSingleton<IRepositoryAttributeResolver, RepositoryAttributeResolver>();
             services.AddScoped<IFollowRepository, FollowRepository>();
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IClubRepository, ClubRepository>();

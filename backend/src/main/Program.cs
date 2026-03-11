@@ -4,7 +4,6 @@ using backend.main.configurations.resource.redis;
 using backend.main.configurations.security;
 using backend.main.utilities.implementation;
 using backend.main.utilities.interfaces;
-
 using Serilog;
 
 Logger.Configure(o =>
@@ -12,14 +11,19 @@ Logger.Configure(o =>
     o.EnableFileLogging = true;
     o.MinFileLevel = backend.main.utilities.interfaces.LogLevel.Warn;
     o.LogDirectory = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "logs"));
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "logs")
+    );
 });
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton(Logger.GetOptions());
 
-builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.AddServerHeader = false;
+    options.Limits.MaxRequestBodySize = 1_048_576; // 1 MB
+});
 
 var port = builder.ConfigureServerUrls();
 
@@ -32,6 +36,7 @@ builder.Services.AddControllersWithViews(options =>
 
 builder.Services.AddApplicationServices();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddClientRequestInspection();
 
 builder.Services.AddAppDatabase(builder.Configuration);
 builder.Services.AddAppRedis(builder.Configuration);
@@ -40,6 +45,8 @@ builder.Services.AddJwtAuth(builder.Configuration);
 builder.Services.AddCustomCors(builder.Configuration);
 builder.Services.AddCustomCsrf();
 builder.Services.AddInMemoryRateLimiter();
+builder.Services.AddCustomRequestTimeouts();
+builder.Services.AddForwardedHeaders();
 
 builder.Services.AddWebConfiguration(builder.Configuration);
 
@@ -49,9 +56,15 @@ Logger.SetInstance(app.Services.GetRequiredService<ICustomLogger>());
 
 await DatabaseConfig.VerifyDatabaseConnectionAsync(app.Services);
 
+app.UseForwardedHeaders();
+
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
+app.UseRequestId();
+
 app.UseRouting();
+
+app.UseRequestTimeouts();
 
 app.UseRateLimiter();
 
@@ -79,7 +92,7 @@ app.UseRefreshCsrfValidation();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.UseStaticFiles();
+app.UseClientRequestInspection();
 
 app.MapControllers();
 
