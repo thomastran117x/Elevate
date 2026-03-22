@@ -1,0 +1,48 @@
+name: Claude PR Review (API)
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+concurrency:
+  group: claude-pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false && github.event.label.name == 'ai-review'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Call Claude PR Review API
+        env:
+          API_URL: ${{ secrets.CLAUDE_REVIEW_API_URL }}
+          API_KEY: ${{ secrets.CLAUDE_REVIEW_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          RESPONSE=$(curl -sf \
+            --max-time 120 \
+            -X POST "$API_URL/api/review" \
+            -H "Authorization: Bearer $API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"anthropic_api_key\": \"$ANTHROPIC_API_KEY\",
+              \"pr_url\": \"$PR_URL\",
+              \"post_comment\": true
+            }")
+
+          echo "Review status: $(echo "$RESPONSE" | jq -r '.status')"
+          echo "Files reviewed: $(echo "$RESPONSE" | jq -r '.metadata.files_reviewed')"
+          echo "Inline comments posted: $(echo "$RESPONSE" | jq -r '.metadata.inline_comments_posted')"
+
+          STATUS=$(echo "$RESPONSE" | jq -r '.status')
+          if [ "$STATUS" = "FAIL" ]; then
+            echo "::error::Claude marked this PR as FAIL. Please address the issues before merging."
+            exit 1
+          elif [ "$STATUS" = "OK" ]; then
+            echo "::warning::Claude marked this PR as OK — improvements recommended but not blocking."
+          else
+            echo "Claude marked this PR as PASS. ✅"
+          fi
