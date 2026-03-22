@@ -30,7 +30,7 @@ namespace backend.main.services.implementations
             var secret = config["Turnstile:Secret"] ?? config["CLOUDFLARE_TURNSTILE_SECRET"] ?? config["TURNSTILE_SECRET"];
             if (string.IsNullOrWhiteSpace(secret))
             {
-                throw new NotAvaliableException(
+                throw new NotAvailableException(
                     "Cloudflare Turnstile secret is not configured. Set one of: Turnstile:Secret, CLOUDFLARE_TURNSTILE_SECRET, or TURNSTILE_SECRET.");
             }
             _secret = secret;

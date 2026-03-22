@@ -2,7 +2,7 @@ using backend.main.exceptions.http;
 
 namespace backend.main.exceptions.app
 {
-    public class RepositoryUnavailableException : NotAvaliableException
+    public class RepositoryUnavailableException : NotAvailableException
     {
         private const string DefaultMessage = "The database is temporarily unavailable.";
 

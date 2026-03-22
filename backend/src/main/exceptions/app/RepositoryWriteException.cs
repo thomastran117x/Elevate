@@ -2,7 +2,7 @@ using backend.main.exceptions.http;
 
 namespace backend.main.exceptions.app
 {
-    public class RepositoryWriteException : NotAvaliableException
+    public class RepositoryWriteException : NotAvailableException
     {
         private const string DefaultMessage = "Unable to write to the database.";
 

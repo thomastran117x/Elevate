@@ -50,7 +50,7 @@ namespace backend.main.services.implementation
         public async Task<OAuthUser> VerifyAppleTokenAsync(string appleToken)
         {
             if (_appleClientId == null || _appleConfigManager == null)
-                throw new NotAvaliableException("Apple OAuth is not available");
+                throw new NotAvailableException("Apple OAuth is not available");
 
             var validationParams = new TokenValidationParameters
             {
@@ -83,7 +83,7 @@ namespace backend.main.services.implementation
         public async Task<OAuthUser> VerifyGoogleTokenAsync(string googleToken)
         {
             if (_googleClientId == null)
-                throw new NotAvaliableException("Google OAuth is not available");
+                throw new NotAvailableException("Google OAuth is not available");
 
             var settings = new GoogleJsonWebSignature.ValidationSettings
             {
@@ -105,7 +105,7 @@ namespace backend.main.services.implementation
         public async Task<OAuthUser> VerifyMicrosoftTokenAsync(string microsoftToken)
         {
             if (_microsoftClientId == null || _microsoftConfigManager == null)
-                throw new NotAvaliableException("Microsoft OAuth is not available");
+                throw new NotAvailableException("Microsoft OAuth is not available");
 
             var validationParams = new TokenValidationParameters
             {

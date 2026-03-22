@@ -92,7 +92,7 @@ namespace backend.main.services.implementation
                 );
 
                 if (!result)
-                    throw new NotAvaliableException();
+                    throw new NotAvailableException();
 
                 return token;
             }
@@ -139,7 +139,7 @@ namespace backend.main.services.implementation
 
                 var result = await _cacheService.DeleteKeyAsync($"refresh:{refreshToken}");
                 if (!result)
-                    throw new NotAvaliableException();
+                    throw new NotAvailableException();
 
                 return userId;
             }
@@ -183,7 +183,7 @@ namespace backend.main.services.implementation
                 );
 
                 if (!result)
-                    throw new NotAvaliableException();
+                    throw new NotAvailableException();
 
                 return token;
             }
