@@ -19,24 +19,38 @@ namespace backend.main.services.implementation
         private readonly string? _microsoftClientId;
         private readonly string? _appleClientId;
 
+        private readonly ConfigurationManager<OpenIdConnectConfiguration>? _appleConfigManager;
+        private readonly ConfigurationManager<OpenIdConnectConfiguration>? _microsoftConfigManager;
+
+        private static readonly JwtSecurityTokenHandler _jwtHandler = new()
+        {
+            MapInboundClaims = false
+        };
+
         public OAuthService(HttpClient? httpClient = null)
             : base(httpClient)
         {
             _googleClientId = EnvironmentSetting.GoogleClientId;
+
             _microsoftClientId = EnvironmentSetting.MicrosoftClientId;
+            if (_microsoftClientId != null)
+                _microsoftConfigManager = new ConfigurationManager<OpenIdConnectConfiguration>(
+                    "https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration",
+                    new OpenIdConnectConfigurationRetriever()
+                );
+
             _appleClientId = EnvironmentSetting.AppleClientId;
+            if (_appleClientId != null)
+                _appleConfigManager = new ConfigurationManager<OpenIdConnectConfiguration>(
+                    "https://appleid.apple.com/.well-known/openid-configuration",
+                    new OpenIdConnectConfigurationRetriever()
+                );
         }
 
         public async Task<OAuthUser> VerifyAppleTokenAsync(string appleToken)
         {
-            if (_appleClientId == null)
+            if (_appleClientId == null || _appleConfigManager == null)
                 throw new NotAvaliableException("Apple OAuth is not available");
-
-            var configManager =
-                new ConfigurationManager<OpenIdConnectConfiguration>(
-                    "https://appleid.apple.com/.well-known/openid-configuration",
-                    new OpenIdConnectConfigurationRetriever()
-                );
 
             var validationParams = new TokenValidationParameters
             {
@@ -45,7 +59,7 @@ namespace backend.main.services.implementation
                 RequireSignedTokens = true,
 
                 ValidAudience = _appleClientId,
-                ConfigurationManager = configManager,
+                ConfigurationManager = _appleConfigManager,
 
                 ValidateIssuer = true,
                 ValidIssuer = "https://appleid.apple.com",
@@ -53,23 +67,15 @@ namespace backend.main.services.implementation
                 ClockSkew = TimeSpan.FromMinutes(2)
             };
 
-            var handler = new JwtSecurityTokenHandler
-            {
-                MapInboundClaims = false
-            };
-
-            var principal = handler.ValidateToken(
-                appleToken,
-                validationParams,
-                out _
-            );
+            var principal = _jwtHandler.ValidateToken(appleToken, validationParams, out _);
 
             var sub =
                 principal.Claims.FirstOrDefault(c => c.Type == "sub")?.Value ??
                 throw new UnauthorizedException("Missing Apple sub claim");
 
             var email =
-                principal.Claims.FirstOrDefault(c => c.Type == "email")?.Value ?? sub;
+                principal.Claims.FirstOrDefault(c => c.Type == "email")?.Value ??
+                throw new UnauthorizedException("Missing Apple email claim");
 
             return new OAuthUser(sub, email, email, "apple");
         }
@@ -98,16 +104,8 @@ namespace backend.main.services.implementation
 
         public async Task<OAuthUser> VerifyMicrosoftTokenAsync(string microsoftToken)
         {
-            if (_microsoftClientId == null)
+            if (_microsoftClientId == null || _microsoftConfigManager == null)
                 throw new NotAvaliableException("Microsoft OAuth is not available");
-
-            var authority = "https://login.microsoftonline.com/common/v2.0";
-
-            var configManager =
-                new ConfigurationManager<OpenIdConnectConfiguration>(
-                    $"{authority}/.well-known/openid-configuration",
-                    new OpenIdConnectConfigurationRetriever()
-                );
 
             var validationParams = new TokenValidationParameters
             {
@@ -116,7 +114,7 @@ namespace backend.main.services.implementation
                 RequireSignedTokens = true,
 
                 ValidAudience = _microsoftClientId,
-                ConfigurationManager = configManager,
+                ConfigurationManager = _microsoftConfigManager,
 
                 ValidateIssuer = true,
                 IssuerValidator = (issuer, token, parameters) =>
@@ -134,16 +132,7 @@ namespace backend.main.services.implementation
                 ClockSkew = TimeSpan.FromMinutes(2)
             };
 
-            var handler = new JwtSecurityTokenHandler
-            {
-                MapInboundClaims = false
-            };
-
-            var principal = handler.ValidateToken(
-                microsoftToken,
-                validationParams,
-                out _
-            );
+            var principal = _jwtHandler.ValidateToken(microsoftToken, validationParams, out _);
 
             var email =
                 principal.Claims.FirstOrDefault(c => c.Type == "preferred_username")?.Value ??
