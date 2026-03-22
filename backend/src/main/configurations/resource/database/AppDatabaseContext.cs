@@ -10,6 +10,7 @@ namespace backend.main.configurations.resource.database
         public DbSet<Club> Clubs { get; set; } = null!;
         public DbSet<Events> Events { get; set; } = null!;
         public DbSet<FollowClub> FollowClubs { get; set; } = null!;
+        public DbSet<Payment> Payments { get; set; } = null!;
         public AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : base(options) { }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -72,6 +73,28 @@ namespace backend.main.configurations.resource.database
                 .HasForeignKey(c => c.ClubId)
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Payment>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(p => p.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Payment>()
+                .HasOne<Events>()
+                .WithMany()
+                .HasForeignKey(p => p.EventId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Payment>()
+                .HasIndex(p => p.UserId);
+
+            modelBuilder.Entity<Payment>()
+                .HasIndex(p => p.ExternalSessionId)
+                .IsUnique()
+                .HasFilter("[ExternalSessionId] IS NOT NULL");
         }
     }
 }
