@@ -93,8 +93,11 @@ namespace backend.main.configurations.resource.database
 
             modelBuilder.Entity<Payment>()
                 .HasIndex(p => p.ExternalSessionId)
-                .IsUnique()
-                .HasFilter("[ExternalSessionId] IS NOT NULL");
+                .IsUnique();
+
+            modelBuilder.Entity<Payment>()
+                .HasIndex(p => p.IdempotencyKey)
+                .IsUnique();
         }
     }
 }

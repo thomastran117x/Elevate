@@ -10,6 +10,7 @@ namespace backend.main.models.core
         public long Amount { get; set; }
         public string Currency { get; set; } = "usd";
         public PaymentStatus Status { get; set; } = PaymentStatus.Pending;
+        public string? IdempotencyKey { get; set; }
         public string? ExternalSessionId { get; set; }
         public string? ExternalPaymentIntentId { get; set; }
         public string? CheckoutUrl { get; set; }

@@ -30,19 +30,46 @@ namespace backend.main.services.implementation
                 ?? throw new InvalidOperationException("STRIPE_WEBHOOK_SECRET is not configured.");
         }
 
-        public async Task<Payment> CreatePaymentSession(int userId, int eventId)
+        public async Task<Payment> CreatePaymentSession(int userId, int eventId, string? idempotencyKey = null)
         {
             try
             {
+                // 1. Idempotency: return the existing payment for this key immediately.
+                if (!string.IsNullOrEmpty(idempotencyKey))
+                {
+                    var keyed = await _paymentRepository.GetByIdempotencyKeyAsync(idempotencyKey);
+                    if (keyed != null)
+                        return keyed;
+                }
+
                 var ev = await _eventsService.GetEvent(eventId);
 
                 if (ev.registerCost == 0)
                     throw new BadRequestException("This event is free and does not require payment.");
 
-                var existing = await _paymentRepository.GetByUserAndEventAsync(userId, eventId);
-                if (existing != null && existing.Status == PaymentStatus.Succeeded)
+                // 2. Atomically claim or fetch an active payment slot.
+                //    The serializable transaction inside prevents concurrent inserts.
+                var stub = new Payment
+                {
+                    UserId = userId,
+                    EventId = eventId,
+                    Amount = ev.registerCost,
+                    Currency = "usd",
+                    Status = PaymentStatus.Pending,
+                    IdempotencyKey = idempotencyKey
+                };
+
+                var active = await _paymentRepository.GetOrCreateActiveAsync(userId, eventId, stub);
+
+                if (active.Status == PaymentStatus.Succeeded)
                     throw new ConflictException("You have already paid for this event.");
 
+                // 3. Reuse the existing checkout URL if this slot already has one
+                //    (e.g. a previous request created the Stripe session but the client retried).
+                if (active.CheckoutUrl != null)
+                    return active;
+
+                // 4. Create Stripe Checkout Session outside the transaction.
                 var successUrl = Environment.GetEnvironmentVariable("STRIPE_SUCCESS_URL")
                     ?? "http://localhost:4200/payment/success";
                 var cancelUrl = Environment.GetEnvironmentVariable("STRIPE_CANCEL_URL")
@@ -81,18 +108,8 @@ namespace backend.main.services.implementation
                 var sessionService = new SessionService();
                 var session = await sessionService.CreateAsync(options);
 
-                var payment = new Payment
-                {
-                    UserId = userId,
-                    EventId = eventId,
-                    Amount = ev.registerCost,
-                    Currency = "usd",
-                    Status = PaymentStatus.Pending,
-                    ExternalSessionId = session.Id,
-                    CheckoutUrl = session.Url
-                };
-
-                return await _paymentRepository.CreateAsync(payment);
+                return await _paymentRepository.UpdateCheckoutDetailsAsync(active.Id, session.Id, session.Url)
+                    ?? throw new InternalServerErrorException("Failed to update payment with checkout details.");
             }
             catch (Exception e)
             {

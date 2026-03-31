@@ -29,8 +29,9 @@ namespace backend.main.implementation.controllers
             try
             {
                 var user = User.GetUserPayload();
+                var idempotencyKey = Request.Headers["Idempotency-Key"].FirstOrDefault();
 
-                var payment = await _paymentService.CreatePaymentSession(user.Id, eventId);
+                var payment = await _paymentService.CreatePaymentSession(user.Id, eventId, idempotencyKey);
 
                 return StatusCode(201,
                     new ApiResponse<PaymentResponse>(
@@ -100,6 +101,7 @@ namespace backend.main.implementation.controllers
         }
 
         [HttpPost("webhook")]
+        [RequestSizeLimit(65_536)]
         public async Task<IActionResult> HandleWebhook()
         {
             try

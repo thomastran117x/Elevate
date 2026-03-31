@@ -1,3 +1,5 @@
+using System.Data;
+
 using backend.main.configurations.resource.database;
 using backend.main.models.core;
 using backend.main.models.enums;
@@ -11,14 +13,33 @@ namespace backend.main.repositories.implementation
     {
         public PaymentRepository(AppDatabaseContext context) : base(context) { }
 
-        public async Task<Payment> CreateAsync(Payment payment)
+        public async Task<Payment> GetOrCreateActiveAsync(int userId, int eventId, Payment stub)
         {
-            return await ExecuteAsync(async () =>
+            using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
             {
-                _context.Payments.Add(payment);
+                var existing = await _context.Payments
+                    .FirstOrDefaultAsync(p =>
+                        p.UserId == userId &&
+                        p.EventId == eventId &&
+                        (p.Status == PaymentStatus.Pending || p.Status == PaymentStatus.Succeeded));
+
+                if (existing != null)
+                {
+                    await transaction.CommitAsync();
+                    return existing;
+                }
+
+                _context.Payments.Add(stub);
                 await _context.SaveChangesAsync();
-                return payment;
-            })!;
+                await transaction.CommitAsync();
+                return stub;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<Payment?> GetByIdAsync(int id)
@@ -31,6 +52,16 @@ namespace backend.main.repositories.implementation
             });
         }
 
+        public async Task<Payment?> GetByIdempotencyKeyAsync(string idempotencyKey)
+        {
+            return await ExecuteAsync(async () =>
+            {
+                return await _context.Payments
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(p => p.IdempotencyKey == idempotencyKey);
+            });
+        }
+
         public async Task<Payment?> GetByExternalSessionIdAsync(string sessionId)
         {
             return await ExecuteAsync(async () =>
@@ -38,16 +69,6 @@ namespace backend.main.repositories.implementation
                 return await _context.Payments
                     .AsNoTracking()
                     .FirstOrDefaultAsync(p => p.ExternalSessionId == sessionId);
-            });
-        }
-
-        public async Task<Payment?> GetByUserAndEventAsync(int userId, int eventId)
-        {
-            return await ExecuteAsync(async () =>
-            {
-                return await _context.Payments
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(p => p.UserId == userId && p.EventId == eventId);
             });
         }
 
@@ -63,6 +84,23 @@ namespace backend.main.repositories.implementation
                     .Take(pageSize)
                     .ToListAsync();
             })!;
+        }
+
+        public async Task<Payment?> UpdateCheckoutDetailsAsync(int id, string sessionId, string checkoutUrl)
+        {
+            return await ExecuteAsync(async () =>
+            {
+                var payment = await _context.Payments.FindAsync(id);
+                if (payment == null)
+                    return null;
+
+                payment.ExternalSessionId = sessionId;
+                payment.CheckoutUrl = checkoutUrl;
+                payment.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+                return payment;
+            });
         }
 
         public async Task<Payment?> UpdateStatusAsync(int id, PaymentStatus status, string? externalPaymentIntentId)
