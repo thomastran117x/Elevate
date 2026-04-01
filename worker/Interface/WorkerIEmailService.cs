@@ -5,6 +5,7 @@ namespace worker.Interfaces
         Task SendVerificationEmailAsync(string toEmail, string token);
         Task SendResetPasswordEmailAsync(string toEmail, string token);
         Task SendConfirmationEmailAsync(string toEmail, string token);
+        Task SendNewDeviceEmailAsync(string toEmail, string token);
         bool isEmailEnabled();
     }
 }

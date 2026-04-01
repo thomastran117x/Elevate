@@ -7,6 +7,7 @@ namespace backend.main.services.interfaces
         Task<UserToken> LoginAsync(string email, string password);
         Task SignUpAsync(string email, string password, string usertype);
         Task<UserToken> VerifyAsync(string token);
+        Task<UserToken> VerifyDeviceLoginAsync(string token);
         Task<UserToken> GoogleAsync(string token);
         Task<UserToken> MicrosoftAsync(string token);
         Task<UserToken> HandleTokensAsync(string refreshToken);

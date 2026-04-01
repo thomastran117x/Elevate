@@ -4,5 +4,6 @@ public enum EmailMessageType
 {
     VerifyEmail,
     ResetPassword,
-    AccountConfirmation
+    AccountConfirmation,
+    NewDevice
 }

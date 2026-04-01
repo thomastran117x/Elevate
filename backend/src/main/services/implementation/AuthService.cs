@@ -1,4 +1,5 @@
 using backend.main.dtos;
+using backend.main.dtos.general;
 using backend.main.exceptions.http;
 using backend.main.models.core;
 using backend.main.models.other;
@@ -15,14 +16,18 @@ namespace backend.main.services.implementation
         private readonly IOAuthService _oauthService;
         private readonly ITokenService _tokenService;
         private readonly IPublisher _publisher;
+        private readonly IDeviceService _deviceService;
+        private readonly ClientRequestInfo _requestInfo;
         private const string DummyHash = "$2a$11$9FJqO6j/4jP3E2fOQdWgMuKZXWWvPZ09f8Pj0L9VqB6TfqZ4fE5SO";
 
-        public AuthService(IUserRepository userRepository, IOAuthService oauthService, ITokenService tokenService, IPublisher publisher)
+        public AuthService(IUserRepository userRepository, IOAuthService oauthService, ITokenService tokenService, IPublisher publisher, IDeviceService deviceService, ClientRequestInfo requestInfo)
         {
             _userRepository = userRepository;
             _oauthService = oauthService;
             _tokenService = tokenService;
             _publisher = publisher;
+            _deviceService = deviceService;
+            _requestInfo = requestInfo;
         }
 
         public async Task<UserToken> LoginAsync(string email, string password)
@@ -37,6 +42,8 @@ namespace backend.main.services.implementation
 
                 if (user == null || user.Password == null || !isValidPassword)
                     throw new UnauthorizedException("Invalid email or password");
+
+                await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
 
                 return await GenerateTokenPair(user);
             }
@@ -261,6 +268,22 @@ namespace backend.main.services.implementation
                     throw;
 
                 Logger.Error($"[AuthService] HandleTokensAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<UserToken> VerifyDeviceLoginAsync(string token)
+        {
+            try
+            {
+                return await _deviceService.VerifyDeviceAsync(token);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[AuthService] VerifyDeviceLoginAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
         }

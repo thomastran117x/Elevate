@@ -263,6 +263,42 @@ namespace backend.main.implementation.controllers
             }
         }
 
+        [HttpGet("device/verify")]
+        public async Task<IActionResult> VerifyDevice([FromQuery] string token)
+        {
+            try
+            {
+                UserToken userToken = await _authService.VerifyDeviceLoginAsync(token);
+                User user = userToken.user;
+                Token authToken = userToken.token;
+
+                HttpUtility.SetRefreshTokenCookie(Response, authToken.RefreshToken);
+
+                AuthResponse response = new(
+                    user.Id,
+                    user.Email,
+                    user.Usertype,
+                    authToken.AccessToken
+                );
+
+                return StatusCode(
+                    200,
+                    new ApiResponse<AuthResponse>(
+                        "Device verified. Login successful.",
+                        response
+                    )
+                );
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[AuthController] VerifyDevice failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
         {

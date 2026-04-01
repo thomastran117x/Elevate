@@ -86,6 +86,12 @@ public sealed class EmailWorker : BackgroundService, IAsyncDisposable
                     message.Token
                 ),
 
+            EmailMessageType.NewDevice =>
+                _emailService.SendNewDeviceEmailAsync(
+                    message.Email,
+                    message.Token
+                ),
+
             _ => throw new NotSupportedException(
                 $"Unsupported email type: {message.Type}"
             )

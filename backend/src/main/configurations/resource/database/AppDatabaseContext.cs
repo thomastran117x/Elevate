@@ -12,6 +12,7 @@ namespace backend.main.configurations.resource.database
         public DbSet<FollowClub> FollowClubs { get; set; } = null!;
         public DbSet<Payment> Payments { get; set; } = null!;
         public DbSet<ClubReview> ClubReviews { get; set; } = null!;
+        public DbSet<Device> Devices { get; set; } = null!;
         public AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : base(options) { }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -119,6 +120,20 @@ namespace backend.main.configurations.resource.database
 
             modelBuilder.Entity<ClubReview>()
                 .HasIndex(r => r.UserId);
+
+            modelBuilder.Entity<Device>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(d => d.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Device>()
+                .HasIndex(d => new { d.UserId, d.DeviceType, d.ClientName })
+                .IsUnique();
+
+            modelBuilder.Entity<Device>()
+                .HasIndex(d => d.UserId);
         }
     }
 }

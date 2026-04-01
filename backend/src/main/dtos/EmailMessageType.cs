@@ -4,6 +4,7 @@ namespace backend.main.dtos
     {
         VerifyEmail,
         ResetPassword,
-        AccountConfirmation
+        AccountConfirmation,
+        NewDevice
     }
 }
