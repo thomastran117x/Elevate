@@ -1,6 +1,7 @@
 using backend.main.attributes.repository;
 using backend.main.publishers.implementation;
 using backend.main.publishers.interfaces;
+using backend.main.repositories.extensions;
 using backend.main.repositories.implementation;
 using backend.main.repositories.interfaces;
 using backend.main.repositories.resilience;
@@ -17,13 +18,13 @@ namespace backend.main.configurations.application
         {
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
             services.AddSingleton<IRepositoryAttributeResolver, RepositoryAttributeResolver>();
-            services.AddScoped<IFollowRepository, FollowRepository>();
-            services.AddScoped<IUserRepository, UserRepository>();
-            services.AddScoped<IClubRepository, ClubRepository>();
-            services.AddScoped<IEventsRepository, EventsRepository>();
-            services.AddScoped<IPaymentRepository, PaymentRepository>();
-            services.AddScoped<IClubReviewRepository, ClubReviewRepository>();
-            services.AddScoped<IDeviceRepository, DeviceRepository>();
+            services.AddRepositoryWithProxy<IFollowRepository, FollowRepository>();
+            services.AddRepositoryWithProxy<IUserRepository, UserRepository>();
+            services.AddRepositoryWithProxy<IClubRepository, ClubRepository>();
+            services.AddRepositoryWithProxy<IEventsRepository, EventsRepository>();
+            services.AddRepositoryWithProxy<IPaymentRepository, PaymentRepository>();
+            services.AddRepositoryWithProxy<IClubReviewRepository, ClubReviewRepository>();
+            services.AddRepositoryWithProxy<IDeviceRepository, DeviceRepository>();
 
             services.AddSingleton<IPublisher, Publisher>();
 
