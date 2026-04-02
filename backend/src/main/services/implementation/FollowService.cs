@@ -139,19 +139,52 @@ namespace backend.main.services.implementation
             }
         }
 
+        private const string NullSentinel = "__null__";
+
         public async Task<bool> IsMemberAsync(int clubId, int userId)
         {
-            return await _followRepository.IsFollowingClubAsync(clubId, userId) != null;
+            var key = FollowKey(userId, clubId);
+            var cached = await _cache.GetValueAsync(key);
+
+            if (cached != null)
+                return cached != NullSentinel;
+
+            var follow = await _followRepository.IsFollowingClubAsync(clubId, userId);
+
+            if (follow == null)
+            {
+                await _cache.SetValueAsync(key, NullSentinel, FollowTTL);
+                return false;
+            }
+
+            await _cache.SetValueAsync(key, JsonSerializer.Serialize(follow), FollowTTL);
+            return true;
         }
 
         public async Task AddMembershipAsync(int clubId, int userId)
         {
-            await _followRepository.FollowClubAsync(userId, clubId);
+            var follow = await _followRepository.FollowClubAsync(clubId, userId);
+
+            await _cache.SetValueAsync(FollowKey(userId, clubId), JsonSerializer.Serialize(follow), FollowTTL);
+            await InvalidateFollowListsAsync(userId, clubId);
         }
 
         public async Task RemoveMembershipAsync(int clubId, int userId)
         {
             await _followRepository.UnfollowClubAsync(clubId, userId);
+
+            await _cache.DeleteKeyAsync(FollowKey(userId, clubId));
+            await InvalidateFollowListsAsync(userId, clubId);
+        }
+
+        private async Task InvalidateFollowListsAsync(int userId, int clubId)
+        {
+            var server = _cache.GetServer();
+            var userListKeys = _cache.ScanKeys(server, $"follow:list:u:{userId}:*");
+            var clubListKeys = _cache.ScanKeys(server, $"follow:list:c:{clubId}:*");
+
+            foreach (var key in userListKeys.Concat(clubListKeys))
+                await _cache.DeleteKeyAsync(key);
         }
 
 
