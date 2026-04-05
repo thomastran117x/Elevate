@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 using backend.main.configurations.security;
 using backend.main.dtos.responses.eventregistration;
 using backend.main.dtos.responses.general;
@@ -24,7 +26,7 @@ namespace backend.main.implementation.controllers
 
         [Authorize]
         [HttpPost("{eventId}/register")]
-        public async Task<IActionResult> Register(int eventId)
+        public async Task<IActionResult> Register([Range(1, int.MaxValue)] int eventId)
         {
             try
             {
@@ -48,7 +50,7 @@ namespace backend.main.implementation.controllers
 
         [Authorize]
         [HttpDelete("{eventId}/register")]
-        public async Task<IActionResult> Unregister(int eventId)
+        public async Task<IActionResult> Unregister([Range(1, int.MaxValue)] int eventId)
         {
             try
             {
@@ -71,7 +73,7 @@ namespace backend.main.implementation.controllers
         }
 
         [HttpGet("{eventId}/registrations")]
-        public async Task<IActionResult> GetRegistrations(int eventId, int page = 1, int pageSize = 20)
+        public async Task<IActionResult> GetRegistrations([Range(1, int.MaxValue)] int eventId, int page = 1, int pageSize = 20)
         {
             try
             {
@@ -94,7 +96,7 @@ namespace backend.main.implementation.controllers
 
         [Authorize]
         [HttpGet("{eventId}/registrations/me")]
-        public async Task<IActionResult> CheckRegistration(int eventId)
+        public async Task<IActionResult> CheckRegistration([Range(1, int.MaxValue)] int eventId)
         {
             try
             {
@@ -134,7 +136,7 @@ namespace backend.main.implementation.controllers
 
         [Authorize]
         [HttpGet("{userId}/events/registered")]
-        public async Task<IActionResult> GetRegisteredEvents(int userId, int page = 1, int pageSize = 20)
+        public async Task<IActionResult> GetRegisteredEvents([Range(1, int.MaxValue)] int userId, int page = 1, int pageSize = 20)
         {
             try
             {

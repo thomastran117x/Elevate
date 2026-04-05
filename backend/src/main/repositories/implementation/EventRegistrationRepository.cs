@@ -1,3 +1,5 @@
+using System.Data;
+
 using backend.main.configurations.resource.database;
 using backend.main.models.core;
 using backend.main.repositories.interfaces;
@@ -12,19 +14,38 @@ namespace backend.main.repositories.implementation
 
         public EventRegistrationRepository(AppDatabaseContext context) => _context = context;
 
-        public async Task<EventRegistration> RegisterAsync(int eventId, int userId)
+        public async Task<EventRegistration?> TryRegisterAsync(int eventId, int userId, int maxParticipants)
         {
-            var registration = new EventRegistration
+            using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
             {
-                EventId = eventId,
-                UserId = userId,
-                CreatedAt = DateTime.UtcNow
-            };
+                var count = await _context.EventRegistrations
+                    .CountAsync(r => r.EventId == eventId);
 
-            _context.EventRegistrations.Add(registration);
-            await _context.SaveChangesAsync();
+                if (count >= maxParticipants)
+                {
+                    await transaction.RollbackAsync();
+                    return null;
+                }
 
-            return registration;
+                var registration = new EventRegistration
+                {
+                    EventId = eventId,
+                    UserId = userId,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.EventRegistrations.Add(registration);
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return registration;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<bool> UnregisterAsync(int eventId, int userId)
@@ -74,13 +95,6 @@ namespace backend.main.repositories.implementation
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
-        }
-
-        public async Task<int> CountByEventAsync(int eventId)
-        {
-            return await _context.EventRegistrations
-                .AsNoTracking()
-                .CountAsync(r => r.EventId == eventId);
         }
     }
 }

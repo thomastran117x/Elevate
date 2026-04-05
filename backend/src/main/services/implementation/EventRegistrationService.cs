@@ -43,6 +43,14 @@ namespace backend.main.services.implementation
         private string UserListKey(int userId, int page, int size)
             => $"evtreg:list:u:{userId}:{page}:{size}";
 
+        // Reverse index sets — track which list cache keys exist per event/user
+        // so invalidation is a Set read + targeted deletes rather than a full key scan.
+        private string EventIndexKey(int eventId)
+            => $"evtreg:index:e:{eventId}";
+
+        private string UserIndexKey(int userId)
+            => $"evtreg:index:u:{userId}";
+
         public async Task RegisterAsync(int eventId, int userId)
         {
             var ev = await _eventsService.GetEvent(eventId);
@@ -62,11 +70,13 @@ namespace backend.main.services.implementation
                 if (await IsRegisteredAsync(eventId, userId))
                     throw new ConflictException("Already registered for this event");
 
-                var count = await _registrationRepository.CountByEventAsync(eventId);
-                if (count >= ev.maxParticipants)
-                    throw new ConflictException("Event is full");
+                // Capacity check + insert are performed atomically inside a SERIALIZABLE
+                // transaction, eliminating the race window between count and insert.
+                // The Redis lock above reduces contention under normal load.
+                var registration = await _registrationRepository.TryRegisterAsync(eventId, userId, ev.maxParticipants);
 
-                var registration = await _registrationRepository.RegisterAsync(eventId, userId);
+                if (registration == null)
+                    throw new ConflictException("Event is full");
 
                 await _cache.SetValueAsync(
                     MembershipKey(userId, eventId),
@@ -162,6 +172,8 @@ namespace backend.main.services.implementation
                 var registrations = (await _registrationRepository.GetRegistrationsByEventAsync(eventId, page, pageSize)).ToList();
 
                 await _cache.SetValueAsync(key, JsonSerializer.Serialize(registrations), ListTTL);
+                await TrackEventListKeyAsync(eventId, key);
+
                 return registrations;
             }
             catch (Exception e)
@@ -187,6 +199,8 @@ namespace backend.main.services.implementation
                 var registrations = (await _registrationRepository.GetRegistrationsByUserAsync(userId, page, pageSize)).ToList();
 
                 await _cache.SetValueAsync(key, JsonSerializer.Serialize(registrations), ListTTL);
+                await TrackUserListKeyAsync(userId, key);
+
                 return registrations;
             }
             catch (Exception e)
@@ -199,14 +213,33 @@ namespace backend.main.services.implementation
             }
         }
 
+        private async Task TrackEventListKeyAsync(int eventId, string key)
+        {
+            var indexKey = EventIndexKey(eventId);
+            await _cache.SetAddAsync(indexKey, key);
+            await _cache.SetExpiryAsync(indexKey, ListTTL);
+        }
+
+        private async Task TrackUserListKeyAsync(int userId, string key)
+        {
+            var indexKey = UserIndexKey(userId);
+            await _cache.SetAddAsync(indexKey, key);
+            await _cache.SetExpiryAsync(indexKey, ListTTL);
+        }
+
         private async Task InvalidateListsAsync(int userId, int eventId)
         {
-            var server = _cache.GetServer();
-            var eventListKeys = _cache.ScanKeys(server, $"evtreg:list:e:{eventId}:*");
-            var userListKeys = _cache.ScanKeys(server, $"evtreg:list:u:{userId}:*");
+            var eventIndexKey = EventIndexKey(eventId);
+            var userIndexKey = UserIndexKey(userId);
 
-            foreach (var key in eventListKeys.Concat(userListKeys))
+            var eventKeys = await _cache.SetMembersAsync(eventIndexKey);
+            var userKeys = await _cache.SetMembersAsync(userIndexKey);
+
+            foreach (var key in eventKeys.Concat(userKeys))
                 await _cache.DeleteKeyAsync(key);
+
+            await _cache.DeleteKeyAsync(eventIndexKey);
+            await _cache.DeleteKeyAsync(userIndexKey);
         }
     }
 }
