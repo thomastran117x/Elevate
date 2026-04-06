@@ -67,7 +67,11 @@ namespace backend.main.services.implementation
             var countTask = _postRepository.CountByClubIdAsync(clubId, search);
             await Task.WhenAll(itemsTask, countTask);
 
-            return (itemsTask.Result, countTask.Result);
+            var posts = itemsTask.Result;
+            if (posts.Count > 0)
+                await _postRepository.IncrementViewCountAsync(posts.Select(p => p.Id));
+
+            return (posts, countTask.Result);
         }
 
         public async Task<ClubPost> UpdateAsync(int clubId, int postId, int userId, string title, string content, PostType postType, bool isPinned)

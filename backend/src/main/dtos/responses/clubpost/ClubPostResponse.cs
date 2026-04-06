@@ -11,12 +11,13 @@ namespace backend.main.dtos.responses.clubpost
         public string Content { get; set; } = string.Empty;
         public PostType PostType { get; set; }
         public int LikesCount { get; set; }
+        public int ViewCount { get; set; }
         public bool IsPinned { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
 
         public ClubPostResponse(int id, int clubId, int userId, string title, string content,
-            PostType postType, int likesCount, bool isPinned, DateTime createdAt, DateTime updatedAt)
+            PostType postType, int likesCount, int viewCount, bool isPinned, DateTime createdAt, DateTime updatedAt)
         {
             Id = id;
             ClubId = clubId;
@@ -25,6 +26,7 @@ namespace backend.main.dtos.responses.clubpost
             Content = content;
             PostType = postType;
             LikesCount = likesCount;
+            ViewCount = viewCount;
             IsPinned = isPinned;
             CreatedAt = createdAt;
             UpdatedAt = updatedAt;

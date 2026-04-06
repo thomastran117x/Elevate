@@ -108,7 +108,7 @@ namespace backend.main.implementation.controllers
         }
 
         private static ClubPostResponse MapToResponse(ClubPost p) =>
-            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.IsPinned, p.CreatedAt, p.UpdatedAt);
+            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt);
     }
 
     [ApiController]
@@ -148,6 +148,6 @@ namespace backend.main.implementation.controllers
         }
 
         private static ClubPostResponse MapToResponse(ClubPost p) =>
-            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.IsPinned, p.CreatedAt, p.UpdatedAt);
+            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt);
     }
 }

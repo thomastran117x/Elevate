@@ -12,5 +12,6 @@ namespace backend.main.repositories.interfaces
         Task<int> CountAllAsync(string? search);
         Task<ClubPost?> UpdateAsync(int id, ClubPost updated);
         Task<bool> DeleteAsync(int id);
+        Task IncrementViewCountAsync(IEnumerable<int> postIds);
     }
 }

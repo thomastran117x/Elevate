@@ -124,5 +124,15 @@ namespace backend.main.repositories.implementation
             await _context.SaveChangesAsync();
             return true;
         }
+
+        public async Task IncrementViewCountAsync(IEnumerable<int> postIds)
+        {
+            var ids = postIds.ToList();
+            if (ids.Count == 0) return;
+
+            await _context.ClubPosts
+                .Where(p => ids.Contains(p.Id))
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.ViewCount, p => p.ViewCount + 1));
+        }
     }
 }
