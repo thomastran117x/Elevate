@@ -1,4 +1,5 @@
 using backend.main.models.core;
+using backend.main.models.enums;
 
 namespace backend.main.repositories.interfaces
 {
@@ -6,11 +7,12 @@ namespace backend.main.repositories.interfaces
     {
         Task<ClubPost> CreateAsync(ClubPost post);
         Task<ClubPost?> GetByIdAsync(int id);
-        Task<List<ClubPost>> GetByClubIdAsync(int clubId, string? search, int page, int pageSize);
+        Task<List<ClubPost>> GetByClubIdAsync(int clubId, string? search, PostSortBy sortBy, int page, int pageSize);
         Task<int> CountByClubIdAsync(int clubId, string? search);
-        Task<List<ClubPost>> GetAllAsync(string? search, int page, int pageSize);
+        Task<List<ClubPost>> GetAllAsync(string? search, PostSortBy sortBy, int page, int pageSize);
         Task<int> CountAllAsync(string? search);
         Task<ClubPost?> UpdateAsync(int id, ClubPost updated);
         Task<bool> DeleteAsync(int id);
+        Task IncrementViewCountAsync(IEnumerable<int> postIds);
     }
 }

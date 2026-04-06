@@ -7,10 +7,10 @@ namespace backend.main.services.interfaces
     {
         Task<ClubPost> CreateAsync(int clubId, int userId, string title, string content, PostType postType, bool isPinned);
         Task<(List<ClubPost> Items, int TotalCount)> GetByClubIdAsync(
-            int clubId, int? requestingUserId, string? search, int page, int pageSize);
+            int clubId, int? requestingUserId, string? search, PostSortBy sortBy, int page, int pageSize);
         Task<ClubPost> UpdateAsync(int clubId, int postId, int userId, string title, string content, PostType postType, bool isPinned);
         Task DeleteAsync(int clubId, int postId, int userId);
         Task<(List<ClubPost> Items, int TotalCount)> GetAllAdminAsync(
-            string? search, int page, int pageSize);
+            string? search, PostSortBy sortBy, int page, int pageSize);
     }
 }

@@ -14,6 +14,7 @@ namespace backend.main.configurations.resource.database
         public DbSet<ClubReview> ClubReviews { get; set; } = null!;
         public DbSet<Device> Devices { get; set; } = null!;
         public DbSet<ClubPost> ClubPosts { get; set; } = null!;
+        public DbSet<PostComment> PostComments { get; set; } = null!;
         public DbSet<EventRegistration> EventRegistrations { get; set; } = null!;
         public AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : base(options) { }
 
@@ -156,6 +157,26 @@ namespace backend.main.configurations.resource.database
 
             modelBuilder.Entity<ClubPost>()
                 .HasIndex(p => p.UserId);
+
+            modelBuilder.Entity<PostComment>()
+                .HasOne<ClubPost>()
+                .WithMany()
+                .HasForeignKey(c => c.PostId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PostComment>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(c => c.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PostComment>()
+                .HasIndex(c => c.PostId);
+
+            modelBuilder.Entity<PostComment>()
+                .HasIndex(c => c.UserId);
 
             modelBuilder.Entity<EventRegistration>()
                 .HasOne<User>()

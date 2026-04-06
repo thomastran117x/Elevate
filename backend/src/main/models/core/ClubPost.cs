@@ -11,6 +11,7 @@ namespace backend.main.models.core
         public string Content { get; set; } = string.Empty;
         public PostType PostType { get; set; } = PostType.General;
         public int LikesCount { get; set; } = 0;
+        public int ViewCount { get; set; } = 0;
         public bool IsPinned { get; set; } = false;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

@@ -3,6 +3,7 @@ using backend.main.dtos.requests.clubpost;
 using backend.main.dtos.responses.clubpost;
 using backend.main.dtos.responses.general;
 using backend.main.models.core;
+using backend.main.models.enums;
 using backend.main.services.interfaces;
 
 using Microsoft.AspNetCore.Authorization;
@@ -44,6 +45,7 @@ namespace backend.main.implementation.controllers
         public async Task<IActionResult> GetPosts(
             int clubId,
             [FromQuery] string? search,
+            [FromQuery] PostSortBy sortBy = PostSortBy.Recent,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
@@ -52,7 +54,7 @@ namespace backend.main.implementation.controllers
                 userId = User.GetUserPayload().Id;
 
             var (items, totalCount) = await _postService.GetByClubIdAsync(
-                clubId, userId, search, page, pageSize);
+                clubId, userId, search, sortBy, page, pageSize);
 
             var paged = new PagedResponse<ClubPostResponse>(
                 items.Select(MapToResponse),
@@ -108,7 +110,7 @@ namespace backend.main.implementation.controllers
         }
 
         private static ClubPostResponse MapToResponse(ClubPost p) =>
-            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.IsPinned, p.CreatedAt, p.UpdatedAt);
+            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt);
     }
 
     [ApiController]
@@ -126,10 +128,11 @@ namespace backend.main.implementation.controllers
         [HttpGet("posts")]
         public async Task<IActionResult> GetAllPosts(
             [FromQuery] string? search,
+            [FromQuery] PostSortBy sortBy = PostSortBy.Recent,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
-            var (items, totalCount) = await _postService.GetAllAdminAsync(search, page, pageSize);
+            var (items, totalCount) = await _postService.GetAllAdminAsync(search, sortBy, page, pageSize);
 
             var paged = new PagedResponse<ClubPostResponse>(
                 items.Select(MapToResponse),
@@ -148,6 +151,6 @@ namespace backend.main.implementation.controllers
         }
 
         private static ClubPostResponse MapToResponse(ClubPost p) =>
-            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.IsPinned, p.CreatedAt, p.UpdatedAt);
+            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt);
     }
 }

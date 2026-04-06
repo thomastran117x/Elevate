@@ -1,5 +1,6 @@
 using backend.main.configurations.resource.database;
 using backend.main.models.core;
+using backend.main.models.enums;
 using backend.main.repositories.interfaces;
 
 using Microsoft.EntityFrameworkCore;
@@ -26,7 +27,7 @@ namespace backend.main.repositories.implementation
                 .FirstOrDefaultAsync(p => p.Id == id);
         }
 
-        public async Task<List<ClubPost>> GetByClubIdAsync(int clubId, string? search, int page, int pageSize)
+        public async Task<List<ClubPost>> GetByClubIdAsync(int clubId, string? search, PostSortBy sortBy, int page, int pageSize)
         {
             IQueryable<ClubPost> query = _context.ClubPosts
                 .AsNoTracking()
@@ -40,9 +41,11 @@ namespace backend.main.repositories.implementation
                     EF.Functions.Like(p.Content, $"%{term}%"));
             }
 
+            query = sortBy == PostSortBy.Popular
+                ? query.OrderByDescending(p => p.IsPinned).ThenByDescending(p => p.LikesCount).ThenByDescending(p => p.ViewCount)
+                : query.OrderByDescending(p => p.IsPinned).ThenByDescending(p => p.CreatedAt);
+
             return await query
-                .OrderByDescending(p => p.IsPinned)
-                .ThenByDescending(p => p.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -64,7 +67,7 @@ namespace backend.main.repositories.implementation
             return await query.CountAsync();
         }
 
-        public async Task<List<ClubPost>> GetAllAsync(string? search, int page, int pageSize)
+        public async Task<List<ClubPost>> GetAllAsync(string? search, PostSortBy sortBy, int page, int pageSize)
         {
             IQueryable<ClubPost> query = _context.ClubPosts.AsNoTracking();
 
@@ -76,8 +79,11 @@ namespace backend.main.repositories.implementation
                     EF.Functions.Like(p.Content, $"%{term}%"));
             }
 
+            query = sortBy == PostSortBy.Popular
+                ? query.OrderByDescending(p => p.LikesCount).ThenByDescending(p => p.ViewCount)
+                : query.OrderByDescending(p => p.CreatedAt);
+
             return await query
-                .OrderByDescending(p => p.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -123,6 +129,16 @@ namespace backend.main.repositories.implementation
             _context.ClubPosts.Remove(post);
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        public async Task IncrementViewCountAsync(IEnumerable<int> postIds)
+        {
+            var ids = postIds.ToList();
+            if (ids.Count == 0) return;
+
+            await _context.ClubPosts
+                .Where(p => ids.Contains(p.Id))
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.ViewCount, p => p.ViewCount + 1));
         }
     }
 }
