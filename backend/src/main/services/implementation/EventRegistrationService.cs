@@ -73,7 +73,7 @@ namespace backend.main.services.implementation
                 // Capacity check + insert are performed atomically inside a SERIALIZABLE
                 // transaction, eliminating the race window between count and insert.
                 // The Redis lock above reduces contention under normal load.
-                var registration = await _registrationRepository.TryRegisterAsync(eventId, userId, ev.maxParticipants);
+                var registration = await _registrationRepository.TryRegisterAsync(eventId, userId);
 
                 if (registration == null)
                     throw new ConflictException("Event is full");

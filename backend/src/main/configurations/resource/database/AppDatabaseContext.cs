@@ -97,6 +97,9 @@ namespace backend.main.configurations.resource.database
                 .HasIndex(p => p.UserId);
 
             modelBuilder.Entity<Payment>()
+                .HasIndex(p => p.EventId);
+
+            modelBuilder.Entity<Payment>()
                 .HasIndex(p => p.ExternalSessionId)
                 .IsUnique();
 

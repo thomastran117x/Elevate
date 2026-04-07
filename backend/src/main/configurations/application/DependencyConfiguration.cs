@@ -28,6 +28,7 @@ namespace backend.main.configurations.application
             services.AddRepositoryWithProxy<IClubPostRepository, ClubPostRepository>();
             services.AddRepositoryWithProxy<IPostCommentRepository, PostCommentRepository>();
             services.AddRepositoryWithProxy<IEventRegistrationRepository, EventRegistrationRepository>();
+            services.AddRepositoryWithProxy<IEventAnalyticsRepository, EventAnalyticsRepository>();
 
             services.AddSingleton<IPublisher, Publisher>();
 

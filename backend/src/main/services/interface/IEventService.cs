@@ -1,4 +1,7 @@
+using backend.main.dtos.requests.events;
+using backend.main.dtos.responses.events;
 using backend.main.models.core;
+using backend.main.models.enums;
 
 namespace backend.main.services.interfaces
 {
@@ -23,15 +26,14 @@ namespace backend.main.services.interfaces
         Task<List<Events>> GetEvents(
             string? search = null,
             bool isPrivate = false,
-            bool isAvailable = true,
+            EventStatus? status = null,
             int page = 1,
             int pageSize = 20
         );
 
         Task<List<Events>> GetEventsByClub(
             int clubId,
-            bool isPrivate = false,
-            bool isAvailable = true,
+            EventStatus? status = null,
             int page = 1,
             int pageSize = 20
         );
@@ -51,5 +53,15 @@ namespace backend.main.services.interfaces
         );
 
         Task DeleteEvent(int eventId, int userId);
+
+        // Batch operations
+        Task<List<Events>> GetEventsByIds(IEnumerable<int> ids);
+        Task<BatchCreateResultResponse> BatchCreateEvents(int clubId, int userId, IEnumerable<BatchCreateEventItem> items);
+        Task<int> BatchUpdateEvents(int userId, IEnumerable<BatchUpdateEventItem> items);
+        Task<int> BatchDeleteEvents(int userId, IEnumerable<int> ids);
+
+        // Analytics
+        Task<EventAnalyticsResponse> GetEventAnalytics(int eventId, int userId);
+        Task<ClubAnalyticsResponse> GetClubAnalytics(int clubId, int userId);
     }
 }

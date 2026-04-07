@@ -1,3 +1,5 @@
+using backend.main.models.enums;
+
 namespace backend.main.dtos.responses.events
 {
     public class EventResponse
@@ -38,5 +40,6 @@ namespace backend.main.dtos.responses.events
         {
             get; set;
         }
+        public EventStatus Status { get; set; }
     }
 }
