@@ -16,6 +16,7 @@ namespace backend.main.configurations.resource.database
         public DbSet<ClubPost> ClubPosts { get; set; } = null!;
         public DbSet<PostComment> PostComments { get; set; } = null!;
         public DbSet<EventRegistration> EventRegistrations { get; set; } = null!;
+        public DbSet<EventImage> EventImages { get; set; } = null!;
         public AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : base(options) { }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -78,6 +79,19 @@ namespace backend.main.configurations.resource.database
                 .HasForeignKey(c => c.ClubId)
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<EventImage>()
+                .HasOne(ei => ei.Event)
+                .WithMany(e => e.Images)
+                .HasForeignKey(ei => ei.EventId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<EventImage>()
+                .HasIndex(ei => ei.EventId);
+
+            modelBuilder.Entity<EventImage>()
+                .HasIndex(ei => new { ei.EventId, ei.SortOrder });
 
             modelBuilder.Entity<Payment>()
                 .HasOne<User>()

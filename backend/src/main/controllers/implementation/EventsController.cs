@@ -26,7 +26,7 @@ namespace backend.main.implementation.controllers
 
         [Authorize(Policy = "OrganizerOnly")]
         [HttpPost("{clubId}")]
-        public async Task<IActionResult> CreateEvent([FromForm] EventCreateRequest request, int clubId)
+        public async Task<IActionResult> CreateEvent([FromBody] EventCreateRequest request, int clubId)
         {
             try
             {
@@ -38,7 +38,7 @@ namespace backend.main.implementation.controllers
                     request.Name,
                     request.Description,
                     request.Location,
-                    request.EventImage,
+                    request.ImageUrls,
                     request.StartTime,
                     request.EndTime,
                     request.IsPrivate,
@@ -66,7 +66,7 @@ namespace backend.main.implementation.controllers
 
         [Authorize(Policy = "OrganizerOnly")]
         [HttpPut("{eventId}")]
-        public async Task<IActionResult> UpdateEvent([FromForm] EventUpdateRequest request, int eventId)
+        public async Task<IActionResult> UpdateEvent([FromBody] EventUpdateRequest request, int eventId)
         {
             try
             {
@@ -78,7 +78,7 @@ namespace backend.main.implementation.controllers
                     request.Name,
                     request.Description,
                     request.Location,
-                    request.EventImage,
+                    request.ImageUrls,
                     request.StartTime,
                     request.EndTime,
                     request.IsPrivate,
@@ -325,6 +325,79 @@ namespace backend.main.implementation.controllers
                     return HandleError.Resolve(e);
 
                 Logger.Error($"[EventsController] GetEventAnalytics failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize(Policy = "OrganizerOnly")]
+        [HttpPost("images/presigned-url")]
+        public async Task<IActionResult> GetPresignedUploadUrl([FromBody] PresignedUrlRequest request)
+        {
+            try
+            {
+                var result = await _eventService.GenerateImageUploadUrlAsync(
+                    request.FileName, request.ContentType);
+
+                return Ok(new ApiResponse<PresignedUploadResponse>(
+                    "Presigned upload URL generated successfully.",
+                    result
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] GetPresignedUploadUrl failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize(Policy = "OrganizerOnly")]
+        [HttpPost("{eventId}/images")]
+        public async Task<IActionResult> AddEventImage([FromBody] AddEventImageRequest request, int eventId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+
+                var image = await _eventService.AddEventImageAsync(eventId, user.Id, request.ImageUrl);
+
+                return StatusCode(201, new ApiResponse<object>(
+                    $"Image added to event {eventId} successfully.",
+                    new { image.Id, image.ImageUrl, image.SortOrder }
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] AddEventImage failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize(Policy = "OrganizerOnly")]
+        [HttpDelete("{eventId}/images/{imageId}")]
+        public async Task<IActionResult> RemoveEventImage(int eventId, int imageId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+
+                await _eventService.RemoveEventImageAsync(eventId, imageId, user.Id);
+
+                return Ok(new MessageResponse(
+                    $"Image {imageId} removed from event {eventId} successfully."
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] RemoveEventImage failed: {e}");
                 return HandleError.Resolve(e);
             }
         }

@@ -17,8 +17,9 @@ namespace backend.main.services.implementation
     public class EventsService : IEventsService
     {
         private readonly IEventsRepository _eventsRepository;
+        private readonly IEventImageRepository _imageRepository;
         private readonly IClubService _clubService;
-        private readonly IFileUploadService _fileUploadService;
+        private readonly IAzureBlobService _blobService;
         private readonly ICacheService _cache;
         private readonly IEventAnalyticsRepository _analyticsRepository;
 
@@ -30,14 +31,16 @@ namespace backend.main.services.implementation
 
         public EventsService(
             IEventsRepository eventsRepository,
+            IEventImageRepository imageRepository,
             IClubService clubService,
-            IFileUploadService fileUploadService,
+            IAzureBlobService blobService,
             ICacheService cache,
             IEventAnalyticsRepository analyticsRepository)
         {
             _eventsRepository = eventsRepository;
+            _imageRepository = imageRepository;
             _clubService = clubService;
-            _fileUploadService = fileUploadService;
+            _blobService = blobService;
             _cache = cache;
             _analyticsRepository = analyticsRepository;
         }
@@ -48,7 +51,7 @@ namespace backend.main.services.implementation
             string name,
             string description,
             string location,
-            IFormFile image,
+            IEnumerable<string> imageUrls,
             DateTime startTime,
             DateTime? endTime,
             bool isPrivate = false,
@@ -59,15 +62,11 @@ namespace backend.main.services.implementation
             {
                 await _clubService.GetClub(clubId);
 
-                var imageUrl = await _fileUploadService.UploadImageAsync(image, "events")
-                    ?? throw new InternalServerErrorException("Image upload failed");
-
                 var ev = new Events
                 {
                     Name = name,
                     Description = description,
                     Location = location,
-                    ImageUrl = imageUrl,
                     StartTime = startTime,
                     EndTime = endTime,
                     isPrivate = isPrivate,
@@ -78,10 +77,16 @@ namespace backend.main.services.implementation
 
                 var created = await _eventsRepository.CreateAsync(ev);
 
-                await CacheEventAsync(created);
+                await _imageRepository.AddImagesAsync(created.Id, imageUrls.Take(5));
+
+                // Re-fetch with images included so cache is warm with full data
+                var withImages = await _eventsRepository.GetByIdAsync(created.Id)
+                    ?? throw new InternalServerErrorException("Failed to reload created event");
+
+                await CacheEventAsync(withImages);
                 await BumpEventListVersionAsync();
 
-                return created;
+                return withImages;
             }
             catch (Exception e)
             {
@@ -208,7 +213,7 @@ namespace backend.main.services.implementation
             string name,
             string description,
             string location,
-            IFormFile image,
+            IEnumerable<string>? imageUrls,
             DateTime startTime,
             DateTime? endTime,
             bool isPrivate,
@@ -228,15 +233,11 @@ namespace backend.main.services.implementation
                 if (existing.ClubId != club.Id)
                     throw new ForbiddenException("Not allowed");
 
-                var newImage = await _fileUploadService.UploadImageAsync(image, "events")
-                    ?? throw new InternalServerErrorException("Image upload failed");
-
                 var updated = await _eventsRepository.UpdateAsync(eventId, new Events
                 {
                     Name = name,
                     Description = description,
                     Location = location,
-                    ImageUrl = newImage,
                     StartTime = startTime,
                     EndTime = endTime,
                     isPrivate = isPrivate,
@@ -245,13 +246,26 @@ namespace backend.main.services.implementation
                     ClubId = club.Id
                 }) ?? throw new InternalServerErrorException("Update failed");
 
-                await CacheEventAsync(updated);
+                if (imageUrls != null)
+                {
+                    var urlList = imageUrls.Take(5).ToList();
+                    var oldUrls = existing.Images.Select(i => i.ImageUrl).ToList();
+
+                    // Best-effort Azure blob deletion
+                    _ = Task.WhenAll(oldUrls.Select(u => _blobService.DeleteBlobAsync(u)));
+
+                    await _imageRepository.DeleteAllByEventIdAsync(eventId);
+                    await _imageRepository.AddImagesAsync(eventId, urlList);
+                }
+
+                // Re-fetch with fresh images for cache
+                var withImages = await _eventsRepository.GetByIdAsync(eventId)
+                    ?? throw new InternalServerErrorException("Failed to reload updated event");
+
+                await CacheEventAsync(withImages);
                 await BumpEventListVersionAsync();
 
-                if (!string.IsNullOrWhiteSpace(existing.ImageUrl))
-                    _ = _fileUploadService.DeleteImageAsync(existing.ImageUrl);
-
-                return updated;
+                return withImages;
             }
             catch (Exception e)
             {
@@ -281,7 +295,10 @@ namespace backend.main.services.implementation
                 if (!await _eventsRepository.DeleteAsync(eventId))
                     throw new InternalServerErrorException("Delete failed");
 
-                await _fileUploadService.DeleteImageAsync(ev.ImageUrl);
+                // EventImages cascade-deletes via FK; clean up blobs best-effort
+                var urls = ev.Images.Select(i => i.ImageUrl).ToList();
+                _ = Task.WhenAll(urls.Select(u => _blobService.DeleteBlobAsync(u)));
+
                 await _cache.DeleteKeyAsync($"event:{eventId}");
                 await BumpEventListVersionAsync();
             }
@@ -329,7 +346,6 @@ namespace backend.main.services.implementation
                     Name = item.Name,
                     Description = item.Description,
                     Location = item.Location,
-                    ImageUrl = item.ImageUrl,
                     StartTime = item.StartTime,
                     EndTime = item.EndTime,
                     isPrivate = item.IsPrivate,
@@ -340,7 +356,9 @@ namespace backend.main.services.implementation
 
                 var created = await _eventsRepository.CreateManyAsync(entities);
 
-                await Task.WhenAll(created.Select(CacheEventAsync));
+                foreach (var (ev, item) in created.Zip(itemList))
+                    await _imageRepository.AddImagesAsync(ev.Id, item.ImageUrls.Take(5));
+
                 await BumpEventListVersionAsync();
 
                 return new BatchCreateResultResponse
@@ -415,11 +433,13 @@ namespace backend.main.services.implementation
                 if (existing.Any(ev => ev.ClubId != club.Id))
                     throw new ForbiddenException("One or more events do not belong to your club");
 
-                var imageUrls = existing.Select(ev => ev.ImageUrl).ToList();
+                var imageUrls = existing
+                    .SelectMany(ev => ev.Images.Select(i => i.ImageUrl))
+                    .ToList();
 
                 var deleted = await _eventsRepository.DeleteManyAsync(idList);
 
-                _ = Task.WhenAll(imageUrls.Select(url => _fileUploadService.DeleteImageAsync(url)));
+                _ = Task.WhenAll(imageUrls.Select(url => _blobService.DeleteBlobAsync(url)));
                 await Task.WhenAll(idList.Select(id => _cache.DeleteKeyAsync($"event:{id}")));
                 await BumpEventListVersionAsync();
 
@@ -431,6 +451,95 @@ namespace backend.main.services.implementation
                     throw;
 
                 Logger.Error($"[EventsService] BatchDeleteEvents failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<PresignedUploadResponse> GenerateImageUploadUrlAsync(
+            string fileName, string contentType)
+        {
+            try
+            {
+                return await _blobService.GenerateUploadUrlAsync(fileName, contentType);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] GenerateImageUploadUrlAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<EventImage> AddEventImageAsync(int eventId, int userId, string imageUrl)
+        {
+            try
+            {
+                var evTask = GetEvent(eventId);
+                var clubTask = _clubService.GetClubByUser(userId);
+
+                await Task.WhenAll(evTask, clubTask);
+
+                var ev = await evTask;
+                var club = await clubTask;
+
+                if (ev.ClubId != club.Id)
+                    throw new ForbiddenException("Not allowed");
+
+                var count = await _imageRepository.CountByEventIdAsync(eventId);
+                if (count >= 5)
+                    throw new BadRequestException("An event cannot have more than 5 images.");
+
+                var images = await _imageRepository.AddImagesAsync(eventId, new[] { imageUrl });
+
+                await _cache.DeleteKeyAsync($"event:{eventId}");
+                await BumpEventListVersionAsync();
+
+                return images[0];
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] AddEventImageAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task RemoveEventImageAsync(int eventId, int imageId, int userId)
+        {
+            try
+            {
+                var evTask = GetEvent(eventId);
+                var clubTask = _clubService.GetClubByUser(userId);
+
+                await Task.WhenAll(evTask, clubTask);
+
+                var ev = await evTask;
+                var club = await clubTask;
+
+                if (ev.ClubId != club.Id)
+                    throw new ForbiddenException("Not allowed");
+
+                var image = await _imageRepository.GetByIdAsync(imageId, eventId)
+                    ?? throw new ResourceNotFoundException(
+                        $"Image {imageId} not found on event {eventId}");
+
+                await _imageRepository.DeleteImageAsync(imageId, eventId);
+
+                _ = _blobService.DeleteBlobAsync(image.ImageUrl);
+
+                await _cache.DeleteKeyAsync($"event:{eventId}");
+                await BumpEventListVersionAsync();
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] RemoveEventImageAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
         }

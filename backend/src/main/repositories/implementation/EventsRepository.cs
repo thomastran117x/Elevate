@@ -23,6 +23,7 @@ namespace backend.main.repositories.implementation
         public async Task<Events?> GetByIdAsync(int id)
         {
             return await _context.Events
+                .Include(e => e.Images)
                 .AsNoTracking()
                 .FirstOrDefaultAsync(e => e.Id == id);
         }
@@ -30,6 +31,7 @@ namespace backend.main.repositories.implementation
         public async Task<IEnumerable<Events>> GetAllAsync(int page = 1, int pageSize = 20)
         {
             return await _context.Events
+                .Include(e => e.Images)
                 .AsNoTracking()
                 .OrderByDescending(e => e.CreatedAt)
                 .Skip((page - 1) * pageSize)
@@ -40,6 +42,7 @@ namespace backend.main.repositories.implementation
         public async Task<Events?> GetByClubIdAsync(int clubId)
         {
             return await _context.Events
+                .Include(e => e.Images)
                 .AsNoTracking()
                 .FirstOrDefaultAsync(e => e.ClubId == clubId);
         }
@@ -55,7 +58,6 @@ namespace backend.main.repositories.implementation
             existing.Name = updated.Name;
             existing.Description = updated.Description;
             existing.Location = updated.Location;
-            existing.ImageUrl = updated.ImageUrl;
             existing.isPrivate = updated.isPrivate;
             existing.maxParticipants = updated.maxParticipants;
             existing.registerCost = updated.registerCost;
@@ -65,6 +67,7 @@ namespace backend.main.repositories.implementation
             existing.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+            await _context.Entry(existing).Collection(e => e.Images).LoadAsync();
             return existing;
         }
 
@@ -107,6 +110,7 @@ namespace backend.main.repositories.implementation
             var now = DateTime.UtcNow;
 
             IQueryable<Events> query = _context.Events
+                .Include(e => e.Images)
                 .AsNoTracking();
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -145,6 +149,7 @@ namespace backend.main.repositories.implementation
                 return new List<Events>();
 
             return await _context.Events
+                .Include(e => e.Images)
                 .AsNoTracking()
                 .Where(e => idList.Contains(e.Id))
                 .ToListAsync();

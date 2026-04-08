@@ -13,7 +13,7 @@ namespace backend.main.services.interfaces
             string name,
             string description,
             string location,
-            IFormFile image,
+            IEnumerable<string> imageUrls,
             DateTime startTime,
             DateTime? endTime,
             bool isPrivate = false,
@@ -44,7 +44,7 @@ namespace backend.main.services.interfaces
             string name,
             string description,
             string location,
-            IFormFile image,
+            IEnumerable<string>? imageUrls,
             DateTime startTime,
             DateTime? endTime,
             bool isPrivate,
@@ -63,5 +63,10 @@ namespace backend.main.services.interfaces
         // Analytics
         Task<EventAnalyticsResponse> GetEventAnalytics(int eventId, int userId);
         Task<ClubAnalyticsResponse> GetClubAnalytics(int clubId, int userId);
+
+        // Image management
+        Task<PresignedUploadResponse> GenerateImageUploadUrlAsync(string fileName, string contentType);
+        Task<EventImage> AddEventImageAsync(int eventId, int userId, string imageUrl);
+        Task RemoveEventImageAsync(int eventId, int imageId, int userId);
     }
 }

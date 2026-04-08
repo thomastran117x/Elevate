@@ -29,6 +29,7 @@ namespace backend.main.configurations.application
             services.AddRepositoryWithProxy<IPostCommentRepository, PostCommentRepository>();
             services.AddRepositoryWithProxy<IEventRegistrationRepository, EventRegistrationRepository>();
             services.AddRepositoryWithProxy<IEventAnalyticsRepository, EventAnalyticsRepository>();
+            services.AddRepositoryWithProxy<IEventImageRepository, EventImageRepository>();
 
             services.AddSingleton<IPublisher, Publisher>();
 
@@ -46,6 +47,7 @@ namespace backend.main.configurations.application
             services.AddScoped<IPostCommentService, PostCommentService>();
             services.AddScoped<IEventRegistrationService, EventRegistrationService>();
             services.AddScoped<IFileUploadService, FileUploadService>();
+            services.AddScoped<IAzureBlobService, AzureBlobService>();
 
             services.AddSingleton<ICustomLogger, FileLogger>();
             return services;

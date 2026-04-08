@@ -18,10 +18,6 @@ public class Events
     {
         get; set;
     }
-    public required string ImageUrl
-    {
-        get; set;
-    }
     public bool isPrivate { get; set; } = false;
     public int maxParticipants { get; set; } = 100;
     public int registerCost { get; set; } = 0;
@@ -39,4 +35,7 @@ public class Events
     }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    // Navigation
+    public ICollection<EventImage> Images { get; set; } = new List<EventImage>();
 }

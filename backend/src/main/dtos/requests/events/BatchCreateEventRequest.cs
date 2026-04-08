@@ -17,8 +17,9 @@ namespace backend.main.dtos.requests.events
         public string Location { get; set; } = null!;
 
         [Required]
-        [Url]
-        public string ImageUrl { get; set; } = null!;
+        [MinLength(1, ErrorMessage = "At least one image is required.")]
+        [MaxLength(5, ErrorMessage = "A maximum of 5 images are allowed.")]
+        public List<string> ImageUrls { get; set; } = new();
 
         public bool IsPrivate { get; set; } = false;
 
@@ -54,6 +55,14 @@ namespace backend.main.dtos.requests.events
                 yield return new ValidationResult(
                     "Private events cannot require a registration fee.",
                     new[] { nameof(RegisterCost), nameof(IsPrivate) });
+            }
+
+            foreach (var url in ImageUrls)
+            {
+                if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+                    yield return new ValidationResult(
+                        $"'{url}' is not a valid HTTPS URL.",
+                        new[] { nameof(ImageUrls) });
             }
         }
     }

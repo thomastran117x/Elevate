@@ -12,7 +12,7 @@ namespace backend.main.Mappers
             Name = ev.Name,
             Description = ev.Description,
             Location = ev.Location,
-            ImageUrl = ev.ImageUrl,
+            ImageUrls = ev.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl).ToList(),
             IsPrivate = ev.isPrivate,
             MaxParticipants = ev.maxParticipants,
             RegisterCost = ev.registerCost,
