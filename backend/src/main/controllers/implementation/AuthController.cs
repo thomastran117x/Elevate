@@ -26,6 +26,7 @@ namespace backend.main.implementation.controllers
         }
 
         [HttpPost("login")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> LocalAuthenticate([FromBody] LoginRequest request)
         {
             try
@@ -63,6 +64,7 @@ namespace backend.main.implementation.controllers
         }
 
         [HttpPost("signup")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> LocalSignup([FromBody] SignUpRequest request)
         {
             try
@@ -121,6 +123,7 @@ namespace backend.main.implementation.controllers
         }
 
         [HttpPost("google")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> GoogleAuthenticate([FromBody] GoogleRequest request)
         {
             try
@@ -158,6 +161,7 @@ namespace backend.main.implementation.controllers
         }
 
         [HttpPost("microsoft")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> MicrosoftAuthenticate([FromBody] MicrosoftRequest request)
         {
             try
@@ -300,6 +304,7 @@ namespace backend.main.implementation.controllers
         }
 
         [HttpPost("forgot-password")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
         {
             try
@@ -322,6 +327,7 @@ namespace backend.main.implementation.controllers
         }
 
         [HttpPost("change-password")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, [FromQuery] string token)
         {
             try

@@ -1,7 +1,9 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { from, switchMap } from 'rxjs';
 import { environment } from '../../../../environments/environment';
+import { AuthTokenService } from '../../../core/api/services/auth-token.service';
 
 export interface LoginRequest {
   email: string;
@@ -27,18 +29,17 @@ export interface AuthResponse {
 export class AuthService {
   private readonly baseUrl = `${environment.backendUrl}/auth`;
 
-  constructor(private http: HttpClient) {}
+  constructor(
+    private http: HttpClient,
+    private authToken: AuthTokenService,
+  ) {}
 
   login(payload: LoginRequest): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${this.baseUrl}/login`, payload, {
-      withCredentials: true,
-    });
+    return this.postWithCsrf<AuthResponse>(`${this.baseUrl}/login`, payload);
   }
 
   signup(payload: SignupRequest): Observable<{ message: string }> {
-    return this.http.post<{ message: string }>(`${this.baseUrl}/signup`, payload, {
-      withCredentials: true,
-    });
+    return this.postWithCsrf<{ message: string }>(`${this.baseUrl}/signup`, payload);
   }
 
   verifyEmail(token: string): Observable<{ message: string }> {
@@ -48,23 +49,15 @@ export class AuthService {
   }
 
   googleVerify(idToken: string): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(
-      `${this.baseUrl}/google`,
-      { Token: idToken },
-      { withCredentials: true },
-    );
+    return this.postWithCsrf<AuthResponse>(`${this.baseUrl}/google`, { Token: idToken });
   }
 
   microsoftVerify(idToken: string): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(
-      `${this.baseUrl}/microsoft`,
-      { Token: idToken },
-      { withCredentials: true },
-    );
+    return this.postWithCsrf<AuthResponse>(`${this.baseUrl}/microsoft`, { Token: idToken });
   }
 
   logout(): Observable<void> {
-    return this.http.post<void>(`${this.baseUrl}/logout`, {}, { withCredentials: true });
+    return this.postWithCsrf<void>(`${this.baseUrl}/logout`, {});
   }
 
   get googleOAuthUrl(): string {
@@ -73,5 +66,20 @@ export class AuthService {
 
   get microsoftOAuthUrl(): string {
     return `${this.baseUrl}/login/microsoft`;
+  }
+
+  private postWithCsrf<T>(url: string, body: unknown): Observable<T> {
+    return from(this.authToken.ensureCsrfToken()).pipe(
+      switchMap(() => {
+        const headers = this.authToken.csrfToken
+          ? new HttpHeaders({ 'X-CSRF-TOKEN': this.authToken.csrfToken })
+          : undefined;
+
+        return this.http.post<T>(url, body, {
+          withCredentials: true,
+          headers,
+        });
+      }),
+    );
   }
 }
