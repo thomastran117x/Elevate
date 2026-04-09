@@ -1,3 +1,5 @@
+using backend.main.models.enums;
+
 namespace backend.main.dtos.responses.events
 {
     public class EventResponse
@@ -9,7 +11,7 @@ namespace backend.main.dtos.responses.events
         public string Name { get; set; } = null!;
         public string Description { get; set; } = null!;
         public string Location { get; set; } = null!;
-        public string ImageUrl { get; set; } = null!;
+        public List<string> ImageUrls { get; set; } = new();
         public bool IsPrivate
         {
             get; set;
@@ -38,5 +40,6 @@ namespace backend.main.dtos.responses.events
         {
             get; set;
         }
+        public EventStatus Status { get; set; }
     }
 }

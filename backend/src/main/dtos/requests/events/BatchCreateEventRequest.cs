@@ -2,21 +2,26 @@ using System.ComponentModel.DataAnnotations;
 
 namespace backend.main.dtos.requests.events
 {
-    public class EventUpdateRequest : IValidatableObject
+    public class BatchCreateEventItem : IValidatableObject
     {
+        [Required]
         [StringLength(30, MinimumLength = 3)]
         public string Name { get; set; } = null!;
 
+        [Required]
         [StringLength(200, MinimumLength = 10)]
         public string Description { get; set; } = null!;
 
+        [Required]
         [StringLength(50)]
         public string Location { get; set; } = null!;
 
+        [Required]
+        [MinLength(1, ErrorMessage = "At least one image is required.")]
         [MaxLength(5, ErrorMessage = "A maximum of 5 images are allowed.")]
-        public List<string>? ImageUrls { get; set; }
+        public List<string> ImageUrls { get; set; } = new();
 
-        public bool IsPrivate { get; set; }
+        public bool IsPrivate { get; set; } = false;
 
         [Range(1, 10_000, ErrorMessage = "Max participants must be between 1 and 10,000.")]
         public int MaxParticipants { get; set; } = 100;
@@ -52,15 +57,28 @@ namespace backend.main.dtos.requests.events
                     new[] { nameof(RegisterCost), nameof(IsPrivate) });
             }
 
-            if (ImageUrls != null)
+            foreach (var url in ImageUrls)
             {
-                foreach (var url in ImageUrls)
-                {
-                    if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
-                        yield return new ValidationResult(
-                            $"'{url}' is not a valid HTTPS URL.",
-                            new[] { nameof(ImageUrls) });
-                }
+                if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+                    yield return new ValidationResult(
+                        $"'{url}' is not a valid HTTPS URL.",
+                        new[] { nameof(ImageUrls) });
+            }
+        }
+    }
+
+    public class BatchCreateEventRequest : IValidatableObject
+    {
+        [Required]
+        public List<BatchCreateEventItem> Events { get; set; } = new();
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (Events.Count == 0 || Events.Count > 50)
+            {
+                yield return new ValidationResult(
+                    "Batch size must be between 1 and 50 events.",
+                    new[] { nameof(Events) });
             }
         }
     }

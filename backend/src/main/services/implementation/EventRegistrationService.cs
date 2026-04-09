@@ -1,5 +1,6 @@
 using System.Text.Json;
 
+using backend.main.dtos.responses.eventregistration;
 using backend.main.exceptions.http;
 using backend.main.models.core;
 using backend.main.repositories.interfaces;
@@ -29,6 +30,75 @@ namespace backend.main.services.implementation
             _registrationRepository = registrationRepository;
             _eventsService = eventsService;
             _cache = cache;
+        }
+
+        public async Task<BatchRegistrationResultResponse> BatchRegisterAsync(int userId, IEnumerable<int> eventIds)
+        {
+            var result = new BatchRegistrationResultResponse();
+
+            // Process sequentially — each registration acquires a per-event Redis lock
+            // and a SERIALIZABLE DB transaction. Running in parallel would risk deadlocks
+            // and excessive lock contention under concurrent batch requests.
+            foreach (var eventId in eventIds)
+            {
+                try
+                {
+                    await RegisterAsync(eventId, userId);
+                    result.Succeeded.Add(eventId);
+                }
+                catch (AppException ex)
+                {
+                    result.Failed.Add(new BatchRegistrationFailure
+                    {
+                        EventId = eventId,
+                        Reason = ex.Message
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"[EventRegistrationService] BatchRegisterAsync failed for event {eventId}: {ex}");
+                    result.Failed.Add(new BatchRegistrationFailure
+                    {
+                        EventId = eventId,
+                        Reason = "An unexpected error occurred."
+                    });
+                }
+            }
+
+            return result;
+        }
+
+        public async Task<BatchRegistrationResultResponse> BatchUnregisterAsync(int userId, IEnumerable<int> eventIds)
+        {
+            var result = new BatchRegistrationResultResponse();
+
+            foreach (var eventId in eventIds)
+            {
+                try
+                {
+                    await UnregisterAsync(eventId, userId);
+                    result.Succeeded.Add(eventId);
+                }
+                catch (AppException ex)
+                {
+                    result.Failed.Add(new BatchRegistrationFailure
+                    {
+                        EventId = eventId,
+                        Reason = ex.Message
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"[EventRegistrationService] BatchUnregisterAsync failed for event {eventId}: {ex}");
+                    result.Failed.Add(new BatchRegistrationFailure
+                    {
+                        EventId = eventId,
+                        Reason = "An unexpected error occurred."
+                    });
+                }
+            }
+
+            return result;
         }
 
         private string LockKey(int eventId)
@@ -73,7 +143,7 @@ namespace backend.main.services.implementation
                 // Capacity check + insert are performed atomically inside a SERIALIZABLE
                 // transaction, eliminating the race window between count and insert.
                 // The Redis lock above reduces contention under normal load.
-                var registration = await _registrationRepository.TryRegisterAsync(eventId, userId, ev.maxParticipants);
+                var registration = await _registrationRepository.TryRegisterAsync(eventId, userId);
 
                 if (registration == null)
                     throw new ConflictException("Event is full");

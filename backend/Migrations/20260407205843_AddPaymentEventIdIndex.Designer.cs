@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using backend.main.configurations.resource.database;
 
@@ -11,9 +12,11 @@ using backend.main.configurations.resource.database;
 namespace backend.Migrations
 {
     [DbContext(typeof(AppDatabaseContext))]
-    partial class AppDatabaseContextModelSnapshot : ModelSnapshot
+    [Migration("20260407205843_AddPaymentEventIdIndex")]
+    partial class AddPaymentEventIdIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -219,36 +222,6 @@ namespace backend.Migrations
                     b.ToTable("Devices");
                 });
 
-            modelBuilder.Entity("backend.main.models.core.EventImage", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<int>("EventId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ImageUrl")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EventId");
-
-                    b.HasIndex("EventId", "SortOrder");
-
-                    b.ToTable("EventImages");
-                });
-
             modelBuilder.Entity("backend.main.models.core.EventRegistration", b =>
                 {
                     b.Property<int>("Id")
@@ -298,6 +271,10 @@ namespace backend.Migrations
 
                     b.Property<DateTime?>("EndTime")
                         .HasColumnType("datetime(6)");
+
+                    b.Property<string>("ImageUrl")
+                        .IsRequired()
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Location")
                         .IsRequired()
@@ -559,17 +536,6 @@ namespace backend.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("backend.main.models.core.EventImage", b =>
-                {
-                    b.HasOne("backend.main.models.core.Events", "Event")
-                        .WithMany("Images")
-                        .HasForeignKey("EventId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Event");
-                });
-
             modelBuilder.Entity("backend.main.models.core.EventRegistration", b =>
                 {
                     b.HasOne("backend.main.models.core.Events", null)
@@ -637,11 +603,6 @@ namespace backend.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("backend.main.models.core.Events", b =>
-                {
-                    b.Navigation("Images");
                 });
 #pragma warning restore 612, 618
         }

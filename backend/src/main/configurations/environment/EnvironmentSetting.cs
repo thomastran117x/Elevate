@@ -22,6 +22,8 @@ namespace backend.main.configurations.environment
         private static readonly string? _paypalClientId;
         private static readonly string? _paypalSecretId;
         private static readonly string? _paypalApi;
+        private static readonly string? _azureStorageConnectionString;
+        private static readonly string? _azureStorageContainerName;
         private static readonly string _appEnvironment;
         private static readonly string _logLevel;
 
@@ -59,6 +61,9 @@ namespace backend.main.configurations.environment
             _microsoftTenantId = GetOptional("MS_TENANT_ID");
             _googleClientId = GetOptional("GOOGLE_CLIENT_ID");
             _appleClientId = GetOptional("APPLE_CLIENT_ID");
+
+            _azureStorageConnectionString = GetOptional("AZURE_STORAGE_CONNECTION_STRING");
+            _azureStorageContainerName = GetOptional("AZURE_STORAGE_CONTAINER_NAME");
 
             _appEnvironment = GetOrDefault("ENVIRONMENT", "development").ToLowerInvariant();
             _logLevel = GetOrDefault("LOG_LEVEL", "info").ToLowerInvariant();
@@ -119,6 +124,8 @@ namespace backend.main.configurations.environment
         public static string? GoogleClientId => _googleClientId;
         public static string? AppleClientId => _appleClientId;
         public static string? MicrosoftTenantId => _microsoftTenantId;
+        public static string? AzureStorageConnectionString => _azureStorageConnectionString;
+        public static string? AzureStorageContainerName => _azureStorageContainerName;
         public static string AppEnvironment => _appEnvironment;
         public static string LogLevel => _logLevel;
 
@@ -134,7 +141,9 @@ namespace backend.main.configurations.environment
             {
                 { "DB_CONNECTION_STRING", _dbConnectionString },
                 { "REDIS_CONNECTION", _redisConnection },
-                { "JWT_SECRET_KEY", _jwtSecretKeyAccess }
+                { "JWT_SECRET_KEY", _jwtSecretKeyAccess },
+                { "AZURE_STORAGE_CONNECTION_STRING", _azureStorageConnectionString ?? "" },
+                { "AZURE_STORAGE_CONTAINER_NAME", _azureStorageContainerName ?? "" }
             };
 
             var missing = required

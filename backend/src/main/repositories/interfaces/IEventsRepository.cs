@@ -1,4 +1,5 @@
 using backend.main.models.core;
+using backend.main.models.enums;
 
 namespace backend.main.repositories.interfaces
 {
@@ -7,7 +8,7 @@ namespace backend.main.repositories.interfaces
         Task<Events> CreateAsync(Events events);
         Task<Events?> GetByIdAsync(int id);
         Task<IEnumerable<Events>> GetAllAsync(int page = 1, int pageSize = 20);
-        Task<Events> GetByClubIdAsync(int clubId);
+        Task<Events?> GetByClubIdAsync(int clubId);
         Task<Events?> UpdateAsync(int id, Events events);
         Task<bool> UpdatePartialAsync(int id, Action<Events> patch);
         Task<bool> DeleteAsync(int id);
@@ -15,9 +16,12 @@ namespace backend.main.repositories.interfaces
         Task<List<Events>> SearchAsync(
             string? search,
             bool isPrivate,
-            bool isAvaliable,
+            EventStatus? status,
             int page = 1,
             int pageSize = 20);
         Task<List<Events>> GetByIdsAsync(IEnumerable<int> ids);
+        Task<List<Events>> CreateManyAsync(IEnumerable<Events> events);
+        Task<int> UpdateManyAsync(IEnumerable<(int id, Action<Events> patch)> updates);
+        Task<int> DeleteManyAsync(IEnumerable<int> ids);
     }
 }

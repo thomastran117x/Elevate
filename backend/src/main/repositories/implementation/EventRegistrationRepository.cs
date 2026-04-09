@@ -14,15 +14,33 @@ namespace backend.main.repositories.implementation
 
         public EventRegistrationRepository(AppDatabaseContext context) => _context = context;
 
-        public async Task<EventRegistration?> TryRegisterAsync(int eventId, int userId, int maxParticipants)
+        public async Task<EventRegistration?> TryRegisterAsync(int eventId, int userId)
         {
             using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             try
             {
+                // Re-read the event row inside the SERIALIZABLE transaction.
+                // This acquires a shared lock on the row, preventing a concurrent organizer
+                // UPDATE (e.g. closing the event) from slipping between the service-layer
+                // cache read and this insert.
+                var ev = await _context.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+
+                if (ev == null)
+                {
+                    await transaction.RollbackAsync();
+                    return null;
+                }
+
+                if (ev.EndTime.HasValue && ev.EndTime <= DateTime.UtcNow)
+                {
+                    await transaction.RollbackAsync();
+                    return null;
+                }
+
                 var count = await _context.EventRegistrations
                     .CountAsync(r => r.EventId == eventId);
 
-                if (count >= maxParticipants)
+                if (count >= ev.maxParticipants)
                 {
                     await transaction.RollbackAsync();
                     return null;

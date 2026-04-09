@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 
 using backend.main.configurations.security;
+using backend.main.dtos.requests.events;
 using backend.main.dtos.responses.eventregistration;
 using backend.main.dtos.responses.general;
 using backend.main.exceptions.http;
@@ -115,6 +116,56 @@ namespace backend.main.implementation.controllers
                     return HandleError.Resolve(e);
 
                 Logger.Error($"[EventRegistrationController] CheckRegistration failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [HttpPost("batch/register")]
+        public async Task<IActionResult> BatchRegister([FromBody] BatchRegistrationRequest request)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+
+                var result = await _registrationService.BatchRegisterAsync(user.Id, request.EventIds);
+
+                return StatusCode(207, new ApiResponse<BatchRegistrationResultResponse>(
+                    $"{result.Succeeded.Count} registration(s) succeeded, {result.Failed.Count} failed.",
+                    result
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventRegistrationController] BatchRegister failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [HttpDelete("batch/register")]
+        public async Task<IActionResult> BatchUnregister([FromBody] BatchRegistrationRequest request)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+
+                var result = await _registrationService.BatchUnregisterAsync(user.Id, request.EventIds);
+
+                return StatusCode(207, new ApiResponse<BatchRegistrationResultResponse>(
+                    $"{result.Succeeded.Count} unregistration(s) succeeded, {result.Failed.Count} failed.",
+                    result
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventRegistrationController] BatchUnregister failed: {e}");
                 return HandleError.Resolve(e);
             }
         }

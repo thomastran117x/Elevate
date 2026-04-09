@@ -6,6 +6,17 @@ namespace backend.main.configurations.security
     {
         public const string CsrfHeaderName = "X-CSRF-TOKEN";
         public const string CsrfCookieName = "XSRF-TOKEN";
+        private static readonly string[] ProtectedAuthPostPaths =
+        [
+            "/api/auth/login",
+            "/api/auth/signup",
+            "/api/auth/google",
+            "/api/auth/microsoft",
+            "/api/auth/refresh",
+            "/api/auth/logout",
+            "/api/auth/forgot-password",
+            "/api/auth/change-password"
+        ];
 
         public static IServiceCollection AddCustomCsrf(this IServiceCollection services)
         {
@@ -77,8 +88,8 @@ namespace backend.main.configurations.security
 
         private static bool IsCsrfProtectedEndpoint(HttpRequest request)
         {
-            return IsRefreshEndpoint(request)
-                || request.Path.StartsWithSegments("/api/auth/logout", StringComparison.OrdinalIgnoreCase);
+            return ProtectedAuthPostPaths.Any(path =>
+                request.Path.StartsWithSegments(path, StringComparison.OrdinalIgnoreCase));
         }
     }
 }
