@@ -12,8 +12,8 @@ namespace backend.main.configurations.security
 {
     public static class JwtConfiguration
     {
-        private const string ISSUER = "SchoolSpace";
-        private const string AUDIENCE = "SchoolSpaceConsumers";
+        private const string ISSUER = "EventXperience";
+        private const string AUDIENCE = "EventXperienceConsumers";
         public static IServiceCollection AddJwtAuth(this IServiceCollection services, IConfiguration config)
         {
             services.AddAuthentication("Bearer")

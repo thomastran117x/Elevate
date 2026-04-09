@@ -219,6 +219,8 @@ namespace backend.main.implementation.controllers
             }
             catch (Exception e)
             {
+                HttpUtility.ClearRefreshTokenCookie(Response);
+
                 if (e is AppException)
                     return HandleError.Resolve(e);
 
@@ -245,12 +247,16 @@ namespace backend.main.implementation.controllers
             {
                 string? refreshToken = Request.Cookies["refreshToken"];
                 if (string.IsNullOrEmpty(refreshToken))
+                {
+                    HttpUtility.ClearRefreshTokenCookie(Response);
                     return StatusCode(
                         200,
                         new MessageResponse($"The user is already logged out.")
                     );
+                }
 
                 await _authService.HandleLogoutAsync(refreshToken);
+                HttpUtility.ClearRefreshTokenCookie(Response);
 
                 return StatusCode(
                     200,
@@ -259,6 +265,8 @@ namespace backend.main.implementation.controllers
             }
             catch (Exception e)
             {
+                HttpUtility.ClearRefreshTokenCookie(Response);
+
                 if (e is AppException)
                     return HandleError.Resolve(e);
 

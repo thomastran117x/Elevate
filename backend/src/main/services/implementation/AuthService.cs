@@ -170,6 +170,7 @@ namespace backend.main.services.implementation
                 existingUser.Password = hashedPassword;
 
                 await _userRepository.UpdateUserAsync(existingUser.Id, existingUser);
+                await _tokenService.RevokeAllRefreshSessionsAsync(existingUser.Id);
 
                 return;
             }
@@ -255,12 +256,12 @@ namespace backend.main.services.implementation
         {
             try
             {
-                var userId = await _tokenService.ValidateRefreshToken(oldRefreshToken);
-                var user = await _userRepository.GetUserAsync(userId);
+                var validation = await _tokenService.ValidateRefreshToken(oldRefreshToken, _requestInfo);
+                var user = await _userRepository.GetUserAsync(validation.UserId);
                 if (user == null)
-                    throw new ResourceNotFoundException($"User with ID {userId} is not found");
+                    throw new ResourceNotFoundException($"User with ID {validation.UserId} is not found");
 
-                return await GenerateTokenPair(user);
+                return await GenerateTokenPair(user, validation.SessionId);
             }
             catch (Exception e)
             {
@@ -292,7 +293,8 @@ namespace backend.main.services.implementation
         {
             try
             {
-                _ = await _tokenService.ValidateRefreshToken(refreshToken);
+                var validation = await _tokenService.ValidateRefreshToken(refreshToken, _requestInfo);
+                await _tokenService.RevokeRefreshSessionAsync(validation.SessionId);
                 return;
             }
             catch (Exception e)
@@ -337,12 +339,16 @@ namespace backend.main.services.implementation
             }
         }
 
-        private async Task<UserToken> GenerateTokenPair(User user)
+        private async Task<UserToken> GenerateTokenPair(User user, string? sessionId = null)
         {
             try
             {
                 var accessToken = _tokenService.GenerateAccessToken(user);
-                var refreshToken = await _tokenService.GenerateRefreshToken(user.Id);
+                var refreshToken = await _tokenService.GenerateRefreshToken(
+                    user.Id,
+                    _requestInfo,
+                    sessionId
+                );
                 Token authToken = new Token(accessToken, refreshToken);
 
                 UserToken userToken = new(authToken, user);

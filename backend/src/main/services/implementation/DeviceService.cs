@@ -21,6 +21,7 @@ namespace backend.main.services.implementation
         private readonly ITokenService _tokenService;
         private readonly ICacheService _cacheService;
         private readonly IPublisher _publisher;
+        private readonly ClientRequestInfo _requestInfo;
         private readonly TimeSpan PENDING_TTL = TimeSpan.FromMinutes(15);
 
         public DeviceService(
@@ -28,13 +29,15 @@ namespace backend.main.services.implementation
             IUserRepository userRepository,
             ITokenService tokenService,
             ICacheService cacheService,
-            IPublisher publisher)
+            IPublisher publisher,
+            ClientRequestInfo requestInfo)
         {
             _deviceRepository = deviceRepository;
             _userRepository = userRepository;
             _tokenService = tokenService;
             _cacheService = cacheService;
             _publisher = publisher;
+            _requestInfo = requestInfo;
         }
 
         public async Task EnsureDeviceKnownAsync(int userId, string userEmail, ClientRequestInfo requestInfo)
@@ -120,7 +123,7 @@ namespace backend.main.services.implementation
                     ?? throw new ResourceNotFoundException($"User with ID {pending.UserId} not found.");
 
                 var accessToken = _tokenService.GenerateAccessToken(user);
-                var refreshToken = await _tokenService.GenerateRefreshToken(user.Id);
+                var refreshToken = await _tokenService.GenerateRefreshToken(user.Id, _requestInfo);
                 var authToken = new Token(accessToken, refreshToken);
 
                 return new UserToken(authToken, user);
