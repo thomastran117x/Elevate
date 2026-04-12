@@ -57,14 +57,10 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task SignUpAsync(string email, string password, string userType)
+        public async Task<VerificationOtpChallenge> SignUpAsync(string email, string password, string userType)
         {
             try
             {
-                var result = await _tokenService.VerificationTokenExist(email);
-                if (result is not null)
-                    return;
-
                 if (await _userRepository.EmailExistsAsync(email))
                     throw new ConflictException($"An account is already registered with the email: {email}");
 
@@ -77,17 +73,21 @@ namespace backend.main.services.implementation
                     Usertype = userType
                 };
 
-                var token = await _tokenService.GenerateVerificationToken(user);
+                var artifacts = await _tokenService.GenerateVerificationArtifactsAsync(
+                    user,
+                    VerificationPurpose.SignUp
+                );
                 var message = new EmailMessage
                 {
                     Type = EmailMessageType.VerifyEmail,
                     Email = email,
-                    Token = token
+                    Token = artifacts.LinkToken,
+                    Code = artifacts.OtpChallenge.Code
                 };
 
                 await _publisher.PublishAsync("eventxperience-email", message);
 
-                return;
+                return artifacts.OtpChallenge;
             }
             catch (Exception e)
             {
@@ -103,7 +103,13 @@ namespace backend.main.services.implementation
         {
             try
             {
-                var user = await _tokenService.VerifyVerificationToken(token);
+                var user = await _tokenService.VerifyVerificationToken(
+                    token,
+                    VerificationPurpose.SignUp
+                );
+
+                if (await _userRepository.EmailExistsAsync(user.Email))
+                    throw new ConflictException($"An account is already registered with the email: {user.Email}");
 
                 await _userRepository.CreateUserAsync(user);
 
@@ -119,13 +125,40 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task ForgotPasswordAsync(string email)
+        public async Task<UserToken> VerifyOtpAsync(string code, string challenge)
+        {
+            try
+            {
+                var user = await _tokenService.VerifyVerificationOtpAsync(
+                    code,
+                    challenge,
+                    VerificationPurpose.SignUp
+                );
+
+                if (await _userRepository.EmailExistsAsync(user.Email))
+                    throw new ConflictException($"An account is already registered with the email: {user.Email}");
+
+                await _userRepository.CreateUserAsync(user);
+
+                return await GenerateTokenPair(user);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[AuthService] VerifyOtpAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<VerificationOtpChallenge?> ForgotPasswordAsync(string email)
         {
             try
             {
                 var existingEmail = await _userRepository.EmailExistsAsync(email);
                 if (!existingEmail)
-                    return;
+                    return null;
 
                 User user = new User
                 {
@@ -134,17 +167,21 @@ namespace backend.main.services.implementation
                     Usertype = "placeholder"
                 };
 
-                var token = await _tokenService.GenerateVerificationToken(user);
+                var artifacts = await _tokenService.GenerateVerificationArtifactsAsync(
+                    user,
+                    VerificationPurpose.ResetPassword
+                );
                 var message = new EmailMessage
                 {
                     Type = EmailMessageType.ResetPassword,
                     Email = email,
-                    Token = token
+                    Token = artifacts.LinkToken,
+                    Code = artifacts.OtpChallenge.Code
                 };
 
                 await _publisher.PublishAsync("eventxperience-email", message);
 
-                return;
+                return artifacts.OtpChallenge;
             }
             catch (Exception e)
             {
@@ -160,18 +197,11 @@ namespace backend.main.services.implementation
         {
             try
             {
-                var user = await _tokenService.VerifyVerificationToken(token);
-
-                var hashedPassword = HashPassword(password);
-
-                var existingUser = await _userRepository.GetUserByEmailAsync(user.Email)
-                    ?? throw new UnauthorizedException("Invalid token");
-
-                existingUser.Password = hashedPassword;
-
-                await _userRepository.UpdateUserAsync(existingUser.Id, existingUser);
-                await _tokenService.RevokeAllRefreshSessionsAsync(existingUser.Id);
-
+                var user = await _tokenService.VerifyVerificationToken(
+                    token,
+                    VerificationPurpose.ResetPassword
+                );
+                await ChangePasswordInternalAsync(user.Email, password);
                 return;
             }
             catch (Exception e)
@@ -180,6 +210,28 @@ namespace backend.main.services.implementation
                     throw;
 
                 Logger.Error($"[AuthService] ChangePasswordAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task ChangePasswordWithOtpAsync(string code, string challenge, string password)
+        {
+            try
+            {
+                var user = await _tokenService.VerifyVerificationOtpAsync(
+                    code,
+                    challenge,
+                    VerificationPurpose.ResetPassword
+                );
+                await ChangePasswordInternalAsync(user.Email, password);
+                return;
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[AuthService] ChangePasswordWithOtpAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
         }
@@ -363,6 +415,19 @@ namespace backend.main.services.implementation
                 Logger.Error($"[AuthService] GenerateTokenPair failed: {e}");
                 throw new InternalServerErrorException();
             }
+        }
+
+        private async Task ChangePasswordInternalAsync(string email, string password)
+        {
+            var hashedPassword = HashPassword(password);
+
+            var existingUser = await _userRepository.GetUserByEmailAsync(email)
+                ?? throw new UnauthorizedException("Invalid token");
+
+            existingUser.Password = hashedPassword;
+
+            await _userRepository.UpdateUserAsync(existingUser.Id, existingUser);
+            await _tokenService.RevokeAllRefreshSessionsAsync(existingUser.Id);
         }
     }
 }

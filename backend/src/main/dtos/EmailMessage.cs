@@ -15,5 +15,9 @@ namespace backend.main.dtos
         {
             get; init;
         }
+        public string? Code
+        {
+            get; init;
+        }
     }
 }

@@ -10,6 +10,7 @@ namespace backend.main.configurations.environment
         private static readonly string _redisConnection;
         private static readonly string _rabbitConnection;
         private static readonly string _jwtSecretKeyAccess;
+        private static readonly string _jwtSecretKeyVerification;
         private static readonly string? _googleCaptchaSecret;
         private static readonly string[] _corsWhiteList;
         private static readonly string? _email;
@@ -49,6 +50,11 @@ namespace backend.main.configurations.environment
             _jwtSecretKeyAccess = GetOrDefault(
                 "JWT_SECRET_ACCESS",
                 "unit_test_secret_12345678901234567890"
+            );
+
+            _jwtSecretKeyVerification = GetOrDefault(
+                "JWT_SECRET_VERIFICATION",
+                "unit_test_verification_secret_12345678901234567890"
             );
 
             _googleCaptchaSecret = GetOptional("GOOGLE_CAPTCHA_SECRET");
@@ -117,6 +123,7 @@ namespace backend.main.configurations.environment
         public static string RedisConnection => _redisConnection;
         public static string RabbitConnection => _rabbitConnection;
         public static string JwtSecretKeyAccess => _jwtSecretKeyAccess;
+        public static string JwtSecretKeyVerification => _jwtSecretKeyVerification;
         public static string? Email => _email;
         public static string? Password => _password;
         public static string? SmtpServer => _smtpServer;

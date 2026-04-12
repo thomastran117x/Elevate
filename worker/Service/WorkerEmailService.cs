@@ -21,7 +21,7 @@ namespace worker.Services
         private readonly string? _username;
         private readonly string? _appPassword;
 
-        private readonly AsyncRetryPolicy _smtpRetryPolicy;
+        private readonly AsyncRetryPolicy? _smtpRetryPolicy;
         private bool IsConfigured { get; }
 
         public EmailService()
@@ -29,8 +29,8 @@ namespace worker.Services
             _username = EnvManager.Email;
             _appPassword = EnvManager.Password;
 
-            if (string.IsNullOrWhiteSpace(_username) ||
-                string.IsNullOrWhiteSpace(_appPassword))
+            if (string.IsNullOrWhiteSpace(_username)
+                || string.IsNullOrWhiteSpace(_appPassword))
             {
                 Logger.Warn("[EmailService] EMAIL or EMAIL_PASSWORD not configured.");
                 IsConfigured = false;
@@ -45,12 +45,12 @@ namespace worker.Services
                 .WaitAndRetryAsync(
                     retryCount: 3,
                     sleepDurationProvider: attempt =>
-                        TimeSpan.FromSeconds(Math.Pow(2, attempt)) +
-                        TimeSpan.FromMilliseconds(Random.Shared.Next(0, 500)),
+                        TimeSpan.FromSeconds(Math.Pow(2, attempt))
+                        + TimeSpan.FromMilliseconds(Random.Shared.Next(0, 500)),
                     onRetry: (ex, delay, attempt, _) =>
                     {
                         Logger.Warn(
-                            $"[EmailService] SMTP retry {attempt}/3 in {delay.TotalSeconds:F1}s — {ex.Message}"
+                            $"[EmailService] SMTP retry {attempt}/3 in {delay.TotalSeconds:F1}s - {ex.Message}"
                         );
                     }
                 );
@@ -68,20 +68,48 @@ namespace worker.Services
             }
         }
 
-        // ------------------------------------------------------------------
-        // Public API
-        // ------------------------------------------------------------------
-
-        public async Task SendVerificationEmailAsync(string toEmail, string token)
+        public async Task SendVerificationEmailAsync(string toEmail, string token, string? code = null)
         {
             EnsureEnabled();
 
             var verifyUrl =
                 $"http://localhost:3090/auth/verify?token={Uri.EscapeDataString(token)}";
 
-            var message = BuildVerificationMessage(toEmail, verifyUrl);
+            await SendAsync(
+                BuildActionMessage(
+                    toEmail,
+                    "Verify Your Email Address",
+                    "Welcome to EventXperience",
+                    "Thanks for signing up for EventXperience. Confirm your email using the code below in the app, or continue with the secure link.",
+                    "Verify My Email",
+                    verifyUrl,
+                    code,
+                    "verification",
+                    "This verification code and link expire in 30 minutes."
+                )
+            );
+        }
 
-            await SendAsync(message);
+        public async Task SendResetPasswordEmailAsync(string toEmail, string token, string? code = null)
+        {
+            EnsureEnabled();
+
+            var resetUrl =
+                $"http://localhost:3090/auth/change-password?token={Uri.EscapeDataString(token)}";
+
+            await SendAsync(
+                BuildActionMessage(
+                    toEmail,
+                    "Reset Your Password",
+                    "Reset Your Password",
+                    "We received a request to reset your EventXperience password. Use the code below in the app, or continue with the secure reset link.",
+                    "Reset Password",
+                    resetUrl,
+                    code,
+                    "password reset",
+                    "This reset code and link expire in 30 minutes."
+                )
+            );
         }
 
         public async Task SendNewDeviceEmailAsync(string toEmail, string token)
@@ -91,15 +119,19 @@ namespace worker.Services
             var verifyUrl =
                 $"http://localhost:3090/auth/device/verify?token={Uri.EscapeDataString(token)}";
 
-            var message = BuildNewDeviceMessage(toEmail, verifyUrl);
-
-            await SendAsync(message);
-        }
-
-        public Task SendResetPasswordEmailAsync(string toEmail, string token)
-        {
-            EnsureEnabled();
-            throw new NotImplementedException();
+            await SendAsync(
+                BuildActionMessage(
+                    toEmail,
+                    "New Device Login Detected",
+                    "New Device Detected",
+                    "We noticed a login attempt from a device we do not recognise. If this was you, confirm the device below to complete the login.",
+                    "Verify This Device",
+                    verifyUrl,
+                    null,
+                    "device verification",
+                    "This verification link expires in 15 minutes."
+                )
+            );
         }
 
         public Task SendConfirmationEmailAsync(string toEmail, string token)
@@ -110,13 +142,9 @@ namespace worker.Services
 
         public bool isEmailEnabled() => IsConfigured;
 
-        // ------------------------------------------------------------------
-        // Internal helpers
-        // ------------------------------------------------------------------
-
         private async Task SendAsync(MimeMessage message)
         {
-            await _smtpRetryPolicy.ExecuteAsync(async () =>
+            await _smtpRetryPolicy!.ExecuteAsync(async () =>
             {
                 using var client = new SmtpClient();
 
@@ -158,15 +186,34 @@ namespace worker.Services
             }
         }
 
-        private static MimeMessage BuildVerificationMessage(
+        private static MimeMessage BuildActionMessage(
             string toEmail,
-            string verifyUrl
+            string subject,
+            string title,
+            string intro,
+            string buttonLabel,
+            string actionUrl,
+            string? code,
+            string codeLabel,
+            string footerNote
         )
         {
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress("EventXperience Team", EnvManager.Email));
             message.To.Add(MailboxAddress.Parse(toEmail));
-            message.Subject = "Verify Your Email Address";
+            message.Subject = subject;
+
+            var otpHtml = string.IsNullOrWhiteSpace(code)
+                ? string.Empty
+                : $@"
+                    <div style='margin:28px 0;padding:24px;border-radius:16px;background:#f5f3ff;border:1px solid #ddd6fe;text-align:center;'>
+                        <p style='margin:0 0 10px;font-size:14px;color:#6b7280;'>Your {codeLabel} code</p>
+                        <div style='font-size:32px;letter-spacing:8px;font-weight:700;color:#4c1d95;'>{code}</div>
+                    </div>";
+
+            var otpText = string.IsNullOrWhiteSpace(code)
+                ? string.Empty
+                : $"Your {codeLabel} code is: {code}\n\n";
 
             var builder = new BodyBuilder
             {
@@ -175,234 +222,36 @@ namespace worker.Services
             <html>
             <body style='margin:0;padding:0;background-color:#f5f3ff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;'>
                 <div style='max-width:640px;margin:48px auto;padding:0 16px;'>
+                    <div style='background:#ffffff;border-radius:18px;box-shadow:0 12px 30px rgba(88,80,236,0.18);overflow:hidden;'>
+                        <div style='background:linear-gradient(135deg,#6d28d9,#7c3aed,#8b5cf6);padding:36px 28px;text-align:center;color:#ffffff;'>
+                            <h1 style='margin:0;font-size:26px;font-weight:700;letter-spacing:0.4px;'>{title}</h1>
+                        </div>
 
-                <!-- Card -->
-                <div style='
-                    background:#ffffff;
-                    border-radius:18px;
-                    box-shadow:0 12px 30px rgba(88,80,236,0.18);
-                    overflow:hidden;
-                '>
-
-                    <!-- Header -->
-                    <div style='
-                    background:linear-gradient(135deg,#6d28d9,#7c3aed,#8b5cf6);
-                    padding:36px 28px;
-                    text-align:center;
-                    color:#ffffff;
-                    '>
-                    <h1 style='
-                        margin:0;
-                        font-size:26px;
-                        font-weight:700;
-                        letter-spacing:0.4px;
-                    '>
-                        Welcome to EventXperience
-                    </h1>
-                    <p style='
-                        margin:10px 0 0;
-                        font-size:15px;
-                        opacity:0.95;
-                    '>
-                        Discover events. Create moments. ✨
-                    </p>
+                        <div style='padding:40px 34px;color:#1f2937;'>
+                            <p style='font-size:17px;margin:0 0 18px;'>Hi there</p>
+                            <p style='font-size:16px;line-height:1.65;margin:0 0 22px;color:#374151;'>{intro}</p>
+                            {otpHtml}
+                            <div style='text-align:center;margin:36px 0;'>
+                                <a href='{actionUrl}'
+                                style='display:inline-block;background:linear-gradient(135deg,#7c3aed,#8b5cf6);color:#ffffff;padding:16px 34px;font-size:16px;font-weight:600;border-radius:12px;text-decoration:none;box-shadow:0 6px 16px rgba(124,58,237,0.45);'>
+                                {buttonLabel}
+                                </a>
+                            </div>
+                            <p style='font-size:14px;color:#6b7280;line-height:1.6;margin:0;'>
+                                {footerNote}
+                            </p>
+                        </div>
                     </div>
-
-                    <!-- Body -->
-                    <div style='padding:40px 34px;color:#1f2937;'>
-                    <p style='font-size:17px;margin:0 0 18px;'>
-                        Hi there 👋
-                    </p>
-
-                    <p style='font-size:16px;line-height:1.65;margin:0 0 22px;color:#374151;'>
-                        Thanks for signing up for <strong>EventXperience</strong>!
-                        Before you get started, please confirm your email address.
-                    </p>
-
-                    <!-- CTA -->
-                    <div style='text-align:center;margin:36px 0;'>
-                        <a href='{verifyUrl}'
-                        style='
-                            display:inline-block;
-                            background:linear-gradient(135deg,#7c3aed,#8b5cf6);
-                            color:#ffffff;
-                            padding:16px 34px;
-                            font-size:16px;
-                            font-weight:600;
-                            border-radius:12px;
-                            text-decoration:none;
-                            box-shadow:0 6px 16px rgba(124,58,237,0.45);
-                        '>
-                        Verify My Email
-                        </a>
-                    </div>
-
-                    <p style='font-size:14px;color:#6b7280;line-height:1.6;margin:0 0 12px;'>
-                        This verification link will expire in <strong>10 minutes</strong> for security reasons.
-                    </p>
-
-                    <p style='font-size:14px;color:#6b7280;line-height:1.6;margin:0;'>
-                        If you didn’t create an EventXperience account, you can safely ignore this email.
-                    </p>
-                    </div>
-
-                    <!-- Divider -->
-                    <div style='height:1px;background:#e5e7eb;margin:0 34px;'></div>
-
-                    <!-- Footer -->
-                    <div style='padding:24px 34px 32px;text-align:center;'>
-                    <p style='
-                        font-size:14px;
-                        color:#4f46e5;
-                        font-weight:600;
-                        margin:0 0 8px;
-                    '>
-                        — The EventXperience Team
-                    </p>
-                    <p style='
-                        font-size:12px;
-                        color:#9ca3af;
-                        margin:0;
-                    '>
-                        © {DateTime.UtcNow.Year} EventXperience. All rights reserved.
-                    </p>
-                    </div>
-
-                </div>
                 </div>
             </body>
-            </html>
-            ",
-
+            </html>",
                 TextBody =
-                    $"Welcome to EventXperience!\n\n" +
-                    $"Please verify your email address using the link below:\n\n" +
-                    $"{verifyUrl}\n\n" +
-                    $"This link expires in 10 minutes.\n\n" +
-                    $"— The EventXperience Team"
-            };
-
-            message.Body = builder.ToMessageBody();
-
-            return message;
-        }
-
-        private static MimeMessage BuildNewDeviceMessage(string toEmail, string verifyUrl)
-        {
-            var message = new MimeMessage();
-            message.From.Add(new MailboxAddress("EventXperience Team", EnvManager.Email));
-            message.To.Add(MailboxAddress.Parse(toEmail));
-            message.Subject = "New Device Login Detected";
-
-            var builder = new BodyBuilder
-            {
-                HtmlBody = $@"
-            <!DOCTYPE html>
-            <html>
-            <body style='margin:0;padding:0;background-color:#f5f3ff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;'>
-                <div style='max-width:640px;margin:48px auto;padding:0 16px;'>
-
-                <!-- Card -->
-                <div style='
-                    background:#ffffff;
-                    border-radius:18px;
-                    box-shadow:0 12px 30px rgba(88,80,236,0.18);
-                    overflow:hidden;
-                '>
-
-                    <!-- Header -->
-                    <div style='
-                    background:linear-gradient(135deg,#6d28d9,#7c3aed,#8b5cf6);
-                    padding:36px 28px;
-                    text-align:center;
-                    color:#ffffff;
-                    '>
-                    <h1 style='
-                        margin:0;
-                        font-size:26px;
-                        font-weight:700;
-                        letter-spacing:0.4px;
-                    '>
-                        New Device Detected
-                    </h1>
-                    <p style='
-                        margin:10px 0 0;
-                        font-size:15px;
-                        opacity:0.95;
-                    '>
-                        Someone signed in from a new device
-                    </p>
-                    </div>
-
-                    <!-- Body -->
-                    <div style='padding:40px 34px;color:#1f2937;'>
-                    <p style='font-size:17px;margin:0 0 18px;'>
-                        Hi there 👋
-                    </p>
-
-                    <p style='font-size:16px;line-height:1.65;margin:0 0 22px;color:#374151;'>
-                        We noticed a login attempt to your <strong>EventXperience</strong> account from a device we don't recognise.
-                        If this was you, please verify the device below to complete your login.
-                    </p>
-
-                    <!-- CTA -->
-                    <div style='text-align:center;margin:36px 0;'>
-                        <a href='{verifyUrl}'
-                        style='
-                            display:inline-block;
-                            background:linear-gradient(135deg,#7c3aed,#8b5cf6);
-                            color:#ffffff;
-                            padding:16px 34px;
-                            font-size:16px;
-                            font-weight:600;
-                            border-radius:12px;
-                            text-decoration:none;
-                            box-shadow:0 6px 16px rgba(124,58,237,0.45);
-                        '>
-                        Verify This Device
-                        </a>
-                    </div>
-
-                    <p style='font-size:14px;color:#6b7280;line-height:1.6;margin:0 0 12px;'>
-                        This link will expire in <strong>15 minutes</strong>. If you did not attempt to log in, you can safely ignore this email and your account will remain secure.
-                    </p>
-                    </div>
-
-                    <!-- Divider -->
-                    <div style='height:1px;background:#e5e7eb;margin:0 34px;'></div>
-
-                    <!-- Footer -->
-                    <div style='padding:24px 34px 32px;text-align:center;'>
-                    <p style='
-                        font-size:14px;
-                        color:#4f46e5;
-                        font-weight:600;
-                        margin:0 0 8px;
-                    '>
-                        — The EventXperience Team
-                    </p>
-                    <p style='
-                        font-size:12px;
-                        color:#9ca3af;
-                        margin:0;
-                    '>
-                        © {DateTime.UtcNow.Year} EventXperience. All rights reserved.
-                    </p>
-                    </div>
-
-                </div>
-                </div>
-            </body>
-            </html>
-            ",
-
-                TextBody =
-                    $"EventXperience — New Device Login\n\n" +
-                    $"We noticed a login attempt from a new device. Click the link below to verify it:\n\n" +
-                    $"{verifyUrl}\n\n" +
-                    $"This link expires in 15 minutes.\n\n" +
-                    $"If you did not attempt to log in, ignore this email.\n\n" +
-                    $"— The EventXperience Team"
+                    $"{title}\n\n" +
+                    $"{intro}\n\n" +
+                    otpText +
+                    $"Continue here:\n{actionUrl}\n\n" +
+                    $"{footerNote}\n\n" +
+                    $"- The EventXperience Team"
             };
 
             message.Body = builder.ToMessageBody();

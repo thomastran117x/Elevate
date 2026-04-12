@@ -71,13 +71,15 @@ public sealed class EmailWorker : BackgroundService, IAsyncDisposable
             EmailMessageType.VerifyEmail =>
                 _emailService.SendVerificationEmailAsync(
                     message.Email,
-                    message.Token
+                    message.Token,
+                    message.Code
                 ),
 
             EmailMessageType.ResetPassword =>
                 _emailService.SendResetPasswordEmailAsync(
                     message.Email,
-                    message.Token
+                    message.Token,
+                    message.Code
                 ),
 
             EmailMessageType.AccountConfirmation =>

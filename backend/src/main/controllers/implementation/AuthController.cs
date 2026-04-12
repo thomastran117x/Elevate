@@ -69,11 +69,22 @@ namespace backend.main.implementation.controllers
         {
             try
             {
-                await _authService.SignUpAsync(request.Email, request.Password, request.Usertype);
+                var challenge = await _authService.SignUpAsync(
+                    request.Email,
+                    request.Password,
+                    request.Usertype
+                );
 
                 return StatusCode(
                     200,
-                    new MessageResponse("Verification email sent.")
+                    new ApiResponse<VerificationChallengeResponse>(
+                        "Verification email sent.",
+                        new VerificationChallengeResponse
+                        {
+                            Challenge = challenge.Challenge,
+                            ExpiresAtUtc = challenge.ExpiresAtUtc,
+                        }
+                    )
                 );
             }
             catch (Exception e)
@@ -82,6 +93,39 @@ namespace backend.main.implementation.controllers
                     return HandleError.Resolve(e);
 
                 Logger.Error($"[AuthController] LocalSignup failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [HttpPost("verify/otp")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> LocalVerifyOtp([FromBody] OtpVerificationRequest request)
+        {
+            try
+            {
+                UserToken userToken = await _authService.VerifyOtpAsync(
+                    request.Code,
+                    request.Challenge
+                );
+                User user = userToken.user;
+                Token authToken = userToken.token;
+
+                AuthResponse response = CreateAuthResponse(user, authToken);
+
+                return StatusCode(
+                    200,
+                    new ApiResponse<AuthResponse>(
+                        "Verification successful",
+                        response
+                    )
+                );
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[AuthController] LocalVerifyOtp failed: {e}");
                 return HandleError.Resolve(e);
             }
         }
@@ -287,11 +331,20 @@ namespace backend.main.implementation.controllers
         {
             try
             {
-                await _authService.ForgotPasswordAsync(request.Email);
+                var challenge = await _authService.ForgotPasswordAsync(request.Email);
 
                 return StatusCode(
                     200,
-                    new MessageResponse("If the account exist, we send a reset email")
+                    new ApiResponse<VerificationChallengeResponse?>(
+                        "If the account exist, we send a reset email",
+                        challenge == null
+                            ? null
+                            : new VerificationChallengeResponse
+                            {
+                                Challenge = challenge.Challenge,
+                                ExpiresAtUtc = challenge.ExpiresAtUtc,
+                            }
+                    )
                 );
             }
             catch (Exception e)
@@ -310,7 +363,23 @@ namespace backend.main.implementation.controllers
         {
             try
             {
-                await _authService.ChangePasswordAsync(token, request.Password);
+                if (!string.IsNullOrWhiteSpace(token))
+                {
+                    await _authService.ChangePasswordAsync(token, request.Password);
+                }
+                else if (!string.IsNullOrWhiteSpace(request.Code)
+                    && !string.IsNullOrWhiteSpace(request.Challenge))
+                {
+                    await _authService.ChangePasswordWithOtpAsync(
+                        request.Code,
+                        request.Challenge,
+                        request.Password
+                    );
+                }
+                else
+                {
+                    throw new BadRequestException("Missing password reset token or OTP challenge.");
+                }
 
                 return StatusCode(
                     200,
