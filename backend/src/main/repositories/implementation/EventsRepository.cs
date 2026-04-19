@@ -155,6 +155,14 @@ namespace backend.main.repositories.implementation
                 .ToListAsync();
         }
 
+        public async Task<List<Events>> GetAllForReindexAsync(int page, int pageSize) =>
+            await _context.Events
+                .AsNoTracking()
+                .OrderBy(e => e.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
         public async Task<List<Events>> CreateManyAsync(IEnumerable<Events> events)
         {
             var list = events.ToList();

@@ -427,4 +427,24 @@ namespace backend.main.implementation.controllers
             }
         }
     }
+
+    [ApiController]
+    [Route("admin/events")]
+    [Authorize("AdminOnly")]
+    public class AdminEventsController : ControllerBase
+    {
+        private readonly IEventReindexService _reindexService;
+
+        public AdminEventsController(IEventReindexService reindexService)
+        {
+            _reindexService = reindexService;
+        }
+
+        [HttpPost("reindex")]
+        public async Task<IActionResult> ReindexEvents()
+        {
+            var count = await _reindexService.ReindexAllAsync();
+            return Ok(new { indexed = count });
+        }
+    }
 }

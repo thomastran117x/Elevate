@@ -51,6 +51,9 @@ namespace backend.main.configurations.application
             services.AddScoped<IClubPostSearchService, ClubPostSearchService>();
             services.AddScoped<IClubPostReindexService, ClubPostReindexService>();
             services.AddHostedService<ClubPostIndexConsumer>();
+            services.AddScoped<IEventSearchService, EventSearchService>();
+            services.AddScoped<IEventReindexService, EventReindexService>();
+            services.AddHostedService<EventIndexConsumer>();
             services.AddScoped<IPostCommentService, PostCommentService>();
             services.AddScoped<IEventRegistrationService, EventRegistrationService>();
             services.AddScoped<IFileUploadService, FileUploadService>();

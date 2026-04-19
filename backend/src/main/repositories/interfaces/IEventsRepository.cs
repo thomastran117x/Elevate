@@ -20,6 +20,7 @@ namespace backend.main.repositories.interfaces
             int page = 1,
             int pageSize = 20);
         Task<List<Events>> GetByIdsAsync(IEnumerable<int> ids);
+        Task<List<Events>> GetAllForReindexAsync(int page, int pageSize);
         Task<List<Events>> CreateManyAsync(IEnumerable<Events> events);
         Task<int> UpdateManyAsync(IEnumerable<(int id, Action<Events> patch)> updates);
         Task<int> DeleteManyAsync(IEnumerable<int> ids);

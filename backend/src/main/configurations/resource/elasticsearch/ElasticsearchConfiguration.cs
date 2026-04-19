@@ -22,8 +22,7 @@ namespace backend.main.configurations.resource.elasticsearch
 
             try
             {
-                var settings = new ElasticsearchClientSettings(new Uri(url))
-                    .DefaultIndex("club_posts");
+                var settings = new ElasticsearchClientSettings(new Uri(url));
 
                 var client = new ElasticsearchClient(settings);
                 services.AddSingleton(client);

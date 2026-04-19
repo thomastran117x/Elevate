@@ -1,12 +1,14 @@
 using System.Text.Json;
 
 using backend.main.dtos;
+using backend.main.dtos.messages;
 using backend.main.dtos.requests.events;
 using backend.main.dtos.responses.events;
 using backend.main.exceptions.http;
 using backend.main.Mappers;
 using backend.main.models.core;
 using backend.main.models.enums;
+using backend.main.publishers.interfaces;
 using backend.main.repositories.interfaces;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
@@ -22,6 +24,8 @@ namespace backend.main.services.implementation
         private readonly IAzureBlobService _blobService;
         private readonly ICacheService _cache;
         private readonly IEventAnalyticsRepository _analyticsRepository;
+        private readonly IPublisher _publisher;
+        private readonly IEventSearchService _searchService;
 
         private static readonly TimeSpan EventTTL = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan EventListTTL = TimeSpan.FromSeconds(60);
@@ -35,7 +39,9 @@ namespace backend.main.services.implementation
             IClubService clubService,
             IAzureBlobService blobService,
             ICacheService cache,
-            IEventAnalyticsRepository analyticsRepository)
+            IEventAnalyticsRepository analyticsRepository,
+            IPublisher publisher,
+            IEventSearchService searchService)
         {
             _eventsRepository = eventsRepository;
             _imageRepository = imageRepository;
@@ -43,6 +49,8 @@ namespace backend.main.services.implementation
             _blobService = blobService;
             _cache = cache;
             _analyticsRepository = analyticsRepository;
+            _publisher = publisher;
+            _searchService = searchService;
         }
 
         public async Task<Events> CreateEvent(
@@ -85,6 +93,7 @@ namespace backend.main.services.implementation
 
                 await CacheEventAsync(withImages);
                 await BumpEventListVersionAsync();
+                await PublishIndexEventAsync(BuildUpsertEvent(withImages));
 
                 return withImages;
             }
@@ -152,6 +161,30 @@ namespace backend.main.services.implementation
                 var cached = await _cache.GetValueAsync(key);
                 if (cached != null)
                     return JsonSerializer.Deserialize<List<Events>>(cached)!;
+
+                if (!string.IsNullOrWhiteSpace(normalized))
+                {
+                    try
+                    {
+                        var (ids, _) = await _searchService.SearchAsync(normalized, isPrivate, status, page, pageSize);
+                        var esEvents = ids.Count > 0
+                            ? await _eventsRepository.GetByIdsAsync(ids)
+                            : new List<Events>();
+
+                        var ordered = ids
+                            .Select(id => esEvents.FirstOrDefault(e => e.Id == id))
+                            .Where(e => e != null)
+                            .Cast<Events>()
+                            .ToList();
+
+                        await _cache.SetValueAsync(key, JsonSerializer.Serialize(ordered), WithJitter(EventListTTL));
+                        return ordered;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn(ex, "[EventsService] Elasticsearch unavailable. Falling back to MySQL LIKE search.");
+                    }
+                }
 
                 var events = await _eventsRepository.SearchAsync(
                     normalized,
@@ -264,6 +297,7 @@ namespace backend.main.services.implementation
 
                 await CacheEventAsync(withImages);
                 await BumpEventListVersionAsync();
+                await PublishIndexEventAsync(BuildUpsertEvent(withImages));
 
                 return withImages;
             }
@@ -301,6 +335,7 @@ namespace backend.main.services.implementation
 
                 await _cache.DeleteKeyAsync($"event:{eventId}");
                 await BumpEventListVersionAsync();
+                await PublishIndexEventAsync(new EventIndexEvent { Operation = "delete", EventId = eventId });
             }
             catch (Exception e)
             {
@@ -361,6 +396,9 @@ namespace backend.main.services.implementation
 
                 await BumpEventListVersionAsync();
 
+                foreach (var ev in created)
+                    await PublishIndexEventAsync(BuildUpsertEvent(ev));
+
                 return new BatchCreateResultResponse
                 {
                     Created = created.Select(EventMapper.MapToResponse).ToList()
@@ -409,6 +447,10 @@ namespace backend.main.services.implementation
                 await Task.WhenAll(ids.Select(id => _cache.DeleteKeyAsync($"event:{id}")));
                 await BumpEventListVersionAsync();
 
+                var updated = await _eventsRepository.GetByIdsAsync(ids);
+                foreach (var ev in updated)
+                    await PublishIndexEventAsync(BuildUpsertEvent(ev));
+
                 return count;
             }
             catch (Exception e)
@@ -442,6 +484,9 @@ namespace backend.main.services.implementation
                 _ = Task.WhenAll(imageUrls.Select(url => _blobService.DeleteBlobAsync(url)));
                 await Task.WhenAll(idList.Select(id => _cache.DeleteKeyAsync($"event:{id}")));
                 await BumpEventListVersionAsync();
+
+                foreach (var id in idList)
+                    await PublishIndexEventAsync(new EventIndexEvent { Operation = "delete", EventId = id });
 
                 return deleted;
             }
@@ -676,6 +721,33 @@ namespace backend.main.services.implementation
 
                 Logger.Error($"[EventsService] GetClubAnalytics failed: {e}");
                 throw new InternalServerErrorException();
+            }
+        }
+
+        private static EventIndexEvent BuildUpsertEvent(Events ev) => new()
+        {
+            Operation = "upsert",
+            EventId = ev.Id,
+            ClubId = ev.ClubId,
+            Name = ev.Name,
+            Description = ev.Description,
+            Location = ev.Location,
+            IsPrivate = ev.isPrivate,
+            StartTime = ev.StartTime,
+            EndTime = ev.EndTime,
+            CreatedAt = ev.CreatedAt,
+            UpdatedAt = ev.UpdatedAt
+        };
+
+        private async Task PublishIndexEventAsync(EventIndexEvent evt)
+        {
+            try
+            {
+                await _publisher.PublishAsync("event-es-index", evt);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, $"Failed to publish ES index event for event {evt.EventId}. Index may be stale.");
             }
         }
 
