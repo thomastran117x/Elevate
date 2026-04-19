@@ -2,6 +2,7 @@ using backend.main.dtos.requests.events;
 using backend.main.dtos.responses.events;
 using backend.main.models.core;
 using backend.main.models.enums;
+using backend.main.models.search;
 
 namespace backend.main.services.interfaces
 {
@@ -16,20 +17,20 @@ namespace backend.main.services.interfaces
             IEnumerable<string> imageUrls,
             DateTime startTime,
             DateTime? endTime,
-            bool isPrivate = false,
-            int maxParticipants = 100,
-            int registerCost = 0
+            bool isPrivate,
+            int maxParticipants,
+            int registerCost,
+            EventCategory category,
+            string? venueName,
+            string? city,
+            double? latitude,
+            double? longitude,
+            List<string>? tags
         );
 
         Task<Events> GetEvent(int eventId);
 
-        Task<List<Events>> GetEvents(
-            string? search = null,
-            bool isPrivate = false,
-            EventStatus? status = null,
-            int page = 1,
-            int pageSize = 20
-        );
+        Task<(List<Events> Events, Dictionary<int, double> DistanceKmById)> GetEvents(EventSearchCriteria criteria);
 
         Task<List<Events>> GetEventsByClub(
             int clubId,
@@ -49,7 +50,13 @@ namespace backend.main.services.interfaces
             DateTime? endTime,
             bool isPrivate,
             int maxParticipants,
-            int registerCost
+            int registerCost,
+            EventCategory category,
+            string? venueName,
+            string? city,
+            double? latitude,
+            double? longitude,
+            List<string>? tags
         );
 
         Task DeleteEvent(int eventId, int userId);
@@ -68,5 +75,8 @@ namespace backend.main.services.interfaces
         Task<PresignedUploadResponse> GenerateImageUploadUrlAsync(string fileName, string contentType);
         Task<EventImage> AddEventImageAsync(int eventId, int userId, string imageUrl);
         Task RemoveEventImageAsync(int eventId, int imageId, int userId);
+
+        // Registration count denorm (called by EventRegistrationService)
+        Task NotifyRegistrationChangedAsync(int eventId);
     }
 }

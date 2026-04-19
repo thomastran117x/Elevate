@@ -41,5 +41,16 @@ namespace backend.main.dtos.responses.events
             get; set;
         }
         public EventStatus Status { get; set; }
+
+        public EventCategory Category { get; set; }
+        public string? VenueName { get; set; }
+        public string? City { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public List<string> Tags { get; set; } = new();
+        public int RegistrationCount { get; set; }
+
+        // Populated only when a proximity search was performed.
+        public double? DistanceKm { get; set; }
     }
 }

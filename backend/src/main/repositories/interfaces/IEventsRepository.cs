@@ -1,5 +1,6 @@
 using backend.main.models.core;
 using backend.main.models.enums;
+using backend.main.models.search;
 
 namespace backend.main.repositories.interfaces
 {
@@ -13,16 +14,12 @@ namespace backend.main.repositories.interfaces
         Task<bool> UpdatePartialAsync(int id, Action<Events> patch);
         Task<bool> DeleteAsync(int id);
         Task<bool> ExistsAsync(int id);
-        Task<List<Events>> SearchAsync(
-            string? search,
-            bool isPrivate,
-            EventStatus? status,
-            int page = 1,
-            int pageSize = 20);
+        Task<List<Events>> SearchAsync(EventSearchCriteria criteria);
         Task<List<Events>> GetByIdsAsync(IEnumerable<int> ids);
         Task<List<Events>> GetAllForReindexAsync(int page, int pageSize);
         Task<List<Events>> CreateManyAsync(IEnumerable<Events> events);
         Task<int> UpdateManyAsync(IEnumerable<(int id, Action<Events> patch)> updates);
         Task<int> DeleteManyAsync(IEnumerable<int> ids);
+        Task IncrementRegistrationCountAsync(int eventId, int delta);
     }
 }

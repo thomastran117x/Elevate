@@ -122,6 +122,17 @@ namespace backend.main.consumers
                     }
                     else
                     {
+                        Elastic.Clients.Elasticsearch.GeoLocation? geo = null;
+                        if (evt.Latitude.HasValue && evt.Longitude.HasValue)
+                        {
+                            geo = Elastic.Clients.Elasticsearch.GeoLocation.LatitudeLongitude(
+                                new Elastic.Clients.Elasticsearch.LatLonGeoLocation
+                                {
+                                    Lat = evt.Latitude.Value,
+                                    Lon = evt.Longitude.Value
+                                });
+                        }
+
                         await searchService.IndexAsync(new EventDocument
                         {
                             Id = evt.EventId,
@@ -133,7 +144,13 @@ namespace backend.main.consumers
                             StartTime = evt.StartTime ?? DateTime.UtcNow,
                             EndTime = evt.EndTime,
                             CreatedAt = evt.CreatedAt ?? DateTime.UtcNow,
-                            UpdatedAt = evt.UpdatedAt ?? DateTime.UtcNow
+                            UpdatedAt = evt.UpdatedAt ?? DateTime.UtcNow,
+                            Category = (evt.Category ?? backend.main.models.enums.EventCategory.Other).ToString(),
+                            VenueName = evt.VenueName,
+                            City = evt.City,
+                            Tags = evt.Tags ?? new List<string>(),
+                            LocationGeo = geo,
+                            RegistrationCount = evt.RegistrationCount ?? 0
                         });
                     }
                 });

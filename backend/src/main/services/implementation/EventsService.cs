@@ -8,6 +8,7 @@ using backend.main.exceptions.http;
 using backend.main.Mappers;
 using backend.main.models.core;
 using backend.main.models.enums;
+using backend.main.models.search;
 using backend.main.publishers.interfaces;
 using backend.main.repositories.interfaces;
 using backend.main.services.interfaces;
@@ -62,9 +63,15 @@ namespace backend.main.services.implementation
             IEnumerable<string> imageUrls,
             DateTime startTime,
             DateTime? endTime,
-            bool isPrivate = false,
-            int maxParticipants = 100,
-            int registerCost = 0)
+            bool isPrivate,
+            int maxParticipants,
+            int registerCost,
+            EventCategory category,
+            string? venueName,
+            string? city,
+            double? latitude,
+            double? longitude,
+            List<string>? tags)
         {
             try
             {
@@ -80,7 +87,13 @@ namespace backend.main.services.implementation
                     isPrivate = isPrivate,
                     maxParticipants = maxParticipants,
                     registerCost = registerCost,
-                    ClubId = clubId
+                    ClubId = clubId,
+                    Category = category,
+                    VenueName = venueName,
+                    City = city,
+                    Latitude = latitude,
+                    Longitude = longitude,
+                    Tags = NormalizeTags(tags)
                 };
 
                 var created = await _eventsRepository.CreateAsync(ev);
@@ -140,67 +153,46 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task<List<Events>> GetEvents(
-            string? search = null,
-            bool isPrivate = false,
-            EventStatus? status = null,
-            int page = 1,
-            int pageSize = 20)
+        public async Task<(List<Events> Events, Dictionary<int, double> DistanceKmById)> GetEvents(EventSearchCriteria criteria)
         {
             try
             {
-                var version = await GetEventListVersionAsync();
+                var normalized = string.IsNullOrWhiteSpace(criteria.Query)
+                    ? null
+                    : criteria.Query.Trim().ToLowerInvariant();
 
-                var normalized = search?.Trim().ToLowerInvariant();
-                var statusKey = status.HasValue ? status.Value.ToString() : "all";
+                var effective = criteria with { Query = normalized };
 
-                var key = normalized == null
-                    ? $"events:list:v{version}:st{statusKey}:p{page}:s{pageSize}"
-                    : $"events:list:v{version}:st{statusKey}:q:{normalized}:p{page}:s{pageSize}";
-
-                var cached = await _cache.GetValueAsync(key);
-                if (cached != null)
-                    return JsonSerializer.Deserialize<List<Events>>(cached)!;
-
-                if (!string.IsNullOrWhiteSpace(normalized))
+                // ES is the only path for proximity/tags/category/sort options.
+                // If ES is down, fall back to a best-effort MySQL search that honors category/city/text/status.
+                try
                 {
-                    try
-                    {
-                        var (ids, _) = await _searchService.SearchAsync(normalized, isPrivate, status, page, pageSize);
-                        var esEvents = ids.Count > 0
-                            ? await _eventsRepository.GetByIdsAsync(ids)
-                            : new List<Events>();
+                    var result = await _searchService.SearchAsync(effective);
+                    if (result.Hits.Count == 0)
+                        return (new List<Events>(), new Dictionary<int, double>());
 
-                        var ordered = ids
-                            .Select(id => esEvents.FirstOrDefault(e => e.Id == id))
-                            .Where(e => e != null)
-                            .Cast<Events>()
-                            .ToList();
+                    var ids = result.Hits.Select(h => h.Id).ToList();
+                    var esEvents = await _eventsRepository.GetByIdsAsync(ids);
 
-                        await _cache.SetValueAsync(key, JsonSerializer.Serialize(ordered), WithJitter(EventListTTL));
-                        return ordered;
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Warn(ex, "[EventsService] Elasticsearch unavailable. Falling back to MySQL LIKE search.");
-                    }
+                    var ordered = ids
+                        .Select(id => esEvents.FirstOrDefault(e => e.Id == id))
+                        .Where(e => e != null)
+                        .Cast<Events>()
+                        .ToList();
+
+                    var distanceMap = result.Hits
+                        .Where(h => h.DistanceKm.HasValue)
+                        .ToDictionary(h => h.Id, h => h.DistanceKm!.Value);
+
+                    return (ordered, distanceMap);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "[EventsService] Elasticsearch unavailable. Falling back to MySQL search.");
                 }
 
-                var events = await _eventsRepository.SearchAsync(
-                    normalized,
-                    isPrivate,
-                    status,
-                    page,
-                    pageSize
-                );
-
-                await _cache.SetValueAsync(
-                    key,
-                    JsonSerializer.Serialize(events),
-                    WithJitter(EventListTTL)
-                );
-
-                return events;
+                var events = await _eventsRepository.SearchAsync(effective);
+                return (events, new Dictionary<int, double>());
             }
             catch (Exception e)
             {
@@ -222,13 +214,14 @@ namespace backend.main.services.implementation
             {
                 await _clubService.GetClub(clubId);
 
-                return await _eventsRepository.SearchAsync(
-                    null,
-                    false,
-                    status,
-                    page,
-                    pageSize
-                );
+                return await _eventsRepository.SearchAsync(new EventSearchCriteria
+                {
+                    Query = null,
+                    IsPrivate = false,
+                    Status = status,
+                    Page = page,
+                    PageSize = pageSize
+                });
             }
             catch (Exception e)
             {
@@ -251,7 +244,13 @@ namespace backend.main.services.implementation
             DateTime? endTime,
             bool isPrivate,
             int maxParticipants,
-            int registerCost)
+            int registerCost,
+            EventCategory category,
+            string? venueName,
+            string? city,
+            double? latitude,
+            double? longitude,
+            List<string>? tags)
         {
             try
             {
@@ -276,7 +275,13 @@ namespace backend.main.services.implementation
                     isPrivate = isPrivate,
                     maxParticipants = maxParticipants,
                     registerCost = registerCost,
-                    ClubId = club.Id
+                    ClubId = club.Id,
+                    Category = category,
+                    VenueName = venueName,
+                    City = city,
+                    Latitude = latitude,
+                    Longitude = longitude,
+                    Tags = NormalizeTags(tags)
                 }) ?? throw new InternalServerErrorException("Update failed");
 
                 if (imageUrls != null)
@@ -386,7 +391,13 @@ namespace backend.main.services.implementation
                     isPrivate = item.IsPrivate,
                     maxParticipants = item.MaxParticipants,
                     registerCost = item.RegisterCost,
-                    ClubId = clubId
+                    ClubId = clubId,
+                    Category = item.Category,
+                    VenueName = item.VenueName,
+                    City = item.City,
+                    Latitude = item.Latitude,
+                    Longitude = item.Longitude,
+                    Tags = NormalizeTags(item.Tags)
                 }).ToList();
 
                 var created = await _eventsRepository.CreateManyAsync(entities);
@@ -401,7 +412,7 @@ namespace backend.main.services.implementation
 
                 return new BatchCreateResultResponse
                 {
-                    Created = created.Select(EventMapper.MapToResponse).ToList()
+                    Created = created.Select(e => EventMapper.MapToResponse(e)).ToList()
                 };
             }
             catch (Exception e)
@@ -439,6 +450,12 @@ namespace backend.main.services.implementation
                         if (item.RegisterCost.HasValue) ev.registerCost = item.RegisterCost.Value;
                         if (item.StartTime.HasValue) ev.StartTime = item.StartTime.Value;
                         if (item.EndTime.HasValue) ev.EndTime = item.EndTime.Value;
+                        if (item.Category.HasValue) ev.Category = item.Category.Value;
+                        if (item.VenueName != null) ev.VenueName = item.VenueName;
+                        if (item.City != null) ev.City = item.City;
+                        if (item.Latitude.HasValue) ev.Latitude = item.Latitude;
+                        if (item.Longitude.HasValue) ev.Longitude = item.Longitude;
+                        if (item.Tags != null) ev.Tags = NormalizeTags(item.Tags);
                     })
                 ));
 
@@ -736,8 +753,42 @@ namespace backend.main.services.implementation
             StartTime = ev.StartTime,
             EndTime = ev.EndTime,
             CreatedAt = ev.CreatedAt,
-            UpdatedAt = ev.UpdatedAt
+            UpdatedAt = ev.UpdatedAt,
+            Category = ev.Category,
+            VenueName = ev.VenueName,
+            City = ev.City,
+            Latitude = ev.Latitude,
+            Longitude = ev.Longitude,
+            Tags = ev.Tags ?? new List<string>(),
+            RegistrationCount = ev.RegistrationCount
         };
+
+        private static List<string> NormalizeTags(IEnumerable<string>? tags)
+        {
+            if (tags == null) return new List<string>();
+            return tags
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Select(t => t.Trim().ToLowerInvariant())
+                .Distinct()
+                .Take(10)
+                .ToList();
+        }
+
+        public async Task NotifyRegistrationChangedAsync(int eventId)
+        {
+            try
+            {
+                var ev = await _eventsRepository.GetByIdAsync(eventId);
+                if (ev == null) return;
+
+                await _cache.DeleteKeyAsync($"event:{eventId}");
+                await PublishIndexEventAsync(BuildUpsertEvent(ev));
+            }
+            catch (Exception e)
+            {
+                Logger.Warn(e, $"[EventsService] NotifyRegistrationChangedAsync failed for event {eventId}");
+            }
+        }
 
         private async Task PublishIndexEventAsync(EventIndexEvent evt)
         {

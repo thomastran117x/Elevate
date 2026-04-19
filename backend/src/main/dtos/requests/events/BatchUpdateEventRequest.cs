@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 
+using backend.main.models.enums;
+
 namespace backend.main.dtos.requests.events
 {
     public class BatchUpdateEventItem
@@ -27,6 +29,24 @@ namespace backend.main.dtos.requests.events
         public DateTime? StartTime { get; set; }
 
         public DateTime? EndTime { get; set; }
+
+        [EnumDataType(typeof(EventCategory))]
+        public EventCategory? Category { get; set; }
+
+        [StringLength(100)]
+        public string? VenueName { get; set; }
+
+        [StringLength(100)]
+        public string? City { get; set; }
+
+        [Range(-90, 90)]
+        public double? Latitude { get; set; }
+
+        [Range(-180, 180)]
+        public double? Longitude { get; set; }
+
+        [MaxLength(10)]
+        public List<string>? Tags { get; set; }
     }
 
     public class BatchUpdateEventRequest : IValidatableObject

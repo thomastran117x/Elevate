@@ -1,4 +1,7 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.RegularExpressions;
+
+using backend.main.models.enums;
 
 namespace backend.main.dtos.requests.events
 {
@@ -28,6 +31,25 @@ namespace backend.main.dtos.requests.events
         public DateTime StartTime { get; set; }
 
         public DateTime? EndTime { get; set; }
+
+        [Required(ErrorMessage = "Category is required.")]
+        [EnumDataType(typeof(EventCategory))]
+        public EventCategory Category { get; set; }
+
+        [StringLength(100)]
+        public string? VenueName { get; set; }
+
+        [StringLength(100)]
+        public string? City { get; set; }
+
+        [Range(-90, 90)]
+        public double? Latitude { get; set; }
+
+        [Range(-180, 180)]
+        public double? Longitude { get; set; }
+
+        [MaxLength(10, ErrorMessage = "A maximum of 10 tags are allowed.")]
+        public List<string>? Tags { get; set; }
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
@@ -60,6 +82,27 @@ namespace backend.main.dtos.requests.events
                         yield return new ValidationResult(
                             $"'{url}' is not a valid HTTPS URL.",
                             new[] { nameof(ImageUrls) });
+                }
+            }
+
+            if (Latitude.HasValue != Longitude.HasValue)
+            {
+                yield return new ValidationResult(
+                    "Latitude and Longitude must both be provided, or both omitted.",
+                    new[] { nameof(Latitude), nameof(Longitude) });
+            }
+
+            if (Tags != null)
+            {
+                foreach (var tag in Tags)
+                {
+                    if (string.IsNullOrWhiteSpace(tag) || tag.Length > 30
+                        || !Regex.IsMatch(tag, "^[a-zA-Z0-9-]+$"))
+                    {
+                        yield return new ValidationResult(
+                            $"Tag '{tag}' is invalid. Tags must be 1-30 chars, alphanumeric or dashes.",
+                            new[] { nameof(Tags) });
+                    }
                 }
             }
         }

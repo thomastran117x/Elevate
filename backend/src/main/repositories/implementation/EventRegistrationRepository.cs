@@ -54,6 +54,8 @@ namespace backend.main.repositories.implementation
                 };
 
                 _context.EventRegistrations.Add(registration);
+                ev.RegistrationCount += 1;
+                ev.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -68,16 +70,36 @@ namespace backend.main.repositories.implementation
 
         public async Task<bool> UnregisterAsync(int eventId, int userId)
         {
-            var registration = await _context.EventRegistrations
-                .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
+            using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                var registration = await _context.EventRegistrations
+                    .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
 
-            if (registration == null)
-                return false;
+                if (registration == null)
+                {
+                    await transaction.RollbackAsync();
+                    return false;
+                }
 
-            _context.EventRegistrations.Remove(registration);
-            await _context.SaveChangesAsync();
+                _context.EventRegistrations.Remove(registration);
 
-            return true;
+                var ev = await _context.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+                if (ev != null)
+                {
+                    ev.RegistrationCount = Math.Max(0, ev.RegistrationCount - 1);
+                    ev.UpdatedAt = DateTime.UtcNow;
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return true;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<EventRegistration?> IsRegisteredAsync(int eventId, int userId)

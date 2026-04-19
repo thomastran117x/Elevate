@@ -3,6 +3,8 @@ using backend.main.repositories.interfaces;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
 
+using Elastic.Clients.Elasticsearch;
+
 namespace backend.main.services.implementation
 {
     public class EventReindexService : IEventReindexService
@@ -42,7 +44,19 @@ namespace backend.main.services.implementation
                     StartTime = e.StartTime,
                     EndTime = e.EndTime,
                     CreatedAt = e.CreatedAt,
-                    UpdatedAt = e.UpdatedAt
+                    UpdatedAt = e.UpdatedAt,
+                    Category = e.Category.ToString(),
+                    VenueName = e.VenueName,
+                    City = e.City,
+                    Tags = e.Tags ?? new List<string>(),
+                    LocationGeo = (e.Latitude.HasValue && e.Longitude.HasValue)
+                        ? GeoLocation.LatitudeLongitude(new LatLonGeoLocation
+                        {
+                            Lat = e.Latitude.Value,
+                            Lon = e.Longitude.Value
+                        })
+                        : null,
+                    RegistrationCount = e.RegistrationCount
                 });
 
                 await _searchService.BulkIndexAsync(documents);

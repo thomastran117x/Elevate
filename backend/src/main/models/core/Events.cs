@@ -1,3 +1,5 @@
+using backend.main.models.enums;
+
 namespace backend.main.models.core;
 
 public class Events
@@ -35,6 +37,35 @@ public class Events
     }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public EventCategory Category
+    {
+        get; set;
+    } = EventCategory.Other;
+    public string? VenueName
+    {
+        get; set;
+    }
+    public string? City
+    {
+        get; set;
+    }
+    public double? Latitude
+    {
+        get; set;
+    }
+    public double? Longitude
+    {
+        get; set;
+    }
+    public List<string> Tags
+    {
+        get; set;
+    } = new List<string>();
+    public int RegistrationCount
+    {
+        get; set;
+    } = 0;
 
     // Navigation
     public ICollection<EventImage> Images { get; set; } = new List<EventImage>();

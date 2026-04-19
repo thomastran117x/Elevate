@@ -6,7 +6,7 @@ namespace backend.main.Mappers
 {
     public static class EventMapper
     {
-        public static EventResponse MapToResponse(Events ev) => new()
+        public static EventResponse MapToResponse(Events ev, double? distanceKm = null) => new()
         {
             Id = ev.Id,
             Name = ev.Name,
@@ -20,7 +20,15 @@ namespace backend.main.Mappers
             EndTime = ev.EndTime,
             ClubId = ev.ClubId,
             CreatedAt = ev.CreatedAt,
-            Status = ResolveStatus(ev)
+            Status = ResolveStatus(ev),
+            Category = ev.Category,
+            VenueName = ev.VenueName,
+            City = ev.City,
+            Latitude = ev.Latitude,
+            Longitude = ev.Longitude,
+            Tags = ev.Tags ?? new List<string>(),
+            RegistrationCount = ev.RegistrationCount,
+            DistanceKm = distanceKm
         };
 
         public static EventStatus ResolveStatus(Events ev)

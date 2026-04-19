@@ -1,3 +1,5 @@
+using backend.main.models.enums;
+
 namespace backend.main.dtos.messages
 {
     public sealed record EventIndexEvent
@@ -13,5 +15,13 @@ namespace backend.main.dtos.messages
         public DateTime? EndTime { get; init; }
         public DateTime? CreatedAt { get; init; }
         public DateTime? UpdatedAt { get; init; }
+
+        public EventCategory? Category { get; init; }
+        public string? VenueName { get; init; }
+        public string? City { get; init; }
+        public double? Latitude { get; init; }
+        public double? Longitude { get; init; }
+        public List<string>? Tags { get; init; }
+        public int? RegistrationCount { get; init; }
     }
 }

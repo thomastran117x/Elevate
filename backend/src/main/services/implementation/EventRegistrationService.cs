@@ -154,6 +154,7 @@ namespace backend.main.services.implementation
                     MembershipTTL
                 );
                 await InvalidateListsAsync(userId, eventId);
+                await _eventsService.NotifyRegistrationChangedAsync(eventId);
             }
             catch (DbUpdateException)
             {
@@ -187,6 +188,7 @@ namespace backend.main.services.implementation
 
                 await _cache.DeleteKeyAsync(MembershipKey(userId, eventId));
                 await InvalidateListsAsync(userId, eventId);
+                await _eventsService.NotifyRegistrationChangedAsync(eventId);
             }
             catch (Exception e)
             {

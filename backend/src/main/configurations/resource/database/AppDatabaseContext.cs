@@ -1,6 +1,9 @@
+using System.Text.Json;
+
 using backend.main.models.core;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace backend.main.configurations.resource.database
 {
@@ -79,6 +82,38 @@ namespace backend.main.configurations.resource.database
                 .HasForeignKey(c => c.ClubId)
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
+
+            var tagsComparer = new ValueComparer<List<string>>(
+                (a, b) => (a ?? new List<string>()).SequenceEqual(b ?? new List<string>()),
+                v => v.Aggregate(0, (acc, t) => HashCode.Combine(acc, t.GetHashCode())),
+                v => v.ToList());
+
+            modelBuilder.Entity<Events>()
+                .Property(e => e.Tags)
+                .HasConversion(
+                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                    v => string.IsNullOrEmpty(v)
+                        ? new List<string>()
+                        : JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>())
+                .HasColumnType("json")
+                .Metadata.SetValueComparer(tagsComparer);
+
+            modelBuilder.Entity<Events>()
+                .Property(e => e.VenueName)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<Events>()
+                .Property(e => e.City)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<Events>()
+                .HasIndex(e => e.Category);
+
+            modelBuilder.Entity<Events>()
+                .HasIndex(e => e.City);
+
+            modelBuilder.Entity<Events>()
+                .HasIndex(e => new { e.Latitude, e.Longitude });
 
             modelBuilder.Entity<EventImage>()
                 .HasOne(ei => ei.Event)

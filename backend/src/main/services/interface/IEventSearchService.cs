@@ -1,5 +1,5 @@
 using backend.main.models.documents;
-using backend.main.models.enums;
+using backend.main.models.search;
 
 namespace backend.main.services.interfaces
 {
@@ -10,11 +10,12 @@ namespace backend.main.services.interfaces
         Task IndexAsync(EventDocument document);
         Task DeleteAsync(int eventId);
         Task BulkIndexAsync(IEnumerable<EventDocument> documents);
-        Task<(List<int> Ids, int TotalCount)> SearchAsync(
-            string search,
-            bool isPrivate,
-            EventStatus? status,
-            int page,
-            int pageSize);
+        Task<EventSearchResult> SearchAsync(EventSearchCriteria criteria);
     }
+
+    public sealed record EventSearchResult(
+        List<EventSearchHit> Hits,
+        int TotalCount);
+
+    public sealed record EventSearchHit(int Id, double? DistanceKm);
 }

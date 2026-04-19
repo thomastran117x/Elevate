@@ -1,3 +1,5 @@
+using Elastic.Clients.Elasticsearch;
+
 namespace backend.main.models.documents
 {
     public class EventDocument
@@ -12,5 +14,12 @@ namespace backend.main.models.documents
         public DateTime? EndTime { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
+
+        public string Category { get; set; } = string.Empty;
+        public string? VenueName { get; set; }
+        public string? City { get; set; }
+        public List<string> Tags { get; set; } = new();
+        public GeoLocation? LocationGeo { get; set; }
+        public int RegistrationCount { get; set; }
     }
 }

@@ -5,6 +5,7 @@ using backend.main.dtos.responses.general;
 using backend.main.exceptions.http;
 using backend.main.Mappers;
 using backend.main.models.enums;
+using backend.main.models.search;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
 
@@ -43,7 +44,13 @@ namespace backend.main.implementation.controllers
                     request.EndTime,
                     request.IsPrivate,
                     request.MaxParticipants,
-                    request.RegisterCost
+                    request.RegisterCost,
+                    request.Category,
+                    request.VenueName,
+                    request.City,
+                    request.Latitude,
+                    request.Longitude,
+                    request.Tags
                 );
 
                 var response = EventMapper.MapToResponse(ev);
@@ -83,7 +90,13 @@ namespace backend.main.implementation.controllers
                     request.EndTime,
                     request.IsPrivate,
                     request.MaxParticipants,
-                    request.RegisterCost
+                    request.RegisterCost,
+                    request.Category,
+                    request.VenueName,
+                    request.City,
+                    request.Latitude,
+                    request.Longitude,
+                    request.Tags
                 );
 
                 return Ok(new ApiResponse<EventResponse>(
@@ -171,19 +184,66 @@ namespace backend.main.implementation.controllers
 
         [HttpGet("")]
         public async Task<IActionResult> GetEvents(
-            string? search,
+            string? search = null,
             bool isPrivate = false,
             EventStatus? status = null,
+            EventCategory? category = null,
+            string? tags = null,
+            string? city = null,
+            double? lat = null,
+            double? lng = null,
+            double? radiusKm = null,
+            EventSortBy sortBy = EventSortBy.Relevance,
             int page = 1,
             int pageSize = 20)
         {
             try
             {
-                var events = await _eventService.GetEvents(search, isPrivate, status, page, pageSize);
+                if ((lat.HasValue) != (lng.HasValue))
+                    return BadRequest(new MessageResponse("Both lat and lng must be provided together."));
+
+                if (radiusKm.HasValue && (radiusKm <= 0 || radiusKm > 500))
+                    return BadRequest(new MessageResponse("radiusKm must be between 0 (exclusive) and 500."));
+
+                if (sortBy == EventSortBy.Distance && (!lat.HasValue || !lng.HasValue))
+                    return BadRequest(new MessageResponse("sortBy=Distance requires lat and lng."));
+
+                List<string>? tagList = null;
+                if (!string.IsNullOrWhiteSpace(tags))
+                {
+                    tagList = tags.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        .Select(t => t.Trim().ToLowerInvariant())
+                        .Where(t => t.Length > 0)
+                        .Distinct()
+                        .ToList();
+
+                    if (tagList.Count > 5)
+                        return BadRequest(new MessageResponse("A maximum of 5 tags are allowed per query."));
+                }
+
+                var criteria = new EventSearchCriteria
+                {
+                    Query = search,
+                    IsPrivate = isPrivate,
+                    Status = status,
+                    Category = category,
+                    Tags = tagList,
+                    City = city,
+                    Lat = lat,
+                    Lng = lng,
+                    RadiusKm = radiusKm,
+                    SortBy = sortBy,
+                    Page = page,
+                    PageSize = pageSize
+                };
+
+                var (events, distances) = await _eventService.GetEvents(criteria);
 
                 return Ok(new ApiResponse<IEnumerable<EventResponse>>(
                     "The events have been fetched successfully.",
-                    events.Select(e => EventMapper.MapToResponse(e))
+                    events.Select(e => EventMapper.MapToResponse(
+                        e,
+                        distances.TryGetValue(e.Id, out var d) ? d : (double?)null))
                 ));
             }
             catch (Exception e)
@@ -216,7 +276,7 @@ namespace backend.main.implementation.controllers
 
                 return Ok(new ApiResponse<IEnumerable<EventResponse>>(
                     $"{events.Count} event(s) fetched successfully.",
-                    events.Select(EventMapper.MapToResponse)
+                    events.Select(e => EventMapper.MapToResponse(e))
                 ));
             }
             catch (Exception e)

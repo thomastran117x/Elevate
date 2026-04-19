@@ -1,6 +1,7 @@
 using backend.main.configurations.resource.database;
 using backend.main.models.core;
 using backend.main.models.enums;
+using backend.main.models.search;
 using backend.main.repositories.interfaces;
 
 using Microsoft.EntityFrameworkCore;
@@ -64,6 +65,12 @@ namespace backend.main.repositories.implementation
             existing.StartTime = updated.StartTime;
             existing.EndTime = updated.EndTime;
             existing.ClubId = updated.ClubId;
+            existing.Category = updated.Category;
+            existing.VenueName = updated.VenueName;
+            existing.City = updated.City;
+            existing.Latitude = updated.Latitude;
+            existing.Longitude = updated.Longitude;
+            existing.Tags = updated.Tags ?? new List<string>();
             existing.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
@@ -100,12 +107,7 @@ namespace backend.main.repositories.implementation
             return await _context.Events.AnyAsync(e => e.Id == id);
         }
 
-        public async Task<List<Events>> SearchAsync(
-            string? search,
-            bool isPrivate,
-            EventStatus? status,
-            int page = 1,
-            int pageSize = 20)
+        public async Task<List<Events>> SearchAsync(EventSearchCriteria criteria)
         {
             var now = DateTime.UtcNow;
 
@@ -113,32 +115,58 @@ namespace backend.main.repositories.implementation
                 .Include(e => e.Images)
                 .AsNoTracking();
 
-            if (!string.IsNullOrWhiteSpace(search))
+            if (!string.IsNullOrWhiteSpace(criteria.Query))
             {
-                var term = search.Trim();
-
+                var term = criteria.Query.Trim();
                 query = query.Where(e =>
                     EF.Functions.Like(e.Name, $"%{term}%") ||
                     EF.Functions.Like(e.Description, $"%{term}%") ||
-                    EF.Functions.Like(e.Location, $"%{term}%")
+                    EF.Functions.Like(e.Location, $"%{term}%") ||
+                    (e.VenueName != null && EF.Functions.Like(e.VenueName, $"%{term}%")) ||
+                    (e.City != null && EF.Functions.Like(e.City, $"%{term}%"))
                 );
             }
 
-            query = query.Where(e => e.isPrivate == isPrivate);
+            query = query.Where(e => e.isPrivate == criteria.IsPrivate);
 
-            if (status == EventStatus.Upcoming)
+            if (criteria.Category.HasValue)
+                query = query.Where(e => e.Category == criteria.Category.Value);
+
+            if (!string.IsNullOrWhiteSpace(criteria.City))
+            {
+                var city = criteria.City.Trim();
+                query = query.Where(e => e.City == city);
+            }
+
+            if (criteria.Status == EventStatus.Upcoming)
                 query = query.Where(e => e.StartTime > now);
-            else if (status == EventStatus.Ongoing)
+            else if (criteria.Status == EventStatus.Ongoing)
                 query = query.Where(e => e.StartTime <= now && (e.EndTime == null || e.EndTime > now));
-            else if (status == EventStatus.Closed)
+            else if (criteria.Status == EventStatus.Closed)
                 query = query.Where(e => e.EndTime != null && e.EndTime <= now);
-            // null = no status filter
+
+            query = criteria.SortBy switch
+            {
+                EventSortBy.Date => query.OrderBy(e => e.StartTime),
+                EventSortBy.Popularity => query.OrderByDescending(e => e.RegistrationCount)
+                    .ThenByDescending(e => e.CreatedAt),
+                _ => query.OrderByDescending(e => e.CreatedAt)
+            };
 
             return await query
-                .OrderByDescending(e => e.CreatedAt)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
+                .Skip((criteria.Page - 1) * criteria.PageSize)
+                .Take(criteria.PageSize)
                 .ToListAsync();
+        }
+
+        public async Task IncrementRegistrationCountAsync(int eventId, int delta)
+        {
+            await _context.Events
+                .Where(e => e.Id == eventId)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(e => e.RegistrationCount,
+                        e => Math.Max(0, e.RegistrationCount + delta))
+                    .SetProperty(e => e.UpdatedAt, DateTime.UtcNow));
         }
 
         public async Task<List<Events>> GetByIdsAsync(IEnumerable<int> ids)
