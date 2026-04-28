@@ -5,7 +5,11 @@ export class RecaptchaLoaderService {
   private loading: Promise<void> | null = null;
 
   load(siteKey: string): Promise<void> {
-    if (typeof window !== 'undefined' && (window as any).grecaptcha) {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return Promise.reject(new Error('reCAPTCHA can only load in the browser.'));
+    }
+
+    if ((window as any).grecaptcha) {
       return Promise.resolve();
     }
     if (this.loading) return this.loading;

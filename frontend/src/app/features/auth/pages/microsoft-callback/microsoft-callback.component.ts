@@ -1,5 +1,5 @@
-import { Component, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { Component, inject, OnInit, PLATFORM_ID, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { AuthService } from '../../services/auth.service';
@@ -15,8 +15,10 @@ import { environment } from '../../../../../environments/environment';
   styleUrls: ['./microsoft-callback.component.css'],
 })
 export class MicrosoftCallbackComponent implements OnInit {
+  private platformId = inject(PLATFORM_ID);
+
   status = signal<'loading' | 'success' | 'error'>('loading');
-  message = signal('Signing you in with Microsoft…');
+  message = signal('Signing you in with Microsoft...');
 
   constructor(
     private auth: AuthService,
@@ -25,6 +27,10 @@ export class MicrosoftCallbackComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
     this.handleMicrosoftCallback();
   }
 
@@ -59,7 +65,7 @@ export class MicrosoftCallbackComponent implements OnInit {
         next: (res) => {
           this.store.dispatch(setUser({ user: res }));
           this.status.set('success');
-          this.message.set('Login successful! Redirecting…');
+          this.message.set('Login successful! Redirecting...');
           setTimeout(() => this.router.navigate(['/dashboard']), 1500);
         },
         error: (err) => {
@@ -77,7 +83,7 @@ export class MicrosoftCallbackComponent implements OnInit {
 
   retry(): void {
     this.status.set('loading');
-    this.message.set('Retrying sign-in…');
+    this.message.set('Retrying sign-in...');
     this.handleMicrosoftCallback();
   }
 }

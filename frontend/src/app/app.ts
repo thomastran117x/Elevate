@@ -1,7 +1,7 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject, OnInit, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser, NgIf } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
 import { SessionManagerService } from './core/services/session-manager.service';
-import { NgIf } from '@angular/common';
 import { NavbarComponent } from './shared/navbar/navbar.component';
 import { FooterComponent } from './shared/footer/footer.component';
 
@@ -13,10 +13,13 @@ import { FooterComponent } from './shared/footer/footer.component';
 })
 export class App implements OnInit {
   private session = inject(SessionManagerService);
+  private platformId = inject(PLATFORM_ID);
   protected readonly title = 'frontend';
 
   ngOnInit(): void {
-    this.session.restoreSession();
+    if (isPlatformBrowser(this.platformId)) {
+      this.session.restoreSession();
+    }
   }
 
   get loading() {
