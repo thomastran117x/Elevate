@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using backend.main.attributes.validation;
 
 namespace backend.main.dtos.requests.auth
 {
@@ -6,8 +7,7 @@ namespace backend.main.dtos.requests.auth
     public class SignUpRequest : AuthRequest
     {
         [Required]
-        [RegularExpression("^(participant|organizer|volunteer)$",
-        ErrorMessage = "Usertype must be 'participant', 'organizer' or 'volunteer'.")]
+        [ValidRole]
         public required string Usertype
         {
             get; set;

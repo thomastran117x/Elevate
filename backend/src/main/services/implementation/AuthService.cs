@@ -1,4 +1,5 @@
 using backend.main.dtos;
+using backend.main.configurations.security;
 using backend.main.dtos.general;
 using backend.main.exceptions.http;
 using backend.main.models.core;
@@ -7,6 +8,7 @@ using backend.main.publishers.interfaces;
 using backend.main.repositories.interfaces;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
+using System.Security.Cryptography;
 
 namespace backend.main.services.implementation
 {
@@ -64,6 +66,7 @@ namespace backend.main.services.implementation
                 if (await _userRepository.EmailExistsAsync(email))
                     throw new ConflictException($"An account is already registered with the email: {email}");
 
+                userType = AuthRoles.NormalizeOrThrow(userType);
                 string hashedPassword = HashPassword(password);
 
                 User user = new User
@@ -152,13 +155,13 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task<VerificationOtpChallenge?> ForgotPasswordAsync(string email)
+        public async Task<VerificationOtpChallenge> ForgotPasswordAsync(string email)
         {
             try
             {
                 var existingEmail = await _userRepository.EmailExistsAsync(email);
                 if (!existingEmail)
-                    return null;
+                    return BuildPlaceholderForgotPasswordChallenge();
 
                 User user = new User
                 {
@@ -251,9 +254,13 @@ namespace backend.main.services.implementation
                     user = await _userRepository.CreateUserAsync(new User
                     {
                         Email = oauthUser.Email,
-                        Usertype = "undefined",
+                        Usertype = AuthRoles.DefaultOAuthRole,
                         GoogleID = oauthUser.Id,
                     });
+                }
+                else
+                {
+                    user = await EnsureOAuthRoleAsync(user);
                 }
 
                 return await GenerateTokenPair(user);
@@ -283,9 +290,13 @@ namespace backend.main.services.implementation
                     user = await _userRepository.CreateUserAsync(new User
                     {
                         Email = oauthUser.Email,
-                        Usertype = "undefined",
+                        Usertype = AuthRoles.DefaultOAuthRole,
                         MicrosoftID = oauthUser.Id,
                     });
+                }
+                else
+                {
+                    user = await EnsureOAuthRoleAsync(user);
                 }
 
                 return await GenerateTokenPair(user);
@@ -395,6 +406,7 @@ namespace backend.main.services.implementation
         {
             try
             {
+                user.Usertype = AuthRoles.NormalizeStored(user.Usertype);
                 var accessToken = _tokenService.GenerateAccessToken(user);
                 var refreshToken = await _tokenService.GenerateRefreshToken(
                     user.Id,
@@ -485,6 +497,36 @@ namespace backend.main.services.implementation
             }
 
             return emailUser;
+        }
+
+        private async Task<User> EnsureOAuthRoleAsync(User user)
+        {
+            user.Usertype = AuthRoles.NormalizeStored(user.Usertype);
+
+            if (AuthRoles.IsKnownRole(user.Usertype))
+                return user;
+
+            var updatedUser = await _userRepository.UpdateUserAsync(user.Id, new User
+            {
+                Email = user.Email,
+                Usertype = AuthRoles.DefaultOAuthRole,
+            });
+
+            if (updatedUser != null)
+                return updatedUser;
+
+            user.Usertype = AuthRoles.DefaultOAuthRole;
+            return user;
+        }
+
+        private static VerificationOtpChallenge BuildPlaceholderForgotPasswordChallenge()
+        {
+            return new VerificationOtpChallenge
+            {
+                Code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6"),
+                Challenge = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)),
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(30),
+            };
         }
     }
 }

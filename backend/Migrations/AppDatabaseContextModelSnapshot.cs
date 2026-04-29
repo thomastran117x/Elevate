@@ -195,6 +195,10 @@ namespace backend.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<string>("DeviceTokenHash")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
                     b.Property<string>("DeviceType")
                         .IsRequired()
                         .HasColumnType("varchar(255)");
@@ -213,8 +217,10 @@ namespace backend.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("UserId", "DeviceType", "ClientName")
+                    b.HasIndex("DeviceTokenHash")
                         .IsUnique();
+
+                    b.HasIndex("UserId", "DeviceType", "ClientName");
 
                     b.ToTable("Devices");
                 });

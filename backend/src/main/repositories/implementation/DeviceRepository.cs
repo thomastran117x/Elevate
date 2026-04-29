@@ -12,14 +12,13 @@ namespace backend.main.repositories.implementation
 
         public DeviceRepository(AppDatabaseContext context) => _context = context;
 
-        public async Task<Device?> GetDeviceAsync(int userId, string deviceType, string clientName)
+        public async Task<Device?> GetDeviceAsync(int userId, string deviceTokenHash)
         {
             return await _context.Devices
                 .AsNoTracking()
                 .FirstOrDefaultAsync(d =>
                     d.UserId == userId &&
-                    d.DeviceType == deviceType &&
-                    d.ClientName == clientName);
+                    d.DeviceTokenHash == deviceTokenHash);
         }
 
         public async Task<Device> CreateDeviceAsync(Device device)
@@ -37,6 +36,8 @@ namespace backend.main.repositories.implementation
 
             existing.LastSeenAt = DateTime.UtcNow;
             existing.IpAddress = device.IpAddress;
+            existing.DeviceType = device.DeviceType;
+            existing.ClientName = device.ClientName;
             await _context.SaveChangesAsync();
         }
     }

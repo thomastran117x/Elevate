@@ -4,18 +4,18 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { setUser } from '../../../../core/stores/user.actions';
 import { UserState } from '../../../../core/stores/user.reducer';
-import { AuthResponse, AuthService, ApiEnvelope } from '../../services/auth.service';
+import { ApiEnvelope, AuthResponse, AuthService } from '../../services/auth.service';
 
 @Component({
-  selector: 'app-verify',
+  selector: 'app-device-verify',
   standalone: true,
   imports: [CommonModule, RouterLink],
-  templateUrl: './verify.component.html',
-  styleUrls: ['./verify.component.css'],
+  templateUrl: './device-verify.component.html',
+  styleUrls: ['./device-verify.component.css'],
 })
-export class VerifyComponent {
+export class DeviceVerifyComponent {
   status = signal<'ready' | 'loading' | 'success' | 'error'>('ready');
-  message = signal('Confirm your email to finish creating your account.');
+  message = signal('Confirm this device to finish signing in.');
   hasToken = false;
 
   private token: string | null = null;
@@ -33,7 +33,7 @@ export class VerifyComponent {
 
     if (!this.token) {
       this.status.set('error');
-      this.message.set('This verification link is missing a token.');
+      this.message.set('This device verification link is missing a token.');
     }
   }
 
@@ -41,25 +41,25 @@ export class VerifyComponent {
     if (!this.token || this.status() === 'loading') return;
 
     this.status.set('loading');
-    this.message.set('Verifying your email and completing sign-in...');
+    this.message.set('Verifying this device and completing sign-in...');
 
-    this.auth.verifyEmail(this.token).subscribe({
+    this.auth.verifyDevice(this.token).subscribe({
       next: (res: ApiEnvelope<AuthResponse>) => {
         const user = res.data ?? res.Data;
         if (!user) {
           this.status.set('error');
-          this.message.set('Verification completed, but the login response was incomplete.');
+          this.message.set('Device verification completed, but the login response was incomplete.');
           return;
         }
 
         this.store.dispatch(setUser({ user }));
         this.status.set('success');
-        this.message.set('Your email is verified. Redirecting to your dashboard...');
+        this.message.set('This device is verified. Redirecting to your dashboard...');
         setTimeout(() => this.router.navigate(['/dashboard']), 1500);
       },
       error: (err) => {
         this.status.set('error');
-        this.message.set(err?.error?.message || 'Email verification failed. Please try again.');
+        this.message.set(err?.error?.message || 'Device verification failed. Please try again.');
       },
     });
   }

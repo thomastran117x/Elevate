@@ -14,6 +14,7 @@ namespace backend.main.dtos.responses.auth
             Username = username;
             Usertype = userType;
             Token = token;
+            AccessToken = token;
             RefreshToken = refreshToken;
             Avatar = "placeholder";
         }
@@ -31,6 +32,10 @@ namespace backend.main.dtos.responses.auth
             get; set;
         }
         public string Token
+        {
+            get; set;
+        }
+        public string AccessToken
         {
             get; set;
         }

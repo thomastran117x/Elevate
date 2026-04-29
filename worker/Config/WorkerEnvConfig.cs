@@ -12,6 +12,7 @@ namespace worker.Config
         private static readonly string? _email;
         private static readonly string? _password;
         private static readonly string? _smtpServer;
+        private static readonly string _frontendUrl;
         private static readonly string _appEnvironment;
         private static readonly string _logLevel;
 
@@ -37,6 +38,7 @@ namespace worker.Config
             _email = GetOptional("EMAIL");
             _password = GetOptional("EMAIL_PASSWORD");
             _smtpServer = GetOptional("SMTP_SERVER");
+            _frontendUrl = GetOrDefault("FRONTEND_URL", "http://localhost:3090");
 
             _appEnvironment = GetOrDefault("APP_ENV", "development").ToLowerInvariant();
             _logLevel = GetOrDefault("LOG_LEVEL", "info").ToLowerInvariant();
@@ -92,6 +94,7 @@ namespace worker.Config
         public static string? Email => _email;
         public static string? Password => _password;
         public static string? SmtpServer => _smtpServer;
+        public static string FrontendUrl => _frontendUrl;
         public static string AppEnvironment => _appEnvironment;
         public static string LogLevel => _logLevel;
 

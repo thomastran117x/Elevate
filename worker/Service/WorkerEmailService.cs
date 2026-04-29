@@ -73,7 +73,7 @@ namespace worker.Services
             EnsureEnabled();
 
             var verifyUrl =
-                $"http://localhost:3090/auth/verify?token={Uri.EscapeDataString(token)}";
+                $"{EnvManager.FrontendUrl.TrimEnd('/')}/auth/verify?token={Uri.EscapeDataString(token)}";
 
             await SendAsync(
                 BuildActionMessage(
@@ -95,7 +95,7 @@ namespace worker.Services
             EnsureEnabled();
 
             var resetUrl =
-                $"http://localhost:3090/auth/change-password?token={Uri.EscapeDataString(token)}";
+                $"{EnvManager.FrontendUrl.TrimEnd('/')}/auth/change-password?token={Uri.EscapeDataString(token)}";
 
             await SendAsync(
                 BuildActionMessage(
@@ -117,7 +117,7 @@ namespace worker.Services
             EnsureEnabled();
 
             var verifyUrl =
-                $"http://localhost:3090/auth/device/verify?token={Uri.EscapeDataString(token)}";
+                $"{EnvManager.FrontendUrl.TrimEnd('/')}/auth/device/verify?token={Uri.EscapeDataString(token)}";
 
             await SendAsync(
                 BuildActionMessage(

@@ -7,7 +7,12 @@ import { updateAccessToken, clearUser } from '../../stores/user.actions';
 import { UserState } from '../../stores/user.reducer';
 
 type CsrfResponse = { token: string };
-type RefreshResponse = { accessToken: string };
+type RefreshResponse = {
+  accessToken?: string;
+  AccessToken?: string;
+  Token?: string;
+  token?: string;
+};
 
 @Injectable({ providedIn: 'root' })
 export class AuthTokenService {
@@ -59,13 +64,22 @@ export class AuthTokenService {
       ),
     );
 
-    this.store.dispatch(updateAccessToken({ accessToken: res.accessToken }));
-    this.accessToken = res.accessToken;
+    const accessToken = this.extractAccessToken(res);
+    if (!accessToken) {
+      throw new Error('Refresh response did not include an access token.');
+    }
+
+    this.store.dispatch(updateAccessToken({ accessToken }));
+    this.accessToken = accessToken;
   }
 
   logoutLocal() {
     this.store.dispatch(clearUser());
     this.accessToken = null;
     this.csrfToken = null;
+  }
+
+  private extractAccessToken(response: RefreshResponse): string | null {
+    return response.accessToken ?? response.AccessToken ?? response.Token ?? response.token ?? null;
   }
 }

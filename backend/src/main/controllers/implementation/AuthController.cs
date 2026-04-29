@@ -5,6 +5,7 @@ using backend.main.dtos.responses.general;
 using backend.main.exceptions.http;
 using backend.main.models.core;
 using backend.main.models.other;
+using backend.main.configurations.application;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
 
@@ -17,25 +18,29 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace backend.main.implementation.controllers
 {
     [ApiController]
-    [Route("auth")]
+    [Route(RoutePaths.AuthPrefix)]
     public class AuthController : ControllerBase
     {
+        private const string DefaultFrontendUrl = "http://localhost:3090";
         private readonly IAuthService _authService;
         private readonly IAntiforgery _antiforgery;
         private readonly ICaptchaService _captchaService;
         private readonly ClientRequestInfo _requestInfo;
+        private readonly IConfiguration _configuration;
 
         public AuthController(
             IAuthService authService,
             IAntiforgery antiforgery,
             ICaptchaService captchaService,
-            ClientRequestInfo requestInfo
+            ClientRequestInfo requestInfo,
+            IConfiguration configuration
         )
         {
             _authService = authService;
             _antiforgery = antiforgery;
             _captchaService = captchaService;
             _requestInfo = requestInfo;
+            _configuration = configuration;
         }
 
         [HttpPost("login")]
@@ -151,11 +156,28 @@ namespace backend.main.implementation.controllers
 
         [HttpGet("verify")]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
-        public async Task<IActionResult> LocalVerify([FromQuery] string token)
+        public IActionResult LocalVerify([FromQuery] string token)
+        {
+            var redirectUrl = BuildFrontendAuthUrl("verify", token);
+            if (redirectUrl != null)
+                return Redirect(redirectUrl);
+
+            return Ok(
+                new MessageResponse(
+                    "Email verification requires confirmation from the frontend.",
+                    "Open the verification link in the app and confirm to complete verification."
+                )
+            );
+        }
+
+        [HttpPost("verify")]
+        [ValidateAntiForgeryToken]
+        [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        public async Task<IActionResult> LocalVerify([FromBody] VerificationTokenRequest request)
         {
             try
             {
-                UserToken userToken = await _authService.VerifyAsync(token);
+                UserToken userToken = await _authService.VerifyAsync(request.Token);
                 User user = userToken.user;
                 Token authToken = userToken.token;
 
@@ -174,7 +196,7 @@ namespace backend.main.implementation.controllers
                 if (e is AppException)
                     return HandleError.Resolve(e);
 
-                Logger.Error($"[AuthController] LocalVerify failed: {e}");
+                Logger.Error($"[AuthController] LocalVerify POST failed: {e}");
                 return HandleError.Resolve(e);
             }
         }
@@ -320,11 +342,28 @@ namespace backend.main.implementation.controllers
 
         [HttpGet("device/verify")]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
-        public async Task<IActionResult> VerifyDevice([FromQuery] string token)
+        public IActionResult VerifyDevice([FromQuery] string token)
+        {
+            var redirectUrl = BuildFrontendAuthUrl("device/verify", token);
+            if (redirectUrl != null)
+                return Redirect(redirectUrl);
+
+            return Ok(
+                new MessageResponse(
+                    "Device verification requires confirmation from the frontend.",
+                    "Open the verification link in the app and confirm to complete device verification."
+                )
+            );
+        }
+
+        [HttpPost("device/verify")]
+        [ValidateAntiForgeryToken]
+        [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        public async Task<IActionResult> VerifyDevice([FromBody] VerificationTokenRequest request)
         {
             try
             {
-                UserToken userToken = await _authService.VerifyDeviceLoginAsync(token);
+                UserToken userToken = await _authService.VerifyDeviceLoginAsync(request.Token);
                 User user = userToken.user;
                 Token authToken = userToken.token;
 
@@ -343,7 +382,7 @@ namespace backend.main.implementation.controllers
                 if (e is AppException)
                     return HandleError.Resolve(e);
 
-                Logger.Error($"[AuthController] VerifyDevice failed: {e}");
+                Logger.Error($"[AuthController] VerifyDevice POST failed: {e}");
                 return HandleError.Resolve(e);
             }
         }
@@ -359,15 +398,13 @@ namespace backend.main.implementation.controllers
 
                 return StatusCode(
                     200,
-                    new ApiResponse<VerificationChallengeResponse?>(
+                    new ApiResponse<VerificationChallengeResponse>(
                         "If the account exist, we send a reset email",
-                        challenge == null
-                            ? null
-                            : new VerificationChallengeResponse
-                            {
-                                Challenge = challenge.Challenge,
-                                ExpiresAtUtc = challenge.ExpiresAtUtc,
-                            }
+                        new VerificationChallengeResponse
+                        {
+                            Challenge = challenge.Challenge,
+                            ExpiresAtUtc = challenge.ExpiresAtUtc,
+                        }
                     )
                 );
             }
@@ -429,7 +466,27 @@ namespace backend.main.implementation.controllers
                 token.RefreshToken,
                 token.RefreshTokenLifetime
             );
-            return new AuthResponse(user.Id, user.Email, user.Usertype, token.AccessToken, refreshToken);
+            return new AuthResponse(
+                user.Id,
+                user.Email,
+                AuthRoles.NormalizeStored(user.Usertype),
+                token.AccessToken,
+                refreshToken
+            );
+        }
+
+        private string? BuildFrontendAuthUrl(string path, string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                return null;
+
+            var frontendBaseUrl = (
+                _configuration["Frontend:BaseUrl"]
+                ?? _configuration["FRONTEND_URL"]
+                ?? DefaultFrontendUrl
+            ).TrimEnd('/');
+
+            return $"{frontendBaseUrl}/auth/{path}?token={Uri.EscapeDataString(token)}";
         }
     }
 }

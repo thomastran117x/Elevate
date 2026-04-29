@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 
 using backend.main.configurations.environment;
+using backend.main.configurations.security;
 using backend.main.dtos.general;
 using backend.main.exceptions.http;
 using backend.main.models.core;
@@ -49,7 +50,7 @@ namespace backend.main.services.implementation
                 {
                     new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                     new Claim(ClaimTypes.Name, user.Email),
-                    new Claim(ClaimTypes.Role, user.Usertype),
+                    new Claim(ClaimTypes.Role, AuthRoles.NormalizeStored(user.Usertype)),
                 };
 
                 var tokenDescriptor = new SecurityTokenDescriptor
@@ -306,10 +307,17 @@ namespace backend.main.services.implementation
                 string linkToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
                 string otpCode = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
                 DateTime expiresAtUtc = DateTime.UtcNow.Add(VERIFY_TTL);
-                string nonce = Guid.NewGuid().ToString("N");
-
-                var challenge = BuildVerificationChallenge(user, purpose, otpCode, expiresAtUtc, nonce);
                 var payload = BuildVerificationPayload(user, purpose);
+                string challenge = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
+                var otpProof = ComputeOtpProof(
+                    purpose,
+                    payload.Email,
+                    payload.Password,
+                    payload.Usertype,
+                    expiresAtUtc,
+                    challenge,
+                    otpCode
+                );
 
                 var linkStored = await _cacheService.SetValueAsync(
                     key: VerificationTokenKey(linkToken),
@@ -324,16 +332,27 @@ namespace backend.main.services.implementation
                     LinkToken = linkToken,
                     OtpCode = otpCode,
                     OtpChallenge = challenge,
+                    OtpProof = otpProof,
+                    Password = payload.Password,
+                    Usertype = payload.Usertype,
                     ExpiresAtUtc = expiresAtUtc,
                 };
 
+                var stateJson = JsonConvert.SerializeObject(state);
+
                 var stateStored = await _cacheService.SetValueAsync(
                     key: VerificationStateKey(user.Email, purpose),
-                    value: JsonConvert.SerializeObject(state),
+                    value: stateJson,
                     expiry: VERIFY_TTL
                 );
 
-                if (!linkStored || !stateStored)
+                var challengeStored = await _cacheService.SetValueAsync(
+                    key: VerificationChallengeKey(challenge),
+                    value: stateJson,
+                    expiry: VERIFY_TTL
+                );
+
+                if (!linkStored || !stateStored || !challengeStored)
                     throw new NotAvailableException();
 
                 return new VerificationArtifacts
@@ -374,7 +393,13 @@ namespace backend.main.services.implementation
                     throw new UnauthorizedException("Verification token purpose mismatch.");
 
                 _ = await _cacheService.DeleteKeyAsync(VerificationTokenKey(token));
-                _ = await _cacheService.DeleteKeyAsync(VerificationStateKey(payload.Email, payload.Purpose));
+                var state = await GetVerificationStateAsync(payload.Email, payload.Purpose);
+                if (state != null)
+                    await DeleteVerificationStateAsync(state);
+                else
+                    _ = await _cacheService.DeleteKeyAsync(
+                        VerificationStateKey(payload.Email, payload.Purpose)
+                    );
 
                 return CreateUserFromPayload(payload);
             }
@@ -396,51 +421,49 @@ namespace backend.main.services.implementation
         {
             try
             {
-                var payload = ReadVerificationChallenge(challenge);
-                if (payload.Purpose != expectedPurpose)
+                var state = await GetVerificationStateByChallengeAsync(challenge);
+                if (state == null)
+                    throw new UnauthorizedException("Invalid or expired verification challenge.");
+
+                if (state.Purpose != expectedPurpose)
                     throw new UnauthorizedException("Verification challenge purpose mismatch.");
 
                 var expectedProof = ComputeOtpProof(
-                    payload.Purpose,
-                    payload.Email,
-                    payload.Password,
-                    payload.Usertype,
-                    payload.ExpiresAtUtc,
-                    payload.Nonce,
+                    state.Purpose,
+                    state.Email,
+                    state.Password,
+                    state.Usertype,
+                    state.ExpiresAtUtc,
+                    challenge,
                     code
                 );
 
-                var state = await GetVerificationStateAsync(payload.Email, payload.Purpose);
-                if (state == null || state.OtpChallenge != challenge)
+                if (state.OtpChallenge != challenge)
                     throw new UnauthorizedException("Invalid or expired verification challenge.");
 
-                if (!FixedTimeEquals(payload.OtpProof, expectedProof))
+                if (!FixedTimeEquals(state.OtpProof, expectedProof))
                 {
-                    var attempts = await RecordFailedOtpAttemptAsync(payload);
+                    var attempts = await RecordFailedOtpAttemptAsync(challenge);
                     if (attempts >= MAX_OTP_ATTEMPTS)
                     {
                         _ = await _cacheService.DeleteKeyAsync(VerificationTokenKey(state.LinkToken));
-                        _ = await _cacheService.DeleteKeyAsync(VerificationStateKey(payload.Email, payload.Purpose));
+                        await DeleteVerificationStateAsync(state);
                     }
 
                     throw new UnauthorizedException("Invalid or expired verification code.");
                 }
 
                 _ = await _cacheService.DeleteKeyAsync(VerificationTokenKey(state.LinkToken));
-                _ = await _cacheService.DeleteKeyAsync(VerificationStateKey(payload.Email, payload.Purpose));
-                _ = await _cacheService.DeleteKeyAsync(OtpAttemptKey(payload));
+                await DeleteVerificationStateAsync(state);
+                _ = await _cacheService.DeleteKeyAsync(OtpAttemptKey(challenge));
 
                 return CreateUserFromPayload(new VerificationTokenPayload
                 {
-                    Email = payload.Email,
-                    Password = payload.Password,
-                    Usertype = payload.Usertype ?? "placeholder",
-                    Purpose = payload.Purpose,
+                    Email = state.Email,
+                    Password = state.Password,
+                    Usertype = state.Usertype,
+                    Purpose = state.Purpose,
                 });
-            }
-            catch (SecurityTokenException)
-            {
-                throw new UnauthorizedException("Invalid or expired verification challenge.");
             }
             catch (Exception e)
             {
@@ -541,104 +564,10 @@ namespace backend.main.services.implementation
             {
                 Email = user.Email,
                 Password = purpose == VerificationPurpose.SignUp ? user.Password : null,
-                Usertype = purpose == VerificationPurpose.SignUp ? user.Usertype : "placeholder",
+                Usertype = purpose == VerificationPurpose.SignUp
+                    ? AuthRoles.NormalizeStored(user.Usertype)
+                    : "placeholder",
                 Purpose = purpose,
-            };
-        }
-
-        private string BuildVerificationChallenge(
-            User user,
-            VerificationPurpose purpose,
-            string otpCode,
-            DateTime expiresAtUtc,
-            string nonce
-        )
-        {
-            var payload = BuildVerificationPayload(user, purpose);
-            var proof = ComputeOtpProof(
-                purpose,
-                payload.Email,
-                payload.Password,
-                payload.Usertype,
-                expiresAtUtc,
-                nonce,
-                otpCode
-            );
-
-            var claims = new List<Claim>
-            {
-                new("purpose", purpose.ToString()),
-                new("email", payload.Email),
-                new("otp_proof", proof),
-                new("nonce", nonce),
-            };
-
-            if (!string.IsNullOrWhiteSpace(payload.Password))
-                claims.Add(new Claim("password", payload.Password));
-
-            if (!string.IsNullOrWhiteSpace(payload.Usertype))
-                claims.Add(new Claim("usertype", payload.Usertype));
-
-            var descriptor = new SecurityTokenDescriptor
-            {
-                Subject = new ClaimsIdentity(claims),
-                Expires = expiresAtUtc,
-                SigningCredentials = new SigningCredentials(
-                    new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JWT_VERIFICATION_SECRET)),
-                    SecurityAlgorithms.HmacSha256Signature
-                ),
-                Issuer = ISSUER,
-                Audience = VERIFICATION_AUDIENCE,
-            };
-
-            var token = _tokenHandler.CreateToken(descriptor);
-            return _tokenHandler.WriteToken(token);
-        }
-
-        private VerificationChallengePayload ReadVerificationChallenge(string challenge)
-        {
-            var parameters = new TokenValidationParameters
-            {
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(
-                    Encoding.UTF8.GetBytes(JWT_VERIFICATION_SECRET)
-                ),
-                ValidateIssuer = true,
-                ValidIssuer = ISSUER,
-                ValidateAudience = true,
-                ValidAudience = VERIFICATION_AUDIENCE,
-                ValidateLifetime = true,
-                ClockSkew = TimeSpan.Zero,
-            };
-
-            var principal = _tokenHandler.ValidateToken(challenge, parameters, out var validatedToken);
-            var jwt = validatedToken as JwtSecurityToken
-                ?? throw new SecurityTokenException("Invalid verification challenge.");
-
-            var purposeValue = principal.FindFirst("purpose")?.Value
-                ?? throw new SecurityTokenException("Missing verification purpose.");
-
-            if (!Enum.TryParse<VerificationPurpose>(purposeValue, ignoreCase: true, out var purpose))
-                throw new SecurityTokenException("Invalid verification purpose.");
-
-            var email = principal.FindFirst("email")?.Value
-                ?? throw new SecurityTokenException("Missing verification email.");
-
-            var otpProof = principal.FindFirst("otp_proof")?.Value
-                ?? throw new SecurityTokenException("Missing OTP proof.");
-
-            var nonce = principal.FindFirst("nonce")?.Value
-                ?? throw new SecurityTokenException("Missing OTP nonce.");
-
-            return new VerificationChallengePayload
-            {
-                Purpose = purpose,
-                Email = email,
-                Password = principal.FindFirst("password")?.Value,
-                Usertype = principal.FindFirst("usertype")?.Value,
-                OtpProof = otpProof,
-                Nonce = nonce,
-                ExpiresAtUtc = jwt.ValidTo,
             };
         }
 
@@ -654,13 +583,31 @@ namespace backend.main.services.implementation
             return JsonConvert.DeserializeObject<VerificationDeliveryState>(json);
         }
 
+        private async Task<VerificationDeliveryState?> GetVerificationStateByChallengeAsync(
+            string challenge
+        )
+        {
+            var json = await _cacheService.GetValueAsync(VerificationChallengeKey(challenge));
+            if (string.IsNullOrWhiteSpace(json))
+                return null;
+
+            return JsonConvert.DeserializeObject<VerificationDeliveryState>(json);
+        }
+
+        private async Task DeleteVerificationStateAsync(VerificationDeliveryState state)
+        {
+            _ = await _cacheService.DeleteKeyAsync(VerificationStateKey(state.Email, state.Purpose));
+            _ = await _cacheService.DeleteKeyAsync(VerificationChallengeKey(state.OtpChallenge));
+            _ = await _cacheService.DeleteKeyAsync(OtpAttemptKey(state.OtpChallenge));
+        }
+
         private User CreateUserFromPayload(VerificationTokenPayload payload)
         {
             return new User
             {
                 Email = payload.Email,
                 Password = payload.Password,
-                Usertype = payload.Usertype,
+                Usertype = AuthRoles.NormalizeStored(payload.Usertype),
             };
         }
 
@@ -676,7 +623,7 @@ namespace backend.main.services.implementation
             string? password,
             string? usertype,
             DateTime expiresAtUtc,
-            string nonce,
+            string challenge,
             string otpCode
         )
         {
@@ -687,7 +634,7 @@ namespace backend.main.services.implementation
                 password ?? string.Empty,
                 usertype ?? string.Empty,
                 expiresAtUtc.ToUniversalTime().Ticks,
-                nonce,
+                challenge,
                 otpCode
             );
 
@@ -698,9 +645,9 @@ namespace backend.main.services.implementation
         private TimeSpan ResolveRefreshTtl(bool rememberMe) =>
             rememberMe ? REMEMBERED_REFRESH_TTL : DEFAULT_REFRESH_TTL;
 
-        private async Task<long> RecordFailedOtpAttemptAsync(VerificationChallengePayload payload)
+        private async Task<long> RecordFailedOtpAttemptAsync(string challenge)
         {
-            var key = OtpAttemptKey(payload);
+            var key = OtpAttemptKey(challenge);
             var attempts = await _cacheService.IncrementAsync(key);
             _ = await _cacheService.SetExpiryAsync(key, VERIFY_TTL);
             return attempts;
@@ -727,8 +674,11 @@ namespace backend.main.services.implementation
         private static string VerificationStateKey(string email, VerificationPurpose purpose) =>
             $"verify:email:{purpose}:{email}";
 
-        private static string OtpAttemptKey(VerificationChallengePayload payload) =>
-            $"verify:otp-attempt:{payload.Purpose}:{payload.Email}:{payload.Nonce}";
+        private static string VerificationChallengeKey(string challenge) =>
+            $"verify:challenge:{challenge}";
+
+        private static string OtpAttemptKey(string challenge) =>
+            $"verify:otp-attempt:{challenge}";
 
         private sealed class RefreshTokenRecord
         {
@@ -766,6 +716,9 @@ namespace backend.main.services.implementation
             public required string LinkToken { get; set; }
             public required string OtpCode { get; set; }
             public required string OtpChallenge { get; set; }
+            public required string OtpProof { get; set; }
+            public string? Password { get; set; }
+            public required string Usertype { get; set; }
             public DateTime ExpiresAtUtc { get; set; }
         }
     }

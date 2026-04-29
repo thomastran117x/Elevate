@@ -1,19 +1,21 @@
 using System.ComponentModel.DataAnnotations;
+using backend.main.configurations.security;
 
-namespace backend.app.attributes.validation;
+namespace backend.main.attributes.validation;
 
 public class ValidRoleAttribute : ValidationAttribute
 {
-    private static readonly string[] DefaultAllowedRoles = ["student", "teacher", "assistant"];
-
-    public string[] AllowedRoles { get; set; } = DefaultAllowedRoles;
+    public string[] AllowedRoles { get; set; } = AuthRoles.SignUpRoles;
 
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
     {
         if (value is not string role)
             return ValidationResult.Success;
 
-        if (AllowedRoles.Contains(role, StringComparer.OrdinalIgnoreCase))
+        if (
+            AuthRoles.TryNormalize(role, out var normalizedRole)
+            && AllowedRoles.Contains(normalizedRole, StringComparer.Ordinal)
+        )
             return ValidationResult.Success;
 
         var formatted = string.Join(", ", AllowedRoles.Select(r => $"'{r}'"));

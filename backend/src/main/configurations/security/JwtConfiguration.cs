@@ -78,10 +78,10 @@ namespace backend.main.configurations.security
             services.AddAuthorization(options =>
             {
                 options.AddPolicy("AdminOnly", p =>
-                    p.RequireRole("Admin"));
+                    p.RequireRole(AuthRoles.Admin));
 
                 options.AddPolicy("OrganizerOnly", p =>
-                    p.RequireRole("Organizer"));
+                    p.RequireRole(AuthRoles.Organizer));
             });
             return services;
         }
@@ -99,7 +99,11 @@ namespace backend.main.configurations.security
                 throw new InvalidTokenPayloadException();
             }
 
-            return new UserIdentityPayload(int.Parse(idClaim), emailClaim, roleClaim);
+            return new UserIdentityPayload(
+                int.Parse(idClaim),
+                emailClaim,
+                AuthRoles.NormalizeStored(roleClaim)
+            );
         }
     }
 }

@@ -4,6 +4,7 @@ public class Device
 {
     public int Id { get; set; }
     public int UserId { get; set; }
+    public required string DeviceTokenHash { get; set; }
     public required string DeviceType { get; set; }
     public required string ClientName { get; set; }
     public string IpAddress { get; set; } = "Unknown";

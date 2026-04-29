@@ -1,7 +1,6 @@
 using System.Text.Json;
 
 using backend.main.dtos.responses.external;
-using backend.main.exceptions.http;
 using backend.main.services.interfaces;
 
 namespace backend.main.services.implementations
@@ -13,7 +12,8 @@ namespace backend.main.services.implementations
 
         private readonly HttpClient _http;
         private readonly ILogger<CloudflareTurnstileCaptchaService> _logger;
-        private readonly string _secret;
+        private readonly string? _secret;
+        private readonly CaptchaVerificationPolicy _policy;
         private readonly IHttpContextAccessor? _httpContextAccessor;
         private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
@@ -26,14 +26,12 @@ namespace backend.main.services.implementations
             _http = http;
             _logger = logger;
             _httpContextAccessor = httpContextAccessor;
+            _policy = new CaptchaVerificationPolicy(config);
 
-            var secret = config["Turnstile:Secret"] ?? config["CLOUDFLARE_TURNSTILE_SECRET"] ?? config["TURNSTILE_SECRET"];
-            if (string.IsNullOrWhiteSpace(secret))
-            {
-                throw new NotAvailableException(
-                    "Cloudflare Turnstile secret is not configured. Set one of: Turnstile:Secret, CLOUDFLARE_TURNSTILE_SECRET, or TURNSTILE_SECRET.");
-            }
-            _secret = secret;
+            _secret =
+                config["Turnstile:Secret"]
+                ?? config["CLOUDFLARE_TURNSTILE_SECRET"]
+                ?? config["TURNSTILE_SECRET"];
 
             var timeoutSeconds = config.GetValue("Turnstile:TimeoutSeconds", DefaultTimeoutSeconds);
             _http.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
@@ -42,11 +40,32 @@ namespace backend.main.services.implementations
         /// <inheritdoc />
         public async Task<bool> VerifyCaptchaAsync(string token, CancellationToken cancellationToken = default)
         {
+            if (_policy.IsBypassEnabled)
+            {
+                _logger.LogWarning(
+                    "[Captcha] Turnstile captcha bypass is enabled for {Environment}.",
+                    _policy.EnvironmentName
+                );
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                _logger.LogWarning("[Captcha] Turnstile captcha token is missing.");
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(_secret))
+            {
+                _logger.LogError("[Captcha] Cloudflare Turnstile secret is not configured.");
+                return false;
+            }
+
             try
             {
                 var formData = new Dictionary<string, string>
                 {
-                    ["secret"] = _secret,
+                    ["secret"] = _secret!,
                     ["response"] = token
                 };
 
@@ -62,20 +81,24 @@ namespace backend.main.services.implementations
                 {
                     var body = await resp.Content.ReadAsStringAsync(cancellationToken);
                     _logger.LogError(
-                        "[Captcha] Turnstile returned HTTP {Status}. Body: {Body}. Allowing login (fail-open).",
+                        "[Captcha] Turnstile returned HTTP {Status}. Body: {Body}. Rejecting captcha.",
                         (int)resp.StatusCode,
                         body
                     );
-                    return true;
+                    return false;
                 }
 
                 await using var stream = await resp.Content.ReadAsStreamAsync(cancellationToken);
-                var payload = await JsonSerializer.DeserializeAsync<TurnstileSiteverifyResponse>(stream, JsonOpts, cancellationToken);
+                var payload = await JsonSerializer.DeserializeAsync<TurnstileSiteverifyResponse>(
+                    stream,
+                    JsonOpts,
+                    cancellationToken
+                );
 
                 if (payload == null)
                 {
-                    _logger.LogError("[Captcha] Turnstile response deserialized to null. Allowing login (fail-open).");
-                    return true;
+                    _logger.LogError("[Captcha] Turnstile response deserialized to null. Rejecting captcha.");
+                    return false;
                 }
 
                 if (payload.Success != true)
@@ -89,10 +112,20 @@ namespace backend.main.services.implementations
 
                 return true;
             }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "[Captcha] Turnstile response was malformed. Rejecting captcha.");
+                return false;
+            }
+            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogError(ex, "[Captcha] Turnstile request timed out. Rejecting captcha.");
+                return false;
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[Captcha] Turnstile verification request failed. Allowing login (fail-open).");
-                return true;
+                _logger.LogError(ex, "[Captcha] Turnstile verification request failed. Rejecting captcha.");
+                return false;
             }
         }
     }

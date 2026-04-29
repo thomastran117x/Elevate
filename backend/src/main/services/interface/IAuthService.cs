@@ -13,7 +13,7 @@ namespace backend.main.services.interfaces
         Task<UserToken> MicrosoftAsync(string token);
         Task<UserToken> HandleTokensAsync(string refreshToken);
         Task HandleLogoutAsync(string refreshToken);
-        Task<VerificationOtpChallenge?> ForgotPasswordAsync(string email);
+        Task<VerificationOtpChallenge> ForgotPasswordAsync(string email);
         Task ChangePasswordAsync(string token, string password);
         Task ChangePasswordWithOtpAsync(string code, string challenge, string password);
     }

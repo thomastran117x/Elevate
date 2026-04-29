@@ -20,9 +20,17 @@ export interface SignupRequest {
 export interface AuthResponse {
   Username: string;
   Token: string;
+  AccessToken?: string;
   Avatar: string;
   Usertype: string;
   Id: number;
+}
+
+export interface ApiEnvelope<T> {
+  message?: string;
+  Message?: string;
+  data?: T;
+  Data?: T;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -42,10 +50,12 @@ export class AuthService {
     return this.postWithCsrf<{ message: string }>(`${this.baseUrl}/signup`, payload);
   }
 
-  verifyEmail(token: string): Observable<{ message: string }> {
-    return this.http.get<{ message: string }>(`${this.baseUrl}/verify/${token}`, {
-      withCredentials: true,
-    });
+  verifyEmail(token: string): Observable<ApiEnvelope<AuthResponse>> {
+    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/verify`, { token });
+  }
+
+  verifyDevice(token: string): Observable<ApiEnvelope<AuthResponse>> {
+    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/device/verify`, { token });
   }
 
   googleVerify(idToken: string): Observable<AuthResponse> {

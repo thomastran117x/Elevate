@@ -1,4 +1,5 @@
 using backend.main.dtos.general;
+using backend.main.configurations.application;
 
 namespace backend.main.utilities.implementation
 {
@@ -6,8 +7,12 @@ namespace backend.main.utilities.implementation
     {
         public const string RefreshCookieName = "refreshToken";
         public const string RefreshTokenHeaderName = "X-Refresh-Token";
-        private const string RefreshCookiePath = "/auth";
+        public const string TrustedDeviceCookieName = "trustedDevice";
+        public const string TrustedDeviceHeaderName = "X-Trusted-Device";
+        private const string RefreshCookiePath = RoutePaths.ApiAuthPath;
+        private const string TrustedDeviceCookiePath = RoutePaths.ApiAuthPath;
         private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
+        private static readonly TimeSpan TrustedDeviceLifetime = TimeSpan.FromDays(90);
 
         public static bool ShouldUseRefreshCookie(ClientRequestInfo requestInfo)
         {
@@ -49,6 +54,50 @@ namespace backend.main.utilities.implementation
             response.Cookies.Delete(RefreshCookieName, BuildRefreshCookieOptions());
         }
 
+        public static string? ResolveTrustedDeviceToken(HttpRequest request, string? deviceToken = null)
+        {
+            if (request.Cookies.TryGetValue(TrustedDeviceCookieName, out var cookieDeviceToken)
+                && !string.IsNullOrWhiteSpace(cookieDeviceToken))
+            {
+                return cookieDeviceToken;
+            }
+
+            var headerDeviceToken = request.Headers[TrustedDeviceHeaderName].FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(headerDeviceToken))
+                return headerDeviceToken;
+
+            return string.IsNullOrWhiteSpace(deviceToken) ? null : deviceToken;
+        }
+
+        public static void SetTrustedDeviceToken(
+            HttpResponse response,
+            ClientRequestInfo requestInfo,
+            string deviceToken,
+            TimeSpan? lifetime = null
+        )
+        {
+            response.Headers[TrustedDeviceHeaderName] = deviceToken;
+
+            if (!requestInfo.IsBrowserClient)
+                return;
+
+            response.Cookies.Append(
+                TrustedDeviceCookieName,
+                deviceToken,
+                BuildTrustedDeviceCookieOptions(lifetime)
+            );
+        }
+
+        public static void ClearTrustedDeviceToken(HttpResponse response, ClientRequestInfo requestInfo)
+        {
+            response.Headers.Remove(TrustedDeviceHeaderName);
+
+            if (!requestInfo.IsBrowserClient)
+                return;
+
+            response.Cookies.Delete(TrustedDeviceCookieName, BuildTrustedDeviceCookieOptions());
+        }
+
         public static void SetRefreshTokenCookie(
             HttpResponse response,
             string refreshToken,
@@ -76,6 +125,22 @@ namespace backend.main.utilities.implementation
                 MaxAge = refreshLifetime,
                 Expires = DateTime.UtcNow.Add(refreshLifetime),
                 Path = RefreshCookiePath
+            };
+        }
+
+        private static CookieOptions BuildTrustedDeviceCookieOptions(TimeSpan? lifetime = null)
+        {
+            var deviceLifetime = lifetime ?? TrustedDeviceLifetime;
+
+            return new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                IsEssential = true,
+                MaxAge = deviceLifetime,
+                Expires = DateTime.UtcNow.Add(deviceLifetime),
+                Path = TrustedDeviceCookiePath
             };
         }
     }

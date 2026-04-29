@@ -6,6 +6,8 @@ import { RouterModule } from '@angular/router';
 import { LoginComponent } from './pages/login/login.component';
 import { GoogleCallbackComponent } from './pages/google-callback/google-callback.component';
 import { MicrosoftCallbackComponent } from './pages/microsoft-callback/microsoft-callback.component';
+import { VerifyComponent } from './pages/verify/verify.component';
+import { DeviceVerifyComponent } from './pages/device-verify/device-verify.component';
 
 @NgModule({
   imports: [
@@ -14,6 +16,8 @@ import { MicrosoftCallbackComponent } from './pages/microsoft-callback/microsoft
     RouterModule.forChild([
       { path: '', redirectTo: 'login', pathMatch: 'full' },
       { path: 'login', component: LoginComponent },
+      { path: 'verify', component: VerifyComponent },
+      { path: 'device/verify', component: DeviceVerifyComponent },
       { path: 'google', component: GoogleCallbackComponent },
       { path: 'microsoft', component: MicrosoftCallbackComponent },
     ]),

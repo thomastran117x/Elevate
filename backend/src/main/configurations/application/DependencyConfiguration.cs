@@ -17,6 +17,8 @@ namespace backend.main.configurations.application
 {
     public static class DependencyInjection
     {
+        private static readonly Uri GoogleCaptchaBaseAddress = new("https://www.google.com/");
+
         public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration config)
         {
             services.AddAppElasticsearch(config);
@@ -64,9 +66,40 @@ namespace backend.main.configurations.application
 
             services.AddSingleton<ICustomLogger, FileLogger>();
 
-            services.AddHttpClient<ICaptchaService, GoogleCaptchaService>();
+            services.AddHttpClient<GoogleCaptchaService>(client =>
+            {
+                client.BaseAddress = GoogleCaptchaBaseAddress;
+            });
+            services.AddHttpClient<CloudflareTurnstileCaptchaService>();
+            services.AddScoped<ICaptchaService>(provider =>
+            {
+                var configuration = provider.GetRequiredService<IConfiguration>();
+                return ResolveCaptchaProvider(configuration) switch
+                {
+                    "turnstile" => provider.GetRequiredService<CloudflareTurnstileCaptchaService>(),
+                    _ => provider.GetRequiredService<GoogleCaptchaService>(),
+                };
+            });
 
             return services;
+        }
+
+        private static string ResolveCaptchaProvider(IConfiguration config)
+        {
+            var configuredProvider = (
+                config["Captcha:Provider"]
+                ?? config["CAPTCHA_PROVIDER"]
+            )?.Trim().ToLowerInvariant();
+
+            if (configuredProvider is "google" or "turnstile")
+                return configuredProvider;
+
+            var turnstileSecret =
+                config["Turnstile:Secret"]
+                ?? config["CLOUDFLARE_TURNSTILE_SECRET"]
+                ?? config["TURNSTILE_SECRET"];
+
+            return string.IsNullOrWhiteSpace(turnstileSecret) ? "google" : "turnstile";
         }
     }
 }

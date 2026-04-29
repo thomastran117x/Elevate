@@ -184,11 +184,14 @@ namespace backend.main.configurations.resource.database
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<Device>()
-                .HasIndex(d => new { d.UserId, d.DeviceType, d.ClientName })
+                .HasIndex(d => d.DeviceTokenHash)
                 .IsUnique();
 
             modelBuilder.Entity<Device>()
                 .HasIndex(d => d.UserId);
+
+            modelBuilder.Entity<Device>()
+                .HasIndex(d => new { d.UserId, d.DeviceType, d.ClientName });
 
             modelBuilder.Entity<ClubPost>()
                 .HasOne<User>()

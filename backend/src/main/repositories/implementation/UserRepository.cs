@@ -1,4 +1,5 @@
 using backend.main.configurations.resource.database;
+using backend.main.configurations.security;
 using backend.main.models.core;
 using backend.main.repositories.interfaces;
 
@@ -14,6 +15,7 @@ namespace backend.main.repositories.implementation
 
         public async Task<User> CreateUserAsync(User user)
         {
+            user.Usertype = AuthRoles.NormalizeStored(user.Usertype);
             await _context.Users.AddAsync(user);
             await _context.SaveChangesAsync();
             return user;
@@ -26,7 +28,9 @@ namespace backend.main.repositories.implementation
                 return null;
 
             user.Password = updated.Password ?? user.Password;
-            user.Usertype = updated.Usertype ?? user.Usertype;
+            user.Usertype = updated.Usertype != null
+                ? AuthRoles.NormalizeStored(updated.Usertype)
+                : user.Usertype;
             user.Name = updated.Name ?? user.Name;
             user.Username = updated.Username ?? user.Username;
             user.Avatar = updated.Avatar ?? user.Avatar;
@@ -48,7 +52,7 @@ namespace backend.main.repositories.implementation
             if (updated.Password != null)
                 existing.Password = updated.Password;
             if (updated.Usertype != null)
-                existing.Usertype = updated.Usertype;
+                existing.Usertype = AuthRoles.NormalizeStored(updated.Usertype);
             if (updated.Name != null)
                 existing.Name = updated.Name;
             if (updated.Username != null)
@@ -132,7 +136,10 @@ namespace backend.main.repositories.implementation
                 .AsQueryable();
 
             if (!string.IsNullOrEmpty(role))
-                query = query.Where(u => u.Usertype == role);
+            {
+                var normalizedRole = AuthRoles.NormalizeStored(role);
+                query = query.Where(u => u.Usertype == normalizedRole);
+            }
 
             return await query.ToListAsync();
         }

@@ -41,8 +41,10 @@ export class SessionManagerService {
         ),
       );
 
-      if (res?.Token) {
-        this.store.dispatch(setUser({ user: res }));
+      const token = res?.Token ?? res?.AccessToken ?? null;
+
+      if (token) {
+        this.store.dispatch(setUser({ user: { ...res, Token: token } }));
       } else {
         this.store.dispatch(clearUser());
       }
