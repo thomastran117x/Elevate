@@ -13,6 +13,9 @@ This test project is organized by application boundary so auth coverage can grow
 - `Services/Captcha`
   - Unit tests for captcha providers and captcha policy behavior.
   - Focus on provider success/failure handling, bypass rules, and request composition.
+- `Seeders`
+  - Startup seeding policy tests and seeder-specific coverage.
+  - Focus on when seeders run, env-driven behavior, and idempotent seed construction rules.
 - `Utilities`
   - Low-level auth utility tests such as cookie/header handling helpers.
 - `TestSupport`

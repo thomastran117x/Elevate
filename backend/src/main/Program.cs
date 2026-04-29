@@ -3,6 +3,7 @@ using backend.main.configurations.environment;
 using backend.main.configurations.resource.database;
 using backend.main.configurations.resource.redis;
 using backend.main.configurations.security;
+using backend.main.seeders;
 using backend.main.utilities.implementation;
 using backend.main.utilities.interfaces;
 using Serilog;
@@ -58,6 +59,7 @@ var app = builder.Build();
 Logger.SetInstance(app.Services.GetRequiredService<ICustomLogger>());
 
 await DatabaseConfig.VerifyDatabaseConnectionAsync(app.Services);
+await app.Services.SeedAppDataAsync();
 
 app.UseForwardedHeaders();
 
