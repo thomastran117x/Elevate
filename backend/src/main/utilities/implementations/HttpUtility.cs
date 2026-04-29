@@ -1,4 +1,5 @@
 using backend.main.dtos.general;
+using backend.main.configurations.application;
 
 namespace backend.main.utilities.implementation
 {
@@ -6,7 +7,7 @@ namespace backend.main.utilities.implementation
     {
         public const string RefreshCookieName = "refreshToken";
         public const string RefreshTokenHeaderName = "X-Refresh-Token";
-        private const string RefreshCookiePath = "/auth";
+        private const string RefreshCookiePath = RoutePaths.ApiAuthPath;
         private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
 
         public static bool ShouldUseRefreshCookie(ClientRequestInfo requestInfo)

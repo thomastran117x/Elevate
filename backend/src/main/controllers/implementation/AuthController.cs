@@ -5,6 +5,7 @@ using backend.main.dtos.responses.general;
 using backend.main.exceptions.http;
 using backend.main.models.core;
 using backend.main.models.other;
+using backend.main.configurations.application;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
 
@@ -17,7 +18,7 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace backend.main.implementation.controllers
 {
     [ApiController]
-    [Route("auth")]
+    [Route(RoutePaths.AuthPrefix)]
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
