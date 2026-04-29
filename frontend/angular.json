@@ -14,6 +14,11 @@
           "builder": "@angular/build:application",
           "options": {
             "browser": "src/main.ts",
+            "server": "src/main.server.ts",
+            "outputMode": "server",
+            "ssr": {
+              "entry": "src/server.ts"
+            },
             "polyfills": ["zone.js"],
             "tsConfig": "tsconfig.app.json",
             "assets": [

@@ -4,6 +4,7 @@ import {
   provideZoneChangeDetection,
   importProvidersFrom,
 } from '@angular/core';
+import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { CoreModule } from './core/core.module';
 import { provideStore } from '@ngrx/store';
@@ -16,6 +17,7 @@ export const appConfig: ApplicationConfig = {
     provideStore({ user: userReducer }),
     provideBrowserGlobalErrorListeners(),
     provideZoneChangeDetection({ eventCoalescing: true }),
+    provideClientHydration(withEventReplay()),
     provideRouter(routes),
     importProvidersFrom(CoreModule),
   ],

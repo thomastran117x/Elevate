@@ -1,5 +1,6 @@
 import { environment } from '../../../environments/environment';
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, inject, PLATFORM_ID, signal } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Store } from '@ngrx/store';
 import { setUser, clearUser } from '../stores/user.actions';
@@ -12,10 +13,16 @@ export class SessionManagerService {
   private http = inject(HttpClient);
   private store = inject(Store);
   private auth = inject(AuthTokenService);
+  private platformId = inject(PLATFORM_ID);
 
-  loading = signal(true);
+  loading = signal(isPlatformBrowser(this.platformId));
 
   async restoreSession(): Promise<void> {
+    if (!isPlatformBrowser(this.platformId)) {
+      this.loading.set(false);
+      return;
+    }
+
     try {
       await this.auth.ensureCsrfToken();
 

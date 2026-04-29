@@ -76,3 +76,5 @@ Icon?
 backend/.env
 
 .vscode/
+!frontend/.vscode/
+!frontend/.vscode/mcp.json
