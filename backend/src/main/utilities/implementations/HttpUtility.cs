@@ -1,12 +1,15 @@
 using backend.main.dtos.general;
 using backend.main.configurations.application;
+using backend.main.models.other;
 
 namespace backend.main.utilities.implementation
 {
     public static class HttpUtility
     {
         public const string RefreshCookieName = "refreshToken";
+        public const string RefreshBindingCookieName = "refreshBinding";
         public const string RefreshTokenHeaderName = "X-Refresh-Token";
+        public const string SessionBindingHeaderName = "X-Session-Binding";
         public const string TrustedDeviceCookieName = "trustedDevice";
         public const string TrustedDeviceHeaderName = "X-Trusted-Device";
         private const string RefreshCookiePath = RoutePaths.ApiAuthPath;
@@ -14,17 +17,17 @@ namespace backend.main.utilities.implementation
         private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
         private static readonly TimeSpan TrustedDeviceLifetime = TimeSpan.FromDays(90);
 
-        public static bool ShouldUseRefreshCookie(ClientRequestInfo requestInfo)
-        {
-            return requestInfo.IsBrowserClient;
-        }
-
-        public static string? ResolveRefreshToken(HttpRequest request, string? refreshToken = null)
+        public static string? ResolveBrowserRefreshToken(HttpRequest request)
         {
             if (request.Cookies.TryGetValue(RefreshCookieName, out var cookieRefreshToken)
                 && !string.IsNullOrWhiteSpace(cookieRefreshToken))
                 return cookieRefreshToken;
 
+            return null;
+        }
+
+        public static string? ResolveApiRefreshToken(HttpRequest request, string? refreshToken = null)
+        {
             var headerRefreshToken = request.Headers[RefreshTokenHeaderName].FirstOrDefault();
             if (!string.IsNullOrWhiteSpace(headerRefreshToken))
                 return headerRefreshToken;
@@ -32,26 +35,52 @@ namespace backend.main.utilities.implementation
             return string.IsNullOrWhiteSpace(refreshToken) ? null : refreshToken;
         }
 
-        public static string? ApplyRefreshToken(
-            HttpResponse response,
-            ClientRequestInfo requestInfo,
-            string refreshToken,
-            TimeSpan? lifetime = null
-        )
+        public static string? ResolveBrowserSessionBindingToken(HttpRequest request)
         {
-            if (!ShouldUseRefreshCookie(requestInfo))
-                return refreshToken;
+            if (request.Cookies.TryGetValue(RefreshBindingCookieName, out var cookieBindingToken)
+                && !string.IsNullOrWhiteSpace(cookieBindingToken))
+            {
+                return cookieBindingToken;
+            }
 
-            response.Cookies.Append(RefreshCookieName, refreshToken, BuildRefreshCookieOptions(lifetime));
             return null;
         }
 
-        public static void ClearRefreshToken(HttpResponse response, ClientRequestInfo requestInfo)
+        public static string? ResolveApiSessionBindingToken(
+            HttpRequest request,
+            string? sessionBindingToken = null
+        )
         {
-            if (!ShouldUseRefreshCookie(requestInfo))
-                return;
+            var headerBindingToken = request.Headers[SessionBindingHeaderName].FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(headerBindingToken))
+                return headerBindingToken;
 
+            return string.IsNullOrWhiteSpace(sessionBindingToken) ? null : sessionBindingToken;
+        }
+
+        public static void SetBrowserRefreshSession(
+            HttpResponse response,
+            string refreshToken,
+            string refreshBindingToken,
+            TimeSpan? lifetime = null
+        )
+        {
+            response.Cookies.Append(
+                RefreshCookieName,
+                refreshToken,
+                BuildRefreshCookieOptions(lifetime)
+            );
+            response.Cookies.Append(
+                RefreshBindingCookieName,
+                refreshBindingToken,
+                BuildRefreshBindingCookieOptions(lifetime)
+            );
+        }
+
+        public static void ClearBrowserRefreshSession(HttpResponse response)
+        {
             response.Cookies.Delete(RefreshCookieName, BuildRefreshCookieOptions());
+            response.Cookies.Delete(RefreshBindingCookieName, BuildRefreshBindingCookieOptions());
         }
 
         public static string? ResolveTrustedDeviceToken(HttpRequest request, string? deviceToken = null)
@@ -98,21 +127,23 @@ namespace backend.main.utilities.implementation
             response.Cookies.Delete(TrustedDeviceCookieName, BuildTrustedDeviceCookieOptions());
         }
 
-        public static void SetRefreshTokenCookie(
-            HttpResponse response,
-            string refreshToken,
-            TimeSpan? lifetime = null
-        )
-        {
-            response.Cookies.Append(RefreshCookieName, refreshToken, BuildRefreshCookieOptions(lifetime));
-        }
-
-        public static void ClearRefreshTokenCookie(HttpResponse response)
-        {
-            response.Cookies.Delete(RefreshCookieName, BuildRefreshCookieOptions());
-        }
-
         private static CookieOptions BuildRefreshCookieOptions(TimeSpan? lifetime = null)
+        {
+            var refreshLifetime = lifetime ?? RefreshTokenLifetime;
+
+            return new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                IsEssential = true,
+                MaxAge = refreshLifetime,
+                Expires = DateTime.UtcNow.Add(refreshLifetime),
+                Path = RefreshCookiePath
+            };
+        }
+
+        private static CookieOptions BuildRefreshBindingCookieOptions(TimeSpan? lifetime = null)
         {
             var refreshLifetime = lifetime ?? RefreshTokenLifetime;
 

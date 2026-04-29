@@ -19,6 +19,8 @@ namespace backend.main.dtos.requests.auth
 
         public bool RememberMe { get; set; } = false;
 
+        public string? Transport { get; set; }
+
         [Required]
         public required string Captcha
         {

@@ -27,8 +27,6 @@ namespace backend.main.configurations.application
             _next = next;
         }
 
-        public const string ClientTypeHeader = "X-Client-Type";
-
         public async Task InvokeAsync(HttpContext context, ClientRequestInfo requestInfo)
         {
             requestInfo.IpAddress = ResolveIpAddress(context);
@@ -41,11 +39,16 @@ namespace backend.main.configurations.application
 
         private static bool ResolveIsBrowser(HttpContext context)
         {
-            var clientType = context.Request.Headers[ClientTypeHeader].FirstOrDefault();
-            if (!string.IsNullOrWhiteSpace(clientType))
-                return clientType.Equals("browser", StringComparison.OrdinalIgnoreCase);
+            var userAgent = context.Request.Headers.UserAgent.ToString();
+            if (string.IsNullOrWhiteSpace(userAgent))
+                return true;
 
-            return true;
+            return !(
+                userAgent.Contains("PostmanRuntime", StringComparison.OrdinalIgnoreCase)
+                || userAgent.Contains("curl/", StringComparison.OrdinalIgnoreCase)
+                || userAgent.Contains("axios/", StringComparison.OrdinalIgnoreCase)
+                || userAgent.Contains("HttpClient", StringComparison.OrdinalIgnoreCase)
+            );
         }
 
         private static string ResolveIpAddress(HttpContext context)

@@ -139,10 +139,16 @@ public class AuthServiceTests
         tokenService.Setup(service => service.GenerateRefreshToken(
                 It.IsAny<int>(),
                 It.IsAny<ClientRequestInfo>(),
+                It.IsAny<SessionTransport>(),
                 It.IsAny<string?>(),
                 It.IsAny<bool?>()
             ))
-            .ReturnsAsync(new RefreshTokenIssue("refresh-token", TimeSpan.FromDays(1)));
+            .ReturnsAsync(new RefreshTokenIssue(
+                "refresh-token",
+                "binding-token",
+                TimeSpan.FromDays(1),
+                SessionTransport.BrowserCookie
+            ));
         deviceService.Setup(service => service.EnsureDeviceKnownAsync(
                 42,
                 oauthUser.Email,
@@ -158,7 +164,11 @@ public class AuthServiceTests
             deviceService: deviceService
         );
 
-        var result = await service.GoogleAsync("google-token", "expected-nonce");
+        var result = await service.GoogleAsync(
+            "google-token",
+            SessionTransport.BrowserCookie,
+            "expected-nonce"
+        );
 
         createdUser.Should().NotBeNull();
         createdUser!.Usertype.Should().Be(AuthRoles.Participant);
@@ -203,10 +213,16 @@ public class AuthServiceTests
         tokenService.Setup(service => service.GenerateRefreshToken(
                 It.IsAny<int>(),
                 It.IsAny<ClientRequestInfo>(),
+                It.IsAny<SessionTransport>(),
                 It.IsAny<string?>(),
                 It.IsAny<bool?>()
             ))
-            .ReturnsAsync(new RefreshTokenIssue("refresh-token", TimeSpan.FromDays(1)));
+            .ReturnsAsync(new RefreshTokenIssue(
+                "refresh-token",
+                "binding-token",
+                TimeSpan.FromDays(1),
+                SessionTransport.BrowserCookie
+            ));
         deviceService.Setup(service => service.EnsureDeviceKnownAsync(
                 21,
                 oauthUser.Email,
@@ -222,7 +238,7 @@ public class AuthServiceTests
             deviceService: deviceService
         );
 
-        var result = await service.MicrosoftAsync("ms-token");
+        var result = await service.MicrosoftAsync("ms-token", SessionTransport.BrowserCookie);
 
         result.user.Id.Should().Be(21);
         deviceService.Verify(service => service.EnsureDeviceKnownAsync(

@@ -104,10 +104,16 @@ public class DeviceServiceTests
         tokenService.Setup(client => client.GenerateRefreshToken(
                 42,
                 It.IsAny<ClientRequestInfo>(),
+                SessionTransport.BrowserCookie,
                 null,
                 false
             ))
-            .ReturnsAsync(new RefreshTokenIssue("refresh-token", TimeSpan.FromDays(1)));
+            .ReturnsAsync(new RefreshTokenIssue(
+                "refresh-token",
+                "binding-token",
+                TimeSpan.FromDays(1),
+                SessionTransport.BrowserCookie
+            ));
 
         var service = CreateService(
             repository,
@@ -118,7 +124,7 @@ public class DeviceServiceTests
             tokenService
         );
 
-        var result = await service.VerifyDeviceAsync("verify-token");
+        var result = await service.VerifyDeviceAsync("verify-token", SessionTransport.BrowserCookie);
 
         result.user.Email.Should().Be("user@example.com");
         repository.Verify(client => client.CreateDeviceAsync(

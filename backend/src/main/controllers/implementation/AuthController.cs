@@ -56,6 +56,7 @@ namespace backend.main.implementation.controllers
                 UserToken userToken = await _authService.LoginAsync(
                     request.Email,
                     request.Password,
+                    SessionTransportResolver.ResolveOrDefault(request.Transport),
                     request.RememberMe
                 );
 
@@ -129,7 +130,8 @@ namespace backend.main.implementation.controllers
             {
                 UserToken userToken = await _authService.VerifyOtpAsync(
                     request.Code,
-                    request.Challenge
+                    request.Challenge,
+                    SessionTransportResolver.ResolveOrDefault(request.Transport)
                 );
                 User user = userToken.user;
                 Token authToken = userToken.token;
@@ -177,7 +179,10 @@ namespace backend.main.implementation.controllers
         {
             try
             {
-                UserToken userToken = await _authService.VerifyAsync(request.Token);
+                UserToken userToken = await _authService.VerifyAsync(
+                    request.Token,
+                    SessionTransportResolver.ResolveOrDefault(request.Transport)
+                );
                 User user = userToken.user;
                 Token authToken = userToken.token;
 
@@ -208,7 +213,11 @@ namespace backend.main.implementation.controllers
         {
             try
             {
-                UserToken userToken = await _authService.GoogleAsync(request.Token, request.Nonce);
+                UserToken userToken = await _authService.GoogleAsync(
+                    request.Token,
+                    SessionTransportResolver.ResolveOrDefault(request.Transport),
+                    request.Nonce
+                );
 
                 User user = userToken.user;
                 Token token = userToken.token;
@@ -240,7 +249,10 @@ namespace backend.main.implementation.controllers
         {
             try
             {
-                UserToken userToken = await _authService.MicrosoftAsync(request.Token);
+                UserToken userToken = await _authService.MicrosoftAsync(
+                    request.Token,
+                    SessionTransportResolver.ResolveOrDefault(request.Transport)
+                );
 
                 User user = userToken.user;
                 Token token = userToken.token;
@@ -271,11 +283,16 @@ namespace backend.main.implementation.controllers
         {
             try
             {
-                string? refreshToken = HttpUtility.ResolveRefreshToken(Request, request?.RefreshToken);
+                string? refreshToken = HttpUtility.ResolveBrowserRefreshToken(Request);
+                string? sessionBindingToken = HttpUtility.ResolveBrowserSessionBindingToken(Request);
                 if (string.IsNullOrEmpty(refreshToken))
                     throw new UnauthorizedException("Missing refresh token");
 
-                UserToken userToken = await _authService.HandleTokensAsync(refreshToken);
+                UserToken userToken = await _authService.HandleTokensAsync(
+                    refreshToken,
+                    sessionBindingToken,
+                    SessionTransport.BrowserCookie
+                );
 
                 User user = userToken.user;
                 Token token = userToken.token;
@@ -284,12 +301,43 @@ namespace backend.main.implementation.controllers
             }
             catch (Exception e)
             {
-                HttpUtility.ClearRefreshToken(Response, _requestInfo);
+                HttpUtility.ClearBrowserRefreshSession(Response);
 
                 if (e is AppException)
                     return HandleError.Resolve(e);
 
                 Logger.Error($"[AuthController] Refresh failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [HttpPost("api/refresh")]
+        public async Task<IActionResult> ApiRefresh([FromBody] RefreshTokenRequest? request)
+        {
+            try
+            {
+                string? refreshToken = HttpUtility.ResolveApiRefreshToken(Request, request?.RefreshToken);
+                string? sessionBindingToken = HttpUtility.ResolveApiSessionBindingToken(
+                    Request,
+                    request?.SessionBindingToken
+                );
+                if (string.IsNullOrEmpty(refreshToken))
+                    throw new UnauthorizedException("Missing refresh token");
+
+                UserToken userToken = await _authService.HandleTokensAsync(
+                    refreshToken,
+                    sessionBindingToken,
+                    SessionTransport.ApiToken
+                );
+
+                return Ok(CreateAuthResponse(userToken.user, userToken.token));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[AuthController] ApiRefresh failed: {e}");
                 return HandleError.Resolve(e);
             }
         }
@@ -310,18 +358,23 @@ namespace backend.main.implementation.controllers
         {
             try
             {
-                string? refreshToken = HttpUtility.ResolveRefreshToken(Request, request?.RefreshToken);
+                string? refreshToken = HttpUtility.ResolveBrowserRefreshToken(Request);
+                string? sessionBindingToken = HttpUtility.ResolveBrowserSessionBindingToken(Request);
                 if (string.IsNullOrEmpty(refreshToken))
                 {
-                    HttpUtility.ClearRefreshToken(Response, _requestInfo);
+                    HttpUtility.ClearBrowserRefreshSession(Response);
                     return StatusCode(
                         200,
                         new MessageResponse($"The user is already logged out.")
                     );
                 }
 
-                await _authService.HandleLogoutAsync(refreshToken);
-                HttpUtility.ClearRefreshToken(Response, _requestInfo);
+                await _authService.HandleLogoutAsync(
+                    refreshToken,
+                    sessionBindingToken,
+                    SessionTransport.BrowserCookie
+                );
+                HttpUtility.ClearBrowserRefreshSession(Response);
 
                 return StatusCode(
                     200,
@@ -330,12 +383,48 @@ namespace backend.main.implementation.controllers
             }
             catch (Exception e)
             {
-                HttpUtility.ClearRefreshToken(Response, _requestInfo);
+                HttpUtility.ClearBrowserRefreshSession(Response);
 
                 if (e is AppException)
                     return HandleError.Resolve(e);
 
                 Logger.Error($"[AuthController] Logout failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [HttpPost("api/logout")]
+        public async Task<IActionResult> ApiLogout([FromBody] RefreshTokenRequest? request)
+        {
+            try
+            {
+                string? refreshToken = HttpUtility.ResolveApiRefreshToken(Request, request?.RefreshToken);
+                string? sessionBindingToken = HttpUtility.ResolveApiSessionBindingToken(
+                    Request,
+                    request?.SessionBindingToken
+                );
+                if (string.IsNullOrEmpty(refreshToken))
+                    throw new UnauthorizedException("Missing refresh token");
+                if (string.IsNullOrEmpty(sessionBindingToken))
+                    throw new UnauthorizedException("Missing session binding token");
+
+                await _authService.HandleLogoutAsync(
+                    refreshToken,
+                    sessionBindingToken,
+                    SessionTransport.ApiToken
+                );
+
+                return StatusCode(
+                    200,
+                    new MessageResponse($"The user's logout is successful")
+                );
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[AuthController] ApiLogout failed: {e}");
                 return HandleError.Resolve(e);
             }
         }
@@ -363,7 +452,10 @@ namespace backend.main.implementation.controllers
         {
             try
             {
-                UserToken userToken = await _authService.VerifyDeviceLoginAsync(request.Token);
+                UserToken userToken = await _authService.VerifyDeviceLoginAsync(
+                    request.Token,
+                    SessionTransportResolver.ResolveOrDefault(request.Transport)
+                );
                 User user = userToken.user;
                 Token authToken = userToken.token;
 
@@ -460,18 +552,31 @@ namespace backend.main.implementation.controllers
 
         private AuthResponse CreateAuthResponse(User user, Token token)
         {
-            var refreshToken = HttpUtility.ApplyRefreshToken(
-                Response,
-                _requestInfo,
-                token.RefreshToken,
-                token.RefreshTokenLifetime
-            );
+            string? refreshToken = null;
+            string? sessionBindingToken = null;
+
+            if (token.Transport.UsesBrowserCookies())
+            {
+                HttpUtility.SetBrowserRefreshSession(
+                    Response,
+                    token.RefreshToken,
+                    token.SessionBindingToken,
+                    token.RefreshTokenLifetime
+                );
+            }
+            else
+            {
+                refreshToken = token.RefreshToken;
+                sessionBindingToken = token.SessionBindingToken;
+            }
+
             return new AuthResponse(
                 user.Id,
                 user.Email,
                 AuthRoles.NormalizeStored(user.Usertype),
                 token.AccessToken,
-                refreshToken
+                refreshToken,
+                sessionBindingToken
             );
         }
 

@@ -28,6 +28,7 @@ namespace backend.main.services.implementation
         private const string AUDIENCE = "EventXperienceConsumers";
         private const string VERIFICATION_AUDIENCE = "EventXperienceVerification";
         private readonly ICacheService _cacheService;
+        private const string RefreshKeyPrefix = "refresh:v2";
         private readonly TimeSpan DEFAULT_REFRESH_TTL = TimeSpan.FromDays(1);
         private readonly TimeSpan REMEMBERED_REFRESH_TTL = TimeSpan.FromDays(30);
         private readonly TimeSpan VERIFY_TTL = TimeSpan.FromMinutes(30);
@@ -78,22 +79,25 @@ namespace backend.main.services.implementation
         public async Task<RefreshTokenIssue> GenerateRefreshToken(
             int userId,
             ClientRequestInfo requestInfo,
+            SessionTransport transport,
             string? sessionId = null,
             bool? rememberMe = null
         )
         {
             try
             {
-                string token;
-                string tokenHash;
+                string refreshToken;
+                string refreshTokenHash;
+                string sessionBindingToken;
+                string sessionBindingTokenHash;
                 TimeSpan refreshTtl;
 
                 do
                 {
-                    token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-                    tokenHash = ComputeTokenHash(token);
+                    refreshToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+                    refreshTokenHash = ComputeTokenHash(refreshToken);
 
-                    string? existing = await _cacheService.GetValueAsync(TokenKey(tokenHash));
+                    string? existing = await _cacheService.GetValueAsync(TokenKey(refreshTokenHash));
 
                     if (existing == null)
                         break;
@@ -108,13 +112,14 @@ namespace backend.main.services.implementation
                     {
                         SessionId = Guid.NewGuid().ToString("N"),
                         UserId = userId,
-                        DeviceType = requestInfo.DeviceType,
-                        ClientName = requestInfo.ClientName,
-                        IsBrowserClient = requestInfo.IsBrowserClient,
+                        Transport = transport,
+                        LastSeenDeviceType = requestInfo.DeviceType,
+                        LastSeenClientName = requestInfo.ClientName,
                         LastSeenIpAddress = requestInfo.IpAddress,
                         CreatedAt = DateTime.UtcNow,
                         LastSeenAt = DateTime.UtcNow,
-                        CurrentTokenHash = tokenHash,
+                        CurrentRefreshTokenHash = string.Empty,
+                        CurrentBindingTokenHash = string.Empty,
                         RememberMe = rememberMe ?? false,
                     };
                     refreshTtl = ResolveRefreshTtl(session.RememberMe);
@@ -127,17 +132,23 @@ namespace backend.main.services.implementation
                     if (session.UserId != userId)
                         throw new UnauthorizedException("Refresh session user mismatch.");
 
-                    session.DeviceType = requestInfo.DeviceType;
-                    session.ClientName = requestInfo.ClientName;
-                    session.IsBrowserClient = requestInfo.IsBrowserClient;
+                    if (session.Transport != transport)
+                        throw new UnauthorizedException("Refresh session transport mismatch.");
+
+                    session.LastSeenDeviceType = requestInfo.DeviceType;
+                    session.LastSeenClientName = requestInfo.ClientName;
                     session.LastSeenIpAddress = requestInfo.IpAddress;
                     session.LastSeenAt = DateTime.UtcNow;
-                    session.CurrentTokenHash = tokenHash;
                     if (rememberMe.HasValue)
                         session.RememberMe = rememberMe.Value;
 
                     refreshTtl = ResolveRefreshTtl(session.RememberMe);
                 }
+
+                sessionBindingToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+                sessionBindingTokenHash = ComputeTokenHash(sessionBindingToken);
+                session.CurrentRefreshTokenHash = refreshTokenHash;
+                session.CurrentBindingTokenHash = sessionBindingTokenHash;
 
                 var tokenRecord = new RefreshTokenRecord
                 {
@@ -147,7 +158,7 @@ namespace backend.main.services.implementation
                 };
 
                 var tokenResult = await _cacheService.SetValueAsync(
-                    key: TokenKey(tokenHash),
+                    key: TokenKey(refreshTokenHash),
                     value: JsonConvert.SerializeObject(tokenRecord),
                     expiry: refreshTtl
                 );
@@ -163,7 +174,12 @@ namespace backend.main.services.implementation
                 if (!tokenResult || !sessionResult)
                     throw new NotAvailableException();
 
-                return new RefreshTokenIssue(token, refreshTtl);
+                return new RefreshTokenIssue(
+                    refreshToken,
+                    sessionBindingToken,
+                    refreshTtl,
+                    session.Transport
+                );
             }
             catch (Exception e)
             {
@@ -177,6 +193,8 @@ namespace backend.main.services.implementation
 
         public async Task<RefreshTokenValidationResult> ValidateRefreshToken(
             string refreshToken,
+            string? sessionBindingToken,
+            SessionTransport expectedTransport,
             ClientRequestInfo requestInfo
         )
         {
@@ -200,16 +218,28 @@ namespace backend.main.services.implementation
                     throw new UnauthorizedException("Refresh session user mismatch.");
                 }
 
-                if (session.CurrentTokenHash != tokenHash)
+                if (session.Transport != expectedTransport)
+                {
+                    await RevokeRefreshSessionAsync(tokenRecord.SessionId);
+                    throw new UnauthorizedException("Refresh token transport mismatch.");
+                }
+
+                if (session.CurrentRefreshTokenHash != tokenHash)
                 {
                     await RevokeRefreshSessionAsync(tokenRecord.SessionId);
                     throw new UnauthorizedException("Refresh token reuse detected.");
                 }
 
-                if (!IsRequestCompatible(session, requestInfo))
+                if (string.IsNullOrWhiteSpace(sessionBindingToken))
                 {
                     await RevokeRefreshSessionAsync(tokenRecord.SessionId);
-                    throw new UnauthorizedException("Refresh request does not match the active session.");
+                    throw new UnauthorizedException("Missing session binding token.");
+                }
+
+                if (session.CurrentBindingTokenHash != ComputeTokenHash(sessionBindingToken))
+                {
+                    await RevokeRefreshSessionAsync(tokenRecord.SessionId);
+                    throw new UnauthorizedException("Invalid session binding token.");
                 }
 
                 var result = await _cacheService.DeleteKeyAsync(TokenKey(tokenHash));
@@ -218,6 +248,8 @@ namespace backend.main.services.implementation
 
                 session.LastSeenAt = DateTime.UtcNow;
                 session.LastSeenIpAddress = requestInfo.IpAddress;
+                session.LastSeenClientName = requestInfo.ClientName;
+                session.LastSeenDeviceType = requestInfo.DeviceType;
 
                 var sessionUpdated = await _cacheService.SetValueAsync(
                     SessionKey(session.SessionId),
@@ -232,6 +264,7 @@ namespace backend.main.services.implementation
                 {
                     SessionId = session.SessionId,
                     UserId = tokenRecord.UserId,
+                    Transport = session.Transport,
                 };
             }
             catch (Exception e)
@@ -500,8 +533,8 @@ namespace backend.main.services.implementation
                 if (session == null)
                     return;
 
-                if (!string.IsNullOrWhiteSpace(session.CurrentTokenHash))
-                    await _cacheService.DeleteKeyAsync(TokenKey(session.CurrentTokenHash));
+                if (!string.IsNullOrWhiteSpace(session.CurrentRefreshTokenHash))
+                    await _cacheService.DeleteKeyAsync(TokenKey(session.CurrentRefreshTokenHash));
 
                 await _cacheService.DeleteKeyAsync(SessionKey(session.SessionId));
                 await _cacheService.SetRemoveAsync(UserSessionsKey(session.UserId), session.SessionId);
@@ -543,16 +576,6 @@ namespace backend.main.services.implementation
                 return null;
 
             return JsonConvert.DeserializeObject<RefreshSessionState>(json);
-        }
-
-        private static bool IsRequestCompatible(
-            RefreshSessionState session,
-            ClientRequestInfo requestInfo
-        )
-        {
-            return session.DeviceType == requestInfo.DeviceType
-                && session.ClientName == requestInfo.ClientName
-                && session.IsBrowserClient == requestInfo.IsBrowserClient;
         }
 
         private VerificationTokenPayload BuildVerificationPayload(
@@ -663,11 +686,14 @@ namespace backend.main.services.implementation
             return CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
         }
 
-        private static string TokenKey(string tokenHash) => $"refresh:token:{tokenHash}";
+        private static string TokenKey(string tokenHash) =>
+            $"{RefreshKeyPrefix}:token:{tokenHash}";
 
-        private static string SessionKey(string sessionId) => $"refresh:session:{sessionId}";
+        private static string SessionKey(string sessionId) =>
+            $"{RefreshKeyPrefix}:session:{sessionId}";
 
-        private static string UserSessionsKey(int userId) => $"refresh:user:{userId}:sessions";
+        private static string UserSessionsKey(int userId) =>
+            $"{RefreshKeyPrefix}:user:{userId}:sessions";
 
         private static string VerificationTokenKey(string token) => $"verify:token:{token}";
 
@@ -691,12 +717,13 @@ namespace backend.main.services.implementation
         {
             public required string SessionId { get; set; }
             public int UserId { get; set; }
-            public required string DeviceType { get; set; }
-            public required string ClientName { get; set; }
-            public bool IsBrowserClient { get; set; }
-            public required string CurrentTokenHash { get; set; }
+            public SessionTransport Transport { get; set; }
+            public required string CurrentRefreshTokenHash { get; set; }
+            public required string CurrentBindingTokenHash { get; set; }
             public bool RememberMe { get; set; }
             public string LastSeenIpAddress { get; set; } = "Unknown";
+            public string LastSeenClientName { get; set; } = "Unknown";
+            public string LastSeenDeviceType { get; set; } = "Unknown";
             public DateTime CreatedAt { get; set; }
             public DateTime LastSeenAt { get; set; }
         }

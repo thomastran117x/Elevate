@@ -4,5 +4,6 @@ namespace backend.main.models.other
     {
         public required string SessionId { get; init; }
         public required int UserId { get; init; }
+        public required SessionTransport Transport { get; init; }
     }
 }

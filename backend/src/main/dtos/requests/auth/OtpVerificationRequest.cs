@@ -10,5 +10,7 @@ namespace backend.main.dtos.requests.auth
 
         [Required]
         public required string Challenge { get; set; }
+
+        public string? Transport { get; set; }
     }
 }

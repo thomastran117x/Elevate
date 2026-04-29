@@ -3,6 +3,8 @@ using System.Text.Json;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using backend.main.configurations.security;
+using backend.main.dtos.general;
+using backend.main.exceptions.http;
 using backend.main.models.core;
 using backend.main.models.other;
 using backend.main.services.implementation;
@@ -32,6 +34,141 @@ public class TokenServiceTests
         ).Value;
 
         roleClaim.Should().Be(AuthRoles.Organizer);
+    }
+
+    [Fact]
+    public async Task GenerateAndValidateRefreshToken_BrowserTransport_RequiresBindingToken()
+    {
+        var cache = CreateCacheMock();
+        var service = new TokenService(cache.Object);
+        var requestInfo = new ClientRequestInfo
+        {
+            IpAddress = "10.0.0.1",
+            ClientName = "Chrome",
+            DeviceType = "Desktop",
+        };
+
+        var issued = await service.GenerateRefreshToken(
+            42,
+            requestInfo,
+            SessionTransport.BrowserCookie
+        );
+
+        var validation = await service.ValidateRefreshToken(
+            issued.Value,
+            issued.SessionBindingToken,
+            SessionTransport.BrowserCookie,
+            requestInfo
+        );
+
+        validation.UserId.Should().Be(42);
+        validation.Transport.Should().Be(SessionTransport.BrowserCookie);
+        validation.SessionId.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_MissingBindingToken_RevokesSession()
+    {
+        var cache = CreateCacheMock();
+        var service = new TokenService(cache.Object);
+        var requestInfo = new ClientRequestInfo
+        {
+            IpAddress = "10.0.0.1",
+            ClientName = "Chrome",
+            DeviceType = "Desktop",
+        };
+
+        var issued = await service.GenerateRefreshToken(
+            42,
+            requestInfo,
+            SessionTransport.BrowserCookie
+        );
+
+        await FluentActions.Awaiting(() => service.ValidateRefreshToken(
+                issued.Value,
+                null,
+                SessionTransport.BrowserCookie,
+                requestInfo
+            ))
+            .Should().ThrowAsync<UnauthorizedException>();
+
+        await FluentActions.Awaiting(() => service.ValidateRefreshToken(
+                issued.Value,
+                issued.SessionBindingToken,
+                SessionTransport.BrowserCookie,
+                requestInfo
+            ))
+            .Should().ThrowAsync<UnauthorizedException>();
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_TransportMismatch_RevokesSession()
+    {
+        var cache = CreateCacheMock();
+        var service = new TokenService(cache.Object);
+        var requestInfo = new ClientRequestInfo
+        {
+            IpAddress = "10.0.0.1",
+            ClientName = "Chrome",
+            DeviceType = "Desktop",
+        };
+
+        var issued = await service.GenerateRefreshToken(
+            42,
+            requestInfo,
+            SessionTransport.BrowserCookie
+        );
+
+        await FluentActions.Awaiting(() => service.ValidateRefreshToken(
+                issued.Value,
+                issued.SessionBindingToken,
+                SessionTransport.ApiToken,
+                requestInfo
+            ))
+            .Should().ThrowAsync<UnauthorizedException>();
+
+        await FluentActions.Awaiting(() => service.ValidateRefreshToken(
+                issued.Value,
+                issued.SessionBindingToken,
+                SessionTransport.BrowserCookie,
+                requestInfo
+            ))
+            .Should().ThrowAsync<UnauthorizedException>();
+    }
+
+    [Fact]
+    public async Task GenerateRefreshToken_RotationIssuesNewRefreshAndBindingTokens()
+    {
+        var cache = CreateCacheMock();
+        var service = new TokenService(cache.Object);
+        var requestInfo = new ClientRequestInfo
+        {
+            IpAddress = "10.0.0.1",
+            ClientName = "Chrome",
+            DeviceType = "Desktop",
+        };
+
+        var firstIssue = await service.GenerateRefreshToken(
+            42,
+            requestInfo,
+            SessionTransport.BrowserCookie
+        );
+        var validation = await service.ValidateRefreshToken(
+            firstIssue.Value,
+            firstIssue.SessionBindingToken,
+            SessionTransport.BrowserCookie,
+            requestInfo
+        );
+        var rotatedIssue = await service.GenerateRefreshToken(
+            42,
+            requestInfo,
+            SessionTransport.BrowserCookie,
+            validation.SessionId
+        );
+
+        rotatedIssue.Value.Should().NotBe(firstIssue.Value);
+        rotatedIssue.SessionBindingToken.Should().NotBe(firstIssue.SessionBindingToken);
+        rotatedIssue.Transport.Should().Be(SessionTransport.BrowserCookie);
     }
 
     [Fact]
@@ -95,6 +232,7 @@ public class TokenServiceTests
     {
         var values = new Dictionary<string, string>();
         var counters = new Dictionary<string, long>();
+        var sets = new Dictionary<string, HashSet<string>>();
         var mock = new Mock<ICacheService>();
 
         mock.Setup(cache => cache.GetValueAsync(It.IsAny<string>()))
@@ -112,7 +250,8 @@ public class TokenServiceTests
             {
                 var removedValue = values.Remove(key);
                 var removedCounter = counters.Remove(key);
-                return removedValue || removedCounter;
+                var removedSet = sets.Remove(key);
+                return removedValue || removedCounter || removedSet;
             });
 
         mock.Setup(cache => cache.IncrementAsync(It.IsAny<string>(), It.IsAny<long>()))
@@ -126,6 +265,40 @@ public class TokenServiceTests
 
         mock.Setup(cache => cache.SetExpiryAsync(It.IsAny<string>(), It.IsAny<TimeSpan>()))
             .ReturnsAsync(true);
+
+        mock.Setup(cache => cache.SetAddAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((string key, string value) =>
+            {
+                if (!sets.TryGetValue(key, out var members))
+                {
+                    members = new HashSet<string>(StringComparer.Ordinal);
+                    sets[key] = members;
+                }
+
+                return members.Add(value);
+            });
+
+        mock.Setup(cache => cache.SetRemoveAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((string key, string value) =>
+            {
+                if (!sets.TryGetValue(key, out var members))
+                    return false;
+
+                var removed = members.Remove(value);
+                if (members.Count == 0)
+                    sets.Remove(key);
+
+                return removed;
+            });
+
+        mock.Setup(cache => cache.SetMembersAsync(It.IsAny<string>()))
+            .ReturnsAsync((string key) =>
+            {
+                if (!sets.TryGetValue(key, out var members))
+                    return Array.Empty<string>();
+
+                return members.ToArray();
+            });
 
         return mock;
     }

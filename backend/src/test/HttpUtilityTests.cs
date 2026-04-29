@@ -9,32 +9,35 @@ namespace backend.test;
 public class HttpUtilityTests
 {
     [Fact]
-    public void SetRefreshTokenCookie_UsesTheApiAuthPath()
+    public void SetBrowserRefreshSession_UsesTheApiAuthPathForBothCookies()
     {
         var httpContext = new DefaultHttpContext();
 
-        HttpUtility.SetRefreshTokenCookie(
+        HttpUtility.SetBrowserRefreshSession(
             httpContext.Response,
             "refresh-token-value",
+            "binding-token-value",
             TimeSpan.FromMinutes(30)
         );
 
         var setCookieHeader = httpContext.Response.Headers.SetCookie.ToString();
 
         setCookieHeader.Should().Contain($"{HttpUtility.RefreshCookieName}=refresh-token-value");
+        setCookieHeader.Should().Contain($"{HttpUtility.RefreshBindingCookieName}=binding-token-value");
         setCookieHeader.Should().Contain($"path={RoutePaths.ApiAuthPath}");
     }
 
     [Fact]
-    public void ClearRefreshTokenCookie_UsesTheApiAuthPath()
+    public void ClearBrowserRefreshSession_UsesTheApiAuthPathForBothCookies()
     {
         var httpContext = new DefaultHttpContext();
 
-        HttpUtility.ClearRefreshTokenCookie(httpContext.Response);
+        HttpUtility.ClearBrowserRefreshSession(httpContext.Response);
 
         var setCookieHeader = httpContext.Response.Headers.SetCookie.ToString();
 
         setCookieHeader.Should().Contain($"{HttpUtility.RefreshCookieName}=;");
+        setCookieHeader.Should().Contain($"{HttpUtility.RefreshBindingCookieName}=;");
         setCookieHeader.Should().Contain($"path={RoutePaths.ApiAuthPath}");
     }
 

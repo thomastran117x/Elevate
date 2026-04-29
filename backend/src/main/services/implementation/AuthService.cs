@@ -32,7 +32,12 @@ namespace backend.main.services.implementation
             _requestInfo = requestInfo;
         }
 
-        public async Task<UserToken> LoginAsync(string email, string password, bool rememberMe = false)
+        public async Task<UserToken> LoginAsync(
+            string email,
+            string password,
+            SessionTransport transport,
+            bool rememberMe = false
+        )
         {
             try
             {
@@ -47,7 +52,7 @@ namespace backend.main.services.implementation
 
                 await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
 
-                return await GenerateTokenPair(user, rememberMe: rememberMe);
+                return await GenerateTokenPair(user, transport, rememberMe: rememberMe);
             }
             catch (Exception e)
             {
@@ -102,7 +107,7 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task<UserToken> VerifyAsync(string token)
+        public async Task<UserToken> VerifyAsync(string token, SessionTransport transport)
         {
             try
             {
@@ -116,7 +121,7 @@ namespace backend.main.services.implementation
 
                 await _userRepository.CreateUserAsync(user);
 
-                return await GenerateTokenPair(user);
+                return await GenerateTokenPair(user, transport);
             }
             catch (Exception e)
             {
@@ -128,7 +133,11 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task<UserToken> VerifyOtpAsync(string code, string challenge)
+        public async Task<UserToken> VerifyOtpAsync(
+            string code,
+            string challenge,
+            SessionTransport transport
+        )
         {
             try
             {
@@ -143,7 +152,7 @@ namespace backend.main.services.implementation
 
                 await _userRepository.CreateUserAsync(user);
 
-                return await GenerateTokenPair(user);
+                return await GenerateTokenPair(user, transport);
             }
             catch (Exception e)
             {
@@ -239,7 +248,11 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task<UserToken> GoogleAsync(string token, string? expectedNonce = null)
+        public async Task<UserToken> GoogleAsync(
+            string token,
+            SessionTransport transport,
+            string? expectedNonce = null
+        )
         {
             try
             {
@@ -268,7 +281,7 @@ namespace backend.main.services.implementation
 
                 await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
 
-                return await GenerateTokenPair(user);
+                return await GenerateTokenPair(user, transport);
             }
             catch (Exception e)
             {
@@ -280,7 +293,7 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task<UserToken> MicrosoftAsync(string token)
+        public async Task<UserToken> MicrosoftAsync(string token, SessionTransport transport)
         {
             try
             {
@@ -306,7 +319,7 @@ namespace backend.main.services.implementation
 
                 await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
 
-                return await GenerateTokenPair(user);
+                return await GenerateTokenPair(user, transport);
             }
             catch (Exception e)
             {
@@ -318,16 +331,29 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task<UserToken> HandleTokensAsync(string oldRefreshToken)
+        public async Task<UserToken> HandleTokensAsync(
+            string oldRefreshToken,
+            string? sessionBindingToken,
+            SessionTransport transport
+        )
         {
             try
             {
-                var validation = await _tokenService.ValidateRefreshToken(oldRefreshToken, _requestInfo);
+                var validation = await _tokenService.ValidateRefreshToken(
+                    oldRefreshToken,
+                    sessionBindingToken,
+                    transport,
+                    _requestInfo
+                );
                 var user = await _userRepository.GetUserAsync(validation.UserId);
                 if (user == null)
                     throw new ResourceNotFoundException($"User with ID {validation.UserId} is not found");
 
-                return await GenerateTokenPair(user, validation.SessionId);
+                return await GenerateTokenPair(
+                    user,
+                    validation.Transport,
+                    validation.SessionId
+                );
             }
             catch (Exception e)
             {
@@ -339,11 +365,14 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task<UserToken> VerifyDeviceLoginAsync(string token)
+        public async Task<UserToken> VerifyDeviceLoginAsync(
+            string token,
+            SessionTransport transport
+        )
         {
             try
             {
-                return await _deviceService.VerifyDeviceAsync(token);
+                return await _deviceService.VerifyDeviceAsync(token, transport);
             }
             catch (Exception e)
             {
@@ -355,11 +384,20 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task HandleLogoutAsync(string refreshToken)
+        public async Task HandleLogoutAsync(
+            string refreshToken,
+            string? sessionBindingToken,
+            SessionTransport transport
+        )
         {
             try
             {
-                var validation = await _tokenService.ValidateRefreshToken(refreshToken, _requestInfo);
+                var validation = await _tokenService.ValidateRefreshToken(
+                    refreshToken,
+                    sessionBindingToken,
+                    transport,
+                    _requestInfo
+                );
                 await _tokenService.RevokeRefreshSessionAsync(validation.SessionId);
                 return;
             }
@@ -407,6 +445,7 @@ namespace backend.main.services.implementation
 
         private async Task<UserToken> GenerateTokenPair(
             User user,
+            SessionTransport transport,
             string? sessionId = null,
             bool? rememberMe = null
         )
@@ -418,13 +457,16 @@ namespace backend.main.services.implementation
                 var refreshToken = await _tokenService.GenerateRefreshToken(
                     user.Id,
                     _requestInfo,
+                    transport,
                     sessionId,
                     rememberMe
                 );
                 Token authToken = new Token(
                     accessToken,
                     refreshToken.Value,
-                    refreshToken.Lifetime
+                    refreshToken.SessionBindingToken,
+                    refreshToken.Lifetime,
+                    refreshToken.Transport
                 );
 
                 UserToken userToken = new(authToken, user);

@@ -9,5 +9,7 @@ namespace backend.main.dtos.requests.auth
         {
             get; set;
         }
+
+        public string? Transport { get; set; }
     }
 }

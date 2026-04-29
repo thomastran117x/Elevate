@@ -10,6 +10,7 @@ namespace backend.main.services.interfaces
         public Task<RefreshTokenIssue> GenerateRefreshToken(
             int userId,
             ClientRequestInfo requestInfo,
+            SessionTransport transport,
             string? sessionId = null,
             bool? rememberMe = null
         );
@@ -30,6 +31,8 @@ namespace backend.main.services.interfaces
         );
         public Task<RefreshTokenValidationResult> ValidateRefreshToken(
             string refreshToken,
+            string? sessionBindingToken,
+            SessionTransport expectedTransport,
             ClientRequestInfo requestInfo
         );
         public Task RevokeRefreshSessionAsync(string sessionId);

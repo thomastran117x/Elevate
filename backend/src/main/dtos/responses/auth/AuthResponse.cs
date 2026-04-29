@@ -7,7 +7,8 @@ namespace backend.main.dtos.responses.auth
             string username,
             string userType,
             string token,
-            string? refreshToken = null
+            string? refreshToken = null,
+            string? sessionBindingToken = null
         )
         {
             Id = id;
@@ -16,6 +17,7 @@ namespace backend.main.dtos.responses.auth
             Token = token;
             AccessToken = token;
             RefreshToken = refreshToken;
+            SessionBindingToken = sessionBindingToken;
             Avatar = "placeholder";
         }
 
@@ -40,6 +42,10 @@ namespace backend.main.dtos.responses.auth
             get; set;
         }
         public string? RefreshToken
+        {
+            get; set;
+        }
+        public string? SessionBindingToken
         {
             get; set;
         }

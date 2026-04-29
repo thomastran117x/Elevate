@@ -12,16 +12,32 @@ namespace backend.main.models.other
         {
             get; set;
         }
+        public string SessionBindingToken
+        {
+            get; set;
+        }
         public TimeSpan RefreshTokenLifetime
         {
             get; set;
         }
+        public SessionTransport Transport
+        {
+            get; set;
+        }
 
-        public Token(string accessToken, string refreshToken, TimeSpan refreshTokenLifetime)
+        public Token(
+            string accessToken,
+            string refreshToken,
+            string sessionBindingToken,
+            TimeSpan refreshTokenLifetime,
+            SessionTransport transport
+        )
         {
             AccessToken = accessToken;
             RefreshToken = refreshToken;
+            SessionBindingToken = sessionBindingToken;
             RefreshTokenLifetime = refreshTokenLifetime;
+            Transport = transport;
         }
     }
 
@@ -31,15 +47,30 @@ namespace backend.main.models.other
         {
             get; set;
         }
+        public string SessionBindingToken
+        {
+            get; set;
+        }
         public TimeSpan Lifetime
         {
             get; set;
         }
+        public SessionTransport Transport
+        {
+            get; set;
+        }
 
-        public RefreshTokenIssue(string value, TimeSpan lifetime)
+        public RefreshTokenIssue(
+            string value,
+            string sessionBindingToken,
+            TimeSpan lifetime,
+            SessionTransport transport
+        )
         {
             Value = value;
+            SessionBindingToken = sessionBindingToken;
             Lifetime = lifetime;
+            Transport = transport;
         }
     }
 

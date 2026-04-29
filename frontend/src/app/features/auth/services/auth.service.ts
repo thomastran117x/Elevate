@@ -10,6 +10,7 @@ export interface LoginRequest {
   password: string;
   rememberMe: boolean;
   captcha: string;
+  transport?: 'browser';
 }
 
 export interface SignupRequest {
@@ -29,6 +30,8 @@ export interface AuthResponse {
   Username: string;
   Token: string;
   AccessToken?: string;
+  RefreshToken?: string;
+  SessionBindingToken?: string;
   Avatar: string;
   Usertype: string;
   Id: number;
@@ -51,7 +54,10 @@ export class AuthService {
   ) {}
 
   login(payload: LoginRequest): Observable<AuthResponse> {
-    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/login`, payload).pipe(
+    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/login`, {
+      ...payload,
+      transport: 'browser' as const,
+    }).pipe(
       map((res) => this.requireData(res, 'Login response was incomplete.')),
     );
   }
@@ -64,23 +70,31 @@ export class AuthService {
   }
 
   verifyEmail(token: string): Observable<ApiEnvelope<AuthResponse>> {
-    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/verify`, { token });
+    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/verify`, {
+      token,
+      transport: 'browser' as const,
+    });
   }
 
   verifyDevice(token: string): Observable<ApiEnvelope<AuthResponse>> {
-    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/device/verify`, { token });
+    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/device/verify`, {
+      token,
+      transport: 'browser' as const,
+    });
   }
 
   googleVerify(idToken: string, nonce: string): Observable<AuthResponse> {
     return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/google`, {
       token: idToken,
       nonce,
+      transport: 'browser' as const,
     }).pipe(map((res) => this.requireData(res, 'Google login response was incomplete.')));
   }
 
   microsoftVerify(idToken: string): Observable<AuthResponse> {
     return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/microsoft`, {
       token: idToken,
+      transport: 'browser' as const,
     }).pipe(map((res) => this.requireData(res, 'Microsoft login response was incomplete.')));
   }
 

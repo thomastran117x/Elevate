@@ -5,6 +5,7 @@ using backend.main.implementation.controllers;
 using backend.main.models.core;
 using backend.main.models.other;
 using backend.main.services.interfaces;
+using backend.main.utilities.implementation;
 using FluentAssertions;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
@@ -27,7 +28,10 @@ public class AuthControllerTests
 
         result.Should().BeOfType<RedirectResult>()
             .Which.Url.Should().Be("http://localhost:3090/auth/verify?token=email-token");
-        authService.Verify(service => service.VerifyAsync(It.IsAny<string>()), Times.Never);
+        authService.Verify(
+            service => service.VerifyAsync(It.IsAny<string>(), It.IsAny<SessionTransport>()),
+            Times.Never
+        );
     }
 
     [Fact]
@@ -40,7 +44,13 @@ public class AuthControllerTests
 
         result.Should().BeOfType<RedirectResult>()
             .Which.Url.Should().Be("http://localhost:3090/auth/device/verify?token=device-token");
-        authService.Verify(service => service.VerifyDeviceLoginAsync(It.IsAny<string>()), Times.Never);
+        authService.Verify(
+            service => service.VerifyDeviceLoginAsync(
+                It.IsAny<string>(),
+                It.IsAny<SessionTransport>()
+            ),
+            Times.Never
+        );
     }
 
     [Fact]
@@ -56,16 +66,73 @@ public class AuthControllerTests
 
         result.Should().BeOfType<RedirectResult>()
             .Which.Url.Should().Be("https://app.eventxperience.test/auth/verify?token=email-token");
-        authService.Verify(service => service.VerifyAsync(It.IsAny<string>()), Times.Never);
+        authService.Verify(
+            service => service.VerifyAsync(It.IsAny<string>(), It.IsAny<SessionTransport>()),
+            Times.Never
+        );
     }
 
     [Fact]
     public async Task Refresh_ReturnsAccessTokenAliasForFrontendCompatibility()
     {
         var authService = new Mock<IAuthService>();
-        authService.Setup(service => service.HandleTokensAsync("refresh-token"))
+        authService.Setup(service => service.HandleTokensAsync(
+                "refresh-token",
+                "binding-token",
+                SessionTransport.BrowserCookie
+            ))
             .ReturnsAsync(new UserToken(
-                new Token("access-token", "refresh-token-2", TimeSpan.FromDays(1)),
+                new Token(
+                    "access-token",
+                    "refresh-token-2",
+                    "binding-token-2",
+                    TimeSpan.FromDays(1),
+                    SessionTransport.BrowserCookie
+                ),
+                new User
+                {
+                    Id = 9,
+                    Email = "organizer@example.com",
+                    Usertype = "Organizer"
+                }
+            ));
+
+        var controller = CreateController(authService);
+        controller.HttpContext.Request.Headers.Cookie = $"{HttpUtility.RefreshCookieName}=refresh-token; {HttpUtility.RefreshBindingCookieName}=binding-token";
+
+        var result = await controller.Refresh(new RefreshTokenRequest());
+
+        var payload = result.Should().BeOfType<OkObjectResult>()
+            .Which.Value.Should().BeOfType<AuthResponse>()
+            .Subject;
+
+        payload.Token.Should().Be("access-token");
+        payload.AccessToken.Should().Be("access-token");
+        payload.RefreshToken.Should().BeNull();
+        payload.SessionBindingToken.Should().BeNull();
+        controller.HttpContext.Response.Headers.SetCookie.ToString()
+            .Should().Contain(HttpUtility.RefreshCookieName);
+        controller.HttpContext.Response.Headers.SetCookie.ToString()
+            .Should().Contain(HttpUtility.RefreshBindingCookieName);
+    }
+
+    [Fact]
+    public async Task ApiRefresh_ReturnsRefreshSecretsForApiTransport()
+    {
+        var authService = new Mock<IAuthService>();
+        authService.Setup(service => service.HandleTokensAsync(
+                "refresh-token",
+                "binding-token",
+                SessionTransport.ApiToken
+            ))
+            .ReturnsAsync(new UserToken(
+                new Token(
+                    "access-token",
+                    "refresh-token-2",
+                    "binding-token-2",
+                    TimeSpan.FromDays(1),
+                    SessionTransport.ApiToken
+                ),
                 new User
                 {
                     Id = 9,
@@ -76,9 +143,10 @@ public class AuthControllerTests
 
         var controller = CreateController(authService);
 
-        var result = await controller.Refresh(new RefreshTokenRequest
+        var result = await controller.ApiRefresh(new RefreshTokenRequest
         {
-            RefreshToken = "refresh-token"
+            RefreshToken = "refresh-token",
+            SessionBindingToken = "binding-token"
         });
 
         var payload = result.Should().BeOfType<OkObjectResult>()
@@ -86,7 +154,8 @@ public class AuthControllerTests
             .Subject;
 
         payload.Token.Should().Be("access-token");
-        payload.AccessToken.Should().Be("access-token");
+        payload.RefreshToken.Should().Be("refresh-token-2");
+        payload.SessionBindingToken.Should().Be("binding-token-2");
     }
 
     private static AuthController CreateController(

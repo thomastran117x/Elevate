@@ -126,7 +126,10 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task<UserToken> VerifyDeviceAsync(string token)
+        public async Task<UserToken> VerifyDeviceAsync(
+            string token,
+            SessionTransport transport
+        )
         {
             try
             {
@@ -167,12 +170,16 @@ namespace backend.main.services.implementation
                 var refreshToken = await _tokenService.GenerateRefreshToken(
                     user.Id,
                     _requestInfo,
+                    transport,
+                    sessionId: null,
                     rememberMe: false
                 );
                 var authToken = new Token(
                     accessToken,
                     refreshToken.Value,
-                    refreshToken.Lifetime
+                    refreshToken.SessionBindingToken,
+                    refreshToken.Lifetime,
+                    refreshToken.Transport
                 );
 
                 return new UserToken(authToken, user);
