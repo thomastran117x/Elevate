@@ -11,9 +11,11 @@ namespace backend.main.configurations.security
         [
             $"{RoutePaths.ApiAuthPath}/login",
             $"{RoutePaths.ApiAuthPath}/signup",
+            $"{RoutePaths.ApiAuthPath}/verify",
             $"{RoutePaths.ApiAuthPath}/verify/otp",
             $"{RoutePaths.ApiAuthPath}/google",
             $"{RoutePaths.ApiAuthPath}/microsoft",
+            $"{RoutePaths.ApiAuthPath}/device/verify",
             $"{RoutePaths.ApiAuthPath}/refresh",
             $"{RoutePaths.ApiAuthPath}/logout",
             $"{RoutePaths.ApiAuthPath}/forgot-password",

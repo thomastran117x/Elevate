@@ -1,0 +1,27 @@
+<div class="verify-shell">
+  <div class="verify-card">
+    <p class="verify-eyebrow">Email Verification</p>
+    <h1>Confirm this email address</h1>
+    <p class="verify-copy">{{ message() }}</p>
+
+    <div *ngIf="status() === 'loading'" class="verify-spinner" aria-hidden="true"></div>
+
+    <div *ngIf="status() === 'ready'" class="verify-actions">
+      <button type="button" class="verify-primary" (click)="confirm()" [disabled]="!hasToken">
+        Verify Email
+      </button>
+      <a routerLink="/auth/login" class="verify-secondary">Back to login</a>
+    </div>
+
+    <div *ngIf="status() === 'success'" class="verify-actions">
+      <a routerLink="/dashboard" class="verify-primary">Go to dashboard</a>
+    </div>
+
+    <div *ngIf="status() === 'error'" class="verify-actions">
+      <button type="button" class="verify-primary" (click)="confirm()" [disabled]="!hasToken">
+        Try Again
+      </button>
+      <a routerLink="/auth/login" class="verify-secondary">Back to login</a>
+    </div>
+  </div>
+</div>
