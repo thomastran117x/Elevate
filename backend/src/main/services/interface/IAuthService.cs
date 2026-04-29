@@ -9,7 +9,7 @@ namespace backend.main.services.interfaces
         Task<UserToken> VerifyAsync(string token);
         Task<UserToken> VerifyOtpAsync(string code, string challenge);
         Task<UserToken> VerifyDeviceLoginAsync(string token);
-        Task<UserToken> GoogleAsync(string token);
+        Task<UserToken> GoogleAsync(string token, string? expectedNonce = null);
         Task<UserToken> MicrosoftAsync(string token);
         Task<UserToken> HandleTokensAsync(string refreshToken);
         Task HandleLogoutAsync(string refreshToken);

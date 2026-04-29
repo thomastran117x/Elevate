@@ -49,7 +49,7 @@ builder.Services.AddCustomCors(builder.Configuration);
 builder.Services.AddCustomCsrf();
 builder.Services.AddInMemoryRateLimiter();
 builder.Services.AddCustomRequestTimeouts();
-builder.Services.AddForwardedHeaders();
+builder.Services.AddForwardedHeaders(builder.Configuration);
 
 builder.Services.AddWebConfiguration(builder.Configuration);
 

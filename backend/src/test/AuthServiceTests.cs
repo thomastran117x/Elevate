@@ -116,11 +116,12 @@ public class AuthServiceTests
         var userRepository = new Mock<IUserRepository>();
         var oauthService = new Mock<IOAuthService>();
         var tokenService = new Mock<ITokenService>();
+        var deviceService = new Mock<IDeviceService>();
         var publisher = new Mock<IPublisher>(MockBehavior.Strict);
         User? createdUser = null;
         var oauthUser = new OAuthUser("google-1", "oauth@example.com", "OAuth User", "google");
 
-        oauthService.Setup(service => service.VerifyGoogleTokenAsync("google-token"))
+        oauthService.Setup(service => service.VerifyGoogleTokenAsync("google-token", "expected-nonce"))
             .ReturnsAsync(oauthUser);
         userRepository.Setup(repository => repository.GetUserByGoogleIdAsync(oauthUser.Id))
             .ReturnsAsync((User?)null);
@@ -142,26 +143,101 @@ public class AuthServiceTests
                 It.IsAny<bool?>()
             ))
             .ReturnsAsync(new RefreshTokenIssue("refresh-token", TimeSpan.FromDays(1)));
+        deviceService.Setup(service => service.EnsureDeviceKnownAsync(
+                42,
+                oauthUser.Email,
+                It.IsAny<ClientRequestInfo>()
+            ))
+            .Returns(Task.CompletedTask);
 
         var service = CreateService(
             userRepository,
             publisher,
             tokenService: tokenService,
-            oauthService: oauthService
+            oauthService: oauthService,
+            deviceService: deviceService
         );
 
-        var result = await service.GoogleAsync("google-token");
+        var result = await service.GoogleAsync("google-token", "expected-nonce");
 
         createdUser.Should().NotBeNull();
         createdUser!.Usertype.Should().Be(AuthRoles.Participant);
         result.user.Usertype.Should().Be(AuthRoles.Participant);
+        deviceService.Verify(service => service.EnsureDeviceKnownAsync(
+            42,
+            oauthUser.Email,
+            It.IsAny<ClientRequestInfo>()
+        ));
+    }
+
+    [Fact]
+    public async Task MicrosoftAsync_RequiresTrustedDeviceBeforeIssuingTokens()
+    {
+        var userRepository = new Mock<IUserRepository>();
+        var oauthService = new Mock<IOAuthService>();
+        var tokenService = new Mock<ITokenService>();
+        var deviceService = new Mock<IDeviceService>();
+        var publisher = new Mock<IPublisher>(MockBehavior.Strict);
+        var oauthUser = new OAuthUser("ms-1", "oauth@example.com", "OAuth User", "microsoft");
+
+        oauthService.Setup(service => service.VerifyMicrosoftTokenAsync("ms-token"))
+            .ReturnsAsync(oauthUser);
+        userRepository.Setup(repository => repository.GetUserByMicrosoftIdAsync(oauthUser.Id))
+            .ReturnsAsync(new User
+            {
+                Id = 21,
+                Email = oauthUser.Email,
+                Usertype = AuthRoles.Organizer,
+                MicrosoftID = oauthUser.Id,
+            });
+        userRepository.Setup(repository => repository.GetUserByEmailAsync(oauthUser.Email))
+            .ReturnsAsync(new User
+            {
+                Id = 21,
+                Email = oauthUser.Email,
+                Usertype = AuthRoles.Organizer,
+                MicrosoftID = oauthUser.Id,
+            });
+        tokenService.Setup(service => service.GenerateAccessToken(It.IsAny<User>()))
+            .Returns("access-token");
+        tokenService.Setup(service => service.GenerateRefreshToken(
+                It.IsAny<int>(),
+                It.IsAny<ClientRequestInfo>(),
+                It.IsAny<string?>(),
+                It.IsAny<bool?>()
+            ))
+            .ReturnsAsync(new RefreshTokenIssue("refresh-token", TimeSpan.FromDays(1)));
+        deviceService.Setup(service => service.EnsureDeviceKnownAsync(
+                21,
+                oauthUser.Email,
+                It.IsAny<ClientRequestInfo>()
+            ))
+            .Returns(Task.CompletedTask);
+
+        var service = CreateService(
+            userRepository,
+            publisher,
+            tokenService: tokenService,
+            oauthService: oauthService,
+            deviceService: deviceService
+        );
+
+        var result = await service.MicrosoftAsync("ms-token");
+
+        result.user.Id.Should().Be(21);
+        deviceService.Verify(service => service.EnsureDeviceKnownAsync(
+            21,
+            oauthUser.Email,
+            It.IsAny<ClientRequestInfo>()
+        ));
     }
 
     private static AuthService CreateService(
         Mock<IUserRepository> userRepository,
         Mock<IPublisher> publisher,
         Mock<ITokenService>? tokenService = null,
-        Mock<IOAuthService>? oauthService = null
+        Mock<IOAuthService>? oauthService = null,
+        Mock<IDeviceService>? deviceService = null
     )
     {
         return new AuthService(
@@ -169,7 +245,7 @@ public class AuthServiceTests
             (oauthService ?? new Mock<IOAuthService>()).Object,
             (tokenService ?? new Mock<ITokenService>()).Object,
             publisher.Object,
-            Mock.Of<IDeviceService>(),
+            (deviceService ?? new Mock<IDeviceService>()).Object,
             new ClientRequestInfo()
         );
     }

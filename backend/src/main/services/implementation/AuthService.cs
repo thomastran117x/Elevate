@@ -239,11 +239,14 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task<UserToken> GoogleAsync(string token)
+        public async Task<UserToken> GoogleAsync(string token, string? expectedNonce = null)
         {
             try
             {
-                OAuthUser oauthUser = await _oauthService.VerifyGoogleTokenAsync(token);
+                OAuthUser oauthUser = await _oauthService.VerifyGoogleTokenAsync(
+                    token,
+                    expectedNonce
+                );
                 if (oauthUser == null)
                     throw new UnauthorizedException("Invalid Google Token");
 
@@ -262,6 +265,8 @@ namespace backend.main.services.implementation
                 {
                     user = await EnsureOAuthRoleAsync(user);
                 }
+
+                await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
 
                 return await GenerateTokenPair(user);
             }
@@ -298,6 +303,8 @@ namespace backend.main.services.implementation
                 {
                     user = await EnsureOAuthRoleAsync(user);
                 }
+
+                await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
 
                 return await GenerateTokenPair(user);
             }

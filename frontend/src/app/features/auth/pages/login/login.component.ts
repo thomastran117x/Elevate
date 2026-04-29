@@ -46,7 +46,7 @@ export class LoginComponent {
     this.form = this.fb.nonNullable.group({
       email: this.fb.nonNullable.control('', [Validators.required, Validators.email]),
       password: this.fb.nonNullable.control('', [Validators.required, Validators.minLength(6)]),
-      remember: this.fb.nonNullable.control(false),
+      rememberMe: this.fb.nonNullable.control(false),
     });
   }
 

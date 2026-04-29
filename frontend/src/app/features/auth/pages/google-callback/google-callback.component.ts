@@ -5,6 +5,7 @@ import { Store } from '@ngrx/store';
 import { AuthService, AuthResponse } from '../../services/auth.service';
 import { setUser } from '../../../../core/stores/user.actions';
 import { UserState } from '../../../../core/stores/user.reducer';
+import { environment } from '../../../../../environments/environment';
 
 @Component({
   selector: 'app-google-callback',
@@ -14,6 +15,10 @@ import { UserState } from '../../../../core/stores/user.reducer';
   styleUrls: ['./google-callback.component.css'],
 })
 export class GoogleCallbackComponent implements OnInit {
+  private static readonly CodeVerifierStorageKey = 'google_code_verifier';
+  private static readonly StateStorageKey = 'google_oauth_state';
+  private static readonly NonceStorageKey = 'google_oauth_nonce';
+
   private platformId = inject(PLATFORM_ID);
 
   status = signal<'loading' | 'success' | 'error'>('loading');
@@ -30,42 +35,73 @@ export class GoogleCallbackComponent implements OnInit {
       return;
     }
 
-    this.handleGoogleCallback();
+    void this.handleGoogleCallback();
   }
 
-  private handleGoogleCallback(): void {
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const idToken = hashParams.get('id_token');
+  private async handleGoogleCallback(): Promise<void> {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const state = params.get('state');
+    const expectedState = sessionStorage.getItem(GoogleCallbackComponent.StateStorageKey);
+    const codeVerifier = sessionStorage.getItem(GoogleCallbackComponent.CodeVerifierStorageKey);
+    const nonce = sessionStorage.getItem(GoogleCallbackComponent.NonceStorageKey);
 
-    if (!idToken) {
+    if (!code || !state || !expectedState || state !== expectedState || !codeVerifier || !nonce) {
       this.status.set('error');
-      this.message.set('Error: No ID token received from Google.');
+      this.message.set('Google sign-in could not be validated. Please try again.');
       return;
     }
 
     this.status.set('loading');
     this.message.set('Verifying Google token...');
 
-    this.auth.googleVerify(idToken).subscribe({
-      next: (res: AuthResponse) => {
-        this.store.dispatch(setUser({ user: res }));
+    try {
+      const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: environment.googleClientId,
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: `${environment.frontendUrl}/auth/google`,
+          code_verifier: codeVerifier,
+        }).toString(),
+      });
 
-        this.status.set('success');
-        this.message.set('Login successful! Redirecting...');
+      const tokenData = await tokenResp.json();
+      if (!tokenResp.ok || !tokenData.id_token) {
+        throw new Error('No id_token returned from Google.');
+      }
 
-        setTimeout(() => this.router.navigate(['/dashboard']), 1500);
-      },
-      error: (err) => {
-        console.error('Google callback failed:', err);
-        this.status.set('error');
-        this.message.set(err?.error?.message || 'Google sign-in failed. Please try again.');
-      },
-    });
+      sessionStorage.removeItem(GoogleCallbackComponent.CodeVerifierStorageKey);
+      sessionStorage.removeItem(GoogleCallbackComponent.StateStorageKey);
+      sessionStorage.removeItem(GoogleCallbackComponent.NonceStorageKey);
+
+      this.auth.googleVerify(tokenData.id_token, nonce).subscribe({
+        next: (res: AuthResponse) => {
+          this.store.dispatch(setUser({ user: res }));
+
+          this.status.set('success');
+          this.message.set('Login successful! Redirecting...');
+
+          setTimeout(() => this.router.navigate(['/dashboard']), 1500);
+        },
+        error: (err) => {
+          console.error('Google callback failed:', err);
+          this.status.set('error');
+          this.message.set(err?.error?.message || 'Google sign-in failed. Please try again.');
+        },
+      });
+    } catch (err) {
+      console.error('Google callback failed:', err);
+      this.status.set('error');
+      this.message.set('Google sign-in failed. Please try again.');
+    }
   }
 
   retry(): void {
     this.status.set('loading');
     this.message.set('Retrying Google sign-in...');
-    this.handleGoogleCallback();
+    void this.handleGoogleCallback();
   }
 }

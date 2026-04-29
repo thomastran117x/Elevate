@@ -1,20 +1,28 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { from, switchMap } from 'rxjs';
+import { from, map, switchMap } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { AuthTokenService } from '../../../core/api/services/auth-token.service';
 
 export interface LoginRequest {
   email: string;
   password: string;
-  remember: boolean;
+  rememberMe: boolean;
+  captcha: string;
 }
 
 export interface SignupRequest {
   email: string;
   password: string;
-  role: 'participant' | 'organizer';
+  usertype: 'participant' | 'organizer' | 'volunteer';
+  rememberMe?: boolean;
+  captcha: string;
+}
+
+export interface VerificationChallengeResponse {
+  Challenge: string;
+  ExpiresAtUtc: string;
 }
 
 export interface AuthResponse {
@@ -43,11 +51,16 @@ export class AuthService {
   ) {}
 
   login(payload: LoginRequest): Observable<AuthResponse> {
-    return this.postWithCsrf<AuthResponse>(`${this.baseUrl}/login`, payload);
+    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/login`, payload).pipe(
+      map((res) => this.requireData(res, 'Login response was incomplete.')),
+    );
   }
 
-  signup(payload: SignupRequest): Observable<{ message: string }> {
-    return this.postWithCsrf<{ message: string }>(`${this.baseUrl}/signup`, payload);
+  signup(payload: SignupRequest): Observable<ApiEnvelope<VerificationChallengeResponse>> {
+    return this.postWithCsrf<ApiEnvelope<VerificationChallengeResponse>>(
+      `${this.baseUrl}/signup`,
+      payload,
+    );
   }
 
   verifyEmail(token: string): Observable<ApiEnvelope<AuthResponse>> {
@@ -58,12 +71,17 @@ export class AuthService {
     return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/device/verify`, { token });
   }
 
-  googleVerify(idToken: string): Observable<AuthResponse> {
-    return this.postWithCsrf<AuthResponse>(`${this.baseUrl}/google`, { Token: idToken });
+  googleVerify(idToken: string, nonce: string): Observable<AuthResponse> {
+    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/google`, {
+      token: idToken,
+      nonce,
+    }).pipe(map((res) => this.requireData(res, 'Google login response was incomplete.')));
   }
 
   microsoftVerify(idToken: string): Observable<AuthResponse> {
-    return this.postWithCsrf<AuthResponse>(`${this.baseUrl}/microsoft`, { Token: idToken });
+    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/microsoft`, {
+      token: idToken,
+    }).pipe(map((res) => this.requireData(res, 'Microsoft login response was incomplete.')));
   }
 
   logout(): Observable<void> {
@@ -86,5 +104,14 @@ export class AuthService {
         });
       }),
     );
+  }
+
+  private requireData<T>(response: ApiEnvelope<T>, fallbackMessage: string): T {
+    const data = response.data ?? response.Data;
+    if (!data) {
+      throw new Error(fallbackMessage);
+    }
+
+    return data;
   }
 }

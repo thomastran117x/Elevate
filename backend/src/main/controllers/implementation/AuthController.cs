@@ -208,7 +208,7 @@ namespace backend.main.implementation.controllers
         {
             try
             {
-                UserToken userToken = await _authService.GoogleAsync(request.Token);
+                UserToken userToken = await _authService.GoogleAsync(request.Token, request.Nonce);
 
                 User user = userToken.user;
                 Token token = userToken.token;
