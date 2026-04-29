@@ -8,6 +8,7 @@ using backend.main.publishers.interfaces;
 using backend.main.repositories.interfaces;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
+using Newtonsoft.Json;
 using System.Security.Cryptography;
 
 namespace backend.main.services.implementation
@@ -17,16 +18,27 @@ namespace backend.main.services.implementation
         private readonly IUserRepository _userRepository;
         private readonly IOAuthService _oauthService;
         private readonly ITokenService _tokenService;
+        private readonly ICacheService _cacheService;
         private readonly IPublisher _publisher;
         private readonly IDeviceService _deviceService;
         private readonly ClientRequestInfo _requestInfo;
         private const string DummyHash = "$2a$11$9FJqO6j/4jP3E2fOQdWgMuKZXWWvPZ09f8Pj0L9VqB6TfqZ4fE5SO";
+        private static readonly TimeSpan PendingOAuthSignupTtl = TimeSpan.FromMinutes(15);
 
-        public AuthService(IUserRepository userRepository, IOAuthService oauthService, ITokenService tokenService, IPublisher publisher, IDeviceService deviceService, ClientRequestInfo requestInfo)
+        public AuthService(
+            IUserRepository userRepository,
+            IOAuthService oauthService,
+            ITokenService tokenService,
+            ICacheService cacheService,
+            IPublisher publisher,
+            IDeviceService deviceService,
+            ClientRequestInfo requestInfo
+        )
         {
             _userRepository = userRepository;
             _oauthService = oauthService;
             _tokenService = tokenService;
+            _cacheService = cacheService;
             _publisher = publisher;
             _deviceService = deviceService;
             _requestInfo = requestInfo;
@@ -248,7 +260,7 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task<UserToken> GoogleAsync(
+        public async Task<OAuthAuthenticationResult> GoogleAsync(
             string token,
             SessionTransport transport,
             string? expectedNonce = null
@@ -266,22 +278,16 @@ namespace backend.main.services.implementation
                 var user = await ResolveGoogleUserAsync(oauthUser);
 
                 if (user == null)
-                {
-                    user = await _userRepository.CreateUserAsync(new User
-                    {
-                        Email = oauthUser.Email,
-                        Usertype = AuthRoles.DefaultOAuthRole,
-                        GoogleID = oauthUser.Id,
-                    });
-                }
-                else
-                {
-                    user = await EnsureOAuthRoleAsync(user);
-                }
+                    return OAuthAuthenticationResult.RoleSelectionRequired(
+                        await CreatePendingOAuthSignupAsync(oauthUser, transport)
+                    );
 
+                user = await EnsureOAuthRoleAsync(user);
                 await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
 
-                return await GenerateTokenPair(user, transport);
+                return OAuthAuthenticationResult.Authenticated(
+                    await GenerateTokenPair(user, transport)
+                );
             }
             catch (Exception e)
             {
@@ -293,7 +299,10 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task<UserToken> MicrosoftAsync(string token, SessionTransport transport)
+        public async Task<OAuthAuthenticationResult> MicrosoftAsync(
+            string token,
+            SessionTransport transport
+        )
         {
             try
             {
@@ -304,22 +313,16 @@ namespace backend.main.services.implementation
                 var user = await ResolveMicrosoftUserAsync(oauthUser);
 
                 if (user == null)
-                {
-                    user = await _userRepository.CreateUserAsync(new User
-                    {
-                        Email = oauthUser.Email,
-                        Usertype = AuthRoles.DefaultOAuthRole,
-                        MicrosoftID = oauthUser.Id,
-                    });
-                }
-                else
-                {
-                    user = await EnsureOAuthRoleAsync(user);
-                }
+                    return OAuthAuthenticationResult.RoleSelectionRequired(
+                        await CreatePendingOAuthSignupAsync(oauthUser, transport)
+                    );
 
+                user = await EnsureOAuthRoleAsync(user);
                 await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
 
-                return await GenerateTokenPair(user, transport);
+                return OAuthAuthenticationResult.Authenticated(
+                    await GenerateTokenPair(user, transport)
+                );
             }
             catch (Exception e)
             {
@@ -327,6 +330,67 @@ namespace backend.main.services.implementation
                     throw;
 
                 Logger.Error($"[AuthService] MicrosoftAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<UserToken> CompleteOAuthSignupAsync(
+            string signupToken,
+            string usertype,
+            SessionTransport transport
+        )
+        {
+            try
+            {
+                usertype = AuthRoles.NormalizeOrThrow(usertype);
+                var pending = await GetPendingOAuthSignupAsync(signupToken)
+                    ?? throw new UnauthorizedException(
+                        "OAuth signup session is invalid or expired."
+                    );
+
+                if (pending.Transport != transport)
+                    throw new UnauthorizedException("OAuth signup transport mismatch.");
+
+                var oauthUser = new OAuthUser(
+                    pending.ProviderUserId,
+                    pending.Email,
+                    pending.Name,
+                    pending.Provider
+                );
+                var user = pending.Provider switch
+                {
+                    "google" => await ResolveGoogleUserAsync(oauthUser),
+                    "microsoft" => await ResolveMicrosoftUserAsync(oauthUser),
+                    _ => throw new BadRequestException("Unsupported OAuth provider."),
+                };
+
+                if (user == null)
+                {
+                    user = await _userRepository.CreateUserAsync(new User
+                    {
+                        Email = pending.Email,
+                        Usertype = usertype,
+                        GoogleID = pending.Provider == "google" ? pending.ProviderUserId : null,
+                        MicrosoftID = pending.Provider == "microsoft"
+                            ? pending.ProviderUserId
+                            : null,
+                    });
+                }
+                else
+                {
+                    user = await EnsureOAuthRoleAsync(user);
+                }
+
+                await _cacheService.DeleteKeyAsync(PendingOAuthSignupKey(signupToken));
+                await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
+                return await GenerateTokenPair(user, transport);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[AuthService] CompleteOAuthSignupAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
         }
@@ -568,6 +632,51 @@ namespace backend.main.services.implementation
             return user;
         }
 
+        private async Task<PendingOAuthSignupChallenge> CreatePendingOAuthSignupAsync(
+            OAuthUser oauthUser,
+            SessionTransport transport
+        )
+        {
+            var signupToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+            var pendingState = new PendingOAuthSignupState
+            {
+                ProviderUserId = oauthUser.Id,
+                Email = oauthUser.Email,
+                Name = oauthUser.Name,
+                Provider = oauthUser.Provider,
+                Transport = transport,
+            };
+
+            var stored = await _cacheService.SetValueAsync(
+                PendingOAuthSignupKey(signupToken),
+                JsonConvert.SerializeObject(pendingState),
+                PendingOAuthSignupTtl
+            );
+
+            if (!stored)
+                throw new NotAvailableException();
+
+            return new PendingOAuthSignupChallenge
+            {
+                SignupToken = signupToken,
+                Email = oauthUser.Email,
+                Name = oauthUser.Name,
+                Provider = oauthUser.Provider,
+            };
+        }
+
+        private async Task<PendingOAuthSignupState?> GetPendingOAuthSignupAsync(string signupToken)
+        {
+            var json = await _cacheService.GetValueAsync(PendingOAuthSignupKey(signupToken));
+            if (string.IsNullOrWhiteSpace(json))
+                return null;
+
+            return JsonConvert.DeserializeObject<PendingOAuthSignupState>(json);
+        }
+
+        private static string PendingOAuthSignupKey(string signupToken) =>
+            $"oauth:pending:{signupToken}";
+
         private static VerificationOtpChallenge BuildPlaceholderForgotPasswordChallenge()
         {
             return new VerificationOtpChallenge
@@ -576,6 +685,15 @@ namespace backend.main.services.implementation
                 Challenge = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)),
                 ExpiresAtUtc = DateTime.UtcNow.AddMinutes(30),
             };
+        }
+
+        private sealed class PendingOAuthSignupState
+        {
+            public required string ProviderUserId { get; set; }
+            public required string Email { get; set; }
+            public required string Name { get; set; }
+            public required string Provider { get; set; }
+            public SessionTransport Transport { get; set; }
         }
     }
 }

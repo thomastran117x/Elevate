@@ -14,12 +14,17 @@ namespace backend.main.services.interfaces
         Task<UserToken> VerifyAsync(string token, SessionTransport transport);
         Task<UserToken> VerifyOtpAsync(string code, string challenge, SessionTransport transport);
         Task<UserToken> VerifyDeviceLoginAsync(string token, SessionTransport transport);
-        Task<UserToken> GoogleAsync(
+        Task<OAuthAuthenticationResult> GoogleAsync(
             string token,
             SessionTransport transport,
             string? expectedNonce = null
         );
-        Task<UserToken> MicrosoftAsync(string token, SessionTransport transport);
+        Task<OAuthAuthenticationResult> MicrosoftAsync(string token, SessionTransport transport);
+        Task<UserToken> CompleteOAuthSignupAsync(
+            string signupToken,
+            string usertype,
+            SessionTransport transport
+        );
         Task<UserToken> HandleTokensAsync(
             string refreshToken,
             string? sessionBindingToken,

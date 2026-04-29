@@ -7,6 +7,7 @@ using backend.main.publishers.interfaces;
 using backend.main.repositories.interfaces;
 using backend.main.services.implementation;
 using backend.main.services.interfaces;
+using backend.test.TestSupport;
 using FluentAssertions;
 using Moq;
 using Xunit;
@@ -52,6 +53,32 @@ public class AuthServiceTests
         challenge.Should().BeEquivalentTo(expectedChallenge);
         capturedUser.Should().NotBeNull();
         capturedUser!.Usertype.Should().Be(AuthRoles.Organizer);
+    }
+
+    [Fact]
+    public async Task LoginAsync_ReturnsUnauthorized_WhenPasswordIsInvalid()
+    {
+        var userRepository = new Mock<IUserRepository>();
+        var publisher = new Mock<IPublisher>(MockBehavior.Strict);
+
+        userRepository.Setup(repository => repository.GetUserByEmailAsync("user@example.com"))
+            .ReturnsAsync(new User
+            {
+                Id = 17,
+                Email = "user@example.com",
+                Password = BCrypt.Net.BCrypt.HashPassword("correct-password"),
+                Usertype = AuthRoles.Participant,
+            });
+
+        var service = CreateService(userRepository, publisher);
+
+        var action = async () => await service.LoginAsync(
+            "user@example.com",
+            "wrong-password",
+            SessionTransport.BrowserCookie
+        );
+
+        await action.Should().ThrowAsync<backend.main.exceptions.http.UnauthorizedException>();
     }
 
     [Fact]
@@ -111,14 +138,12 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task GoogleAsync_AssignsParticipantRoleToNewOAuthUsers()
+    public async Task GoogleAsync_FirstTimeUserRequiresRoleSelection()
     {
         var userRepository = new Mock<IUserRepository>();
         var oauthService = new Mock<IOAuthService>();
-        var tokenService = new Mock<ITokenService>();
-        var deviceService = new Mock<IDeviceService>();
         var publisher = new Mock<IPublisher>(MockBehavior.Strict);
-        User? createdUser = null;
+        var cacheService = new Mock<ICacheService>();
         var oauthUser = new OAuthUser("google-1", "oauth@example.com", "OAuth User", "google");
 
         oauthService.Setup(service => service.VerifyGoogleTokenAsync("google-token", "expected-nonce"))
@@ -127,41 +152,18 @@ public class AuthServiceTests
             .ReturnsAsync((User?)null);
         userRepository.Setup(repository => repository.GetUserByEmailAsync(oauthUser.Email))
             .ReturnsAsync((User?)null);
-        userRepository.Setup(repository => repository.CreateUserAsync(It.IsAny<User>()))
-            .Callback<User>(user => createdUser = user)
-            .ReturnsAsync((User user) =>
-            {
-                user.Id = 42;
-                return user;
-            });
-        tokenService.Setup(service => service.GenerateAccessToken(It.IsAny<User>()))
-            .Returns("access-token");
-        tokenService.Setup(service => service.GenerateRefreshToken(
-                It.IsAny<int>(),
-                It.IsAny<ClientRequestInfo>(),
-                It.IsAny<SessionTransport>(),
-                It.IsAny<string?>(),
-                It.IsAny<bool?>()
+        cacheService.Setup(cache => cache.SetValueAsync(
+                It.Is<string>(key => key.StartsWith("oauth:pending:", StringComparison.Ordinal)),
+                It.IsAny<string>(),
+                It.IsAny<TimeSpan?>()
             ))
-            .ReturnsAsync(new RefreshTokenIssue(
-                "refresh-token",
-                "binding-token",
-                TimeSpan.FromDays(1),
-                SessionTransport.BrowserCookie
-            ));
-        deviceService.Setup(service => service.EnsureDeviceKnownAsync(
-                42,
-                oauthUser.Email,
-                It.IsAny<ClientRequestInfo>()
-            ))
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(true);
 
         var service = CreateService(
             userRepository,
             publisher,
-            tokenService: tokenService,
             oauthService: oauthService,
-            deviceService: deviceService
+            cacheService: cacheService
         );
 
         var result = await service.GoogleAsync(
@@ -170,14 +172,11 @@ public class AuthServiceTests
             "expected-nonce"
         );
 
-        createdUser.Should().NotBeNull();
-        createdUser!.Usertype.Should().Be(AuthRoles.Participant);
-        result.user.Usertype.Should().Be(AuthRoles.Participant);
-        deviceService.Verify(service => service.EnsureDeviceKnownAsync(
-            42,
-            oauthUser.Email,
-            It.IsAny<ClientRequestInfo>()
-        ));
+        result.RequiresRoleSelection.Should().BeTrue();
+        result.PendingSignup.Should().NotBeNull();
+        result.PendingSignup!.Email.Should().Be(oauthUser.Email);
+        result.PendingSignup.Provider.Should().Be("google");
+        userRepository.Verify(repository => repository.CreateUserAsync(It.IsAny<User>()), Times.Never);
     }
 
     [Fact]
@@ -240,7 +239,9 @@ public class AuthServiceTests
 
         var result = await service.MicrosoftAsync("ms-token", SessionTransport.BrowserCookie);
 
-        result.user.Id.Should().Be(21);
+        result.RequiresRoleSelection.Should().BeFalse();
+        result.UserToken.Should().NotBeNull();
+        result.UserToken!.user.Id.Should().Be(21);
         deviceService.Verify(service => service.EnsureDeviceKnownAsync(
             21,
             oauthUser.Email,
@@ -248,18 +249,118 @@ public class AuthServiceTests
         ));
     }
 
+    [Fact]
+    public async Task CompleteOAuthSignupAsync_RejectsTransportMismatch()
+    {
+        var userRepository = new Mock<IUserRepository>();
+        var publisher = new Mock<IPublisher>(MockBehavior.Strict);
+        var cacheService = new Mock<ICacheService>();
+        var signupToken = "pending-signup-token";
+        var pendingState =
+            "{\"ProviderUserId\":\"google-1\",\"Email\":\"oauth@example.com\",\"Name\":\"OAuth User\",\"Provider\":\"google\",\"Transport\":1}";
+
+        cacheService.Setup(cache => cache.GetValueAsync($"oauth:pending:{signupToken}"))
+            .ReturnsAsync(pendingState);
+
+        var service = CreateService(
+            userRepository,
+            publisher,
+            cacheService: cacheService
+        );
+
+        var action = async () => await service.CompleteOAuthSignupAsync(
+            signupToken,
+            "organizer",
+            SessionTransport.BrowserCookie
+        );
+
+        await action.Should().ThrowAsync<backend.main.exceptions.http.UnauthorizedException>();
+    }
+
+    [Fact]
+    public async Task CompleteOAuthSignupAsync_CreatesUserWithChosenRole()
+    {
+        var userRepository = new Mock<IUserRepository>();
+        var tokenService = new Mock<ITokenService>();
+        var deviceService = new Mock<IDeviceService>();
+        var publisher = new Mock<IPublisher>(MockBehavior.Strict);
+        var cacheService = new Mock<ICacheService>();
+        User? createdUser = null;
+        var signupToken = "pending-signup-token";
+        var pendingState =
+            "{\"ProviderUserId\":\"google-1\",\"Email\":\"oauth@example.com\",\"Name\":\"OAuth User\",\"Provider\":\"google\",\"Transport\":0}";
+
+        cacheService.Setup(cache => cache.GetValueAsync($"oauth:pending:{signupToken}"))
+            .ReturnsAsync(pendingState);
+        cacheService.Setup(cache => cache.DeleteKeyAsync($"oauth:pending:{signupToken}"))
+            .ReturnsAsync(true);
+        userRepository.Setup(repository => repository.GetUserByGoogleIdAsync("google-1"))
+            .ReturnsAsync((User?)null);
+        userRepository.Setup(repository => repository.GetUserByEmailAsync("oauth@example.com"))
+            .ReturnsAsync((User?)null);
+        userRepository.Setup(repository => repository.CreateUserAsync(It.IsAny<User>()))
+            .Callback<User>(user => createdUser = user)
+            .ReturnsAsync((User user) =>
+            {
+                user.Id = 42;
+                return user;
+            });
+        tokenService.Setup(service => service.GenerateAccessToken(It.IsAny<User>()))
+            .Returns("access-token");
+        tokenService.Setup(service => service.GenerateRefreshToken(
+                It.IsAny<int>(),
+                It.IsAny<ClientRequestInfo>(),
+                It.IsAny<SessionTransport>(),
+                It.IsAny<string?>(),
+                It.IsAny<bool?>()
+            ))
+            .ReturnsAsync(new RefreshTokenIssue(
+                "refresh-token",
+                "binding-token",
+                TimeSpan.FromDays(1),
+                SessionTransport.BrowserCookie
+            ));
+        deviceService.Setup(service => service.EnsureDeviceKnownAsync(
+                42,
+                "oauth@example.com",
+                It.IsAny<ClientRequestInfo>()
+            ))
+            .Returns(Task.CompletedTask);
+
+        var service = CreateService(
+            userRepository,
+            publisher,
+            tokenService: tokenService,
+            deviceService: deviceService,
+            cacheService: cacheService
+        );
+
+        var result = await service.CompleteOAuthSignupAsync(
+            signupToken,
+            "organizer",
+            SessionTransport.BrowserCookie
+        );
+
+        createdUser.Should().NotBeNull();
+        createdUser!.Usertype.Should().Be(AuthRoles.Organizer);
+        createdUser.GoogleID.Should().Be("google-1");
+        result.user.Id.Should().Be(42);
+    }
+
     private static AuthService CreateService(
         Mock<IUserRepository> userRepository,
         Mock<IPublisher> publisher,
         Mock<ITokenService>? tokenService = null,
         Mock<IOAuthService>? oauthService = null,
-        Mock<IDeviceService>? deviceService = null
+        Mock<IDeviceService>? deviceService = null,
+        Mock<ICacheService>? cacheService = null
     )
     {
         return new AuthService(
             userRepository.Object,
             (oauthService ?? new Mock<IOAuthService>()).Object,
             (tokenService ?? new Mock<ITokenService>()).Object,
+            (cacheService ?? InMemoryCacheMock.Create()).Object,
             publisher.Object,
             (deviceService ?? new Mock<IDeviceService>()).Object,
             new ClientRequestInfo()

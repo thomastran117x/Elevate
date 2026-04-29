@@ -15,6 +15,7 @@ namespace backend.main.configurations.security
             $"{RoutePaths.ApiAuthPath}/verify/otp",
             $"{RoutePaths.ApiAuthPath}/google",
             $"{RoutePaths.ApiAuthPath}/microsoft",
+            $"{RoutePaths.ApiAuthPath}/oauth/complete",
             $"{RoutePaths.ApiAuthPath}/device/verify",
             $"{RoutePaths.ApiAuthPath}/refresh",
             $"{RoutePaths.ApiAuthPath}/logout",

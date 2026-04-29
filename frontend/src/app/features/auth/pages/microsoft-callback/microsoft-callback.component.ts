@@ -2,7 +2,11 @@ import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Component, inject, OnInit, PLATFORM_ID, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { Store } from '@ngrx/store';
-import { AuthService } from '../../services/auth.service';
+import {
+  AuthService,
+  PendingOAuthSignupStorageKey,
+  OAuthAuthResponse,
+} from '../../services/auth.service';
 import { setUser } from '../../../../core/stores/user.actions';
 import { UserState } from '../../../../core/stores/user.reducer';
 import { environment } from '../../../../../environments/environment';
@@ -62,8 +66,16 @@ export class MicrosoftCallbackComponent implements OnInit {
       if (!tokenData.id_token) throw new Error('No id_token returned from Microsoft.');
 
       this.auth.microsoftVerify(tokenData.id_token).subscribe({
-        next: (res) => {
-          this.store.dispatch(setUser({ user: res }));
+        next: (res: OAuthAuthResponse) => {
+          if (res.RequiresRoleSelection) {
+            sessionStorage.setItem(PendingOAuthSignupStorageKey, JSON.stringify(res));
+            this.status.set('success');
+            this.message.set('Choose your role to finish creating your account...');
+            setTimeout(() => this.router.navigate(['/auth/oauth/role']), 250);
+            return;
+          }
+
+          this.store.dispatch(setUser({ user: res.Auth }));
           this.status.set('success');
           this.message.set('Login successful! Redirecting...');
           setTimeout(() => this.router.navigate(['/dashboard']), 1500);

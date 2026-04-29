@@ -1,0 +1,109 @@
+.oauth-role-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1rem;
+  background:
+    radial-gradient(circle at top, rgba(51, 153, 255, 0.18), transparent 35%),
+    linear-gradient(180deg, #08111f 0%, #10253f 100%);
+}
+
+.oauth-role-card {
+  width: min(100%, 34rem);
+  padding: 2rem;
+  border-radius: 1.5rem;
+  background: rgba(8, 17, 31, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f3f7fb;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+}
+
+.oauth-role-back {
+  color: #b9d7ff;
+  text-decoration: none;
+}
+
+.oauth-role-eyebrow {
+  margin: 1.5rem 0 0.4rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: #7bb6ff;
+}
+
+.oauth-role-card h1 {
+  margin: 0;
+  font-size: clamp(2rem, 3vw, 2.6rem);
+}
+
+.oauth-role-copy {
+  margin: 0.75rem 0 1.5rem;
+  color: rgba(243, 247, 251, 0.8);
+}
+
+.oauth-role-summary {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(243, 247, 251, 0.82);
+}
+
+.oauth-role-provider {
+  margin-top: 0.35rem;
+  text-transform: capitalize;
+}
+
+.oauth-role-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.oauth-role-option {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+
+.oauth-role-option-selected {
+  border-color: rgba(123, 182, 255, 0.9);
+  background: rgba(123, 182, 255, 0.12);
+}
+
+.oauth-role-option input {
+  margin-top: 0.2rem;
+}
+
+.oauth-role-option-body {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.oauth-role-option-title {
+  font-weight: 700;
+}
+
+.oauth-role-option-description {
+  color: rgba(243, 247, 251, 0.72);
+}
+
+.oauth-role-form button {
+  margin-top: 0.5rem;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.95rem 1.2rem;
+  font-weight: 700;
+  color: #08111f;
+  background: linear-gradient(135deg, #8cd0ff 0%, #d6f0ff 100%);
+  cursor: pointer;
+}
+
+.oauth-role-form button:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}

@@ -1,6 +1,7 @@
 using backend.main.dtos.general;
 using backend.main.dtos.requests.auth;
 using backend.main.dtos.responses.auth;
+using backend.main.dtos.responses.general;
 using backend.main.implementation.controllers;
 using backend.main.models.core;
 using backend.main.models.other;
@@ -158,9 +159,133 @@ public class AuthControllerTests
         payload.SessionBindingToken.Should().Be("binding-token-2");
     }
 
+    [Fact]
+    public async Task LocalAuthenticate_ReturnsBadRequest_WhenCaptchaIsInvalid()
+    {
+        var authService = new Mock<IAuthService>(MockBehavior.Strict);
+        var captchaService = new Mock<ICaptchaService>();
+        captchaService.Setup(service => service.VerifyCaptchaAsync("captcha-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var controller = CreateController(authService, captchaService: captchaService);
+
+        var result = await controller.LocalAuthenticate(new LoginRequest
+        {
+            Email = "user@example.com",
+            Password = "Password123!",
+            Captcha = "captcha-token",
+        });
+
+        var payload = result.Should().BeOfType<ObjectResult>().Subject;
+        payload.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+        payload.Value.Should().BeOfType<MessageResponse>()
+            .Which.Message.Should().Be("Invalid captcha.");
+    }
+
+    [Fact]
+    public async Task GoogleAuthenticate_ReturnsRoleSelectionChallenge_ForFirstTimeOAuthUser()
+    {
+        var authService = new Mock<IAuthService>();
+        authService.Setup(service => service.GoogleAsync(
+                "google-token",
+                SessionTransport.BrowserCookie,
+                "nonce-value"
+            ))
+            .ReturnsAsync(OAuthAuthenticationResult.RoleSelectionRequired(
+                new PendingOAuthSignupChallenge
+                {
+                    SignupToken = "signup-token",
+                    Email = "oauth@example.com",
+                    Name = "OAuth User",
+                    Provider = "google",
+                }
+            ));
+
+        var controller = CreateController(authService);
+
+        var result = await controller.GoogleAuthenticate(new GoogleRequest
+        {
+            Token = "google-token",
+            Nonce = "nonce-value",
+            Transport = "browser",
+        });
+
+        var payload = result.Should().BeOfType<ObjectResult>()
+            .Which.Value.Should().BeOfType<ApiResponse<OAuthAuthenticationResponse>>()
+            .Subject;
+
+        payload.Data.Should().NotBeNull();
+        payload.Data!.RequiresRoleSelection.Should().BeTrue();
+        payload.Data.SignupToken.Should().Be("signup-token");
+        payload.Data.Auth.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CompleteOAuthSignup_ReturnsAuthEnvelope()
+    {
+        var authService = new Mock<IAuthService>();
+        authService.Setup(service => service.CompleteOAuthSignupAsync(
+                "signup-token",
+                "Organizer",
+                SessionTransport.BrowserCookie
+            ))
+            .ReturnsAsync(new UserToken(
+                new Token(
+                    "access-token",
+                    "refresh-token",
+                    "binding-token",
+                    TimeSpan.FromDays(1),
+                    SessionTransport.BrowserCookie
+                ),
+                new User
+                {
+                    Id = 12,
+                    Email = "oauth@example.com",
+                    Usertype = "Organizer"
+                }
+            ));
+
+        var controller = CreateController(authService);
+
+        var result = await controller.CompleteOAuthSignup(new CompleteOAuthSignupRequest
+        {
+            SignupToken = "signup-token",
+            Usertype = "Organizer",
+            Transport = "browser",
+        });
+
+        var payload = result.Should().BeOfType<ObjectResult>()
+            .Which.Value.Should().BeOfType<ApiResponse<AuthResponse>>()
+            .Subject;
+
+        payload.Data.Should().NotBeNull();
+        payload.Data!.Username.Should().Be("oauth@example.com");
+        payload.Data.Usertype.Should().Be("Organizer");
+    }
+
+    [Fact]
+    public async Task Logout_WithoutRefreshToken_ClearsCookiesAndReturnsSuccessMessage()
+    {
+        var authService = new Mock<IAuthService>(MockBehavior.Strict);
+        var controller = CreateController(authService);
+
+        var result = await controller.Logout(null);
+
+        var payload = result.Should().BeOfType<ObjectResult>()
+            .Which.Value.Should().BeOfType<MessageResponse>()
+            .Subject;
+
+        payload.Message.Should().Be("The user is already logged out.");
+        controller.HttpContext.Response.Headers.SetCookie.ToString()
+            .Should().Contain($"{HttpUtility.RefreshCookieName}=;");
+        controller.HttpContext.Response.Headers.SetCookie.ToString()
+            .Should().Contain($"{HttpUtility.RefreshBindingCookieName}=;");
+    }
+
     private static AuthController CreateController(
         Mock<IAuthService> authService,
-        Dictionary<string, string?>? configValues = null
+        Dictionary<string, string?>? configValues = null,
+        Mock<ICaptchaService>? captchaService = null
     )
     {
         var config = new ConfigurationBuilder()
@@ -170,7 +295,7 @@ public class AuthControllerTests
         var controller = new AuthController(
             authService.Object,
             Mock.Of<IAntiforgery>(),
-            Mock.Of<ICaptchaService>(),
+            (captchaService ?? new Mock<ICaptchaService>()).Object,
             new ClientRequestInfo(),
             config
         );

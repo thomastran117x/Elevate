@@ -2,7 +2,11 @@ import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Component, inject, OnInit, PLATFORM_ID, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { Store } from '@ngrx/store';
-import { AuthService, AuthResponse } from '../../services/auth.service';
+import {
+  AuthService,
+  PendingOAuthSignupStorageKey,
+  OAuthAuthResponse,
+} from '../../services/auth.service';
 import { setUser } from '../../../../core/stores/user.actions';
 import { UserState } from '../../../../core/stores/user.reducer';
 import { environment } from '../../../../../environments/environment';
@@ -78,8 +82,16 @@ export class GoogleCallbackComponent implements OnInit {
       sessionStorage.removeItem(GoogleCallbackComponent.NonceStorageKey);
 
       this.auth.googleVerify(tokenData.id_token, nonce).subscribe({
-        next: (res: AuthResponse) => {
-          this.store.dispatch(setUser({ user: res }));
+        next: (res: OAuthAuthResponse) => {
+          if (res.RequiresRoleSelection) {
+            sessionStorage.setItem(PendingOAuthSignupStorageKey, JSON.stringify(res));
+            this.status.set('success');
+            this.message.set('Choose your role to finish creating your account...');
+            setTimeout(() => this.router.navigate(['/auth/oauth/role']), 250);
+            return;
+          }
+
+          this.store.dispatch(setUser({ user: res.Auth }));
 
           this.status.set('success');
           this.message.set('Login successful! Redirecting...');

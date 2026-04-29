@@ -9,6 +9,7 @@ using backend.main.models.core;
 using backend.main.models.other;
 using backend.main.services.implementation;
 using backend.main.services.interfaces;
+using backend.test.TestSupport;
 using FluentAssertions;
 using Moq;
 using Xunit;
@@ -39,7 +40,7 @@ public class TokenServiceTests
     [Fact]
     public async Task GenerateAndValidateRefreshToken_BrowserTransport_RequiresBindingToken()
     {
-        var cache = CreateCacheMock();
+        var cache = InMemoryCacheMock.Create();
         var service = new TokenService(cache.Object);
         var requestInfo = new ClientRequestInfo
         {
@@ -69,7 +70,7 @@ public class TokenServiceTests
     [Fact]
     public async Task ValidateRefreshToken_MissingBindingToken_RevokesSession()
     {
-        var cache = CreateCacheMock();
+        var cache = InMemoryCacheMock.Create();
         var service = new TokenService(cache.Object);
         var requestInfo = new ClientRequestInfo
         {
@@ -104,7 +105,7 @@ public class TokenServiceTests
     [Fact]
     public async Task ValidateRefreshToken_TransportMismatch_RevokesSession()
     {
-        var cache = CreateCacheMock();
+        var cache = InMemoryCacheMock.Create();
         var service = new TokenService(cache.Object);
         var requestInfo = new ClientRequestInfo
         {
@@ -137,9 +138,44 @@ public class TokenServiceTests
     }
 
     [Fact]
+    public async Task ValidateRefreshToken_InvalidBindingToken_RevokesSession()
+    {
+        var cache = InMemoryCacheMock.Create();
+        var service = new TokenService(cache.Object);
+        var requestInfo = new ClientRequestInfo
+        {
+            IpAddress = "10.0.0.1",
+            ClientName = "Chrome",
+            DeviceType = "Desktop",
+        };
+
+        var issued = await service.GenerateRefreshToken(
+            42,
+            requestInfo,
+            SessionTransport.BrowserCookie
+        );
+
+        await FluentActions.Awaiting(() => service.ValidateRefreshToken(
+                issued.Value,
+                "wrong-binding-token",
+                SessionTransport.BrowserCookie,
+                requestInfo
+            ))
+            .Should().ThrowAsync<UnauthorizedException>();
+
+        await FluentActions.Awaiting(() => service.ValidateRefreshToken(
+                issued.Value,
+                issued.SessionBindingToken,
+                SessionTransport.BrowserCookie,
+                requestInfo
+            ))
+            .Should().ThrowAsync<UnauthorizedException>();
+    }
+
+    [Fact]
     public async Task GenerateRefreshToken_RotationIssuesNewRefreshAndBindingTokens()
     {
-        var cache = CreateCacheMock();
+        var cache = InMemoryCacheMock.Create();
         var service = new TokenService(cache.Object);
         var requestInfo = new ClientRequestInfo
         {
@@ -172,9 +208,43 @@ public class TokenServiceTests
     }
 
     [Fact]
+    public async Task RevokeAllRefreshSessionsAsync_RemovesEverySessionForUser()
+    {
+        var cache = InMemoryCacheMock.Create();
+        var service = new TokenService(cache.Object);
+        var requestInfo = new ClientRequestInfo
+        {
+            IpAddress = "10.0.0.1",
+            ClientName = "Chrome",
+            DeviceType = "Desktop",
+        };
+
+        var first = await service.GenerateRefreshToken(42, requestInfo, SessionTransport.BrowserCookie);
+        var second = await service.GenerateRefreshToken(42, requestInfo, SessionTransport.ApiToken);
+
+        await service.RevokeAllRefreshSessionsAsync(42);
+
+        await FluentActions.Awaiting(() => service.ValidateRefreshToken(
+                first.Value,
+                first.SessionBindingToken,
+                SessionTransport.BrowserCookie,
+                requestInfo
+            ))
+            .Should().ThrowAsync<UnauthorizedException>();
+
+        await FluentActions.Awaiting(() => service.ValidateRefreshToken(
+                second.Value,
+                second.SessionBindingToken,
+                SessionTransport.ApiToken,
+                requestInfo
+            ))
+            .Should().ThrowAsync<UnauthorizedException>();
+    }
+
+    [Fact]
     public async Task GenerateVerificationArtifactsAsync_SignUpChallenge_IsOpaqueAndDoesNotExposePasswordData()
     {
-        var cache = CreateCacheMock();
+        var cache = InMemoryCacheMock.Create();
         var service = new TokenService(cache.Object);
         var user = new User
         {
@@ -203,7 +273,7 @@ public class TokenServiceTests
     [Fact]
     public async Task VerifyVerificationOtpAsync_SignUpChallenge_UsesServerSideState()
     {
-        var cache = CreateCacheMock();
+        var cache = InMemoryCacheMock.Create();
         var service = new TokenService(cache.Object);
         var user = new User
         {
@@ -226,81 +296,6 @@ public class TokenServiceTests
         verifiedUser.Email.Should().Be(user.Email);
         verifiedUser.Password.Should().Be(user.Password);
         verifiedUser.Usertype.Should().Be(user.Usertype);
-    }
-
-    private static Mock<ICacheService> CreateCacheMock()
-    {
-        var values = new Dictionary<string, string>();
-        var counters = new Dictionary<string, long>();
-        var sets = new Dictionary<string, HashSet<string>>();
-        var mock = new Mock<ICacheService>();
-
-        mock.Setup(cache => cache.GetValueAsync(It.IsAny<string>()))
-            .ReturnsAsync((string key) => values.TryGetValue(key, out var value) ? value : null);
-
-        mock.Setup(cache => cache.SetValueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan?>()))
-            .ReturnsAsync((string key, string value, TimeSpan? _) =>
-            {
-                values[key] = value;
-                return true;
-            });
-
-        mock.Setup(cache => cache.DeleteKeyAsync(It.IsAny<string>()))
-            .ReturnsAsync((string key) =>
-            {
-                var removedValue = values.Remove(key);
-                var removedCounter = counters.Remove(key);
-                var removedSet = sets.Remove(key);
-                return removedValue || removedCounter || removedSet;
-            });
-
-        mock.Setup(cache => cache.IncrementAsync(It.IsAny<string>(), It.IsAny<long>()))
-            .ReturnsAsync((string key, long amount) =>
-            {
-                counters.TryGetValue(key, out var current);
-                current += amount;
-                counters[key] = current;
-                return current;
-            });
-
-        mock.Setup(cache => cache.SetExpiryAsync(It.IsAny<string>(), It.IsAny<TimeSpan>()))
-            .ReturnsAsync(true);
-
-        mock.Setup(cache => cache.SetAddAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((string key, string value) =>
-            {
-                if (!sets.TryGetValue(key, out var members))
-                {
-                    members = new HashSet<string>(StringComparer.Ordinal);
-                    sets[key] = members;
-                }
-
-                return members.Add(value);
-            });
-
-        mock.Setup(cache => cache.SetRemoveAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((string key, string value) =>
-            {
-                if (!sets.TryGetValue(key, out var members))
-                    return false;
-
-                var removed = members.Remove(value);
-                if (members.Count == 0)
-                    sets.Remove(key);
-
-                return removed;
-            });
-
-        mock.Setup(cache => cache.SetMembersAsync(It.IsAny<string>()))
-            .ReturnsAsync((string key) =>
-            {
-                if (!sets.TryGetValue(key, out var members))
-                    return Array.Empty<string>();
-
-                return members.ToArray();
-            });
-
-        return mock;
     }
 
     private static Dictionary<string, JsonElement>? TryDecodeJwtPayload(string token)

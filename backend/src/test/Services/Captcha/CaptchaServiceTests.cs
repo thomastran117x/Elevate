@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using backend.main.configurations.application;
 using backend.main.services.implementations;
+using backend.test.TestSupport;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,7 +22,7 @@ public class CaptchaServiceTests
                 ["GoogleCaptcha:Secret"] = "secret",
                 ["ASPNETCORE_ENVIRONMENT"] = "production"
             },
-            handler: new StubHttpMessageHandler(_ => CreateJsonResponse(
+            handler: new StubHttpMessageHandler(_ => StubHttpMessageHandler.JsonResponse(
                 HttpStatusCode.OK,
                 """{"success":false,"error-codes":["invalid-input-response"]}"""
             ))
@@ -41,7 +42,7 @@ public class CaptchaServiceTests
                 ["GoogleCaptcha:Secret"] = "secret",
                 ["ASPNETCORE_ENVIRONMENT"] = "production"
             },
-            handler: new StubHttpMessageHandler(_ => CreateJsonResponse(
+            handler: new StubHttpMessageHandler(_ => StubHttpMessageHandler.JsonResponse(
                 HttpStatusCode.BadGateway,
                 """{"success":false}"""
             ))
@@ -86,6 +87,26 @@ public class CaptchaServiceTests
         var isValid = await service.VerifyCaptchaAsync("token");
 
         isValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GoogleCaptcha_ReturnsTrue_WhenProviderApprovesToken()
+    {
+        var service = CreateGoogleService(
+            configValues: new Dictionary<string, string?>
+            {
+                ["GoogleCaptcha:Secret"] = "secret",
+                ["ASPNETCORE_ENVIRONMENT"] = "production"
+            },
+            handler: new StubHttpMessageHandler(_ => StubHttpMessageHandler.JsonResponse(
+                HttpStatusCode.OK,
+                """{"success":true}"""
+            ))
+        );
+
+        var isValid = await service.VerifyCaptchaAsync("token");
+
+        isValid.Should().BeTrue();
     }
 
     [Fact]
@@ -159,6 +180,57 @@ public class CaptchaServiceTests
     }
 
     [Fact]
+    public async Task TurnstileCaptcha_ReturnsTrue_AndSendsRemoteIp_WhenProviderApprovesToken()
+    {
+        string? sentBody = null;
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.42");
+
+        var service = new CloudflareTurnstileCaptchaService(
+            new HttpClient(new StubHttpMessageHandler(request =>
+            {
+                sentBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                return StubHttpMessageHandler.JsonResponse(
+                    HttpStatusCode.OK,
+                    """{"success":true}"""
+                );
+            })),
+            NullLogger<CloudflareTurnstileCaptchaService>.Instance,
+            BuildConfig(new Dictionary<string, string?>
+            {
+                ["Turnstile:Secret"] = "secret",
+                ["ASPNETCORE_ENVIRONMENT"] = "production"
+            }),
+            new Microsoft.AspNetCore.Http.HttpContextAccessor
+            {
+                HttpContext = httpContext
+            }
+        );
+
+        var isValid = await service.VerifyCaptchaAsync("token");
+
+        isValid.Should().BeTrue();
+        sentBody.Should().Contain("remoteip=203.0.113.42");
+    }
+
+    [Fact]
+    public async Task TurnstileCaptcha_AllowsExplicitBypass_OnlyInNonProduction()
+    {
+        var service = CreateTurnstileService(
+            configValues: new Dictionary<string, string?>
+            {
+                ["ASPNETCORE_ENVIRONMENT"] = "development",
+                ["Captcha:AllowBypass"] = "true"
+            },
+            handler: new StubHttpMessageHandler(_ => throw new InvalidOperationException("should not call provider"))
+        );
+
+        var isValid = await service.VerifyCaptchaAsync("token");
+
+        isValid.Should().BeTrue();
+    }
+
+    [Fact]
     public void DependencyInjection_ConfiguresGoogleCaptchaBaseAddress()
     {
         var services = new ServiceCollection();
@@ -215,23 +287,4 @@ public class CaptchaServiceTests
             .Build();
     }
 
-    private static HttpResponseMessage CreateJsonResponse(HttpStatusCode statusCode, string json)
-    {
-        return new HttpResponseMessage(statusCode)
-        {
-            Content = new StringContent(json, Encoding.UTF8, "application/json")
-        };
-    }
-
-    private sealed class StubHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responder)
-        : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken
-        )
-        {
-            return Task.FromResult(responder(request));
-        }
-    }
 }

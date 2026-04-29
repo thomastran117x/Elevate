@@ -213,21 +213,19 @@ namespace backend.main.implementation.controllers
         {
             try
             {
-                UserToken userToken = await _authService.GoogleAsync(
+                OAuthAuthenticationResult result = await _authService.GoogleAsync(
                     request.Token,
                     SessionTransportResolver.ResolveOrDefault(request.Transport),
                     request.Nonce
                 );
-
-                User user = userToken.user;
-                Token token = userToken.token;
-
-                AuthResponse response = CreateAuthResponse(user, token);
+                OAuthAuthenticationResponse response = CreateOAuthAuthenticationResponse(result);
 
                 return StatusCode(
                     200,
-                    new ApiResponse<AuthResponse>(
-                        $"Login successful",
+                    new ApiResponse<OAuthAuthenticationResponse>(
+                        response.RequiresRoleSelection
+                            ? "Role selection is required to complete signup."
+                            : "Login successful",
                         response
                     )
                 );
@@ -249,20 +247,18 @@ namespace backend.main.implementation.controllers
         {
             try
             {
-                UserToken userToken = await _authService.MicrosoftAsync(
+                OAuthAuthenticationResult result = await _authService.MicrosoftAsync(
                     request.Token,
                     SessionTransportResolver.ResolveOrDefault(request.Transport)
                 );
-
-                User user = userToken.user;
-                Token token = userToken.token;
-
-                AuthResponse response = CreateAuthResponse(user, token);
+                OAuthAuthenticationResponse response = CreateOAuthAuthenticationResponse(result);
 
                 return StatusCode(
                     200,
-                    new ApiResponse<AuthResponse>(
-                        $"Login successful",
+                    new ApiResponse<OAuthAuthenticationResponse>(
+                        response.RequiresRoleSelection
+                            ? "Role selection is required to complete signup."
+                            : "Login successful",
                         response
                     )
                 );
@@ -307,6 +303,41 @@ namespace backend.main.implementation.controllers
                     return HandleError.Resolve(e);
 
                 Logger.Error($"[AuthController] Refresh failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [HttpPost("oauth/complete")]
+        [ValidateAntiForgeryToken]
+        [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        public async Task<IActionResult> CompleteOAuthSignup(
+            [FromBody] CompleteOAuthSignupRequest request
+        )
+        {
+            try
+            {
+                UserToken userToken = await _authService.CompleteOAuthSignupAsync(
+                    request.SignupToken,
+                    request.Usertype,
+                    SessionTransportResolver.ResolveOrDefault(request.Transport)
+                );
+
+                AuthResponse response = CreateAuthResponse(userToken.user, userToken.token);
+
+                return StatusCode(
+                    200,
+                    new ApiResponse<AuthResponse>(
+                        "Signup completed successfully.",
+                        response
+                    )
+                );
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[AuthController] CompleteOAuthSignup failed: {e}");
                 return HandleError.Resolve(e);
             }
         }
@@ -578,6 +609,32 @@ namespace backend.main.implementation.controllers
                 refreshToken,
                 sessionBindingToken
             );
+        }
+
+        private OAuthAuthenticationResponse CreateOAuthAuthenticationResponse(
+            OAuthAuthenticationResult result
+        )
+        {
+            if (result.UserToken != null)
+            {
+                return new OAuthAuthenticationResponse
+                {
+                    RequiresRoleSelection = false,
+                    Auth = CreateAuthResponse(result.UserToken.user, result.UserToken.token)
+                };
+            }
+
+            var pending = result.PendingSignup
+                ?? throw new InvalidOperationException("OAuth result did not contain a payload.");
+
+            return new OAuthAuthenticationResponse
+            {
+                RequiresRoleSelection = true,
+                SignupToken = pending.SignupToken,
+                Email = pending.Email,
+                Name = pending.Name,
+                Provider = pending.Provider,
+            };
         }
 
         private string? BuildFrontendAuthUrl(string path, string token)

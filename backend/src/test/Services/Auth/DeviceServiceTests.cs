@@ -8,6 +8,7 @@ using backend.main.repositories.interfaces;
 using backend.main.services.implementation;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
+using backend.test.TestSupport;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Moq;
@@ -76,7 +77,7 @@ public class DeviceServiceTests
         var userRepository = new Mock<IUserRepository>();
         var tokenService = new Mock<ITokenService>();
         var publisher = new Mock<IPublisher>(MockBehavior.Strict);
-        var cacheState = new CacheMockState();
+        var cacheState = new InMemoryCacheState();
         var httpContext = new DefaultHttpContext();
         var pending = new
         {
@@ -145,7 +146,7 @@ public class DeviceServiceTests
     {
         var repository = new Mock<IDeviceRepository>();
         var publisher = new Mock<IPublisher>();
-        var cacheState = new CacheMockState();
+        var cacheState = new InMemoryCacheState();
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers.Cookie =
             $"{HttpUtility.TrustedDeviceCookieName}=stale-device-token";
@@ -177,11 +178,63 @@ public class DeviceServiceTests
             .Should().Contain($"{HttpUtility.TrustedDeviceCookieName}=;");
     }
 
+    [Fact]
+    public async Task EnsureDeviceKnownAsync_StoresPendingVerificationAndPublishesEmail()
+    {
+        var repository = new Mock<IDeviceRepository>();
+        var publisher = new Mock<IPublisher>();
+        var cacheState = new InMemoryCacheState();
+        var httpContext = new DefaultHttpContext();
+
+        publisher.Setup(client => client.PublishAsync("eventxperience-email", It.IsAny<EmailMessage>()))
+            .Returns(Task.CompletedTask);
+
+        var service = CreateService(repository, publisher, httpContext, cacheState);
+
+        var action = async () => await service.EnsureDeviceKnownAsync(
+            42,
+            "user@example.com",
+            new ClientRequestInfo
+            {
+                DeviceType = "Desktop",
+                ClientName = "Chrome",
+                IpAddress = "10.0.0.5",
+                IsBrowserClient = true,
+            }
+        );
+
+        await action.Should().ThrowAsync<DeviceVerificationRequiredException>();
+        cacheState.Values.Keys.Should().ContainSingle(key => key.StartsWith("device:pending:", StringComparison.Ordinal));
+        publisher.Verify(client => client.PublishAsync(
+            "eventxperience-email",
+            It.Is<EmailMessage>(message =>
+                message.Type == EmailMessageType.NewDevice &&
+                message.Email == "user@example.com" &&
+                !string.IsNullOrWhiteSpace(message.Token))
+        ));
+    }
+
+    [Fact]
+    public async Task VerifyDeviceAsync_ThrowsUnauthorized_WhenPendingVerificationIsMissing()
+    {
+        var repository = new Mock<IDeviceRepository>();
+        var publisher = new Mock<IPublisher>(MockBehavior.Strict);
+        var httpContext = new DefaultHttpContext();
+        var service = CreateService(repository, publisher, httpContext, new InMemoryCacheState());
+
+        var action = async () => await service.VerifyDeviceAsync(
+            "missing-token",
+            SessionTransport.BrowserCookie
+        );
+
+        await action.Should().ThrowAsync<UnauthorizedException>();
+    }
+
     private static DeviceService CreateService(
         Mock<IDeviceRepository> repository,
         Mock<IPublisher> publisher,
         HttpContext httpContext,
-        CacheMockState? cacheState = null,
+        InMemoryCacheState? cacheState = null,
         Mock<IUserRepository>? userRepository = null,
         Mock<ITokenService>? tokenService = null
     )
@@ -195,42 +248,16 @@ public class DeviceServiceTests
             repository.Object,
             (userRepository ?? new Mock<IUserRepository>()).Object,
             (tokenService ?? new Mock<ITokenService>()).Object,
-            CreateCacheMock(cacheState).Object,
+            InMemoryCacheMock.Create(cacheState).Object,
             publisher.Object,
             new ClientRequestInfo { IsBrowserClient = true },
             accessor
         );
     }
 
-    private static Mock<ICacheService> CreateCacheMock(CacheMockState? state = null)
-    {
-        state ??= new CacheMockState();
-        var mock = new Mock<ICacheService>();
-
-        mock.Setup(cache => cache.GetValueAsync(It.IsAny<string>()))
-            .ReturnsAsync((string key) => state.Values.TryGetValue(key, out var value) ? value : null);
-
-        mock.Setup(cache => cache.SetValueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan?>()))
-            .ReturnsAsync((string key, string value, TimeSpan? _) =>
-            {
-                state.Values[key] = value;
-                return true;
-            });
-
-        mock.Setup(cache => cache.DeleteKeyAsync(It.IsAny<string>()))
-            .ReturnsAsync((string key) => state.Values.Remove(key));
-
-        return mock;
-    }
-
     private static string ComputeDeviceTokenHash(string deviceToken)
     {
         var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(deviceToken));
         return Convert.ToHexString(bytes);
-    }
-
-    private sealed class CacheMockState
-    {
-        public Dictionary<string, string> Values { get; } = new();
     }
 }

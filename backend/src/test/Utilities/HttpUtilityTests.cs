@@ -60,4 +60,30 @@ public class HttpUtilityTests
         setCookieHeader.Should().Contain($"{HttpUtility.TrustedDeviceCookieName}=trusted-device-token");
         setCookieHeader.Should().Contain($"path={RoutePaths.ApiAuthPath}");
     }
+
+    [Fact]
+    public void ResolveApiSessionBindingToken_PrefersHeaderValue()
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers[HttpUtility.SessionBindingHeaderName] = "header-binding-token";
+
+        var resolved = HttpUtility.ResolveApiSessionBindingToken(
+            httpContext.Request,
+            "body-binding-token"
+        );
+
+        resolved.Should().Be("header-binding-token");
+    }
+
+    [Fact]
+    public void ResolveBrowserRefreshToken_ReadsCookieOnly()
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers.Cookie =
+            $"{HttpUtility.RefreshCookieName}=refresh-cookie-token; {HttpUtility.RefreshBindingCookieName}=binding-token";
+
+        var resolved = HttpUtility.ResolveBrowserRefreshToken(httpContext.Request);
+
+        resolved.Should().Be("refresh-cookie-token");
+    }
 }

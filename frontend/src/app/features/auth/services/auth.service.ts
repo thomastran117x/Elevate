@@ -16,7 +16,7 @@ export interface LoginRequest {
 export interface SignupRequest {
   email: string;
   password: string;
-  usertype: 'participant' | 'organizer' | 'volunteer';
+  usertype: SignupRole;
   rememberMe?: boolean;
   captcha: string;
 }
@@ -25,6 +25,8 @@ export interface VerificationChallengeResponse {
   Challenge: string;
   ExpiresAtUtc: string;
 }
+
+export type SignupRole = 'participant' | 'organizer' | 'volunteer';
 
 export interface AuthResponse {
   Username: string;
@@ -37,12 +39,34 @@ export interface AuthResponse {
   Id: number;
 }
 
+export interface OAuthRoleSelectionResponse {
+  RequiresRoleSelection: true;
+  SignupToken: string;
+  Email: string;
+  Name: string;
+  Provider: string;
+  Auth?: undefined;
+}
+
+export interface OAuthAuthenticatedResponse {
+  RequiresRoleSelection: false;
+  Auth: AuthResponse;
+  SignupToken?: undefined;
+  Email?: undefined;
+  Name?: undefined;
+  Provider?: undefined;
+}
+
+export type OAuthAuthResponse = OAuthRoleSelectionResponse | OAuthAuthenticatedResponse;
+
 export interface ApiEnvelope<T> {
   message?: string;
   Message?: string;
   data?: T;
   Data?: T;
 }
+
+export const PendingOAuthSignupStorageKey = 'pending_oauth_signup';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -83,19 +107,27 @@ export class AuthService {
     });
   }
 
-  googleVerify(idToken: string, nonce: string): Observable<AuthResponse> {
-    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/google`, {
+  googleVerify(idToken: string, nonce: string): Observable<OAuthAuthResponse> {
+    return this.postWithCsrf<ApiEnvelope<OAuthAuthResponse>>(`${this.baseUrl}/google`, {
       token: idToken,
       nonce,
       transport: 'browser' as const,
     }).pipe(map((res) => this.requireData(res, 'Google login response was incomplete.')));
   }
 
-  microsoftVerify(idToken: string): Observable<AuthResponse> {
-    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/microsoft`, {
+  microsoftVerify(idToken: string): Observable<OAuthAuthResponse> {
+    return this.postWithCsrf<ApiEnvelope<OAuthAuthResponse>>(`${this.baseUrl}/microsoft`, {
       token: idToken,
       transport: 'browser' as const,
     }).pipe(map((res) => this.requireData(res, 'Microsoft login response was incomplete.')));
+  }
+
+  completeOAuthSignup(signupToken: string, usertype: SignupRole): Observable<AuthResponse> {
+    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/oauth/complete`, {
+      signupToken,
+      usertype,
+      transport: 'browser' as const,
+    }).pipe(map((res) => this.requireData(res, 'OAuth signup completion response was incomplete.')));
   }
 
   logout(): Observable<void> {
