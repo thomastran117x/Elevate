@@ -87,8 +87,8 @@ public class AuthServiceTests
         var userRepository = new Mock<IUserRepository>();
         var publisher = new Mock<IPublisher>(MockBehavior.Strict);
 
-        userRepository.Setup(repository => repository.EmailExistsAsync("missing@example.com"))
-            .ReturnsAsync(false);
+        userRepository.Setup(repository => repository.GetUserByEmailAsync("missing@example.com"))
+            .ReturnsAsync((User?)null);
 
         var service = CreateService(userRepository, publisher);
 
@@ -115,8 +115,13 @@ public class AuthServiceTests
             ExpiresAtUtc = DateTime.UtcNow.AddMinutes(30),
         };
 
-        userRepository.Setup(repository => repository.EmailExistsAsync("user@example.com"))
-            .ReturnsAsync(true);
+        userRepository.Setup(repository => repository.GetUserByEmailAsync("user@example.com"))
+            .ReturnsAsync(new User
+            {
+                Id = 18,
+                Email = "user@example.com",
+                Usertype = AuthRoles.Participant,
+            });
         tokenService.Setup(service => service.GenerateVerificationArtifactsAsync(
                 It.IsAny<backend.main.models.core.User>(),
                 VerificationPurpose.ResetPassword
@@ -135,6 +140,32 @@ public class AuthServiceTests
         var challenge = await service.ForgotPasswordAsync("user@example.com");
 
         challenge.Should().BeEquivalentTo(expectedChallenge);
+    }
+
+    [Fact]
+    public async Task ForgotPasswordAsync_ReturnsPlaceholderChallenge_WhenUserIsDisabled()
+    {
+        var userRepository = new Mock<IUserRepository>();
+        var publisher = new Mock<IPublisher>(MockBehavior.Strict);
+
+        userRepository.Setup(repository => repository.GetUserByEmailAsync("disabled@example.com"))
+            .ReturnsAsync(new User
+            {
+                Id = 88,
+                Email = "disabled@example.com",
+                Usertype = AuthRoles.Participant,
+                IsDisabled = true,
+            });
+
+        var service = CreateService(userRepository, publisher);
+
+        var challenge = await service.ForgotPasswordAsync("disabled@example.com");
+
+        challenge.Challenge.Should().NotBeNullOrWhiteSpace();
+        publisher.Verify(
+            client => client.PublishAsync(It.IsAny<string>(), It.IsAny<EmailMessage>()),
+            Times.Never
+        );
     }
 
     [Fact]
@@ -208,7 +239,7 @@ public class AuthServiceTests
                 MicrosoftID = oauthUser.Id,
             });
         tokenService.Setup(service => service.GenerateAccessToken(It.IsAny<User>()))
-            .Returns("access-token");
+            .Returns(new AccessTokenIssue("access-token", DateTime.UtcNow.AddMinutes(15)));
         tokenService.Setup(service => service.GenerateRefreshToken(
                 It.IsAny<int>(),
                 It.IsAny<ClientRequestInfo>(),
@@ -306,7 +337,7 @@ public class AuthServiceTests
                 return user;
             });
         tokenService.Setup(service => service.GenerateAccessToken(It.IsAny<User>()))
-            .Returns("access-token");
+            .Returns(new AccessTokenIssue("access-token", DateTime.UtcNow.AddMinutes(15)));
         tokenService.Setup(service => service.GenerateRefreshToken(
                 It.IsAny<int>(),
                 It.IsAny<ClientRequestInfo>(),
@@ -345,6 +376,75 @@ public class AuthServiceTests
         createdUser!.Usertype.Should().Be(AuthRoles.Organizer);
         createdUser.GoogleID.Should().Be("google-1");
         result.user.Id.Should().Be(42);
+    }
+
+    [Fact]
+    public async Task LoginAsync_RejectsDisabledUsers()
+    {
+        var userRepository = new Mock<IUserRepository>();
+        var publisher = new Mock<IPublisher>(MockBehavior.Strict);
+
+        userRepository.Setup(repository => repository.GetUserByEmailAsync("disabled@example.com"))
+            .ReturnsAsync(new User
+            {
+                Id = 19,
+                Email = "disabled@example.com",
+                Password = BCrypt.Net.BCrypt.HashPassword("Password123!"),
+                Usertype = AuthRoles.Participant,
+                IsDisabled = true,
+            });
+
+        var service = CreateService(userRepository, publisher);
+
+        var action = async () => await service.LoginAsync(
+            "disabled@example.com",
+            "Password123!",
+            SessionTransport.BrowserCookie
+        );
+
+        await action.Should().ThrowAsync<backend.main.exceptions.http.ForbiddenException>();
+    }
+
+    [Fact]
+    public async Task HandleTokensAsync_RejectsDisabledUsersAndRevokesSessions()
+    {
+        var userRepository = new Mock<IUserRepository>();
+        var tokenService = new Mock<ITokenService>();
+        var publisher = new Mock<IPublisher>(MockBehavior.Strict);
+
+        tokenService.Setup(service => service.ValidateRefreshToken(
+                "refresh-token",
+                "binding-token",
+                SessionTransport.BrowserCookie,
+                It.IsAny<ClientRequestInfo>()
+            ))
+            .ReturnsAsync(new RefreshTokenValidationResult
+            {
+                SessionId = "session-1",
+                UserId = 91,
+                Transport = SessionTransport.BrowserCookie,
+            });
+        tokenService.Setup(service => service.RevokeAllRefreshSessionsAsync(91))
+            .Returns(Task.CompletedTask);
+        userRepository.Setup(repository => repository.GetUserAsync(91))
+            .ReturnsAsync(new User
+            {
+                Id = 91,
+                Email = "disabled@example.com",
+                Usertype = AuthRoles.Participant,
+                IsDisabled = true,
+            });
+
+        var service = CreateService(userRepository, publisher, tokenService: tokenService);
+
+        var action = async () => await service.HandleTokensAsync(
+            "refresh-token",
+            "binding-token",
+            SessionTransport.BrowserCookie
+        );
+
+        await action.Should().ThrowAsync<backend.main.exceptions.http.ForbiddenException>();
+        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(91), Times.Once);
     }
 
     private static AuthService CreateService(

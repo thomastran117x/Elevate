@@ -3,16 +3,13 @@ import { HttpClient } from '@angular/common/http';
 import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
-import { updateAccessToken, clearUser } from '../../stores/user.actions';
-import { UserState } from '../../stores/user.reducer';
+import { clearUser } from '../../stores/user.actions';
+import { clearSession, updateSession } from '../../stores/session.actions';
+import { SessionState } from '../../stores/session.reducer';
+import { AuthenticatedSessionResponse } from '../../models/auth-response.model';
+import { selectAccessToken } from '../../stores/session.selectors';
 
 type CsrfResponse = { token: string };
-type RefreshResponse = {
-  accessToken?: string;
-  AccessToken?: string;
-  Token?: string;
-  token?: string;
-};
 
 @Injectable({ providedIn: 'root' })
 export class AuthTokenService {
@@ -23,10 +20,10 @@ export class AuthTokenService {
 
   constructor(
     private http: HttpClient,
-    private store: Store<{ user: UserState }>,
+    private store: Store<{ session: SessionState }>,
   ) {
     this.store
-      .select((state) => state.user.user?.Token)
+      .select(selectAccessToken)
       .subscribe((token) => {
         this.accessToken = token || null;
       });
@@ -55,7 +52,7 @@ export class AuthTokenService {
     await this.ensureCsrfToken();
 
     const res = await firstValueFrom(
-      this.http.post<RefreshResponse>(
+      this.http.post<AuthenticatedSessionResponse>(
         `${environment.backendUrl}/auth/refresh`,
         {},
         {
@@ -64,22 +61,21 @@ export class AuthTokenService {
       ),
     );
 
-    const accessToken = this.extractAccessToken(res);
-    if (!accessToken) {
+    if (!res?.AccessToken) {
       throw new Error('Refresh response did not include an access token.');
     }
 
-    this.store.dispatch(updateAccessToken({ accessToken }));
-    this.accessToken = accessToken;
+    this.store.dispatch(updateSession({
+      accessToken: res.AccessToken,
+      expiresAtUtc: res.ExpiresAtUtc,
+    }));
+    this.accessToken = res.AccessToken;
   }
 
   logoutLocal() {
     this.store.dispatch(clearUser());
+    this.store.dispatch(clearSession());
     this.accessToken = null;
     this.csrfToken = null;
-  }
-
-  private extractAccessToken(response: RefreshResponse): string | null {
-    return response.accessToken ?? response.AccessToken ?? response.Token ?? response.token ?? null;
   }
 }

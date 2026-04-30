@@ -6,7 +6,8 @@ import { Observable } from 'rxjs';
 import { selectUser } from '../../core/stores/user.selectors';
 import { User } from '../../core/stores/user.model';
 import { UserState } from '../../core/stores/user.reducer';
-import { clearUser } from '../../core/stores/user.actions';
+import { AuthService } from '../../features/auth/services/auth.service';
+import { AuthTokenService } from '../../core/api/services/auth-token.service';
 
 @Component({
   selector: 'app-navbar',
@@ -22,7 +23,11 @@ export class NavbarComponent {
   user$: Observable<User | null>;
   isCollapsed = true;
 
-  constructor(private store: Store<{ user: UserState }>) {
+  constructor(
+    private store: Store<{ user: UserState }>,
+    private auth: AuthService,
+    private authToken: AuthTokenService,
+  ) {
     this.user$ = this.store.select(selectUser);
   }
 
@@ -51,6 +56,9 @@ export class NavbarComponent {
   }
 
   logout() {
-    this.store.dispatch(clearUser());
+    this.auth.logout().subscribe({
+      next: () => this.authToken.logoutLocal(),
+      error: () => this.authToken.logoutLocal(),
+    });
   }
 }

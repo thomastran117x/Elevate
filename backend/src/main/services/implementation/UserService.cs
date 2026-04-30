@@ -11,11 +11,18 @@ namespace backend.main.services.implementation
         private readonly IUserRepository _userRepository;
         private readonly IFileUploadService _fileService;
         private readonly IFollowService _followService;
-        public UserService(IUserRepository userRepository, IFileUploadService fileService, IFollowService followService)
+        private readonly ITokenService _tokenService;
+        public UserService(
+            IUserRepository userRepository,
+            IFileUploadService fileService,
+            IFollowService followService,
+            ITokenService tokenService
+        )
         {
             _userRepository = userRepository;
             _fileService = fileService;
             _followService = followService;
+            _tokenService = tokenService;
         }
 
         public async Task<List<User>> GetAllUsersAsync()
@@ -48,6 +55,16 @@ namespace backend.main.services.implementation
         {
             _ = await _userRepository.DeleteUserAsync(id);
             return true;
+        }
+
+        public async Task<User> UpdateUserStatusAsync(int id, bool isDisabled, string? reason)
+        {
+            var user = await _userRepository.UpdateUserStatusAsync(id, isDisabled, reason);
+            if (user == null)
+                throw new ResourceNotFoundException($"User with the id {id} is not found");
+
+            await _tokenService.RevokeAllRefreshSessionsAsync(id);
+            return user;
         }
 
         public async Task<User?> UpdateAvatarAsync(int id, IFormFile image)

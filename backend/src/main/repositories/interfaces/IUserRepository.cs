@@ -8,6 +8,8 @@ namespace backend.main.repositories.interfaces
         Task<User?> UpdateUserAsync(int id, User updated);
         Task<User?> UpdatePartialAsync(User user);
         Task<User?> UpdateProviderIdsAsync(int id, string? googleId, string? microsoftId);
+        Task<User?> UpdateUserStatusAsync(int id, bool isDisabled, string? disabledReason);
+        Task<User?> IncrementAuthVersionAsync(int id);
         Task<bool> DeleteUserAsync(int id);
         Task<User?> GetUserAsync(int id);
         Task<User?> GetUserByEmailAsync(string email);

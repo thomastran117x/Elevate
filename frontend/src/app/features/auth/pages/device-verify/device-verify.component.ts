@@ -1,10 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { Component, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { Store } from '@ngrx/store';
-import { setUser } from '../../../../core/stores/user.actions';
-import { UserState } from '../../../../core/stores/user.reducer';
-import { ApiEnvelope, AuthResponse, AuthService } from '../../services/auth.service';
+import { AuthenticatedSessionResponse } from '../../../../core/models/auth-response.model';
+import { SessionManagerService } from '../../../../core/services/session-manager.service';
+import { ApiEnvelope, AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-device-verify',
@@ -23,7 +22,7 @@ export class DeviceVerifyComponent {
   constructor(
     private route: ActivatedRoute,
     private auth: AuthService,
-    private store: Store<{ user: UserState }>,
+    private sessionManager: SessionManagerService,
     private router: Router,
   ) {}
 
@@ -44,18 +43,23 @@ export class DeviceVerifyComponent {
     this.message.set('Verifying this device and completing sign-in...');
 
     this.auth.verifyDevice(this.token).subscribe({
-      next: (res: ApiEnvelope<AuthResponse>) => {
-        const user = res.data ?? res.Data;
-        if (!user) {
+      next: async (res: ApiEnvelope<AuthenticatedSessionResponse>) => {
+        const session = res.data ?? res.Data;
+        if (!session) {
           this.status.set('error');
           this.message.set('Device verification completed, but the login response was incomplete.');
           return;
         }
 
-        this.store.dispatch(setUser({ user }));
-        this.status.set('success');
-        this.message.set('This device is verified. Redirecting to your dashboard...');
-        setTimeout(() => this.router.navigate(['/dashboard']), 1500);
+        try {
+          await this.sessionManager.bootstrapSession(session);
+          this.status.set('success');
+          this.message.set('This device is verified. Redirecting to your dashboard...');
+          setTimeout(() => this.router.navigate(['/dashboard']), 1500);
+        } catch (err: any) {
+          this.status.set('error');
+          this.message.set(err?.error?.message || err?.message || 'Device verification failed. Please try again.');
+        }
       },
       error: (err) => {
         this.status.set('error');

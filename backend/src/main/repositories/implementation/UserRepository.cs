@@ -83,6 +83,35 @@ namespace backend.main.repositories.implementation
             return user;
         }
 
+        public async Task<User?> UpdateUserStatusAsync(int id, bool isDisabled, string? disabledReason)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null)
+                return null;
+
+            user.IsDisabled = isDisabled;
+            user.DisabledAtUtc = isDisabled ? DateTime.UtcNow : null;
+            user.DisabledReason = isDisabled ? disabledReason : null;
+            user.AuthVersion += 1;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return user;
+        }
+
+        public async Task<User?> IncrementAuthVersionAsync(int id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null)
+                return null;
+
+            user.AuthVersion += 1;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return user;
+        }
+
         public async Task<bool> DeleteUserAsync(int id)
         {
             var user = await _context.Users.FindAsync(id);

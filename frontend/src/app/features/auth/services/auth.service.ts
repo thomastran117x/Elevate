@@ -4,6 +4,10 @@ import { Observable } from 'rxjs';
 import { from, map, switchMap } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { AuthTokenService } from '../../../core/api/services/auth-token.service';
+import {
+  AuthenticatedSessionResponse,
+  CurrentUserResponse,
+} from '../../../core/models/auth-response.model';
 
 export interface LoginRequest {
   email: string;
@@ -32,17 +36,6 @@ export interface VerificationChallengeResponse {
 
 export type SignupRole = 'participant' | 'organizer' | 'volunteer';
 
-export interface AuthResponse {
-  Username: string;
-  Token: string;
-  AccessToken?: string;
-  RefreshToken?: string;
-  SessionBindingToken?: string;
-  Avatar: string;
-  Usertype: string;
-  Id: number;
-}
-
 export interface OAuthRoleSelectionResponse {
   RequiresRoleSelection: true;
   SignupToken: string;
@@ -54,7 +47,7 @@ export interface OAuthRoleSelectionResponse {
 
 export interface OAuthAuthenticatedResponse {
   RequiresRoleSelection: false;
-  Auth: AuthResponse;
+  Auth: AuthenticatedSessionResponse;
   SignupToken?: undefined;
   Email?: undefined;
   Name?: undefined;
@@ -81,8 +74,8 @@ export class AuthService {
     private authToken: AuthTokenService,
   ) {}
 
-  login(payload: LoginRequest): Observable<AuthResponse> {
-    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/login`, {
+  login(payload: LoginRequest): Observable<AuthenticatedSessionResponse> {
+    return this.postWithCsrf<ApiEnvelope<AuthenticatedSessionResponse>>(`${this.baseUrl}/login`, {
       ...payload,
       transport: 'browser' as const,
     }).pipe(
@@ -97,15 +90,15 @@ export class AuthService {
     );
   }
 
-  verifyEmail(token: string): Observable<ApiEnvelope<AuthResponse>> {
-    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/verify`, {
+  verifyEmail(token: string): Observable<ApiEnvelope<AuthenticatedSessionResponse>> {
+    return this.postWithCsrf<ApiEnvelope<AuthenticatedSessionResponse>>(`${this.baseUrl}/verify`, {
       token,
       transport: 'browser' as const,
     });
   }
 
-  verifyDevice(token: string): Observable<ApiEnvelope<AuthResponse>> {
-    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/device/verify`, {
+  verifyDevice(token: string): Observable<ApiEnvelope<AuthenticatedSessionResponse>> {
+    return this.postWithCsrf<ApiEnvelope<AuthenticatedSessionResponse>>(`${this.baseUrl}/device/verify`, {
       token,
       transport: 'browser' as const,
     });
@@ -127,12 +120,20 @@ export class AuthService {
     }).pipe(map((res) => this.requireData(res, 'Microsoft login response was incomplete.')));
   }
 
-  completeOAuthSignup(signupToken: string, usertype: SignupRole): Observable<AuthResponse> {
-    return this.postWithCsrf<ApiEnvelope<AuthResponse>>(`${this.baseUrl}/oauth/complete`, {
+  completeOAuthSignup(signupToken: string, usertype: SignupRole): Observable<AuthenticatedSessionResponse> {
+    return this.postWithCsrf<ApiEnvelope<AuthenticatedSessionResponse>>(`${this.baseUrl}/oauth/complete`, {
       signupToken,
       usertype,
       transport: 'browser' as const,
     }).pipe(map((res) => this.requireData(res, 'OAuth signup completion response was incomplete.')));
+  }
+
+  me(): Observable<ApiEnvelope<CurrentUserResponse>> {
+    return from(this.authToken.ensureCsrfToken()).pipe(
+      switchMap(() => this.http.get<ApiEnvelope<CurrentUserResponse>>(`${this.baseUrl}/me`, {
+        withCredentials: true,
+      })),
+    );
   }
 
   logout(): Observable<void> {

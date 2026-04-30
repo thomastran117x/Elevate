@@ -26,15 +26,20 @@ public class TokenServiceTests
         {
             Id = 17,
             Email = "organizer@example.com",
-            Usertype = "organizer"
+            Usertype = "organizer",
+            AuthVersion = 4,
         };
 
-        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(service.GenerateAccessToken(user));
+        var issued = service.GenerateAccessToken(user);
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(issued.Value);
         var roleClaim = jwt.Claims.First(claim =>
             claim.Type == ClaimTypes.Role || claim.Type == "role"
         ).Value;
+        var authVersionClaim = jwt.Claims.First(claim => claim.Type == TokenService.AuthVersionClaimType).Value;
 
         roleClaim.Should().Be(AuthRoles.Organizer);
+        authVersionClaim.Should().Be("4");
+        issued.ExpiresAtUtc.Should().BeAfter(DateTime.UtcNow.AddMinutes(10));
     }
 
     [Fact]

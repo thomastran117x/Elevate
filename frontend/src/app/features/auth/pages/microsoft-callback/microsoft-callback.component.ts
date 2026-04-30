@@ -1,15 +1,13 @@
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Component, inject, OnInit, PLATFORM_ID, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { Store } from '@ngrx/store';
 import {
   AuthService,
   PendingOAuthSignupStorageKey,
   OAuthAuthResponse,
 } from '../../services/auth.service';
-import { setUser } from '../../../../core/stores/user.actions';
-import { UserState } from '../../../../core/stores/user.reducer';
 import { environment } from '../../../../../environments/environment';
+import { SessionManagerService } from '../../../../core/services/session-manager.service';
 
 @Component({
   selector: 'app-microsoft-callback',
@@ -29,7 +27,7 @@ export class MicrosoftCallbackComponent implements OnInit {
 
   constructor(
     private auth: AuthService,
-    private store: Store<{ user: UserState }>,
+    private sessionManager: SessionManagerService,
     private router: Router,
   ) {}
 
@@ -80,7 +78,7 @@ export class MicrosoftCallbackComponent implements OnInit {
       sessionStorage.removeItem(MicrosoftCallbackComponent.NonceStorageKey);
 
       this.auth.microsoftVerify(tokenData.id_token, nonce).subscribe({
-        next: (res: OAuthAuthResponse) => {
+        next: async (res: OAuthAuthResponse) => {
           if (res.RequiresRoleSelection) {
             sessionStorage.setItem(PendingOAuthSignupStorageKey, JSON.stringify(res));
             this.status.set('success');
@@ -89,10 +87,16 @@ export class MicrosoftCallbackComponent implements OnInit {
             return;
           }
 
-          this.store.dispatch(setUser({ user: res.Auth }));
-          this.status.set('success');
-          this.message.set('Login successful! Redirecting...');
-          setTimeout(() => this.router.navigate(['/dashboard']), 1500);
+          try {
+            await this.sessionManager.bootstrapSession(res.Auth);
+            this.status.set('success');
+            this.message.set('Login successful! Redirecting...');
+            setTimeout(() => this.router.navigate(['/dashboard']), 1500);
+          } catch (err: any) {
+            console.error(err);
+            this.status.set('error');
+            this.message.set(err?.error?.message || err?.message || 'Sign-in failed.');
+          }
         },
         error: (err) => {
           console.error(err);

@@ -11,10 +11,11 @@ import { provideStore } from '@ngrx/store';
 import { routes } from './app.routes';
 
 import { userReducer } from './core/stores/user.reducer';
+import { sessionReducer } from './core/stores/session.reducer';
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideStore({ user: userReducer }),
+    provideStore({ user: userReducer, session: sessionReducer }),
     provideBrowserGlobalErrorListeners(),
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideClientHydration(withEventReplay()),

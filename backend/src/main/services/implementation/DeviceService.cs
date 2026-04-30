@@ -165,6 +165,8 @@ namespace backend.main.services.implementation
 
                 var user = await _userRepository.GetUserAsync(pending.UserId)
                     ?? throw new ResourceNotFoundException($"User with ID {pending.UserId} not found.");
+                if (user.IsDisabled)
+                    throw new ForbiddenException("This account is disabled.");
 
                 var accessToken = _tokenService.GenerateAccessToken(user);
                 var refreshToken = await _tokenService.GenerateRefreshToken(
@@ -175,7 +177,8 @@ namespace backend.main.services.implementation
                     rememberMe: false
                 );
                 var authToken = new Token(
-                    accessToken,
+                    accessToken.Value,
+                    accessToken.ExpiresAtUtc,
                     refreshToken.Value,
                     refreshToken.SessionBindingToken,
                     refreshToken.Lifetime,

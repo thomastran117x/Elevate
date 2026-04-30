@@ -46,6 +46,22 @@ public class User
     {
         get; set;
     }
+    public bool IsDisabled
+    {
+        get; set;
+    } = false;
+    public DateTime? DisabledAtUtc
+    {
+        get; set;
+    }
+    public string? DisabledReason
+    {
+        get; set;
+    }
+    public int AuthVersion
+    {
+        get; set;
+    } = 1;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

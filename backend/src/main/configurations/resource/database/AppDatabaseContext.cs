@@ -42,6 +42,14 @@ namespace backend.main.configurations.resource.database
                 .HasIndex(u => u.MicrosoftID)
                 .IsUnique();
 
+            modelBuilder.Entity<User>()
+                .Property(u => u.IsDisabled)
+                .HasDefaultValue(false);
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.AuthVersion)
+                .HasDefaultValue(1);
+
             modelBuilder.Entity<Club>()
                 .HasOne<User>()
                 .WithMany()

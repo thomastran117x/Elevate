@@ -62,6 +62,7 @@ namespace backend.main.services.implementation
                 if (user == null || user.Password == null || !isValidPassword)
                     throw new UnauthorizedException("Invalid email or password");
 
+                await EnsureUserEnabledAsync(user);
                 await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
 
                 return await GenerateTokenPair(user, transport, rememberMe: rememberMe);
@@ -180,8 +181,8 @@ namespace backend.main.services.implementation
         {
             try
             {
-                var existingEmail = await _userRepository.EmailExistsAsync(email);
-                if (!existingEmail)
+                var existingUser = await _userRepository.GetUserByEmailAsync(email);
+                if (existingUser == null || existingUser.IsDisabled)
                     return BuildPlaceholderForgotPasswordChallenge();
 
                 User user = new User
@@ -282,6 +283,7 @@ namespace backend.main.services.implementation
                         await CreatePendingOAuthSignupAsync(oauthUser, transport)
                     );
 
+                await EnsureUserEnabledAsync(user);
                 user = await EnsureOAuthRoleAsync(user);
                 await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
 
@@ -321,6 +323,7 @@ namespace backend.main.services.implementation
                         await CreatePendingOAuthSignupAsync(oauthUser, transport)
                     );
 
+                await EnsureUserEnabledAsync(user);
                 user = await EnsureOAuthRoleAsync(user);
                 await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
 
@@ -382,6 +385,7 @@ namespace backend.main.services.implementation
                 }
                 else
                 {
+                    await EnsureUserEnabledAsync(user);
                     user = await EnsureOAuthRoleAsync(user);
                 }
 
@@ -395,6 +399,26 @@ namespace backend.main.services.implementation
                     throw;
 
                 Logger.Error($"[AuthService] CompleteOAuthSignupAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<User> GetCurrentUserAsync(int userId)
+        {
+            try
+            {
+                var user = await _userRepository.GetUserAsync(userId)
+                    ?? throw new ResourceNotFoundException($"User with ID {userId} is not found");
+
+                await EnsureUserEnabledAsync(user);
+                return user;
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[AuthService] GetCurrentUserAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
         }
@@ -416,6 +440,7 @@ namespace backend.main.services.implementation
                 var user = await _userRepository.GetUserAsync(validation.UserId);
                 if (user == null)
                     throw new ResourceNotFoundException($"User with ID {validation.UserId} is not found");
+                await EnsureUserEnabledAsync(user, revokeSessions: true);
 
                 return await GenerateTokenPair(
                     user,
@@ -530,7 +555,8 @@ namespace backend.main.services.implementation
                     rememberMe
                 );
                 Token authToken = new Token(
-                    accessToken,
+                    accessToken.Value,
+                    accessToken.ExpiresAtUtc,
                     refreshToken.Value,
                     refreshToken.SessionBindingToken,
                     refreshToken.Lifetime,
@@ -557,10 +583,12 @@ namespace backend.main.services.implementation
 
             var existingUser = await _userRepository.GetUserByEmailAsync(email)
                 ?? throw new UnauthorizedException("Invalid token");
+            await EnsureUserEnabledAsync(existingUser);
 
             existingUser.Password = hashedPassword;
 
             await _userRepository.UpdateUserAsync(existingUser.Id, existingUser);
+            await _userRepository.IncrementAuthVersionAsync(existingUser.Id);
             await _tokenService.RevokeAllRefreshSessionsAsync(existingUser.Id);
         }
 
@@ -680,6 +708,17 @@ namespace backend.main.services.implementation
 
         private static string PendingOAuthSignupKey(string signupToken) =>
             $"oauth:pending:{signupToken}";
+
+        private async Task EnsureUserEnabledAsync(User user, bool revokeSessions = false)
+        {
+            if (!user.IsDisabled)
+                return;
+
+            if (revokeSessions)
+                await _tokenService.RevokeAllRefreshSessionsAsync(user.Id);
+
+            throw new ForbiddenException("This account is disabled.");
+        }
 
         private static VerificationOtpChallenge BuildPlaceholderForgotPasswordChallenge()
         {

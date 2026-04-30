@@ -20,6 +20,7 @@ namespace backend.main.services.implementation
 {
     public class TokenService : ITokenService
     {
+        public const string AuthVersionClaimType = "auth_version";
         private readonly JwtSecurityTokenHandler _tokenHandler = new();
         private readonly string JWT_ACCESS_SECRET;
         private readonly string JWT_VERIFICATION_SECRET;
@@ -41,30 +42,32 @@ namespace backend.main.services.implementation
             _cacheService = cacheService;
         }
 
-        public string GenerateAccessToken(User user)
+        public AccessTokenIssue GenerateAccessToken(User user)
         {
             try
             {
                 var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JWT_ACCESS_SECRET));
+                var expiresAtUtc = DateTime.UtcNow.Add(JWT_ACCESS_LIFETIME);
 
                 var claims = new List<Claim>
                 {
                     new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                     new Claim(ClaimTypes.Name, user.Email),
                     new Claim(ClaimTypes.Role, AuthRoles.NormalizeStored(user.Usertype)),
+                    new Claim(AuthVersionClaimType, user.AuthVersion.ToString()),
                 };
 
                 var tokenDescriptor = new SecurityTokenDescriptor
                 {
                     Subject = new ClaimsIdentity(claims),
-                    Expires = DateTime.UtcNow.Add(JWT_ACCESS_LIFETIME),
+                    Expires = expiresAtUtc,
                     SigningCredentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature),
                     Issuer = ISSUER,
                     Audience = AUDIENCE
                 };
 
                 var token = _tokenHandler.CreateToken(tokenDescriptor);
-                return _tokenHandler.WriteToken(token);
+                return new AccessTokenIssue(_tokenHandler.WriteToken(token), expiresAtUtc);
             }
             catch (Exception e)
             {

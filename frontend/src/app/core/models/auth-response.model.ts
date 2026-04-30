@@ -1,10 +1,15 @@
-export interface AuthResponse {
-  Username: string;
-  Token: string;
-  AccessToken?: string;
+export interface AuthenticatedSessionResponse {
+  AccessToken: string;
+  ExpiresAtUtc: string;
   RefreshToken?: string;
   SessionBindingToken?: string;
-  Avatar: string;
-  Usertype: string;
+}
+
+export interface CurrentUserResponse {
   Id: number;
+  Email: string;
+  Username: string;
+  Name?: string | null;
+  Avatar?: string | null;
+  Usertype: string;
 }

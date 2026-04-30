@@ -1,4 +1,5 @@
 using backend.main.dtos;
+using backend.main.configurations.security;
 using backend.main.dtos.general;
 using backend.main.exceptions.http;
 using backend.main.models.core;
@@ -101,7 +102,7 @@ public class DeviceServiceTests
                 Usertype = "attendee",
             });
         tokenService.Setup(client => client.GenerateAccessToken(It.IsAny<User>()))
-            .Returns("access-token");
+            .Returns(new AccessTokenIssue("access-token", DateTime.UtcNow.AddMinutes(15)));
         tokenService.Setup(client => client.GenerateRefreshToken(
                 42,
                 It.IsAny<ClientRequestInfo>(),
@@ -139,6 +140,50 @@ public class DeviceServiceTests
             .ToString().Should().Be("DEVICE-SECRET");
         httpContext.Response.Headers.SetCookie.ToString()
             .Should().Contain($"{HttpUtility.TrustedDeviceCookieName}=DEVICE-SECRET");
+    }
+
+    [Fact]
+    public async Task VerifyDeviceAsync_RejectsDisabledUsers()
+    {
+        var repository = new Mock<IDeviceRepository>();
+        var userRepository = new Mock<IUserRepository>();
+        var publisher = new Mock<IPublisher>(MockBehavior.Strict);
+        var cacheState = new InMemoryCacheState();
+        var httpContext = new DefaultHttpContext();
+        var pending = new
+        {
+            UserId = 42,
+            Email = "user@example.com",
+            DeviceType = "Desktop",
+            ClientName = "Chrome",
+            TrustedDeviceId = "DEVICE-SECRET",
+            IpAddress = "10.0.0.3",
+        };
+
+        cacheState.Values["device:pending:verify-token"] = JsonConvert.SerializeObject(pending);
+
+        repository.Setup(client => client.CreateDeviceAsync(It.IsAny<Device>()))
+            .ReturnsAsync((Device device) => device);
+        userRepository.Setup(client => client.GetUserAsync(42))
+            .ReturnsAsync(new User
+            {
+                Id = 42,
+                Email = "user@example.com",
+                Usertype = AuthRoles.Participant,
+                IsDisabled = true,
+            });
+
+        var service = CreateService(
+            repository,
+            publisher,
+            httpContext,
+            cacheState,
+            userRepository
+        );
+
+        var action = async () => await service.VerifyDeviceAsync("verify-token", SessionTransport.BrowserCookie);
+
+        await action.Should().ThrowAsync<ForbiddenException>();
     }
 
     [Fact]

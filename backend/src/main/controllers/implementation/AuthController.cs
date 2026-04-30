@@ -12,6 +12,7 @@ using backend.main.utilities.implementation;
 using backend.main.configurations.security;
 
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -63,11 +64,11 @@ namespace backend.main.implementation.controllers
                 User user = userToken.user;
                 Token token = userToken.token;
 
-                AuthResponse response = CreateAuthResponse(user, token);
+                AuthenticatedSessionResponse response = CreateSessionResponse(user, token);
 
                 return StatusCode(
                     200,
-                    new ApiResponse<AuthResponse>(
+                    new ApiResponse<AuthenticatedSessionResponse>(
                         $"Login successful",
                         response
                     )
@@ -136,11 +137,11 @@ namespace backend.main.implementation.controllers
                 User user = userToken.user;
                 Token authToken = userToken.token;
 
-                AuthResponse response = CreateAuthResponse(user, authToken);
+                AuthenticatedSessionResponse response = CreateSessionResponse(user, authToken);
 
                 return StatusCode(
                     200,
-                    new ApiResponse<AuthResponse>(
+                    new ApiResponse<AuthenticatedSessionResponse>(
                         "Verification successful",
                         response
                     )
@@ -186,11 +187,11 @@ namespace backend.main.implementation.controllers
                 User user = userToken.user;
                 Token authToken = userToken.token;
 
-                AuthResponse response = CreateAuthResponse(user, authToken);
+                AuthenticatedSessionResponse response = CreateSessionResponse(user, authToken);
 
                 return StatusCode(
                     200,
-                    new ApiResponse<AuthResponse>(
+                    new ApiResponse<AuthenticatedSessionResponse>(
                         $"Verification successful",
                         response
                     )
@@ -274,6 +275,33 @@ namespace backend.main.implementation.controllers
             }
         }
 
+        [Authorize]
+        [HttpGet("me")]
+        public async Task<IActionResult> Me()
+        {
+            try
+            {
+                var userPayload = User.GetUserPayload();
+                var user = await _authService.GetCurrentUserAsync(userPayload.Id);
+
+                return StatusCode(
+                    200,
+                    new ApiResponse<CurrentUserResponse>(
+                        "Current user fetched successfully.",
+                        CreateCurrentUserResponse(user)
+                    )
+                );
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[AuthController] Me failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
         [HttpPost("refresh")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest? request)
@@ -294,7 +322,7 @@ namespace backend.main.implementation.controllers
                 User user = userToken.user;
                 Token token = userToken.token;
 
-                return Ok(CreateAuthResponse(user, token));
+                return Ok(CreateSessionResponse(user, token));
             }
             catch (Exception e)
             {
@@ -323,11 +351,11 @@ namespace backend.main.implementation.controllers
                     SessionTransportResolver.ResolveOrDefault(request.Transport)
                 );
 
-                AuthResponse response = CreateAuthResponse(userToken.user, userToken.token);
+                AuthenticatedSessionResponse response = CreateSessionResponse(userToken.user, userToken.token);
 
                 return StatusCode(
                     200,
-                    new ApiResponse<AuthResponse>(
+                    new ApiResponse<AuthenticatedSessionResponse>(
                         "Signup completed successfully.",
                         response
                     )
@@ -362,7 +390,7 @@ namespace backend.main.implementation.controllers
                     SessionTransport.ApiToken
                 );
 
-                return Ok(CreateAuthResponse(userToken.user, userToken.token));
+                return Ok(CreateSessionResponse(userToken.user, userToken.token));
             }
             catch (Exception e)
             {
@@ -491,11 +519,11 @@ namespace backend.main.implementation.controllers
                 User user = userToken.user;
                 Token authToken = userToken.token;
 
-                AuthResponse response = CreateAuthResponse(user, authToken);
+                AuthenticatedSessionResponse response = CreateSessionResponse(user, authToken);
 
                 return StatusCode(
                     200,
-                    new ApiResponse<AuthResponse>(
+                    new ApiResponse<AuthenticatedSessionResponse>(
                         "Device verified. Login successful.",
                         response
                     )
@@ -585,7 +613,7 @@ namespace backend.main.implementation.controllers
             }
         }
 
-        private AuthResponse CreateAuthResponse(User user, Token token)
+        private AuthenticatedSessionResponse CreateSessionResponse(User user, Token token)
         {
             string? refreshToken = null;
             string? sessionBindingToken = null;
@@ -605,14 +633,25 @@ namespace backend.main.implementation.controllers
                 sessionBindingToken = token.SessionBindingToken;
             }
 
-            return new AuthResponse(
-                user.Id,
-                user.Email,
-                AuthRoles.NormalizeStored(user.Usertype),
+            return new AuthenticatedSessionResponse(
                 token.AccessToken,
+                token.AccessTokenExpiresAtUtc,
                 refreshToken,
                 sessionBindingToken
             );
+        }
+
+        private static CurrentUserResponse CreateCurrentUserResponse(User user)
+        {
+            return new CurrentUserResponse
+            {
+                Id = user.Id,
+                Email = user.Email,
+                Username = string.IsNullOrWhiteSpace(user.Username) ? user.Email : user.Username,
+                Name = user.Name,
+                Avatar = user.Avatar,
+                Usertype = AuthRoles.NormalizeStored(user.Usertype),
+            };
         }
 
         private OAuthAuthenticationResponse CreateOAuthAuthenticationResponse(
@@ -624,7 +663,7 @@ namespace backend.main.implementation.controllers
                 return new OAuthAuthenticationResponse
                 {
                     RequiresRoleSelection = false,
-                    Auth = CreateAuthResponse(result.UserToken.user, result.UserToken.token)
+                    Auth = CreateSessionResponse(result.UserToken.user, result.UserToken.token)
                 };
             }
 

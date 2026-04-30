@@ -2,12 +2,14 @@ using backend.main.dtos.general;
 using backend.main.dtos.requests.auth;
 using backend.main.dtos.responses.auth;
 using backend.main.dtos.responses.general;
+using backend.main.configurations.security;
 using backend.main.implementation.controllers;
 using backend.main.models.core;
 using backend.main.models.other;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
 using FluentAssertions;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -85,6 +87,7 @@ public class AuthControllerTests
             .ReturnsAsync(new UserToken(
                 new Token(
                     "access-token",
+                    DateTime.UtcNow.AddMinutes(15),
                     "refresh-token-2",
                     "binding-token-2",
                     TimeSpan.FromDays(1),
@@ -104,11 +107,11 @@ public class AuthControllerTests
         var result = await controller.Refresh(new RefreshTokenRequest());
 
         var payload = result.Should().BeOfType<OkObjectResult>()
-            .Which.Value.Should().BeOfType<AuthResponse>()
+            .Which.Value.Should().BeOfType<AuthenticatedSessionResponse>()
             .Subject;
 
-        payload.Token.Should().Be("access-token");
         payload.AccessToken.Should().Be("access-token");
+        payload.ExpiresAtUtc.Should().BeAfter(DateTime.UtcNow.AddMinutes(10));
         payload.RefreshToken.Should().BeNull();
         payload.SessionBindingToken.Should().BeNull();
         controller.HttpContext.Response.Headers.SetCookie.ToString()
@@ -129,6 +132,7 @@ public class AuthControllerTests
             .ReturnsAsync(new UserToken(
                 new Token(
                     "access-token",
+                    DateTime.UtcNow.AddMinutes(15),
                     "refresh-token-2",
                     "binding-token-2",
                     TimeSpan.FromDays(1),
@@ -151,10 +155,10 @@ public class AuthControllerTests
         });
 
         var payload = result.Should().BeOfType<OkObjectResult>()
-            .Which.Value.Should().BeOfType<AuthResponse>()
+            .Which.Value.Should().BeOfType<AuthenticatedSessionResponse>()
             .Subject;
 
-        payload.Token.Should().Be("access-token");
+        payload.AccessToken.Should().Be("access-token");
         payload.RefreshToken.Should().Be("refresh-token-2");
         payload.SessionBindingToken.Should().Be("binding-token-2");
     }
@@ -232,6 +236,7 @@ public class AuthControllerTests
             .ReturnsAsync(new UserToken(
                 new Token(
                     "access-token",
+                    DateTime.UtcNow.AddMinutes(15),
                     "refresh-token",
                     "binding-token",
                     TimeSpan.FromDays(1),
@@ -255,12 +260,51 @@ public class AuthControllerTests
         });
 
         var payload = result.Should().BeOfType<ObjectResult>()
-            .Which.Value.Should().BeOfType<ApiResponse<AuthResponse>>()
+            .Which.Value.Should().BeOfType<ApiResponse<AuthenticatedSessionResponse>>()
             .Subject;
 
         payload.Data.Should().NotBeNull();
-        payload.Data!.Username.Should().Be("oauth@example.com");
-        payload.Data.Usertype.Should().Be("Organizer");
+        payload.Data!.AccessToken.Should().Be("access-token");
+        payload.Data.RefreshToken.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Me_ReturnsCurrentUserPayload()
+    {
+        var authService = new Mock<IAuthService>();
+        authService.Setup(service => service.GetCurrentUserAsync(12))
+            .ReturnsAsync(new User
+            {
+                Id = 12,
+                Email = "oauth@example.com",
+                Username = null,
+                Usertype = AuthRoles.Organizer,
+                Avatar = null,
+            });
+
+        var controller = CreateController(authService);
+        controller.ControllerContext.HttpContext.User = new ClaimsPrincipal(
+            new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "12"),
+                    new Claim(ClaimTypes.Name, "oauth@example.com"),
+                    new Claim(ClaimTypes.Role, AuthRoles.Organizer),
+                ],
+                "Bearer"
+            )
+        );
+
+        var result = await controller.Me();
+
+        var payload = result.Should().BeOfType<ObjectResult>()
+            .Which.Value.Should().BeOfType<ApiResponse<CurrentUserResponse>>()
+            .Subject;
+
+        payload.Data.Should().NotBeNull();
+        payload.Data!.Id.Should().Be(12);
+        payload.Data.Email.Should().Be("oauth@example.com");
+        payload.Data.Username.Should().Be("oauth@example.com");
+        payload.Data.Usertype.Should().Be(AuthRoles.Organizer);
     }
 
     [Fact]

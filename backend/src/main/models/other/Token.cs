@@ -8,6 +8,10 @@ namespace backend.main.models.other
         {
             get; set;
         }
+        public DateTime AccessTokenExpiresAtUtc
+        {
+            get; set;
+        }
         public string RefreshToken
         {
             get; set;
@@ -27,6 +31,7 @@ namespace backend.main.models.other
 
         public Token(
             string accessToken,
+            DateTime accessTokenExpiresAtUtc,
             string refreshToken,
             string sessionBindingToken,
             TimeSpan refreshTokenLifetime,
@@ -34,10 +39,29 @@ namespace backend.main.models.other
         )
         {
             AccessToken = accessToken;
+            AccessTokenExpiresAtUtc = accessTokenExpiresAtUtc;
             RefreshToken = refreshToken;
             SessionBindingToken = sessionBindingToken;
             RefreshTokenLifetime = refreshTokenLifetime;
             Transport = transport;
+        }
+    }
+
+    public class AccessTokenIssue
+    {
+        public string Value
+        {
+            get; set;
+        }
+        public DateTime ExpiresAtUtc
+        {
+            get; set;
+        }
+
+        public AccessTokenIssue(string value, DateTime expiresAtUtc)
+        {
+            Value = value;
+            ExpiresAtUtc = expiresAtUtc;
         }
     }
 

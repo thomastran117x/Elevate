@@ -6,7 +6,7 @@ namespace backend.main.services.interfaces
 {
     public interface ITokenService
     {
-        public string GenerateAccessToken(User user);
+        public AccessTokenIssue GenerateAccessToken(User user);
         public Task<RefreshTokenIssue> GenerateRefreshToken(
             int userId,
             ClientRequestInfo requestInfo,

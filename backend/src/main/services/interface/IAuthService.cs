@@ -1,3 +1,4 @@
+using backend.main.models.core;
 using backend.main.models.other;
 
 namespace backend.main.services.interfaces
@@ -29,6 +30,7 @@ namespace backend.main.services.interfaces
             string usertype,
             SessionTransport transport
         );
+        Task<User> GetCurrentUserAsync(int userId);
         Task<UserToken> HandleTokensAsync(
             string refreshToken,
             string? sessionBindingToken,

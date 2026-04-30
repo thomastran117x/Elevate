@@ -2,9 +2,7 @@ import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Component, inject, PLATFORM_ID, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { Store } from '@ngrx/store';
-import { setUser } from '../../../../core/stores/user.actions';
-import { UserState } from '../../../../core/stores/user.reducer';
+import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import {
   AuthService,
   PendingOAuthSignupStorageKey,
@@ -58,7 +56,7 @@ export class OAuthRoleComponent {
 
   constructor(
     private auth: AuthService,
-    private store: Store<{ user: UserState }>,
+    private sessionManager: SessionManagerService,
     private router: Router,
   ) {}
 
@@ -104,12 +102,17 @@ export class OAuthRoleComponent {
     this.message.set('Completing your account setup...');
 
     this.auth.completeOAuthSignup(pending.SignupToken, this.form.getRawValue().usertype).subscribe({
-      next: (user) => {
-        sessionStorage.removeItem(PendingOAuthSignupStorageKey);
-        this.store.dispatch(setUser({ user }));
-        this.status.set('ready');
-        this.message.set('Your account is ready. Redirecting to your dashboard...');
-        setTimeout(() => this.router.navigate(['/dashboard']), 800);
+      next: async (session) => {
+        try {
+          await this.sessionManager.bootstrapSession(session);
+          sessionStorage.removeItem(PendingOAuthSignupStorageKey);
+          this.status.set('ready');
+          this.message.set('Your account is ready. Redirecting to your dashboard...');
+          setTimeout(() => this.router.navigate(['/dashboard']), 800);
+        } catch (err: any) {
+          this.status.set('error');
+          this.message.set(err?.error?.message || err?.message || 'We could not complete your signup. Please try again.');
+        }
       },
       error: (err) => {
         this.status.set('error');

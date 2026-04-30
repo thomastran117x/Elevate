@@ -1,10 +1,7 @@
 import { Component } from '@angular/core';
 import { FormBuilder, Validators, FormGroup } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
-import { Store } from '@ngrx/store';
 import { AuthService } from '../../services/auth.service';
-import { setUser } from '@stores/user.actions';
-import { UserState } from '@stores/user.reducer';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
@@ -12,6 +9,7 @@ import { RecaptchaV3Service } from '../../services/recaptcha.service';
 import { GoogleButtonComponent } from '../../components/google-button/google-button.component';
 import { MicrosoftButtonComponent } from '../../components/microsoft-button/microsoft-button.component';
 import { environment } from '@environments/environment';
+import { SessionManagerService } from '../../../../core/services/session-manager.service';
 
 @Component({
   selector: 'app-login',
@@ -37,7 +35,7 @@ export class LoginComponent {
   constructor(
     private fb: FormBuilder,
     private auth: AuthService,
-    private store: Store<{ user: UserState }>,
+    private sessionManager: SessionManagerService,
     private router: Router,
     private recaptcha: RecaptchaV3Service,
   ) {}
@@ -67,9 +65,13 @@ export class LoginComponent {
         .login(payload)
         .pipe(finalize(() => (this.loading = false)))
         .subscribe({
-          next: (res) => {
-            this.store.dispatch(setUser({ user: res }));
-            this.router.navigate(['/dashboard']);
+          next: async (res) => {
+            try {
+              await this.sessionManager.bootstrapSession(res);
+              this.router.navigate(['/dashboard']);
+            } catch (err: any) {
+              this.error = err?.error?.message || err?.message || 'Login failed.';
+            }
           },
           error: (err) => (this.error = err?.error?.message || 'Login failed.'),
         });

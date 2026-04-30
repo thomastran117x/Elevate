@@ -4,6 +4,8 @@ using System.Text;
 using backend.main.configurations.environment;
 using backend.main.dtos.general;
 using backend.main.errors.app;
+using backend.main.repositories.interfaces;
+using backend.main.services.implementation;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -70,6 +72,27 @@ namespace backend.main.configurations.security
                                 error = "Forbidden",
                                 message = "You do not have permission to access this resource"
                             });
+                        },
+
+                        OnTokenValidated = async context =>
+                        {
+                            string? idClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                            string? authVersionClaim = context.Principal?.FindFirst(TokenService.AuthVersionClaimType)?.Value;
+
+                            if (!int.TryParse(idClaim, out var userId)
+                                || !int.TryParse(authVersionClaim, out var authVersion))
+                            {
+                                context.Fail("Invalid token payload.");
+                                return;
+                            }
+
+                            var userRepository = context.HttpContext.RequestServices.GetRequiredService<IUserRepository>();
+                            var user = await userRepository.GetUserAsync(userId);
+
+                            if (user == null || user.IsDisabled || user.AuthVersion != authVersion)
+                            {
+                                context.Fail("This access token is no longer valid.");
+                            }
                         }
                     };
                 });
