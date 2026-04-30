@@ -1,7 +1,6 @@
 using backend.main.dtos.requests.auth;
 using backend.main.dtos.responses.auth;
 using backend.main.dtos.responses.general;
-using backend.main.models.core;
 using backend.main.services.interfaces;
 
 using Microsoft.AspNetCore.Authorization;
@@ -24,7 +23,7 @@ namespace backend.main.implementation.controllers
         [HttpPatch("{id}/status")]
         public async Task<IActionResult> UpdateUserStatus(int id, [FromBody] UpdateUserStatusRequest request)
         {
-            User user = await _userService.UpdateUserStatusAsync(id, request.IsDisabled, request.Reason);
+            var user = await _userService.UpdateUserStatusAsync(id, request.IsDisabled, request.Reason);
 
             return StatusCode(
                 200,
