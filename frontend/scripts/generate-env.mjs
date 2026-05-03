@@ -14,11 +14,6 @@ const environment = {
 
 const filePath = './src/environments/environment.ts';
 
-if (fs.existsSync(filePath)) {
-  console.log('⚙️ Skipped: environment.ts already exists');
-  process.exit(0);
-}
-
 const content = `/**
  * ⚙️ Auto-generated from .env — do NOT edit manually.
     This file must be included in the .gitinore and not be

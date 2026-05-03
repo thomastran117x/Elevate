@@ -21,6 +21,7 @@ namespace backend.main.configurations.environment
         private static readonly string? _microsoftClientId;
         private static readonly string? _microsoftTenantId;
         private static readonly string? _googleClientId;
+        private static readonly string? _googleClientSecret;
         private static readonly string? _appleClientId;
         private static readonly string? _paypalClientId;
         private static readonly string? _paypalSecretId;
@@ -80,6 +81,7 @@ namespace backend.main.configurations.environment
             _microsoftClientId = GetOptional(["MS_CLIENT_ID"]);
             _microsoftTenantId = GetOptional(["MS_TENANT_ID"]);
             _googleClientId = GetOptional(["GOOGLE_CLIENT_ID"]);
+            _googleClientSecret = GetOptional(["GOOGLE_CLIENT_SECRET"]);
             _appleClientId = GetOptional(["APPLE_CLIENT_ID"]);
 
             _azureStorageConnectionString = GetOptional(["AZURE_STORAGE_CONNECTION_STRING"]);
@@ -185,6 +187,7 @@ namespace backend.main.configurations.environment
         public static string FrontendBaseUrl => _frontendBaseUrl;
         public static string? MicrosoftClientId => _microsoftClientId;
         public static string? GoogleClientId => _googleClientId;
+        public static string? GoogleClientSecret => _googleClientSecret;
         public static string? AppleClientId => _appleClientId;
         public static string? MicrosoftTenantId => _microsoftTenantId;
         public static string? AzureStorageConnectionString => _azureStorageConnectionString;

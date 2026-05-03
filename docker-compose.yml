@@ -1,6 +1,6 @@
 services:
   frontend:
-    container_name: event-frontned
+    container_name: event-frontend
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -9,7 +9,7 @@ services:
         required: false
     environment:
       NODE_ENV: "${NODE_ENV:-development}"
-      BACKEND_URL: "${BACKEND_URL:-http://localhost:8090}"
+      BACKEND_URL: "${BACKEND_URL:-http://localhost:8090/api}"
       FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3090}"
     ports:
       - "3090:3090"

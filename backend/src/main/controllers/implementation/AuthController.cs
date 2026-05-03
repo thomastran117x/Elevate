@@ -241,6 +241,42 @@ namespace backend.main.implementation.controllers
             }
         }
 
+        [HttpPost("google/code")]
+        [ValidateAntiForgeryToken]
+        [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        public async Task<IActionResult> GoogleCodeAuthenticate([FromBody] GoogleCodeRequest request)
+        {
+            try
+            {
+                OAuthAuthenticationResult result = await _authService.GoogleCodeAsync(
+                    request.Code,
+                    request.CodeVerifier,
+                    request.RedirectUri,
+                    SessionTransportResolver.ResolveOrDefault(request.Transport),
+                    request.Nonce
+                );
+                OAuthAuthenticationResponse response = CreateOAuthAuthenticationResponse(result);
+
+                return StatusCode(
+                    200,
+                    new ApiResponse<OAuthAuthenticationResponse>(
+                        response.RequiresRoleSelection
+                            ? "Role selection is required to complete signup."
+                            : "Login successful",
+                        response
+                    )
+                );
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[AuthController] GoogleCodeAuthenticate failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
         [HttpPost("microsoft")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]

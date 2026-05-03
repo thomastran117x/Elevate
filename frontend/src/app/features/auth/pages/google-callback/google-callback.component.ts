@@ -58,28 +58,11 @@ export class GoogleCallbackComponent implements OnInit {
     this.message.set('Verifying Google token...');
 
     try {
-      const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: environment.googleClientId,
-          grant_type: 'authorization_code',
-          code,
-          redirect_uri: `${environment.frontendUrl}/auth/google`,
-          code_verifier: codeVerifier,
-        }).toString(),
-      });
-
-      const tokenData = await tokenResp.json();
-      if (!tokenResp.ok || !tokenData.id_token) {
-        throw new Error('No id_token returned from Google.');
-      }
-
       sessionStorage.removeItem(GoogleCallbackComponent.CodeVerifierStorageKey);
       sessionStorage.removeItem(GoogleCallbackComponent.StateStorageKey);
       sessionStorage.removeItem(GoogleCallbackComponent.NonceStorageKey);
 
-      this.auth.googleVerify(tokenData.id_token, nonce).subscribe({
+      this.auth.googleCodeVerify(code, codeVerifier, `${environment.frontendUrl}/auth/google`, nonce).subscribe({
         next: async (res: OAuthAuthResponse) => {
           if (res.RequiresRoleSelection) {
             sessionStorage.setItem(PendingOAuthSignupStorageKey, JSON.stringify(res));

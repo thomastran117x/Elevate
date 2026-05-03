@@ -112,6 +112,16 @@ export class AuthService {
     }).pipe(map((res) => this.requireData(res, 'Google login response was incomplete.')));
   }
 
+  googleCodeVerify(code: string, codeVerifier: string, redirectUri: string, nonce: string): Observable<OAuthAuthResponse> {
+    return this.postWithCsrf<ApiEnvelope<OAuthAuthResponse>>(`${this.baseUrl}/google/code`, {
+      code,
+      codeVerifier,
+      redirectUri,
+      nonce,
+      transport: 'browser' as const,
+    }).pipe(map((res) => this.requireData(res, 'Google login response was incomplete.')));
+  }
+
   microsoftVerify(idToken: string, nonce: string): Observable<OAuthAuthResponse> {
     return this.postWithCsrf<ApiEnvelope<OAuthAuthResponse>>(`${this.baseUrl}/microsoft`, {
       token: idToken,
