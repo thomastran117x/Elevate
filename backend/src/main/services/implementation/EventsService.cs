@@ -165,7 +165,7 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task<(List<Events> Events, Dictionary<int, double> DistanceKmById, string Source)> GetEvents(EventSearchCriteria criteria)
+        public async Task<(List<Events> Events, int TotalCount, Dictionary<int, double> DistanceKmById, string Source)> GetEvents(EventSearchCriteria criteria)
         {
             try
             {
@@ -181,7 +181,7 @@ namespace backend.main.services.implementation
                 {
                     var result = await _searchService.SearchAsync(effective);
                     if (result.Hits.Count == 0)
-                        return (new List<Events>(), new Dictionary<int, double>(), ResponseSource.Elasticsearch);
+                        return (new List<Events>(), result.TotalCount, new Dictionary<int, double>(), ResponseSource.Elasticsearch);
 
                     var ids = result.Hits.Select(h => h.Id).ToList();
                     var esEvents = await _eventsRepository.GetByIdsAsync(ids);
@@ -196,7 +196,7 @@ namespace backend.main.services.implementation
                         .Where(h => h.DistanceKm.HasValue)
                         .ToDictionary(h => h.Id, h => h.DistanceKm!.Value);
 
-                    return (ordered, distanceMap, ResponseSource.Elasticsearch);
+                    return (ordered, result.TotalCount, distanceMap, ResponseSource.Elasticsearch);
                 }
                 catch (ElasticsearchDisabledException ex)
                 {
@@ -212,8 +212,8 @@ namespace backend.main.services.implementation
                     throw;
                 }
 
-                var events = await _eventsRepository.SearchAsync(effective);
-                return (events, new Dictionary<int, double>(), ResponseSource.Database);
+                var (events, totalCount) = await _eventsRepository.SearchAsync(effective);
+                return (events, totalCount, new Dictionary<int, double>(), ResponseSource.Database);
             }
             catch (Exception e)
             {
@@ -225,7 +225,7 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task<List<Events>> GetEventsByClub(
+        public async Task<(List<Events> Events, int TotalCount, string Source)> GetEventsByClub(
             int clubId,
             EventStatus? status = null,
             int page = 1,
@@ -235,14 +235,17 @@ namespace backend.main.services.implementation
             {
                 await _clubService.GetClub(clubId);
 
-                return await _eventsRepository.SearchAsync(new EventSearchCriteria
+                var (events, totalCount) = await _eventsRepository.SearchAsync(new EventSearchCriteria
                 {
                     Query = null,
+                    ClubId = clubId,
                     IsPrivate = false,
                     Status = status,
                     Page = page,
                     PageSize = pageSize
                 });
+
+                return (events, totalCount, ResponseSource.Database);
             }
             catch (Exception e)
             {

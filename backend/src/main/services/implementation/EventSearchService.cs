@@ -353,6 +353,11 @@ namespace backend.main.services.implementation
                 f => f.Term(t => t.Field(d => d.IsPrivate).Value(criteria.IsPrivate))
             };
 
+            if (criteria.ClubId.HasValue)
+            {
+                filters.Add(f => f.Term(t => t.Field(d => d.ClubId).Value(criteria.ClubId.Value)));
+            }
+
             if (criteria.Category.HasValue)
             {
                 var categoryValue = criteria.Category.Value.ToString();
@@ -438,19 +443,26 @@ namespace backend.main.services.implementation
                     })
                     .Order(SortOrder.Asc)
                     .Unit(Elastic.Clients.Elasticsearch.DistanceUnit.Meters)
-                ));
+                ).Field(f => f.StartTime, fs => fs.Order(SortOrder.Asc))
+                 .Field(f => f.Id, fs => fs.Order(SortOrder.Asc)));
                 return;
             }
 
             switch (criteria.SortBy)
             {
                 case EventSortBy.Date:
-                    s.Sort(so => so.Field(f => f.StartTime, fs => fs.Order(SortOrder.Asc)));
+                    s.Sort(so => so
+                        .Field(f => f.StartTime, fs => fs.Order(SortOrder.Asc))
+                        .Field(f => f.CreatedAt, fs => fs.Order(SortOrder.Desc))
+                        .Field(f => f.Id, fs => fs.Order(SortOrder.Asc))
+                    );
                     break;
                 case EventSortBy.Popularity:
                     s.Sort(so => so
                         .Field(f => f.RegistrationCount, fs => fs.Order(SortOrder.Desc))
+                        .Field(f => f.StartTime, fs => fs.Order(SortOrder.Asc))
                         .Field(f => f.CreatedAt, fs => fs.Order(SortOrder.Desc))
+                        .Field(f => f.Id, fs => fs.Order(SortOrder.Asc))
                     );
                     break;
                 case EventSortBy.Relevance:
@@ -458,6 +470,7 @@ namespace backend.main.services.implementation
                     s.Sort(so => so
                         .Score(new ScoreSort { Order = SortOrder.Desc })
                         .Field(f => f.CreatedAt, fs => fs.Order(SortOrder.Desc))
+                        .Field(f => f.Id, fs => fs.Order(SortOrder.Asc))
                     );
                     break;
             }

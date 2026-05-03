@@ -143,11 +143,25 @@ namespace backend.main.implementation.controllers
         {
             try
             {
-                var events = await _eventService.GetEventsByClub(clubId, status: status, page: page, pageSize: pageSize);
+                if (page < 1)
+                    return BadRequest(new MessageResponse("page must be at least 1."));
 
-                return Ok(new ApiResponse<IEnumerable<EventResponse>>(
+                if (pageSize < 1 || pageSize > 100)
+                    return BadRequest(new MessageResponse("pageSize must be between 1 and 100."));
+
+                var (events, totalCount, source) = await _eventService.GetEventsByClub(clubId, status: status, page: page, pageSize: pageSize);
+
+                var paged = new PagedResponse<EventResponse>(
+                    events.Select(e => EventMapper.MapToResponse(e)),
+                    totalCount,
+                    page,
+                    pageSize
+                );
+
+                return Ok(new ApiResponse<PagedResponse<EventResponse>>(
                     $"The events for club {clubId} have been fetched successfully.",
-                    events.Select(e => EventMapper.MapToResponse(e))
+                    paged,
+                    source
                 ));
             }
             catch (Exception e)
@@ -199,6 +213,12 @@ namespace backend.main.implementation.controllers
         {
             try
             {
+                if (page < 1)
+                    return BadRequest(new MessageResponse("page must be at least 1."));
+
+                if (pageSize < 1 || pageSize > 100)
+                    return BadRequest(new MessageResponse("pageSize must be between 1 and 100."));
+
                 if ((lat.HasValue) != (lng.HasValue))
                     return BadRequest(new MessageResponse("Both lat and lng must be provided together."));
 
@@ -237,13 +257,20 @@ namespace backend.main.implementation.controllers
                     PageSize = pageSize
                 };
 
-                var (events, distances, source) = await _eventService.GetEvents(criteria);
+                var (events, totalCount, distances, source) = await _eventService.GetEvents(criteria);
 
-                return Ok(new ApiResponse<IEnumerable<EventResponse>>(
-                    "The events have been fetched successfully.",
+                var paged = new PagedResponse<EventResponse>(
                     events.Select(e => EventMapper.MapToResponse(
                         e,
                         distances.TryGetValue(e.Id, out var d) ? d : (double?)null)),
+                    totalCount,
+                    page,
+                    pageSize
+                );
+
+                return Ok(new ApiResponse<PagedResponse<EventResponse>>(
+                    "The events have been fetched successfully.",
+                    paged,
                     source
                 ));
             }

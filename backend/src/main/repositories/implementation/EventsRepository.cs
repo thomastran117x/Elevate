@@ -103,7 +103,7 @@ namespace backend.main.repositories.implementation
             return await _context.Events.AnyAsync(e => e.Id == id);
         }
 
-        public async Task<List<Events>> SearchAsync(EventSearchCriteria criteria)
+        public async Task<(List<Events> Items, int TotalCount)> SearchAsync(EventSearchCriteria criteria)
         {
             var now = DateTime.UtcNow;
 
@@ -111,48 +111,16 @@ namespace backend.main.repositories.implementation
                 .Include(e => e.Images)
                 .AsNoTracking();
 
-            if (!string.IsNullOrWhiteSpace(criteria.Query))
-            {
-                var term = criteria.Query.Trim();
-                query = query.Where(e =>
-                    EF.Functions.Like(e.Name, $"%{term}%") ||
-                    EF.Functions.Like(e.Description, $"%{term}%") ||
-                    EF.Functions.Like(e.Location, $"%{term}%") ||
-                    (e.VenueName != null && EF.Functions.Like(e.VenueName, $"%{term}%")) ||
-                    (e.City != null && EF.Functions.Like(e.City, $"%{term}%"))
-                );
-            }
+            query = ApplyFilters(query, criteria, now);
 
-            query = query.Where(e => e.isPrivate == criteria.IsPrivate);
+            var totalCount = await query.CountAsync();
 
-            if (criteria.Category.HasValue)
-                query = query.Where(e => e.Category == criteria.Category.Value);
-
-            if (!string.IsNullOrWhiteSpace(criteria.City))
-            {
-                var city = criteria.City.Trim();
-                query = query.Where(e => e.City == city);
-            }
-
-            if (criteria.Status == EventStatus.Upcoming)
-                query = query.Where(e => e.StartTime > now);
-            else if (criteria.Status == EventStatus.Ongoing)
-                query = query.Where(e => e.StartTime <= now && (e.EndTime == null || e.EndTime > now));
-            else if (criteria.Status == EventStatus.Closed)
-                query = query.Where(e => e.EndTime != null && e.EndTime <= now);
-
-            query = criteria.SortBy switch
-            {
-                EventSortBy.Date => query.OrderBy(e => e.StartTime),
-                EventSortBy.Popularity => query.OrderByDescending(e => e.RegistrationCount)
-                    .ThenByDescending(e => e.CreatedAt),
-                _ => query.OrderByDescending(e => e.CreatedAt)
-            };
-
-            return await query
+            var items = await ApplyOrdering(query, criteria)
                 .Skip((criteria.Page - 1) * criteria.PageSize)
                 .Take(criteria.PageSize)
                 .ToListAsync();
+
+            return (items, totalCount);
         }
 
         public async Task IncrementRegistrationCountAsync(int eventId, int delta)
@@ -219,6 +187,68 @@ namespace backend.main.repositories.implementation
 
             _context.Events.RemoveRange(entities);
             return entities.Count;
+        }
+
+        private static IQueryable<Events> ApplyFilters(
+            IQueryable<Events> query,
+            EventSearchCriteria criteria,
+            DateTime now)
+        {
+            if (!string.IsNullOrWhiteSpace(criteria.Query))
+            {
+                var term = criteria.Query.Trim();
+                query = query.Where(e =>
+                    EF.Functions.Like(e.Name, $"%{term}%") ||
+                    EF.Functions.Like(e.Description, $"%{term}%") ||
+                    EF.Functions.Like(e.Location, $"%{term}%") ||
+                    (e.VenueName != null && EF.Functions.Like(e.VenueName, $"%{term}%")) ||
+                    (e.City != null && EF.Functions.Like(e.City, $"%{term}%"))
+                );
+            }
+
+            if (criteria.ClubId.HasValue)
+                query = query.Where(e => e.ClubId == criteria.ClubId.Value);
+
+            query = query.Where(e => e.isPrivate == criteria.IsPrivate);
+
+            if (criteria.Category.HasValue)
+                query = query.Where(e => e.Category == criteria.Category.Value);
+
+            if (!string.IsNullOrWhiteSpace(criteria.City))
+            {
+                var city = criteria.City.Trim();
+                query = query.Where(e => e.City == city);
+            }
+
+            if (criteria.Status == EventStatus.Upcoming)
+                query = query.Where(e => e.StartTime > now);
+            else if (criteria.Status == EventStatus.Ongoing)
+                query = query.Where(e => e.StartTime <= now && (e.EndTime == null || e.EndTime > now));
+            else if (criteria.Status == EventStatus.Closed)
+                query = query.Where(e => e.EndTime != null && e.EndTime <= now);
+
+            return query;
+        }
+
+        private static IOrderedQueryable<Events> ApplyOrdering(
+            IQueryable<Events> query,
+            EventSearchCriteria criteria)
+        {
+            return criteria.SortBy switch
+            {
+                EventSortBy.Date => query
+                    .OrderBy(e => e.StartTime)
+                    .ThenByDescending(e => e.CreatedAt)
+                    .ThenBy(e => e.Id),
+                EventSortBy.Popularity => query
+                    .OrderByDescending(e => e.RegistrationCount)
+                    .ThenBy(e => e.StartTime)
+                    .ThenByDescending(e => e.CreatedAt)
+                    .ThenBy(e => e.Id),
+                _ => query
+                    .OrderByDescending(e => e.CreatedAt)
+                    .ThenBy(e => e.Id)
+            };
         }
     }
 }
