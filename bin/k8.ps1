@@ -38,14 +38,18 @@ $root = Resolve-Path (Join-Path (Split-Path $MyInvocation.MyCommand.Path) "..")
 
 $frontendPath = Join-Path $root "frontend"
 $backendPath  = Join-Path $root "backend"
-$workerPath   = Join-Path $root "worker"
+$eventIndexerPath = Join-Path $root "backend\src\worker\event-indexer"
+$clubPostIndexerPath = Join-Path $root "backend\src\worker\clubpost-indexer"
+$emailWorkerPath = Join-Path $root "backend\src\worker\email-worker"
 $manifest     = Join-Path $root "eventxperience.yml"
 
 Info "Building Docker images (linux/arm64)..."
 
 docker buildx build --platform linux/arm64 -t myapp-frontend:latest $frontendPath | Out-Null
 docker buildx build --platform linux/arm64 -t myapp-backend:latest  $backendPath  | Out-Null
-docker buildx build --platform linux/arm64 -t myapp-worker:latest   $workerPath   | Out-Null
+docker buildx build --platform linux/arm64 -t myapp-event-indexer:latest -f (Join-Path $eventIndexerPath "Dockerfile") $backendPath | Out-Null
+docker buildx build --platform linux/arm64 -t myapp-clubpost-indexer:latest -f (Join-Path $clubPostIndexerPath "Dockerfile") $backendPath | Out-Null
+docker buildx build --platform linux/arm64 -t myapp-email-worker:latest -f (Join-Path $emailWorkerPath "Dockerfile") $backendPath | Out-Null
 
 Success "Docker images built"
 

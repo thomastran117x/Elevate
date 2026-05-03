@@ -7,11 +7,13 @@ namespace backend.main.dtos.responses.general
         {
             get; set;
         }
+        public string? Source { get; set; }
 
-        public ApiResponse(string message, T data)
+        public ApiResponse(string message, T data, string? source = null)
         {
             Message = message;
             Data = data;
+            Source = source;
         }
     }
 }

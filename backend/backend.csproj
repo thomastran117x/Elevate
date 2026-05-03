@@ -14,8 +14,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="src\worker\**\*.cs" />
+    <Content Remove="src\worker\**\*" />
+    <EmbeddedResource Remove="src\worker\**\*" />
+    <None Remove="src\worker\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="Confluent.Kafka" Version="2.5.3" />
     <PackageReference Include="DotNetEnv" Version="3.1.1" />
     <PackageReference Include="Elastic.Clients.Elasticsearch" Version="8.16.7" />
     <PackageReference Include="FluentAssertions" Version="8.8.0" />
@@ -34,7 +42,6 @@
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="Polly" Version="8.6.5" />
     <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
-    <PackageReference Include="RabbitMQ.Client" Version="7.2.0" />
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
     <PackageReference Include="StackExchange.Redis" Version="2.9.17" />

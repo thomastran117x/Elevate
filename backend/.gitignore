@@ -8,3 +8,4 @@ artifacts/
 .env
 www/
 wwwroot/
+out/

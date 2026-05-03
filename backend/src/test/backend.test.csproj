@@ -20,6 +20,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\backend.csproj" />
+    <ProjectReference Include="..\worker\clubpost-indexer\clubpost-indexer.csproj" />
+    <ProjectReference Include="..\worker\email-worker\email-worker.csproj" />
+    <ProjectReference Include="..\worker\event-indexer\event-indexer.csproj" />
   </ItemGroup>
 
 </Project>

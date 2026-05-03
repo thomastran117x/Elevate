@@ -1,5 +1,7 @@
+using System.Data;
 using System.Text.Json;
 
+using backend.main.configurations.resource.database;
 using backend.main.dtos.responses.eventregistration;
 using backend.main.exceptions.http;
 using backend.main.models.core;
@@ -13,9 +15,11 @@ namespace backend.main.services.implementation
 {
     public class EventRegistrationService : IEventRegistrationService
     {
+        private readonly AppDatabaseContext _db;
         private readonly IEventRegistrationRepository _registrationRepository;
         private readonly IEventsService _eventsService;
         private readonly ICacheService _cache;
+        private readonly IEventSearchOutboxWriter _outboxWriter;
 
         private static readonly TimeSpan MembershipTTL = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan ListTTL = TimeSpan.FromMinutes(3);
@@ -23,13 +27,17 @@ namespace backend.main.services.implementation
         private const string NullSentinel = "__null__";
 
         public EventRegistrationService(
+            AppDatabaseContext db,
             IEventRegistrationRepository registrationRepository,
             IEventsService eventsService,
-            ICacheService cache)
+            ICacheService cache,
+            IEventSearchOutboxWriter outboxWriter)
         {
+            _db = db;
             _registrationRepository = registrationRepository;
             _eventsService = eventsService;
             _cache = cache;
+            _outboxWriter = outboxWriter;
         }
 
         public async Task<BatchRegistrationResultResponse> BatchRegisterAsync(int userId, IEnumerable<int> eventIds)
@@ -140,13 +148,34 @@ namespace backend.main.services.implementation
                 if (await IsRegisteredAsync(eventId, userId))
                     throw new ConflictException("Already registered for this event");
 
-                // Capacity check + insert are performed atomically inside a SERIALIZABLE
-                // transaction, eliminating the race window between count and insert.
-                // The Redis lock above reduces contention under normal load.
-                var registration = await _registrationRepository.TryRegisterAsync(eventId, userId);
+                await using var transaction = await _db.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
 
-                if (registration == null)
+                var trackedEvent = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+                if (trackedEvent == null)
+                    throw new ResourceNotFoundException($"Event {eventId} not found");
+
+                if (trackedEvent.EndTime.HasValue && trackedEvent.EndTime <= DateTime.UtcNow)
                     throw new ConflictException("Event is full");
+
+                var count = await _db.EventRegistrations.CountAsync(r => r.EventId == eventId);
+                if (count >= trackedEvent.maxParticipants)
+                    throw new ConflictException("Event is full");
+
+                var registration = new EventRegistration
+                {
+                    EventId = eventId,
+                    UserId = userId,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _db.EventRegistrations.Add(registration);
+                trackedEvent.RegistrationCount += 1;
+                trackedEvent.UpdatedAt = DateTime.UtcNow;
+                _outboxWriter.StageUpsert(trackedEvent);
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
 
                 await _cache.SetValueAsync(
                     MembershipKey(userId, eventId),
@@ -154,7 +183,7 @@ namespace backend.main.services.implementation
                     MembershipTTL
                 );
                 await InvalidateListsAsync(userId, eventId);
-                await _eventsService.NotifyRegistrationChangedAsync(eventId);
+                await _cache.DeleteKeyAsync($"event:{eventId}");
             }
             catch (DbUpdateException)
             {
@@ -181,14 +210,31 @@ namespace backend.main.services.implementation
             {
                 await _eventsService.GetEvent(eventId);
 
-                if (!await IsRegisteredAsync(eventId, userId))
+                await using var transaction = await _db.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+
+                var registration = await _db.EventRegistrations
+                    .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
+
+                if (registration == null)
                     throw new ResourceNotFoundException("Registration not found");
 
-                await _registrationRepository.UnregisterAsync(eventId, userId);
+                _db.EventRegistrations.Remove(registration);
+
+                var trackedEvent = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+                if (trackedEvent != null)
+                {
+                    trackedEvent.RegistrationCount = Math.Max(0, trackedEvent.RegistrationCount - 1);
+                    trackedEvent.UpdatedAt = DateTime.UtcNow;
+                    _outboxWriter.StageUpsert(trackedEvent);
+                }
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
 
                 await _cache.DeleteKeyAsync(MembershipKey(userId, eventId));
                 await InvalidateListsAsync(userId, eventId);
-                await _eventsService.NotifyRegistrationChangedAsync(eventId);
+                await _cache.DeleteKeyAsync($"event:{eventId}");
             }
             catch (Exception e)
             {

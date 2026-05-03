@@ -53,7 +53,7 @@ namespace backend.main.implementation.controllers
             if (User.Identity?.IsAuthenticated == true)
                 userId = User.GetUserPayload().Id;
 
-            var (items, totalCount) = await _postService.GetByClubIdAsync(
+            var (items, totalCount, source) = await _postService.GetByClubIdAsync(
                 clubId, userId, search, sortBy, page, pageSize);
 
             var paged = new PagedResponse<ClubPostResponse>(
@@ -67,7 +67,8 @@ namespace backend.main.implementation.controllers
                 200,
                 new ApiResponse<PagedResponse<ClubPostResponse>>(
                     $"Posts for club with ID {clubId} have been fetched successfully.",
-                    paged
+                    paged,
+                    source
                 )
             );
         }
@@ -141,7 +142,7 @@ namespace backend.main.implementation.controllers
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
-            var (items, totalCount) = await _postService.GetAllAdminAsync(search, sortBy, page, pageSize);
+            var (items, totalCount, source) = await _postService.GetAllAdminAsync(search, sortBy, page, pageSize);
 
             var paged = new PagedResponse<ClubPostResponse>(
                 items.Select(MapToResponse),
@@ -154,7 +155,8 @@ namespace backend.main.implementation.controllers
                 200,
                 new ApiResponse<PagedResponse<ClubPostResponse>>(
                     "All posts have been fetched successfully.",
-                    paged
+                    paged,
+                    source
                 )
             );
         }

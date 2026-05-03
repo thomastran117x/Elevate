@@ -6,6 +6,8 @@ namespace backend.main.seeders
         {
             services.AddScoped<ISeederOrchestrator, SeederOrchestrator>();
             services.AddScoped<ISeeder, AuthUsersSeeder>();
+            services.AddScoped<ISeeder, MockClubSeeder>();
+            services.AddScoped<ISeeder, MockEventSeeder>();
             return services;
         }
 

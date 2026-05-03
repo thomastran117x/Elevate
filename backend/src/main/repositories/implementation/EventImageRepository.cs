@@ -43,23 +43,29 @@ namespace backend.main.repositories.implementation
             }).ToList();
 
             await _context.EventImages.AddRangeAsync(entities);
-            await _context.SaveChangesAsync();
             return entities;
         }
 
         public async Task<bool> DeleteImageAsync(int imageId, int eventId)
         {
-            var deleted = await _context.EventImages
-                .Where(ei => ei.Id == imageId && ei.EventId == eventId)
-                .ExecuteDeleteAsync();
-            return deleted > 0;
+            var image = await _context.EventImages
+                .FirstOrDefaultAsync(ei => ei.Id == imageId && ei.EventId == eventId);
+
+            if (image == null)
+                return false;
+
+            _context.EventImages.Remove(image);
+            return true;
         }
 
         public async Task DeleteAllByEventIdAsync(int eventId)
         {
-            await _context.EventImages
+            var images = await _context.EventImages
                 .Where(ei => ei.EventId == eventId)
-                .ExecuteDeleteAsync();
+                .ToListAsync();
+
+            if (images.Count > 0)
+                _context.EventImages.RemoveRange(images);
         }
 
         public async Task<int> CountByEventIdAsync(int eventId)

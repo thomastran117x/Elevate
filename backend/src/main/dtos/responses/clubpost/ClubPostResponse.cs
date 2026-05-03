@@ -1,4 +1,5 @@
 using backend.main.models.enums;
+using backend.main.dtos.responses.general;
 
 namespace backend.main.dtos.responses.clubpost
 {

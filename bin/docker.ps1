@@ -29,11 +29,9 @@ docker-compose build
 
 Write-Host ""
 Write-Host "Starting full application stack..."
-docker compose up backend frontend redis mysql rabbitmq elasticsearch worker
+docker compose up -d
 
 Start-Sleep -Seconds 3
-
-docker-compose run --rm --entrypoint "dotnet ef database update" backend
 
 Pop-Location
 
@@ -41,3 +39,5 @@ Write-Host ""
 Write-Host "All services are now running."
 Write-Host "Frontend: http://localhost:3090"
 Write-Host "Backend : http://localhost:8090"
+Write-Host ""
+Write-Host "To follow logs, run: docker compose logs -f"

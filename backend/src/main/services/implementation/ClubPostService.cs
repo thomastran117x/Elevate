@@ -1,5 +1,6 @@
 using backend.main.dtos.messages;
 using backend.main.configurations.resource.elasticsearch;
+using backend.main.dtos.responses.general;
 using backend.main.exceptions.http;
 using backend.main.models.core;
 using backend.main.models.enums;
@@ -55,7 +56,7 @@ namespace backend.main.services.implementation
             return post;
         }
 
-        public async Task<(List<ClubPost> Items, int TotalCount)> GetByClubIdAsync(
+        public async Task<(List<ClubPost> Items, int TotalCount, string Source)> GetByClubIdAsync(
             int clubId, int? requestingUserId, string? search, PostSortBy sortBy, int page, int pageSize)
         {
             var club = await _clubRepository.GetByIdAsync(clubId)
@@ -85,7 +86,7 @@ namespace backend.main.services.implementation
                         : [];
                     if (posts.Count > 0)
                         await _postRepository.IncrementViewCountAsync(posts.Select(p => p.Id));
-                    return (posts, total);
+                    return (posts, total, ResponseSource.Elasticsearch);
                 }
                 catch (ElasticsearchDisabledException ex)
                 {
@@ -110,7 +111,7 @@ namespace backend.main.services.implementation
             if (resultPosts.Count > 0)
                 await _postRepository.IncrementViewCountAsync(resultPosts.Select(p => p.Id));
 
-            return (resultPosts, countTask.Result);
+            return (resultPosts, countTask.Result, ResponseSource.Database);
         }
 
         public async Task<ClubPost> UpdateAsync(int clubId, int postId, int userId, string title, string content, PostType postType, bool isPinned)
@@ -151,7 +152,7 @@ namespace backend.main.services.implementation
             await PublishIndexEventAsync(new ClubPostIndexEvent { Operation = "delete", PostId = postId });
         }
 
-        public async Task<(List<ClubPost> Items, int TotalCount)> GetAllAdminAsync(
+        public async Task<(List<ClubPost> Items, int TotalCount, string Source)> GetAllAdminAsync(
             string? search, PostSortBy sortBy, int page, int pageSize)
         {
             if (!string.IsNullOrWhiteSpace(search))
@@ -162,7 +163,7 @@ namespace backend.main.services.implementation
                     var posts = ids.Count > 0
                         ? await _postRepository.GetByIdsAsync(ids)
                         : [];
-                    return (posts, total);
+                    return (posts, total, ResponseSource.Elasticsearch);
                 }
                 catch (ElasticsearchDisabledException ex)
                 {
@@ -183,7 +184,7 @@ namespace backend.main.services.implementation
             var countTask = _postRepository.CountAllAsync(search);
             await Task.WhenAll(itemsTask, countTask);
 
-            return (itemsTask.Result, countTask.Result);
+            return (itemsTask.Result, countTask.Result, ResponseSource.Database);
         }
 
         private async Task PublishIndexEventAsync(ClubPostIndexEvent evt)

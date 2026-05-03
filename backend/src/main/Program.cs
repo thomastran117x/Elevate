@@ -59,6 +59,7 @@ var app = builder.Build();
 Logger.SetInstance(app.Services.GetRequiredService<ICustomLogger>());
 
 await DatabaseConfig.VerifyDatabaseConnectionAsync(app.Services);
+await DatabaseConfig.EnsureDatabaseMigratedAsync(app.Services);
 await app.Services.SeedAppDataAsync();
 
 app.UseForwardedHeaders();

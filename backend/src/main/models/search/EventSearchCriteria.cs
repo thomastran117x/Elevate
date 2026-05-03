@@ -5,6 +5,7 @@ namespace backend.main.models.search
     public sealed record EventSearchCriteria
     {
         public string? Query { get; init; }
+        public int? ClubId { get; init; }
         public bool IsPrivate { get; init; }
         public EventStatus? Status { get; init; }
         public EventCategory? Category { get; init; }

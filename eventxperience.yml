@@ -101,43 +101,103 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: rabbitmq
+  name: elasticsearch
   namespace: eventxperience
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: rabbitmq
+      app: elasticsearch
   template:
     metadata:
       labels:
-        app: rabbitmq
+        app: elasticsearch
     spec:
       containers:
-        - name: rabbitmq
-          image: rabbitmq:3.13-management
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.16.1
           ports:
-            - containerPort: 5672
-            - containerPort: 15672
+            - containerPort: 9200
           env:
-            - name: RABBITMQ_DEFAULT_USER
-              value: appuser
-            - name: RABBITMQ_DEFAULT_PASS
-              value: apppass
+            - name: discovery.type
+              value: "single-node"
+            - name: xpack.security.enabled
+              value: "false"
+            - name: xpack.security.http.ssl.enabled
+              value: "false"
+            - name: ES_JAVA_OPTS
+              value: "-Xms512m -Xmx512m"
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: rabbitmq
+  name: elasticsearch
   namespace: eventxperience
 spec:
   selector:
-    app: rabbitmq
+    app: elasticsearch
   ports:
-    - name: amqp
-      port: 5672
-    - name: management
-      port: 15672
+    - port: 9200
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+  namespace: eventxperience
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+        - name: kafka
+          image: bitnami/kafka:3.8
+          ports:
+            - containerPort: 9092
+            - containerPort: 9093
+          env:
+            - name: KAFKA_CFG_NODE_ID
+              value: "1"
+            - name: KAFKA_CFG_PROCESS_ROLES
+              value: "broker,controller"
+            - name: KAFKA_CFG_CONTROLLER_QUORUM_VOTERS
+              value: "1@kafka:9093"
+            - name: KAFKA_CFG_LISTENERS
+              value: "PLAINTEXT://:9092,CONTROLLER://:9093"
+            - name: KAFKA_CFG_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://kafka:9092"
+            - name: KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+            - name: KAFKA_CFG_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+            - name: KAFKA_CFG_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+            - name: KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE
+              value: "true"
+            - name: KAFKA_KRAFT_CLUSTER_ID
+              value: "MkU3OEVBNTcwNTJENDM2Qk"
+            - name: ALLOW_PLAINTEXT_LISTENER
+              value: "yes"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: eventxperience
+spec:
+  selector:
+    app: kafka
+  ports:
+    - name: plaintext
+      port: 9092
+    - name: controller
+      port: 9093
 
 ---
 apiVersion: apps/v1
@@ -168,8 +228,10 @@ spec:
               value: "Server=mysql;Port=3306;Database=appdb;User=appuser;Password=apppass"
             - name: REDIS_CONNECTION
               value: "redis:6379"
-            - name: RABBIT_CONNECTION
-              value: "amqp://appuser:apppass@rabbitmq:5672"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:9092"
+            - name: ELASTICSEARCH_URL
+              value: "http://elasticsearch:9200"
             - name: JWT_SECRET_KEY
               value: "amazing_secret_key_yup_yes_abcdef123"
 ---
@@ -188,27 +250,85 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: worker
+  name: event-indexer
   namespace: eventxperience
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: worker
+      app: event-indexer
   template:
     metadata:
       labels:
-        app: worker
+        app: event-indexer
     spec:
       containers:
-        - name: worker
-          image: myapp-worker:latest
+        - name: event-indexer
+          image: myapp-event-indexer:latest
           imagePullPolicy: IfNotPresent
           env:
-            - name: RABBIT_CONNECTION
-              value: "amqp://appuser:apppass@rabbitmq:5672"
-            - name: REDIS_CONNECTION
-              value: "redis:6379"
+            - name: ELASTICSEARCH_URL
+              value: "http://elasticsearch:9200"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:9092"
+            - name: EVENT_INDEX_TOPIC
+              value: "event-index-events"
+            - name: EVENT_INDEX_GROUP_ID
+              value: "event-indexer"
+            - name: EVENT_INDEX_DLQ_TOPIC
+              value: "event-index-events-dlq"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clubpost-indexer
+  namespace: eventxperience
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clubpost-indexer
+  template:
+    metadata:
+      labels:
+        app: clubpost-indexer
+    spec:
+      containers:
+        - name: clubpost-indexer
+          image: myapp-clubpost-indexer:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ELASTICSEARCH_URL
+              value: "http://elasticsearch:9200"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:9092"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: email-worker
+  namespace: eventxperience
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: email-worker
+  template:
+    metadata:
+      labels:
+        app: email-worker
+    spec:
+      containers:
+        - name: email-worker
+          image: myapp-email-worker:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:9092"
+            - name: FRONTEND_URL
+              value: "http://frontend:3090"
 
 ---
 apiVersion: apps/v1

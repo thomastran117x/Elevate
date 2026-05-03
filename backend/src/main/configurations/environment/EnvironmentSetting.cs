@@ -9,7 +9,6 @@ namespace backend.main.configurations.environment
         private static readonly bool _runningInContainer;
         private static readonly string _dbConnectionString;
         private static readonly string _redisConnection;
-        private static readonly string _rabbitConnection;
         private static readonly string _jwtSecretKeyAccess;
         private static readonly string _jwtSecretKeyVerification;
         private static readonly string? _googleCaptchaSecret;
@@ -17,6 +16,8 @@ namespace backend.main.configurations.environment
         private static readonly string? _email;
         private static readonly string? _password;
         private static readonly string? _smtpServer;
+        private static readonly int _smtpPort;
+        private static readonly string _frontendBaseUrl;
         private static readonly string? _microsoftClientId;
         private static readonly string? _microsoftTenantId;
         private static readonly string? _googleClientId;
@@ -27,6 +28,10 @@ namespace backend.main.configurations.environment
         private static readonly string? _azureStorageConnectionString;
         private static readonly string? _azureStorageContainerName;
         private static readonly string? _elasticsearchUrl;
+        private static readonly string _kafkaBootstrapServers;
+        private static readonly string _eventIndexTopic;
+        private static readonly string _eventIndexGroupId;
+        private static readonly string _eventIndexDlqTopic;
         private static readonly string _appEnvironment;
         private static readonly string _logLevel;
         private const string DefaultJwtSecretAccess = "unit_test_secret_12345678901234567890";
@@ -48,11 +53,6 @@ namespace backend.main.configurations.environment
                 "localhost:6379"
             );
 
-            _rabbitConnection = GetOrDefault(
-                ["RABBITMQ_URL", "RABBIT_CONNECTION"],
-                "amqp://guest:guest@localhost:5672"
-            );
-
             _jwtSecretKeyAccess = GetOrDefault(
                 ["JWT_SECRET_ACCESS", "JWT_SECRET_KEY"],
                 DefaultJwtSecretAccess
@@ -68,6 +68,14 @@ namespace backend.main.configurations.environment
             _email = GetOptional(["EMAIL_USER"]);
             _password = GetOptional(["EMAIL_PASSWORD"]);
             _smtpServer = GetOptional(["SMTP_SERVER"]);
+            _smtpPort = GetOptional(["SMTP_PORT"]) is string smtpPortText
+                && int.TryParse(smtpPortText, out var smtpPort)
+                ? smtpPort
+                : 587;
+            _frontendBaseUrl = GetOrDefault(
+                ["Frontend:BaseUrl", "FRONTEND_URL"],
+                "http://localhost:3090"
+            );
 
             _microsoftClientId = GetOptional(["MS_CLIENT_ID"]);
             _microsoftTenantId = GetOptional(["MS_TENANT_ID"]);
@@ -78,6 +86,22 @@ namespace backend.main.configurations.environment
             _azureStorageContainerName = GetOptional(["AZURE_STORAGE_CONTAINER_NAME"]);
 
             _elasticsearchUrl = GetOptional(["ELASTICSEARCH_URL"]);
+            _kafkaBootstrapServers = GetOrDefault(
+                ["KAFKA_BOOTSTRAP_SERVERS"],
+                "localhost:9092"
+            );
+            _eventIndexTopic = GetOrDefault(
+                ["EVENT_INDEX_TOPIC"],
+                "event-index-events"
+            );
+            _eventIndexGroupId = GetOrDefault(
+                ["EVENT_INDEX_GROUP_ID"],
+                "event-indexer"
+            );
+            _eventIndexDlqTopic = GetOrDefault(
+                ["EVENT_INDEX_DLQ_TOPIC"],
+                "event-index-events-dlq"
+            );
 
             _appEnvironment = (
                 GetOptional(["ENVIRONMENT", "ASPNETCORE_ENVIRONMENT", "DOTNET_ENVIRONMENT"])
@@ -152,12 +176,13 @@ namespace backend.main.configurations.environment
 
         public static string DbConnectionString => _dbConnectionString;
         public static string RedisConnection => _redisConnection;
-        public static string RabbitConnection => _rabbitConnection;
         public static string JwtSecretKeyAccess => _jwtSecretKeyAccess;
         public static string JwtSecretKeyVerification => _jwtSecretKeyVerification;
         public static string? Email => _email;
         public static string? Password => _password;
         public static string? SmtpServer => _smtpServer;
+        public static int SmtpPort => _smtpPort;
+        public static string FrontendBaseUrl => _frontendBaseUrl;
         public static string? MicrosoftClientId => _microsoftClientId;
         public static string? GoogleClientId => _googleClientId;
         public static string? AppleClientId => _appleClientId;
@@ -165,6 +190,10 @@ namespace backend.main.configurations.environment
         public static string? AzureStorageConnectionString => _azureStorageConnectionString;
         public static string? AzureStorageContainerName => _azureStorageContainerName;
         public static string? ElasticsearchUrl => _elasticsearchUrl;
+        public static string KafkaBootstrapServers => _kafkaBootstrapServers;
+        public static string EventIndexTopic => _eventIndexTopic;
+        public static string EventIndexGroupId => _eventIndexGroupId;
+        public static string EventIndexDlqTopic => _eventIndexDlqTopic;
         public static string AppEnvironment => _appEnvironment;
         public static string LogLevel => _logLevel;
 

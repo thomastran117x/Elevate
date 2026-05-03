@@ -33,8 +33,8 @@ services:
       REDIS_URL: "${REDIS_URL:-redis:6379}"
       JWT_SECRET_ACCESS: "${JWT_SECRET_ACCESS:-amazing_secret_key_yup_yes_abcdef123}"
       JWT_SECRET_VERIFICATION: "${JWT_SECRET_VERIFICATION:-amazing_verification_secret_yup_yes_abcdef123}"
-      RABBITMQ_URL: "${RABBITMQ_URL:-amqp://appuser:apppass@rabbitmq:5672}"
       ELASTICSEARCH_URL: "${ELASTICSEARCH_URL:-http://elasticsearch:9200}"
+      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
     ports:
       - "8090:8090"
     depends_on:
@@ -42,40 +42,90 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-      rabbitmq:
+      elasticsearch:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    networks:
+      - event-network
+
+  event-indexer:
+    container_name: event-event-indexer
+    build:
+      context: ./backend
+      dockerfile: src/worker/event-indexer/Dockerfile
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Development}"
+      ELASTICSEARCH_URL: "${ELASTICSEARCH_URL:-http://elasticsearch:9200}"
+      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
+      EVENT_INDEX_TOPIC: "${EVENT_INDEX_TOPIC:-event-index-events}"
+      EVENT_INDEX_GROUP_ID: "${EVENT_INDEX_GROUP_ID:-event-indexer}"
+      EVENT_INDEX_DLQ_TOPIC: "${EVENT_INDEX_DLQ_TOPIC:-event-index-events-dlq}"
+    depends_on:
+      kafka:
+        condition: service_started
+      kafka-connect:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
     networks:
       - event-network
 
-  worker:
-    container_name: event-worker
+  clubpost-indexer:
+    container_name: event-clubpost-indexer
     build:
-      context: ./worker
-      dockerfile: Dockerfile
+      context: ./backend
+      dockerfile: src/worker/clubpost-indexer/Dockerfile
     env_file:
       - path: ./.env
         required: false
     environment:
-      APP_ENV: "${APP_ENV:-development}"
-      DB_CONNECTION_STRING: "${DB_CONNECTION_STRING:-Server=mysql;Port=3306;Database=appdb;User=appuser;Password=apppass}"
-      RABBIT_CONNECTION: "${RABBIT_CONNECTION:-amqp://appuser:apppass@rabbitmq:5672}"
-      REDIS_CONNECTION: "${REDIS_CONNECTION:-redis:6379}"
+      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Development}"
+      ELASTICSEARCH_URL: "${ELASTICSEARCH_URL:-http://elasticsearch:9200}"
+      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
+    depends_on:
+      kafka:
+        condition: service_started
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - event-network
+
+  email-worker:
+    container_name: event-email-worker
+    build:
+      context: ./backend
+      dockerfile: src/worker/email-worker/Dockerfile
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Development}"
+      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
+      SMTP_SERVER: "${SMTP_SERVER:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      EMAIL_USER: "${EMAIL_USER:-}"
+      EMAIL_PASSWORD: "${EMAIL_PASSWORD:-}"
       FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3090}"
     depends_on:
-      rabbitmq:
-        condition: service_healthy
-      redis:
+      kafka:
         condition: service_started
     networks:
       - event-network
-    restart: unless-stopped
 
   mysql:
     container_name: event-mysql
     image: mysql:8.4
     restart: always
+    command:
+      - "--server-id=223344"
+      - "--log-bin=mysql-bin"
+      - "--binlog_format=ROW"
+      - "--binlog_row_image=FULL"
+      - "--binlog_expire_logs_seconds=86400"
     environment:
       MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-root}"
       MYSQL_DATABASE: "${MYSQL_DATABASE:-appdb}"
@@ -104,25 +154,6 @@ services:
     networks:
       - event-network
 
-  rabbitmq:
-    image: rabbitmq:3.13-management
-    container_name: event-rabbitmq
-    restart: always
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      RABBITMQ_DEFAULT_USER: "${RABBITMQ_DEFAULT_USER:-appuser}"
-      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_DEFAULT_PASS:-apppass}"
-      RABBITMQ_DEFAULT_VHOST: "${RABBITMQ_DEFAULT_VHOST:-/}"
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - event-network
-
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.16.1
     container_name: event-elasticsearch
@@ -142,6 +173,79 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
+    networks:
+      - event-network
+
+  kafka:
+    image: bitnamilegacy/kafka:4.0.0-debian-12-r10
+    container_name: event-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_KRAFT_CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    ports:
+      - "9093:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    networks:
+      - event-network
+
+  kafka-connect:
+    image: quay.io/debezium/connect:3.0.7.Final
+    container_name: event-kafka-connect
+    restart: unless-stopped
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: connect_configs
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      STATUS_STORAGE_TOPIC: connect_statuses
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+      KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+    depends_on:
+      - kafka
+      - mysql
+    ports:
+      - "8083:8083"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8083/connectors >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - event-network
+
+  kafka-connect-init:
+    image: curlimages/curl:8.8.0
+    container_name: event-kafka-connect-init
+    depends_on:
+      kafka-connect:
+        condition: service_healthy
+    volumes:
+      - ./docker/kafka-connect:/scripts:ro
+    entrypoint:
+      - sh
+      - /scripts/register-event-outbox-connector.sh
     networks:
       - event-network
 

@@ -1,6 +1,5 @@
 using backend.main.attributes.repository;
 using backend.main.configurations.resource.elasticsearch;
-using backend.main.consumers;
 using backend.main.publishers.implementation;
 using backend.main.publishers.interfaces;
 using backend.main.repositories.extensions;
@@ -20,10 +19,42 @@ namespace backend.main.configurations.application
     {
         private static readonly Uri GoogleCaptchaBaseAddress = new("https://www.google.com/");
 
-        public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration config)
+        public static IServiceCollection AddElasticsearchInfrastructure(this IServiceCollection services, IConfiguration config)
         {
             services.AddAppElasticsearch(config);
             services.AddSingleton<ElasticsearchCircuitBreaker>();
+
+            return services;
+        }
+
+        public static IServiceCollection AddEventSearchInfrastructure(this IServiceCollection services, IConfiguration config)
+        {
+            services.AddElasticsearchInfrastructure(config);
+            services.AddScoped<IEventSearchService, EventSearchService>();
+
+            return services;
+        }
+
+        public static IServiceCollection AddClubPostSearchInfrastructure(this IServiceCollection services, IConfiguration config)
+        {
+            services.AddElasticsearchInfrastructure(config);
+            services.AddScoped<IClubPostSearchService, ClubPostSearchService>();
+
+            return services;
+        }
+
+        public static IServiceCollection AddSearchInfrastructure(this IServiceCollection services, IConfiguration config)
+        {
+            services.AddElasticsearchInfrastructure(config);
+            services.AddScoped<IEventSearchService, EventSearchService>();
+            services.AddScoped<IClubPostSearchService, ClubPostSearchService>();
+
+            return services;
+        }
+
+        public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration config)
+        {
+            services.AddSearchInfrastructure(config);
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
             services.AddSingleton<IRepositoryAttributeResolver, RepositoryAttributeResolver>();
             services.AddRepositoryWithProxy<IFollowRepository, FollowRepository>();
@@ -52,14 +83,10 @@ namespace backend.main.configurations.application
             services.AddScoped<IClubReviewService, ClubReviewService>();
             services.AddScoped<IDeviceService, DeviceService>();
             services.AddScoped<IClubPostService, ClubPostService>();
-            services.AddScoped<IClubPostSearchService, ClubPostSearchService>();
             services.AddScoped<IClubPostReindexService, ClubPostReindexService>();
             services.AddHostedService<ElasticsearchIndexInitializationService>();
-            services.AddHostedService<ElasticsearchDlqMonitorService>();
-            services.AddHostedService<ClubPostIndexConsumer>();
-            services.AddScoped<IEventSearchService, EventSearchService>();
             services.AddScoped<IEventReindexService, EventReindexService>();
-            services.AddHostedService<EventIndexConsumer>();
+            services.AddScoped<IEventSearchOutboxWriter, EventSearchOutboxWriter>();
             services.AddScoped<IPostCommentService, PostCommentService>();
             services.AddScoped<IEventRegistrationService, EventRegistrationService>();
             services.AddScoped<IFileUploadService, FileUploadService>();

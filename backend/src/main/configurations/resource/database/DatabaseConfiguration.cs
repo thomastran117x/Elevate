@@ -50,5 +50,25 @@ namespace backend.main.configurations.resource.database
                 Environment.Exit(1);
             }
         }
+
+        public static async Task EnsureDatabaseMigratedAsync(
+            IServiceProvider serviceProvider)
+        {
+            try
+            {
+                using var scope = serviceProvider.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+
+                await db.Database.MigrateAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(
+                    $"Failed to apply database migrations after retries: {ex.Message}"
+                );
+
+                Environment.Exit(1);
+            }
+        }
     }
 }

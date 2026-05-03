@@ -1,5 +1,6 @@
 using backend.main.models.documents;
 using backend.main.exceptions.http;
+using backend.main.Mappers;
 using backend.main.repositories.interfaces;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
@@ -44,31 +45,7 @@ namespace backend.main.services.implementation
                     var events = await _eventsRepository.GetAllForReindexAsync(page, BatchSize, token);
                     if (events.Count == 0) break;
 
-                    var documents = events.Select(e => new EventDocument
-                    {
-                        Id = e.Id,
-                        ClubId = e.ClubId,
-                        Name = e.Name,
-                        Description = e.Description,
-                        Location = e.Location,
-                        IsPrivate = e.isPrivate,
-                        StartTime = e.StartTime,
-                        EndTime = e.EndTime,
-                        CreatedAt = e.CreatedAt,
-                        UpdatedAt = e.UpdatedAt,
-                        Category = e.Category.ToString(),
-                        VenueName = e.VenueName,
-                        City = e.City,
-                        Tags = e.Tags ?? new List<string>(),
-                        LocationGeo = (e.Latitude.HasValue && e.Longitude.HasValue)
-                            ? GeoLocation.LatitudeLongitude(new LatLonGeoLocation
-                            {
-                                Lat = e.Latitude.Value,
-                                Lon = e.Longitude.Value
-                            })
-                            : null,
-                        RegistrationCount = e.RegistrationCount
-                    });
+                    var documents = events.Select(EventSearchDocumentMapper.ToDocument);
 
                     await _searchService.BulkIndexAsync(documents, token);
                     totalIndexed += events.Count;

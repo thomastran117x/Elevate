@@ -11,31 +11,46 @@ namespace backend.main.services.implementation
 {
     public class AzureBlobService : IAzureBlobService
     {
-        private readonly BlobContainerClient _container;
+        private readonly BlobContainerClient? _container;
+        private readonly string? _configurationError;
 
         public AzureBlobService()
         {
-            var connectionString = EnvironmentSetting.AzureStorageConnectionString
-                ?? throw new InvalidOperationException("AZURE_STORAGE_CONNECTION_STRING is not configured.");
-            var containerName = EnvironmentSetting.AzureStorageContainerName
-                ?? throw new InvalidOperationException("AZURE_STORAGE_CONTAINER_NAME is not configured.");
+            var connectionString = EnvironmentSetting.AzureStorageConnectionString;
+            var containerName = EnvironmentSetting.AzureStorageContainerName;
+
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                _configurationError = "AZURE_STORAGE_CONNECTION_STRING is not configured.";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(containerName))
+            {
+                _configurationError = "AZURE_STORAGE_CONTAINER_NAME is not configured.";
+                return;
+            }
 
             _container = new BlobContainerClient(connectionString, containerName);
         }
 
-        public async Task<PresignedUploadResponse> GenerateUploadUrlAsync(string fileName, string contentType)
+        public async Task<PresignedUploadResponse> GenerateUploadUrlAsync(
+            string fileName,
+            string contentType)
         {
-            await _container.CreateIfNotExistsAsync(PublicAccessType.Blob);
+            var container = GetRequiredContainer();
+
+            await container.CreateIfNotExistsAsync(PublicAccessType.Blob);
 
             var ext = Path.GetExtension(fileName);
             var blobName = $"events/{Guid.NewGuid()}{ext}";
-            var blobClient = _container.GetBlobClient(blobName);
+            var blobClient = container.GetBlobClient(blobName);
 
             var expiresAt = DateTimeOffset.UtcNow.AddMinutes(15);
 
             var sasBuilder = new BlobSasBuilder
             {
-                BlobContainerName = _container.Name,
+                BlobContainerName = container.Name,
                 BlobName = blobName,
                 Resource = "b",
                 ExpiresOn = expiresAt
@@ -56,9 +71,11 @@ namespace backend.main.services.implementation
         {
             try
             {
+                if (_container == null)
+                    return;
+
                 var uri = new Uri(blobUrl);
                 var blobPath = uri.AbsolutePath.TrimStart('/');
-                // AbsolutePath is "/{container}/{blobName}" — strip the container prefix
                 var containerPrefix = _container.Name + "/";
                 if (blobPath.StartsWith(containerPrefix))
                     blobPath = blobPath[containerPrefix.Length..];
@@ -70,6 +87,16 @@ namespace backend.main.services.implementation
             {
                 Logger.Warn(ex, $"[AzureBlobService] Best-effort blob deletion failed for: {blobUrl}");
             }
+        }
+
+        private BlobContainerClient GetRequiredContainer()
+        {
+            if (_container != null)
+                return _container;
+
+            throw new InvalidOperationException(
+                _configurationError ?? "Azure Blob Storage is not configured."
+            );
         }
     }
 }

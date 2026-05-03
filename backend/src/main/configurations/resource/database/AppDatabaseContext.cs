@@ -20,6 +20,7 @@ namespace backend.main.configurations.resource.database
         public DbSet<PostComment> PostComments { get; set; } = null!;
         public DbSet<EventRegistration> EventRegistrations { get; set; } = null!;
         public DbSet<EventImage> EventImages { get; set; } = null!;
+        public DbSet<EventSearchOutbox> EventSearchOutbox { get; set; } = null!;
         public AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : base(options) { }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -264,6 +265,40 @@ namespace backend.main.configurations.resource.database
             modelBuilder.Entity<EventRegistration>()
                 .HasIndex(r => new { r.EventId, r.UserId })
                 .IsUnique();
+
+            modelBuilder.Entity<EventSearchOutbox>()
+                .ToTable("event_search_outbox");
+
+            modelBuilder.Entity<EventSearchOutbox>()
+                .Property(e => e.Id)
+                .HasColumnName("id");
+
+            modelBuilder.Entity<EventSearchOutbox>()
+                .Property(e => e.AggregateType)
+                .HasColumnName("aggregatetype")
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<EventSearchOutbox>()
+                .Property(e => e.AggregateId)
+                .HasColumnName("aggregateid")
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<EventSearchOutbox>()
+                .Property(e => e.Type)
+                .HasColumnName("type")
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<EventSearchOutbox>()
+                .Property(e => e.Payload)
+                .HasColumnName("payload")
+                .HasColumnType("json");
+
+            modelBuilder.Entity<EventSearchOutbox>()
+                .Property(e => e.CreatedAt)
+                .HasColumnName("created_at");
+
+            modelBuilder.Entity<EventSearchOutbox>()
+                .HasIndex(e => e.CreatedAt);
         }
     }
 }
