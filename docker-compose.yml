@@ -65,8 +65,8 @@ services:
       EVENT_INDEX_GROUP_ID: "${EVENT_INDEX_GROUP_ID:-event-indexer}"
       EVENT_INDEX_DLQ_TOPIC: "${EVENT_INDEX_DLQ_TOPIC:-event-index-events-dlq}"
     depends_on:
-      kafka:
-        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
       kafka-connect:
         condition: service_healthy
       elasticsearch:
@@ -87,8 +87,8 @@ services:
       ELASTICSEARCH_URL: "${ELASTICSEARCH_URL:-http://elasticsearch:9200}"
       KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
     depends_on:
-      kafka:
-        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
       elasticsearch:
         condition: service_healthy
     networks:
@@ -111,8 +111,8 @@ services:
       EMAIL_PASSWORD: "${EMAIL_PASSWORD:-}"
       FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3090}"
     depends_on:
-      kafka:
-        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
     networks:
       - event-network
 
@@ -203,6 +203,26 @@ services:
       timeout: 10s
       retries: 12
       start_period: 30s
+    networks:
+      - event-network
+
+  kafka-init:
+    image: bitnamilegacy/kafka:4.0.0-debian-12-r10
+    container_name: event-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint:
+      - bash
+      - -c
+      - |
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic event-index-events --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic event-index-events-dlq --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic clubpost-es-index --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic clubpost-es-index-dlq --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-email --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-email-dlq --partitions 1 --replication-factor 1
+        echo "All Kafka topics created."
     networks:
       - event-network
 
