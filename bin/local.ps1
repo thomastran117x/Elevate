@@ -15,7 +15,7 @@ try {
 $RootDir      = Resolve-Path (Join-Path $PSScriptRoot "..")
 $FrontendPath = Resolve-Path (Join-Path $RootDir "frontend")
 $BackendPath  = Resolve-Path (Join-Path $RootDir "backend")
-$WorkerPath  = Resolve-Path (Join-Path $RootDir "worker")
+$WorkerPath   = Resolve-Path (Join-Path $RootDir "backend\src\worker")
 
 function Assert-Package([string]$Path) {
   if (-not (Test-Path (Join-Path $Path "package.json"))) {

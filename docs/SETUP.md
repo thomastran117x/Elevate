@@ -25,12 +25,12 @@ Verify Docker is working with:
 - [.NET Core 9.x](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
 - [MySQL](https://www.mysql.com/downloads/)
 - [Redis](https://redis.io/downloads/)
-- [RabbitMQ](https://www.rabbitmq.com/tutorials)
+- [Kafka](https://kafka.apache.org/quickstart)
 
 [Installing Redis on Windows](https://redis.io/docs/latest/operate/oss_and_stack/install/archive/install-redis/install-redis-on-windows/)  
-[Installing RabbitMQ on Windows](https://www.rabbitmq.com/docs/download)
+[Installing Kafka on Windows](https://kafka.apache.org/quickstart)
 
-Alternatively, you can use a cloud instance of MySQL, Redis and RabbitMQ - however it is a lot for this project
+Alternatively, you can use a cloud instance of MySQL, Redis, Kafka, and Elasticsearch - however it is a lot for this project
 
 Verify your local environment is working with:
 
@@ -39,7 +39,7 @@ Verify your local environment is working with:
   dotnet --version
   mysql -u root -p -e "SELECT VERSION();"
   redis-cli ping
-  sudo rabbitmq-diagnostics ping
+  kafka-topics --version
 ```
 
 Once verification of the tools are successful, then you are ready to install and run EventXperience

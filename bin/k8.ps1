@@ -38,14 +38,14 @@ $root = Resolve-Path (Join-Path (Split-Path $MyInvocation.MyCommand.Path) "..")
 
 $frontendPath = Join-Path $root "frontend"
 $backendPath  = Join-Path $root "backend"
-$workerPath   = Join-Path $root "worker"
+$workerPath   = Join-Path $root "backend\src\worker\event-indexer"
 $manifest     = Join-Path $root "eventxperience.yml"
 
 Info "Building Docker images (linux/arm64)..."
 
 docker buildx build --platform linux/arm64 -t myapp-frontend:latest $frontendPath | Out-Null
 docker buildx build --platform linux/arm64 -t myapp-backend:latest  $backendPath  | Out-Null
-docker buildx build --platform linux/arm64 -t myapp-worker:latest   $workerPath   | Out-Null
+docker buildx build --platform linux/arm64 -t myapp-worker:latest -f (Join-Path $workerPath "Dockerfile") $backendPath | Out-Null
 
 Success "Docker images built"
 

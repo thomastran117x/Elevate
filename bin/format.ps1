@@ -31,7 +31,7 @@ function Dotnet-Format {
 
 Dotnet-Format "..\backend"
 Prettier-Format "..\frontend"
-Dotnet-Format "..\worker"
+Dotnet-Format "..\backend\src\worker\event-indexer"
 
 Write-Host ""
 Write-Host "All formatting complete." -ForegroundColor Cyan
