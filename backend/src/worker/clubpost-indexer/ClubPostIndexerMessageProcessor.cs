@@ -9,7 +9,7 @@ using backend.main.utilities.implementation;
 using Polly;
 using Polly.Retry;
 
-namespace backend.worker.event_indexer;
+namespace backend.worker.clubpost_indexer;
 
 public sealed class ClubPostIndexerMessageProcessor
 {
@@ -35,7 +35,7 @@ public sealed class ClubPostIndexerMessageProcessor
     }
 
     public async Task ProcessAsync(
-        EventIndexerEnvelope envelope,
+        ClubPostIndexerEnvelope envelope,
         CancellationToken cancellationToken = default)
     {
         ClubPostIndexEvent? evt = null;

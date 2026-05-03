@@ -7,7 +7,7 @@ using backend.main.utilities.implementation;
 using Polly;
 using Polly.Retry;
 
-namespace backend.worker.event_indexer;
+namespace backend.worker.email_worker;
 
 public sealed class EmailMessageProcessor
 {
@@ -33,7 +33,7 @@ public sealed class EmailMessageProcessor
     }
 
     public async Task ProcessAsync(
-        EventIndexerEnvelope envelope,
+        EmailWorkerEnvelope envelope,
         CancellationToken cancellationToken = default)
     {
         EmailMessage? message = null;

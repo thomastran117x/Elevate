@@ -2,7 +2,7 @@ using backend.main.utilities.implementation;
 
 using Confluent.Kafka;
 
-namespace backend.worker.event_indexer;
+namespace backend.worker.email_worker;
 
 public sealed class KafkaEmailWorker : BackgroundService
 {
@@ -45,7 +45,7 @@ public sealed class KafkaEmailWorker : BackgroundService
                     using var scope = _scopeFactory.CreateScope();
                     var processor = scope.ServiceProvider.GetRequiredService<EmailMessageProcessor>();
 
-                    await processor.ProcessAsync(EventIndexerEnvelope.FromConsumeResult(result), stoppingToken);
+                    await processor.ProcessAsync(EmailWorkerEnvelope.FromConsumeResult(result), stoppingToken);
                     consumer.Commit(result);
                 }
             }

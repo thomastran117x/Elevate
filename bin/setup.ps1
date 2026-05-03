@@ -85,7 +85,9 @@ if (Test-Path $worker) {
     }
 
     Write-Host "Restoring .NET dependencies..."
-    dotnet restore $workerProjFiles[0].FullName
+    foreach ($workerProj in $workerProjFiles) {
+        dotnet restore $workerProj.FullName
+    }
 
     Pop-Location
 } else {

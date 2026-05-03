@@ -49,8 +49,8 @@ services:
     networks:
       - event-network
 
-  worker:
-    container_name: event-worker
+  event-indexer:
+    container_name: event-event-indexer
     build:
       context: ./backend
       dockerfile: src/worker/event-indexer/Dockerfile
@@ -71,6 +71,48 @@ services:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
+    networks:
+      - event-network
+
+  clubpost-indexer:
+    container_name: event-clubpost-indexer
+    build:
+      context: ./backend
+      dockerfile: src/worker/clubpost-indexer/Dockerfile
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Development}"
+      ELASTICSEARCH_URL: "${ELASTICSEARCH_URL:-http://elasticsearch:9200}"
+      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
+    depends_on:
+      kafka:
+        condition: service_started
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - event-network
+
+  email-worker:
+    container_name: event-email-worker
+    build:
+      context: ./backend
+      dockerfile: src/worker/email-worker/Dockerfile
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Development}"
+      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
+      SMTP_SERVER: "${SMTP_SERVER:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      EMAIL_USER: "${EMAIL_USER:-}"
+      EMAIL_PASSWORD: "${EMAIL_PASSWORD:-}"
+      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3090}"
+    depends_on:
+      kafka:
+        condition: service_started
     networks:
       - event-network
 

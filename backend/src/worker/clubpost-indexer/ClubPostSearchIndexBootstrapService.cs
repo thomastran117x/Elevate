@@ -2,7 +2,10 @@ using backend.main.configurations.resource.elasticsearch;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
 
-namespace backend.worker.event_indexer;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+namespace backend.worker.clubpost_indexer;
 
 public sealed class ClubPostSearchIndexBootstrapService : BackgroundService
 {

@@ -13,7 +13,7 @@ public class EmailMessageProcessorTests
     {
         var sender = new FakeEmailSender();
         var dlq = new FakeDlqPublisher();
-        var processor = new backend.worker.event_indexer.EmailMessageProcessor(sender, dlq);
+        var processor = new backend.worker.email_worker.EmailMessageProcessor(sender, dlq);
 
         await processor.ProcessAsync(CreateEnvelope(
             """
@@ -35,7 +35,7 @@ public class EmailMessageProcessorTests
     {
         var sender = new FakeEmailSender();
         var dlq = new FakeDlqPublisher();
-        var processor = new backend.worker.event_indexer.EmailMessageProcessor(sender, dlq);
+        var processor = new backend.worker.email_worker.EmailMessageProcessor(sender, dlq);
 
         await processor.ProcessAsync(CreateEnvelope("""{ "type": "VerifyEmail" """));
 
@@ -43,7 +43,7 @@ public class EmailMessageProcessorTests
         dlq.Messages.Should().ContainSingle();
     }
 
-    private static backend.worker.event_indexer.EventIndexerEnvelope CreateEnvelope(string payload) =>
+    private static backend.worker.email_worker.EmailWorkerEnvelope CreateEnvelope(string payload) =>
         new(
             "eventxperience-email",
             0,
@@ -54,7 +54,7 @@ public class EmailMessageProcessorTests
             new Dictionary<string, string?>()
         );
 
-    private sealed class FakeEmailSender : backend.worker.event_indexer.IEmailSender
+    private sealed class FakeEmailSender : backend.worker.email_worker.IEmailSender
     {
         public List<EmailMessage> Messages { get; } = new();
 
@@ -65,12 +65,12 @@ public class EmailMessageProcessorTests
         }
     }
 
-    private sealed class FakeDlqPublisher : backend.worker.event_indexer.IEmailWorkerDlqPublisher
+    private sealed class FakeDlqPublisher : backend.worker.email_worker.IEmailWorkerDlqPublisher
     {
-        public List<(backend.worker.event_indexer.EventIndexerEnvelope Envelope, string Error)> Messages { get; } = new();
+        public List<(backend.worker.email_worker.EmailWorkerEnvelope Envelope, string Error)> Messages { get; } = new();
 
         public Task PublishAsync(
-            backend.worker.event_indexer.EventIndexerEnvelope envelope,
+            backend.worker.email_worker.EmailWorkerEnvelope envelope,
             string error,
             CancellationToken cancellationToken = default)
         {

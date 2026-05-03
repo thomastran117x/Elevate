@@ -15,7 +15,7 @@ public class ClubPostIndexerMessageProcessorTests
     {
         var search = new FakeClubPostSearchService();
         var dlq = new FakeDlqPublisher();
-        var processor = new backend.worker.event_indexer.ClubPostIndexerMessageProcessor(search, dlq);
+        var processor = new backend.worker.clubpost_indexer.ClubPostIndexerMessageProcessor(search, dlq);
 
         await processor.ProcessAsync(CreateEnvelope(
             """
@@ -44,7 +44,7 @@ public class ClubPostIndexerMessageProcessorTests
     {
         var search = new FakeClubPostSearchService();
         var dlq = new FakeDlqPublisher();
-        var processor = new backend.worker.event_indexer.ClubPostIndexerMessageProcessor(search, dlq);
+        var processor = new backend.worker.clubpost_indexer.ClubPostIndexerMessageProcessor(search, dlq);
 
         await processor.ProcessAsync(CreateEnvelope("""{ "operation": "upsert", "postId": 0 }"""));
 
@@ -52,7 +52,7 @@ public class ClubPostIndexerMessageProcessorTests
         dlq.Messages.Should().ContainSingle();
     }
 
-    private static backend.worker.event_indexer.EventIndexerEnvelope CreateEnvelope(string payload) =>
+    private static backend.worker.clubpost_indexer.ClubPostIndexerEnvelope CreateEnvelope(string payload) =>
         new(
             "clubpost-es-index",
             0,
@@ -83,12 +83,12 @@ public class ClubPostIndexerMessageProcessorTests
         }
     }
 
-    private sealed class FakeDlqPublisher : backend.worker.event_indexer.IClubPostIndexerDlqPublisher
+    private sealed class FakeDlqPublisher : backend.worker.clubpost_indexer.IClubPostIndexerDlqPublisher
     {
-        public List<(backend.worker.event_indexer.EventIndexerEnvelope Envelope, string Error)> Messages { get; } = new();
+        public List<(backend.worker.clubpost_indexer.ClubPostIndexerEnvelope Envelope, string Error)> Messages { get; } = new();
 
         public Task PublishAsync(
-            backend.worker.event_indexer.EventIndexerEnvelope envelope,
+            backend.worker.clubpost_indexer.ClubPostIndexerEnvelope envelope,
             string error,
             CancellationToken cancellationToken = default)
         {

@@ -1,6 +1,6 @@
 using backend.main.configurations.environment;
 
-namespace backend.worker.event_indexer;
+namespace backend.worker.email_worker;
 
 public sealed record EmailWorkerOptions(
     string BootstrapServers,
@@ -19,7 +19,7 @@ public sealed record EmailWorkerOptions(
         && !string.IsNullOrWhiteSpace(Password);
 
     public static EmailWorkerOptions FromEnvironment() => new(
-        EventIndexerOptions.Require(EnvironmentSetting.KafkaBootstrapServers, nameof(EnvironmentSetting.KafkaBootstrapServers)),
+        Require(EnvironmentSetting.KafkaBootstrapServers, nameof(EnvironmentSetting.KafkaBootstrapServers)),
         "eventxperience-email",
         "email-worker",
         "eventxperience-email-dlq",
@@ -29,4 +29,12 @@ public sealed record EmailWorkerOptions(
         EnvironmentSetting.Password,
         EnvironmentSetting.FrontendBaseUrl
     );
+
+    private static string Require(string? value, string settingName)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+            return value.Trim();
+
+        throw new InvalidOperationException($"{settingName} must be configured for the email worker.");
+    }
 }

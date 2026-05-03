@@ -4,22 +4,32 @@ using backend.main.publishers.implementation;
 
 using Confluent.Kafka;
 
-namespace backend.worker.event_indexer;
+namespace backend.worker.email_worker;
 
-public interface IClubPostIndexerDlqPublisher
+public sealed record EmailWorkerDlqMessage(
+    string SourceTopic,
+    int SourcePartition,
+    long SourceOffset,
+    string? SourceKey,
+    IReadOnlyDictionary<string, string?> Headers,
+    string Payload,
+    string Error,
+    DateTime FailedAtUtc);
+
+public interface IEmailWorkerDlqPublisher
 {
     Task PublishAsync(
-        EventIndexerEnvelope envelope,
+        EmailWorkerEnvelope envelope,
         string error,
         CancellationToken cancellationToken = default);
 }
 
-public sealed class KafkaClubPostIndexerDlqPublisher : IClubPostIndexerDlqPublisher, IAsyncDisposable
+public sealed class KafkaEmailWorkerDlqPublisher : IEmailWorkerDlqPublisher, IAsyncDisposable
 {
     private readonly IProducer<string, string> _producer;
-    private readonly ClubPostIndexerOptions _options;
+    private readonly EmailWorkerOptions _options;
 
-    public KafkaClubPostIndexerDlqPublisher(ClubPostIndexerOptions options)
+    public KafkaEmailWorkerDlqPublisher(EmailWorkerOptions options)
     {
         _options = options;
         _producer = new ProducerBuilder<string, string>(new ProducerConfig
@@ -30,16 +40,15 @@ public sealed class KafkaClubPostIndexerDlqPublisher : IClubPostIndexerDlqPublis
     }
 
     public async Task PublishAsync(
-        EventIndexerEnvelope envelope,
+        EmailWorkerEnvelope envelope,
         string error,
         CancellationToken cancellationToken = default)
     {
-        var payload = new EventIndexerDlqMessage(
+        var payload = new EmailWorkerDlqMessage(
             envelope.Topic,
             envelope.Partition,
             envelope.Offset,
             envelope.Key,
-            envelope.Operation,
             envelope.Headers,
             envelope.Payload,
             error,

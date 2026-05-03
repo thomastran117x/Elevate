@@ -31,7 +31,11 @@ function Dotnet-Format {
 
 Dotnet-Format "..\backend"
 Prettier-Format "..\frontend"
-Dotnet-Format "..\backend\src\worker\event-indexer"
+$workerRoot = Resolve-Path "..\backend\src\worker"
+$workerProjects = Get-ChildItem -Path $workerRoot -Filter *.csproj -Recurse
+foreach ($workerProject in $workerProjects) {
+    Dotnet-Format $workerProject.Directory.FullName
+}
 
 Write-Host ""
 Write-Host "All formatting complete." -ForegroundColor Cyan

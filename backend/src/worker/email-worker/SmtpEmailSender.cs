@@ -7,7 +7,7 @@ using MailKitSmtpClient = MailKit.Net.Smtp.SmtpClient;
 
 using MimeKit;
 
-namespace backend.worker.event_indexer;
+namespace backend.worker.email_worker;
 
 public sealed class SmtpEmailSender : IEmailSender
 {

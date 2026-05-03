@@ -2,7 +2,10 @@ using backend.main.utilities.implementation;
 
 using Confluent.Kafka;
 
-namespace backend.worker.event_indexer;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+namespace backend.worker.clubpost_indexer;
 
 public sealed class KafkaClubPostIndexerWorker : BackgroundService
 {
@@ -41,7 +44,7 @@ public sealed class KafkaClubPostIndexerWorker : BackgroundService
                     using var scope = _scopeFactory.CreateScope();
                     var processor = scope.ServiceProvider.GetRequiredService<ClubPostIndexerMessageProcessor>();
 
-                    await processor.ProcessAsync(EventIndexerEnvelope.FromConsumeResult(result), stoppingToken);
+                    await processor.ProcessAsync(ClubPostIndexerEnvelope.FromConsumeResult(result), stoppingToken);
                     consumer.Commit(result);
                 }
             }

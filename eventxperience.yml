@@ -250,21 +250,21 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: worker
+  name: event-indexer
   namespace: eventxperience
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: worker
+      app: event-indexer
   template:
     metadata:
       labels:
-        app: worker
+        app: event-indexer
     spec:
       containers:
-        - name: worker
-          image: myapp-worker:latest
+        - name: event-indexer
+          image: myapp-event-indexer:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: ELASTICSEARCH_URL
@@ -277,6 +277,58 @@ spec:
               value: "event-indexer"
             - name: EVENT_INDEX_DLQ_TOPIC
               value: "event-index-events-dlq"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clubpost-indexer
+  namespace: eventxperience
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clubpost-indexer
+  template:
+    metadata:
+      labels:
+        app: clubpost-indexer
+    spec:
+      containers:
+        - name: clubpost-indexer
+          image: myapp-clubpost-indexer:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ELASTICSEARCH_URL
+              value: "http://elasticsearch:9200"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:9092"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: email-worker
+  namespace: eventxperience
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: email-worker
+  template:
+    metadata:
+      labels:
+        app: email-worker
+    spec:
+      containers:
+        - name: email-worker
+          image: myapp-email-worker:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:9092"
+            - name: FRONTEND_URL
+              value: "http://frontend:3090"
 
 ---
 apiVersion: apps/v1

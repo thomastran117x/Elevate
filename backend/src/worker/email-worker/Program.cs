@@ -1,7 +1,6 @@
-using backend.main.configurations.application;
 using backend.main.utilities.implementation;
 using backend.main.utilities.interfaces;
-using backend.worker.event_indexer;
+using backend.worker.email_worker;
 
 Logger.Configure(options =>
 {
@@ -16,12 +15,11 @@ var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddSingleton(Logger.GetOptions());
 builder.Services.AddSingleton<ICustomLogger, FileLogger>();
-builder.Services.AddEventSearchInfrastructure(builder.Configuration);
-builder.Services.AddSingleton(EventIndexerOptions.FromEnvironment());
-builder.Services.AddSingleton<IEventIndexerDlqPublisher, KafkaEventIndexerDlqPublisher>();
-builder.Services.AddScoped<EventIndexerMessageProcessor>();
-builder.Services.AddHostedService<EventSearchIndexBootstrapService>();
-builder.Services.AddHostedService<KafkaEventIndexerWorker>();
+builder.Services.AddSingleton(EmailWorkerOptions.FromEnvironment());
+builder.Services.AddSingleton<IEmailWorkerDlqPublisher, KafkaEmailWorkerDlqPublisher>();
+builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+builder.Services.AddScoped<EmailMessageProcessor>();
+builder.Services.AddHostedService<KafkaEmailWorker>();
 
 using var host = builder.Build();
 

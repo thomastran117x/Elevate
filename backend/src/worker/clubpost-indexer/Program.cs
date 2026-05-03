@@ -1,7 +1,10 @@
 using backend.main.configurations.application;
 using backend.main.utilities.implementation;
 using backend.main.utilities.interfaces;
-using backend.worker.event_indexer;
+using backend.worker.clubpost_indexer;
+
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 Logger.Configure(options =>
 {
@@ -16,12 +19,12 @@ var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddSingleton(Logger.GetOptions());
 builder.Services.AddSingleton<ICustomLogger, FileLogger>();
-builder.Services.AddEventSearchInfrastructure(builder.Configuration);
-builder.Services.AddSingleton(EventIndexerOptions.FromEnvironment());
-builder.Services.AddSingleton<IEventIndexerDlqPublisher, KafkaEventIndexerDlqPublisher>();
-builder.Services.AddScoped<EventIndexerMessageProcessor>();
-builder.Services.AddHostedService<EventSearchIndexBootstrapService>();
-builder.Services.AddHostedService<KafkaEventIndexerWorker>();
+builder.Services.AddClubPostSearchInfrastructure(builder.Configuration);
+builder.Services.AddSingleton(ClubPostIndexerOptions.FromEnvironment());
+builder.Services.AddSingleton<IClubPostIndexerDlqPublisher, KafkaClubPostIndexerDlqPublisher>();
+builder.Services.AddScoped<ClubPostIndexerMessageProcessor>();
+builder.Services.AddHostedService<ClubPostSearchIndexBootstrapService>();
+builder.Services.AddHostedService<KafkaClubPostIndexerWorker>();
 
 using var host = builder.Build();
 

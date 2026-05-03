@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="Confluent.Kafka" Version="2.5.3" />
+    <PackageReference Include="MailKit" Version="4.14.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.5" />
   </ItemGroup>
 

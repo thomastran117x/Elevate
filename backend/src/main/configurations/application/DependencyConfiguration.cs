@@ -19,24 +19,34 @@ namespace backend.main.configurations.application
     {
         private static readonly Uri GoogleCaptchaBaseAddress = new("https://www.google.com/");
 
-        public static IServiceCollection AddEventSearchInfrastructure(this IServiceCollection services, IConfiguration config)
+        public static IServiceCollection AddElasticsearchInfrastructure(this IServiceCollection services, IConfiguration config)
         {
             services.AddAppElasticsearch(config);
             services.AddSingleton<ElasticsearchCircuitBreaker>();
+
+            return services;
+        }
+
+        public static IServiceCollection AddEventSearchInfrastructure(this IServiceCollection services, IConfiguration config)
+        {
+            services.AddElasticsearchInfrastructure(config);
             services.AddScoped<IEventSearchService, EventSearchService>();
+
+            return services;
+        }
+
+        public static IServiceCollection AddClubPostSearchInfrastructure(this IServiceCollection services, IConfiguration config)
+        {
+            services.AddElasticsearchInfrastructure(config);
+            services.AddScoped<IClubPostSearchService, ClubPostSearchService>();
 
             return services;
         }
 
         public static IServiceCollection AddSearchInfrastructure(this IServiceCollection services, IConfiguration config)
         {
-            services.AddEventSearchInfrastructure(config);
-            services.AddClubPostSearchInfrastructure();
-            return services;
-        }
-
-        public static IServiceCollection AddClubPostSearchInfrastructure(this IServiceCollection services)
-        {
+            services.AddElasticsearchInfrastructure(config);
+            services.AddScoped<IEventSearchService, EventSearchService>();
             services.AddScoped<IClubPostSearchService, ClubPostSearchService>();
 
             return services;

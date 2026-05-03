@@ -1,6 +1,6 @@
 using backend.main.dtos;
 
-namespace backend.worker.event_indexer;
+namespace backend.worker.email_worker;
 
 public interface IEmailSender
 {
