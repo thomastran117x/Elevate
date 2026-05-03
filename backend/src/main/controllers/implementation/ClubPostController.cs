@@ -53,11 +53,11 @@ namespace backend.main.implementation.controllers
             if (User.Identity?.IsAuthenticated == true)
                 userId = User.GetUserPayload().Id;
 
-            var (items, totalCount) = await _postService.GetByClubIdAsync(
+            var (items, totalCount, source) = await _postService.GetByClubIdAsync(
                 clubId, userId, search, sortBy, page, pageSize);
 
             var paged = new PagedResponse<ClubPostResponse>(
-                items.Select(MapToResponse),
+                items.Select(post => MapToResponse(post, source)),
                 totalCount,
                 page,
                 pageSize
@@ -109,8 +109,10 @@ namespace backend.main.implementation.controllers
             );
         }
 
-        private static ClubPostResponse MapToResponse(ClubPost p) =>
-            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt);
+        private static ClubPostResponse MapToResponse(
+            ClubPost p,
+            string source = ResponseSource.Database) =>
+            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt, source);
     }
 
     [ApiController]
@@ -141,10 +143,10 @@ namespace backend.main.implementation.controllers
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
-            var (items, totalCount) = await _postService.GetAllAdminAsync(search, sortBy, page, pageSize);
+            var (items, totalCount, source) = await _postService.GetAllAdminAsync(search, sortBy, page, pageSize);
 
             var paged = new PagedResponse<ClubPostResponse>(
-                items.Select(MapToResponse),
+                items.Select(post => MapToResponse(post, source)),
                 totalCount,
                 page,
                 pageSize
@@ -159,7 +161,9 @@ namespace backend.main.implementation.controllers
             );
         }
 
-        private static ClubPostResponse MapToResponse(ClubPost p) =>
-            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt);
+        private static ClubPostResponse MapToResponse(
+            ClubPost p,
+            string source = ResponseSource.Database) =>
+            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt, source);
     }
 }

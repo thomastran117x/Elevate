@@ -30,7 +30,7 @@ namespace backend.main.services.interfaces
 
         Task<Events> GetEvent(int eventId);
 
-        Task<(List<Events> Events, Dictionary<int, double> DistanceKmById)> GetEvents(EventSearchCriteria criteria);
+        Task<(List<Events> Events, Dictionary<int, double> DistanceKmById, string Source)> GetEvents(EventSearchCriteria criteria);
 
         Task<List<Events>> GetEventsByClub(
             int clubId,

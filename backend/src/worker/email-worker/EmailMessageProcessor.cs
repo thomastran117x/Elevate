@@ -46,7 +46,7 @@ public sealed class EmailMessageProcessor
             ValidateMessage(message);
 
             await RetryPipeline.ExecuteAsync(
-                ct => _emailSender.SendAsync(message, ct),
+                async (CancellationToken ct) => await _emailSender.SendAsync(message, ct),
                 cancellationToken
             );
         }

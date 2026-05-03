@@ -1,4 +1,5 @@
 using backend.main.dtos.responses.events;
+using backend.main.dtos.responses.general;
 using backend.main.models.core;
 using backend.main.models.enums;
 
@@ -6,7 +7,10 @@ namespace backend.main.Mappers
 {
     public static class EventMapper
     {
-        public static EventResponse MapToResponse(Events ev, double? distanceKm = null) => new()
+        public static EventResponse MapToResponse(
+            Events ev,
+            double? distanceKm = null,
+            string source = ResponseSource.Database) => new()
         {
             Id = ev.Id,
             Name = ev.Name,
@@ -28,7 +32,8 @@ namespace backend.main.Mappers
             Longitude = ev.Longitude,
             Tags = ev.Tags ?? new List<string>(),
             RegistrationCount = ev.RegistrationCount,
-            DistanceKm = distanceKm
+            DistanceKm = distanceKm,
+            Source = source
         };
 
         public static EventStatus ResolveStatus(Events ev)

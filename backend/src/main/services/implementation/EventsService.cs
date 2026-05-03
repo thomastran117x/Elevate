@@ -5,6 +5,7 @@ using backend.main.configurations.resource.database;
 using backend.main.configurations.resource.elasticsearch;
 using backend.main.dtos.requests.events;
 using backend.main.dtos.responses.events;
+using backend.main.dtos.responses.general;
 using backend.main.exceptions.http;
 using backend.main.Mappers;
 using backend.main.models.core;
@@ -164,7 +165,7 @@ namespace backend.main.services.implementation
             }
         }
 
-        public async Task<(List<Events> Events, Dictionary<int, double> DistanceKmById)> GetEvents(EventSearchCriteria criteria)
+        public async Task<(List<Events> Events, Dictionary<int, double> DistanceKmById, string Source)> GetEvents(EventSearchCriteria criteria)
         {
             try
             {
@@ -180,7 +181,7 @@ namespace backend.main.services.implementation
                 {
                     var result = await _searchService.SearchAsync(effective);
                     if (result.Hits.Count == 0)
-                        return (new List<Events>(), new Dictionary<int, double>());
+                        return (new List<Events>(), new Dictionary<int, double>(), ResponseSource.Elasticsearch);
 
                     var ids = result.Hits.Select(h => h.Id).ToList();
                     var esEvents = await _eventsRepository.GetByIdsAsync(ids);
@@ -195,7 +196,7 @@ namespace backend.main.services.implementation
                         .Where(h => h.DistanceKm.HasValue)
                         .ToDictionary(h => h.Id, h => h.DistanceKm!.Value);
 
-                    return (ordered, distanceMap);
+                    return (ordered, distanceMap, ResponseSource.Elasticsearch);
                 }
                 catch (ElasticsearchDisabledException ex)
                 {
@@ -212,7 +213,7 @@ namespace backend.main.services.implementation
                 }
 
                 var events = await _eventsRepository.SearchAsync(effective);
-                return (events, new Dictionary<int, double>());
+                return (events, new Dictionary<int, double>(), ResponseSource.Database);
             }
             catch (Exception e)
             {

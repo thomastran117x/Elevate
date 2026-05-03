@@ -1,4 +1,5 @@
 using backend.main.models.enums;
+using backend.main.dtos.responses.general;
 
 namespace backend.main.dtos.responses.clubpost
 {
@@ -15,9 +16,11 @@ namespace backend.main.dtos.responses.clubpost
         public bool IsPinned { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
+        public string Source { get; set; }
 
         public ClubPostResponse(int id, int clubId, int userId, string title, string content,
-            PostType postType, int likesCount, int viewCount, bool isPinned, DateTime createdAt, DateTime updatedAt)
+            PostType postType, int likesCount, int viewCount, bool isPinned, DateTime createdAt, DateTime updatedAt,
+            string source = ResponseSource.Database)
         {
             Id = id;
             ClubId = clubId;
@@ -30,6 +33,7 @@ namespace backend.main.dtos.responses.clubpost
             IsPinned = isPinned;
             CreatedAt = createdAt;
             UpdatedAt = updatedAt;
+            Source = source;
         }
     }
 }

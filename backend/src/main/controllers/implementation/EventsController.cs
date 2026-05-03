@@ -237,13 +237,14 @@ namespace backend.main.implementation.controllers
                     PageSize = pageSize
                 };
 
-                var (events, distances) = await _eventService.GetEvents(criteria);
+                var (events, distances, source) = await _eventService.GetEvents(criteria);
 
                 return Ok(new ApiResponse<IEnumerable<EventResponse>>(
                     "The events have been fetched successfully.",
                     events.Select(e => EventMapper.MapToResponse(
                         e,
-                        distances.TryGetValue(e.Id, out var d) ? d : (double?)null))
+                        distances.TryGetValue(e.Id, out var d) ? d : (double?)null,
+                        source))
                 ));
             }
             catch (Exception e)

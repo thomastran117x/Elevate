@@ -49,6 +49,7 @@ namespace backend.main.dtos.responses.events
         public double? Longitude { get; set; }
         public List<string> Tags { get; set; } = new();
         public int RegistrationCount { get; set; }
+        public string Source { get; set; } = general.ResponseSource.Database;
 
         // Populated only when a proximity search was performed.
         public double? DistanceKm { get; set; }
