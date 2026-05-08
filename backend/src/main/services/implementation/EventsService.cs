@@ -82,7 +82,10 @@ namespace backend.main.services.implementation
         {
             try
             {
-                await _clubService.GetClub(clubId);
+                var club = await _clubService.GetClub(clubId);
+
+                if (club.UserId != userId)
+                    throw new ForbiddenException("Not allowed");
 
                 var ev = new Events
                 {
