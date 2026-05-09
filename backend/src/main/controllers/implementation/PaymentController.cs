@@ -111,7 +111,7 @@ namespace backend.main.implementation.controllers
 
                 await _paymentService.HandleWebhook(payload, signature);
 
-                return Ok();
+                return Ok(new MessageResponse("Webhook processed successfully."));
             }
             catch (Exception e)
             {

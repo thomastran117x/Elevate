@@ -163,6 +163,15 @@ export class EventsSearchComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (res) => {
+          if (!res.data) {
+            this.error = res.message || 'Failed to load events. Please try again.';
+            this.events = [];
+            this.totalCount = 0;
+            this.totalPages = 0;
+            this.loading = false;
+            return;
+          }
+
           this.events = res.data.items;
           this.totalCount = res.data.totalCount;
           this.totalPages = res.data.totalPages;

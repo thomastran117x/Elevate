@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Security.Cryptography;
 
 using backend.main.dtos;
 using backend.main.configurations.resource.database;
@@ -32,12 +33,22 @@ namespace backend.main.services.implementation
         private readonly IEventAnalyticsRepository _analyticsRepository;
         private readonly IEventSearchService _searchService;
         private readonly IEventSearchOutboxWriter _outboxWriter;
+        private readonly IEventRegistrationRepository _registrationRepository;
 
         private static readonly TimeSpan EventTTL = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan EventListTTL = TimeSpan.FromSeconds(60);
         private static readonly TimeSpan NotFoundTTL = TimeSpan.FromSeconds(15);
+        private static readonly TimeSpan ImageUploadIntentTTL = TimeSpan.FromMinutes(20);
         private const string EventListVersionKey = "events:version";
         private const string NullSentinel = "__null__";
+
+        private sealed record EventImageUploadIntent(
+            int ClubId,
+            int? EventId,
+            int UserId,
+            string PublicUrl,
+            string ContentType
+        );
 
         public EventsService(
             AppDatabaseContext db,
@@ -48,7 +59,8 @@ namespace backend.main.services.implementation
             ICacheService cache,
             IEventAnalyticsRepository analyticsRepository,
             IEventSearchService searchService,
-            IEventSearchOutboxWriter outboxWriter)
+            IEventSearchOutboxWriter outboxWriter,
+            IEventRegistrationRepository registrationRepository)
         {
             _db = db;
             _eventsRepository = eventsRepository;
@@ -59,6 +71,7 @@ namespace backend.main.services.implementation
             _analyticsRepository = analyticsRepository;
             _searchService = searchService;
             _outboxWriter = outboxWriter;
+            _registrationRepository = registrationRepository;
         }
 
         public async Task<Events> CreateEvent(
@@ -87,6 +100,9 @@ namespace backend.main.services.implementation
                 if (club.UserId != userId)
                     throw new ForbiddenException("Not allowed");
 
+                var requestedImageUrls = imageUrls.Take(5).ToList();
+                await ValidateUploadedImageUrlsAsync(clubId, userId, requestedImageUrls);
+
                 var ev = new Events
                 {
                     Name = name,
@@ -111,7 +127,7 @@ namespace backend.main.services.implementation
                 var created = await _eventsRepository.CreateAsync(ev);
                 await _db.SaveChangesAsync();
 
-                await _imageRepository.AddImagesAsync(created.Id, imageUrls.Take(5));
+                await _imageRepository.AddImagesAsync(created.Id, requestedImageUrls);
                 _outboxWriter.StageUpsert(created);
 
                 await _db.SaveChangesAsync();
@@ -168,6 +184,26 @@ namespace backend.main.services.implementation
             }
         }
 
+        public async Task<Events> GetVisibleEvent(int eventId, int? userId = null)
+        {
+            try
+            {
+                var ev = await GetEvent(eventId);
+                if (await CanViewEventAsync(ev, userId))
+                    return ev;
+
+                throw new ResourceNotFoundException($"Event {eventId} not found");
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] GetVisibleEvent failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
         public async Task<(List<Events> Events, int TotalCount, Dictionary<int, double> DistanceKmById, string Source)> GetEvents(EventSearchCriteria criteria)
         {
             try
@@ -178,8 +214,8 @@ namespace backend.main.services.implementation
 
                 var effective = criteria with { Query = normalized };
 
-                // ES is the only path for proximity/tags/category/sort options.
-                // If ES is down, fall back to a best-effort MySQL search that honors category/city/text/status.
+                // Prefer ES for full-text, tag, and geo search. If ES is unavailable, fall back to MySQL
+                // for the subset of filters/sorts we can honor safely.
                 try
                 {
                     var result = await _searchService.SearchAsync(effective);
@@ -215,8 +251,11 @@ namespace backend.main.services.implementation
                     throw;
                 }
 
+                EnsureFallbackSearchIsSupported(effective);
+
                 var (events, totalCount) = await _eventsRepository.SearchAsync(effective);
-                return (events, totalCount, new Dictionary<int, double>(), ResponseSource.Database);
+                var fallbackDistanceMap = BuildDistanceMap(events, effective);
+                return (events, totalCount, fallbackDistanceMap, ResponseSource.Database);
             }
             catch (Exception e)
             {
@@ -293,6 +332,28 @@ namespace backend.main.services.implementation
                     throw new ForbiddenException("Not allowed");
 
                 List<string>? oldUrls = null;
+                List<string>? requestedImageUrls = null;
+                List<string>? removedUrls = null;
+
+                if (imageUrls != null)
+                {
+                    requestedImageUrls = imageUrls.Take(5).ToList();
+                    var existingUrls = existing.Images
+                        .Select(i => i.ImageUrl)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    await ValidateUploadedImageUrlsAsync(
+                        club.Id,
+                        userId,
+                        requestedImageUrls,
+                        eventId,
+                        existingUrls);
+
+                    oldUrls = existing.Images.Select(i => i.ImageUrl).ToList();
+                    removedUrls = oldUrls
+                        .Except(requestedImageUrls, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                }
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
@@ -315,13 +376,10 @@ namespace backend.main.services.implementation
                     Tags = NormalizeTags(tags)
                 }) ?? throw new InternalServerErrorException("Update failed");
 
-                if (imageUrls != null)
+                if (requestedImageUrls != null)
                 {
-                    var urlList = imageUrls.Take(5).ToList();
-                    oldUrls = existing.Images.Select(i => i.ImageUrl).ToList();
-
                     await _imageRepository.DeleteAllByEventIdAsync(eventId);
-                    await _imageRepository.AddImagesAsync(eventId, urlList);
+                    await _imageRepository.AddImagesAsync(eventId, requestedImageUrls);
                 }
 
                 _outboxWriter.StageUpsert(updated);
@@ -331,8 +389,8 @@ namespace backend.main.services.implementation
                 var withImages = await _eventsRepository.GetByIdAsync(eventId)
                     ?? throw new InternalServerErrorException("Failed to reload updated event");
 
-                if (oldUrls != null && oldUrls.Count > 0)
-                    _ = Task.WhenAll(oldUrls.Select(u => _blobService.DeleteBlobAsync(u)));
+                if (removedUrls != null && removedUrls.Count > 0)
+                    _ = Task.WhenAll(removedUrls.Select(u => _blobService.DeleteBlobAsync(u)));
 
                 await CacheEventAsync(withImages);
                 await BumpEventListVersionAsync();
@@ -406,6 +464,95 @@ namespace backend.main.services.implementation
             }
         }
 
+        private static void EnsureFallbackSearchIsSupported(EventSearchCriteria criteria)
+        {
+            if (criteria.Tags != null && criteria.Tags.Count > 0)
+            {
+                throw new NotAvailableException(
+                    "Tag filtering is temporarily unavailable because search indexing is unavailable.");
+            }
+        }
+
+        private static Dictionary<int, double> BuildDistanceMap(
+            IEnumerable<Events> events,
+            EventSearchCriteria criteria)
+        {
+            if (!criteria.Lat.HasValue || !criteria.Lng.HasValue)
+                return new Dictionary<int, double>();
+
+            var map = new Dictionary<int, double>();
+            foreach (var ev in events)
+            {
+                if (!ev.Latitude.HasValue || !ev.Longitude.HasValue)
+                    continue;
+
+                map[ev.Id] = CalculateDistanceKm(
+                    criteria.Lat.Value,
+                    criteria.Lng.Value,
+                    ev.Latitude.Value,
+                    ev.Longitude.Value);
+            }
+
+            return map;
+        }
+
+        private static double CalculateDistanceKm(
+            double originLat,
+            double originLng,
+            double targetLat,
+            double targetLng)
+        {
+            const double EarthRadiusKm = 6371.0;
+
+            var dLat = DegreesToRadians(targetLat - originLat);
+            var dLng = DegreesToRadians(targetLng - originLng);
+            var originLatRad = DegreesToRadians(originLat);
+            var targetLatRad = DegreesToRadians(targetLat);
+
+            var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                    Math.Cos(originLatRad) * Math.Cos(targetLatRad) *
+                    Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
+
+            var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+            return EarthRadiusKm * c;
+        }
+
+        private static double DegreesToRadians(double degrees) =>
+            degrees * (Math.PI / 180.0);
+
+        public async Task<List<Events>> GetVisibleEventsByIds(IEnumerable<int> ids, int? userId = null)
+        {
+            try
+            {
+                var requestedIds = ids.Distinct().ToList();
+                if (requestedIds.Count == 0)
+                    return new List<Events>();
+
+                var events = await _eventsRepository.GetByIdsAsync(requestedIds);
+                var eventsById = events.ToDictionary(e => e.Id);
+                var visible = new List<Events>(requestedIds.Count);
+
+                foreach (var id in requestedIds)
+                {
+                    if (!eventsById.TryGetValue(id, out var ev))
+                        continue;
+
+                    if (await CanViewEventAsync(ev, userId))
+                        visible.Add(ev);
+                }
+
+                return visible;
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] GetVisibleEventsByIds failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
         public async Task<BatchCreateResultResponse> BatchCreateEvents(
             int clubId,
             int userId,
@@ -419,6 +566,9 @@ namespace backend.main.services.implementation
                     throw new ForbiddenException("Not allowed");
 
                 var itemList = items.ToList();
+                foreach (var item in itemList)
+                    await ValidateUploadedImageUrlsAsync(clubId, userId, item.ImageUrls.Take(5).ToList());
+
                 var entities = itemList.Select(item => new Events
                 {
                     Name = item.Name,
@@ -481,7 +631,13 @@ namespace backend.main.services.implementation
                 var itemList = items.ToList();
                 var ids = itemList.Select(i => i.EventId).ToList();
 
-                var existing = await _eventsRepository.GetByIdsAsync(ids);
+                EnsureNoDuplicateIds(ids);
+
+                var requestedIds = ids.Distinct().ToList();
+
+                var existing = await _eventsRepository.GetByIdsAsync(requestedIds);
+
+                EnsureAllRequestedEventsExist(requestedIds, existing.Select(ev => ev.Id));
 
                 if (existing.Any(ev => ev.ClubId != club.Id))
                     throw new ForbiddenException("One or more events do not belong to your club");
@@ -511,7 +667,7 @@ namespace backend.main.services.implementation
 
                 var count = await _eventsRepository.UpdateManyAsync(patches);
                 var updatedEvents = await _db.Events
-                    .Where(ev => ids.Contains(ev.Id))
+                    .Where(ev => requestedIds.Contains(ev.Id))
                     .ToListAsync();
 
                 foreach (var ev in updatedEvents)
@@ -520,7 +676,7 @@ namespace backend.main.services.implementation
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                await Task.WhenAll(ids.Select(id => _cache.DeleteKeyAsync($"event:{id}")));
+                await Task.WhenAll(requestedIds.Select(id => _cache.DeleteKeyAsync($"event:{id}")));
                 await BumpEventListVersionAsync();
 
                 return count;
@@ -542,7 +698,13 @@ namespace backend.main.services.implementation
                 var club = await _clubService.GetClubByUser(userId);
                 var idList = ids.ToList();
 
-                var existing = await _eventsRepository.GetByIdsAsync(idList);
+                EnsureNoDuplicateIds(idList);
+
+                var requestedIds = idList.Distinct().ToList();
+
+                var existing = await _eventsRepository.GetByIdsAsync(requestedIds);
+
+                EnsureAllRequestedEventsExist(requestedIds, existing.Select(ev => ev.Id));
 
                 if (existing.Any(ev => ev.ClubId != club.Id))
                     throw new ForbiddenException("One or more events do not belong to your club");
@@ -553,16 +715,16 @@ namespace backend.main.services.implementation
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                foreach (var id in idList)
+                foreach (var id in requestedIds)
                     _outboxWriter.StageDelete(id);
 
-                var deleted = await _eventsRepository.DeleteManyAsync(idList);
+                var deleted = await _eventsRepository.DeleteManyAsync(requestedIds);
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
                 if (imageUrls.Count > 0)
                     _ = Task.WhenAll(imageUrls.Select(url => _blobService.DeleteBlobAsync(url)));
-                await Task.WhenAll(idList.Select(id => _cache.DeleteKeyAsync($"event:{id}")));
+                await Task.WhenAll(requestedIds.Select(id => _cache.DeleteKeyAsync($"event:{id}")));
                 await BumpEventListVersionAsync();
 
                 return deleted;
@@ -578,11 +740,52 @@ namespace backend.main.services.implementation
         }
 
         public async Task<PresignedUploadResponse> GenerateImageUploadUrlAsync(
-            string fileName, string contentType)
+            int clubId,
+            int userId,
+            string fileName,
+            string contentType,
+            int? eventId = null)
         {
             try
             {
-                return await _blobService.GenerateUploadUrlAsync(fileName, contentType);
+                var club = await _clubService.GetClubByUser(userId);
+                if (club.Id != clubId)
+                    throw new ForbiddenException("Not allowed");
+
+                if (eventId.HasValue)
+                {
+                    var ev = await GetEvent(eventId.Value);
+                    if (ev.ClubId != clubId)
+                        throw new ForbiddenException("Not allowed");
+                }
+
+                var scope = eventId.HasValue
+                    ? $"events/clubs/{clubId}/events/{eventId.Value}"
+                    : $"events/clubs/{clubId}/pending";
+
+                var result = await _blobService.GenerateUploadUrlAsync(scope, fileName, contentType);
+
+                var intent = new EventImageUploadIntent(
+                    clubId,
+                    eventId,
+                    userId,
+                    result.PublicUrl,
+                    contentType.Trim().ToLowerInvariant()
+                );
+
+                var stored = await _cache.SetValueAsync(
+                    GetImageUploadIntentKey(result.PublicUrl),
+                    JsonSerializer.Serialize(intent),
+                    ImageUploadIntentTTL
+                );
+
+                if (!stored)
+                {
+                    throw new NotAvailableException(
+                        "Image uploads are temporarily unavailable. Please try again shortly.");
+                }
+
+                return result;
             }
             catch (Exception e)
             {
@@ -608,6 +811,8 @@ namespace backend.main.services.implementation
 
                 if (ev.ClubId != club.Id)
                     throw new ForbiddenException("Not allowed");
+
+                await ValidateUploadedImageUrlsAsync(club.Id, userId, new[] { imageUrl }, eventId);
 
                 var count = await _imageRepository.CountByEventIdAsync(eventId);
                 if (count >= 5)
@@ -812,6 +1017,118 @@ namespace backend.main.services.implementation
                 .Distinct()
                 .Take(10)
                 .ToList();
+        }
+
+        private static void EnsureNoDuplicateIds(IEnumerable<int> ids)
+        {
+            var duplicateIds = ids
+                .GroupBy(id => id)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
+
+            if (duplicateIds.Count > 0)
+            {
+                throw new BadRequestException(
+                    $"Duplicate event IDs are not allowed: {string.Join(", ", duplicateIds)}.");
+            }
+        }
+
+        private static void EnsureAllRequestedEventsExist(
+            IEnumerable<int> requestedIds,
+            IEnumerable<int> foundIds)
+        {
+            var foundIdSet = foundIds.ToHashSet();
+            var missingIds = requestedIds
+                .Where(id => !foundIdSet.Contains(id))
+                .ToList();
+
+            if (missingIds.Count > 0)
+            {
+                throw new ResourceNotFoundException(
+                    $"One or more requested events were not found: {string.Join(", ", missingIds)}");
+            }
+        }
+
+        private async Task ValidateUploadedImageUrlsAsync(
+            int clubId,
+            int userId,
+            IEnumerable<string> imageUrls,
+            int? eventId = null,
+            ISet<string>? existingUrls = null)
+        {
+            var urls = imageUrls.ToList();
+            foreach (var imageUrl in urls)
+            {
+                if (existingUrls?.Contains(imageUrl) == true)
+                    continue;
+
+                await ValidateNewUploadedImageUrlAsync(clubId, userId, imageUrl, eventId);
+            }
+        }
+
+        private async Task ValidateNewUploadedImageUrlAsync(
+            int clubId,
+            int userId,
+            string imageUrl,
+            int? eventId = null)
+        {
+            if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri) ||
+                !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BadRequestException("Event images must use a valid HTTPS URL.");
+            }
+
+            if (!_blobService.IsOwnedBlobUrl(imageUrl))
+            {
+                throw new BadRequestException(
+                    "Event images must reference uploads issued by this service.");
+            }
+
+            var intentPayload = await _cache.GetValueAsync(GetImageUploadIntentKey(imageUrl));
+            if (intentPayload == null)
+            {
+                throw new BadRequestException(
+                    "Image upload is invalid or expired. Please upload the image again.");
+            }
+
+            var intent = JsonSerializer.Deserialize<EventImageUploadIntent>(intentPayload);
+            if (intent == null ||
+                intent.UserId != userId ||
+                intent.ClubId != clubId ||
+                !string.Equals(intent.PublicUrl, imageUrl, StringComparison.Ordinal))
+            {
+                throw new BadRequestException(
+                    "Image upload is invalid or does not belong to this organizer.");
+            }
+
+            if (intent.EventId.HasValue && intent.EventId != eventId)
+            {
+                throw new BadRequestException(
+                    "Image upload does not belong to the specified event.");
+            }
+        }
+
+        private static string GetImageUploadIntentKey(string imageUrl)
+        {
+            var bytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(imageUrl));
+            return $"event:image-upload:intent:{Convert.ToHexString(bytes)}";
+        }
+
+        private async Task<bool> CanViewEventAsync(Events ev, int? userId)
+        {
+            if (!ev.isPrivate)
+                return true;
+
+            if (!userId.HasValue)
+                return false;
+
+            var club = await _clubService.GetClub(ev.ClubId);
+            if (club.UserId == userId.Value)
+                return true;
+
+            var registration = await _registrationRepository.IsRegisteredAsync(ev.Id, userId.Value);
+            return registration != null;
         }
 
         public async Task NotifyRegistrationChangedAsync(int eventId)

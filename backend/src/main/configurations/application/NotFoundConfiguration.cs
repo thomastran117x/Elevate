@@ -1,3 +1,5 @@
+using backend.main.dtos.responses.general;
+
 namespace backend.main.configurations.application
 {
     public static class NotFoundConfig
@@ -15,12 +17,16 @@ namespace backend.main.configurations.application
                 {
                     context.Response.ContentType = "application/json";
 
-                    await context.Response.WriteAsJsonAsync(new
-                    {
-                        error = "Resource not found",
-                        code = 404,
-                        path = context.Request.Path.Value
-                    });
+                    await context.Response.WriteAsJsonAsync(
+                        ApiResponse<object?>.Failure(
+                            "Resource not found.",
+                            "RESOURCE_NOT_FOUND",
+                            new
+                            {
+                                path = context.Request.Path.Value
+                            }
+                        )
+                    );
                 }
             });
         }

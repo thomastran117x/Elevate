@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { from, map, switchMap } from 'rxjs';
 import { environment } from '../../../../environments/environment';
+import { ApiEnvelope, requireEnvelopeData } from '../../../core/api/models/api-envelope.model';
 import { AuthTokenService } from '../../../core/api/services/auth-token.service';
 import {
   AuthenticatedSessionResponse,
@@ -55,13 +56,6 @@ export interface OAuthAuthenticatedResponse {
 }
 
 export type OAuthAuthResponse = OAuthRoleSelectionResponse | OAuthAuthenticatedResponse;
-
-export interface ApiEnvelope<T> {
-  message?: string;
-  Message?: string;
-  data?: T;
-  Data?: T;
-}
 
 export const PendingOAuthSignupStorageKey = 'pending_oauth_signup';
 
@@ -183,11 +177,6 @@ export class AuthService {
   }
 
   private requireData<T>(response: ApiEnvelope<T>, fallbackMessage: string): T {
-    const data = response.data ?? response.Data;
-    if (!data) {
-      throw new Error(fallbackMessage);
-    }
-
-    return data;
+    return requireEnvelopeData(response, fallbackMessage);
   }
 }

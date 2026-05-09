@@ -1,3 +1,5 @@
+import { ApiEnvelope } from '../../../core/api/models/api-envelope.model';
+
 export type EventCategory =
   | 'Sports'
   | 'Music'
@@ -51,11 +53,11 @@ export interface EventsPagedData {
   totalPages: number;
 }
 
-export interface EventsApiResponse {
-  message: string;
-  data: EventsPagedData;
+export interface EventsResponseMeta {
   source?: string;
 }
+
+export type EventsApiResponse = ApiEnvelope<EventsPagedData, EventsResponseMeta>;
 
 export interface EventSearchParams {
   search?: string;

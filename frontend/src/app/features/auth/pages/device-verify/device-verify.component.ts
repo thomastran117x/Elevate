@@ -1,9 +1,10 @@
 import { CommonModule } from '@angular/common';
 import { Component, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ApiEnvelope, requireEnvelopeData } from '../../../../core/api/models/api-envelope.model';
 import { AuthenticatedSessionResponse } from '../../../../core/models/auth-response.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
-import { ApiEnvelope, AuthService } from '../../services/auth.service';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-device-verify',
@@ -44,14 +45,11 @@ export class DeviceVerifyComponent {
 
     this.auth.verifyDevice(this.token).subscribe({
       next: async (res: ApiEnvelope<AuthenticatedSessionResponse>) => {
-        const session = res.data ?? res.Data;
-        if (!session) {
-          this.status.set('error');
-          this.message.set('Device verification completed, but the login response was incomplete.');
-          return;
-        }
-
         try {
+          const session = requireEnvelopeData(
+            res,
+            'Device verification completed, but the login response was incomplete.',
+          );
           await this.sessionManager.bootstrapSession(session);
           this.status.set('success');
           this.message.set('This device is verified. Redirecting to your dashboard...');

@@ -1,17 +1,14 @@
 namespace backend.main.dtos.responses.general
 {
-    public class MessageResponse
+    public class MessageResponse : ApiResponse<object?>
     {
-        public string Message { get; set; } = string.Empty;
-        public string? Details
-        {
-            get; set;
-        }
+        public MessageResponse(string message)
+            : base(message, null) { }
 
-        public MessageResponse(string message, string? details = null)
+        public MessageResponse(string message, object? meta)
+            : base(message, null)
         {
-            Message = message;
-            Details = details;
+            Meta = meta;
         }
     }
 }

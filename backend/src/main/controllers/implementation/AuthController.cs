@@ -167,8 +167,7 @@ namespace backend.main.implementation.controllers
 
             return Ok(
                 new MessageResponse(
-                    "Email verification requires confirmation from the frontend.",
-                    "Open the verification link in the app and confirm to complete verification."
+                    "Email verification requires confirmation from the frontend. Open the verification link in the app and confirm to complete verification."
                 )
             );
         }
@@ -358,7 +357,12 @@ namespace backend.main.implementation.controllers
                 User user = userToken.user;
                 Token token = userToken.token;
 
-                return Ok(CreateSessionResponse(user, token));
+                return Ok(
+                    new ApiResponse<AuthenticatedSessionResponse>(
+                        "Session refreshed successfully.",
+                        CreateSessionResponse(user, token)
+                    )
+                );
             }
             catch (Exception e)
             {
@@ -426,7 +430,12 @@ namespace backend.main.implementation.controllers
                     SessionTransport.ApiToken
                 );
 
-                return Ok(CreateSessionResponse(userToken.user, userToken.token));
+                return Ok(
+                    new ApiResponse<AuthenticatedSessionResponse>(
+                        "Session refreshed successfully.",
+                        CreateSessionResponse(userToken.user, userToken.token)
+                    )
+                );
             }
             catch (Exception e)
             {
@@ -442,10 +451,15 @@ namespace backend.main.implementation.controllers
         public IActionResult Csrf()
         {
             var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
-            return Ok(new
-            {
-                token = tokens.RequestToken
-            });
+            return Ok(
+                new ApiResponse<object>(
+                    "CSRF token fetched successfully.",
+                    new
+                    {
+                        token = tokens.RequestToken
+                    }
+                )
+            );
         }
 
         [HttpPost("logout")]
@@ -535,8 +549,7 @@ namespace backend.main.implementation.controllers
 
             return Ok(
                 new MessageResponse(
-                    "Device verification requires confirmation from the frontend.",
-                    "Open the verification link in the app and confirm to complete device verification."
+                    "Device verification requires confirmation from the frontend. Open the verification link in the app and confirm to complete device verification."
                 )
             );
         }

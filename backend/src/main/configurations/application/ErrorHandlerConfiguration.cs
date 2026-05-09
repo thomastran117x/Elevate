@@ -1,4 +1,5 @@
 using backend.main.utilities.implementation;
+using backend.main.dtos.responses.general;
 
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
@@ -25,11 +26,16 @@ namespace backend.main.configurations.application
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
                 context.Response.ContentType = "application/json";
 
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    message = "CSRF validation failed.",
-                    detail = ex.Message,
-                });
+                await context.Response.WriteAsJsonAsync(
+                    ApiResponse<object?>.Failure(
+                        "CSRF validation failed.",
+                        "CSRF_VALIDATION_FAILED",
+                        new
+                        {
+                            reason = ex.Message
+                        }
+                    )
+                );
             }
             catch (Exception ex)
             {

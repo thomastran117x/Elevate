@@ -3,6 +3,7 @@ using System.Text;
 
 using backend.main.configurations.environment;
 using backend.main.dtos.general;
+using backend.main.dtos.responses.general;
 using backend.main.errors.app;
 using backend.main.repositories.interfaces;
 using backend.main.services.implementation;
@@ -51,14 +52,9 @@ namespace backend.main.configurations.security
                                 _ => "Invalid or expired access token"
                             };
 
-                            var payload = new
-                            {
-                                status = 401,
-                                error = "Unauthorized",
-                                message
-                            };
-
-                            await context.Response.WriteAsJsonAsync(payload);
+                            await context.Response.WriteAsJsonAsync(
+                                ApiResponse<object?>.Failure(message, "UNAUTHORIZED")
+                            );
                         },
 
                         OnForbidden = async context =>
@@ -66,12 +62,12 @@ namespace backend.main.configurations.security
                             context.Response.StatusCode = StatusCodes.Status403Forbidden;
                             context.Response.ContentType = "application/json";
 
-                            await context.Response.WriteAsJsonAsync(new
-                            {
-                                status = 403,
-                                error = "Forbidden",
-                                message = "You do not have permission to access this resource"
-                            });
+                            await context.Response.WriteAsJsonAsync(
+                                ApiResponse<object?>.Failure(
+                                    "You do not have permission to access this resource",
+                                    "FORBIDDEN"
+                                )
+                            );
                         },
 
                         OnTokenValidated = async context =>

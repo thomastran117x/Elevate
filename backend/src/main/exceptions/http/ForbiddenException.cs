@@ -4,14 +4,15 @@ namespace backend.main.exceptions.http
     {
         private const string DefaultMessage = "Forbidden";
         private const int code = StatusCodes.Status403Forbidden;
+        private const string DefaultErrorCode = "FORBIDDEN";
 
         public ForbiddenException()
-            : base(DefaultMessage, code) { }
+            : base(DefaultMessage, code, DefaultErrorCode) { }
 
         public ForbiddenException(string message)
-            : base(message, code) { }
+            : base(message, code, DefaultErrorCode) { }
 
         public ForbiddenException(string message, string details)
-            : base(message, code, details) { }
+            : base(message, code, DefaultErrorCode, details) { }
     }
 }

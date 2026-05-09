@@ -29,6 +29,7 @@ namespace backend.main.services.interfaces
         );
 
         Task<Events> GetEvent(int eventId);
+        Task<Events> GetVisibleEvent(int eventId, int? userId = null);
 
         Task<(List<Events> Events, int TotalCount, Dictionary<int, double> DistanceKmById, string Source)> GetEvents(EventSearchCriteria criteria);
 
@@ -63,6 +64,7 @@ namespace backend.main.services.interfaces
 
         // Batch operations
         Task<List<Events>> GetEventsByIds(IEnumerable<int> ids);
+        Task<List<Events>> GetVisibleEventsByIds(IEnumerable<int> ids, int? userId = null);
         Task<BatchCreateResultResponse> BatchCreateEvents(int clubId, int userId, IEnumerable<BatchCreateEventItem> items);
         Task<int> BatchUpdateEvents(int userId, IEnumerable<BatchUpdateEventItem> items);
         Task<int> BatchDeleteEvents(int userId, IEnumerable<int> ids);
@@ -72,7 +74,12 @@ namespace backend.main.services.interfaces
         Task<ClubAnalyticsResponse> GetClubAnalytics(int clubId, int userId);
 
         // Image management
-        Task<PresignedUploadResponse> GenerateImageUploadUrlAsync(string fileName, string contentType);
+        Task<PresignedUploadResponse> GenerateImageUploadUrlAsync(
+            int clubId,
+            int userId,
+            string fileName,
+            string contentType,
+            int? eventId = null);
         Task<EventImage> AddEventImageAsync(int eventId, int userId, string imageUrl);
         Task RemoveEventImageAsync(int eventId, int imageId, int userId);
 

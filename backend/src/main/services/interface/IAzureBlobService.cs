@@ -4,7 +4,8 @@ namespace backend.main.services.interfaces
 {
     public interface IAzureBlobService
     {
-        Task<PresignedUploadResponse> GenerateUploadUrlAsync(string fileName, string contentType);
+        Task<PresignedUploadResponse> GenerateUploadUrlAsync(string blobPathPrefix, string fileName, string contentType);
+        bool IsOwnedBlobUrl(string blobUrl);
         Task DeleteBlobAsync(string blobUrl);
     }
 }
