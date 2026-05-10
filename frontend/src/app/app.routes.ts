@@ -14,4 +14,8 @@ export const routes: Routes = [
     path: 'auth',
     loadChildren: () => import('./features/auth/auth.module').then((m) => m.AuthModule),
   },
+  {
+    path: 'events',
+    loadChildren: () => import('./features/events/events.routes').then((m) => m.EVENTS_ROUTES),
+  },
 ];

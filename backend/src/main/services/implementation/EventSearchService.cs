@@ -6,6 +6,7 @@ using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
 
 using Elastic.Clients.Elasticsearch;
+using Elastic.Clients.Elasticsearch.Analysis;
 using Elastic.Clients.Elasticsearch.Mapping;
 using Elastic.Clients.Elasticsearch.QueryDsl;
 
@@ -56,6 +57,24 @@ namespace backend.main.services.implementation
                             .Settings(s => s
                                 .NumberOfShards(1)
                                 .NumberOfReplicas(1)
+                                .Analysis(a => a
+                                    .TokenFilters(tf => tf
+                                        .EdgeNGram("autocomplete_filter", e => e
+                                            .MinGram(2)
+                                            .MaxGram(20)
+                                        )
+                                    )
+                                    .Analyzers(an => an
+                                        .Custom("autocomplete_index", ca => ca
+                                            .Tokenizer("standard")
+                                            .Filter(["lowercase", "autocomplete_filter"])
+                                        )
+                                        .Custom("autocomplete_search", ca => ca
+                                            .Tokenizer("standard")
+                                            .Filter(["lowercase"])
+                                        )
+                                    )
+                                )
                             )
                             .Mappings(m => m
                                 .Properties<EventDocument>(p => p
@@ -63,20 +82,54 @@ namespace backend.main.services.implementation
                                     .IntegerNumber(f => f.ClubId)
                                     .Text(f => f.Name, t => t
                                         .Analyzer("english")
-                                        .Fields(ff => ff.Keyword("keyword", k => k.IgnoreAbove(256)))
+                                        .Fields(ff => ff
+                                            .Keyword("keyword", k => k.IgnoreAbove(256))
+                                            .Text("autocomplete", ac => ac
+                                                .Analyzer("autocomplete_index")
+                                                .SearchAnalyzer("autocomplete_search")
+                                            )
+                                        )
                                     )
-                                    .Text(f => f.Description, t => t.Analyzer("english"))
-                                    .Text(f => f.Location, t => t.Analyzer("english"))
+                                    .Text(f => f.Description, t => t
+                                        .Analyzer("english")
+                                        .Fields(ff => ff
+                                            .Text("autocomplete", ac => ac
+                                                .Analyzer("autocomplete_index")
+                                                .SearchAnalyzer("autocomplete_search")
+                                            )
+                                        )
+                                    )
+                                    .Text(f => f.Location, t => t
+                                        .Analyzer("english")
+                                        .Fields(ff => ff
+                                            .Text("autocomplete", ac => ac
+                                                .Analyzer("autocomplete_index")
+                                                .SearchAnalyzer("autocomplete_search")
+                                            )
+                                        )
+                                    )
                                     .Keyword(f => f.Category)
                                     .Text(f => f.VenueName, t => t
                                         .Analyzer("english")
-                                        .Fields(ff => ff.Keyword("keyword", k => k.IgnoreAbove(256)))
+                                        .Fields(ff => ff
+                                            .Keyword("keyword", k => k.IgnoreAbove(256))
+                                            .Text("autocomplete", ac => ac
+                                                .Analyzer("autocomplete_index")
+                                                .SearchAnalyzer("autocomplete_search")
+                                            )
+                                        )
                                     )
                                     .Text(f => f.City, t => t
                                         .Analyzer("english")
-                                        .Fields(ff => ff.Keyword("keyword", k => k.IgnoreAbove(100)))
+                                        .Fields(ff => ff
+                                            .Keyword("keyword", k => k.IgnoreAbove(100))
+                                        )
                                     )
-                                    .Keyword(f => f.Tags)
+                                    .Keyword(f => f.Tags, k => k
+                                        .Fields(ff => ff
+                                            .Text("search", t => t.Analyzer("english"))
+                                        )
+                                    )
                                     .GeoPoint(f => f.LocationGeo)
                                     .IntegerNumber(f => f.RegistrationCount)
                                     .Boolean(f => f.IsPrivate)
@@ -314,11 +367,16 @@ namespace backend.main.services.implementation
                 .Fields((Fields)new Field[]
                 {
                     (Field)"name^3",
+                    (Field)"name.autocomplete^2",
                     (Field)"tags^2.5",
+                    (Field)"tags.search^2",
                     (Field)"venueName^2",
+                    (Field)"venueName.autocomplete^1.5",
                     (Field)"description",
+                    (Field)"description.autocomplete^0.5",
                     (Field)"city",
-                    (Field)"location"
+                    (Field)"location",
+                    (Field)"location.autocomplete^0.5"
                 })
                 .Type(TextQueryType.BestFields)
                 .Fuzziness(new Fuzziness("AUTO"))

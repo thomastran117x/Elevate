@@ -1,4 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http.Json;
+using System.Text.Json;
 
 using backend.main.configurations.environment;
 using backend.main.exceptions.http;
@@ -16,6 +18,7 @@ namespace backend.main.services.implementation
     public class OAuthService : BaseService, IOAuthService
     {
         private readonly string? _googleClientId;
+        private readonly string? _googleClientSecret;
         private readonly string? _microsoftClientId;
         private readonly string? _appleClientId;
 
@@ -31,6 +34,7 @@ namespace backend.main.services.implementation
             : base(httpClient)
         {
             _googleClientId = EnvironmentSetting.GoogleClientId;
+            _googleClientSecret = EnvironmentSetting.GoogleClientSecret;
 
             _microsoftClientId = EnvironmentSetting.MicrosoftClientId;
             if (_microsoftClientId != null)
@@ -45,6 +49,43 @@ namespace backend.main.services.implementation
                     "https://appleid.apple.com/.well-known/openid-configuration",
                     new OpenIdConnectConfigurationRetriever()
                 );
+        }
+
+        public async Task<string> ExchangeGoogleCodeAsync(
+            string code,
+            string codeVerifier,
+            string redirectUri
+        )
+        {
+            if (_googleClientId == null || _googleClientSecret == null)
+                throw new NotAvailableException("Google OAuth is not available");
+
+            var response = await Http.PostAsync(
+                "https://oauth2.googleapis.com/token",
+                new FormUrlEncodedContent(
+                [
+                    new("client_id", _googleClientId),
+                    new("client_secret", _googleClientSecret),
+                    new("code", code),
+                    new("code_verifier", codeVerifier),
+                    new("redirect_uri", redirectUri),
+                    new("grant_type", "authorization_code"),
+                ])
+            );
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                throw new UnauthorizedException($"Google code exchange failed: {error}");
+            }
+
+            var data = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var idToken = data.GetProperty("id_token").GetString();
+
+            if (string.IsNullOrWhiteSpace(idToken))
+                throw new UnauthorizedException("No id_token returned from Google.");
+
+            return idToken;
         }
 
         public async Task<OAuthUser> VerifyAppleTokenAsync(string appleToken)

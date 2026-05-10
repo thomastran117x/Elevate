@@ -3,6 +3,7 @@ using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
 
 using backend.main.configurations.environment;
+using backend.main.exceptions.http;
 using backend.main.dtos.responses.events;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
@@ -11,6 +12,16 @@ namespace backend.main.services.implementation
 {
     public class AzureBlobService : IAzureBlobService
     {
+        private static readonly Dictionary<string, string[]> AllowedImageTypes =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["image/jpeg"] = new[] { ".jpg", ".jpeg" },
+                ["image/jpg"] = new[] { ".jpg", ".jpeg" },
+                ["image/png"] = new[] { ".png" },
+                ["image/webp"] = new[] { ".webp" },
+                ["image/gif"] = new[] { ".gif" }
+            };
+
         private readonly BlobContainerClient? _container;
         private readonly string? _configurationError;
 
@@ -35,6 +46,7 @@ namespace backend.main.services.implementation
         }
 
         public async Task<PresignedUploadResponse> GenerateUploadUrlAsync(
+            string blobPathPrefix,
             string fileName,
             string contentType)
         {
@@ -42,8 +54,11 @@ namespace backend.main.services.implementation
 
             await container.CreateIfNotExistsAsync(PublicAccessType.Blob);
 
-            var ext = Path.GetExtension(fileName);
-            var blobName = $"events/{Guid.NewGuid()}{ext}";
+            var extension = ValidateAndNormalizeImageExtension(fileName, contentType);
+            var normalizedPrefix = string.IsNullOrWhiteSpace(blobPathPrefix)
+                ? "events"
+                : blobPathPrefix.Trim().Trim('/');
+            var blobName = $"{normalizedPrefix}/{Guid.NewGuid():N}{extension}";
             var blobClient = container.GetBlobClient(blobName);
 
             var expiresAt = DateTimeOffset.UtcNow.AddMinutes(15);
@@ -67,20 +82,21 @@ namespace backend.main.services.implementation
             };
         }
 
+        public bool IsOwnedBlobUrl(string blobUrl) =>
+            TryGetManagedBlobPath(blobUrl, out _);
+
         public async Task DeleteBlobAsync(string blobUrl)
         {
             try
             {
-                if (_container == null)
+                if (!TryGetManagedBlobPath(blobUrl, out var blobPath))
                     return;
 
-                var uri = new Uri(blobUrl);
-                var blobPath = uri.AbsolutePath.TrimStart('/');
-                var containerPrefix = _container.Name + "/";
-                if (blobPath.StartsWith(containerPrefix))
-                    blobPath = blobPath[containerPrefix.Length..];
+                var container = _container;
+                if (container == null)
+                    return;
 
-                var blobClient = _container.GetBlobClient(blobPath);
+                var blobClient = container.GetBlobClient(blobPath);
                 await blobClient.DeleteIfExistsAsync();
             }
             catch (Exception ex)
@@ -97,6 +113,55 @@ namespace backend.main.services.implementation
             throw new InvalidOperationException(
                 _configurationError ?? "Azure Blob Storage is not configured."
             );
+        }
+
+        private static string ValidateAndNormalizeImageExtension(string fileName, string contentType)
+        {
+            var safeFileName = Path.GetFileName(fileName?.Trim() ?? string.Empty);
+            if (string.IsNullOrWhiteSpace(safeFileName))
+                throw new BadRequestException("A valid file name is required.");
+
+            var normalizedContentType = (contentType ?? string.Empty).Trim().ToLowerInvariant();
+            if (!AllowedImageTypes.TryGetValue(normalizedContentType, out var allowedExtensions))
+            {
+                throw new UnsupportedMediaTypeException(
+                    "Only JPEG, PNG, WEBP, and GIF images are supported.");
+            }
+
+            var extension = Path.GetExtension(safeFileName).ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(extension) || !allowedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+            {
+                throw new BadRequestException(
+                    "The file extension must match the supplied image content type.");
+            }
+
+            return extension;
+        }
+
+        private bool TryGetManagedBlobPath(string blobUrl, out string blobPath)
+        {
+            blobPath = string.Empty;
+
+            if (_container == null)
+                return false;
+
+            if (!Uri.TryCreate(blobUrl, UriKind.Absolute, out var blobUri))
+                return false;
+
+            if (!string.Equals(blobUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            var containerUri = _container.Uri;
+            if (!string.Equals(blobUri.Host, containerUri.Host, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            var containerPath = containerUri.AbsolutePath.TrimEnd('/');
+            var requiredPrefix = containerPath + "/";
+            if (!blobUri.AbsolutePath.StartsWith(requiredPrefix, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            blobPath = blobUri.AbsolutePath[requiredPrefix.Length..];
+            return !string.IsNullOrWhiteSpace(blobPath);
         }
     }
 }

@@ -62,6 +62,19 @@ namespace backend.main.dtos.requests.events
                     "Batch size must be between 1 and 50 events.",
                     new[] { nameof(Events) });
             }
+
+            var duplicateIds = Events
+                .GroupBy(e => e.EventId)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
+
+            if (duplicateIds.Count > 0)
+            {
+                yield return new ValidationResult(
+                    $"Duplicate event IDs are not allowed: {string.Join(", ", duplicateIds)}.",
+                    new[] { nameof(Events) });
+            }
         }
     }
 }

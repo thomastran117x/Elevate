@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
+import { ApiEnvelope, extractEnvelopeData } from '../models/api-envelope.model';
 import { environment } from '../../../../environments/environment';
 import { clearUser } from '../../stores/user.actions';
 import { clearSession, updateSession } from '../../stores/session.actions';
@@ -35,11 +36,12 @@ export class AuthTokenService {
     if (!this.csrfPromise) {
       this.csrfPromise = (async () => {
         const res = await firstValueFrom(
-          this.http.get<CsrfResponse>(`${environment.backendUrl}/auth/csrf`, {
+          this.http.get<ApiEnvelope<CsrfResponse> | CsrfResponse>(`${environment.backendUrl}/auth/csrf`, {
             withCredentials: true,
           }),
         );
-        this.csrfToken = res?.token ?? null;
+        const payload = extractEnvelopeData(res);
+        this.csrfToken = payload?.token ?? null;
       })().finally(() => {
         this.csrfPromise = null;
       });
@@ -52,7 +54,7 @@ export class AuthTokenService {
     await this.ensureCsrfToken();
 
     const res = await firstValueFrom(
-      this.http.post<AuthenticatedSessionResponse>(
+      this.http.post<ApiEnvelope<AuthenticatedSessionResponse> | AuthenticatedSessionResponse>(
         `${environment.backendUrl}/auth/refresh`,
         {},
         {
@@ -60,16 +62,17 @@ export class AuthTokenService {
         },
       ),
     );
+    const payload = extractEnvelopeData(res);
 
-    if (!res?.AccessToken) {
+    if (!payload?.AccessToken) {
       throw new Error('Refresh response did not include an access token.');
     }
 
     this.store.dispatch(updateSession({
-      accessToken: res.AccessToken,
-      expiresAtUtc: res.ExpiresAtUtc,
+      accessToken: payload.AccessToken,
+      expiresAtUtc: payload.ExpiresAtUtc,
     }));
-    this.accessToken = res.AccessToken;
+    this.accessToken = payload.AccessToken;
   }
 
   logoutLocal() {

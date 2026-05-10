@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 
+using backend.main.dtos.responses.general;
+
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,12 +28,13 @@ namespace backend.main.configurations.security
                 {
                     context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
                     context.HttpContext.Response.ContentType = "application/json";
-                    await context.HttpContext.Response.WriteAsJsonAsync(new
-                    {
-                        status = 429,
-                        error = "Too Many Requests",
-                        message = "Rate limit exceeded. Please try again later."
-                    }, cancellationToken);
+                    await context.HttpContext.Response.WriteAsJsonAsync(
+                        ApiResponse<object?>.Failure(
+                            "Rate limit exceeded. Please try again later.",
+                            "TOO_MANY_REQUESTS"
+                        ),
+                        cancellationToken
+                    );
                 };
 
                 options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>

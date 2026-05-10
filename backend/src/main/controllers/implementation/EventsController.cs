@@ -144,10 +144,10 @@ namespace backend.main.implementation.controllers
             try
             {
                 if (page < 1)
-                    return BadRequest(new MessageResponse("page must be at least 1."));
+                    return BadRequestResponse("page must be at least 1.");
 
                 if (pageSize < 1 || pageSize > 100)
-                    return BadRequest(new MessageResponse("pageSize must be between 1 and 100."));
+                    return BadRequestResponse("pageSize must be between 1 and 100.");
 
                 var (events, totalCount, source) = await _eventService.GetEventsByClub(clubId, status: status, page: page, pageSize: pageSize);
 
@@ -179,7 +179,7 @@ namespace backend.main.implementation.controllers
         {
             try
             {
-                var ev = await _eventService.GetEvent(eventId);
+                var ev = await _eventService.GetVisibleEvent(eventId, GetOptionalUserId());
 
                 return Ok(new ApiResponse<EventResponse>(
                     $"The event with ID {eventId} has been fetched successfully.",
@@ -213,20 +213,23 @@ namespace backend.main.implementation.controllers
         {
             try
             {
+                if (isPrivate)
+                    return BadRequestResponse("Private events are not available through the public events endpoint.");
+
                 if (page < 1)
-                    return BadRequest(new MessageResponse("page must be at least 1."));
+                    return BadRequestResponse("page must be at least 1.");
 
                 if (pageSize < 1 || pageSize > 100)
-                    return BadRequest(new MessageResponse("pageSize must be between 1 and 100."));
+                    return BadRequestResponse("pageSize must be between 1 and 100.");
 
                 if ((lat.HasValue) != (lng.HasValue))
-                    return BadRequest(new MessageResponse("Both lat and lng must be provided together."));
+                    return BadRequestResponse("Both lat and lng must be provided together.");
 
                 if (radiusKm.HasValue && (radiusKm <= 0 || radiusKm > 500))
-                    return BadRequest(new MessageResponse("radiusKm must be between 0 (exclusive) and 500."));
+                    return BadRequestResponse("radiusKm must be between 0 (exclusive) and 500.");
 
                 if (sortBy == EventSortBy.Distance && (!lat.HasValue || !lng.HasValue))
-                    return BadRequest(new MessageResponse("sortBy=Distance requires lat and lng."));
+                    return BadRequestResponse("sortBy=Distance requires lat and lng.");
 
                 List<string>? tagList = null;
                 if (!string.IsNullOrWhiteSpace(tags))
@@ -238,7 +241,7 @@ namespace backend.main.implementation.controllers
                         .ToList();
 
                     if (tagList.Count > 5)
-                        return BadRequest(new MessageResponse("A maximum of 5 tags are allowed per query."));
+                        return BadRequestResponse("A maximum of 5 tags are allowed per query.");
                 }
 
                 var criteria = new EventSearchCriteria
@@ -284,6 +287,63 @@ namespace backend.main.implementation.controllers
             }
         }
 
+        [HttpPost("search")]
+        public async Task<IActionResult> SearchEvents([FromBody] EventSearchRequest request)
+        {
+            try
+            {
+                if (request.Filters?.IsPrivate == true)
+                    return BadRequestResponse("Private events are not available through the public events endpoint.");
+
+                var tagList = request.Filters?.Tags?
+                    .Select(t => t.Trim().ToLowerInvariant())
+                    .Where(t => t.Length > 0)
+                    .Distinct()
+                    .ToList();
+
+                var criteria = new EventSearchCriteria
+                {
+                    Query = request.Query,
+                    IsPrivate = request.Filters?.IsPrivate ?? false,
+                    Status = request.Filters?.Status,
+                    Category = request.Filters?.Category,
+                    Tags = tagList,
+                    City = request.Filters?.City,
+                    Lat = request.Geo?.Lat,
+                    Lng = request.Geo?.Lng,
+                    RadiusKm = request.Geo?.RadiusKm,
+                    SortBy = request.SortBy,
+                    Page = request.Page,
+                    PageSize = request.PageSize
+                };
+
+                var (events, totalCount, distances, source) = await _eventService.GetEvents(criteria);
+
+                var paged = new PagedResponse<EventResponse>(
+                    events.Select(e => EventMapper.MapToResponse(
+                        e,
+                        distances.TryGetValue(e.Id, out var d) ? d : (double?)null)),
+                    totalCount,
+                    request.Page,
+                    request.PageSize
+                );
+
+                return Ok(new ApiResponse<PagedResponse<EventResponse>>(
+                    "The events have been fetched successfully.",
+                    paged,
+                    source
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] SearchEvents failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
         [HttpGet("batch")]
         public async Task<IActionResult> GetEventsBatch([FromQuery] string ids)
         {
@@ -298,9 +358,9 @@ namespace backend.main.implementation.controllers
                     .ToList();
 
                 if (parsedIds.Count == 0)
-                    return BadRequest(new MessageResponse("No valid IDs provided."));
+                    return BadRequestResponse("No valid IDs provided.");
 
-                var events = await _eventService.GetEventsByIds(parsedIds);
+                var events = await _eventService.GetVisibleEventsByIds(parsedIds, GetOptionalUserId());
 
                 return Ok(new ApiResponse<IEnumerable<EventResponse>>(
                     $"{events.Count} event(s) fetched successfully.",
@@ -316,6 +376,17 @@ namespace backend.main.implementation.controllers
                 return HandleError.Resolve(e);
             }
         }
+
+        private int? GetOptionalUserId()
+        {
+            if (User.Identity?.IsAuthenticated != true)
+                return null;
+
+            return User.GetUserPayload().Id;
+        }
+
+        private static IActionResult BadRequestResponse(string message) =>
+            HandleError.Resolve(new BadRequestException(message));
 
         [Authorize(Policy = "OrganizerOnly")]
         [HttpPost("batch/{clubId}")]
@@ -423,8 +494,14 @@ namespace backend.main.implementation.controllers
         {
             try
             {
+                var user = User.GetUserPayload();
+
                 var result = await _eventService.GenerateImageUploadUrlAsync(
-                    request.FileName, request.ContentType);
+                    request.ClubId,
+                    user.Id,
+                    request.FileName,
+                    request.ContentType,
+                    request.EventId);
 
                 return Ok(new ApiResponse<PresignedUploadResponse>(
                     "Presigned upload URL generated successfully.",
@@ -532,7 +609,10 @@ namespace backend.main.implementation.controllers
         public async Task<IActionResult> ReindexEvents(CancellationToken cancellationToken)
         {
             var count = await _reindexService.ReindexAllAsync(cancellationToken);
-            return Ok(new { indexed = count });
+            return Ok(new ApiResponse<object>(
+                "Events reindexed successfully.",
+                new { indexed = count }
+            ));
         }
     }
 }

@@ -302,6 +302,29 @@ namespace backend.main.services.implementation
             }
         }
 
+        public async Task<OAuthAuthenticationResult> GoogleCodeAsync(
+            string code,
+            string codeVerifier,
+            string redirectUri,
+            SessionTransport transport,
+            string? nonce = null
+        )
+        {
+            try
+            {
+                var idToken = await _oauthService.ExchangeGoogleCodeAsync(code, codeVerifier, redirectUri);
+                return await GoogleAsync(idToken, transport, nonce);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[AuthService] GoogleCodeAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
         public async Task<OAuthAuthenticationResult> MicrosoftAsync(
             string token,
             SessionTransport transport,

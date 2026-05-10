@@ -37,6 +37,7 @@ builder.Services.AddControllersWithViews(options =>
 {
     options.Conventions.Insert(0, new RoutePrefixConvention(RoutePaths.ApiPrefix));
 });
+builder.Services.AddApiResponseConventions();
 
 builder.Services.AddApplicationServices(builder.Configuration);
 builder.Services.AddHttpContextAccessor();

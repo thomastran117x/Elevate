@@ -132,7 +132,10 @@ namespace backend.main.implementation.controllers
         public async Task<IActionResult> ReindexPosts(CancellationToken cancellationToken)
         {
             var count = await _reindexService.ReindexAllAsync(cancellationToken);
-            return Ok(new { indexed = count });
+            return Ok(new ApiResponse<object>(
+                "Posts reindexed successfully.",
+                new { indexed = count }
+            ));
         }
 
         [HttpGet("posts")]

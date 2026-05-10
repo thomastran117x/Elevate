@@ -20,6 +20,13 @@ namespace backend.main.services.interfaces
             SessionTransport transport,
             string? expectedNonce = null
         );
+        Task<OAuthAuthenticationResult> GoogleCodeAsync(
+            string code,
+            string codeVerifier,
+            string redirectUri,
+            SessionTransport transport,
+            string? nonce = null
+        );
         Task<OAuthAuthenticationResult> MicrosoftAsync(
             string token,
             SessionTransport transport,

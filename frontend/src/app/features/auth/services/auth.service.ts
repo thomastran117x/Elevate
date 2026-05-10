@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { from, map, switchMap } from 'rxjs';
 import { environment } from '../../../../environments/environment';
+import { ApiEnvelope, requireEnvelopeData } from '../../../core/api/models/api-envelope.model';
 import { AuthTokenService } from '../../../core/api/services/auth-token.service';
 import {
   AuthenticatedSessionResponse,
@@ -56,13 +57,6 @@ export interface OAuthAuthenticatedResponse {
 
 export type OAuthAuthResponse = OAuthRoleSelectionResponse | OAuthAuthenticatedResponse;
 
-export interface ApiEnvelope<T> {
-  message?: string;
-  Message?: string;
-  data?: T;
-  Data?: T;
-}
-
 export const PendingOAuthSignupStorageKey = 'pending_oauth_signup';
 
 @Injectable({ providedIn: 'root' })
@@ -107,6 +101,16 @@ export class AuthService {
   googleVerify(idToken: string, nonce: string): Observable<OAuthAuthResponse> {
     return this.postWithCsrf<ApiEnvelope<OAuthAuthResponse>>(`${this.baseUrl}/google`, {
       token: idToken,
+      nonce,
+      transport: 'browser' as const,
+    }).pipe(map((res) => this.requireData(res, 'Google login response was incomplete.')));
+  }
+
+  googleCodeVerify(code: string, codeVerifier: string, redirectUri: string, nonce: string): Observable<OAuthAuthResponse> {
+    return this.postWithCsrf<ApiEnvelope<OAuthAuthResponse>>(`${this.baseUrl}/google/code`, {
+      code,
+      codeVerifier,
+      redirectUri,
       nonce,
       transport: 'browser' as const,
     }).pipe(map((res) => this.requireData(res, 'Google login response was incomplete.')));
@@ -173,11 +177,6 @@ export class AuthService {
   }
 
   private requireData<T>(response: ApiEnvelope<T>, fallbackMessage: string): T {
-    const data = response.data ?? response.Data;
-    if (!data) {
-      throw new Error(fallbackMessage);
-    }
-
-    return data;
+    return requireEnvelopeData(response, fallbackMessage);
   }
 }

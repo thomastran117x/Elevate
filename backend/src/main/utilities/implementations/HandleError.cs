@@ -12,8 +12,9 @@ namespace backend.main.utilities.implementation
             if (ex is AppException appEx)
                 return HandleAppException(appEx);
 
-            MessageResponse response = new MessageResponse(
-                "An unexpected error occurred."
+            var response = ApiResponse<object?>.Failure(
+                "An unexpected error occurred.",
+                "INTERNAL_SERVER_ERROR"
             );
 
             return new ObjectResult(response)
@@ -24,7 +25,7 @@ namespace backend.main.utilities.implementation
 
         private static IActionResult HandleAppException(AppException ex)
         {
-            var response = new MessageResponse(ex.Message, ex.Details);
+            var response = ApiResponse<object?>.Failure(ex.Message, ex.ErrorCode, ex.Details);
 
             return new ObjectResult(response)
             {

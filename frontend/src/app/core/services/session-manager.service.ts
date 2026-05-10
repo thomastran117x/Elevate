@@ -5,10 +5,11 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Store } from '@ngrx/store';
 import { setUser, clearUser } from '../stores/user.actions';
 import { firstValueFrom } from 'rxjs';
+import { ApiEnvelope, extractEnvelopeData, requireEnvelopeData } from '../api/models/api-envelope.model';
 import { AuthTokenService } from '../api/services/auth-token.service';
 import { setSession, clearSession } from '../stores/session.actions';
 import { AuthenticatedSessionResponse, CurrentUserResponse } from '../models/auth-response.model';
-import { AuthService, ApiEnvelope } from '../../features/auth/services/auth.service';
+import { AuthService } from '../../features/auth/services/auth.service';
 import { UserState } from '../stores/user.reducer';
 import { SessionState } from '../stores/session.reducer';
 
@@ -58,7 +59,7 @@ export class SessionManagerService {
         : undefined;
 
       const res = await firstValueFrom(
-        this.http.post<AuthenticatedSessionResponse>(
+        this.http.post<ApiEnvelope<AuthenticatedSessionResponse> | AuthenticatedSessionResponse>(
           `${environment.backendUrl}/auth/refresh`,
           {},
           {
@@ -67,9 +68,10 @@ export class SessionManagerService {
           },
         ),
       );
+      const session = extractEnvelopeData(res);
 
-      if (res?.AccessToken) {
-        await this.bootstrapSession(res);
+      if (session?.AccessToken) {
+        await this.bootstrapSession(session);
       } else {
         this.clearSessionState();
       }
@@ -82,12 +84,7 @@ export class SessionManagerService {
   }
 
   private requireCurrentUser(response: ApiEnvelope<CurrentUserResponse>): CurrentUserResponse {
-    const user = response.data ?? response.Data;
-    if (!user) {
-      throw new Error('Current user response was incomplete.');
-    }
-
-    return user;
+    return requireEnvelopeData(response, 'Current user response was incomplete.');
   }
 
   private clearSessionState(): void {

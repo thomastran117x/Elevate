@@ -4,14 +4,15 @@ namespace backend.main.exceptions.http
     {
         private const string DefaultMessage = "Unprocessable entity";
         private const int code = StatusCodes.Status422UnprocessableEntity;
+        private const string DefaultErrorCode = "UNPROCESSABLE_ENTITY";
 
         public UnprocessableEntityException()
-            : base(DefaultMessage, code) { }
+            : base(DefaultMessage, code, DefaultErrorCode) { }
 
         public UnprocessableEntityException(string message)
-            : base(message, code) { }
+            : base(message, code, DefaultErrorCode) { }
 
         public UnprocessableEntityException(string message, string details)
-            : base(message, code, details) { }
+            : base(message, code, DefaultErrorCode, details) { }
     }
 }

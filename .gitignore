@@ -7,8 +7,6 @@
 *.tmp
 *.log
 *.env
-.env.*
-!.env.example   # keep a sample env if you want
 
 ########################################
 # ASP.NET Core / .NET backend

@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Component } from '@angular/core';
-import { RouterModule } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 
 type Category = { name: string; emoji: string; count: string };
 type Feature = { title: string; desc: string; icon: string };
@@ -17,7 +18,7 @@ type Testimonial = { quote: string; name: string; role: string };
 @Component({
   selector: 'app-home-page',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   template: `
     <div class="min-h-screen bg-slate-950 text-white overflow-x-hidden overflow-y-visible relative">
       <!-- Ambient background -->
@@ -133,6 +134,8 @@ type Testimonial = { quote: string; name: string; role: string };
                       <input
                         class="w-full bg-transparent outline-none text-sm placeholder:text-white/40"
                         placeholder="Search artists, teams, venues…"
+                        [(ngModel)]="heroSearch"
+                        (keyup.enter)="explore()"
                       />
                     </div>
                   </div>
@@ -146,13 +149,15 @@ type Testimonial = { quote: string; name: string; role: string };
                       <input
                         class="w-full bg-transparent outline-none text-sm placeholder:text-white/40"
                         placeholder="Ottawa, Toronto…"
+                        [(ngModel)]="heroCity"
+                        (keyup.enter)="explore()"
                       />
                     </div>
                   </div>
 
                   <div class="sm:col-span-3">
-                    <a
-                      routerLink="/events"
+                    <button
+                      (click)="explore()"
                       class="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2
                              bg-gradient-to-r from-purple-500 to-fuchsia-500
                              font-semibold text-sm shadow-lg shadow-purple-500/25
@@ -160,26 +165,21 @@ type Testimonial = { quote: string; name: string; role: string };
                     >
                       Explore events
                       <span class="text-white/90">→</span>
-                    </a>
+                    </button>
                   </div>
                 </div>
 
                 <div class="px-4 pb-4 flex flex-wrap gap-2 text-xs text-white/60">
-                  <span class="rounded-full bg-white/5 border border-white/10 px-2 py-1"
-                    >🎤 Concerts</span
-                  >
-                  <span class="rounded-full bg-white/5 border border-white/10 px-2 py-1"
-                    >🏒 Sports</span
-                  >
-                  <span class="rounded-full bg-white/5 border border-white/10 px-2 py-1"
-                    >🎭 Theatre</span
-                  >
-                  <span class="rounded-full bg-white/5 border border-white/10 px-2 py-1"
-                    >🎓 Campus</span
-                  >
-                  <span class="rounded-full bg-white/5 border border-white/10 px-2 py-1"
-                    >🌙 Nightlife</span
-                  >
+                  <button class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                    (click)="explore('Music')">🎤 Concerts</button>
+                  <button class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                    (click)="explore('Sports')">🏒 Sports</button>
+                  <button class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                    (click)="explore('Arts')">🎭 Theatre</button>
+                  <button class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                    (click)="explore('Academic')">🎓 Campus</button>
+                  <button class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                    (click)="explore('Party')">🌙 Nightlife</button>
                 </div>
               </div>
 
@@ -560,6 +560,19 @@ type Testimonial = { quote: string; name: string; role: string };
 })
 export class HomeComponent {
   year = new Date().getFullYear();
+
+  heroSearch = '';
+  heroCity = '';
+
+  constructor(private router: Router) {}
+
+  explore(category?: string): void {
+    const queryParams: Record<string, string> = {};
+    if (this.heroSearch.trim()) queryParams['search'] = this.heroSearch.trim();
+    if (this.heroCity.trim()) queryParams['city'] = this.heroCity.trim();
+    if (category) queryParams['category'] = category;
+    this.router.navigate(['/events'], { queryParams });
+  }
 
   categories: Category[] = [
     { name: 'Concerts', emoji: '🎤', count: '1,240 events' },

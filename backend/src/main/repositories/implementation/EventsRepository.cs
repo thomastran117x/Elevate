@@ -220,6 +220,24 @@ namespace backend.main.repositories.implementation
                 query = query.Where(e => e.City == city);
             }
 
+            if (criteria.Lat.HasValue && criteria.Lng.HasValue && criteria.RadiusKm.HasValue)
+            {
+                var lat = criteria.Lat.Value;
+                var lng = criteria.Lng.Value;
+                var radiusKm = criteria.RadiusKm.Value;
+                var latScaleKm = 111.32;
+                var lngScaleKm = Math.Cos(lat * Math.PI / 180.0) * 111.32;
+                var radiusSquaredKm = radiusKm * radiusKm;
+
+                query = query.Where(e =>
+                    e.Latitude.HasValue &&
+                    e.Longitude.HasValue &&
+                    ((((e.Latitude.Value - lat) * latScaleKm) * ((e.Latitude.Value - lat) * latScaleKm)) +
+                     (((e.Longitude.Value - lng) * lngScaleKm) * ((e.Longitude.Value - lng) * lngScaleKm)))
+                    <= radiusSquaredKm
+                );
+            }
+
             if (criteria.Status == EventStatus.Upcoming)
                 query = query.Where(e => e.StartTime > now);
             else if (criteria.Status == EventStatus.Ongoing)
@@ -234,6 +252,23 @@ namespace backend.main.repositories.implementation
             IQueryable<Events> query,
             EventSearchCriteria criteria)
         {
+            if (criteria.SortBy == EventSortBy.Distance && criteria.Lat.HasValue && criteria.Lng.HasValue)
+            {
+                var lat = criteria.Lat.Value;
+                var lng = criteria.Lng.Value;
+                var latScaleKm = 111.32;
+                var lngScaleKm = Math.Cos(lat * Math.PI / 180.0) * 111.32;
+
+                return query
+                    .OrderBy(e =>
+                        (e.Latitude.HasValue && e.Longitude.HasValue)
+                            ? ((((e.Latitude.Value - lat) * latScaleKm) * ((e.Latitude.Value - lat) * latScaleKm)) +
+                               (((e.Longitude.Value - lng) * lngScaleKm) * ((e.Longitude.Value - lng) * lngScaleKm)))
+                            : double.MaxValue)
+                    .ThenBy(e => e.StartTime)
+                    .ThenBy(e => e.Id);
+            }
+
             return criteria.SortBy switch
             {
                 EventSortBy.Date => query
