@@ -1,4 +1,4 @@
-namespace backend.main.exceptions.http
+namespace backend.main.shared.exceptions.http
 {
     public class GatewayTimeoutException : AppException
     {

@@ -1,6 +1,6 @@
-using backend.main.exceptions.http;
+using backend.main.shared.exceptions.http;
 
-namespace backend.main.exceptions.app
+namespace backend.main.shared.exceptions.app
 {
     public class RepositoryWriteException : NotAvailableException
     {

@@ -1,6 +1,6 @@
-using backend.main.exceptions.http;
+using backend.main.shared.exceptions.http;
 
-namespace backend.main.errors.app
+namespace backend.main.shared.exceptions.app
 {
     public class UserNotActiveException : ForbiddenException
     {

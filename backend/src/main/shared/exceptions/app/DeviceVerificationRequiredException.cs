@@ -1,4 +1,6 @@
-namespace backend.main.exceptions.http
+using backend.main.shared.exceptions.http;
+
+namespace backend.main.shared.exceptions.app
 {
     public class DeviceVerificationRequiredException : AppException
     {
