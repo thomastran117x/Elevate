@@ -1,6 +1,6 @@
 using System.Reflection;
 
-using backend.main.attributes.repository;
+using backend.main.shared.attributes.repository;
 
 using Microsoft.EntityFrameworkCore;
 

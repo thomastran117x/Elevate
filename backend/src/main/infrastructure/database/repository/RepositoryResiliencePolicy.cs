@@ -1,7 +1,10 @@
 using System.Data.Common;
+
 using backend.main.exceptions.app;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+
 using Polly;
 using Polly.CircuitBreaker;
 using Polly.Timeout;

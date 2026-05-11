@@ -12,6 +12,9 @@ namespace backend.main.infrastructure.database.repository
             string operationName,
             CancellationToken ct = default
         );
-        bool IsDatabaseHealthy { get; }
+        bool IsDatabaseHealthy
+        {
+            get;
+        }
     }
 }

@@ -1,4 +1,4 @@
-using backend.main.attributes.repository;
+using backend.main.shared.attributes.repository;
 
 namespace backend.main.infrastructure.database.repository
 {
