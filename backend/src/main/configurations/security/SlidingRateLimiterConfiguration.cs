@@ -1,6 +1,6 @@
 using System.Net;
 
-using backend.main.services.interfaces;
+using backend.main.features.cache;
 
 using StackExchange.Redis;
 
