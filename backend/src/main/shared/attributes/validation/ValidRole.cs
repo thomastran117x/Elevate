@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-using backend.main.configurations.security;
+using backend.main.application.security;
 
 namespace backend.main.shared.attributes.validation;
 

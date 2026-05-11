@@ -1,4 +1,4 @@
-using backend.main.configurations.security;
+using backend.main.application.security;
 using backend.main.dtos.requests.events;
 using backend.main.dtos.responses.events;
 using backend.main.dtos.responses.general;

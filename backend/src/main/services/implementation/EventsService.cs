@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Security.Cryptography;
 
 using backend.main.dtos;
-using backend.main.configurations.resource.database;
+using backend.main.infrastructure.database.core;
 using backend.main.dtos.requests.events;
 using backend.main.dtos.responses.events;
 using backend.main.dtos.responses.general;

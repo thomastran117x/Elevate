@@ -1,5 +1,5 @@
 using backend.main.infrastructure.database.core;
-using backend.main.configurations.security;
+using backend.main.application.security;
 using backend.main.models.core;
 using backend.main.repositories.contracts.users;
 using backend.main.repositories.interfaces;

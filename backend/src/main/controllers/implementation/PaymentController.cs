@@ -1,4 +1,4 @@
-using backend.main.configurations.security;
+using backend.main.application.security;
 using backend.main.dtos.responses.general;
 using backend.main.dtos.responses.payment;
 using backend.main.exceptions.http;

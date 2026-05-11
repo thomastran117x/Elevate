@@ -1,6 +1,6 @@
 using backend.main.exceptions.http;
 
-namespace backend.main.configurations.security
+namespace backend.main.application.security
 {
     public static class AuthRoles
     {

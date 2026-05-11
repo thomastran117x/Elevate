@@ -9,12 +9,11 @@ using backend.main.configurations.application;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
 
-using backend.main.configurations.security;
-
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using backend.main.application.security;
 
 namespace backend.main.implementation.controllers
 {

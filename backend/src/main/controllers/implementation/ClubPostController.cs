@@ -1,4 +1,4 @@
-using backend.main.configurations.security;
+using backend.main.application.security;
 using backend.main.dtos.requests.clubpost;
 using backend.main.dtos.responses.clubpost;
 using backend.main.dtos.responses.general;

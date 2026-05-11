@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-using backend.main.configurations.security;
+using backend.main.application.security;
 using backend.main.dtos.requests.events;
 using backend.main.dtos.responses.eventregistration;
 using backend.main.dtos.responses.general;

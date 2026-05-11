@@ -1,12 +1,12 @@
 using backend.main.configurations.application;
 using backend.main.application.environment;
-using backend.main.configurations.security;
 using backend.main.seeders;
 using backend.main.utilities.implementation;
 using backend.main.utilities.interfaces;
 using Serilog;
 using backend.main.infrastructure.redis;
 using backend.main.infrastructure.database.core;
+using backend.main.application.security;
 
 Logger.Configure(o =>
 {
