@@ -1,4 +1,4 @@
-using backend.main.configurations.application;
+using backend.main.application.bootstrap;
 using backend.main.utilities.implementation;
 using backend.main.utilities.interfaces;
 using backend.worker.event_indexer;

@@ -1,6 +1,6 @@
 using backend.main.dtos.general;
-using backend.main.configurations.application;
 using backend.main.models.other;
+using backend.main.application.bootstrap;
 
 namespace backend.main.utilities.implementation
 {

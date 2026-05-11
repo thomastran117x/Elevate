@@ -1,4 +1,3 @@
-using backend.main.configurations.application;
 using backend.main.application.environment;
 using backend.main.seeders;
 using backend.main.utilities.implementation;
@@ -7,6 +6,8 @@ using Serilog;
 using backend.main.infrastructure.redis;
 using backend.main.infrastructure.database.core;
 using backend.main.application.security;
+using backend.main.application.bootstrap;
+using backend.main.application.handlers;
 
 Logger.Configure(o =>
 {
@@ -65,7 +66,7 @@ await app.Services.SeedAppDataAsync();
 
 app.UseForwardedHeaders();
 
-app.UseMiddleware<GlobalExceptionMiddleware>();
+app.UseMiddleware<GlobalExceptionHandler>();
 
 app.UseRequestId();
 

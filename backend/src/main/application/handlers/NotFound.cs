@@ -1,6 +1,6 @@
 using backend.main.dtos.responses.general;
 
-namespace backend.main.application.handler
+namespace backend.main.application.handlers
 {
     public static class NotFoundHandler
     {

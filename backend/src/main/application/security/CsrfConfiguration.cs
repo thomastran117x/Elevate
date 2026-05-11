@@ -1,4 +1,4 @@
-using backend.main.configurations.application;
+using backend.main.application.bootstrap;
 
 using Microsoft.AspNetCore.Antiforgery;
 
