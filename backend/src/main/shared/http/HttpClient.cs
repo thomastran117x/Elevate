@@ -2,7 +2,10 @@ namespace backend.main.shared.http
 {
     public sealed class ExternalApiClient : IExternalApiClient
     {
-        public HttpClient HttpClient { get; }
+        public HttpClient HttpClient
+        {
+            get;
+        }
 
         public ExternalApiClient(HttpClient httpClient) => HttpClient = httpClient;
 

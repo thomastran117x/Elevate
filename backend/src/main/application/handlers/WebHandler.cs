@@ -1,6 +1,6 @@
 using System.Net;
 
-using backend.main.http;
+using backend.main.shared.http;
 
 using Microsoft.Extensions.Http.Resilience;
 

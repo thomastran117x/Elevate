@@ -2,7 +2,10 @@ namespace backend.main.shared.http
 {
     public interface IExternalApiClient
     {
-        HttpClient HttpClient { get; }
+        HttpClient HttpClient
+        {
+            get;
+        }
 
         Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
