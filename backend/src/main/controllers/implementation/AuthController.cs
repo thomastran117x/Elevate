@@ -6,7 +6,7 @@ using backend.main.shared.exceptions.http;
 using backend.main.models.core;
 using backend.main.models.other;
 using backend.main.services.interfaces;
-using backend.main.utilities.implementation;
+using backend.main.utilities;
 
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using backend.main.application.security;
 using backend.main.application.bootstrap;
+using backend.main.shared.utilities.logger;
 
 namespace backend.main.implementation.controllers
 {

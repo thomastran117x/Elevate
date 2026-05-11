@@ -1,5 +1,5 @@
 using backend.main.infrastructure.redis;
-using backend.main.utilities.implementation;
+using backend.main.shared.utilities.logger;
 
 using StackExchange.Redis;
 

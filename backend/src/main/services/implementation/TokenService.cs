@@ -10,12 +10,12 @@ using backend.main.shared.exceptions.http;
 using backend.main.models.core;
 using backend.main.models.other;
 using backend.main.services.interfaces;
-using backend.main.utilities.implementation;
 using backend.main.features.cache;
 
 using Microsoft.IdentityModel.Tokens;
 
 using Newtonsoft.Json;
+using backend.main.shared.utilities.logger;
 
 namespace backend.main.services.implementation
 {

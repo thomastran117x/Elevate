@@ -3,10 +3,10 @@ using backend.main.models.core;
 using backend.main.models.enums;
 using backend.main.repositories.interfaces;
 using backend.main.services.interfaces;
-using backend.main.utilities.implementation;
 
 using Stripe;
 using Stripe.Checkout;
+using backend.main.shared.utilities.logger;
 
 namespace backend.main.services.implementation
 {

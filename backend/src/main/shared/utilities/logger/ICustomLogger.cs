@@ -1,4 +1,4 @@
-namespace backend.main.utilities.interfaces
+namespace backend.main.shared.utilities.logger
 {
     public interface ICustomLogger
     {

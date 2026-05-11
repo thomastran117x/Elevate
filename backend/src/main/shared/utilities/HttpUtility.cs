@@ -1,8 +1,7 @@
 using backend.main.dtos.general;
-using backend.main.models.other;
 using backend.main.application.bootstrap;
 
-namespace backend.main.utilities.implementation
+namespace backend.main.utilities
 {
     public static class HttpUtility
     {

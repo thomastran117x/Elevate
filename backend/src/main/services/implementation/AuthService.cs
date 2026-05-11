@@ -4,15 +4,15 @@ using backend.main.dtos.general;
 using backend.main.shared.exceptions.http;
 using backend.main.models.core;
 using backend.main.models.other;
-using backend.main.publishers.interfaces;
 using backend.main.repositories.contracts.users;
 using backend.main.repositories.interfaces;
 using backend.main.services.interfaces;
-using backend.main.utilities.implementation;
 using backend.main.features.cache;
 
 using Newtonsoft.Json;
 using System.Security.Cryptography;
+using backend.main.shared.providers;
+using backend.main.shared.utilities.logger;
 
 namespace backend.main.services.implementation
 {

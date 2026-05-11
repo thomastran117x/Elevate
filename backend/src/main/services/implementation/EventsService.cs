@@ -11,14 +11,13 @@ using backend.main.Mappers;
 using backend.main.models.core;
 using backend.main.models.enums;
 using backend.main.models.search;
-using backend.main.publishers.interfaces;
 using backend.main.repositories.interfaces;
 using backend.main.services.interfaces;
-using backend.main.utilities.implementation;
 using backend.main.features.cache;
 
 using Microsoft.EntityFrameworkCore;
 using backend.main.infrastructure.elasticsearch;
+using backend.main.shared.utilities.logger;
 
 
 namespace backend.main.services.implementation

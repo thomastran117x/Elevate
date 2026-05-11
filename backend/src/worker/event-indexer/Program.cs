@@ -1,12 +1,11 @@
 using backend.main.application.bootstrap;
-using backend.main.utilities.implementation;
-using backend.main.utilities.interfaces;
+using backend.main.shared.utilities.logger;
 using backend.worker.event_indexer;
 
 Logger.Configure(options =>
 {
     options.EnableFileLogging = true;
-    options.MinFileLevel = backend.main.utilities.interfaces.LogLevel.Warn;
+    options.MinFileLevel = LogLevel.Warn;
     options.LogDirectory = Path.GetFullPath(
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "logs")
     );

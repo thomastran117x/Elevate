@@ -1,18 +1,17 @@
 using backend.main.application.environment;
 using backend.main.seeders;
-using backend.main.utilities.implementation;
-using backend.main.utilities.interfaces;
 using Serilog;
 using backend.main.infrastructure.redis;
 using backend.main.infrastructure.database.core;
 using backend.main.application.security;
 using backend.main.application.bootstrap;
 using backend.main.application.handlers;
+using backend.main.shared.utilities.logger;
 
 Logger.Configure(o =>
 {
     o.EnableFileLogging = true;
-    o.MinFileLevel = backend.main.utilities.interfaces.LogLevel.Warn;
+    o.MinFileLevel = backend.main.shared.utilities.logger.LogLevel.Warn;
     o.LogDirectory = Path.GetFullPath(
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "logs")
     );

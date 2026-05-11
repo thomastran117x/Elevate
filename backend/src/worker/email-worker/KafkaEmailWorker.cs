@@ -1,4 +1,4 @@
-using backend.main.utilities.implementation;
+using backend.main.shared.utilities.logger;
 
 using Confluent.Kafka;
 

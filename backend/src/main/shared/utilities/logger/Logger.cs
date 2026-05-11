@@ -1,8 +1,5 @@
-using backend.main.utilities.interfaces;
-
-namespace backend.main.utilities.implementation
+namespace backend.main.shared.utilities.logger
 {
-    using LogLevel = interfaces.LogLevel;
     public static class Logger
     {
         private static LoggerOptions _options = new();

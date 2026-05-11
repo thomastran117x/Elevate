@@ -3,7 +3,7 @@ using backend.main.shared.exceptions.http;
 
 using Microsoft.AspNetCore.Mvc;
 
-namespace backend.main.utilities.implementation
+namespace backend.main.utilities
 {
     public static class HandleError
     {

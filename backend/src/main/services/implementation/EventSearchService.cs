@@ -3,7 +3,7 @@ using backend.main.models.documents;
 using backend.main.models.enums;
 using backend.main.models.search;
 using backend.main.services.interfaces;
-using backend.main.utilities.implementation;
+using backend.main.shared.utilities.logger;
 
 using Elastic.Clients.Elasticsearch;
 using Elastic.Clients.Elasticsearch.Analysis;

@@ -3,11 +3,11 @@ using backend.main.dtos.responses.general;
 using backend.main.shared.exceptions.http;
 using backend.main.models.core;
 using backend.main.models.enums;
-using backend.main.publishers.interfaces;
 using backend.main.repositories.interfaces;
 using backend.main.services.interfaces;
-using backend.main.utilities.implementation;
 using backend.main.infrastructure.elasticsearch;
+using backend.main.shared.providers;
+using backend.main.shared.utilities.logger;
 
 namespace backend.main.services.implementation
 {

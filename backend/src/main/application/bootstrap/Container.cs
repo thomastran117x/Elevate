@@ -4,11 +4,10 @@ using backend.main.services.implementation;
 using backend.main.services.implementations;
 using backend.main.services.interfaces;
 using backend.main.seeders;
-using backend.main.utilities.implementation;
-using backend.main.utilities.interfaces;
 using backend.main.infrastructure.database.repository;
 using backend.main.infrastructure.elasticsearch;
 using backend.main.shared.providers;
+using backend.main.shared.utilities.logger;
 
 namespace backend.main.application.bootstrap
 {

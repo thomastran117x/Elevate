@@ -7,10 +7,11 @@ using backend.main.Mappers;
 using backend.main.models.enums;
 using backend.main.models.search;
 using backend.main.services.interfaces;
-using backend.main.utilities.implementation;
+using backend.main.utilities;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using backend.main.shared.utilities.logger;
 
 namespace backend.main.implementation.controllers
 {
