@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using backend.main.attributes.validation;
+using backend.main.shared.attributes.validation;
 
 namespace backend.main.dtos.requests.auth
 {
