@@ -1,9 +1,8 @@
-using backend.main.configurations.resource.redis;
-using backend.main.services.interfaces;
+using backend.main.infrastructure.redis;
 
 using StackExchange.Redis;
 
-namespace backend.main.services.implementation
+namespace backend.main.features.cache
 {
     public class CacheService : BaseCacheService, ICacheService
     {

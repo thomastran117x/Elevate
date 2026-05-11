@@ -11,9 +11,9 @@ using backend.main.utilities.implementation;
 using backend.main.utilities.interfaces;
 using backend.main.infrastructure.database.repository;
 
-namespace backend.main.configurations.application
+namespace backend.main.application.bootstrap
 {
-    public static class DependencyInjection
+    public static class Container
     {
         private static readonly Uri GoogleCaptchaBaseAddress = new("https://www.google.com/");
 
