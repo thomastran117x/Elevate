@@ -6,7 +6,7 @@ using backend.main.infrastructure.database.core;
 using backend.main.dtos.requests.events;
 using backend.main.dtos.responses.events;
 using backend.main.dtos.responses.general;
-using backend.main.exceptions.http;
+using backend.main.shared.exceptions.http;
 using backend.main.Mappers;
 using backend.main.models.core;
 using backend.main.models.enums;

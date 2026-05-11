@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 
 using backend.main.dtos;
 using backend.main.dtos.general;
-using backend.main.exceptions.http;
+using backend.main.shared.exceptions.http;
 using backend.main.models.core;
 using backend.main.models.other;
 using backend.main.publishers.interfaces;
@@ -12,6 +12,7 @@ using backend.main.utilities.implementation;
 using backend.main.features.cache;
 
 using Newtonsoft.Json;
+using backend.main.shared.exceptions.app;
 
 namespace backend.main.services.implementation
 {

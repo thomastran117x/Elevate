@@ -1,4 +1,4 @@
-using backend.main.exceptions.http;
+using backend.main.shared.exceptions.http;
 
 namespace backend.main.shared.other
 {

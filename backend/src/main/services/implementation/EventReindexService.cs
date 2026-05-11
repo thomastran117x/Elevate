@@ -1,11 +1,9 @@
 using backend.main.models.documents;
-using backend.main.exceptions.http;
+using backend.main.shared.exceptions.http;
 using backend.main.Mappers;
 using backend.main.repositories.interfaces;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
-
-using Elastic.Clients.Elasticsearch;
 
 namespace backend.main.services.implementation
 {

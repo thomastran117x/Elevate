@@ -1,6 +1,6 @@
 using backend.main.dtos.messages;
 using backend.main.dtos.responses.general;
-using backend.main.exceptions.http;
+using backend.main.shared.exceptions.http;
 using backend.main.models.core;
 using backend.main.models.enums;
 using backend.main.publishers.interfaces;

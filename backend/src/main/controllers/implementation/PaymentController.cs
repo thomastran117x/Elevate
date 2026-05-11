@@ -1,7 +1,7 @@
 using backend.main.application.security;
 using backend.main.dtos.responses.general;
 using backend.main.dtos.responses.payment;
-using backend.main.exceptions.http;
+using backend.main.shared.exceptions.http;
 using backend.main.Mappers;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;

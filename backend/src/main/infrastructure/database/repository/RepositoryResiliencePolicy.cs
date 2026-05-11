@@ -1,6 +1,6 @@
 using System.Data.Common;
 
-using backend.main.exceptions.app;
+using backend.main.shared.exceptions.app;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;

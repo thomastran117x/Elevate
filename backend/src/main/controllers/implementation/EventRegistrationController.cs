@@ -4,7 +4,7 @@ using backend.main.application.security;
 using backend.main.dtos.requests.events;
 using backend.main.dtos.responses.eventregistration;
 using backend.main.dtos.responses.general;
-using backend.main.exceptions.http;
+using backend.main.shared.exceptions.http;
 using backend.main.models.core;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;

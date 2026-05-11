@@ -4,9 +4,9 @@ using System.Text;
 using backend.main.application.environment;
 using backend.main.dtos.general;
 using backend.main.dtos.responses.general;
-using backend.main.errors.app;
 using backend.main.repositories.interfaces;
 using backend.main.services.implementation;
+using backend.main.shared.exceptions.app;
 using backend.main.shared.other;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;

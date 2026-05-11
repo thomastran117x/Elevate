@@ -1,7 +1,7 @@
 using backend.main.dtos;
 using backend.main.application.security;
 using backend.main.dtos.general;
-using backend.main.exceptions.http;
+using backend.main.shared.exceptions.http;
 using backend.main.models.core;
 using backend.main.models.other;
 using backend.main.publishers.interfaces;

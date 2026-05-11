@@ -1,5 +1,5 @@
 using backend.main.dtos.responses.general;
-using backend.main.exceptions.http;
+using backend.main.shared.exceptions.http;
 
 using Microsoft.AspNetCore.Mvc;
 

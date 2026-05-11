@@ -1,13 +1,14 @@
 using System.Text.Json;
 
 using backend.main.dtos;
-using backend.main.exceptions.http;
+using backend.main.shared.exceptions.http;
 using backend.main.Mappers;
 using backend.main.models.core;
 using backend.main.models.enums;
 using backend.main.repositories.interfaces;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
+using backend.main.features.cache;
 
 namespace backend.main.services.implementation
 {
@@ -333,12 +334,12 @@ namespace backend.main.services.implementation
 
         public async Task EventCreatedAsync(int clubId, int eventId)
         {
-            throw new backend.main.exceptions.http.NotImplementedException();
+            throw new shared.exceptions.http.NotImplementedException();
         }
 
         public async Task EventDeletedAsync(int clubId, int eventId)
         {
-            throw new backend.main.exceptions.http.NotImplementedException();
+            throw new shared.exceptions.http.NotImplementedException();
         }
 
         private async Task CacheClubAsync(Club club)
