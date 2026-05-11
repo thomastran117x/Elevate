@@ -2,7 +2,7 @@ using System.Text.Json;
 
 using backend.main.consumers;
 using backend.main.dtos.messages;
-using backend.main.publishers.implementation;
+using backend.main.shared.providers;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
 

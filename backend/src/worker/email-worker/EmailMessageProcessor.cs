@@ -1,7 +1,7 @@
 using System.Text.Json;
 
 using backend.main.dtos;
-using backend.main.publishers.implementation;
+using backend.main.shared.providers;
 using backend.main.utilities.implementation;
 
 using Polly;

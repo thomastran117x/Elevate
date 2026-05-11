@@ -1,4 +1,4 @@
-namespace backend.main.publishers.interfaces
+namespace backend.main.shared.providers
 {
     public interface IPublisher
     {

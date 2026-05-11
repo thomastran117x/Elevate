@@ -6,7 +6,7 @@ using backend.main.publishers.interfaces;
 
 using Confluent.Kafka;
 
-namespace backend.main.publishers.implementation
+namespace backend.main.shared.providers
 {
     public static class JsonOptions
     {

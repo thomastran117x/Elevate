@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-using backend.main.publishers.implementation;
+using backend.main.shared.providers;
 
 using Confluent.Kafka;
 

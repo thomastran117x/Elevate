@@ -1,4 +1,4 @@
-namespace backend.main.shared.http
+namespace backend.main.shared.providers
 {
     public sealed class ExternalApiClient : IExternalApiClient
     {
