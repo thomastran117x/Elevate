@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using System.Text;
 
-using backend.main.configurations.environment;
+using backend.main.application.environment;
 using backend.main.dtos.general;
 using backend.main.dtos.responses.general;
 using backend.main.errors.app;

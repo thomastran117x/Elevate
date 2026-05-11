@@ -2,7 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Json;
 using System.Text.Json;
 
-using backend.main.configurations.environment;
+using backend.main.application.environment;
 using backend.main.exceptions.http;
 using backend.main.models.other;
 using backend.main.services.interfaces;

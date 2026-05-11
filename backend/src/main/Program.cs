@@ -1,5 +1,5 @@
 using backend.main.configurations.application;
-using backend.main.configurations.environment;
+using backend.main.application.environment;
 using backend.main.configurations.resource.database;
 using backend.main.configurations.resource.redis;
 using backend.main.configurations.security;

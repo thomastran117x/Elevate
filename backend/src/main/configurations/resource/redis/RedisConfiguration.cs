@@ -1,4 +1,4 @@
-using backend.main.configurations.environment;
+using backend.main.application.environment;
 using backend.main.services.implementation;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;

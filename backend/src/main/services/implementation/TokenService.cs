@@ -3,7 +3,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 
-using backend.main.configurations.environment;
+using backend.main.application.environment;
 using backend.main.configurations.security;
 using backend.main.dtos.general;
 using backend.main.exceptions.http;

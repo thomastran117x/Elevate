@@ -2,7 +2,7 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
 
-using backend.main.configurations.environment;
+using backend.main.application.environment;
 using backend.main.exceptions.http;
 using backend.main.dtos.responses.events;
 using backend.main.services.interfaces;
