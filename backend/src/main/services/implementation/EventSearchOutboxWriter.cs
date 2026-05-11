@@ -3,7 +3,7 @@ using System.Text.Json;
 using backend.main.dtos.messages;
 using backend.main.Mappers;
 using backend.main.models.core;
-using backend.main.configurations.resource.database;
+using backend.main.infrastructure.database.core;
 using backend.main.services.interfaces;
 
 namespace backend.main.services.implementation

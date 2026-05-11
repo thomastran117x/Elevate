@@ -1,4 +1,4 @@
-using backend.main.configurations.resource.database;
+using backend.main.infrastructure.database.core;
 using backend.main.models.enums;
 using backend.main.repositories.interfaces;
 

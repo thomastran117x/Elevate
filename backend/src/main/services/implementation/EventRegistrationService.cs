@@ -1,7 +1,7 @@
 using System.Data;
 using System.Text.Json;
 
-using backend.main.configurations.resource.database;
+using backend.main.infrastructure.database.core;
 using backend.main.dtos.responses.eventregistration;
 using backend.main.exceptions.http;
 using backend.main.models.core;

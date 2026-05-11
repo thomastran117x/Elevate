@@ -1,4 +1,4 @@
-using backend.main.configurations.resource.database;
+using backend.main.infrastructure.database.core;
 using backend.main.configurations.security;
 using backend.main.models.core;
 using backend.main.repositories.contracts.users;
