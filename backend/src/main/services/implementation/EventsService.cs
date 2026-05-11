@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 
 using backend.main.dtos;
 using backend.main.configurations.resource.database;
-using backend.main.configurations.resource.elasticsearch;
 using backend.main.dtos.requests.events;
 using backend.main.dtos.responses.events;
 using backend.main.dtos.responses.general;
@@ -19,6 +18,7 @@ using backend.main.utilities.implementation;
 using backend.main.features.cache;
 
 using Microsoft.EntityFrameworkCore;
+using backend.main.infrastructure.elasticsearch;
 
 
 namespace backend.main.services.implementation

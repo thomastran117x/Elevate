@@ -1,5 +1,4 @@
 using backend.main.dtos.messages;
-using backend.main.configurations.resource.elasticsearch;
 using backend.main.dtos.responses.general;
 using backend.main.exceptions.http;
 using backend.main.models.core;
@@ -8,6 +7,7 @@ using backend.main.publishers.interfaces;
 using backend.main.repositories.interfaces;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
+using backend.main.infrastructure.elasticsearch;
 
 namespace backend.main.services.implementation
 {

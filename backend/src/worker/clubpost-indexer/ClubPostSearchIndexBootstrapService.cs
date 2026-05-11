@@ -1,4 +1,4 @@
-using backend.main.configurations.resource.elasticsearch;
+using backend.main.infrastructure.elasticsearch;
 using backend.main.services.interfaces;
 using backend.main.utilities.implementation;
 

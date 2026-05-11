@@ -1,4 +1,3 @@
-using backend.main.configurations.resource.elasticsearch;
 using backend.main.publishers.implementation;
 using backend.main.publishers.interfaces;
 using backend.main.repositories.implementation;
@@ -10,6 +9,7 @@ using backend.main.seeders;
 using backend.main.utilities.implementation;
 using backend.main.utilities.interfaces;
 using backend.main.infrastructure.database.repository;
+using backend.main.infrastructure.elasticsearch;
 
 namespace backend.main.application.bootstrap
 {
