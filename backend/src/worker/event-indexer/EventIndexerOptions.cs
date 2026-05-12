@@ -1,4 +1,4 @@
-using backend.main.configurations.environment;
+using backend.main.application.environment;
 
 namespace backend.worker.event_indexer;
 

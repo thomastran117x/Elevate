@@ -1,17 +1,17 @@
-using backend.main.configurations.application;
-using backend.main.configurations.environment;
-using backend.main.configurations.resource.database;
-using backend.main.configurations.resource.redis;
-using backend.main.configurations.security;
+using backend.main.application.environment;
 using backend.main.seeders;
-using backend.main.utilities.implementation;
-using backend.main.utilities.interfaces;
 using Serilog;
+using backend.main.infrastructure.redis;
+using backend.main.infrastructure.database.core;
+using backend.main.application.security;
+using backend.main.application.bootstrap;
+using backend.main.application.handlers;
+using backend.main.shared.utilities.logger;
 
 Logger.Configure(o =>
 {
     o.EnableFileLogging = true;
-    o.MinFileLevel = backend.main.utilities.interfaces.LogLevel.Warn;
+    o.MinFileLevel = backend.main.shared.utilities.logger.LogLevel.Warn;
     o.LogDirectory = Path.GetFullPath(
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "logs")
     );
@@ -65,7 +65,7 @@ await app.Services.SeedAppDataAsync();
 
 app.UseForwardedHeaders();
 
-app.UseMiddleware<GlobalExceptionMiddleware>();
+app.UseMiddleware<GlobalExceptionHandler>();
 
 app.UseRequestId();
 

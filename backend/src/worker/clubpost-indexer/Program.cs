@@ -1,6 +1,5 @@
-using backend.main.configurations.application;
-using backend.main.utilities.implementation;
-using backend.main.utilities.interfaces;
+using backend.main.application.bootstrap;
+using backend.main.shared.utilities.logger;
 using backend.worker.clubpost_indexer;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -9,7 +8,7 @@ using Microsoft.Extensions.Hosting;
 Logger.Configure(options =>
 {
     options.EnableFileLogging = true;
-    options.MinFileLevel = backend.main.utilities.interfaces.LogLevel.Warn;
+    options.MinFileLevel = LogLevel.Warn;
     options.LogDirectory = Path.GetFullPath(
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "logs")
     );

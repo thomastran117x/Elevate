@@ -1,13 +1,12 @@
 using System.Text.Json;
 
 using backend.main.consumers;
-using backend.main.dtos.messages;
-using backend.main.publishers.implementation;
-using backend.main.services.interfaces;
-using backend.main.utilities.implementation;
+using backend.main.features.clubs.posts.search;
+using backend.main.shared.providers;
 
 using Polly;
 using Polly.Retry;
+using backend.main.shared.utilities.logger;
 
 namespace backend.worker.clubpost_indexer;
 

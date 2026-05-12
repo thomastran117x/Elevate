@@ -1,5 +1,5 @@
-using backend.main.services.interfaces;
-using backend.main.utilities.implementation;
+using backend.main.features.events.search;
+using backend.main.shared.utilities.logger;
 
 using Polly;
 using Polly.Retry;

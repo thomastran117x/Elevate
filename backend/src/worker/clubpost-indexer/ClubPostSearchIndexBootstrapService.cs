@@ -1,6 +1,6 @@
-using backend.main.configurations.resource.elasticsearch;
-using backend.main.services.interfaces;
-using backend.main.utilities.implementation;
+using backend.main.infrastructure.elasticsearch;
+using backend.main.features.clubs.posts.search;
+using backend.main.shared.utilities.logger;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

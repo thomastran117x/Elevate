@@ -1,0 +1,14 @@
+using backend.main.features.payment;
+
+namespace backend.main.features.payment
+{
+    public interface IPaymentService
+    {
+        Task<Payment> CreatePaymentSession(int userId, int eventId, string? idempotencyKey = null);
+        Task<Payment> GetPayment(int paymentId);
+        Task<List<Payment>> GetPaymentsByUser(int userId, int page = 1, int pageSize = 20);
+        Task HandleWebhook(string payload, string signature);
+        Task<Payment> RefundPayment(int paymentId, int requestingUserId);
+    }
+}
+
