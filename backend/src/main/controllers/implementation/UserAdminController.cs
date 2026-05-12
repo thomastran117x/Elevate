@@ -1,5 +1,5 @@
-using backend.main.dtos.requests.auth;
-using backend.main.dtos.responses.auth;
+using backend.main.features.auth.contracts.requests;
+using backend.main.features.auth.contracts.responses;
 using backend.main.dtos.responses.general;
 using backend.main.services.interfaces;
 

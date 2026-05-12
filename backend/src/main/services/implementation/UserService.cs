@@ -1,5 +1,8 @@
 using backend.main.shared.exceptions.http;
 using backend.main.models.core;
+using backend.main.features.auth.contracts;
+using backend.main.features.auth.repositories;
+using backend.main.features.auth.token;
 using backend.main.repositories.contracts.users;
 using backend.main.repositories.interfaces;
 using backend.main.services.interfaces;
@@ -10,17 +13,20 @@ namespace backend.main.services.implementation
     public class UserService : IUserService
     {
         private readonly IUserRepository _userRepository;
+        private readonly IAuthUserRepository _authUserRepository;
         private readonly IFileUploadService _fileService;
         private readonly IFollowService _followService;
         private readonly ITokenService _tokenService;
         public UserService(
             IUserRepository userRepository,
+            IAuthUserRepository authUserRepository,
             IFileUploadService fileService,
             IFollowService followService,
             ITokenService tokenService
         )
         {
             _userRepository = userRepository;
+            _authUserRepository = authUserRepository;
             _fileService = fileService;
             _followService = followService;
             _tokenService = tokenService;
@@ -63,7 +69,7 @@ namespace backend.main.services.implementation
 
         public async Task<UserStatusRecord> UpdateUserStatusAsync(int id, bool isDisabled, string? reason)
         {
-            var user = await _userRepository.UpdateUserStatusAsync(id, isDisabled, reason);
+            var user = await _authUserRepository.UpdateUserStatusAsync(id, isDisabled, reason);
             if (user == null)
                 throw new ResourceNotFoundException($"User with the id {id} is not found");
 

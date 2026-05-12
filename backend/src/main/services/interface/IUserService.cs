@@ -1,4 +1,5 @@
 using backend.main.models.core;
+using backend.main.features.auth.contracts;
 using backend.main.repositories.contracts.users;
 
 namespace backend.main.services.interfaces

@@ -4,8 +4,8 @@ using System.Text;
 using backend.main.application.environment;
 using backend.main.dtos.general;
 using backend.main.dtos.responses.general;
-using backend.main.repositories.interfaces;
-using backend.main.services.implementation;
+using backend.main.features.auth.repositories;
+using backend.main.features.auth.token;
 using backend.main.shared.exceptions.app;
 using backend.main.shared.other;
 
@@ -83,7 +83,7 @@ namespace backend.main.application.security
                                 return;
                             }
 
-                            var userRepository = context.HttpContext.RequestServices.GetRequiredService<IUserRepository>();
+                            var userRepository = context.HttpContext.RequestServices.GetRequiredService<IAuthUserRepository>();
                             var user = await userRepository.GetUserAsync(userId);
 
                             if (user == null || user.IsDisabled || user.AuthVersion != authVersion)

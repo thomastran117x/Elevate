@@ -1,8 +1,12 @@
-using backend.main.repositories.implementation;
 using backend.main.repositories.interfaces;
-using backend.main.services.implementation;
-using backend.main.services.implementations;
 using backend.main.services.interfaces;
+using backend.main.features.auth;
+using backend.main.features.auth.captcha;
+using backend.main.features.auth.device;
+using backend.main.features.auth.oauth;
+using backend.main.features.auth.token;
+using backend.main.repositories.implementation;
+using backend.main.services.implementation;
 using backend.main.seeders;
 using backend.main.infrastructure.database.repository;
 using backend.main.infrastructure.elasticsearch;
@@ -54,7 +58,8 @@ namespace backend.main.application.bootstrap
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
             services.AddSingleton<IRepositoryAttributeResolver, RepositoryAttributeResolver>();
             services.AddRepositoryWithProxy<IFollowRepository, FollowRepository>();
-            services.AddRepositoryWithProxy<IUserRepository, UserRepository>();
+            services.AddRepositoryWithProxy<IAuthUserRepository, AuthUserRepository>();
+            services.AddRepositoryWithProxy<IUserRepository, AuthUserRepository>();
             services.AddRepositoryWithProxy<IClubRepository, ClubRepository>();
             services.AddRepositoryWithProxy<IEventsRepository, EventsRepository>();
             services.AddRepositoryWithProxy<IPaymentRepository, PaymentRepository>();

@@ -2,7 +2,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using backend.main.application.environment;
-using backend.main.publishers.interfaces;
 
 using Confluent.Kafka;
 
