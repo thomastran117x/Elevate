@@ -13,8 +13,8 @@ using backend.main.shared.exceptions.http;
 using backend.main.features.clubs;
 using backend.main.models.core;
 using backend.main.models.enums;
-using backend.main.services.interfaces;
 using backend.main.features.cache;
+using backend.main.shared.storage;
 
 using Microsoft.EntityFrameworkCore;
 using backend.main.infrastructure.elasticsearch;

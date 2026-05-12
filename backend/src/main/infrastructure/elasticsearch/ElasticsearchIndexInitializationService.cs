@@ -1,6 +1,5 @@
 using backend.main.features.clubs.posts.search;
 using backend.main.features.events.search;
-using backend.main.services.interfaces;
 using backend.main.shared.utilities.logger;
 
 namespace backend.main.infrastructure.elasticsearch

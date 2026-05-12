@@ -1,7 +1,6 @@
 using System.Text.Json;
 
 using backend.main.dtos.responses.external;
-using backend.main.services.implementations;
 
 using Polly.CircuitBreaker;
 
