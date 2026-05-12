@@ -1,4 +1,4 @@
-namespace backend.main.models.core;
+namespace backend.main.features.auth.device;
 
 public class Device
 {
@@ -11,3 +11,5 @@ public class Device
     public DateTime LastSeenAt { get; set; } = DateTime.UtcNow;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
+
+

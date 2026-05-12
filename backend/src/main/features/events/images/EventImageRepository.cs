@@ -1,5 +1,5 @@
 using backend.main.infrastructure.database.core;
-using backend.main.models.core;
+using backend.main.features.events.images;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -74,3 +74,5 @@ namespace backend.main.features.events.images
         }
     }
 }
+
+

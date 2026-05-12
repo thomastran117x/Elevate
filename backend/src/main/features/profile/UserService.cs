@@ -1,5 +1,5 @@
 using backend.main.shared.exceptions.http;
-using backend.main.models.core;
+using backend.main.features.profile;
 using backend.main.features.auth;
 using backend.main.features.auth.contracts;
 using backend.main.features.auth.token;
@@ -98,3 +98,4 @@ namespace backend.main.features.profile
         }
     }
 }
+

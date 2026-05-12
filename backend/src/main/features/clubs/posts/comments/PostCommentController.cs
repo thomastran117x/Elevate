@@ -2,7 +2,7 @@ using backend.main.application.security;
 using backend.main.dtos.responses.general;
 using backend.main.features.clubs.posts.comments.contracts.requests;
 using backend.main.features.clubs.posts.comments.contracts.responses;
-using backend.main.models.core;
+using backend.main.features.clubs.posts.comments;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -110,3 +110,6 @@ namespace backend.main.features.clubs.posts.comments
             new(c.Id, c.PostId, c.UserId, c.Content, c.CreatedAt, c.UpdatedAt);
     }
 }
+
+
+

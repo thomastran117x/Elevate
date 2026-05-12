@@ -1,4 +1,4 @@
-namespace backend.main.models.enums
+namespace backend.main.features.events
 {
     public enum EventSortBy
     {
@@ -8,3 +8,5 @@ namespace backend.main.models.enums
         Popularity = 3
     }
 }
+
+

@@ -1,4 +1,4 @@
-namespace backend.main.models.core
+namespace backend.main.features.clubs.posts.comments
 {
     public class PostComment
     {
@@ -10,3 +10,5 @@ namespace backend.main.models.core
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
 }
+
+

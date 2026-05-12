@@ -1,7 +1,7 @@
 using backend.main.features.events.contracts.requests;
 using backend.main.features.events.contracts.responses;
-using backend.main.models.core;
-using backend.main.models.enums;
+using backend.main.features.events;
+using backend.main.features.events.images;
 using backend.main.features.events.search;
 
 namespace backend.main.features.events
@@ -87,3 +87,5 @@ namespace backend.main.features.events
         Task NotifyRegistrationChangedAsync(int eventId);
     }
 }
+
+

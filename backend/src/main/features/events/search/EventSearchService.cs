@@ -1,6 +1,6 @@
 using backend.main.infrastructure.elasticsearch;
 using backend.main.features.events.search;
-using backend.main.models.enums;
+using backend.main.features.events;
 using backend.main.shared.utilities.logger;
 
 using Elastic.Clients.Elasticsearch;
@@ -533,3 +533,4 @@ namespace backend.main.features.events.search
         }
     }
 }
+

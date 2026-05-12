@@ -1,4 +1,4 @@
-using backend.main.models.core;
+using backend.main.features.clubs.follow;
 
 namespace backend.main.features.clubs.follow
 {
@@ -14,3 +14,5 @@ namespace backend.main.features.clubs.follow
         Task<IEnumerable<FollowClub>> GetFollowsByClubAsync(int clubId, int page = 1, int pageSize = 20);
     }
 }
+
+

@@ -1,4 +1,4 @@
-namespace backend.main.models.core;
+namespace backend.main.features.events.search;
 
 public class EventSearchOutbox
 {
@@ -9,3 +9,5 @@ public class EventSearchOutbox
     public string Payload { get; set; } = "{}";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
+
+

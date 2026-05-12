@@ -1,4 +1,4 @@
-using backend.main.models.core;
+using backend.main.features.events;
 
 using Elastic.Clients.Elasticsearch;
 
@@ -33,3 +33,4 @@ namespace backend.main.features.events.search
         };
     }
 }
+

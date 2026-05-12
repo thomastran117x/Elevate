@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using backend.main.models.enums;
+using backend.main.features.clubs.posts;
 
 namespace backend.main.features.clubs.posts.contracts.requests
 {
@@ -18,3 +18,5 @@ namespace backend.main.features.clubs.posts.contracts.requests
         public bool IsPinned { get; set; } = false;
     }
 }
+
+

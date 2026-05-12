@@ -2,7 +2,7 @@ using backend.main.application.security;
 using backend.main.features.clubs.contracts.requests;
 using backend.main.features.clubs.contracts.responses;
 using backend.main.dtos.responses.general;
-using backend.main.models.core;
+using backend.main.features.clubs;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -183,3 +183,4 @@ namespace backend.main.features.clubs
         }
     }
 }
+

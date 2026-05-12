@@ -1,4 +1,4 @@
-using backend.main.models.core;
+using backend.main.features.clubs.posts.comments;
 
 namespace backend.main.features.clubs.posts.comments
 {
@@ -12,3 +12,6 @@ namespace backend.main.features.clubs.posts.comments
         Task<bool> DeleteAsync(int id);
     }
 }
+
+
+

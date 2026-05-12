@@ -1,9 +1,6 @@
 using backend.main.dtos.responses.general;
 using backend.main.shared.exceptions.http;
-using backend.main.features.clubs;
 using backend.main.features.clubs.posts.search;
-using backend.main.models.core;
-using backend.main.models.enums;
 using backend.main.features.clubs.follow;
 using backend.main.infrastructure.elasticsearch;
 using backend.main.shared.providers;
@@ -215,3 +212,6 @@ namespace backend.main.features.clubs.posts
         };
     }
 }
+
+
+

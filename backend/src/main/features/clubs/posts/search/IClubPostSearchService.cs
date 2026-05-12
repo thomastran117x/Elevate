@@ -1,4 +1,4 @@
-using backend.main.models.enums;
+using backend.main.features.clubs.posts;
 
 namespace backend.main.features.clubs.posts.search
 {
@@ -13,3 +13,5 @@ namespace backend.main.features.clubs.posts.search
         Task<(List<int> Ids, int TotalCount)> SearchAllAsync(string search, PostSortBy sortBy, int page, int pageSize);
     }
 }
+
+

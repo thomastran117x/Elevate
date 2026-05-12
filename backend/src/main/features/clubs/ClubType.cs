@@ -1,4 +1,4 @@
-namespace backend.main.models.enums
+namespace backend.main.features.clubs
 {
     public enum ClubType
     {
@@ -11,3 +11,5 @@ namespace backend.main.models.enums
     }
 
 }
+
+

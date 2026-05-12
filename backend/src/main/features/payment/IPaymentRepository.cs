@@ -1,6 +1,3 @@
-using backend.main.models.core;
-using backend.main.models.enums;
-
 namespace backend.main.features.payment
 {
     public interface IPaymentRepository
@@ -19,3 +16,5 @@ namespace backend.main.features.payment
         Task<Payment?> UpdateStatusAsync(int id, PaymentStatus status, string? externalPaymentIntentId);
     }
 }
+
+

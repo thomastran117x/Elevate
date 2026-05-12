@@ -11,8 +11,6 @@ using backend.main.features.events.registration;
 using backend.main.features.events.search;
 using backend.main.shared.exceptions.http;
 using backend.main.features.clubs;
-using backend.main.models.core;
-using backend.main.models.enums;
 using backend.main.features.cache;
 using backend.main.shared.storage;
 
@@ -1187,3 +1185,5 @@ namespace backend.main.features.events
         }
     }
 }
+
+

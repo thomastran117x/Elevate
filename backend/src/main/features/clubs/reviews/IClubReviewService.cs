@@ -1,4 +1,4 @@
-using backend.main.models.core;
+using backend.main.features.clubs.reviews;
 
 namespace backend.main.features.clubs.reviews
 {
@@ -11,3 +11,5 @@ namespace backend.main.features.clubs.reviews
         Task DeleteReviewAsync(int reviewId, int userId);
     }
 }
+
+

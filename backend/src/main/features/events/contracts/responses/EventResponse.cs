@@ -1,4 +1,4 @@
-using backend.main.models.enums;
+using backend.main.features.events;
 
 namespace backend.main.features.events.contracts.responses
 {
@@ -54,4 +54,5 @@ namespace backend.main.features.events.contracts.responses
         public double? DistanceKm { get; set; }
     }
 }
+
 

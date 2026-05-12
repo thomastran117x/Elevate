@@ -1,6 +1,3 @@
-using backend.main.models.core;
-using backend.main.models.enums;
-
 namespace backend.main.features.clubs.posts
 {
     public interface IClubPostService
@@ -14,3 +11,6 @@ namespace backend.main.features.clubs.posts
             string? search, PostSortBy sortBy, int page, int pageSize);
     }
 }
+
+
+

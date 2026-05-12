@@ -1,6 +1,4 @@
 using backend.main.infrastructure.database.core;
-using backend.main.models.core;
-using backend.main.models.enums;
 using backend.main.features.events.search;
 
 using Microsoft.EntityFrameworkCore;
@@ -286,3 +284,5 @@ namespace backend.main.features.events
         }
     }
 }
+
+

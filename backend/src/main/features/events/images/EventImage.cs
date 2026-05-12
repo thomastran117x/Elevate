@@ -1,4 +1,4 @@
-namespace backend.main.models.core;
+namespace backend.main.features.events.images;
 
 public class EventImage
 {
@@ -11,3 +11,6 @@ public class EventImage
     // Navigation
     public Events Event { get; set; } = null!;
 }
+
+
+

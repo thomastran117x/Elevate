@@ -7,7 +7,7 @@ using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
 using backend.main.dtos.responses.general;
 using backend.main.shared.exceptions.http;
-using backend.main.models.core;
+using backend.main.features.profile;
 using backend.main.utilities;
 
 using Microsoft.AspNetCore.Antiforgery;
@@ -746,3 +746,4 @@ namespace backend.main.features.auth
         }
     }
 }
+

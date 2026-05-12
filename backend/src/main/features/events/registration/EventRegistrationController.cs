@@ -5,7 +5,7 @@ using backend.main.dtos.responses.general;
 using backend.main.features.events.registration.contracts.requests;
 using backend.main.features.events.registration.contracts.responses;
 using backend.main.shared.exceptions.http;
-using backend.main.models.core;
+using backend.main.features.events.registration;
 using backend.main.utilities;
 
 using Microsoft.AspNetCore.Authorization;
@@ -209,3 +209,5 @@ namespace backend.main.features.events.registration
         }
     }
 }
+
+

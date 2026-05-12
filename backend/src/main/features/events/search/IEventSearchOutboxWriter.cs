@@ -1,4 +1,4 @@
-using backend.main.models.core;
+using backend.main.features.events;
 
 namespace backend.main.features.events.search
 {
@@ -8,3 +8,4 @@ namespace backend.main.features.events.search
         void StageDelete(int eventId);
     }
 }
+

@@ -1,4 +1,4 @@
-using backend.main.models.core;
+using backend.main.features.profile;
 using backend.main.features.auth.contracts;
 using backend.main.features.clubs.follow;
 using backend.main.features.profile.contracts;
@@ -19,3 +19,4 @@ namespace backend.main.features.profile
         Task<IEnumerable<FollowClub>> GetUserFollowingsAsync(int id, int page = 1, int pageSize = 20);
     }
 }
+

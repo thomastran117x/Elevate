@@ -1,6 +1,3 @@
-using backend.main.models.core;
-using backend.main.models.enums;
-
 namespace backend.main.features.clubs.posts
 {
     public interface IClubPostRepository
@@ -18,3 +15,6 @@ namespace backend.main.features.clubs.posts
         Task<List<ClubPost>> GetAllForReindexAsync(int page, int pageSize, CancellationToken cancellationToken = default);
     }
 }
+
+
+

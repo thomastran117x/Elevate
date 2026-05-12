@@ -1,4 +1,4 @@
-namespace backend.main.models.core
+namespace backend.main.features.events.registration
 {
     public class EventRegistration
     {
@@ -8,3 +8,5 @@ namespace backend.main.models.core
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
+
+

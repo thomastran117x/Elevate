@@ -1,4 +1,4 @@
-using backend.main.models.core;
+using backend.main.features.profile;
 
 namespace backend.main.features.auth.token
 {
@@ -115,3 +115,4 @@ namespace backend.main.features.auth.token
         }
     }
 }
+

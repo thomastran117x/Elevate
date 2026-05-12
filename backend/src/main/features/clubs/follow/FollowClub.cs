@@ -1,4 +1,4 @@
-namespace backend.main.models.core
+namespace backend.main.features.clubs.follow
 {
     public class FollowClub
     {
@@ -18,3 +18,5 @@ namespace backend.main.models.core
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
 }
+
+

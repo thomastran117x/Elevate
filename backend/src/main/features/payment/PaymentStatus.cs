@@ -1,4 +1,4 @@
-namespace backend.main.models.enums
+namespace backend.main.features.payment
 {
     public enum PaymentStatus
     {
@@ -8,3 +8,5 @@ namespace backend.main.models.enums
         Refunded = 3
     }
 }
+
+

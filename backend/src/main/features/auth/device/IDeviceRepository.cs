@@ -1,4 +1,4 @@
-using backend.main.models.core;
+using backend.main.features.profile;
 
 namespace backend.main.features.auth.device
 {
@@ -9,3 +9,4 @@ namespace backend.main.features.auth.device
         Task UpdateLastSeenAsync(Device device);
     }
 }
+

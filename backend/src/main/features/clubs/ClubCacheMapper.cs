@@ -1,6 +1,4 @@
 using backend.main.features.clubs.contracts;
-using backend.main.models.core;
-using backend.main.models.enums;
 
 namespace backend.main.features.clubs
 {
@@ -40,3 +38,5 @@ namespace backend.main.features.clubs
         };
     }
 }
+
+

@@ -1,6 +1,4 @@
-using backend.main.models.enums;
-
-namespace backend.main.models.core
+namespace backend.main.features.payment
 {
     public class Payment
     {
@@ -18,3 +16,5 @@ namespace backend.main.models.core
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
 }
+
+

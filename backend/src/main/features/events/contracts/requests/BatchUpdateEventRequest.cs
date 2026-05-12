@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-using backend.main.models.enums;
+using backend.main.features.events;
 
 namespace backend.main.features.events.contracts.requests
 {
@@ -78,4 +78,5 @@ namespace backend.main.features.events.contracts.requests
         }
     }
 }
+
 

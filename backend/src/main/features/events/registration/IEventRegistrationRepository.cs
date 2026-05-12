@@ -1,4 +1,4 @@
-using backend.main.models.core;
+using backend.main.features.events.registration;
 
 namespace backend.main.features.events.registration
 {
@@ -17,3 +17,5 @@ namespace backend.main.features.events.registration
         Task<IEnumerable<EventRegistration>> GetRegistrationsByUserAsync(int userId, int page = 1, int pageSize = 20);
     }
 }
+
+

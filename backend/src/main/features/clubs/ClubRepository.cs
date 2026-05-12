@@ -1,5 +1,5 @@
 using backend.main.infrastructure.database.core;
-using backend.main.models.core;
+using backend.main.features.clubs;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -132,3 +132,4 @@ namespace backend.main.features.clubs
         }
     }
 }
+

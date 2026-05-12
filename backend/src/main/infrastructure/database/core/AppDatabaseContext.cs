@@ -1,6 +1,17 @@
 using System.Text.Json;
 
-using backend.main.models.core;
+using backend.main.features.auth.device;
+using backend.main.features.clubs;
+using backend.main.features.clubs.follow;
+using backend.main.features.clubs.posts;
+using backend.main.features.clubs.posts.comments;
+using backend.main.features.clubs.reviews;
+using backend.main.features.events;
+using backend.main.features.events.images;
+using backend.main.features.events.registration;
+using backend.main.features.events.search;
+using backend.main.features.payment;
+using backend.main.features.profile;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;

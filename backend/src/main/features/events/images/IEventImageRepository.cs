@@ -1,4 +1,4 @@
-using backend.main.models.core;
+using backend.main.features.events.images;
 
 namespace backend.main.features.events.images
 {
@@ -12,3 +12,5 @@ namespace backend.main.features.events.images
         Task<int> CountByEventIdAsync(int eventId);
     }
 }
+
+

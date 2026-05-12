@@ -1,8 +1,6 @@
 using System.Data;
 
 using backend.main.infrastructure.database.core;
-using backend.main.models.core;
-using backend.main.models.enums;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -105,3 +103,5 @@ namespace backend.main.features.payment
         }
     }
 }
+
+

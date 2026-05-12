@@ -3,8 +3,7 @@ using backend.main.features.clubs.posts.contracts.requests;
 using backend.main.features.clubs.posts.contracts.responses;
 using backend.main.features.clubs.posts.search;
 using backend.main.dtos.responses.general;
-using backend.main.models.core;
-using backend.main.models.enums;
+using backend.main.features.clubs.posts;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -168,3 +167,6 @@ namespace backend.main.features.clubs.posts
             new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt);
     }
 }
+
+
+

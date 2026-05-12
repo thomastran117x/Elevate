@@ -1,5 +1,5 @@
 using backend.main.features.events.registration.contracts.responses;
-using backend.main.models.core;
+using backend.main.features.events.registration;
 
 namespace backend.main.features.events.registration
 {
@@ -14,3 +14,5 @@ namespace backend.main.features.events.registration
         Task<BatchRegistrationResultResponse> BatchUnregisterAsync(int userId, IEnumerable<int> eventIds);
     }
 }
+
+

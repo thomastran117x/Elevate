@@ -1,5 +1,5 @@
 using backend.main.infrastructure.elasticsearch;
-using backend.main.models.enums;
+using backend.main.features.clubs.posts;
 using backend.main.shared.utilities.logger;
 
 using Elastic.Clients.Elasticsearch;
@@ -329,3 +329,5 @@ namespace backend.main.features.clubs.posts.search
         }
     }
 }
+
+

@@ -1,4 +1,4 @@
-namespace backend.main.models.enums
+namespace backend.main.features.clubs.posts
 {
     public enum PostType
     {
@@ -8,3 +8,5 @@ namespace backend.main.models.enums
         Poll
     }
 }
+
+

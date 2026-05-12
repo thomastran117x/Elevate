@@ -1,4 +1,4 @@
-using backend.main.models.core;
+using backend.main.features.clubs;
 
 namespace backend.main.features.clubs
 {
@@ -19,3 +19,4 @@ namespace backend.main.features.clubs
         Task<List<Club>> GetByIdsAsync(IEnumerable<int> ids);
     }
 }
+

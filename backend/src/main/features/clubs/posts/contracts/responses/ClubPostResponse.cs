@@ -1,4 +1,4 @@
-using backend.main.models.enums;
+using backend.main.features.clubs.posts;
 using backend.main.dtos.responses.general;
 
 namespace backend.main.features.clubs.posts.contracts.responses
@@ -34,3 +34,5 @@ namespace backend.main.features.clubs.posts.contracts.responses
         }
     }
 }
+
+

@@ -1,7 +1,7 @@
 using System.Text.Json;
 
 using backend.main.shared.exceptions.http;
-using backend.main.models.core;
+using backend.main.features.clubs.follow;
 using backend.main.features.cache;
 using backend.main.shared.utilities.logger;
 
@@ -189,3 +189,5 @@ namespace backend.main.features.clubs.follow
 
     }
 }
+
+

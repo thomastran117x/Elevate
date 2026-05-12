@@ -1,6 +1,6 @@
 using backend.main.infrastructure.database.core;
-using backend.main.models.core;
-using backend.main.models.enums;
+using backend.main.features.clubs;
+using backend.main.features.profile;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -156,3 +156,5 @@ namespace backend.main.seeders
         );
     }
 }
+
+

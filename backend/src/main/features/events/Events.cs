@@ -1,6 +1,6 @@
-using backend.main.models.enums;
+using backend.main.features.events.images;
 
-namespace backend.main.models.core;
+namespace backend.main.features.events;
 
 public class Events
 {
@@ -70,3 +70,5 @@ public class Events
     // Navigation
     public ICollection<EventImage> Images { get; set; } = new List<EventImage>();
 }
+
+

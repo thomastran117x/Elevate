@@ -1,5 +1,5 @@
 using backend.main.features.profile.contracts;
-using backend.main.models.core;
+using backend.main.features.profile;
 
 namespace backend.main.features.profile
 {
@@ -23,3 +23,4 @@ namespace backend.main.features.profile
         );
     }
 }
+

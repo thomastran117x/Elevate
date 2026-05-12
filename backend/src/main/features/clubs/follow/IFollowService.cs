@@ -1,4 +1,4 @@
-using backend.main.models.core;
+using backend.main.features.clubs.follow;
 
 namespace backend.main.features.clubs.follow
 {
@@ -13,3 +13,5 @@ namespace backend.main.features.clubs.follow
         Task RemoveMembershipAsync(int clubId, int userId);
     }
 }
+
+

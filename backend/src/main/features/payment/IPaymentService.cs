@@ -1,4 +1,4 @@
-using backend.main.models.core;
+using backend.main.features.payment;
 
 namespace backend.main.features.payment
 {
@@ -11,3 +11,4 @@ namespace backend.main.features.payment
         Task<Payment> RefundPayment(int paymentId, int requestingUserId);
     }
 }
+

@@ -4,7 +4,7 @@ using backend.main.features.events.contracts.responses;
 using backend.main.dtos.responses.general;
 using backend.main.features.events.search;
 using backend.main.shared.exceptions.http;
-using backend.main.models.enums;
+using backend.main.features.events;
 using backend.main.utilities;
 
 using Microsoft.AspNetCore.Authorization;
@@ -615,3 +615,4 @@ namespace backend.main.features.events
         }
     }
 }
+

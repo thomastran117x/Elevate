@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-using backend.main.models.core;
+using backend.main.features.events;
 using backend.main.infrastructure.database.core;
 
 namespace backend.main.features.events.search
@@ -41,3 +41,4 @@ namespace backend.main.features.events.search
         }
     }
 }
+

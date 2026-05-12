@@ -1,4 +1,4 @@
-namespace backend.main.models.core;
+namespace backend.main.features.profile;
 
 public class User
 {
@@ -65,3 +65,5 @@ public class User
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
+
+

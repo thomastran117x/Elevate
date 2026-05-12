@@ -1,4 +1,4 @@
-using backend.main.models.core;
+using backend.main.features.profile;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
 
@@ -54,3 +54,4 @@ namespace backend.main.features.auth
         Task ChangePasswordWithOtpAsync(string code, string challenge, string password);
     }
 }
+

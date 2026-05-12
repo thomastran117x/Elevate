@@ -1,5 +1,5 @@
 using backend.main.infrastructure.database.core;
-using backend.main.models.enums;
+using backend.main.features.payment;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -91,9 +91,10 @@ namespace backend.main.features.events.analytics
             // 3. Revenue totals
             var clubEventIds = perEvent.Select(p => p.EventId).ToList();
 
-            var revenueTotals = clubEventIds.Count == 0
-                ? (Total: 0L, Pending: 0L)
-                : await _context.Payments
+            var revenueTotals = (Total: 0L, Pending: 0L);
+            if (clubEventIds.Count > 0)
+            {
+                var revenueTotalsRaw = await _context.Payments
                     .AsNoTracking()
                     .Where(p => clubEventIds.Contains(p.EventId))
                     .GroupBy(_ => 1)
@@ -102,43 +103,53 @@ namespace backend.main.features.events.analytics
                         Total = g.Where(p => p.Status == PaymentStatus.Succeeded).Sum(p => (long?)p.Amount) ?? 0L,
                         Pending = g.Where(p => p.Status == PaymentStatus.Pending).Sum(p => (long?)p.Amount) ?? 0L
                     })
-                    .FirstOrDefaultAsync()
-                    .ContinueWith(t => t.Result == null
-                        ? (Total: 0L, Pending: 0L)
-                        : (Total: t.Result.Total, Pending: t.Result.Pending));
+                    .FirstOrDefaultAsync();
+
+                if (revenueTotalsRaw != null)
+                {
+                    revenueTotals = (revenueTotalsRaw.Total, revenueTotalsRaw.Pending);
+                }
+            }
 
             // 4. 7-day registration trend
-            var regTrendRaw = clubEventIds.Count == 0
-                ? new List<(DateOnly, int)>()
-                : await _context.EventRegistrations
+            var regTrendRaw = new List<(DateOnly Date, int Count)>();
+            if (clubEventIds.Count > 0)
+            {
+                var regTrendRows = await _context.EventRegistrations
                     .AsNoTracking()
                     .Where(r => clubEventIds.Contains(r.EventId) && r.CreatedAt >= sevenDaysAgo)
                     .GroupBy(r => r.CreatedAt.Date)
                     .Select(g => new { Date = g.Key, Count = g.Count() })
-                    .ToListAsync()
-                    .ContinueWith(t => t.Result
-                        .Select(x => (Date: DateOnly.FromDateTime(x.Date), Count: x.Count))
-                        .ToList());
+                    .ToListAsync();
+
+                regTrendRaw = regTrendRows
+                    .Select(x => (Date: DateOnly.FromDateTime(x.Date), Count: x.Count))
+                    .ToList();
+            }
 
             // 5. 7-day revenue trend (succeeded payments)
-            var revTrendRaw = clubEventIds.Count == 0
-                ? new List<(DateOnly, long)>()
-                : await _context.Payments
+            var revTrendRaw = new List<(DateOnly Date, long Amount)>();
+            if (clubEventIds.Count > 0)
+            {
+                var revTrendRows = await _context.Payments
                     .AsNoTracking()
                     .Where(p => clubEventIds.Contains(p.EventId)
                         && p.Status == PaymentStatus.Succeeded
                         && p.CreatedAt >= sevenDaysAgo)
                     .GroupBy(p => p.CreatedAt.Date)
                     .Select(g => new { Date = g.Key, Amount = g.Sum(p => (long?)p.Amount) ?? 0L })
-                    .ToListAsync()
-                    .ContinueWith(t => t.Result
-                        .Select(x => (Date: DateOnly.FromDateTime(x.Date), Amount: x.Amount))
-                        .ToList());
+                    .ToListAsync();
+
+                revTrendRaw = revTrendRows
+                    .Select(x => (Date: DateOnly.FromDateTime(x.Date), Amount: x.Amount))
+                    .ToList();
+            }
 
             // 6. Unique and repeat attendees
-            var attendeeStats = clubEventIds.Count == 0
-                ? (Unique: 0, Repeat: 0)
-                : await _context.EventRegistrations
+            var attendeeStats = (Unique: 0, Repeat: 0);
+            if (clubEventIds.Count > 0)
+            {
+                var attendeeStatsRaw = await _context.EventRegistrations
                     .AsNoTracking()
                     .Where(r => clubEventIds.Contains(r.EventId))
                     .GroupBy(r => r.UserId)
@@ -149,10 +160,13 @@ namespace backend.main.features.events.analytics
                         Unique = g.Count(),
                         Repeat = g.Count(u => u.EventCount > 1)
                     })
-                    .FirstOrDefaultAsync()
-                    .ContinueWith(t => t.Result == null
-                        ? (Unique: 0, Repeat: 0)
-                        : (Unique: t.Result.Unique, Repeat: t.Result.Repeat));
+                    .FirstOrDefaultAsync();
+
+                if (attendeeStatsRaw != null)
+                {
+                    attendeeStats = (attendeeStatsRaw.Unique, attendeeStatsRaw.Repeat);
+                }
+            }
 
             // Backfill missing days with zero for both trends
             var regTrendMap = regTrendRaw.ToDictionary(x => x.Item1, x => x.Item2);
@@ -193,3 +207,4 @@ namespace backend.main.features.events.analytics
         }
     }
 }
+

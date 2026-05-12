@@ -7,7 +7,7 @@ using backend.main.application.environment;
 using backend.main.application.security;
 using backend.main.dtos.general;
 using backend.main.shared.exceptions.http;
-using backend.main.models.core;
+using backend.main.features.profile;
 using backend.main.features.cache;
 
 using Microsoft.IdentityModel.Tokens;
@@ -752,3 +752,4 @@ namespace backend.main.features.auth.token
         }
     }
 }
+

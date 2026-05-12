@@ -1,4 +1,4 @@
-namespace backend.main.models.enums
+namespace backend.main.features.events
 {
     public enum EventCategory
     {
@@ -19,3 +19,5 @@ namespace backend.main.models.enums
         Other = 14
     }
 }
+
+

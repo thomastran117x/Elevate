@@ -1,4 +1,4 @@
-namespace backend.main.models.enums
+namespace backend.main.features.clubs.posts
 {
     public enum PostSortBy
     {
@@ -6,3 +6,5 @@ namespace backend.main.models.enums
         Popular = 1
     }
 }
+
+

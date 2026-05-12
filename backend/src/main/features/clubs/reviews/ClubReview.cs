@@ -1,4 +1,4 @@
-namespace backend.main.models.core
+namespace backend.main.features.clubs.reviews
 {
     public class ClubReview
     {
@@ -12,3 +12,5 @@ namespace backend.main.models.core
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
 }
+
+

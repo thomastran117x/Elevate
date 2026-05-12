@@ -1,5 +1,5 @@
 using backend.main.features.auth.contracts;
-using backend.main.models.core;
+using backend.main.features.profile;
 
 namespace backend.main.features.auth
 {
@@ -18,3 +18,4 @@ namespace backend.main.features.auth
         Task<bool> EmailExistsAsync(string email);
     }
 }
+

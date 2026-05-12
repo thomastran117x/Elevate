@@ -1,4 +1,4 @@
-namespace backend.main.models.enums
+namespace backend.main.features.events
 {
     public enum EventStatus
     {
@@ -7,3 +7,5 @@ namespace backend.main.models.enums
         Closed = 2
     }
 }
+
+

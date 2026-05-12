@@ -1,4 +1,4 @@
-using backend.main.models.enums;
+using backend.main.features.events;
 
 namespace backend.main.features.events.search
 {
@@ -25,4 +25,5 @@ namespace backend.main.features.events.search
         public int? RegistrationCount { get; init; }
     }
 }
+
 

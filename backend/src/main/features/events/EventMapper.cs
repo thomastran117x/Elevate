@@ -1,7 +1,5 @@
 using backend.main.features.events.contracts.responses;
 using backend.main.dtos.responses.general;
-using backend.main.models.core;
-using backend.main.models.enums;
 
 namespace backend.main.features.events
 {
@@ -45,3 +43,5 @@ namespace backend.main.features.events
         }
     }
 }
+
+

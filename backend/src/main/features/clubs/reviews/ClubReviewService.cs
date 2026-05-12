@@ -1,6 +1,4 @@
 using backend.main.shared.exceptions.http;
-using backend.main.features.clubs;
-using backend.main.models.core;
 
 namespace backend.main.features.clubs.reviews
 {
@@ -97,3 +95,5 @@ namespace backend.main.features.clubs.reviews
         }
     }
 }
+
+

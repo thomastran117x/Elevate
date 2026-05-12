@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.RegularExpressions;
 
-using backend.main.models.enums;
+using backend.main.features.events;
 
 namespace backend.main.features.events.contracts.requests
 {
@@ -110,4 +110,5 @@ namespace backend.main.features.events.contracts.requests
         }
     }
 }
+
 
