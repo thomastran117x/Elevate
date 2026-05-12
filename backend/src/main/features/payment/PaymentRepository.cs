@@ -3,11 +3,10 @@ using System.Data;
 using backend.main.infrastructure.database.core;
 using backend.main.models.core;
 using backend.main.models.enums;
-using backend.main.repositories.interfaces;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace backend.main.repositories.implementation
+namespace backend.main.features.payment
 {
     public class PaymentRepository : IPaymentRepository
     {

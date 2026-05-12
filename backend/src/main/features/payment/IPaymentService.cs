@@ -1,6 +1,6 @@
 using backend.main.models.core;
 
-namespace backend.main.services.interfaces
+namespace backend.main.features.payment
 {
     public interface IPaymentService
     {

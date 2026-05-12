@@ -2,14 +2,12 @@ using backend.main.shared.exceptions.http;
 using backend.main.features.events;
 using backend.main.models.core;
 using backend.main.models.enums;
-using backend.main.repositories.interfaces;
-using backend.main.services.interfaces;
 
 using Stripe;
 using Stripe.Checkout;
 using backend.main.shared.utilities.logger;
 
-namespace backend.main.services.implementation
+namespace backend.main.features.payment
 {
     public class StripePaymentService : IPaymentService
     {

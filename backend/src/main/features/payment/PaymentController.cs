@@ -1,16 +1,14 @@
 using backend.main.application.security;
 using backend.main.dtos.responses.general;
-using backend.main.dtos.responses.payment;
+using backend.main.features.payment.contracts.responses;
 using backend.main.shared.exceptions.http;
-using backend.main.Mappers;
-using backend.main.services.interfaces;
 using backend.main.utilities;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using backend.main.shared.utilities.logger;
 
-namespace backend.main.implementation.controllers
+namespace backend.main.features.payment
 {
     [ApiController]
     [Route("payments")]

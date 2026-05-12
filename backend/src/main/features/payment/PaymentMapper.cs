@@ -1,7 +1,7 @@
-using backend.main.dtos.responses.payment;
+using backend.main.features.payment.contracts.responses;
 using backend.main.models.core;
 
-namespace backend.main.Mappers
+namespace backend.main.features.payment
 {
     public static class PaymentMapper
     {

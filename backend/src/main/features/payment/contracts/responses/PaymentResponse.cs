@@ -1,4 +1,4 @@
-namespace backend.main.dtos.responses.payment
+namespace backend.main.features.payment.contracts.responses
 {
     public class PaymentResponse
     {

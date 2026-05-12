@@ -15,6 +15,7 @@ using backend.main.features.events.analytics;
 using backend.main.features.events.images;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
+using backend.main.features.payment;
 using backend.main.repositories.implementation;
 using backend.main.services.implementation;
 using backend.main.seeders;

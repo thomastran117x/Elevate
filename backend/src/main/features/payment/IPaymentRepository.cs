@@ -1,7 +1,7 @@
 using backend.main.models.core;
 using backend.main.models.enums;
 
-namespace backend.main.repositories.interfaces
+namespace backend.main.features.payment
 {
     public interface IPaymentRepository
     {
