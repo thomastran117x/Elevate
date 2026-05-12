@@ -4,7 +4,6 @@ using backend.main.dtos.general;
 using backend.main.features.auth.contracts;
 using backend.main.features.auth.device;
 using backend.main.features.auth.oauth;
-using backend.main.features.auth.repositories;
 using backend.main.features.auth.token;
 using backend.main.shared.exceptions.http;
 using backend.main.models.core;

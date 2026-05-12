@@ -1,8 +1,9 @@
 using backend.main.shared.exceptions.http;
 using backend.main.models.core;
+using backend.main.features.auth;
 using backend.main.features.auth.contracts;
-using backend.main.features.auth.repositories;
 using backend.main.features.auth.token;
+using backend.main.features.clubs.follow;
 using backend.main.repositories.contracts.users;
 using backend.main.repositories.interfaces;
 using backend.main.services.interfaces;

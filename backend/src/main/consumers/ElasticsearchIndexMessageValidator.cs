@@ -1,4 +1,5 @@
 using backend.main.dtos.messages;
+using backend.main.features.clubs.posts.search;
 using backend.main.models.documents;
 
 using Elastic.Clients.Elasticsearch;

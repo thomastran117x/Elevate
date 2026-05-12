@@ -4,7 +4,7 @@ using System.Text;
 using backend.main.application.environment;
 using backend.main.dtos.general;
 using backend.main.dtos.responses.general;
-using backend.main.features.auth.repositories;
+using backend.main.features.auth;
 using backend.main.features.auth.token;
 using backend.main.shared.exceptions.app;
 using backend.main.shared.other;
