@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace backend.main.dtos.responses.general
+namespace backend.main.shared.responses
 {
     public class ApiResponse<T>
     {
@@ -47,7 +47,9 @@ namespace backend.main.dtos.responses.general
         private static object? CreateSourceMeta(string? source)
         {
             if (string.IsNullOrWhiteSpace(source))
+            {
                 return null;
+            }
 
             return new Dictionary<string, object?>
             {

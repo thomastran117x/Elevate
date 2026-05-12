@@ -2,8 +2,7 @@ using System.Security.Claims;
 using System.Text;
 
 using backend.main.application.environment;
-using backend.main.dtos.general;
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 using backend.main.features.auth;
 using backend.main.features.auth.token;
 using backend.main.shared.exceptions.app;
@@ -127,3 +126,5 @@ namespace backend.main.application.security
         }
     }
 }
+
+

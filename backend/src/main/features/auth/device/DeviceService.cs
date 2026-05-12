@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 
-using backend.main.dtos;
-using backend.main.dtos.general;
+using backend.main.shared.providers.messages;
+using backend.main.shared.requests;
 using backend.main.features.auth.token;
 using backend.main.shared.exceptions.http;
 using backend.main.features.profile;
@@ -215,4 +215,6 @@ namespace backend.main.features.auth.device
         }
     }
 }
+
+
 

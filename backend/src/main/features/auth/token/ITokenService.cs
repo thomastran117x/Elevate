@@ -1,4 +1,4 @@
-using backend.main.dtos.general;
+using backend.main.shared.requests;
 using backend.main.features.profile;
 
 namespace backend.main.features.auth.token
@@ -39,4 +39,5 @@ namespace backend.main.features.auth.token
         public Task<string?> VerificationTokenExist(string email, VerificationPurpose purpose);
     }
 }
+
 

@@ -1,4 +1,4 @@
-using backend.main.dtos.general;
+using backend.main.shared.requests;
 using backend.main.application.bootstrap;
 
 namespace backend.main.utilities
@@ -175,3 +175,4 @@ namespace backend.main.utilities
         }
     }
 }
+

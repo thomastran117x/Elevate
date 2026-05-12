@@ -1,4 +1,4 @@
-using backend.main.dtos.general;
+using backend.main.shared.requests;
 
 namespace backend.main.application.handlers
 {
@@ -130,3 +130,4 @@ namespace backend.main.application.handlers
         }
     }
 }
+

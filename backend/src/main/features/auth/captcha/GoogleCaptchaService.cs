@@ -1,7 +1,5 @@
 using System.Text.Json;
 
-using backend.main.dtos.responses.external;
-
 using Polly.CircuitBreaker;
 
 namespace backend.main.features.auth.captcha
@@ -118,3 +116,4 @@ namespace backend.main.features.auth.captcha
         }
     }
 }
+

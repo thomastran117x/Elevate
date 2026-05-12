@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace backend.main.dtos.responses.general
+namespace backend.main.shared.responses
 {
     public class ApiError
     {

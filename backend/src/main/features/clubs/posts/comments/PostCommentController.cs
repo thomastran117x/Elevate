@@ -1,5 +1,5 @@
 using backend.main.application.security;
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 using backend.main.features.clubs.posts.comments.contracts.requests;
 using backend.main.features.clubs.posts.comments.contracts.responses;
 using backend.main.features.clubs.posts.comments;
@@ -110,6 +110,7 @@ namespace backend.main.features.clubs.posts.comments
             new(c.Id, c.PostId, c.UserId, c.Content, c.CreatedAt, c.UpdatedAt);
     }
 }
+
 
 
 

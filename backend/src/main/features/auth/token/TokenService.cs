@@ -5,7 +5,7 @@ using System.Text;
 
 using backend.main.application.environment;
 using backend.main.application.security;
-using backend.main.dtos.general;
+using backend.main.shared.requests;
 using backend.main.shared.exceptions.http;
 using backend.main.features.profile;
 using backend.main.features.cache;
@@ -752,4 +752,5 @@ namespace backend.main.features.auth.token
         }
     }
 }
+
 

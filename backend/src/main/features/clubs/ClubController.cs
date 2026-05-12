@@ -1,7 +1,7 @@
 using backend.main.application.security;
 using backend.main.features.clubs.contracts.requests;
 using backend.main.features.clubs.contracts.responses;
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 using backend.main.features.clubs;
 
 using Microsoft.AspNetCore.Authorization;
@@ -183,4 +183,5 @@ namespace backend.main.features.clubs
         }
     }
 }
+
 

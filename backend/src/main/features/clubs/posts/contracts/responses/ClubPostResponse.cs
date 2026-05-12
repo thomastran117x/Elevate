@@ -1,5 +1,5 @@
 using backend.main.features.clubs.posts;
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 
 namespace backend.main.features.clubs.posts.contracts.responses
 {
@@ -34,5 +34,6 @@ namespace backend.main.features.clubs.posts.contracts.responses
         }
     }
 }
+
 
 

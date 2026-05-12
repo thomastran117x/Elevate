@@ -1,4 +1,4 @@
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -37,3 +37,4 @@ namespace backend.main.application.handlers
         }
     }
 }
+

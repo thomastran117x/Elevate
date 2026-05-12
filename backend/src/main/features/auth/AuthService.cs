@@ -1,6 +1,6 @@
-using backend.main.dtos;
 using backend.main.application.security;
-using backend.main.dtos.general;
+using backend.main.shared.providers.messages;
+using backend.main.shared.requests;
 using backend.main.features.auth.contracts;
 using backend.main.features.auth.device;
 using backend.main.features.auth.oauth;
@@ -796,4 +796,6 @@ namespace backend.main.features.auth
         }
     }
 }
+
+
 

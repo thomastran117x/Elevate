@@ -1,4 +1,4 @@
-using backend.main.dtos.general;
+using backend.main.shared.requests;
 using backend.main.features.auth.token;
 
 namespace backend.main.features.auth.device
@@ -9,3 +9,4 @@ namespace backend.main.features.auth.device
         Task<UserToken> VerifyDeviceAsync(string token, SessionTransport transport);
     }
 }
+

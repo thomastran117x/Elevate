@@ -1,6 +1,6 @@
 using backend.main.application.security;
 using backend.main.features.clubs.follow.contracts.responses;
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 using backend.main.features.clubs.follow;
 
 using Microsoft.AspNetCore.Authorization;
@@ -95,5 +95,6 @@ namespace backend.main.features.clubs.follow
         }
     }
 }
+
 
 

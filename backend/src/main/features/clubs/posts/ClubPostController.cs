@@ -2,7 +2,7 @@ using backend.main.application.security;
 using backend.main.features.clubs.posts.contracts.requests;
 using backend.main.features.clubs.posts.contracts.responses;
 using backend.main.features.clubs.posts.search;
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 using backend.main.features.clubs.posts;
 
 using Microsoft.AspNetCore.Authorization;
@@ -167,6 +167,7 @@ namespace backend.main.features.clubs.posts
             new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt);
     }
 }
+
 
 
 

@@ -1,6 +1,6 @@
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 using backend.main.features.profile;
 
 using Microsoft.AspNetCore.Authorization;
@@ -44,3 +44,4 @@ namespace backend.main.features.profile.admin
         }
     }
 }
+

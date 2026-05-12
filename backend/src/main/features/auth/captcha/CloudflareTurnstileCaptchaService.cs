@@ -1,7 +1,5 @@
 using System.Text.Json;
 
-using backend.main.dtos.responses.external;
-
 namespace backend.main.features.auth.captcha
 {
     public sealed class CloudflareTurnstileCaptchaService : ICaptchaService
@@ -129,3 +127,4 @@ namespace backend.main.features.auth.captcha
         }
     }
 }
+

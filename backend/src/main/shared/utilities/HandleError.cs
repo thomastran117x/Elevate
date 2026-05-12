@@ -1,4 +1,4 @@
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 using backend.main.shared.exceptions.http;
 
 using Microsoft.AspNetCore.Mvc;
@@ -34,3 +34,4 @@ namespace backend.main.utilities
         }
     }
 }
+

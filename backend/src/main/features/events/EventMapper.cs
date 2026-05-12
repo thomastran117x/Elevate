@@ -1,5 +1,5 @@
 using backend.main.features.events.contracts.responses;
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 
 namespace backend.main.features.events
 {
@@ -43,5 +43,6 @@ namespace backend.main.features.events
         }
     }
 }
+
 
 

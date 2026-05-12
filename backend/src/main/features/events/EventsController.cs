@@ -1,7 +1,7 @@
 using backend.main.application.security;
 using backend.main.features.events.contracts.requests;
 using backend.main.features.events.contracts.responses;
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 using backend.main.features.events.search;
 using backend.main.shared.exceptions.http;
 using backend.main.features.events;
@@ -615,4 +615,5 @@ namespace backend.main.features.events
         }
     }
 }
+
 

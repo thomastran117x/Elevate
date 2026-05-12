@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 
 using backend.main.application.security;
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 using backend.main.features.events.registration.contracts.requests;
 using backend.main.features.events.registration.contracts.responses;
 using backend.main.shared.exceptions.http;
@@ -209,5 +209,6 @@ namespace backend.main.features.events.registration
         }
     }
 }
+
 
 

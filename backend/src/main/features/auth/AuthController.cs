@@ -1,11 +1,11 @@
 using backend.main.features.auth.contracts.requests;
-using backend.main.dtos.general;
+using backend.main.shared.requests;
 using backend.main.features.auth;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 using backend.main.shared.exceptions.http;
 using backend.main.features.profile;
 using backend.main.utilities;
@@ -746,4 +746,6 @@ namespace backend.main.features.auth
         }
     }
 }
+
+
 

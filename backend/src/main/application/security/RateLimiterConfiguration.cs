@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
@@ -91,3 +91,4 @@ namespace backend.main.application.security
         }
     }
 }
+

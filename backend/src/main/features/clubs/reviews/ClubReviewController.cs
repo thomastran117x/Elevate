@@ -1,7 +1,7 @@
 using backend.main.application.security;
 using backend.main.features.clubs.reviews.contracts.requests;
 using backend.main.features.clubs.reviews.contracts.responses;
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 using backend.main.features.clubs.reviews;
 
 using Microsoft.AspNetCore.Authorization;
@@ -159,5 +159,6 @@ namespace backend.main.features.clubs.reviews
         }
     }
 }
+
 
 

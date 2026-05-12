@@ -1,4 +1,4 @@
-namespace backend.main.dtos.general
+namespace backend.main.shared.requests
 {
     public class ClientRequestInfo
     {

@@ -1,4 +1,4 @@
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 using backend.main.shared.exceptions.http;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.follow;
@@ -212,6 +212,7 @@ namespace backend.main.features.clubs.posts
         };
     }
 }
+
 
 
 

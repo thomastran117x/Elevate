@@ -1,5 +1,5 @@
 using backend.main.application.security;
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 using backend.main.features.payment.contracts.responses;
 using backend.main.shared.exceptions.http;
 using backend.main.utilities;
@@ -147,3 +147,4 @@ namespace backend.main.features.payment
         }
     }
 }
+

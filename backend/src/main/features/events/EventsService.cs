@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Security.Cryptography;
 
 using backend.main.infrastructure.database.core;
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 using backend.main.features.events.analytics;
 using backend.main.features.events.contracts.requests;
 using backend.main.features.events.contracts.responses;
@@ -1185,5 +1185,6 @@ namespace backend.main.features.events
         }
     }
 }
+
 
 

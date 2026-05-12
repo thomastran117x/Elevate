@@ -1,4 +1,4 @@
-using backend.main.dtos.responses.general;
+using backend.main.shared.responses;
 
 namespace backend.main.application.handlers
 {
@@ -32,3 +32,4 @@ namespace backend.main.application.handlers
         }
     }
 }
+

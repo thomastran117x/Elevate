@@ -1,4 +1,4 @@
-namespace backend.main.dtos
+namespace backend.main.shared.providers.messages
 {
     public enum EmailMessageType
     {

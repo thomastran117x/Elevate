@@ -1,4 +1,4 @@
-namespace backend.main.dtos.responses.general
+namespace backend.main.shared.responses
 {
     public class MessageResponse : ApiResponse<object?>
     {
