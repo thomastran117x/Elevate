@@ -1,4 +1,4 @@
-using backend.main.dtos.responses.events;
+using backend.main.features.events.contracts.responses;
 
 namespace backend.main.services.interfaces
 {

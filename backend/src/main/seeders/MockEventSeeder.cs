@@ -1,4 +1,5 @@
 using backend.main.infrastructure.database.core;
+using backend.main.features.events.search;
 using backend.main.models.core;
 using backend.main.models.enums;
 using backend.main.services.interfaces;

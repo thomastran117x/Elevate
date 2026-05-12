@@ -1,4 +1,5 @@
 using backend.main.shared.exceptions.http;
+using backend.main.features.events;
 using backend.main.models.core;
 using backend.main.models.enums;
 using backend.main.repositories.interfaces;
