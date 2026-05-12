@@ -1,9 +1,8 @@
 using System.Text.Json;
 
 using backend.main.consumers;
-using backend.main.dtos.messages;
+using backend.main.features.clubs.posts.search;
 using backend.main.shared.providers;
-using backend.main.services.interfaces;
 
 using Polly;
 using Polly.Retry;

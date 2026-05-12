@@ -1,7 +1,7 @@
 using System.Text.Json;
 
-using backend.main.dtos;
 using backend.main.shared.providers;
+using backend.main.shared.providers.messages;
 using backend.main.shared.utilities.logger;
 
 using Polly;

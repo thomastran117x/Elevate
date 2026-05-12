@@ -1,4 +1,4 @@
-using backend.main.dtos;
+using backend.main.shared.providers.messages;
 
 namespace backend.worker.email_worker;
 

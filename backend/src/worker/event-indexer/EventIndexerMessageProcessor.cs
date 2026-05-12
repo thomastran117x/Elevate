@@ -1,4 +1,4 @@
-using backend.main.services.interfaces;
+using backend.main.features.events.search;
 using backend.main.shared.utilities.logger;
 
 using Polly;

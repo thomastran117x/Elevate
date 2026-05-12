@@ -1,6 +1,6 @@
 using System.Net.Mail;
 
-using backend.main.dtos;
+using backend.main.shared.providers.messages;
 
 using MailKit.Security;
 using MailKitSmtpClient = MailKit.Net.Smtp.SmtpClient;

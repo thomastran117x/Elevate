@@ -1,5 +1,5 @@
 using backend.main.infrastructure.elasticsearch;
-using backend.main.services.interfaces;
+using backend.main.features.clubs.posts.search;
 using backend.main.shared.utilities.logger;
 
 using Microsoft.Extensions.DependencyInjection;

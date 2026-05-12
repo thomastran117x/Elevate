@@ -1,7 +1,6 @@
 using System.Text.Json;
 
-using backend.main.dtos.messages;
-using backend.main.models.documents;
+using backend.main.features.events.search;
 using backend.main.shared.providers;
 
 namespace backend.worker.event_indexer;
