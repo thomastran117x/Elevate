@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using backend.main.features.events;
 
 namespace backend.main.features.events.contracts.responses
@@ -72,6 +74,7 @@ namespace backend.main.features.events.contracts.responses
         public double? DistanceKm { get; set; }
 
         // Populated on the event detail endpoint.
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public EventHostClubResponse? Club { get; set; }
     }
 }
