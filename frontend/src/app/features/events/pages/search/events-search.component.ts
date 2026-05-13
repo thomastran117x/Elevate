@@ -58,7 +58,7 @@ export class EventsSearchComponent implements OnInit, OnDestroy {
   radiusKm: number | null = null;
 
   currentPage = 1;
-  readonly pageSize = 20;
+  readonly pageSize = 18;
 
   events: EventItem[] = [];
   totalCount = 0;

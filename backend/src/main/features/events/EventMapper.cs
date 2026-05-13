@@ -1,5 +1,6 @@
 using backend.main.features.events.contracts.responses;
 using backend.main.shared.responses;
+using backend.main.features.clubs;
 
 namespace backend.main.features.events
 {
@@ -30,6 +31,24 @@ namespace backend.main.features.events
             Tags = ev.Tags ?? new List<string>(),
             RegistrationCount = ev.RegistrationCount,
             DistanceKm = distanceKm
+        };
+
+        public static EventHostClubResponse MapClubToResponse(Club club) => new()
+        {
+            Id = club.Id,
+            Name = club.Name,
+            Description = club.Description,
+            ClubType = club.Clubtype.ToString(),
+            ClubImage = club.ClubImage,
+            MemberCount = club.MemberCount,
+            EventCount = club.EventCount,
+            AvailableEventCount = club.AvaliableEventCount,
+            IsPrivate = club.isPrivate,
+            Email = club.Email,
+            Phone = club.Phone,
+            Rating = club.Rating,
+            WebsiteUrl = club.WebsiteUrl,
+            Location = club.Location
         };
 
         public static EventStatus ResolveStatus(Events ev)

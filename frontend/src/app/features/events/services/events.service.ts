@@ -5,8 +5,10 @@ import { environment } from '@environments/environment';
 import {
   ALL_CATEGORIES,
   ALL_STATUSES,
+  ClubType,
   EventApiResponse,
   EventCategory,
+  EventHostClub,
   EventItem,
   EventSearchParams,
   EventsApiResponse,
@@ -37,6 +39,26 @@ type EventItemPayload = EventItem & {
   Tags?: string[];
   RegistrationCount?: number;
   DistanceKm?: number;
+  Club?: EventHostClubPayload;
+};
+
+type EventHostClubPayload = EventHostClub & {
+  Id?: number;
+  Name?: string;
+  Description?: string;
+  ClubType?: string | number;
+  Clubtype?: string | number;
+  ClubImage?: string;
+  MemberCount?: number;
+  EventCount?: number;
+  AvailableEventCount?: number;
+  AvaliableEventCount?: number;
+  IsPrivate?: boolean;
+  Email?: string;
+  Phone?: string;
+  Rating?: number;
+  WebsiteUrl?: string;
+  Location?: string;
 };
 
 type EventsPagedPayload = Partial<EventsPagedData> & {
@@ -141,6 +163,31 @@ export class EventsService {
       tags: item.tags ?? item.Tags ?? [],
       registrationCount: item.registrationCount ?? item.RegistrationCount ?? 0,
       distanceKm: item.distanceKm ?? item.DistanceKm,
+      club: this.normalizeClub(item.club ?? item.Club),
+    };
+  }
+
+  private normalizeClub(value: EventHostClubPayload | undefined): EventHostClub | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    return {
+      id: value.id ?? value.Id ?? 0,
+      name: value.name ?? value.Name ?? '',
+      description: value.description ?? value.Description ?? '',
+      clubType: this.normalizeClubType(value.clubType ?? value.ClubType ?? value.Clubtype),
+      clubImage: value.clubImage ?? value.ClubImage ?? '',
+      memberCount: value.memberCount ?? value.MemberCount ?? 0,
+      eventCount: value.eventCount ?? value.EventCount ?? 0,
+      availableEventCount:
+        value.availableEventCount ?? value.AvailableEventCount ?? value.AvaliableEventCount ?? 0,
+      isPrivate: value.isPrivate ?? value.IsPrivate ?? false,
+      email: value.email ?? value.Email,
+      phone: value.phone ?? value.Phone,
+      rating: value.rating ?? value.Rating,
+      websiteUrl: value.websiteUrl ?? value.WebsiteUrl,
+      location: value.location ?? value.Location,
     };
   }
 
@@ -158,5 +205,15 @@ export class EventsService {
     }
 
     return ALL_CATEGORIES.includes(value as EventCategory) ? (value as EventCategory) : 'Other';
+  }
+
+  private normalizeClubType(value: string | number | undefined): ClubType {
+    const clubTypes: ClubType[] = ['Sports', 'Academic', 'Social', 'Cultural', 'Gaming', 'Other'];
+
+    if (typeof value === 'number') {
+      return clubTypes[value] ?? 'Other';
+    }
+
+    return clubTypes.includes(value as ClubType) ? (value as ClubType) : 'Other';
   }
 }

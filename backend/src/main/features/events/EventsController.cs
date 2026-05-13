@@ -10,6 +10,7 @@ using backend.main.utilities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using backend.main.shared.utilities.logger;
+using backend.main.features.clubs;
 
 namespace backend.main.features.events
 {
@@ -18,10 +19,12 @@ namespace backend.main.features.events
     public class EventsController : ControllerBase
     {
         private readonly IEventsService _eventService;
+        private readonly IClubService _clubService;
 
-        public EventsController(IEventsService eventService)
+        public EventsController(IEventsService eventService, IClubService clubService)
         {
             _eventService = eventService;
+            _clubService = clubService;
         }
 
         [Authorize(Policy = "OrganizerOnly")]
@@ -179,10 +182,13 @@ namespace backend.main.features.events
             try
             {
                 var ev = await _eventService.GetVisibleEvent(eventId, GetOptionalUserId());
+                var club = await _clubService.GetClub(ev.ClubId);
+                var response = EventMapper.MapToResponse(ev);
+                response.Club = EventMapper.MapClubToResponse(club);
 
                 return Ok(new ApiResponse<EventResponse>(
                     $"The event with ID {eventId} has been fetched successfully.",
-                    EventMapper.MapToResponse(ev)
+                    response
                 ));
             }
             catch (Exception e)

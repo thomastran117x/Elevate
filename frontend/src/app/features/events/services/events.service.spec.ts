@@ -127,6 +127,7 @@ describe('EventsService', () => {
           tags: ['tech', 'community'],
           registrationCount: 34,
           distanceKm: 2.5,
+          club: undefined,
         },
       ],
       totalCount: 1,
@@ -189,6 +190,103 @@ describe('EventsService', () => {
       page: 1,
       pageSize: 20,
       totalPages: 1,
+    });
+  });
+
+  it('normalizes a single event payload from the backend', () => {
+    let responseBody: unknown;
+
+    service.getEvent(42).subscribe((response) => {
+      responseBody = response.data;
+    });
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/events/42'));
+
+    expect(request.request.method).toBe('GET');
+
+    request.flush({
+      success: true,
+      message: 'ok',
+      data: {
+        Id: 42,
+        Name: 'Hack Night',
+        Description: 'Build things together',
+        Location: 'Student Center',
+        ImageUrls: ['https://example.com/poster.png'],
+        IsPrivate: false,
+        MaxParticipants: 120,
+        RegisterCost: 0,
+        StartTime: '2026-05-20T18:00:00Z',
+        EndTime: '2026-05-20T21:00:00Z',
+        ClubId: 7,
+        CreatedAt: '2026-05-01T12:00:00Z',
+        Status: 'Upcoming',
+        Category: 'Workshop',
+        VenueName: 'Main Hall',
+        City: 'Ottawa',
+        Latitude: 45.4215,
+        Longitude: -75.6972,
+        Tags: ['tech', 'community'],
+        RegistrationCount: 34,
+        Club: {
+          Id: 7,
+          Name: 'uOttaHack',
+          Description: 'Hackathons and builder meetups',
+          ClubType: 'Academic',
+          ClubImage: 'https://example.com/club.png',
+          MemberCount: 240,
+          EventCount: 18,
+          AvailableEventCount: 3,
+          IsPrivate: false,
+          Email: 'hello@uottahack.ca',
+          Phone: '555-0101',
+          Rating: 4.8,
+          WebsiteUrl: 'https://uottahack.ca',
+          Location: 'Ottawa',
+        },
+      },
+      error: null,
+      meta: null,
+    });
+
+    expect(responseBody).toEqual({
+      id: 42,
+      name: 'Hack Night',
+      description: 'Build things together',
+      location: 'Student Center',
+      imageUrls: ['https://example.com/poster.png'],
+      isPrivate: false,
+      maxParticipants: 120,
+      registerCost: 0,
+      startTime: '2026-05-20T18:00:00Z',
+      endTime: '2026-05-20T21:00:00Z',
+      clubId: 7,
+      createdAt: '2026-05-01T12:00:00Z',
+      status: 'Upcoming',
+      category: 'Workshop',
+      venueName: 'Main Hall',
+      city: 'Ottawa',
+      latitude: 45.4215,
+      longitude: -75.6972,
+      tags: ['tech', 'community'],
+      registrationCount: 34,
+      distanceKm: undefined,
+      club: {
+        id: 7,
+        name: 'uOttaHack',
+        description: 'Hackathons and builder meetups',
+        clubType: 'Academic',
+        clubImage: 'https://example.com/club.png',
+        memberCount: 240,
+        eventCount: 18,
+        availableEventCount: 3,
+        isPrivate: false,
+        email: 'hello@uottahack.ca',
+        phone: '555-0101',
+        rating: 4.8,
+        websiteUrl: 'https://uottahack.ca',
+        location: 'Ottawa',
+      },
     });
   });
 });

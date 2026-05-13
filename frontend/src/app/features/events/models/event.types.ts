@@ -20,6 +20,24 @@ export type EventCategory =
 export type EventStatus = 'Upcoming' | 'Ongoing' | 'Closed';
 
 export type EventSortBy = 'Relevance' | 'Date' | 'Distance' | 'Popularity';
+export type ClubType = 'Sports' | 'Academic' | 'Social' | 'Cultural' | 'Gaming' | 'Other';
+
+export interface EventHostClub {
+  id: number;
+  name: string;
+  description: string;
+  clubType: ClubType;
+  clubImage: string;
+  memberCount: number;
+  eventCount: number;
+  availableEventCount: number;
+  isPrivate: boolean;
+  email?: string;
+  phone?: string;
+  rating?: number;
+  websiteUrl?: string;
+  location?: string;
+}
 
 export interface EventItem {
   id: number;
@@ -43,6 +61,7 @@ export interface EventItem {
   tags: string[];
   registrationCount: number;
   distanceKm?: number;
+  club?: EventHostClub;
 }
 
 export interface EventsPagedData {
