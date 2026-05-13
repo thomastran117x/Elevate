@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 
 using backend.main.features.events;
+using backend.main.features.events.search;
 
 namespace backend.main.features.events.contracts.requests
 {
@@ -19,23 +20,10 @@ namespace backend.main.features.events.contracts.requests
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
-            if (Geo != null)
+            foreach (var error in PublicEventSearchCriteriaFactory.ValidateRequest(this))
             {
-                if (Geo.RadiusKm <= 0 || Geo.RadiusKm > 500)
-                    yield return new ValidationResult(
-                        "radiusKm must be between 0 (exclusive) and 500.",
-                        [nameof(Geo)]);
+                yield return new ValidationResult(error.Message, [error.MemberName]);
             }
-
-            if (SortBy == EventSortBy.Distance && Geo == null)
-                yield return new ValidationResult(
-                    "sortBy=Distance requires a geo filter with lat, lng, and radiusKm.",
-                    [nameof(SortBy)]);
-
-            if (Filters?.Tags != null && Filters.Tags.Count > 5)
-                yield return new ValidationResult(
-                    "A maximum of 5 tags are allowed per query.",
-                    [nameof(Filters)]);
         }
     }
 
@@ -50,16 +38,13 @@ namespace backend.main.features.events.contracts.requests
 
     public sealed record EventGeoFilter
     {
-        [Required]
-        [Range(-90, 90)]
-        public double Lat { get; init; }
+        [Range(-90, 90, ErrorMessage = "lat must be between -90 and 90.")]
+        public double? Lat { get; init; }
 
-        [Required]
-        [Range(-180, 180)]
-        public double Lng { get; init; }
+        [Range(-180, 180, ErrorMessage = "lng must be between -180 and 180.")]
+        public double? Lng { get; init; }
 
-        [Required]
-        public double RadiusKm { get; init; }
+        public double? RadiusKm { get; init; }
     }
 }
 
