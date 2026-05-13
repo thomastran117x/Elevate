@@ -250,7 +250,7 @@ namespace backend.main.features.events
                     throw;
                 }
 
-                EnsureFallbackSearchIsSupported(effective);
+                EventSearchFallbackSupport.EnsureSupported(effective);
 
                 var (events, totalCount) = await _eventsRepository.SearchAsync(effective);
                 var fallbackDistanceMap = BuildDistanceMap(events, effective);
@@ -460,15 +460,6 @@ namespace backend.main.features.events
 
                 Logger.Error($"[EventsService] GetEventsByIds failed: {e}");
                 throw new InternalServerErrorException();
-            }
-        }
-
-        private static void EnsureFallbackSearchIsSupported(EventSearchCriteria criteria)
-        {
-            if (criteria.Tags != null && criteria.Tags.Count > 0)
-            {
-                throw new NotAvailableException(
-                    "Tag filtering is temporarily unavailable because search indexing is unavailable.");
             }
         }
 

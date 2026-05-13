@@ -53,11 +53,12 @@ export interface EventsPagedData {
   totalPages: number;
 }
 
-export interface EventsResponseMeta {
+export interface EventsResponseMeta extends Record<string, unknown> {
   source?: string;
 }
 
 export type EventsApiResponse = ApiEnvelope<EventsPagedData, EventsResponseMeta>;
+export type EventApiResponse = ApiEnvelope<EventItem, EventsResponseMeta>;
 
 export interface EventSearchParams {
   search?: string;
@@ -67,6 +68,9 @@ export interface EventSearchParams {
   sortBy?: EventSortBy;
   isPrivate?: boolean;
   tags?: string;
+  lat?: number;
+  lng?: number;
+  radiusKm?: number;
   page?: number;
   pageSize?: number;
 }
@@ -76,6 +80,10 @@ export const ALL_CATEGORIES: EventCategory[] = [
   'Social', 'Cultural', 'Gaming', 'Food', 'Fitness',
   'Networking', 'Volunteer', 'Party', 'Arts', 'Other',
 ];
+
+export const ALL_STATUSES: EventStatus[] = ['Upcoming', 'Ongoing', 'Closed'];
+
+export const ALL_EVENT_SORTS: EventSortBy[] = ['Relevance', 'Date', 'Distance', 'Popularity'];
 
 export const CATEGORY_STYLES: Record<EventCategory, { badge: string; bg: string }> = {
   Sports:      { badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30',      bg: 'bg-blue-500' },

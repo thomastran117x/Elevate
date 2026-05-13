@@ -212,52 +212,19 @@ namespace backend.main.features.events
         {
             try
             {
-                if (isPrivate)
-                    return BadRequestResponse("Private events are not available through the public events endpoint.");
-
-                if (page < 1)
-                    return BadRequestResponse("page must be at least 1.");
-
-                if (pageSize < 1 || pageSize > 100)
-                    return BadRequestResponse("pageSize must be between 1 and 100.");
-
-                if ((lat.HasValue) != (lng.HasValue))
-                    return BadRequestResponse("Both lat and lng must be provided together.");
-
-                if (radiusKm.HasValue && (radiusKm <= 0 || radiusKm > 500))
-                    return BadRequestResponse("radiusKm must be between 0 (exclusive) and 500.");
-
-                if (sortBy == EventSortBy.Distance && (!lat.HasValue || !lng.HasValue))
-                    return BadRequestResponse("sortBy=Distance requires lat and lng.");
-
-                List<string>? tagList = null;
-                if (!string.IsNullOrWhiteSpace(tags))
-                {
-                    tagList = tags.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                        .Select(t => t.Trim().ToLowerInvariant())
-                        .Where(t => t.Length > 0)
-                        .Distinct()
-                        .ToList();
-
-                    if (tagList.Count > 5)
-                        return BadRequestResponse("A maximum of 5 tags are allowed per query.");
-                }
-
-                var criteria = new EventSearchCriteria
-                {
-                    Query = search,
-                    IsPrivate = isPrivate,
-                    Status = status,
-                    Category = category,
-                    Tags = tagList,
-                    City = city,
-                    Lat = lat,
-                    Lng = lng,
-                    RadiusKm = radiusKm,
-                    SortBy = sortBy,
-                    Page = page,
-                    PageSize = pageSize
-                };
+                var criteria = PublicEventSearchCriteriaFactory.FromQuery(
+                    search,
+                    isPrivate,
+                    status,
+                    category,
+                    tags,
+                    city,
+                    lat,
+                    lng,
+                    radiusKm,
+                    sortBy,
+                    page,
+                    pageSize);
 
                 var (events, totalCount, distances, source) = await _eventService.GetEvents(criteria);
 
@@ -291,30 +258,7 @@ namespace backend.main.features.events
         {
             try
             {
-                if (request.Filters?.IsPrivate == true)
-                    return BadRequestResponse("Private events are not available through the public events endpoint.");
-
-                var tagList = request.Filters?.Tags?
-                    .Select(t => t.Trim().ToLowerInvariant())
-                    .Where(t => t.Length > 0)
-                    .Distinct()
-                    .ToList();
-
-                var criteria = new EventSearchCriteria
-                {
-                    Query = request.Query,
-                    IsPrivate = request.Filters?.IsPrivate ?? false,
-                    Status = request.Filters?.Status,
-                    Category = request.Filters?.Category,
-                    Tags = tagList,
-                    City = request.Filters?.City,
-                    Lat = request.Geo?.Lat,
-                    Lng = request.Geo?.Lng,
-                    RadiusKm = request.Geo?.RadiusKm,
-                    SortBy = request.SortBy,
-                    Page = request.Page,
-                    PageSize = request.PageSize
-                };
+                var criteria = PublicEventSearchCriteriaFactory.FromRequest(request);
 
                 var (events, totalCount, distances, source) = await _eventService.GetEvents(criteria);
 

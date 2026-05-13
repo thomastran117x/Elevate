@@ -1,10 +1,25 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { PLATFORM_ID } from '@angular/core';
+
 import { App } from './app';
+import { SessionManagerService } from './core/services/session-manager.service';
 
 describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
+      providers: [
+        provideRouter([]),
+        { provide: PLATFORM_ID, useValue: 'browser' },
+        {
+          provide: SessionManagerService,
+          useValue: {
+            loading: () => false,
+            restoreSession: jasmine.createSpy('restoreSession'),
+          },
+        },
+      ],
     }).compileComponents();
   });
 
@@ -12,12 +27,5 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
     expect(app).toBeTruthy();
-  });
-
-  it('should render title', () => {
-    const fixture = TestBed.createComponent(App);
-    fixture.detectChanges();
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, frontend');
   });
 });

@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "email-worker", "backend\src
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "event-indexer", "backend\src\worker\event-indexer\event-indexer.csproj", "{82C559A0-34A7-4DCD-AAD6-F97D8977AF47}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "backend.tests", "backend.tests\backend.tests.csproj", "{2E61F1C9-85EF-4A84-AE01-7BC574B89A53}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -69,6 +71,18 @@ Global
 		{82C559A0-34A7-4DCD-AAD6-F97D8977AF47}.Release|x64.Build.0 = Release|Any CPU
 		{82C559A0-34A7-4DCD-AAD6-F97D8977AF47}.Release|x86.ActiveCfg = Release|Any CPU
 		{82C559A0-34A7-4DCD-AAD6-F97D8977AF47}.Release|x86.Build.0 = Release|Any CPU
+		{2E61F1C9-85EF-4A84-AE01-7BC574B89A53}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2E61F1C9-85EF-4A84-AE01-7BC574B89A53}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2E61F1C9-85EF-4A84-AE01-7BC574B89A53}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2E61F1C9-85EF-4A84-AE01-7BC574B89A53}.Debug|x64.Build.0 = Debug|Any CPU
+		{2E61F1C9-85EF-4A84-AE01-7BC574B89A53}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2E61F1C9-85EF-4A84-AE01-7BC574B89A53}.Debug|x86.Build.0 = Debug|Any CPU
+		{2E61F1C9-85EF-4A84-AE01-7BC574B89A53}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2E61F1C9-85EF-4A84-AE01-7BC574B89A53}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2E61F1C9-85EF-4A84-AE01-7BC574B89A53}.Release|x64.ActiveCfg = Release|Any CPU
+		{2E61F1C9-85EF-4A84-AE01-7BC574B89A53}.Release|x64.Build.0 = Release|Any CPU
+		{2E61F1C9-85EF-4A84-AE01-7BC574B89A53}.Release|x86.ActiveCfg = Release|Any CPU
+		{2E61F1C9-85EF-4A84-AE01-7BC574B89A53}.Release|x86.Build.0 = Release|Any CPU
 		{F2D41563-378D-46F9-B662-4F87333EF15F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{F2D41563-378D-46F9-B662-4F87333EF15F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F2D41563-378D-46F9-B662-4F87333EF15F}.Debug|x64.ActiveCfg = Debug|Any CPU
