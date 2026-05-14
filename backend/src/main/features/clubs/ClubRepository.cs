@@ -1,5 +1,5 @@
 using backend.main.infrastructure.database.core;
-using backend.main.features.clubs;
+using backend.main.features.clubs.search;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -94,29 +94,54 @@ namespace backend.main.features.clubs
             return true;
         }
 
-        public async Task<List<Club>> SearchAsync(
-            string? search,
-            int page = 1,
-            int pageSize = 20)
+        public async Task<(List<Club> Items, int TotalCount)> SearchAsync(ClubSearchCriteria criteria)
         {
             IQueryable<Club> query = _context.Clubs
-                .AsNoTracking();
+                .AsNoTracking()
+                .Where(c => !c.isPrivate);
 
-            if (!string.IsNullOrWhiteSpace(search))
+            if (!string.IsNullOrWhiteSpace(criteria.Query))
             {
-                var term = search.Trim();
+                var term = criteria.Query.Trim();
 
                 query = query.Where(c =>
                     EF.Functions.Like(c.Name, $"%{term}%") ||
-                    EF.Functions.Like(c.Description, $"%{term}%")
+                    EF.Functions.Like(c.Description, $"%{term}%") ||
+                    (c.Location != null && EF.Functions.Like(c.Location, $"%{term}%"))
                 );
             }
 
-            return await query
-                .OrderByDescending(c => c.CreatedAt)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
+            if (criteria.ClubType.HasValue)
+                query = query.Where(c => c.Clubtype == criteria.ClubType.Value);
+
+            var totalCount = await query.CountAsync();
+
+            var ordered = criteria.SortBy switch
+            {
+                ClubSortBy.Newest => query
+                    .OrderByDescending(c => c.CreatedAt)
+                    .ThenBy(c => c.Id),
+                ClubSortBy.Members => query
+                    .OrderByDescending(c => c.MemberCount)
+                    .ThenByDescending(c => c.CreatedAt)
+                    .ThenBy(c => c.Id),
+                ClubSortBy.Rating => query
+                    .OrderByDescending(c => c.Rating.HasValue)
+                    .ThenByDescending(c => c.Rating)
+                    .ThenByDescending(c => c.MemberCount)
+                    .ThenByDescending(c => c.CreatedAt)
+                    .ThenBy(c => c.Id),
+                _ => query
+                    .OrderByDescending(c => c.CreatedAt)
+                    .ThenBy(c => c.Id)
+            };
+
+            var items = await ordered
+                .Skip((criteria.Page - 1) * criteria.PageSize)
+                .Take(criteria.PageSize)
                 .ToListAsync();
+
+            return (items, totalCount);
         }
 
         public async Task<List<Club>> GetByIdsAsync(IEnumerable<int> ids)
@@ -131,6 +156,14 @@ namespace backend.main.features.clubs
                 .Where(c => idList.Contains(c.Id))
                 .ToListAsync();
         }
+
+        public async Task<List<Club>> GetAllForReindexAsync(int page, int pageSize, CancellationToken cancellationToken = default) =>
+            await _context.Clubs
+                .AsNoTracking()
+                .OrderBy(c => c.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
     }
 }
 

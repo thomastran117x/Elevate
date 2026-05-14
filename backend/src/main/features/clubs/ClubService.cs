@@ -3,10 +3,13 @@ using System.Text.Json;
 using backend.main.features.cache;
 using backend.main.features.clubs.contracts;
 using backend.main.features.clubs.follow;
+using backend.main.features.clubs.search;
 using backend.main.features.clubs.staff;
 using backend.main.features.clubs.versions;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
+using backend.main.infrastructure.elasticsearch;
+using backend.main.shared.responses;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.storage;
 using backend.main.shared.utilities.logger;
@@ -24,6 +27,8 @@ namespace backend.main.features.clubs
         private readonly IFollowService _followService;
         private readonly IFileUploadService _fileUploadService;
         private readonly ICacheService _cache;
+        private readonly IClubSearchService _searchService;
+        private readonly IClubSearchOutboxWriter _outboxWriter;
         private readonly ClubVersioningOptions _versioningOptions;
         private readonly TimeProvider _timeProvider;
 
@@ -43,6 +48,8 @@ namespace backend.main.features.clubs
             IFileUploadService fileUploadService,
             IFollowService followService,
             ICacheService cache,
+            IClubSearchService searchService,
+            IClubSearchOutboxWriter outboxWriter,
             IOptions<ClubVersioningOptions> versioningOptions,
             TimeProvider timeProvider)
         {
@@ -52,6 +59,8 @@ namespace backend.main.features.clubs
             _userService = userService;
             _fileUploadService = fileUploadService;
             _cache = cache;
+            _searchService = searchService;
+            _outboxWriter = outboxWriter;
             _versioningOptions = versioningOptions.Value;
             _timeProvider = timeProvider;
         }
@@ -99,6 +108,7 @@ namespace backend.main.features.clubs
                 rollbackSourceVersionNumber: null,
                 changedFields: BuildChangedFields(null, BuildSnapshot(club)),
                 createdAt: now);
+            _outboxWriter.StageUpsert(club);
 
             await _db.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -281,41 +291,60 @@ namespace backend.main.features.clubs
                 .AnyAsync(club => club.Id == clubId && club.UserId == userId);
         }
 
-        public async Task<List<Club>> GetAllClubs(
-            string? search = null,
-            int page = 1,
-            int pageSize = 20)
+        public async Task<(List<Club> Clubs, int TotalCount, string Source)> GetAllClubs(ClubSearchCriteria criteria)
         {
             var version = await GetClubListVersionAsync();
-
-            var normalizedSearch = search?.Trim().ToLowerInvariant();
-
-            var key = normalizedSearch == null
-                ? $"clubs:list:v{version}:p{page}:s{pageSize}"
-                : $"clubs:list:v{version}:q:{normalizedSearch}:p{page}:s{pageSize}";
+            var normalizedQuery = string.IsNullOrWhiteSpace(criteria.Query)
+                ? null
+                : criteria.Query.Trim().ToLowerInvariant();
+            var effective = criteria with { Query = normalizedQuery };
+            var key = BuildClubListCacheKey(version, effective);
 
             var cached = await _cache.GetValueAsync(key);
             if (cached != null)
             {
-                var dtos = JsonSerializer.Deserialize<List<ClubCacheDto>>(cached)!;
-                return dtos.Select(ClubCacheMapper.ToEntity).ToList();
+                var payload = JsonSerializer.Deserialize<ClubListCachePayload>(cached)!;
+                return (
+                    payload.Items.Select(ClubCacheMapper.ToEntity).ToList(),
+                    payload.TotalCount,
+                    payload.Source
+                );
             }
 
-            var clubs = await _clubRepository.SearchAsync(
-                normalizedSearch,
-                page,
-                pageSize
-            );
+            try
+            {
+                var result = await _searchService.SearchAsync(effective);
+                var ids = result.Hits.Select(hit => hit.Id).ToList();
+                var clubs = ids.Count > 0
+                    ? await GetClubsByIdsAsync(ids)
+                    : [];
+                var ordered = ids
+                    .Select(id => clubs.FirstOrDefault(club => club.Id == id))
+                    .Where(club => club != null)
+                    .Cast<Club>()
+                    .ToList();
 
-            var dtoList = clubs.Select(ClubCacheMapper.ToDto).ToList();
+                await CacheClubListAsync(key, ordered, result.TotalCount, ResponseSource.Elasticsearch);
+                return (ordered, result.TotalCount, ResponseSource.Elasticsearch);
+            }
+            catch (ElasticsearchDisabledException ex)
+            {
+                Logger.Info($"[ClubService] Elasticsearch disabled. Falling back to MySQL search. {ex.Message}");
+            }
+            catch (ElasticsearchUnavailableException ex)
+            {
+                Logger.Warn(ex, "[ClubService] Elasticsearch temporarily unavailable. Falling back to MySQL search.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[ClubService] Elasticsearch search failed with a non-fallback error: {ex}");
+                throw;
+            }
 
-            await _cache.SetValueAsync(
-                key,
-                JsonSerializer.Serialize(dtoList),
-                WithJitter(ClubListTTL)
-            );
+            var (items, totalCount) = await _clubRepository.SearchAsync(effective);
+            await CacheClubListAsync(key, items, totalCount, ResponseSource.Database);
 
-            return clubs;
+            return (items, totalCount, ResponseSource.Database);
         }
 
         public async Task<List<Club>> GetClubsByIdsAsync(IEnumerable<int> clubIds)
@@ -398,6 +427,7 @@ namespace backend.main.features.clubs
                 rollbackSourceVersionNumber: null,
                 changedFields: changedFields,
                 createdAt: existing.UpdatedAt);
+            _outboxWriter.StageUpsert(existing);
 
             await _db.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -415,6 +445,7 @@ namespace backend.main.features.clubs
 
             await _fileUploadService.DeleteImageAsync(club.ClubImage);
 
+            _outboxWriter.StageDelete(clubId);
             _db.Clubs.Remove(club);
             await _db.SaveChangesAsync();
 
@@ -505,6 +536,7 @@ namespace backend.main.features.clubs
             if (existingManagerRole != null)
                 _db.ClubStaff.Remove(existingManagerRole);
 
+            _outboxWriter.StageUpsert(club);
             await _db.SaveChangesAsync();
 
             await CacheClubAsync(club);
@@ -524,7 +556,10 @@ namespace backend.main.features.clubs
             await _followService.AddMembershipAsync(clubId, userId);
 
             club.MemberCount++;
-            await _clubRepository.UpdateAsync(clubId, club);
+            club = await _clubRepository.UpdateAsync(clubId, club)
+                ?? throw new ResourceNotFoundException("Club not found");
+            _outboxWriter.StageUpsert(club);
+            await _db.SaveChangesAsync();
 
             await CacheClubAsync(club);
             await BumpClubListVersionAsync();
@@ -541,7 +576,10 @@ namespace backend.main.features.clubs
             await _followService.RemoveMembershipAsync(clubId, userId);
 
             club.MemberCount--;
-            await _clubRepository.UpdateAsync(clubId, club);
+            club = await _clubRepository.UpdateAsync(clubId, club)
+                ?? throw new ResourceNotFoundException("Club not found");
+            _outboxWriter.StageUpsert(club);
+            await _db.SaveChangesAsync();
 
             await CacheClubAsync(club);
             await BumpClubListVersionAsync();
@@ -648,6 +686,7 @@ namespace backend.main.features.clubs
                 rollbackSourceVersionNumber: targetVersion.VersionNumber,
                 changedFields: changedFields,
                 createdAt: club.UpdatedAt);
+            _outboxWriter.StageUpsert(club);
 
             await _db.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -674,6 +713,19 @@ namespace backend.main.features.clubs
             var expiry = WithJitter(ClubTTL);
 
             await _cache.SetValueAsync(GetClubCacheKey(club.Id), payload, expiry);
+        }
+
+        private async Task CacheClubListAsync(string key, IEnumerable<Club> clubs, int totalCount, string source)
+        {
+            var payload = new ClubListCachePayload(
+                clubs.Select(ClubCacheMapper.ToDto).ToList(),
+                totalCount,
+                source);
+
+            await _cache.SetValueAsync(
+                key,
+                JsonSerializer.Serialize(payload),
+                WithJitter(ClubListTTL));
         }
 
         private async Task<long> GetClubListVersionAsync()
@@ -902,6 +954,13 @@ namespace backend.main.features.clubs
 
         private static string GetClubCacheKey(int clubId) => $"club:{clubId}";
 
+        private static string BuildClubListCacheKey(long version, ClubSearchCriteria criteria)
+        {
+            var queryKey = criteria.Query == null ? "-" : criteria.Query;
+            var clubTypeKey = criteria.ClubType?.ToString() ?? "-";
+            return $"clubs:list:v{version}:q:{queryKey}:t:{clubTypeKey}:sort:{criteria.SortBy}:p{criteria.Page}:s{criteria.PageSize}";
+        }
+
         private async Task EnsureCanManageClubAsync(Club club, int userId, string userRole)
         {
             if (club.UserId == userId || IsAdminRole(userRole))
@@ -954,5 +1013,10 @@ namespace backend.main.features.clubs
                 "other" => ClubType.Other,
                 _ => Enum.Parse<ClubType>(clubtype, true)
             };
+
+        private sealed record ClubListCachePayload(
+            List<ClubCacheDto> Items,
+            int TotalCount,
+            string Source);
     }
 }

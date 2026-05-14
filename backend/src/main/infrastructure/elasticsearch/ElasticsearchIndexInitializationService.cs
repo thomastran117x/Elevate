@@ -1,3 +1,4 @@
+using backend.main.features.clubs.search;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.events.search;
 using backend.main.shared.utilities.logger;
@@ -32,9 +33,11 @@ namespace backend.main.infrastructure.elasticsearch
             try
             {
                 var eventSearch = scope.ServiceProvider.GetRequiredService<IEventSearchService>();
+                var clubSearch = scope.ServiceProvider.GetRequiredService<IClubSearchService>();
                 var clubPostSearch = scope.ServiceProvider.GetRequiredService<IClubPostSearchService>();
 
                 await eventSearch.EnsureIndexAsync(stoppingToken);
+                await clubSearch.EnsureIndexAsync(stoppingToken);
                 await clubPostSearch.EnsureIndexAsync(stoppingToken);
 
                 Logger.Info("Elasticsearch indices verified during startup.");

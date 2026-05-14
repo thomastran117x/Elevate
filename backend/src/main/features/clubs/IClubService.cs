@@ -1,6 +1,7 @@
 using backend.main.features.clubs;
 
 using backend.main.features.clubs.contracts.responses;
+using backend.main.features.clubs.search;
 using backend.main.features.clubs.staff;
 using backend.main.features.clubs.versions;
 
@@ -8,11 +9,7 @@ namespace backend.main.features.clubs
 {
     public interface IClubService
     {
-        Task<List<Club>> GetAllClubs(
-            string? search = null,
-            int page = 1,
-            int pageSize = 20
-        );
+        Task<(List<Club> Clubs, int TotalCount, string Source)> GetAllClubs(ClubSearchCriteria criteria);
         Task<Club> GetClub(int clubId);
         Task<List<Club>> GetManagedClubsAsync(int userId);
         Task<ClubAccessInfo> GetClubAccessAsync(int clubId, int? userId, string? userRole = null);

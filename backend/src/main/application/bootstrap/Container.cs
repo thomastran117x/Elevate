@@ -9,6 +9,7 @@ using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.reviews;
+using backend.main.features.clubs.search;
 using backend.main.features.clubs.versions;
 using backend.main.features.events;
 using backend.main.features.events.analytics;
@@ -55,10 +56,19 @@ namespace backend.main.application.bootstrap
             return services;
         }
 
+        public static IServiceCollection AddClubSearchInfrastructure(this IServiceCollection services, IConfiguration config)
+        {
+            services.AddElasticsearchInfrastructure(config);
+            services.AddScoped<IClubSearchService, ClubSearchService>();
+
+            return services;
+        }
+
         public static IServiceCollection AddSearchInfrastructure(this IServiceCollection services, IConfiguration config)
         {
             services.AddElasticsearchInfrastructure(config);
             services.AddScoped<IEventSearchService, EventSearchService>();
+            services.AddScoped<IClubSearchService, ClubSearchService>();
             services.AddScoped<IClubPostSearchService, ClubPostSearchService>();
 
             return services;
@@ -103,7 +113,9 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IClubPostReindexService, ClubPostReindexService>();
             services.AddHostedService<ElasticsearchIndexInitializationService>();
             services.AddHostedService<ClubVersionCleanupService>();
+            services.AddScoped<IClubReindexService, ClubReindexService>();
             services.AddScoped<IEventReindexService, EventReindexService>();
+            services.AddScoped<IClubSearchOutboxWriter, ClubSearchOutboxWriter>();
             services.AddScoped<IEventSearchOutboxWriter, EventSearchOutboxWriter>();
             services.AddScoped<IPostCommentService, PostCommentService>();
             services.AddScoped<IEventRegistrationService, EventRegistrationService>();

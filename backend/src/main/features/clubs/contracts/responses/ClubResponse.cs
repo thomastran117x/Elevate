@@ -39,6 +39,14 @@ namespace backend.main.features.clubs.contracts.responses
         {
             get; set;
         }
+        public string? WebsiteUrl
+        {
+            get; set;
+        }
+        public string? Location
+        {
+            get; set;
+        }
         public ClubResponse(int id, int userId, string name, string description, string clubtype, string clubimage, int memberCount, int eventCount, int avaliableEventCount, int maxMemberCount, bool isPrivate, int currentVersionNumber)
         {
             Id = id;

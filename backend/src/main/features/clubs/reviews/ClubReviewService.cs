@@ -1,18 +1,26 @@
 using backend.main.shared.exceptions.http;
+using backend.main.features.clubs.search;
+using backend.main.infrastructure.database.core;
 
 namespace backend.main.features.clubs.reviews
 {
     public class ClubReviewService : IClubReviewService
     {
+        private readonly AppDatabaseContext _db;
         private readonly IClubReviewRepository _reviewRepository;
         private readonly IClubRepository _clubRepository;
+        private readonly IClubSearchOutboxWriter _outboxWriter;
 
         public ClubReviewService(
+            AppDatabaseContext db,
             IClubReviewRepository reviewRepository,
-            IClubRepository clubRepository)
+            IClubRepository clubRepository,
+            IClubSearchOutboxWriter outboxWriter)
         {
+            _db = db;
             _reviewRepository = reviewRepository;
             _clubRepository = clubRepository;
+            _outboxWriter = outboxWriter;
         }
 
         public async Task<ClubReview> CreateReviewAsync(int clubId, int userId, string title, int rating, string? comment)
@@ -88,10 +96,20 @@ namespace backend.main.features.clubs.reviews
         {
             var average = await _reviewRepository.GetAverageRatingAsync(clubId);
 
-            await _clubRepository.UpdatePartialAsync(clubId, club =>
+            var updated = await _clubRepository.UpdatePartialAsync(clubId, club =>
             {
                 club.Rating = average.HasValue ? Math.Round(average.Value, 1) : null;
             });
+
+            if (!updated)
+                return;
+
+            var club = await _db.Clubs.FindAsync(clubId);
+            if (club == null)
+                return;
+
+            _outboxWriter.StageUpsert(club);
+            await _db.SaveChangesAsync();
         }
     }
 }

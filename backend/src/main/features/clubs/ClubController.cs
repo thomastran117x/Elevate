@@ -1,6 +1,7 @@
 using backend.main.application.security;
 using backend.main.features.clubs.contracts.requests;
 using backend.main.features.clubs.contracts.responses;
+using backend.main.features.clubs.search;
 using backend.main.features.clubs.versions;
 using backend.main.features.clubs.versions.contracts.responses;
 using backend.main.shared.responses;
@@ -149,22 +150,48 @@ namespace backend.main.features.clubs
         [HttpGet("")]
         public async Task<IActionResult> GetClubs(
             [FromQuery] string? search,
+            [FromQuery] ClubType? clubType,
+            [FromQuery] ClubSortBy sortBy = ClubSortBy.Relevance,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
-            List<Club> clubs = await _clubService
-                .GetAllClubs(search, page, pageSize);
+            var criteria = PublicClubSearchCriteriaFactory.FromQuery(
+                search,
+                clubType,
+                sortBy,
+                page,
+                pageSize);
+            var (clubs, totalCount, source) = await _clubService.GetAllClubs(criteria);
 
             var accessMap = await ResolveAccessAsync(clubs.Select(club => club.Id));
             IEnumerable<ClubResponse> responses = clubs.Select(club => MapToResponse(club, accessMap[club.Id]));
+            var paged = new PagedResponse<ClubResponse>(responses, totalCount, criteria.Page, criteria.PageSize);
 
             return StatusCode(
                 200,
-                new ApiResponse<IEnumerable<ClubResponse>>(
+                new ApiResponse<PagedResponse<ClubResponse>>(
                     $"The clubs have been fetched successfully.",
-                    responses
+                    paged,
+                    source
                 )
             );
+        }
+
+        [HttpPost("search")]
+        public async Task<IActionResult> SearchClubs([FromBody] ClubSearchRequest request)
+        {
+            var criteria = PublicClubSearchCriteriaFactory.FromRequest(request);
+            var (clubs, totalCount, source) = await _clubService.GetAllClubs(criteria);
+
+            var accessMap = await ResolveAccessAsync(clubs.Select(club => club.Id));
+            var responses = clubs.Select(club => MapToResponse(club, accessMap[club.Id]));
+            var paged = new PagedResponse<ClubResponse>(responses, totalCount, criteria.Page, criteria.PageSize);
+
+            return Ok(new ApiResponse<PagedResponse<ClubResponse>>(
+                "The clubs have been fetched successfully.",
+                paged,
+                source
+            ));
         }
 
         [Authorize]
@@ -366,6 +393,8 @@ namespace backend.main.features.clubs
                 Phone = club.Phone,
                 Email = club.Email,
                 Rating = club.Rating,
+                WebsiteUrl = club.WebsiteUrl,
+                Location = club.Location,
                 IsOwner = access?.IsOwner ?? false,
                 IsManager = access?.IsManager ?? false,
                 IsVolunteer = access?.IsVolunteer ?? false,
@@ -426,5 +455,28 @@ namespace backend.main.features.clubs
 
         private static ClubVersionFieldChangeResponse MapToFieldChangeResponse(ClubVersionFieldChange change) =>
             new(change.Field, change.OldValue, change.NewValue);
+    }
+
+    [ApiController]
+    [Route("admin/clubs")]
+    [Authorize("AdminOnly")]
+    public class AdminClubsController : ControllerBase
+    {
+        private readonly IClubReindexService _reindexService;
+
+        public AdminClubsController(IClubReindexService reindexService)
+        {
+            _reindexService = reindexService;
+        }
+
+        [HttpPost("reindex")]
+        public async Task<IActionResult> ReindexClubs(CancellationToken cancellationToken)
+        {
+            var count = await _reindexService.ReindexAllAsync(cancellationToken);
+            return Ok(new ApiResponse<object>(
+                "Clubs reindexed successfully.",
+                new { indexed = count }
+            ));
+        }
     }
 }

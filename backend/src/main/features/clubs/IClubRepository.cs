@@ -1,4 +1,4 @@
-using backend.main.features.clubs;
+using backend.main.features.clubs.search;
 
 namespace backend.main.features.clubs
 {
@@ -12,11 +12,9 @@ namespace backend.main.features.clubs
         Task<bool> UpdatePartialAsync(int id, Action<Club> patch);
         Task<bool> DeleteAsync(int id);
         Task<bool> ExistsAsync(int id);
-        Task<List<Club>> SearchAsync(
-            string? search,
-            int page = 1,
-            int pageSize = 20);
+        Task<(List<Club> Items, int TotalCount)> SearchAsync(ClubSearchCriteria criteria);
         Task<List<Club>> GetByIdsAsync(IEnumerable<int> ids);
+        Task<List<Club>> GetAllForReindexAsync(int page, int pageSize, CancellationToken cancellationToken = default);
     }
 }
 

@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\backend\backend.csproj" />
+    <ProjectReference Include="..\backend\src\worker\club-indexer\club-indexer.csproj" />
   </ItemGroup>
 
 </Project>
