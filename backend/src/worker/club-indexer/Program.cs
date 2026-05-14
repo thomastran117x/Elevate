@@ -2,6 +2,9 @@ using backend.main.application.bootstrap;
 using backend.main.shared.utilities.logger;
 using backend.worker.club_indexer;
 
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
 Logger.Configure(options =>
 {
     options.EnableFileLogging = true;

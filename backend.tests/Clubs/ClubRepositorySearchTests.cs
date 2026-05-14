@@ -1,5 +1,6 @@
 using backend.main.features.clubs;
 using backend.main.features.clubs.search;
+using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
 
 using FluentAssertions;
@@ -24,6 +25,11 @@ public class ClubRepositorySearchTests
 
         await using var context = new AppDatabaseContext(options);
         await context.Database.EnsureCreatedAsync();
+
+        context.Users.AddRange(
+            new User { Id = 1, Email = "owner1@test.local", Usertype = "Organizer" },
+            new User { Id = 2, Email = "owner2@test.local", Usertype = "Organizer" },
+            new User { Id = 3, Email = "owner3@test.local", Usertype = "Organizer" });
 
         context.Clubs.AddRange(
             new Club

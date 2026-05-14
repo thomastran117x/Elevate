@@ -2,6 +2,9 @@ using backend.main.features.clubs.search;
 using backend.main.infrastructure.elasticsearch;
 using backend.main.shared.utilities.logger;
 
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
 namespace backend.worker.club_indexer;
 
 public sealed class ClubSearchIndexBootstrapService : BackgroundService

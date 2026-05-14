@@ -25,7 +25,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\backend\backend.csproj" />
-    <ProjectReference Include="..\backend\src\worker\club-indexer\club-indexer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\backend\src\worker\club-indexer\ClubIndexerMessageParser.cs" Link="Worker\ClubIndexerMessageParser.cs" />
   </ItemGroup>
 
 </Project>

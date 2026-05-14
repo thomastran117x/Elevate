@@ -2,6 +2,9 @@ using backend.main.shared.utilities.logger;
 
 using Confluent.Kafka;
 
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
 namespace backend.worker.club_indexer;
 
 public sealed class KafkaClubIndexerWorker : BackgroundService

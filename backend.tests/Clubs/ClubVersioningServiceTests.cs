@@ -4,6 +4,7 @@ using System.Text.Json;
 using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
+using backend.main.features.clubs.search;
 using backend.main.features.clubs.versions;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
@@ -603,6 +604,12 @@ public class ClubVersioningServiceTests
                 });
 
             var followService = new Mock<IFollowService>();
+            var searchService = new Mock<IClubSearchService>();
+            searchService
+                .Setup(service => service.SearchAsync(It.IsAny<ClubSearchCriteria>()))
+                .ReturnsAsync(new ClubSearchResult(new List<ClubSearchHit>(), 0));
+
+            var outboxWriter = new Mock<IClubSearchOutboxWriter>();
 
             var service = new ClubService(
                 db,
@@ -611,6 +618,8 @@ public class ClubVersioningServiceTests
                 fileUpload.Object,
                 followService.Object,
                 cache.Object,
+                searchService.Object,
+                outboxWriter.Object,
                 Options.Create(new ClubVersioningOptions
                 {
                     RollbackWindowDays = 90,
