@@ -1,4 +1,5 @@
 using backend.main.features.clubs;
+using backend.main.features.clubs.posts;
 using backend.main.features.events;
 
 namespace backend.main.seeders.clubs;
@@ -23,6 +24,19 @@ public sealed class WeekendMakersCommonsClubSeed : IClubSeedDefinitionSource
         ManagerEmail: $"makers.manager{SeedCatalogConstants.SeedEmailDomain}",
         VolunteerEmail: $"makers.volunteer{SeedCatalogConstants.SeedEmailDomain}",
         ThemeTags: ["makers", "diy", "creative"],
+        Posts:
+        [
+            new("Welcome to {club}", "{club} is a home for {theme} where imperfect projects are part of the fun.", PostType.Announcement, true, SeedClubAuthorRole.Owner, 45, 15, 138),
+            new("What Counts as a Project Here", "Loose repairs, paper prototypes, tiny experiments, and unfinished ideas all count. Bring what you’ve got.", PostType.General, true, SeedClubAuthorRole.Manager, 40, 11, 119),
+            new("Tool Table Notes", "If you borrow shared tools, reset the station before you leave so the next builder can jump in fast.", PostType.Announcement, false, SeedClubAuthorRole.Volunteer, 35, 7, 83),
+            new("Open Bench Sign-Up", "Reply if you need table space, a soldering station, or extra materials for the next build night.", PostType.Poll, false, SeedClubAuthorRole.Manager, 30, 5, 74),
+            new("Repair Cafe Recap", "The repair cafe was a reminder that practical making can be social, generous, and surprisingly funny.", PostType.Event, false, SeedClubAuthorRole.Owner, 25, 8, 91),
+            new("Pinned: Commons Etiquette", "Ask before rearranging someone’s setup, label shared materials clearly, and leave the bench better than you found it.", PostType.Announcement, true, SeedClubAuthorRole.Owner, 20, 14, 133),
+            new("Project Prompt Thread", "What small build would you actually finish in one evening if you had the right nudge from the group?", PostType.Poll, false, SeedClubAuthorRole.Volunteer, 16, 6, 71),
+            new("Member Showcase Call", "If you’ve wrapped a small project recently, post a photo and a one-line lesson from making it.", PostType.General, false, SeedClubAuthorRole.Manager, 11, 9, 86),
+            new("Craft Social Preview", "The next craft social is casual by design: simple materials, low stakes, and lots of room to talk while you work.", PostType.Event, false, SeedClubAuthorRole.Volunteer, 7, 5, 70),
+            new("Why We Like Tiny Wins", "Small finished things keep the momentum alive. {club} is built to make tiny wins feel visible and shared.", PostType.General, false, SeedClubAuthorRole.Owner, 4, 8, 79)
+        ],
         PublicSeries:
         [
             new("Open Bench Build Night", "A drop-in build session at {venue} where {club} members keep projects moving with peer help and shared tools.", EventCategory.Workshop, MakerVenues, ["build", "workshop"], 10, 1, 7, 23, 3, 34, 10, false, 3, 0),

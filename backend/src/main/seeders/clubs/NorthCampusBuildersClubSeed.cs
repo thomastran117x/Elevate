@@ -1,4 +1,5 @@
 using backend.main.features.clubs;
+using backend.main.features.clubs.posts;
 using backend.main.features.events;
 
 namespace backend.main.seeders.clubs;
@@ -23,6 +24,19 @@ public sealed class NorthCampusBuildersClubSeed : IClubSeedDefinitionSource
         ManagerEmail: $"builders.manager{SeedCatalogConstants.SeedEmailDomain}",
         VolunteerEmail: $"builders.volunteer{SeedCatalogConstants.SeedEmailDomain}",
         ThemeTags: ["startup", "product", "builders"],
+        Posts:
+        [
+            new("Welcome to {club}", "{club} exists for students building real things. Come as you are, bring the rough draft, and keep moving.", PostType.Announcement, true, SeedClubAuthorRole.Owner, 45, 20, 180),
+            new("How We Run Build Nights", "Build nights are practical: short kickoff, focused work block, and a fast debrief so momentum stays high.", PostType.Announcement, true, SeedClubAuthorRole.Manager, 41, 14, 146),
+            new("Mentor Office Hours Format", "Office hours work best when you arrive with one concrete bottleneck, one key question, and one next step in mind.", PostType.General, false, SeedClubAuthorRole.Manager, 36, 9, 101),
+            new("Volunteer Help Needed for Demo Setup", "We need a few extra hands to manage room flow, timers, and check-in before the next demo night.", PostType.Poll, false, SeedClubAuthorRole.Volunteer, 31, 5, 77),
+            new("Builder Resource Thread", "Share templates, decks, research tools, and founder reads that actually helped you make progress this semester.", PostType.General, false, SeedClubAuthorRole.Owner, 27, 12, 115),
+            new("Pitch Night Expectations", "Pitch nights are sharp but supportive. We care about clarity, audience fit, and honest next-step feedback.", PostType.Event, false, SeedClubAuthorRole.Manager, 22, 8, 96),
+            new("Member Win: Shipped This Week", "A quick celebration thread for launches, pilot tests, waitlists, and quiet progress that deserves some credit.", PostType.General, false, SeedClubAuthorRole.Volunteer, 17, 7, 88),
+            new("Pinned: Community Standards", "Be specific, be generous, and be honest. We want ambitious conversations without performative noise.", PostType.Announcement, true, SeedClubAuthorRole.Owner, 13, 16, 153),
+            new("Breakfast Forum Roll Call", "If you’re coming to the next breakfast forum, reply with the problem you’re currently untangling so tables can be grouped well.", PostType.Poll, false, SeedClubAuthorRole.Manager, 8, 6, 74),
+            new("Why We Keep Things Practical", "The culture of {club} is built around execution. Fewer speeches, more reps, better questions, stronger follow-through.", PostType.General, false, SeedClubAuthorRole.Owner, 4, 11, 97)
+        ],
         PublicSeries:
         [
             new("Founder Sprint Lab", "Week {number} of the sprint lab helps {club} members sharpen priorities, test assumptions, and keep shipping momentum at {venue}.", EventCategory.Workshop, CampusInnovationVenues, ["startup", "sprint"], 10, 1, 7, 22, 2, 44, 5, false, 4, 5),

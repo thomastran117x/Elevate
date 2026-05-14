@@ -1,4 +1,5 @@
 using backend.main.features.clubs;
+using backend.main.features.clubs.posts;
 using backend.main.features.events;
 
 namespace backend.main.seeders.clubs;
@@ -23,6 +24,19 @@ public sealed class HarbourStridersClubSeed : IClubSeedDefinitionSource
         ManagerEmail: $"harbour.manager{SeedCatalogConstants.SeedEmailDomain}",
         VolunteerEmail: $"harbour.volunteer{SeedCatalogConstants.SeedEmailDomain}",
         ThemeTags: ["running", "waterfront", "fitness"],
+        Posts:
+        [
+            new("Welcome to {club}", "We’re building a {tone} home for {theme} in {city}. Start with one easy session and meet us by the water.", PostType.Announcement, true, SeedClubAuthorRole.Owner, 45, 18, 140),
+            new("This Month's Training Rhythm", "Here’s the current training rhythm for {club}: sunrise runs, tempo work, and long-run weekends that stay friendly to mixed paces.", PostType.Announcement, true, SeedClubAuthorRole.Manager, 42, 12, 110),
+            new("Route Notes from {location}", "A quick route update: expect breezy stretches, shared pathways, and strong coffee options after the run.", PostType.General, false, SeedClubAuthorRole.Volunteer, 38, 6, 84),
+            new("Why We Warm Up Together", "The group warm-up is part of the culture here. It keeps the pace calm, the energy social, and the start line less intimidating.", PostType.General, false, SeedClubAuthorRole.Owner, 34, 8, 92),
+            new("Volunteer Call for Water Table Support", "We’re looking for two extra hands to help with check-in and finish-line hydration at upcoming long-run meetups.", PostType.Poll, false, SeedClubAuthorRole.Volunteer, 29, 4, 70),
+            new("First-Time Runner FAQ", "If you’re new to club running, arrive ten minutes early, ask for the beginner group, and don’t worry about speed.", PostType.General, false, SeedClubAuthorRole.Manager, 24, 10, 101),
+            new("Photo Recap: Sunrise Loop", "Thanks to everyone who came out for the latest waterfront loop. The mood was light, the pacing was steady, and the views were unreal.", PostType.Event, false, SeedClubAuthorRole.Volunteer, 18, 9, 96),
+            new("Pinned: Pace Group Guide", "We’ve pinned a simple guide to help members choose the right pace group and know what kind of session to expect.", PostType.Announcement, true, SeedClubAuthorRole.Manager, 14, 15, 128),
+            new("Member Win of the Week", "Shout-out to everyone who showed up consistently this month. Quiet consistency is a huge part of the {club} culture.", PostType.General, false, SeedClubAuthorRole.Owner, 9, 7, 76),
+            new("What to Expect at Community Long Run", "Long-run mornings are conversational, host-led, and designed so people can scale distance without feeling left behind.", PostType.Event, false, SeedClubAuthorRole.Manager, 4, 5, 67)
+        ],
         PublicSeries:
         [
             new("Sunrise Run Session", "Week {number} of {club}'s sunrise run series keeps the {theme} routine steady with easy mileage and form cues at {venue}.", EventCategory.Fitness, WaterfrontVenues, ["sunrise", "cardio"], 10, 2, 7, 11, 2, 48, 0, false, 6, 0),

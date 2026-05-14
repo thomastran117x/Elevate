@@ -1,4 +1,5 @@
 using backend.main.features.clubs;
+using backend.main.features.clubs.posts;
 using backend.main.features.events;
 
 namespace backend.main.seeders;
@@ -50,6 +51,23 @@ public sealed record SeedEventDefinition(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
 
+public enum SeedClubAuthorRole
+{
+    Owner,
+    Manager,
+    Volunteer
+}
+
+public sealed record SeedClubPostDefinition(
+    string TitleTemplate,
+    string ContentTemplate,
+    PostType PostType,
+    bool IsPinned,
+    SeedClubAuthorRole AuthorRole,
+    int DayOffset,
+    int LikesCount = 0,
+    int ViewCount = 0);
+
 public sealed record SeedClubDefinition(
     string Slug,
     string Name,
@@ -68,6 +86,7 @@ public sealed record SeedClubDefinition(
     string ManagerEmail,
     string VolunteerEmail,
     IReadOnlyList<string> ThemeTags,
+    IReadOnlyList<SeedClubPostDefinition> Posts,
     IReadOnlyList<SeedEventSeriesDefinition> PublicSeries,
     IReadOnlyList<SeedEventSeriesDefinition> PrivateSeries);
 

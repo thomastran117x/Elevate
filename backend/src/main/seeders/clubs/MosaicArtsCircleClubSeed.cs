@@ -1,4 +1,5 @@
 using backend.main.features.clubs;
+using backend.main.features.clubs.posts;
 using backend.main.features.events;
 
 namespace backend.main.seeders.clubs;
@@ -23,6 +24,19 @@ public sealed class MosaicArtsCircleClubSeed : IClubSeedDefinitionSource
         ManagerEmail: $"mosaic.manager{SeedCatalogConstants.SeedEmailDomain}",
         VolunteerEmail: $"mosaic.volunteer{SeedCatalogConstants.SeedEmailDomain}",
         ThemeTags: ["art", "sketching", "gallery"],
+        Posts:
+        [
+            new("Welcome to {club}", "{club} is a soft landing place for {theme}, whether you’re experienced or just opening a sketchbook again.", PostType.Announcement, true, SeedClubAuthorRole.Owner, 45, 16, 144),
+            new("How Crit Nights Work", "Crit nights are generous, specific, and paced so nobody feels steamrolled by louder voices in the room.", PostType.Announcement, true, SeedClubAuthorRole.Manager, 40, 10, 121),
+            new("Favourite Materials Thread", "Drop the materials you keep reaching for lately: pencils, gouache, collage scraps, brush pens, anything.", PostType.General, false, SeedClubAuthorRole.Volunteer, 35, 8, 81),
+            new("Volunteer Help for Install Day", "We need a few steady hands for signage, framing support, and room reset before the next display.", PostType.Poll, false, SeedClubAuthorRole.Volunteer, 30, 4, 65),
+            new("Sketchbook Social Recap", "The latest sketch night had calm energy, great table mixing, and some wonderful risk-taking with color.", PostType.Event, false, SeedClubAuthorRole.Manager, 25, 9, 93),
+            new("Pinned: Feedback Norms", "Describe what you see, ask what the artist wants help with, and keep critique useful instead of performative.", PostType.Announcement, true, SeedClubAuthorRole.Owner, 20, 15, 137),
+            new("Gallery Walk Notes", "Slow-looking changes the conversation. The best gallery nights happen when people stop rushing to have the right take.", PostType.General, false, SeedClubAuthorRole.Owner, 16, 7, 77),
+            new("Community Prompt of the Week", "This week’s prompt: make something around the idea of light, repetition, or neighborhood memory.", PostType.General, false, SeedClubAuthorRole.Volunteer, 11, 6, 73),
+            new("Mural Meetup Roll Call", "If you’re joining the next mural planning meetup, tell us whether you want design work, paint help, or logistics tasks.", PostType.Poll, false, SeedClubAuthorRole.Manager, 7, 5, 68),
+            new("Why We Keep the Room Gentle", "Creative growth takes courage. {club} works best when the room feels safer than the average critique space.", PostType.General, false, SeedClubAuthorRole.Owner, 4, 8, 82)
+        ],
         PublicSeries:
         [
             new("Sketchbook Social", "A hosted sketch night for {club} that keeps the {theme} vibe accessible with prompts, playlists, and table mixing at {venue}.", EventCategory.Arts, ArtVenues, ["sketching", "social"], 10, 1, 7, 22, 2, 26, 12, false, 2, 2),

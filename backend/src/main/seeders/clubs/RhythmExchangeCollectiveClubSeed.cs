@@ -1,4 +1,5 @@
 using backend.main.features.clubs;
+using backend.main.features.clubs.posts;
 using backend.main.features.events;
 
 namespace backend.main.seeders.clubs;
@@ -23,6 +24,19 @@ public sealed class RhythmExchangeCollectiveClubSeed : IClubSeedDefinitionSource
         ManagerEmail: $"rhythm.manager{SeedCatalogConstants.SeedEmailDomain}",
         VolunteerEmail: $"rhythm.volunteer{SeedCatalogConstants.SeedEmailDomain}",
         ThemeTags: ["music", "dance", "rhythm"],
+        Posts:
+        [
+            new("Welcome to {club}", "{club} is for people who want to explore {theme} without needing perfect technique on day one.", PostType.Announcement, true, SeedClubAuthorRole.Owner, 45, 18, 151),
+            new("What Beginner-Friendly Means Here", "We slow things down, explain transitions clearly, and keep partner rotations kind and predictable.", PostType.Announcement, true, SeedClubAuthorRole.Manager, 40, 12, 130),
+            new("Playlist Drop Thread", "Share a song that makes you want to move. We use member picks to keep the room feeling alive and collective.", PostType.General, false, SeedClubAuthorRole.Volunteer, 35, 9, 87),
+            new("Volunteer Ask for Check-In Crew", "We’d love a few extra people to help greet newcomers and keep the first fifteen minutes feeling easy.", PostType.Poll, false, SeedClubAuthorRole.Volunteer, 30, 5, 69),
+            new("Live Band Night Recap", "The last live band social had beautiful energy and a lot of brave first dances. Thanks for making it feel open.", PostType.Event, false, SeedClubAuthorRole.Manager, 25, 8, 95),
+            new("Pinned: Floor Etiquette", "Respect the shared floor, rotate kindly, and remember that confidence grows fastest in a room without ego.", PostType.Announcement, true, SeedClubAuthorRole.Owner, 20, 14, 140),
+            new("Movement Practice Tip", "If timing feels hard, simplify your footwork and listen for the groove before trying to add style.", PostType.General, false, SeedClubAuthorRole.Owner, 16, 7, 76),
+            new("Partnerwork Workshop Sign-Up", "Tell us if you’re joining the next workshop and whether you want fundamentals, musicality, or turn-pattern reps.", PostType.Poll, false, SeedClubAuthorRole.Manager, 11, 6, 71),
+            new("Member Playlist Spotlight", "This week’s community playlist has warm-up tracks, social-floor picks, and a few quiet gems for the ride home.", PostType.General, false, SeedClubAuthorRole.Volunteer, 7, 6, 74),
+            new("Why We Teach Through Joy", "The fastest way to stay in the scene is to make practice feel good. That’s a big part of the {club} philosophy.", PostType.General, false, SeedClubAuthorRole.Owner, 4, 9, 84)
+        ],
         PublicSeries:
         [
             new("Groove Basics Night", "{club} teaches week {number} of its foundation series with simple movement, partner rotation, and a {tone} host flow at {venue}.", EventCategory.Music, RhythmVenues, ["dance", "beginner"], 10, 1, 7, 22, 2, 50, 10, false, 4, 0),

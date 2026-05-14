@@ -1,4 +1,5 @@
 using backend.main.features.clubs;
+using backend.main.features.clubs.posts;
 using backend.main.features.events;
 
 namespace backend.main.seeders.clubs;
@@ -23,6 +24,19 @@ public sealed class NeighbourhoodKitchenTableClubSeed : IClubSeedDefinitionSourc
         ManagerEmail: $"kitchen.manager{SeedCatalogConstants.SeedEmailDomain}",
         VolunteerEmail: $"kitchen.volunteer{SeedCatalogConstants.SeedEmailDomain}",
         ThemeTags: ["food", "cooking", "community"],
+        Posts:
+        [
+            new("Welcome to {club}", "{club} gathers around {theme} with practical recipes, gentle hosting, and a real neighborhood feel.", PostType.Announcement, true, SeedClubAuthorRole.Owner, 45, 17, 147),
+            new("What a Supper Night Feels Like", "Expect shared prep, simple tasks, and a room where conversation matters as much as the final plate.", PostType.Announcement, true, SeedClubAuthorRole.Manager, 40, 11, 123),
+            new("Kitchen Comfort Check", "If kitchens make you nervous, you’re exactly the kind of member we want to support. Start with one station and build from there.", PostType.General, false, SeedClubAuthorRole.Volunteer, 35, 9, 85),
+            new("Volunteer Ask for Cleanup Crew", "We’re looking for a few extra members willing to help with dish flow and room reset after shared meals.", PostType.Poll, false, SeedClubAuthorRole.Volunteer, 30, 4, 67),
+            new("Potluck Recap", "The last potluck felt beautifully local: generous portions, great stories, and a lot of recipe swapping at the tables.", PostType.Event, false, SeedClubAuthorRole.Manager, 25, 8, 90),
+            new("Pinned: Allergy and Safety Notes", "Label ingredients clearly, ask questions early, and help keep the kitchen calm and communicative.", PostType.Announcement, true, SeedClubAuthorRole.Owner, 20, 15, 142),
+            new("Favourite Pantry Staples", "What ingredients do you always keep around because they make weekday cooking faster and less stressful?", PostType.Poll, false, SeedClubAuthorRole.Owner, 16, 7, 79),
+            new("Recipe Thread of the Week", "Share one reliable dish that feels generous without being complicated. Those are the recipes we come back to.", PostType.General, false, SeedClubAuthorRole.Volunteer, 11, 6, 73),
+            new("Bake Table Preview", "The next bake table will stay simple and social, with one core recipe and plenty of room for conversation.", PostType.Event, false, SeedClubAuthorRole.Manager, 7, 6, 76),
+            new("Why Food Clubs Matter", "Shared meals build trust quickly. {club} is really about making a city feel smaller and more human, one table at a time.", PostType.General, false, SeedClubAuthorRole.Owner, 4, 10, 86)
+        ],
         PublicSeries:
         [
             new("Weeknight Supper Club", "{club} gathers around a practical shared meal with rotating prep teams and table conversation hosted at {venue}.", EventCategory.Food, KitchenVenues, ["supper", "shared-meal"], 10, 1, 7, 22, 3, 24, 15, false, 2, 3),

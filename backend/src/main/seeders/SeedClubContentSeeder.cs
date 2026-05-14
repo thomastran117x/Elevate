@@ -1,4 +1,6 @@
 using backend.main.features.clubs;
+using backend.main.features.clubs.posts;
+using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.search;
 using backend.main.features.clubs.staff;
 using backend.main.features.events;
@@ -14,6 +16,7 @@ public sealed class SeedClubContentSeeder : ISeeder
 {
     private readonly AppDatabaseContext _dbContext;
     private readonly IEventSearchOutboxWriter _eventOutboxWriter;
+    private readonly IClubPostSearchOutboxWriter _clubPostOutboxWriter;
     private readonly IClubSearchOutboxWriter _clubOutboxWriter;
     private readonly IEnumerable<IClubSeedDefinitionSource> _clubSeedSources;
     private readonly ILogger<SeedClubContentSeeder> _logger;
@@ -21,12 +24,14 @@ public sealed class SeedClubContentSeeder : ISeeder
     public SeedClubContentSeeder(
         AppDatabaseContext dbContext,
         IEventSearchOutboxWriter eventOutboxWriter,
+        IClubPostSearchOutboxWriter clubPostOutboxWriter,
         IClubSearchOutboxWriter clubOutboxWriter,
         IEnumerable<IClubSeedDefinitionSource> clubSeedSources,
         ILogger<SeedClubContentSeeder> logger)
     {
         _dbContext = dbContext;
         _eventOutboxWriter = eventOutboxWriter;
+        _clubPostOutboxWriter = clubPostOutboxWriter;
         _clubOutboxWriter = clubOutboxWriter;
         _clubSeedSources = clubSeedSources;
         _logger = logger;
@@ -102,6 +107,9 @@ public sealed class SeedClubContentSeeder : ISeeder
         var reconciledEventCount = 0;
         var touchedEventCount = 0;
         var removedEventCount = 0;
+        var reconciledPostCount = 0;
+        var touchedPostCount = 0;
+        var removedPostCount = 0;
 
         foreach (var definition in clubDefinitions)
         {
@@ -114,9 +122,19 @@ public sealed class SeedClubContentSeeder : ISeeder
                 seasonStartUtc,
                 cancellationToken);
 
+            var postChanges = await ReconcilePostsAsync(
+                club,
+                definition,
+                seasonStartUtc,
+                usersByEmail,
+                cancellationToken);
+
             reconciledEventCount += eventChanges.TotalEvents;
             touchedEventCount += eventChanges.UpsertedOrUpdatedCount;
             removedEventCount += eventChanges.RemovedCount;
+            reconciledPostCount += postChanges.TotalPosts;
+            touchedPostCount += postChanges.UpsertedOrUpdatedCount;
+            removedPostCount += postChanges.RemovedCount;
         }
 
         var staleSeedClubs = seededClubs
@@ -124,7 +142,11 @@ public sealed class SeedClubContentSeeder : ISeeder
             .ToList();
 
         foreach (var staleClub in staleSeedClubs)
-            removedEventCount += await RemoveClubAsync(staleClub, cancellationToken);
+        {
+            var removalCounts = await RemoveClubAsync(staleClub, cancellationToken);
+            removedEventCount += removalCounts.RemovedEventCount;
+            removedPostCount += removalCounts.RemovedPostCount;
+        }
 
         await RefreshClubEventCountsAsync(currentClubs.Select(club => club.Id).ToList(), cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -132,11 +154,14 @@ public sealed class SeedClubContentSeeder : ISeeder
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "[Seeders] Reconciled themed clubs. Clubs: {ClubCount}, events: {EventCount}, touched events: {TouchedEventCount}, removed events: {RemovedEventCount}.",
+            "[Seeders] Reconciled themed clubs. Clubs: {ClubCount}, events: {EventCount}, posts: {PostCount}, touched events: {TouchedEventCount}, removed events: {RemovedEventCount}, touched posts: {TouchedPostCount}, removed posts: {RemovedPostCount}.",
             currentClubs.Count,
             reconciledEventCount,
+            reconciledPostCount,
             touchedEventCount,
-            removedEventCount);
+            removedEventCount,
+            touchedPostCount,
+            removedPostCount);
     }
 
     private static IEnumerable<string> GetRequiredUserEmails(SeedClubDefinition definition)
@@ -332,19 +357,86 @@ public sealed class SeedClubContentSeeder : ISeeder
         return (desiredEvents.Count, upsertedOrUpdatedCount, removedCount);
     }
 
-    private async Task<int> RemoveClubAsync(Club staleClub, CancellationToken cancellationToken)
+    private async Task<(int TotalPosts, int UpsertedOrUpdatedCount, int RemovedCount)> ReconcilePostsAsync(
+        Club club,
+        SeedClubDefinition definition,
+        DateTime seasonStartUtc,
+        IReadOnlyDictionary<string, User> usersByEmail,
+        CancellationToken cancellationToken)
+    {
+        var desiredPosts = ThematicClubPostFactory.BuildPosts(definition, seasonStartUtc);
+        var desiredByTitle = desiredPosts.ToDictionary(post => post.Title, StringComparer.OrdinalIgnoreCase);
+        var seedAuthorIds = new[]
+        {
+            usersByEmail[definition.OwnerEmail].Id,
+            usersByEmail[definition.ManagerEmail].Id,
+            usersByEmail[definition.VolunteerEmail].Id
+        }.ToHashSet();
+
+        var existingPosts = await _dbContext.ClubPosts
+            .Where(post => post.ClubId == club.Id)
+            .ToListAsync(cancellationToken);
+        var managedExistingPosts = existingPosts
+            .Where(post => seedAuthorIds.Contains(post.UserId))
+            .ToDictionary(post => post.Title, StringComparer.OrdinalIgnoreCase);
+
+        var upsertedOrUpdatedCount = 0;
+
+        foreach (var desiredPost in desiredPosts)
+        {
+            var authorId = ResolveAuthorId(desiredPost.AuthorRole, definition, usersByEmail);
+
+            if (managedExistingPosts.TryGetValue(desiredPost.Title, out var existing))
+            {
+                if (ApplyPostDefinition(existing, desiredPost, club.Id, authorId))
+                {
+                    _clubPostOutboxWriter.StageUpsert(existing);
+                    upsertedOrUpdatedCount++;
+                }
+
+                continue;
+            }
+
+            var created = CreatePost(club.Id, authorId, desiredPost);
+            _dbContext.ClubPosts.Add(created);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            _clubPostOutboxWriter.StageUpsert(created);
+            upsertedOrUpdatedCount++;
+        }
+
+        var removedCount = 0;
+
+        foreach (var managedPost in managedExistingPosts.Values)
+        {
+            if (desiredByTitle.ContainsKey(managedPost.Title))
+                continue;
+
+            _clubPostOutboxWriter.StageDelete(managedPost.Id);
+            _dbContext.ClubPosts.Remove(managedPost);
+            removedCount++;
+        }
+
+        return (desiredPosts.Count, upsertedOrUpdatedCount, removedCount);
+    }
+
+    private async Task<(int RemovedEventCount, int RemovedPostCount)> RemoveClubAsync(Club staleClub, CancellationToken cancellationToken)
     {
         var clubEvents = await _dbContext.Events
             .Where(ev => ev.ClubId == staleClub.Id)
             .ToListAsync(cancellationToken);
+        var clubPosts = await _dbContext.ClubPosts
+            .Where(post => post.ClubId == staleClub.Id)
+            .ToListAsync(cancellationToken);
 
         foreach (var clubEvent in clubEvents)
             _eventOutboxWriter.StageDelete(clubEvent.Id);
+        foreach (var clubPost in clubPosts)
+            _clubPostOutboxWriter.StageDelete(clubPost.Id);
 
         _clubOutboxWriter.StageDelete(staleClub.Id);
         _dbContext.Clubs.Remove(staleClub);
 
-        return clubEvents.Count;
+        return (clubEvents.Count, clubPosts.Count);
     }
 
     private async Task RefreshClubEventCountsAsync(
@@ -434,6 +526,23 @@ public sealed class SeedClubContentSeeder : ISeeder
             Latitude = definition.Latitude,
             Longitude = definition.Longitude,
             Tags = definition.Tags.ToList()
+        };
+    }
+
+    private static ClubPost CreatePost(int clubId, int userId, ResolvedSeedClubPostDefinition definition)
+    {
+        return new ClubPost
+        {
+            ClubId = clubId,
+            UserId = userId,
+            Title = definition.Title,
+            Content = definition.Content,
+            PostType = definition.PostType,
+            LikesCount = definition.LikesCount,
+            ViewCount = definition.ViewCount,
+            IsPinned = definition.IsPinned,
+            CreatedAt = definition.CreatedAtUtc,
+            UpdatedAt = definition.UpdatedAtUtc
         };
     }
 
@@ -527,6 +636,82 @@ public sealed class SeedClubContentSeeder : ISeeder
         }
 
         return changed;
+    }
+
+    private static bool ApplyPostDefinition(
+        ClubPost existing,
+        ResolvedSeedClubPostDefinition definition,
+        int clubId,
+        int authorId)
+    {
+        var changed = false;
+
+        if (existing.ClubId != clubId)
+        {
+            existing.ClubId = clubId;
+            changed = true;
+        }
+
+        if (existing.UserId != authorId)
+        {
+            existing.UserId = authorId;
+            changed = true;
+        }
+
+        changed |= SetIfDifferent(existing.Title, definition.Title, value => existing.Title = value ?? string.Empty);
+        changed |= SetIfDifferent(existing.Content, definition.Content, value => existing.Content = value ?? string.Empty);
+
+        if (existing.PostType != definition.PostType)
+        {
+            existing.PostType = definition.PostType;
+            changed = true;
+        }
+
+        if (existing.IsPinned != definition.IsPinned)
+        {
+            existing.IsPinned = definition.IsPinned;
+            changed = true;
+        }
+
+        if (existing.LikesCount != definition.LikesCount)
+        {
+            existing.LikesCount = definition.LikesCount;
+            changed = true;
+        }
+
+        if (existing.ViewCount != definition.ViewCount)
+        {
+            existing.ViewCount = definition.ViewCount;
+            changed = true;
+        }
+
+        if (existing.CreatedAt != definition.CreatedAtUtc)
+        {
+            existing.CreatedAt = definition.CreatedAtUtc;
+            changed = true;
+        }
+
+        if (existing.UpdatedAt != definition.UpdatedAtUtc)
+        {
+            existing.UpdatedAt = definition.UpdatedAtUtc;
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static int ResolveAuthorId(
+        SeedClubAuthorRole authorRole,
+        SeedClubDefinition definition,
+        IReadOnlyDictionary<string, User> usersByEmail)
+    {
+        return authorRole switch
+        {
+            SeedClubAuthorRole.Owner => usersByEmail[definition.OwnerEmail].Id,
+            SeedClubAuthorRole.Manager => usersByEmail[definition.ManagerEmail].Id,
+            SeedClubAuthorRole.Volunteer => usersByEmail[definition.VolunteerEmail].Id,
+            _ => throw new InvalidOperationException($"Unsupported seeded author role '{authorRole}'.")
+        };
     }
 
     private static bool IsManagedSeedEvent(Events ev, string clubSlug)

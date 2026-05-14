@@ -1,4 +1,6 @@
 using backend.main.features.clubs;
+using backend.main.features.clubs.posts;
+using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.search;
 using backend.main.features.clubs.staff;
 using backend.main.features.events;
@@ -104,6 +106,35 @@ public class ThematicSeedersTests
     }
 
     [Fact]
+    public async Task ThematicSeeders_ShouldCreateOneHundredClubPosts_WithExpectedPerClubCounts()
+    {
+        await using var db = await CreateDbContextAsync();
+
+        await RunSeedersAsync(db);
+
+        var clubs = await db.Clubs
+            .OrderBy(club => club.Name)
+            .ToListAsync();
+        var posts = await db.ClubPosts
+            .OrderBy(post => post.ClubId)
+            .ThenBy(post => post.CreatedAt)
+            .ToListAsync();
+
+        posts.Should().HaveCount(100);
+
+        foreach (var definition in ClubSources.Select(source => source.Definition))
+        {
+            var club = clubs.Single(entry => entry.Name == definition.Name);
+            var clubPosts = posts.Where(post => post.ClubId == club.Id).ToList();
+
+            clubPosts.Should().HaveCount(10);
+            clubPosts.Count(post => post.IsPinned).Should().BeGreaterThanOrEqualTo(2);
+            clubPosts.Should().Contain(post => post.PostType == PostType.Announcement);
+            clubPosts.Should().Contain(post => post.PostType == PostType.General);
+        }
+    }
+
+    [Fact]
     public async Task ThematicSeeders_ShouldPruneStaleSeedContent_AndRestoreDriftOnRerun()
     {
         await using var db = await CreateDbContextAsync();
@@ -119,6 +150,10 @@ public class ThematicSeedersTests
             .OrderBy(ev => ev.Name)
             .FirstAsync();
         var extraStaffUser = await db.Users.SingleAsync(user => user.Email == $"builders.owner{SeedCatalogConstants.SeedEmailDomain}");
+        var originalManagedPost = await db.ClubPosts
+            .Where(post => post.ClubId == harbourClub.Id)
+            .OrderBy(post => post.Title)
+            .FirstAsync();
 
         db.ClubStaff.Add(new ClubStaff
         {
@@ -157,7 +192,22 @@ public class ThematicSeedersTests
             ]
         });
 
+        db.ClubPosts.Add(new ClubPost
+        {
+            ClubId = harbourClub.Id,
+            UserId = harbourClub.UserId,
+            Title = "Legacy Seed Post",
+            Content = "Legacy seeded post that should be removed.",
+            PostType = PostType.General,
+            LikesCount = 1,
+            ViewCount = 9,
+            IsPinned = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+
         originalManagedEvent.Description = "Drifted description";
+        originalManagedPost.Content = "Drifted post content";
 
         var legacyUser = new User
         {
@@ -219,14 +269,21 @@ public class ThematicSeedersTests
         var refreshedHarbourEvents = await db.Events
             .Where(ev => ev.ClubId == harbourClub.Id)
             .ToListAsync();
+        var refreshedHarbourPosts = await db.ClubPosts
+            .Where(post => post.ClubId == harbourClub.Id)
+            .ToListAsync();
         var refreshedHarbourStaff = await db.ClubStaff
             .Where(entry => entry.ClubId == harbourClub.Id)
             .ToListAsync();
         var refreshedOriginalEvent = refreshedHarbourEvents.Single(ev => ev.Id == originalManagedEvent.Id);
+        var refreshedOriginalPost = refreshedHarbourPosts.Single(post => post.Id == originalManagedPost.Id);
 
         refreshedHarbourEvents.Should().HaveCount(55);
+        refreshedHarbourPosts.Should().HaveCount(10);
         refreshedHarbourEvents.Should().NotContain(ev => ev.Name == "Legacy Seed Event 99");
+        refreshedHarbourPosts.Should().NotContain(post => post.Title == "Legacy Seed Post");
         refreshedOriginalEvent.Description.Should().NotBe("Drifted description");
+        refreshedOriginalPost.Content.Should().NotBe("Drifted post content");
         refreshedHarbourStaff.Should().HaveCount(2);
         refreshedHarbourStaff.Should().NotContain(entry => entry.UserId == extraStaffUser.Id);
         (await db.Clubs.AnyAsync(club => club.Name == "Legacy Seed Club")).Should().BeFalse();
@@ -255,6 +312,7 @@ public class ThematicSeedersTests
         return new SeedClubContentSeeder(
             db,
             new EventSearchOutboxWriter(db),
+            new ClubPostSearchOutboxWriter(db),
             new ClubSearchOutboxWriter(db),
             ClubSources,
             NullLogger<SeedClubContentSeeder>.Instance);

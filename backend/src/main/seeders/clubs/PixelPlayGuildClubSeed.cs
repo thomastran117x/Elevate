@@ -1,4 +1,5 @@
 using backend.main.features.clubs;
+using backend.main.features.clubs.posts;
 using backend.main.features.events;
 
 namespace backend.main.seeders.clubs;
@@ -23,6 +24,19 @@ public sealed class PixelPlayGuildClubSeed : IClubSeedDefinitionSource
         ManagerEmail: $"pixel.manager{SeedCatalogConstants.SeedEmailDomain}",
         VolunteerEmail: $"pixel.volunteer{SeedCatalogConstants.SeedEmailDomain}",
         ThemeTags: ["gaming", "co-op", "arcade"],
+        Posts:
+        [
+            new("Welcome to {club}", "{club} is a home for {theme} where new players and longtime regulars can actually enjoy the same room.", PostType.Announcement, true, SeedClubAuthorRole.Owner, 45, 21, 172),
+            new("How Tournament Nights Stay Friendly", "We seed brackets clearly, explain formats upfront, and make sure casual players still have a great night.", PostType.Announcement, true, SeedClubAuthorRole.Manager, 40, 13, 145),
+            new("Current Co-Op Favorites", "Drop the co-op games that have been working best for conversation, quick onboarding, and big laughs lately.", PostType.General, false, SeedClubAuthorRole.Volunteer, 35, 10, 93),
+            new("Volunteer Help for Setup", "We need a couple more hands for controller checks, signage, and newcomer table support before the next event.", PostType.Poll, false, SeedClubAuthorRole.Volunteer, 30, 5, 74),
+            new("Retro Replay Recap", "The latest retro night proved again that a good throwback session can carry a whole room on pure charm.", PostType.Event, false, SeedClubAuthorRole.Manager, 25, 8, 89),
+            new("Pinned: Community Play Rules", "Respect the queue, coach kindly, and don’t let skill level decide who gets included at the station.", PostType.Announcement, true, SeedClubAuthorRole.Owner, 20, 16, 149),
+            new("New Player Thread", "If you’re brand new to the club, tell us what kinds of games you enjoy and we’ll point you to the right tables.", PostType.Poll, false, SeedClubAuthorRole.Owner, 16, 7, 81),
+            new("Guild Recommendation Swap", "Share one game you think more members should try and why it fits the room’s vibe.", PostType.General, false, SeedClubAuthorRole.Volunteer, 11, 6, 72),
+            new("Tournament Format Preview", "The next bracket night will have shorter rounds, better station rotation, and more breathing room between matches.", PostType.Event, false, SeedClubAuthorRole.Manager, 7, 7, 79),
+            new("Why We Care About the Room Feel", "A strong gaming community isn’t just about titles or skill. It’s about whether people want to come back next week.", PostType.General, false, SeedClubAuthorRole.Owner, 4, 9, 88)
+        ],
         PublicSeries:
         [
             new("Couch Co-Op Carnival", "A rotating co-op night where {club} members jump into easy-entry games, cheer each other on, and swap stations at {venue}.", EventCategory.Gaming, GameVenues, ["co-op", "party-games"], 10, 1, 7, 23, 3, 64, 8, false, 4, 0),

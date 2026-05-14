@@ -1,4 +1,5 @@
 using backend.main.features.clubs;
+using backend.main.features.clubs.posts;
 using backend.main.features.events;
 
 namespace backend.main.seeders.clubs;
@@ -23,6 +24,19 @@ public sealed class LanternSocialCollectiveClubSeed : IClubSeedDefinitionSource
         ManagerEmail: $"lantern.manager{SeedCatalogConstants.SeedEmailDomain}",
         VolunteerEmail: $"lantern.volunteer{SeedCatalogConstants.SeedEmailDomain}",
         ThemeTags: ["social", "community", "city-life"],
+        Posts:
+        [
+            new("Welcome to {club}", "{club} is built for {theme}. You don’t need to be outgoing, just willing to show up once.", PostType.Announcement, true, SeedClubAuthorRole.Owner, 45, 19, 166),
+            new("How Our Mixers Work", "We use hosts, prompts, and small-group resets so conversations stay easy and nobody gets stranded in the room.", PostType.Announcement, true, SeedClubAuthorRole.Manager, 40, 13, 141),
+            new("Best Advice for First-Timers", "Come a little early, tell a host it’s your first time, and let the structure do most of the heavy lifting.", PostType.General, false, SeedClubAuthorRole.Volunteer, 35, 10, 98),
+            new("Volunteer Hosts Wanted", "If you love welcoming people and can help with intros, we’d love a few more host-team volunteers.", PostType.Poll, false, SeedClubAuthorRole.Volunteer, 30, 5, 72),
+            new("Photo Walk Recap", "The latest walk had great energy, easy pace changes, and exactly the kind of low-pressure conversation we want more of.", PostType.Event, false, SeedClubAuthorRole.Manager, 25, 8, 90),
+            new("Pinned: Community Expectations", "Be kind, include people who are standing alone, and help keep the room feeling lighter than the internet does.", PostType.Announcement, true, SeedClubAuthorRole.Owner, 20, 16, 154),
+            new("Board Game Table Ideas", "What kinds of games help you meet people fastest: quick party games, co-op puzzles, or longer strategy tables?", PostType.Poll, false, SeedClubAuthorRole.Owner, 16, 7, 80),
+            new("Member Win Thread", "Shout-out to everyone who introduced themselves to someone new this week. That’s the culture we’re building.", PostType.General, false, SeedClubAuthorRole.Volunteer, 11, 6, 75),
+            new("Rooftop Mixer Checklist", "If you’re joining the next rooftop mixer, bring a layer, arrive before the sunset rush, and expect some guided mingling.", PostType.Event, false, SeedClubAuthorRole.Manager, 7, 7, 82),
+            new("Why We Keep It Low-Pressure", "Friendship grows better when the room feels safe, hosted, and a little less performative than a typical social event.", PostType.General, false, SeedClubAuthorRole.Owner, 4, 9, 84)
+        ],
         PublicSeries:
         [
             new("Rooftop Mixer Night", "A hosted social evening at {venue} where {club} members meet in smaller conversation circles and get easy prompts to connect.", EventCategory.Social, SocialVenues, ["mixer", "rooftop"], 10, 1, 7, 23, 3, 72, 0, false, 6, 0),
