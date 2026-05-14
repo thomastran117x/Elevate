@@ -67,6 +67,7 @@ namespace backend.main.features.events
             existing.Latitude = updated.Latitude;
             existing.Longitude = updated.Longitude;
             existing.Tags = updated.Tags ?? new List<string>();
+            existing.CurrentVersionNumber = updated.CurrentVersionNumber;
             existing.UpdatedAt = DateTime.UtcNow;
 
             await _context.Entry(existing).Collection(e => e.Images).LoadAsync();
@@ -167,6 +168,7 @@ namespace backend.main.features.events
                 var ev = await _context.Events.FindAsync(id);
                 if (ev == null) continue;
                 patch(ev);
+                ev.CurrentVersionNumber += 1;
                 ev.UpdatedAt = DateTime.UtcNow;
                 count++;
             }

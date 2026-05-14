@@ -1,5 +1,7 @@
-using System.Text.Json;
 using System.Security.Cryptography;
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using backend.main.infrastructure.database.core;
 using backend.main.shared.responses;
@@ -9,12 +11,14 @@ using backend.main.features.events.contracts.responses;
 using backend.main.features.events.images;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
+using backend.main.features.events.versions;
 using backend.main.shared.exceptions.http;
 using backend.main.features.clubs;
 using backend.main.features.cache;
 using backend.main.shared.storage;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using backend.main.infrastructure.elasticsearch;
 using backend.main.shared.utilities.logger;
 
@@ -33,11 +37,17 @@ namespace backend.main.features.events
         private readonly IEventSearchService _searchService;
         private readonly IEventSearchOutboxWriter _outboxWriter;
         private readonly IEventRegistrationRepository _registrationRepository;
+        private readonly EventVersioningOptions _versioningOptions;
+        private readonly TimeProvider _timeProvider;
 
         private static readonly TimeSpan EventTTL = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan EventListTTL = TimeSpan.FromSeconds(60);
         private static readonly TimeSpan NotFoundTTL = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan ImageUploadIntentTTL = TimeSpan.FromMinutes(20);
+        private static readonly JsonSerializerOptions EventCacheSerializerOptions = new()
+        {
+            ReferenceHandler = ReferenceHandler.IgnoreCycles
+        };
         private const string EventListVersionKey = "events:version";
         private const string NullSentinel = "__null__";
 
@@ -59,7 +69,9 @@ namespace backend.main.features.events
             IEventAnalyticsRepository analyticsRepository,
             IEventSearchService searchService,
             IEventSearchOutboxWriter outboxWriter,
-            IEventRegistrationRepository registrationRepository)
+            IEventRegistrationRepository registrationRepository,
+            IOptions<EventVersioningOptions> versioningOptions,
+            TimeProvider timeProvider)
         {
             _db = db;
             _eventsRepository = eventsRepository;
@@ -71,6 +83,8 @@ namespace backend.main.features.events
             _searchService = searchService;
             _outboxWriter = outboxWriter;
             _registrationRepository = registrationRepository;
+            _versioningOptions = versioningOptions.Value;
+            _timeProvider = timeProvider;
         }
 
         public async Task<Events> CreateEvent(
@@ -102,6 +116,7 @@ namespace backend.main.features.events
                 var requestedImageUrls = imageUrls.Take(5).ToList();
                 await ValidateUploadedImageUrlsAsync(clubId, userId, requestedImageUrls);
 
+                var now = GetUtcNow();
                 var ev = new Events
                 {
                     Name = name,
@@ -118,13 +133,25 @@ namespace backend.main.features.events
                     City = city,
                     Latitude = latitude,
                     Longitude = longitude,
-                    Tags = NormalizeTags(tags)
+                    Tags = NormalizeTags(tags),
+                    CurrentVersionNumber = 1,
+                    CreatedAt = now,
+                    UpdatedAt = now
                 };
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
                 var created = await _eventsRepository.CreateAsync(ev);
                 await _db.SaveChangesAsync();
+
+                AddVersionRecord(
+                    created,
+                    EventVersionActions.Create,
+                    actorUserId: userId,
+                    actorRole: "Organizer",
+                    rollbackSourceVersionNumber: null,
+                    changedFields: BuildChangedFields(null, BuildSnapshot(created)),
+                    createdAt: now);
 
                 await _imageRepository.AddImagesAsync(created.Id, requestedImageUrls);
                 _outboxWriter.StageUpsert(created);
@@ -319,16 +346,13 @@ namespace backend.main.features.events
         {
             try
             {
-                var evTask = GetEvent(eventId);
-                var clubTask = _clubService.GetClubByUser(userId);
-
-                await Task.WhenAll(evTask, clubTask);
-
-                var existing = await evTask;
-                var club = await clubTask;
+                var existing = await GetTrackedEventOrThrowAsync(eventId);
+                var club = await _clubService.GetClubByUser(userId);
 
                 if (existing.ClubId != club.Id)
                     throw new ForbiddenException("Not allowed");
+
+                var previousSnapshot = BuildSnapshot(existing);
 
                 List<string>? oldUrls = null;
                 List<string>? requestedImageUrls = null;
@@ -354,26 +378,27 @@ namespace backend.main.features.events
                         .ToList();
                 }
 
-                await using var transaction = await _db.Database.BeginTransactionAsync();
+                existing.Name = name;
+                existing.Description = description;
+                existing.Location = location;
+                existing.StartTime = startTime;
+                existing.EndTime = endTime;
+                existing.isPrivate = isPrivate;
+                existing.maxParticipants = maxParticipants;
+                existing.registerCost = registerCost;
+                existing.ClubId = club.Id;
+                existing.Category = category;
+                existing.VenueName = venueName;
+                existing.City = city;
+                existing.Latitude = latitude;
+                existing.Longitude = longitude;
+                existing.Tags = NormalizeTags(tags);
+                existing.CurrentVersionNumber += 1;
+                existing.UpdatedAt = GetUtcNow();
 
-                var updated = await _eventsRepository.UpdateAsync(eventId, new Events
-                {
-                    Name = name,
-                    Description = description,
-                    Location = location,
-                    StartTime = startTime,
-                    EndTime = endTime,
-                    isPrivate = isPrivate,
-                    maxParticipants = maxParticipants,
-                    registerCost = registerCost,
-                    ClubId = club.Id,
-                    Category = category,
-                    VenueName = venueName,
-                    City = city,
-                    Latitude = latitude,
-                    Longitude = longitude,
-                    Tags = NormalizeTags(tags)
-                }) ?? throw new InternalServerErrorException("Update failed");
+                var changedFields = BuildChangedFields(previousSnapshot, BuildSnapshot(existing));
+
+                await using var transaction = await _db.Database.BeginTransactionAsync();
 
                 if (requestedImageUrls != null)
                 {
@@ -381,7 +406,16 @@ namespace backend.main.features.events
                     await _imageRepository.AddImagesAsync(eventId, requestedImageUrls);
                 }
 
-                _outboxWriter.StageUpsert(updated);
+                AddVersionRecord(
+                    existing,
+                    EventVersionActions.Update,
+                    actorUserId: userId,
+                    actorRole: "Organizer",
+                    rollbackSourceVersionNumber: null,
+                    changedFields: changedFields,
+                    createdAt: existing.UpdatedAt);
+
+                _outboxWriter.StageUpsert(existing);
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -559,6 +593,7 @@ namespace backend.main.features.events
                 foreach (var item in itemList)
                     await ValidateUploadedImageUrlsAsync(clubId, userId, item.ImageUrls.Take(5).ToList());
 
+                var now = GetUtcNow();
                 var entities = itemList.Select(item => new Events
                 {
                     Name = item.Name,
@@ -575,7 +610,10 @@ namespace backend.main.features.events
                     City = item.City,
                     Latitude = item.Latitude,
                     Longitude = item.Longitude,
-                    Tags = NormalizeTags(item.Tags)
+                    Tags = NormalizeTags(item.Tags),
+                    CurrentVersionNumber = 1,
+                    CreatedAt = now,
+                    UpdatedAt = now
                 }).ToList();
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
@@ -585,6 +623,14 @@ namespace backend.main.features.events
 
                 foreach (var (ev, item) in created.Zip(itemList))
                 {
+                    AddVersionRecord(
+                        ev,
+                        EventVersionActions.Create,
+                        actorUserId: userId,
+                        actorRole: "Organizer",
+                        rollbackSourceVersionNumber: null,
+                        changedFields: BuildChangedFields(null, BuildSnapshot(ev)),
+                        createdAt: now);
                     await _imageRepository.AddImagesAsync(ev.Id, item.ImageUrls.Take(5));
                     _outboxWriter.StageUpsert(ev);
                 }
@@ -632,36 +678,33 @@ namespace backend.main.features.events
                 if (existing.Any(ev => ev.ClubId != club.Id))
                     throw new ForbiddenException("One or more events do not belong to your club");
 
+                var trackedEvents = await _db.Events
+                    .Where(ev => requestedIds.Contains(ev.Id))
+                    .ToDictionaryAsync(ev => ev.Id);
+
+                var now = GetUtcNow();
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                var patches = itemList.Select(item => (
-                    id: item.EventId,
-                    patch: (Action<Events>)(ev =>
-                    {
-                        if (item.Name != null) ev.Name = item.Name;
-                        if (item.Description != null) ev.Description = item.Description;
-                        if (item.Location != null) ev.Location = item.Location;
-                        if (item.IsPrivate.HasValue) ev.isPrivate = item.IsPrivate.Value;
-                        if (item.MaxParticipants.HasValue) ev.maxParticipants = item.MaxParticipants.Value;
-                        if (item.RegisterCost.HasValue) ev.registerCost = item.RegisterCost.Value;
-                        if (item.StartTime.HasValue) ev.StartTime = item.StartTime.Value;
-                        if (item.EndTime.HasValue) ev.EndTime = item.EndTime.Value;
-                        if (item.Category.HasValue) ev.Category = item.Category.Value;
-                        if (item.VenueName != null) ev.VenueName = item.VenueName;
-                        if (item.City != null) ev.City = item.City;
-                        if (item.Latitude.HasValue) ev.Latitude = item.Latitude;
-                        if (item.Longitude.HasValue) ev.Longitude = item.Longitude;
-                        if (item.Tags != null) ev.Tags = NormalizeTags(item.Tags);
-                    })
-                ));
+                foreach (var item in itemList)
+                {
+                    var ev = trackedEvents[item.EventId];
+                    var previousSnapshot = BuildSnapshot(ev);
 
-                var count = await _eventsRepository.UpdateManyAsync(patches);
-                var updatedEvents = await _db.Events
-                    .Where(ev => requestedIds.Contains(ev.Id))
-                    .ToListAsync();
+                    ApplyBatchPatch(ev, item);
+                    ev.CurrentVersionNumber += 1;
+                    ev.UpdatedAt = now;
 
-                foreach (var ev in updatedEvents)
+                    AddVersionRecord(
+                        ev,
+                        EventVersionActions.Update,
+                        actorUserId: userId,
+                        actorRole: "Organizer",
+                        rollbackSourceVersionNumber: null,
+                        changedFields: BuildChangedFields(previousSnapshot, BuildSnapshot(ev)),
+                        createdAt: now);
+
                     _outboxWriter.StageUpsert(ev);
+                }
 
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -669,7 +712,7 @@ namespace backend.main.features.events
                 await Task.WhenAll(requestedIds.Select(id => _cache.DeleteKeyAsync($"event:{id}")));
                 await BumpEventListVersionAsync();
 
-                return count;
+                return trackedEvents.Count;
             }
             catch (Exception e)
             {
@@ -725,6 +768,149 @@ namespace backend.main.features.events
                     throw;
 
                 Logger.Error($"[EventsService] BatchDeleteEvents failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<(List<EventVersionHistoryItem> Items, int TotalCount)> GetVersionHistoryAsync(
+            int eventId,
+            int userId,
+            string userRole,
+            int page = 1,
+            int pageSize = 20)
+        {
+            try
+            {
+                page = NormalizePage(page);
+                pageSize = NormalizePageSize(pageSize);
+
+                var ev = await GetEventRecordOrThrowAsync(eventId);
+                await EnsureOwnerOrAdminAsync(ev, userId, userRole);
+
+                var query = _db.EventVersions
+                    .AsNoTracking()
+                    .Where(v => v.EventId == eventId);
+
+                var totalCount = await query.CountAsync();
+                var versions = await query
+                    .OrderByDescending(v => v.VersionNumber)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                return (
+                    versions.Select(v => MapHistoryItem(v, ev.CurrentVersionNumber)).ToList(),
+                    totalCount
+                );
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] GetVersionHistoryAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<EventVersionDetail> GetVersionDetailAsync(
+            int eventId,
+            int versionNumber,
+            int userId,
+            string userRole)
+        {
+            try
+            {
+                var ev = await GetEventRecordOrThrowAsync(eventId);
+                await EnsureOwnerOrAdminAsync(ev, userId, userRole);
+
+                var version = await _db.EventVersions
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(v => v.EventId == eventId && v.VersionNumber == versionNumber)
+                    ?? throw new ResourceNotFoundException(
+                        $"Version {versionNumber} for event {eventId} was not found.");
+
+                return new EventVersionDetail(
+                    version.EventId,
+                    version.VersionNumber,
+                    version.ActionType,
+                    version.CreatedAt,
+                    version.ActorUserId,
+                    version.ActorRole,
+                    IsRollbackEligible(version, ev.CurrentVersionNumber),
+                    GetRollbackExpiry(version.CreatedAt),
+                    version.RollbackSourceVersionNumber,
+                    DeserializeChangedFields(version.ChangedFieldsJson),
+                    DeserializeSnapshot(version.SnapshotJson));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] GetVersionDetailAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<EventRollbackResult> RollbackToVersionAsync(
+            int eventId,
+            int versionNumber,
+            int userId,
+            string userRole)
+        {
+            try
+            {
+                var ev = await GetTrackedEventOrThrowAsync(eventId);
+                await EnsureOwnerOrAdminAsync(ev, userId, userRole);
+
+                var targetVersion = await _db.EventVersions
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(v => v.EventId == eventId && v.VersionNumber == versionNumber)
+                    ?? throw new ResourceNotFoundException(
+                        $"Version {versionNumber} for event {eventId} was not found.");
+
+                if (versionNumber == ev.CurrentVersionNumber)
+                    throw new BadRequestException("Cannot roll back to the current version.");
+
+                if (!IsRollbackEligible(targetVersion, ev.CurrentVersionNumber))
+                    throw new BadRequestException("This version is no longer eligible for rollback.");
+
+                var currentSnapshot = BuildSnapshot(ev);
+                var targetSnapshot = DeserializeSnapshot(targetVersion.SnapshotJson);
+
+                ApplySnapshot(ev, targetSnapshot);
+                ev.CurrentVersionNumber += 1;
+                ev.UpdatedAt = GetUtcNow();
+
+                var changedFields = BuildChangedFields(currentSnapshot, BuildSnapshot(ev));
+
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+
+                AddVersionRecord(
+                    ev,
+                    EventVersionActions.Rollback,
+                    actorUserId: userId,
+                    actorRole: NormalizeActorRole(userRole),
+                    rollbackSourceVersionNumber: targetVersion.VersionNumber,
+                    changedFields: changedFields,
+                    createdAt: ev.UpdatedAt);
+
+                _outboxWriter.StageUpsert(ev);
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                await CacheEventAsync(ev);
+                await BumpEventListVersionAsync();
+
+                return new EventRollbackResult(ev, targetVersion.VersionNumber, ev.CurrentVersionNumber);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] RollbackToVersionAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
         }
@@ -998,6 +1184,329 @@ namespace backend.main.features.events
             }
         }
 
+        private async Task<Events> GetTrackedEventOrThrowAsync(int eventId)
+        {
+            return await _db.Events
+                .Include(e => e.Images)
+                .FirstOrDefaultAsync(e => e.Id == eventId)
+                ?? throw new ResourceNotFoundException($"Event {eventId} not found");
+        }
+
+        private async Task<Events> GetEventRecordOrThrowAsync(int eventId)
+        {
+            return await _db.Events
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.Id == eventId)
+                ?? throw new ResourceNotFoundException($"Event {eventId} not found");
+        }
+
+        private async Task EnsureOwnerOrAdminAsync(Events ev, int userId, string userRole)
+        {
+            if (IsAdminRole(userRole))
+                return;
+
+            var ownerUserId = await _db.Clubs
+                .Where(c => c.Id == ev.ClubId)
+                .Select(c => c.UserId)
+                .FirstOrDefaultAsync();
+
+            if (ownerUserId == 0)
+                throw new ResourceNotFoundException($"Club {ev.ClubId} not found");
+
+            if (ownerUserId != userId)
+                throw new ForbiddenException("Not allowed");
+        }
+
+        private void AddVersionRecord(
+            Events ev,
+            string actionType,
+            int actorUserId,
+            string actorRole,
+            int? rollbackSourceVersionNumber,
+            IReadOnlyList<EventVersionFieldChange> changedFields,
+            DateTime createdAt)
+        {
+            _db.EventVersions.Add(new EventVersion
+            {
+                EventId = ev.Id,
+                VersionNumber = ev.CurrentVersionNumber,
+                ActionType = actionType,
+                SnapshotJson = JsonSerializer.Serialize(BuildSnapshot(ev)),
+                ChangedFieldsJson = JsonSerializer.Serialize(changedFields),
+                ActorUserId = actorUserId,
+                ActorRole = actorRole,
+                RollbackSourceVersionNumber = rollbackSourceVersionNumber,
+                CreatedAt = createdAt
+            });
+        }
+
+        private static EventVersionSnapshot BuildSnapshot(Events ev) => new()
+        {
+            Name = ev.Name,
+            Description = ev.Description,
+            Location = ev.Location,
+            IsPrivate = ev.isPrivate,
+            MaxParticipants = ev.maxParticipants,
+            RegisterCost = ev.registerCost,
+            StartTime = ev.StartTime,
+            EndTime = ev.EndTime,
+            ClubId = ev.ClubId,
+            Category = ev.Category,
+            VenueName = ev.VenueName,
+            City = ev.City,
+            Latitude = ev.Latitude,
+            Longitude = ev.Longitude,
+            Tags = ev.Tags?.ToList() ?? []
+        };
+
+        private static void ApplySnapshot(Events ev, EventVersionSnapshot snapshot)
+        {
+            ev.Name = snapshot.Name;
+            ev.Description = snapshot.Description;
+            ev.Location = snapshot.Location;
+            ev.isPrivate = snapshot.IsPrivate;
+            ev.maxParticipants = snapshot.MaxParticipants;
+            ev.registerCost = snapshot.RegisterCost;
+            ev.StartTime = snapshot.StartTime;
+            ev.EndTime = snapshot.EndTime;
+            ev.ClubId = snapshot.ClubId;
+            ev.Category = snapshot.Category;
+            ev.VenueName = snapshot.VenueName;
+            ev.City = snapshot.City;
+            ev.Latitude = snapshot.Latitude;
+            ev.Longitude = snapshot.Longitude;
+            ev.Tags = snapshot.Tags.ToList();
+        }
+
+        private static void ApplyBatchPatch(Events ev, BatchUpdateEventItem item)
+        {
+            if (item.Name != null) ev.Name = item.Name;
+            if (item.Description != null) ev.Description = item.Description;
+            if (item.Location != null) ev.Location = item.Location;
+            if (item.IsPrivate.HasValue) ev.isPrivate = item.IsPrivate.Value;
+            if (item.MaxParticipants.HasValue) ev.maxParticipants = item.MaxParticipants.Value;
+            if (item.RegisterCost.HasValue) ev.registerCost = item.RegisterCost.Value;
+            if (item.StartTime.HasValue) ev.StartTime = item.StartTime.Value;
+            if (item.EndTime.HasValue) ev.EndTime = item.EndTime.Value;
+            if (item.Category.HasValue) ev.Category = item.Category.Value;
+            if (item.VenueName != null) ev.VenueName = item.VenueName;
+            if (item.City != null) ev.City = item.City;
+            if (item.Latitude.HasValue) ev.Latitude = item.Latitude;
+            if (item.Longitude.HasValue) ev.Longitude = item.Longitude;
+            if (item.Tags != null) ev.Tags = NormalizeTags(item.Tags);
+        }
+
+        private static List<EventVersionFieldChange> BuildChangedFields(
+            EventVersionSnapshot? previous,
+            EventVersionSnapshot current)
+        {
+            var changes = new List<EventVersionFieldChange>();
+
+            AddChange(changes, "name", previous?.Name, current.Name);
+            AddChange(changes, "description", previous?.Description, current.Description);
+            AddChange(changes, "location", previous?.Location, current.Location);
+            AddChange(changes, "isPrivate", previous?.IsPrivate, current.IsPrivate);
+            AddChange(changes, "maxParticipants", previous?.MaxParticipants, current.MaxParticipants);
+            AddChange(changes, "registerCost", previous?.RegisterCost, current.RegisterCost);
+            AddChange(changes, "startTime", previous?.StartTime, current.StartTime);
+            AddChange(changes, "endTime", previous?.EndTime, current.EndTime);
+            AddChange(changes, "clubId", previous?.ClubId, current.ClubId);
+            AddChange(changes, "category", previous?.Category, current.Category);
+            AddChange(changes, "venueName", previous?.VenueName, current.VenueName);
+            AddChange(changes, "city", previous?.City, current.City);
+            AddChange(changes, "latitude", previous?.Latitude, current.Latitude);
+            AddChange(changes, "longitude", previous?.Longitude, current.Longitude);
+            AddChange(changes, "tags", previous?.Tags, current.Tags);
+
+            return changes;
+        }
+
+        private static void AddChange(
+            ICollection<EventVersionFieldChange> changes,
+            string field,
+            string? oldValue,
+            string? newValue)
+        {
+            if (string.Equals(oldValue, newValue, StringComparison.Ordinal))
+                return;
+
+            changes.Add(new EventVersionFieldChange
+            {
+                Field = field,
+                OldValue = oldValue,
+                NewValue = newValue
+            });
+        }
+
+        private static void AddChange(
+            ICollection<EventVersionFieldChange> changes,
+            string field,
+            bool? oldValue,
+            bool newValue)
+        {
+            if (oldValue.HasValue && oldValue.Value == newValue)
+                return;
+
+            changes.Add(new EventVersionFieldChange
+            {
+                Field = field,
+                OldValue = oldValue?.ToString().ToLowerInvariant(),
+                NewValue = newValue.ToString().ToLowerInvariant()
+            });
+        }
+
+        private static void AddChange(
+            ICollection<EventVersionFieldChange> changes,
+            string field,
+            int? oldValue,
+            int newValue)
+        {
+            if (oldValue.HasValue && oldValue.Value == newValue)
+                return;
+
+            changes.Add(new EventVersionFieldChange
+            {
+                Field = field,
+                OldValue = oldValue?.ToString(CultureInfo.InvariantCulture),
+                NewValue = newValue.ToString(CultureInfo.InvariantCulture)
+            });
+        }
+
+        private static void AddChange(
+            ICollection<EventVersionFieldChange> changes,
+            string field,
+            DateTime? oldValue,
+            DateTime newValue)
+        {
+            if (oldValue.HasValue && oldValue.Value == newValue)
+                return;
+
+            changes.Add(new EventVersionFieldChange
+            {
+                Field = field,
+                OldValue = oldValue?.ToString("O", CultureInfo.InvariantCulture),
+                NewValue = newValue.ToString("O", CultureInfo.InvariantCulture)
+            });
+        }
+
+        private static void AddChange(
+            ICollection<EventVersionFieldChange> changes,
+            string field,
+            DateTime? oldValue,
+            DateTime? newValue)
+        {
+            if (oldValue == newValue)
+                return;
+
+            changes.Add(new EventVersionFieldChange
+            {
+                Field = field,
+                OldValue = oldValue?.ToString("O", CultureInfo.InvariantCulture),
+                NewValue = newValue?.ToString("O", CultureInfo.InvariantCulture)
+            });
+        }
+
+        private static void AddChange(
+            ICollection<EventVersionFieldChange> changes,
+            string field,
+            EventCategory? oldValue,
+            EventCategory newValue)
+        {
+            if (oldValue.HasValue && oldValue.Value == newValue)
+                return;
+
+            changes.Add(new EventVersionFieldChange
+            {
+                Field = field,
+                OldValue = oldValue?.ToString(),
+                NewValue = newValue.ToString()
+            });
+        }
+
+        private static void AddChange(
+            ICollection<EventVersionFieldChange> changes,
+            string field,
+            double? oldValue,
+            double? newValue)
+        {
+            if (oldValue == newValue)
+                return;
+
+            changes.Add(new EventVersionFieldChange
+            {
+                Field = field,
+                OldValue = oldValue?.ToString(CultureInfo.InvariantCulture),
+                NewValue = newValue?.ToString(CultureInfo.InvariantCulture)
+            });
+        }
+
+        private static void AddChange(
+            ICollection<EventVersionFieldChange> changes,
+            string field,
+            IReadOnlyList<string>? oldValue,
+            IReadOnlyList<string> newValue)
+        {
+            var normalizedOld = oldValue?.ToList() ?? [];
+            var normalizedNew = newValue.ToList();
+
+            if (normalizedOld.SequenceEqual(normalizedNew, StringComparer.Ordinal))
+                return;
+
+            changes.Add(new EventVersionFieldChange
+            {
+                Field = field,
+                OldValue = JsonSerializer.Serialize(normalizedOld),
+                NewValue = JsonSerializer.Serialize(normalizedNew)
+            });
+        }
+
+        private EventVersionHistoryItem MapHistoryItem(EventVersion version, int currentVersionNumber) => new(
+            version.EventId,
+            version.VersionNumber,
+            version.ActionType,
+            version.CreatedAt,
+            version.ActorUserId,
+            version.ActorRole,
+            IsRollbackEligible(version, currentVersionNumber),
+            GetRollbackExpiry(version.CreatedAt),
+            version.RollbackSourceVersionNumber,
+            DeserializeChangedFields(version.ChangedFieldsJson));
+
+        private bool IsRollbackEligible(EventVersion version, int currentVersionNumber)
+        {
+            if (version.VersionNumber == currentVersionNumber)
+                return false;
+
+            return GetRollbackExpiry(version.CreatedAt) >= GetUtcNow();
+        }
+
+        private DateTime GetRollbackExpiry(DateTime createdAt) =>
+            createdAt.AddDays(_versioningOptions.RollbackWindowDays);
+
+        private DateTime GetUtcNow() => _timeProvider.GetUtcNow().UtcDateTime;
+
+        private static EventVersionSnapshot DeserializeSnapshot(string snapshotJson) =>
+            JsonSerializer.Deserialize<EventVersionSnapshot>(snapshotJson)
+            ?? throw new InvalidOperationException("Event version snapshot could not be deserialized.");
+
+        private static IReadOnlyList<EventVersionFieldChange> DeserializeChangedFields(string changedFieldsJson) =>
+            JsonSerializer.Deserialize<List<EventVersionFieldChange>>(changedFieldsJson) ?? [];
+
+        private static bool IsAdminRole(string userRole) =>
+            string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase);
+
+        private static string NormalizeActorRole(string actorRole) =>
+            string.IsNullOrWhiteSpace(actorRole) ? "Unknown" : actorRole.Trim();
+
+        private static int NormalizePage(int page) => page < 1 ? 1 : page;
+
+        private static int NormalizePageSize(int pageSize) => pageSize switch
+        {
+            < 1 => 20,
+            > 100 => 100,
+            _ => pageSize
+        };
+
         private static List<string> NormalizeTags(IEnumerable<string>? tags)
         {
             if (tags == null) return new List<string>();
@@ -1146,7 +1655,7 @@ namespace backend.main.features.events
         {
             await _cache.SetValueAsync(
                 $"event:{ev.Id}",
-                JsonSerializer.Serialize(ev),
+                JsonSerializer.Serialize(ev, EventCacheSerializerOptions),
                 WithJitter(EventTTL)
             );
         }

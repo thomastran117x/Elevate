@@ -3,6 +3,7 @@ using backend.main.features.events.contracts.responses;
 using backend.main.features.events;
 using backend.main.features.events.images;
 using backend.main.features.events.search;
+using backend.main.features.events.versions;
 
 namespace backend.main.features.events
 {
@@ -85,6 +86,23 @@ namespace backend.main.features.events
 
         // Registration count denorm (called by EventRegistrationService)
         Task NotifyRegistrationChangedAsync(int eventId);
+
+        Task<(List<EventVersionHistoryItem> Items, int TotalCount)> GetVersionHistoryAsync(
+            int eventId,
+            int userId,
+            string userRole,
+            int page = 1,
+            int pageSize = 20);
+        Task<EventVersionDetail> GetVersionDetailAsync(
+            int eventId,
+            int versionNumber,
+            int userId,
+            string userRole);
+        Task<EventRollbackResult> RollbackToVersionAsync(
+            int eventId,
+            int versionNumber,
+            int userId,
+            string userRole);
     }
 }
 

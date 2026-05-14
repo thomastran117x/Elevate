@@ -3,6 +3,8 @@ using backend.main.features.events.contracts.requests;
 using backend.main.features.events.contracts.responses;
 using backend.main.shared.responses;
 using backend.main.features.events.search;
+using backend.main.features.events.versions;
+using backend.main.features.events.versions.contracts.responses;
 using backend.main.shared.exceptions.http;
 using backend.main.features.events;
 using backend.main.utilities;
@@ -138,6 +140,80 @@ namespace backend.main.features.events
                 Logger.Error($"[EventsController] DeleteEvent failed: {e}");
                 return HandleError.Resolve(e);
             }
+        }
+
+        [Authorize]
+        [HttpGet("{eventId}/versions")]
+        public async Task<IActionResult> GetEventVersions(
+            int eventId,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            var effectivePage = page < 1 ? 1 : page;
+            var effectivePageSize = pageSize switch
+            {
+                < 1 => 20,
+                > 100 => 100,
+                _ => pageSize
+            };
+
+            var userPayload = User.GetUserPayload();
+            var (items, totalCount) = await _eventService.GetVersionHistoryAsync(
+                eventId,
+                userPayload.Id,
+                userPayload.Role,
+                effectivePage,
+                effectivePageSize);
+
+            var paged = new PagedResponse<EventVersionListItemResponse>(
+                items.Select(MapToVersionListItemResponse),
+                totalCount,
+                effectivePage,
+                effectivePageSize);
+
+            return Ok(new ApiResponse<PagedResponse<EventVersionListItemResponse>>(
+                $"Version history for event with ID {eventId} has been fetched successfully.",
+                paged
+            ));
+        }
+
+        [Authorize]
+        [HttpGet("{eventId}/versions/{versionNumber}")]
+        public async Task<IActionResult> GetEventVersion(int eventId, int versionNumber)
+        {
+            var userPayload = User.GetUserPayload();
+            var version = await _eventService.GetVersionDetailAsync(
+                eventId,
+                versionNumber,
+                userPayload.Id,
+                userPayload.Role);
+
+            return Ok(new ApiResponse<EventVersionDetailResponse>(
+                $"Version {versionNumber} for event with ID {eventId} has been fetched successfully.",
+                MapToVersionDetailResponse(version)
+            ));
+        }
+
+        [Authorize]
+        [HttpPost("{eventId}/versions/{versionNumber}/rollback")]
+        public async Task<IActionResult> RollbackEventVersion(int eventId, int versionNumber)
+        {
+            var userPayload = User.GetUserPayload();
+            var result = await _eventService.RollbackToVersionAsync(
+                eventId,
+                versionNumber,
+                userPayload.Id,
+                userPayload.Role);
+
+            var response = new EventRollbackResponse(
+                EventMapper.MapToResponse(result.Event),
+                result.RestoredFromVersionNumber,
+                result.NewVersionNumber);
+
+            return Ok(new ApiResponse<EventRollbackResponse>(
+                $"Event with ID {eventId} has been rolled back to version {versionNumber} successfully.",
+                response
+            ));
         }
 
         [HttpGet("clubs/{clubId}")]
@@ -540,6 +616,52 @@ namespace backend.main.features.events
                 return HandleError.Resolve(e);
             }
         }
+
+        private static EventVersionListItemResponse MapToVersionListItemResponse(EventVersionHistoryItem item) =>
+            new(
+                item.VersionNumber,
+                item.ActionType,
+                item.CreatedAt,
+                item.ActorUserId,
+                item.ActorRole,
+                item.RollbackEligible,
+                item.RollbackExpiresAt,
+                item.RollbackSourceVersionNumber,
+                item.ChangedFields.Select(MapToFieldChangeResponse).ToList()
+            );
+
+        private static EventVersionDetailResponse MapToVersionDetailResponse(EventVersionDetail detail) =>
+            new(
+                detail.VersionNumber,
+                detail.ActionType,
+                detail.CreatedAt,
+                detail.ActorUserId,
+                detail.ActorRole,
+                detail.RollbackEligible,
+                detail.RollbackExpiresAt,
+                detail.RollbackSourceVersionNumber,
+                detail.ChangedFields.Select(MapToFieldChangeResponse).ToList(),
+                new EventVersionSnapshotResponse(
+                    detail.Snapshot.Name,
+                    detail.Snapshot.Description,
+                    detail.Snapshot.Location,
+                    detail.Snapshot.IsPrivate,
+                    detail.Snapshot.MaxParticipants,
+                    detail.Snapshot.RegisterCost,
+                    detail.Snapshot.StartTime,
+                    detail.Snapshot.EndTime,
+                    detail.Snapshot.ClubId,
+                    detail.Snapshot.Category,
+                    detail.Snapshot.VenueName,
+                    detail.Snapshot.City,
+                    detail.Snapshot.Latitude,
+                    detail.Snapshot.Longitude,
+                    detail.Snapshot.Tags
+                )
+            );
+
+        private static EventVersionFieldChangeResponse MapToFieldChangeResponse(EventVersionFieldChange change) =>
+            new(change.Field, change.OldValue, change.NewValue);
     }
 
     [ApiController]

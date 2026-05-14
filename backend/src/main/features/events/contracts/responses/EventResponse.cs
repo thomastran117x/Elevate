@@ -56,6 +56,7 @@ namespace backend.main.features.events.contracts.responses
         {
             get; set;
         }
+        public int CurrentVersionNumber { get; set; }
         public DateTime CreatedAt
         {
             get; set;

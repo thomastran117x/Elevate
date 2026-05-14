@@ -11,6 +11,7 @@ using backend.main.features.events;
 using backend.main.features.events.images;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
+using backend.main.features.events.versions;
 using backend.main.features.payment;
 using backend.main.features.profile;
 
@@ -25,6 +26,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<Club> Clubs { get; set; } = null!;
         public DbSet<ClubVersion> ClubVersions { get; set; } = null!;
         public DbSet<Events> Events { get; set; } = null!;
+        public DbSet<EventVersion> EventVersions { get; set; } = null!;
         public DbSet<FollowClub> FollowClubs { get; set; } = null!;
         public DbSet<Payment> Payments { get; set; } = null!;
         public DbSet<ClubReview> ClubReviews { get; set; } = null!;
@@ -161,6 +163,28 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<Events>()
                 .HasIndex(e => new { e.Latitude, e.Longitude });
+
+            modelBuilder.Entity<EventVersion>()
+                .HasOne<Events>()
+                .WithMany()
+                .HasForeignKey(v => v.EventId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<EventVersion>()
+                .Property(v => v.ActionType)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<EventVersion>()
+                .Property(v => v.ActorRole)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<EventVersion>()
+                .HasIndex(v => new { v.EventId, v.VersionNumber })
+                .IsUnique();
+
+            modelBuilder.Entity<EventVersion>()
+                .HasIndex(v => v.CreatedAt);
 
             modelBuilder.Entity<EventImage>()
                 .HasOne(ei => ei.Event)

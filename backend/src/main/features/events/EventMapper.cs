@@ -21,6 +21,7 @@ namespace backend.main.features.events
             StartTime = ev.StartTime,
             EndTime = ev.EndTime,
             ClubId = ev.ClubId,
+            CurrentVersionNumber = ev.CurrentVersionNumber,
             CreatedAt = ev.CreatedAt,
             Status = ResolveStatus(ev),
             Category = ev.Category,

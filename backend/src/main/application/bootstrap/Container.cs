@@ -15,6 +15,7 @@ using backend.main.features.events.analytics;
 using backend.main.features.events.images;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
+using backend.main.features.events.versions;
 using backend.main.features.payment;
 using backend.main.features.profile;
 using backend.main.seeders;
@@ -66,6 +67,7 @@ namespace backend.main.application.bootstrap
         public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration config)
         {
             services.Configure<ClubVersioningOptions>(config.GetSection("ClubVersioning"));
+            services.Configure<EventVersioningOptions>(config.GetSection("EventVersioning"));
             services.AddSingleton(TimeProvider.System);
             services.AddSearchInfrastructure(config);
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
