@@ -1,8 +1,9 @@
 using backend.main.application.security;
 using backend.main.features.clubs.contracts.requests;
 using backend.main.features.clubs.contracts.responses;
+using backend.main.features.clubs.versions;
+using backend.main.features.clubs.versions.contracts.responses;
 using backend.main.shared.responses;
-using backend.main.features.clubs;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,7 +20,6 @@ namespace backend.main.features.clubs
         {
             _clubService = clubService;
         }
-
 
         [Authorize]
         [HttpPost("{clubId}/join")]
@@ -89,6 +89,7 @@ namespace backend.main.features.clubs
             Club club = await _clubService.UpdateClub(
                 clubId: id,
                 userId: userPayload.Id,
+                userRole: userPayload.Role,
                 name: request.Name,
                 description: request.Description,
                 clubtype: request.Clubtype,
@@ -160,6 +161,80 @@ namespace backend.main.features.clubs
             );
         }
 
+        [Authorize]
+        [HttpGet("{id}/versions")]
+        public async Task<IActionResult> GetClubVersions(
+            int id,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            var effectivePage = page < 1 ? 1 : page;
+            var effectivePageSize = pageSize switch
+            {
+                < 1 => 20,
+                > 100 => 100,
+                _ => pageSize
+            };
+
+            var userPayload = User.GetUserPayload();
+            var (items, totalCount) = await _clubService.GetVersionHistoryAsync(
+                id,
+                userPayload.Id,
+                userPayload.Role,
+                effectivePage,
+                effectivePageSize);
+
+            var paged = new PagedResponse<ClubVersionListItemResponse>(
+                items.Select(MapToVersionListItemResponse),
+                totalCount,
+                effectivePage,
+                effectivePageSize);
+
+            return Ok(new ApiResponse<PagedResponse<ClubVersionListItemResponse>>(
+                $"Version history for club with ID {id} has been fetched successfully.",
+                paged
+            ));
+        }
+
+        [Authorize]
+        [HttpGet("{id}/versions/{versionNumber}")]
+        public async Task<IActionResult> GetClubVersion(int id, int versionNumber)
+        {
+            var userPayload = User.GetUserPayload();
+            var version = await _clubService.GetVersionDetailAsync(
+                id,
+                versionNumber,
+                userPayload.Id,
+                userPayload.Role);
+
+            return Ok(new ApiResponse<ClubVersionDetailResponse>(
+                $"Version {versionNumber} for club with ID {id} has been fetched successfully.",
+                MapToVersionDetailResponse(version)
+            ));
+        }
+
+        [Authorize]
+        [HttpPost("{id}/versions/{versionNumber}/rollback")]
+        public async Task<IActionResult> RollbackClubVersion(int id, int versionNumber)
+        {
+            var userPayload = User.GetUserPayload();
+            var result = await _clubService.RollbackToVersionAsync(
+                id,
+                versionNumber,
+                userPayload.Id,
+                userPayload.Role);
+
+            var response = new ClubRollbackResponse(
+                MapToResponse(result.Club),
+                result.RestoredFromVersionNumber,
+                result.NewVersionNumber);
+
+            return Ok(new ApiResponse<ClubRollbackResponse>(
+                $"Club with ID {id} has been rolled back to version {versionNumber} successfully.",
+                response
+            ));
+        }
+
         private static ClubResponse MapToResponse(Club club)
         {
             return new ClubResponse(
@@ -173,7 +248,8 @@ namespace backend.main.features.clubs
                 club.EventCount,
                 club.AvaliableEventCount,
                 club.MaxMemberCount,
-                club.isPrivate
+                club.isPrivate,
+                club.CurrentVersionNumber
             )
             {
                 Phone = club.Phone,
@@ -181,7 +257,46 @@ namespace backend.main.features.clubs
                 Rating = club.Rating
             };
         }
+
+        private static ClubVersionListItemResponse MapToVersionListItemResponse(ClubVersionHistoryItem item) =>
+            new(
+                item.VersionNumber,
+                item.ActionType,
+                item.CreatedAt,
+                item.ActorUserId,
+                item.ActorRole,
+                item.RollbackEligible,
+                item.RollbackExpiresAt,
+                item.RollbackSourceVersionNumber,
+                item.ChangedFields.Select(MapToFieldChangeResponse).ToList()
+            );
+
+        private static ClubVersionDetailResponse MapToVersionDetailResponse(ClubVersionDetail detail) =>
+            new(
+                detail.VersionNumber,
+                detail.ActionType,
+                detail.CreatedAt,
+                detail.ActorUserId,
+                detail.ActorRole,
+                detail.RollbackEligible,
+                detail.RollbackExpiresAt,
+                detail.RollbackSourceVersionNumber,
+                detail.ChangedFields.Select(MapToFieldChangeResponse).ToList(),
+                new ClubVersionSnapshotResponse(
+                    detail.Snapshot.Name,
+                    detail.Snapshot.Description,
+                    detail.Snapshot.Clubtype,
+                    detail.Snapshot.ClubImage,
+                    detail.Snapshot.Phone,
+                    detail.Snapshot.Email,
+                    detail.Snapshot.WebsiteUrl,
+                    detail.Snapshot.Location,
+                    detail.Snapshot.MaxMemberCount,
+                    detail.Snapshot.IsPrivate
+                )
+            );
+
+        private static ClubVersionFieldChangeResponse MapToFieldChangeResponse(ClubVersionFieldChange change) =>
+            new(change.Field, change.OldValue, change.NewValue);
     }
 }
-
-

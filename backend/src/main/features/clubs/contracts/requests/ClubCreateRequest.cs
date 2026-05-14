@@ -17,8 +17,8 @@ namespace backend.main.features.clubs.contracts.requests
             get; set;
         }
         [Required]
-        [RegularExpression("^(sport|game|music|other)$",
-        ErrorMessage = "Clubtype must be 'sport', 'game', 'music' or 'other'.")]
+        [RegularExpression("^(sport|sports|academic|social|cultural|game|gaming|music|other)$",
+        ErrorMessage = "Clubtype must be one of: sport, sports, academic, social, cultural, game, gaming, music, other.")]
         public required string Clubtype
         {
             get; set;

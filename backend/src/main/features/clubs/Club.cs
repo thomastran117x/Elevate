@@ -47,6 +47,7 @@ namespace backend.main.features.clubs
         public int AvaliableEventCount { get; set; } = 0;
         public int MaxMemberCount { get; set; } = 1000;
         public bool isPrivate { get; set; } = false;
+        public int CurrentVersionNumber { get; set; } = 0;
         public int UserId
         {
             get; set;

@@ -9,6 +9,7 @@ using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.reviews;
+using backend.main.features.clubs.versions;
 using backend.main.features.events;
 using backend.main.features.events.analytics;
 using backend.main.features.events.images;
@@ -64,6 +65,8 @@ namespace backend.main.application.bootstrap
 
         public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration config)
         {
+            services.Configure<ClubVersioningOptions>(config.GetSection("ClubVersioning"));
+            services.AddSingleton(TimeProvider.System);
             services.AddSearchInfrastructure(config);
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
             services.AddSingleton<IRepositoryAttributeResolver, RepositoryAttributeResolver>();
@@ -88,6 +91,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IOAuthService, OAuthService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IClubService, ClubService>();
+            services.AddScoped<ClubVersionCleanupRunner>();
             services.AddScoped<IFollowService, FollowService>();
             services.AddScoped<IEventsService, EventsService>();
             services.AddScoped<IPaymentService, StripePaymentService>();
@@ -96,6 +100,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IClubPostService, ClubPostService>();
             services.AddScoped<IClubPostReindexService, ClubPostReindexService>();
             services.AddHostedService<ElasticsearchIndexInitializationService>();
+            services.AddHostedService<ClubVersionCleanupService>();
             services.AddScoped<IEventReindexService, EventReindexService>();
             services.AddScoped<IEventSearchOutboxWriter, EventSearchOutboxWriter>();
             services.AddScoped<IPostCommentService, PostCommentService>();

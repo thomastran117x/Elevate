@@ -1,0 +1,112 @@
+using System.Security.Claims;
+
+using backend.main.features.clubs;
+using backend.main.features.clubs.contracts.responses;
+using backend.main.features.clubs.versions;
+using backend.main.features.clubs.versions.contracts.responses;
+using backend.main.shared.responses;
+
+using FluentAssertions;
+
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+
+using Moq;
+
+using Xunit;
+
+namespace backend.tests.Clubs;
+
+public class ClubControllerTests
+{
+    [Fact]
+    public async Task GetClubVersions_ShouldReturnPagedHistoryResponse()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.GetVersionHistoryAsync(4, 7, "Organizer", 1, 20))
+            .ReturnsAsync((
+                new List<ClubVersionHistoryItem>
+                {
+                    new(
+                        4,
+                        2,
+                        ClubVersionActions.Update,
+                        new DateTime(2026, 5, 13, 12, 0, 0, DateTimeKind.Utc),
+                        7,
+                        "Organizer",
+                        true,
+                        new DateTime(2026, 8, 11, 12, 0, 0, DateTimeKind.Utc),
+                        null,
+                        [new ClubVersionFieldChange
+                        {
+                            Field = "name",
+                            OldValue = "Chess Club",
+                            NewValue = "Campus Chess Club"
+                        }])
+                },
+                1));
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.GetClubVersions(4, 1, 20);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<PagedResponse<ClubVersionListItemResponse>>>().Subject;
+
+        response.Data.Should().NotBeNull();
+        response.Data!.Items.Should().ContainSingle();
+        response.Data.Items.Single().VersionNumber.Should().Be(2);
+        response.Data.TotalCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RollbackClubVersion_ShouldReturnRollbackPayload()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.RollbackToVersionAsync(4, 1, 7, "Organizer"))
+            .ReturnsAsync(new ClubRollbackResult(
+                new Club
+                {
+                    Id = 4,
+                    UserId = 7,
+                    Name = "Chess Club",
+                    Description = "Weekly strategy nights",
+                    Clubtype = ClubType.Social,
+                    ClubImage = "https://cdn.test/clubs/club-v1.png",
+                    CurrentVersionNumber = 3,
+                },
+                1,
+                3));
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.RollbackClubVersion(4, 1);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<ClubRollbackResponse>>().Subject;
+
+        response.Data.Should().NotBeNull();
+        response.Data!.RestoredFromVersionNumber.Should().Be(1);
+        response.Data.NewVersionNumber.Should().Be(3);
+        response.Data.Club.CurrentVersionNumber.Should().Be(3);
+    }
+
+    private static ClubController CreateController(IClubService service)
+    {
+        var controller = new ClubController(service);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "7"),
+                    new Claim(ClaimTypes.Name, "owner@test.local"),
+                    new Claim(ClaimTypes.Role, "Organizer")
+                ], "TestAuth"))
+            }
+        };
+
+        return controller;
+    }
+}

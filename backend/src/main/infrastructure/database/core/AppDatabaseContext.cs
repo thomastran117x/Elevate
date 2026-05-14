@@ -6,6 +6,7 @@ using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.reviews;
+using backend.main.features.clubs.versions;
 using backend.main.features.events;
 using backend.main.features.events.images;
 using backend.main.features.events.registration;
@@ -22,6 +23,7 @@ namespace backend.main.infrastructure.database.core
     {
         public DbSet<User> Users { get; set; } = null!;
         public DbSet<Club> Clubs { get; set; } = null!;
+        public DbSet<ClubVersion> ClubVersions { get; set; } = null!;
         public DbSet<Events> Events { get; set; } = null!;
         public DbSet<FollowClub> FollowClubs { get; set; } = null!;
         public DbSet<Payment> Payments { get; set; } = null!;
@@ -75,6 +77,31 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<Club>()
                 .HasIndex(c => c.UserId);
+
+            modelBuilder.Entity<ClubVersion>()
+                .HasOne<Club>()
+                .WithMany()
+                .HasForeignKey(v => v.ClubId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClubVersion>()
+                .Property(v => v.ActionType)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<ClubVersion>()
+                .Property(v => v.ActorRole)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<ClubVersion>()
+                .HasIndex(v => new { v.ClubId, v.VersionNumber })
+                .IsUnique();
+
+            modelBuilder.Entity<ClubVersion>()
+                .HasIndex(v => v.CreatedAt);
+
+            modelBuilder.Entity<ClubVersion>()
+                .HasIndex(v => v.ClubImage);
 
             modelBuilder.Entity<FollowClub>()
                 .HasOne<User>()

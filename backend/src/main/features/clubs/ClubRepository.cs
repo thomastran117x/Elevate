@@ -74,6 +74,7 @@ namespace backend.main.features.clubs
             existing.Location = updatedClub.Location;
             existing.Rating = updatedClub.Rating;
             existing.MemberCount = updatedClub.MemberCount;
+            existing.CurrentVersionNumber = updatedClub.CurrentVersionNumber;
             existing.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();

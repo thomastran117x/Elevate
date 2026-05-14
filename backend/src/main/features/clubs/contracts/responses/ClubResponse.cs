@@ -21,6 +21,7 @@ namespace backend.main.features.clubs.contracts.responses
         public int AvaliableEventCount { get; set; } = 0;
         public int MaxMemberCount { get; set; } = 0;
         public bool IsPrivate { get; set; } = false;
+        public int CurrentVersionNumber { get; set; } = 0;
 
         public string? Phone
         {
@@ -34,7 +35,7 @@ namespace backend.main.features.clubs.contracts.responses
         {
             get; set;
         }
-        public ClubResponse(int id, int userId, string name, string description, string clubtype, string clubimage, int memberCount, int eventCount, int avaliableEventCount, int maxMemberCount, bool isPrivate)
+        public ClubResponse(int id, int userId, string name, string description, string clubtype, string clubimage, int memberCount, int eventCount, int avaliableEventCount, int maxMemberCount, bool isPrivate, int currentVersionNumber)
         {
             Id = id;
             OwnerId = userId;
@@ -47,6 +48,7 @@ namespace backend.main.features.clubs.contracts.responses
             AvaliableEventCount = avaliableEventCount;
             MaxMemberCount = maxMemberCount;
             IsPrivate = isPrivate;
+            CurrentVersionNumber = currentVersionNumber;
         }
     }
 }

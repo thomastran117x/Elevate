@@ -12,12 +12,16 @@ namespace backend.main.features.clubs
             club.ClubImage,
             club.Phone,
             club.Email,
+            club.Rating,
+            club.WebsiteUrl,
+            club.Location,
             club.MemberCount,
             club.EventCount,
             club.AvaliableEventCount,
             club.MaxMemberCount,
             club.isPrivate,
-            club.UserId
+            club.UserId,
+            club.CurrentVersionNumber
         );
 
         public static Club ToEntity(ClubCacheDto dto) => new()
@@ -29,12 +33,16 @@ namespace backend.main.features.clubs
             ClubImage = dto.ClubImage,
             Phone = dto.Phone,
             Email = dto.Email,
+            Rating = dto.Rating,
+            WebsiteUrl = dto.WebsiteUrl,
+            Location = dto.Location,
             MemberCount = dto.MemberCount,
             EventCount = dto.EventCount,
             AvaliableEventCount = dto.AvaliableEventCount,
             MaxMemberCount = dto.MaxMemberCount,
             isPrivate = dto.isPrivate,
             UserId = dto.UserId,
+            CurrentVersionNumber = dto.CurrentVersionNumber,
         };
     }
 }
