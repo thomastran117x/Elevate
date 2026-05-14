@@ -116,6 +116,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IClubReindexService, ClubReindexService>();
             services.AddScoped<IEventReindexService, EventReindexService>();
             services.AddScoped<IClubSearchOutboxWriter, ClubSearchOutboxWriter>();
+            services.AddScoped<IClubPostSearchOutboxWriter, ClubPostSearchOutboxWriter>();
             services.AddScoped<IEventSearchOutboxWriter, EventSearchOutboxWriter>();
             services.AddScoped<IPostCommentService, PostCommentService>();
             services.AddScoped<IEventRegistrationService, EventRegistrationService>();

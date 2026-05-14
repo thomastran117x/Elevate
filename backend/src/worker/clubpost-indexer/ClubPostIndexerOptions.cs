@@ -10,9 +10,9 @@ public sealed record ClubPostIndexerOptions(
 {
     public static ClubPostIndexerOptions FromEnvironment() => new(
         Require(EnvironmentSetting.KafkaBootstrapServers, nameof(EnvironmentSetting.KafkaBootstrapServers)),
-        "clubpost-es-index",
-        "clubpost-indexer",
-        "clubpost-es-index-dlq"
+        Require(EnvironmentSetting.ClubPostIndexTopic, nameof(EnvironmentSetting.ClubPostIndexTopic)),
+        Require(EnvironmentSetting.ClubPostIndexGroupId, nameof(EnvironmentSetting.ClubPostIndexGroupId)),
+        Require(EnvironmentSetting.ClubPostIndexDlqTopic, nameof(EnvironmentSetting.ClubPostIndexDlqTopic))
     );
 
     private static string Require(string? value, string settingName)

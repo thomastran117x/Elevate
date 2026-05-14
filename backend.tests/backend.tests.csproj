@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <Compile Include="..\backend\src\worker\club-indexer\ClubIndexerMessageParser.cs" Link="Worker\ClubIndexerMessageParser.cs" />
+    <Compile Include="..\backend\src\worker\clubpost-indexer\ClubPostIndexerMessageParser.cs" Link="Worker\ClubPostIndexerMessageParser.cs" />
   </ItemGroup>
 
 </Project>

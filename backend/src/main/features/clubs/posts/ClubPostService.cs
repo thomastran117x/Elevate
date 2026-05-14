@@ -2,32 +2,35 @@ using backend.main.shared.responses;
 using backend.main.shared.exceptions.http;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.follow;
+using backend.main.infrastructure.database.core;
 using backend.main.infrastructure.elasticsearch;
-using backend.main.shared.providers;
 using backend.main.shared.utilities.logger;
 
 namespace backend.main.features.clubs.posts
 {
     public class ClubPostService : IClubPostService
     {
+        private readonly AppDatabaseContext _db;
         private readonly IClubPostRepository _postRepository;
         private readonly IClubService _clubService;
         private readonly IFollowRepository _followRepository;
         private readonly IClubPostSearchService _searchService;
-        private readonly IPublisher _publisher;
+        private readonly IClubPostSearchOutboxWriter _outboxWriter;
 
         public ClubPostService(
+            AppDatabaseContext db,
             IClubPostRepository postRepository,
             IClubService clubService,
             IFollowRepository followRepository,
             IClubPostSearchService searchService,
-            IPublisher publisher)
+            IClubPostSearchOutboxWriter outboxWriter)
         {
+            _db = db;
             _postRepository = postRepository;
             _clubService = clubService;
             _followRepository = followRepository;
             _searchService = searchService;
-            _publisher = publisher;
+            _outboxWriter = outboxWriter;
         }
 
         public async Task<ClubPost> CreateAsync(int clubId, int userId, string userRole, string title, string content, PostType postType, bool isPinned)
@@ -47,8 +50,13 @@ namespace backend.main.features.clubs.posts
                 IsPinned = isPinned
             };
 
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+
             post = await _postRepository.CreateAsync(post);
-            await PublishIndexEventAsync(BuildUpsertEvent(post));
+            _outboxWriter.StageUpsert(post);
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
             return post;
         }
 
@@ -120,6 +128,8 @@ namespace backend.main.features.clubs.posts
             if (!await _clubService.CanManageClubPostsAsync(clubId, userId, userRole))
                 throw new ForbiddenException("You are not allowed to update this post.");
 
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+
             var updated = await _postRepository.UpdateAsync(postId, new ClubPost
             {
                 Title = title,
@@ -128,7 +138,10 @@ namespace backend.main.features.clubs.posts
                 IsPinned = isPinned
             }) ?? throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
 
-            await PublishIndexEventAsync(BuildUpsertEvent(updated));
+            _outboxWriter.StageUpsert(updated);
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
             return updated;
         }
 
@@ -143,8 +156,12 @@ namespace backend.main.features.clubs.posts
             if (!await _clubService.CanManageClubPostsAsync(clubId, userId, userRole))
                 throw new ForbiddenException("You are not allowed to delete this post.");
 
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+
             await _postRepository.DeleteAsync(postId);
-            await PublishIndexEventAsync(new ClubPostIndexEvent { Operation = "delete", PostId = postId });
+            _outboxWriter.StageDelete(postId);
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
         }
 
         public async Task<(List<ClubPost> Items, int TotalCount, string Source)> GetAllAdminAsync(
@@ -181,33 +198,6 @@ namespace backend.main.features.clubs.posts
 
             return (itemsTask.Result, countTask.Result, ResponseSource.Database);
         }
-
-        private async Task PublishIndexEventAsync(ClubPostIndexEvent evt)
-        {
-            try
-            {
-                await _publisher.PublishAsync("clubpost-es-index", evt);
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, $"Failed to publish ES index event for post {evt.PostId}. Index may be stale.");
-            }
-        }
-
-        private static ClubPostIndexEvent BuildUpsertEvent(ClubPost post) => new()
-        {
-            Operation = "upsert",
-            PostId = post.Id,
-            ClubId = post.ClubId,
-            UserId = post.UserId,
-            Title = post.Title,
-            Content = post.Content,
-            PostType = post.PostType.ToString(),
-            LikesCount = post.LikesCount,
-            IsPinned = post.IsPinned,
-            CreatedAt = post.CreatedAt,
-            UpdatedAt = post.UpdatedAt
-        };
     }
 }
 

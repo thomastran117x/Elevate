@@ -6,6 +6,8 @@ EVENT_CONNECTOR_NAME="event-search-outbox"
 EVENT_CONFIG_PATH="/scripts/event-outbox-connector.json"
 CLUB_CONNECTOR_NAME="club-search-outbox"
 CLUB_CONFIG_PATH="/scripts/club-outbox-connector.json"
+CLUBPOST_CONNECTOR_NAME="clubpost-search-outbox"
+CLUBPOST_CONFIG_PATH="/scripts/clubpost-outbox-connector.json"
 
 echo "Waiting for Kafka Connect at ${CONNECT_URL}..."
 until curl -fsS "${CONNECT_URL}/connectors" >/dev/null 2>&1; do
@@ -29,3 +31,12 @@ curl -fsS \
   --data @"${CLUB_CONFIG_PATH}"
 
 echo "Connector ${CLUB_CONNECTOR_NAME} is configured."
+
+echo "Registering connector ${CLUBPOST_CONNECTOR_NAME}..."
+curl -fsS \
+  -X PUT \
+  -H "Content-Type: application/json" \
+  "${CONNECT_URL}/connectors/${CLUBPOST_CONNECTOR_NAME}/config" \
+  --data @"${CLUBPOST_CONFIG_PATH}"
+
+echo "Connector ${CLUBPOST_CONNECTOR_NAME} is configured."

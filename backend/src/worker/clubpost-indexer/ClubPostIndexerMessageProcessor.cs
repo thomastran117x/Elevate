@@ -1,8 +1,4 @@
-using System.Text.Json;
-
-using backend.main.consumers;
 using backend.main.features.clubs.posts.search;
-using backend.main.shared.providers;
 
 using Polly;
 using Polly.Retry;
@@ -37,25 +33,21 @@ public sealed class ClubPostIndexerMessageProcessor
         ClubPostIndexerEnvelope envelope,
         CancellationToken cancellationToken = default)
     {
-        ClubPostIndexEvent? evt = null;
+        ClubPostIndexerMessage? parsed = null;
 
         try
         {
-            evt = JsonSerializer.Deserialize<ClubPostIndexEvent>(envelope.Payload, JsonOptions.Default)
-                ?? throw new ElasticsearchIndexMessageValidationException(
-                    "Club post index payload could not be deserialized.");
+            parsed = ClubPostIndexerMessageParser.Parse(envelope);
 
             await RetryPipeline.ExecuteAsync(async ct =>
             {
-                if (ElasticsearchIndexMessageValidator.IsDeleteOperation(evt.Operation))
+                if (parsed.Operation == ClubPostIndexerOperation.Delete)
                 {
-                    ElasticsearchIndexMessageValidator.ValidateDelete(evt);
-                    await _searchService.DeleteAsync(evt.PostId, ct);
+                    await _searchService.DeleteAsync(parsed.PostId!.Value, ct);
                 }
                 else
                 {
-                    var document = ElasticsearchIndexMessageValidator.ToClubPostDocument(evt);
-                    await _searchService.IndexAsync(document, ct);
+                    await _searchService.IndexAsync(parsed.Document!, ct);
                 }
             }, cancellationToken);
         }
@@ -63,20 +55,15 @@ public sealed class ClubPostIndexerMessageProcessor
         {
             throw;
         }
-        catch (ElasticsearchIndexMessageValidationException ex)
+        catch (ClubPostIndexerMessageParseException ex)
         {
-            Logger.Warn(ex, "Invalid club post index payload. Publishing to Kafka DLQ.");
-            await _dlqPublisher.PublishAsync(envelope, ex.Message, cancellationToken);
-        }
-        catch (JsonException ex)
-        {
-            Logger.Warn(ex, "Malformed club post index payload. Publishing to Kafka DLQ.");
+            Logger.Warn(ex, "Invalid CDC club post index payload. Publishing to Kafka DLQ.");
             await _dlqPublisher.PublishAsync(envelope, ex.Message, cancellationToken);
         }
         catch (Exception ex)
         {
-            var postId = evt?.PostId.ToString() ?? "unknown";
-            Logger.Warn(ex, $"Club post indexing failed for post {postId}. Publishing to Kafka DLQ.");
+            var postId = parsed?.PostId?.ToString() ?? "unknown";
+            Logger.Warn(ex, $"CDC club post indexing failed for post {postId}. Publishing to Kafka DLQ.");
             await _dlqPublisher.PublishAsync(envelope, ex.Message, cancellationToken);
         }
     }

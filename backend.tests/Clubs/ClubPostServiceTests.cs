@@ -6,7 +6,6 @@ using backend.main.features.clubs.staff;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
 using backend.main.shared.exceptions.http;
-using backend.main.shared.providers;
 
 using FluentAssertions;
 
@@ -165,12 +164,15 @@ public class ClubPostServiceTests
             clubService.Setup(service => service.HasClubStaffAccessAsync(4, 88, "Participant"))
                 .ReturnsAsync(false);
 
+            var outboxWriter = new Mock<IClubPostSearchOutboxWriter>();
+
             var service = new ClubPostService(
+                db,
                 new ClubPostRepository(db),
                 clubService.Object,
                 new FollowRepository(db),
                 Mock.Of<IClubPostSearchService>(),
-                Mock.Of<IPublisher>());
+                outboxWriter.Object);
 
             return new ClubPostServiceHarness(connection, db, service);
         }
