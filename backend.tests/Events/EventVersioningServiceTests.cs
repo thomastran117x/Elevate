@@ -39,6 +39,7 @@ public class EventVersioningServiceTests
         var ev = await harness.Service.CreateEvent(
             clubId: 4,
             userId: 7,
+            userRole: "Organizer",
             name: "Board Game Night",
             description: "A casual game night with strategy tables.",
             location: "Student Center",
@@ -80,6 +81,7 @@ public class EventVersioningServiceTests
         var updated = await harness.Service.UpdateEvent(
             created.Id,
             userId: 7,
+            userRole: "Organizer",
             name: "Advanced Board Game Night",
             description: "Competitive strategy tables and a newcomer pod.",
             location: "Innovation Hall",
@@ -120,6 +122,7 @@ public class EventVersioningServiceTests
         await harness.Service.UpdateEvent(
             created.Id,
             userId: 7,
+            userRole: "Organizer",
             name: "Advanced Board Game Night",
             description: "Competitive strategy tables and a newcomer pod.",
             location: "Innovation Hall",
@@ -173,6 +176,7 @@ public class EventVersioningServiceTests
         await harness.Service.UpdateEvent(
             created.Id,
             userId: 7,
+            userRole: "Organizer",
             name: "Admin Rollback Target",
             description: "A changed version that admins can revert.",
             location: "Main Hall",
@@ -217,6 +221,7 @@ public class EventVersioningServiceTests
         await harness.Service.UpdateEvent(
             created.Id,
             userId: 7,
+            userRole: "Organizer",
             name: "Expired Rollback Target",
             description: "Changed after the rollback window elapsed.",
             location: "Main Hall",
@@ -261,6 +266,107 @@ public class EventVersioningServiceTests
     }
 
     [Fact]
+    public async Task Manager_ShouldBeAbleToCreateUpdateAndInspectManagedClubEvents()
+    {
+        await using var harness = await EventServiceHarness.CreateAsync();
+        harness.SeedManagerAssignment(userId: 55);
+        harness.SeedUploadIntent(PrimaryImageUrl, clubId: 4, userId: 55);
+
+        var created = await harness.Service.CreateEvent(
+            clubId: 4,
+            userId: 55,
+            userRole: "Participant",
+            name: "Manager Event",
+            description: "Created by a delegated manager.",
+            location: "Student Center",
+            imageUrls: [PrimaryImageUrl],
+            startTime: harness.TimeProvider.GetUtcNow().UtcDateTime.AddDays(2),
+            endTime: harness.TimeProvider.GetUtcNow().UtcDateTime.AddDays(2).AddHours(2),
+            isPrivate: false,
+            maxParticipants: 40,
+            registerCost: 0,
+            category: EventCategory.Gaming,
+            venueName: "Room 201",
+            city: "Toronto",
+            latitude: 43.6532,
+            longitude: -79.3832,
+            tags: ["manager"]);
+
+        var updated = await harness.Service.UpdateEvent(
+            created.Id,
+            userId: 55,
+            userRole: "Participant",
+            name: "Manager Event Updated",
+            description: "Updated by a delegated manager.",
+            location: "Innovation Hall",
+            imageUrls: null,
+            startTime: created.StartTime.AddDays(1),
+            endTime: created.EndTime?.AddDays(1),
+            isPrivate: true,
+            maxParticipants: 50,
+            registerCost: 10,
+            category: EventCategory.Social,
+            venueName: "Auditorium",
+            city: "Mississauga",
+            latitude: 43.5890,
+            longitude: -79.6441,
+            tags: ["updated"]);
+
+        updated.Name.Should().Be("Manager Event Updated");
+
+        var (history, totalCount) = await harness.Service.GetVersionHistoryAsync(
+            created.Id,
+            userId: 55,
+            userRole: "Participant");
+
+        totalCount.Should().Be(2);
+        history.Should().Contain(item => item.ActorUserId == 55);
+    }
+
+    [Fact]
+    public async Task Volunteer_ShouldBeAbleToManageEventImagesButNotCreateEvents()
+    {
+        await using var harness = await EventServiceHarness.CreateAsync();
+        harness.SeedVolunteerAssignment(userId: 66);
+        var created = await harness.CreateEventAsync();
+        harness.SeedUploadIntent(SecondaryImageUrl, clubId: 4, userId: 66, eventId: created.Id);
+
+        var image = await harness.Service.AddEventImageAsync(
+            created.Id,
+            66,
+            "Participant",
+            SecondaryImageUrl);
+
+        image.ImageUrl.Should().Be(SecondaryImageUrl);
+
+        await harness.Service.RemoveEventImageAsync(created.Id, image.Id, 66, "Participant");
+
+        var createAct = () => harness.Service.CreateEvent(
+            clubId: 4,
+            userId: 66,
+            userRole: "Participant",
+            name: "Volunteer Event",
+            description: "Should not be allowed",
+            location: "Student Center",
+            imageUrls: [],
+            startTime: harness.TimeProvider.GetUtcNow().UtcDateTime.AddDays(1),
+            endTime: harness.TimeProvider.GetUtcNow().UtcDateTime.AddDays(1).AddHours(1),
+            isPrivate: false,
+            maxParticipants: 20,
+            registerCost: 0,
+            category: EventCategory.Gaming,
+            venueName: "Room 101",
+            city: "Toronto",
+            latitude: 43.0,
+            longitude: -79.0,
+            tags: null);
+
+        await createAct.Should()
+            .ThrowAsync<ForbiddenException>()
+            .WithMessage("Not allowed");
+    }
+
+    [Fact]
     public async Task BatchCreateAndBatchUpdate_ShouldRecordVersionsForEachEvent()
     {
         await using var harness = await EventServiceHarness.CreateAsync();
@@ -270,6 +376,7 @@ public class EventVersioningServiceTests
         var created = await harness.Service.BatchCreateEvents(
             clubId: 4,
             userId: 7,
+            userRole: "Organizer",
             [
                 new BatchCreateEventItem
                 {
@@ -298,6 +405,7 @@ public class EventVersioningServiceTests
 
         var updatedCount = await harness.Service.BatchUpdateEvents(
             7,
+            "Organizer",
             [
                 new BatchUpdateEventItem
                 {
@@ -379,6 +487,22 @@ public class EventVersioningServiceTests
                     Usertype = "Admin",
                     CreatedAt = now.UtcDateTime,
                     UpdatedAt = now.UtcDateTime
+                },
+                new User
+                {
+                    Id = 55,
+                    Email = "manager@test.local",
+                    Usertype = "Participant",
+                    CreatedAt = now.UtcDateTime,
+                    UpdatedAt = now.UtcDateTime
+                },
+                new User
+                {
+                    Id = 66,
+                    Email = "volunteer@test.local",
+                    Usertype = "Participant",
+                    CreatedAt = now.UtcDateTime,
+                    UpdatedAt = now.UtcDateTime
                 });
             db.Clubs.Add(new Club
             {
@@ -424,8 +548,51 @@ public class EventVersioningServiceTests
             var clubService = new Mock<IClubService>();
             clubService.Setup(service => service.GetClub(4))
                 .ReturnsAsync(club);
-            clubService.Setup(service => service.GetClubByUser(7))
-                .ReturnsAsync(club);
+            clubService.Setup(service => service.CanManageClubAsync(
+                    4,
+                    It.IsAny<int>(),
+                    It.IsAny<string?>()))
+                .ReturnsAsync((int clubId, int userId, string? userRole) =>
+                {
+                    if (clubId != 4)
+                        return false;
+
+                    if (userId == 7 || string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase))
+                        return true;
+
+                    return db.ClubStaff.Any(staff =>
+                        staff.ClubId == clubId &&
+                        staff.UserId == userId &&
+                        staff.Role == backend.main.features.clubs.staff.ClubStaffRole.Manager);
+                });
+            clubService.Setup(service => service.HasClubStaffAccessAsync(
+                    4,
+                    It.IsAny<int>(),
+                    It.IsAny<string?>()))
+                .ReturnsAsync((int clubId, int userId, string? userRole) =>
+                {
+                    if (clubId != 4)
+                        return false;
+
+                    if (userId == 7 || string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase))
+                        return true;
+
+                    return db.ClubStaff.Any(staff => staff.ClubId == clubId && staff.UserId == userId);
+                });
+            clubService.Setup(service => service.CanManageEventMediaAsync(
+                    4,
+                    It.IsAny<int>(),
+                    It.IsAny<string?>()))
+                .ReturnsAsync((int clubId, int userId, string? userRole) =>
+                {
+                    if (clubId != 4)
+                        return false;
+
+                    if (userId == 7 || string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase))
+                        return true;
+
+                    return db.ClubStaff.Any(staff => staff.ClubId == clubId && staff.UserId == userId);
+                });
 
             var blobService = new Mock<IAzureBlobService>();
             blobService.Setup(service => service.IsOwnedBlobUrl(It.IsAny<string>()))
@@ -460,6 +627,7 @@ public class EventVersioningServiceTests
             return await Service.CreateEvent(
                 clubId: 4,
                 userId: 7,
+                userRole: "Organizer",
                 name: "Board Game Night",
                 description: "A casual game night with strategy tables.",
                 location: "Student Center",
@@ -487,6 +655,30 @@ public class EventVersioningServiceTests
                 PublicUrl = imageUrl,
                 ContentType = "image/png"
             });
+        }
+
+        public void SeedManagerAssignment(int userId)
+        {
+            Db.ClubStaff.Add(new backend.main.features.clubs.staff.ClubStaff
+            {
+                ClubId = 4,
+                UserId = userId,
+                Role = backend.main.features.clubs.staff.ClubStaffRole.Manager,
+                GrantedByUserId = 7
+            });
+            Db.SaveChanges();
+        }
+
+        public void SeedVolunteerAssignment(int userId)
+        {
+            Db.ClubStaff.Add(new backend.main.features.clubs.staff.ClubStaff
+            {
+                ClubId = 4,
+                UserId = userId,
+                Role = backend.main.features.clubs.staff.ClubStaffRole.Volunteer,
+                GrantedByUserId = 7
+            });
+            Db.SaveChanges();
         }
 
         public async ValueTask DisposeAsync()

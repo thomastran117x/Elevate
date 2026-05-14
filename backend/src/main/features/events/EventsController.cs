@@ -29,7 +29,7 @@ namespace backend.main.features.events
             _clubService = clubService;
         }
 
-        [Authorize(Policy = "OrganizerOnly")]
+        [Authorize]
         [HttpPost("{clubId}")]
         public async Task<IActionResult> CreateEvent([FromBody] EventCreateRequest request, int clubId)
         {
@@ -40,6 +40,7 @@ namespace backend.main.features.events
                 var ev = await _eventService.CreateEvent(
                     clubId,
                     user.Id,
+                    user.Role,
                     request.Name,
                     request.Description,
                     request.Location,
@@ -75,7 +76,7 @@ namespace backend.main.features.events
             }
         }
 
-        [Authorize(Policy = "OrganizerOnly")]
+        [Authorize]
         [HttpPut("{eventId}")]
         public async Task<IActionResult> UpdateEvent([FromBody] EventUpdateRequest request, int eventId)
         {
@@ -86,6 +87,7 @@ namespace backend.main.features.events
                 var ev = await _eventService.UpdateEvent(
                     eventId,
                     user.Id,
+                    user.Role,
                     request.Name,
                     request.Description,
                     request.Location,
@@ -118,7 +120,7 @@ namespace backend.main.features.events
             }
         }
 
-        [Authorize(Policy = "OrganizerOnly")]
+        [Authorize]
         [HttpDelete("{eventId}")]
         public async Task<IActionResult> DeleteEvent(int eventId)
         {
@@ -126,7 +128,7 @@ namespace backend.main.features.events
             {
                 var user = User.GetUserPayload();
 
-                await _eventService.DeleteEvent(eventId, user.Id);
+                await _eventService.DeleteEvent(eventId, user.Id, user.Role);
 
                 return Ok(new MessageResponse(
                     $"The event with ID {eventId} has been deleted successfully."
@@ -257,7 +259,8 @@ namespace backend.main.features.events
         {
             try
             {
-                var ev = await _eventService.GetVisibleEvent(eventId, GetOptionalUserId());
+                var user = GetOptionalUserPayload();
+                var ev = await _eventService.GetVisibleEvent(eventId, user?.Id, user?.Role);
                 var club = await _clubService.GetClub(ev.ClubId);
                 var response = EventMapper.MapToResponse(ev);
                 response.Club = EventMapper.MapClubToResponse(club);
@@ -385,7 +388,8 @@ namespace backend.main.features.events
                 if (parsedIds.Count == 0)
                     return BadRequestResponse("No valid IDs provided.");
 
-                var events = await _eventService.GetVisibleEventsByIds(parsedIds, GetOptionalUserId());
+                var user = GetOptionalUserPayload();
+                var events = await _eventService.GetVisibleEventsByIds(parsedIds, user?.Id, user?.Role);
 
                 return Ok(new ApiResponse<IEnumerable<EventResponse>>(
                     $"{events.Count} event(s) fetched successfully.",
@@ -402,18 +406,18 @@ namespace backend.main.features.events
             }
         }
 
-        private int? GetOptionalUserId()
+        private UserIdentityPayload? GetOptionalUserPayload()
         {
             if (User.Identity?.IsAuthenticated != true)
                 return null;
 
-            return User.GetUserPayload().Id;
+            return User.GetUserPayload();
         }
 
         private static IActionResult BadRequestResponse(string message) =>
             HandleError.Resolve(new BadRequestException(message));
 
-        [Authorize(Policy = "OrganizerOnly")]
+        [Authorize]
         [HttpPost("batch/{clubId}")]
         public async Task<IActionResult> BatchCreateEvents([FromBody] BatchCreateEventRequest request, int clubId)
         {
@@ -421,7 +425,7 @@ namespace backend.main.features.events
             {
                 var user = User.GetUserPayload();
 
-                var result = await _eventService.BatchCreateEvents(clubId, user.Id, request.Events);
+                var result = await _eventService.BatchCreateEvents(clubId, user.Id, user.Role, request.Events);
 
                 return StatusCode(201, new ApiResponse<BatchCreateResultResponse>(
                     $"{result.Created.Count} event(s) created successfully.",
@@ -438,7 +442,7 @@ namespace backend.main.features.events
             }
         }
 
-        [Authorize(Policy = "OrganizerOnly")]
+        [Authorize]
         [HttpPut("batch")]
         public async Task<IActionResult> BatchUpdateEvents([FromBody] BatchUpdateEventRequest request)
         {
@@ -446,7 +450,7 @@ namespace backend.main.features.events
             {
                 var user = User.GetUserPayload();
 
-                var count = await _eventService.BatchUpdateEvents(user.Id, request.Events);
+                var count = await _eventService.BatchUpdateEvents(user.Id, user.Role, request.Events);
 
                 return Ok(new ApiResponse<object>(
                     $"{count} event(s) updated successfully.",
@@ -463,7 +467,7 @@ namespace backend.main.features.events
             }
         }
 
-        [Authorize(Policy = "OrganizerOnly")]
+        [Authorize]
         [HttpDelete("batch")]
         public async Task<IActionResult> BatchDeleteEvents([FromBody] BatchDeleteRequest request)
         {
@@ -471,7 +475,7 @@ namespace backend.main.features.events
             {
                 var user = User.GetUserPayload();
 
-                var count = await _eventService.BatchDeleteEvents(user.Id, request.Ids);
+                var count = await _eventService.BatchDeleteEvents(user.Id, user.Role, request.Ids);
 
                 return Ok(new ApiResponse<object>(
                     $"{count} event(s) deleted successfully.",
@@ -488,7 +492,7 @@ namespace backend.main.features.events
             }
         }
 
-        [Authorize(Policy = "OrganizerOnly")]
+        [Authorize]
         [HttpGet("{eventId}/analytics")]
         public async Task<IActionResult> GetEventAnalytics(int eventId)
         {
@@ -496,7 +500,7 @@ namespace backend.main.features.events
             {
                 var user = User.GetUserPayload();
 
-                var analytics = await _eventService.GetEventAnalytics(eventId, user.Id);
+                var analytics = await _eventService.GetEventAnalytics(eventId, user.Id, user.Role);
 
                 return Ok(new ApiResponse<EventAnalyticsResponse>(
                     $"Analytics for event {eventId} fetched successfully.",
@@ -513,7 +517,7 @@ namespace backend.main.features.events
             }
         }
 
-        [Authorize(Policy = "OrganizerOnly")]
+        [Authorize]
         [HttpPost("images/presigned-url")]
         public async Task<IActionResult> GetPresignedUploadUrl([FromBody] PresignedUrlRequest request)
         {
@@ -524,6 +528,7 @@ namespace backend.main.features.events
                 var result = await _eventService.GenerateImageUploadUrlAsync(
                     request.ClubId,
                     user.Id,
+                    user.Role,
                     request.FileName,
                     request.ContentType,
                     request.EventId);
@@ -543,7 +548,7 @@ namespace backend.main.features.events
             }
         }
 
-        [Authorize(Policy = "OrganizerOnly")]
+        [Authorize]
         [HttpPost("{eventId}/images")]
         public async Task<IActionResult> AddEventImage([FromBody] AddEventImageRequest request, int eventId)
         {
@@ -551,7 +556,7 @@ namespace backend.main.features.events
             {
                 var user = User.GetUserPayload();
 
-                var image = await _eventService.AddEventImageAsync(eventId, user.Id, request.ImageUrl);
+                var image = await _eventService.AddEventImageAsync(eventId, user.Id, user.Role, request.ImageUrl);
 
                 return StatusCode(201, new ApiResponse<object>(
                     $"Image added to event {eventId} successfully.",
@@ -568,7 +573,7 @@ namespace backend.main.features.events
             }
         }
 
-        [Authorize(Policy = "OrganizerOnly")]
+        [Authorize]
         [HttpDelete("{eventId}/images/{imageId}")]
         public async Task<IActionResult> RemoveEventImage(int eventId, int imageId)
         {
@@ -576,7 +581,7 @@ namespace backend.main.features.events
             {
                 var user = User.GetUserPayload();
 
-                await _eventService.RemoveEventImageAsync(eventId, imageId, user.Id);
+                await _eventService.RemoveEventImageAsync(eventId, imageId, user.Id, user.Role);
 
                 return Ok(new MessageResponse(
                     $"Image {imageId} removed from event {eventId} successfully."
@@ -592,7 +597,7 @@ namespace backend.main.features.events
             }
         }
 
-        [Authorize(Policy = "OrganizerOnly")]
+        [Authorize]
         [HttpGet("clubs/{clubId}/analytics")]
         public async Task<IActionResult> GetClubAnalytics(int clubId)
         {
@@ -600,7 +605,7 @@ namespace backend.main.features.events
             {
                 var user = User.GetUserPayload();
 
-                var analytics = await _eventService.GetClubAnalytics(clubId, user.Id);
+                var analytics = await _eventService.GetClubAnalytics(clubId, user.Id, user.Role);
 
                 return Ok(new ApiResponse<ClubAnalyticsResponse>(
                     $"Analytics for club {clubId} fetched successfully.",

@@ -205,6 +205,181 @@ public class ClubVersioningServiceTests
     }
 
     [Fact]
+    public async Task GetManagedClubsAsync_ShouldReturnAllOwnedAndManagedClubs()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+
+        var first = await harness.Service.CreateClub(
+            "Chess Club",
+            7,
+            "Weekly strategy nights",
+            "Social",
+            CreateFormFile("club-v1.png"));
+
+        var second = await harness.Service.CreateClub(
+            "Robotics Club",
+            7,
+            "Building and competing together.",
+            "Academic",
+            CreateFormFile("club-v2.png"));
+
+        await harness.Service.AddStaffAsync(first.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
+
+        var ownedClubs = await harness.Service.GetManagedClubsAsync(7);
+        var managedClubs = await harness.Service.GetManagedClubsAsync(55);
+
+        ownedClubs.Select(club => club.Id).Should().BeEquivalentTo([first.Id, second.Id]);
+        managedClubs.Select(club => club.Id).Should().BeEquivalentTo([first.Id]);
+    }
+
+    [Fact]
+    public async Task AddManagerAsync_ShouldRejectDuplicateManagerAssignments()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+
+        var created = await harness.Service.CreateClub(
+            "Chess Club",
+            7,
+            "Weekly strategy nights",
+            "Social",
+            CreateFormFile("club-v1.png"));
+
+        var manager = await harness.Service.AddStaffAsync(created.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
+
+        manager.UserId.Should().Be(55);
+        manager.Role.Should().Be(backend.main.features.clubs.staff.ClubStaffRole.Manager);
+
+        var act = () => harness.Service.AddStaffAsync(created.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
+
+        await act.Should()
+            .ThrowAsync<ConflictException>()
+            .WithMessage("User already has a staff role for this club.");
+    }
+
+    [Fact]
+    public async Task UpdateClub_ShouldAllowManager()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+
+        var created = await harness.Service.CreateClub(
+            "Chess Club",
+            7,
+            "Weekly strategy nights",
+            "Social",
+            CreateFormFile("club-v1.png"));
+
+        await harness.Service.AddStaffAsync(created.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
+
+        var updated = await harness.Service.UpdateClub(
+            created.Id,
+            userId: 55,
+            userRole: "Participant",
+            name: "Campus Chess Club",
+            description: "Manager-updated description",
+            clubtype: "Social",
+            clubimage: CreateFormFile("club-v2.png"));
+
+        updated.Name.Should().Be("Campus Chess Club");
+        updated.UserId.Should().Be(7);
+
+        var latestVersion = await harness.Db.ClubVersions
+            .OrderByDescending(version => version.VersionNumber)
+            .FirstAsync();
+
+        latestVersion.ActorUserId.Should().Be(55);
+        latestVersion.ActorRole.Should().Be("Participant");
+    }
+
+    [Fact]
+    public async Task DeleteClub_ShouldRejectManager()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+
+        var created = await harness.Service.CreateClub(
+            "Chess Club",
+            7,
+            "Weekly strategy nights",
+            "Social",
+            CreateFormFile("club-v1.png"));
+
+        await harness.Service.AddStaffAsync(created.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
+
+        var act = () => harness.Service.DeleteClub(created.Id, 55);
+
+        await act.Should()
+            .ThrowAsync<ForbiddenException>()
+            .WithMessage("Not allowed");
+    }
+
+    [Fact]
+    public async Task UpdateClub_ShouldRejectVolunteer()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+
+        var created = await harness.Service.CreateClub(
+            "Chess Club",
+            7,
+            "Weekly strategy nights",
+            "Social",
+            CreateFormFile("club-v1.png"));
+
+        await harness.Service.AddStaffAsync(
+            created.Id,
+            55,
+            backend.main.features.clubs.staff.ClubStaffRole.Volunteer,
+            7,
+            "Organizer");
+
+        var act = () => harness.Service.UpdateClub(
+            created.Id,
+            userId: 55,
+            userRole: "Participant",
+            name: "Volunteer Edit",
+            description: "Should not be allowed",
+            clubtype: "Social",
+            clubimage: CreateFormFile("club-v2.png"));
+
+        await act.Should()
+            .ThrowAsync<ForbiddenException>()
+            .WithMessage("Not allowed");
+    }
+
+    [Fact]
+    public async Task TransferOwnershipAsync_ShouldMoveOwnerAndRemoveManagerRoleFromNewOwner()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+
+        var created = await harness.Service.CreateClub(
+            "Chess Club",
+            7,
+            "Weekly strategy nights",
+            "Social",
+            CreateFormFile("club-v1.png"));
+
+        await harness.Service.AddStaffAsync(created.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
+
+        var transferred = await harness.Service.TransferOwnershipAsync(created.Id, 55, 7, "Organizer");
+
+        transferred.UserId.Should().Be(55);
+        (await harness.Db.ClubStaff.AnyAsync(staff => staff.ClubId == created.Id && staff.UserId == 55))
+            .Should()
+            .BeFalse();
+
+        var act = () => harness.Service.UpdateClub(
+            created.Id,
+            userId: 7,
+            userRole: "Organizer",
+            name: "Former Owner Edit",
+            description: "Should not be allowed",
+            clubtype: "Social",
+            clubimage: CreateFormFile("club-v3.png"));
+
+        await act.Should()
+            .ThrowAsync<ForbiddenException>()
+            .WithMessage("Not allowed");
+    }
+
+    [Fact]
     public async Task CleanupRunner_ShouldDeleteOnlyImagesThatAreNoLongerRollbackableOrCurrent()
     {
         var connection = new SqliteConnection("DataSource=:memory:");
@@ -366,6 +541,12 @@ public class ClubVersioningServiceTests
                 },
                 new User
                 {
+                    Id = 55,
+                    Email = "manager@test.local",
+                    Usertype = "Participant"
+                },
+                new User
+                {
                     Id = 99,
                     Email = "admin@test.local",
                     Usertype = "Admin"
@@ -405,6 +586,20 @@ public class ClubVersioningServiceTests
                     Id = 7,
                     Email = "owner@test.local",
                     Usertype = "Organizer"
+                });
+            userService.Setup(service => service.GetUserByIdAsync(55))
+                .ReturnsAsync(new User
+                {
+                    Id = 55,
+                    Email = "manager@test.local",
+                    Usertype = "Participant"
+                });
+            userService.Setup(service => service.GetUserByIdAsync(99))
+                .ReturnsAsync(new User
+                {
+                    Id = 99,
+                    Email = "admin@test.local",
+                    Usertype = "Admin"
                 });
 
             var followService = new Mock<IFollowService>();

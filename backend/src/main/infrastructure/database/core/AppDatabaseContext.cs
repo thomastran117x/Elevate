@@ -6,6 +6,7 @@ using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.reviews;
+using backend.main.features.clubs.staff;
 using backend.main.features.clubs.versions;
 using backend.main.features.events;
 using backend.main.features.events.images;
@@ -24,6 +25,7 @@ namespace backend.main.infrastructure.database.core
     {
         public DbSet<User> Users { get; set; } = null!;
         public DbSet<Club> Clubs { get; set; } = null!;
+        public DbSet<ClubStaff> ClubStaff { get; set; } = null!;
         public DbSet<ClubVersion> ClubVersions { get; set; } = null!;
         public DbSet<Events> Events { get; set; } = null!;
         public DbSet<EventVersion> EventVersions { get; set; } = null!;
@@ -79,6 +81,39 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<Club>()
                 .HasIndex(c => c.UserId);
+
+            modelBuilder.Entity<ClubStaff>()
+                .HasOne<Club>()
+                .WithMany()
+                .HasForeignKey(cs => cs.ClubId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClubStaff>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(cs => cs.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClubStaff>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(cs => cs.GrantedByUserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ClubStaff>()
+                .Property(cs => cs.Role)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<ClubStaff>()
+                .HasIndex(cs => new { cs.ClubId, cs.UserId })
+                .IsUnique();
+
+            modelBuilder.Entity<ClubStaff>()
+                .HasIndex(cs => cs.UserId);
 
             modelBuilder.Entity<ClubVersion>()
                 .HasOne<Club>()

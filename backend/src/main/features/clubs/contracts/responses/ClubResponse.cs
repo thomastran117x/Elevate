@@ -22,6 +22,10 @@ namespace backend.main.features.clubs.contracts.responses
         public int MaxMemberCount { get; set; } = 0;
         public bool IsPrivate { get; set; } = false;
         public int CurrentVersionNumber { get; set; } = 0;
+        public bool IsOwner { get; set; } = false;
+        public bool IsManager { get; set; } = false;
+        public bool IsVolunteer { get; set; } = false;
+        public bool CanManage { get; set; } = false;
 
         public string? Phone
         {

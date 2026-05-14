@@ -11,32 +11,31 @@ namespace backend.main.features.clubs.posts
     public class ClubPostService : IClubPostService
     {
         private readonly IClubPostRepository _postRepository;
-        private readonly IClubRepository _clubRepository;
+        private readonly IClubService _clubService;
         private readonly IFollowRepository _followRepository;
         private readonly IClubPostSearchService _searchService;
         private readonly IPublisher _publisher;
 
         public ClubPostService(
             IClubPostRepository postRepository,
-            IClubRepository clubRepository,
+            IClubService clubService,
             IFollowRepository followRepository,
             IClubPostSearchService searchService,
             IPublisher publisher)
         {
             _postRepository = postRepository;
-            _clubRepository = clubRepository;
+            _clubService = clubService;
             _followRepository = followRepository;
             _searchService = searchService;
             _publisher = publisher;
         }
 
-        public async Task<ClubPost> CreateAsync(int clubId, int userId, string title, string content, PostType postType, bool isPinned)
+        public async Task<ClubPost> CreateAsync(int clubId, int userId, string userRole, string title, string content, PostType postType, bool isPinned)
         {
-            var club = await _clubRepository.GetByIdAsync(clubId)
-                ?? throw new ResourceNotFoundException($"Club with ID {clubId} was not found.");
+            var club = await _clubService.GetClub(clubId);
 
-            if (club.UserId != userId)
-                throw new ForbiddenException("Only the club owner can create posts.");
+            if (!await _clubService.CanManageClubPostsAsync(clubId, userId, userRole))
+                throw new ForbiddenException("You are not allowed to create posts for this club.");
 
             var post = new ClubPost
             {
@@ -54,18 +53,17 @@ namespace backend.main.features.clubs.posts
         }
 
         public async Task<(List<ClubPost> Items, int TotalCount, string Source)> GetByClubIdAsync(
-            int clubId, int? requestingUserId, string? search, PostSortBy sortBy, int page, int pageSize)
+            int clubId, int? requestingUserId, string? requestingUserRole, string? search, PostSortBy sortBy, int page, int pageSize)
         {
-            var club = await _clubRepository.GetByIdAsync(clubId)
-                ?? throw new ResourceNotFoundException($"Club with ID {clubId} was not found.");
+            var club = await _clubService.GetClub(clubId);
 
             if (club.isPrivate)
             {
                 if (requestingUserId == null)
                     throw new UnauthorizedException("Authentication is required to view posts for a private club.");
 
-                bool isOwner = club.UserId == requestingUserId.Value;
-                if (!isOwner)
+                var hasStaffAccess = await _clubService.HasClubStaffAccessAsync(clubId, requestingUserId.Value, requestingUserRole);
+                if (!hasStaffAccess)
                 {
                     var membership = await _followRepository.IsFollowingClubAsync(clubId, requestingUserId.Value);
                     if (membership == null)
@@ -111,7 +109,7 @@ namespace backend.main.features.clubs.posts
             return (resultPosts, countTask.Result, ResponseSource.Database);
         }
 
-        public async Task<ClubPost> UpdateAsync(int clubId, int postId, int userId, string title, string content, PostType postType, bool isPinned)
+        public async Task<ClubPost> UpdateAsync(int clubId, int postId, int userId, string userRole, string title, string content, PostType postType, bool isPinned)
         {
             var post = await _postRepository.GetByIdAsync(postId)
                 ?? throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
@@ -119,7 +117,7 @@ namespace backend.main.features.clubs.posts
             if (post.ClubId != clubId)
                 throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
 
-            if (post.UserId != userId)
+            if (!await _clubService.CanManageClubPostsAsync(clubId, userId, userRole))
                 throw new ForbiddenException("You are not allowed to update this post.");
 
             var updated = await _postRepository.UpdateAsync(postId, new ClubPost
@@ -134,7 +132,7 @@ namespace backend.main.features.clubs.posts
             return updated;
         }
 
-        public async Task DeleteAsync(int clubId, int postId, int userId)
+        public async Task DeleteAsync(int clubId, int postId, int userId, string userRole)
         {
             var post = await _postRepository.GetByIdAsync(postId)
                 ?? throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
@@ -142,7 +140,7 @@ namespace backend.main.features.clubs.posts
             if (post.ClubId != clubId)
                 throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
 
-            if (post.UserId != userId)
+            if (!await _clubService.CanManageClubPostsAsync(clubId, userId, userRole))
                 throw new ForbiddenException("You are not allowed to delete this post.");
 
             await _postRepository.DeleteAsync(postId);

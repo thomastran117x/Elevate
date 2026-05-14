@@ -69,7 +69,11 @@ namespace backend.main.features.clubs
                 email: request.Email
             );
 
-            ClubResponse response = MapToResponse(club);
+            ClubResponse response = MapToResponse(club, new ClubAccessInfo
+            {
+                IsOwner = true,
+                CanManage = true
+            });
 
             return StatusCode(
                 201,
@@ -98,7 +102,8 @@ namespace backend.main.features.clubs
                 email: request.Email
             );
 
-            ClubResponse response = MapToResponse(club);
+            var access = await _clubService.GetClubAccessAsync(id, userPayload.Id, userPayload.Role);
+            ClubResponse response = MapToResponse(club, access);
 
             return StatusCode(
                 200,
@@ -129,8 +134,8 @@ namespace backend.main.features.clubs
         public async Task<IActionResult> GetClub(int id)
         {
             Club club = await _clubService.GetClub(id);
-
-            ClubResponse response = MapToResponse(club);
+            var access = await ResolveAccessAsync([club.Id]);
+            ClubResponse response = MapToResponse(club, access[club.Id]);
 
             return StatusCode(
                 200,
@@ -150,7 +155,8 @@ namespace backend.main.features.clubs
             List<Club> clubs = await _clubService
                 .GetAllClubs(search, page, pageSize);
 
-            IEnumerable<ClubResponse> responses = clubs.Select(MapToResponse);
+            var accessMap = await ResolveAccessAsync(clubs.Select(club => club.Id));
+            IEnumerable<ClubResponse> responses = clubs.Select(club => MapToResponse(club, accessMap[club.Id]));
 
             return StatusCode(
                 200,
@@ -159,6 +165,102 @@ namespace backend.main.features.clubs
                     responses
                 )
             );
+        }
+
+        [Authorize]
+        [HttpGet("managed")]
+        public async Task<IActionResult> GetManagedClubs()
+        {
+            var userPayload = User.GetUserPayload();
+            var clubs = await _clubService.GetManagedClubsAsync(userPayload.Id);
+            var accessMap = await _clubService.GetClubAccessMapAsync(
+                clubs.Select(club => club.Id),
+                userPayload.Id,
+                userPayload.Role);
+
+            return Ok(new ApiResponse<IEnumerable<ClubResponse>>(
+                "Managed clubs have been fetched successfully.",
+                clubs.Select(club => MapToResponse(club, accessMap[club.Id]))
+            ));
+        }
+
+        [Authorize]
+        [HttpGet("{id}/staff")]
+        public async Task<IActionResult> GetClubStaff(int id)
+        {
+            var userPayload = User.GetUserPayload();
+            var staff = await _clubService.GetStaffAsync(id, userPayload.Id, userPayload.Role);
+
+            return Ok(new ApiResponse<IEnumerable<ClubStaffResponse>>(
+                $"Staff for club with ID {id} has been fetched successfully.",
+                staff.Select(MapToStaffResponse)
+            ));
+        }
+
+        [Authorize]
+        [HttpPost("{id}/staff/managers")]
+        public async Task<IActionResult> AddManager(int id, [FromBody] ClubStaffCreateRequest request)
+        {
+            var userPayload = User.GetUserPayload();
+            var staff = await _clubService.AddStaffAsync(
+                id,
+                request.UserId,
+                backend.main.features.clubs.staff.ClubStaffRole.Manager,
+                userPayload.Id,
+                userPayload.Role);
+
+            return StatusCode(201, new ApiResponse<ClubStaffResponse>(
+                $"Manager has been added to club with ID {id} successfully.",
+                MapToStaffResponse(staff)
+            ));
+        }
+
+        [Authorize]
+        [HttpPost("{id}/staff/volunteers")]
+        public async Task<IActionResult> AddVolunteer(int id, [FromBody] ClubStaffCreateRequest request)
+        {
+            var userPayload = User.GetUserPayload();
+            var staff = await _clubService.AddStaffAsync(
+                id,
+                request.UserId,
+                backend.main.features.clubs.staff.ClubStaffRole.Volunteer,
+                userPayload.Id,
+                userPayload.Role);
+
+            return StatusCode(201, new ApiResponse<ClubStaffResponse>(
+                $"Volunteer has been added to club with ID {id} successfully.",
+                MapToStaffResponse(staff)
+            ));
+        }
+
+        [Authorize]
+        [HttpDelete("{id}/staff/{userId}")]
+        public async Task<IActionResult> RemoveStaff(int id, int userId)
+        {
+            var userPayload = User.GetUserPayload();
+            await _clubService.RemoveStaffAsync(id, userId, userPayload.Id, userPayload.Role);
+
+            return Ok(new MessageResponse(
+                $"Staff member with user ID {userId} has been removed from club with ID {id} successfully."
+            ));
+        }
+
+        [Authorize]
+        [HttpPost("{id}/transfer-ownership")]
+        public async Task<IActionResult> TransferOwnership(int id, [FromBody] ClubOwnershipTransferRequest request)
+        {
+            var userPayload = User.GetUserPayload();
+            var club = await _clubService.TransferOwnershipAsync(
+                id,
+                request.NewOwnerUserId,
+                userPayload.Id,
+                userPayload.Role);
+
+            var access = await _clubService.GetClubAccessAsync(id, userPayload.Id, userPayload.Role);
+            return Ok(new ApiResponse<ClubResponse>(
+                $"Ownership for club with ID {id} has been transferred successfully.",
+                MapToResponse(club, access)
+            ));
         }
 
         [Authorize]
@@ -235,9 +337,18 @@ namespace backend.main.features.clubs
             ));
         }
 
-        private static ClubResponse MapToResponse(Club club)
+        private async Task<Dictionary<int, ClubAccessInfo>> ResolveAccessAsync(IEnumerable<int> clubIds)
         {
-            return new ClubResponse(
+            if (User.Identity?.IsAuthenticated != true)
+                return clubIds.Distinct().ToDictionary(id => id, _ => new ClubAccessInfo());
+
+            var userPayload = User.GetUserPayload();
+            return await _clubService.GetClubAccessMapAsync(clubIds, userPayload.Id, userPayload.Role);
+        }
+
+        private static ClubResponse MapToResponse(Club club, ClubAccessInfo? access = null)
+        {
+            var response = new ClubResponse(
                 club.Id,
                 club.UserId,
                 club.Name,
@@ -254,9 +365,26 @@ namespace backend.main.features.clubs
             {
                 Phone = club.Phone,
                 Email = club.Email,
-                Rating = club.Rating
+                Rating = club.Rating,
+                IsOwner = access?.IsOwner ?? false,
+                IsManager = access?.IsManager ?? false,
+                IsVolunteer = access?.IsVolunteer ?? false,
+                CanManage = access?.CanManage ?? false
             };
+
+            return response;
         }
+
+        private static ClubStaffResponse MapToStaffResponse(backend.main.features.clubs.staff.ClubStaff staff) =>
+            new(
+                staff.Id,
+                staff.ClubId,
+                staff.UserId,
+                staff.Role.ToString(),
+                staff.GrantedByUserId,
+                staff.CreatedAt,
+                staff.UpdatedAt
+            );
 
         private static ClubVersionListItemResponse MapToVersionListItemResponse(ClubVersionHistoryItem item) =>
             new(

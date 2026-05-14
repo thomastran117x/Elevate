@@ -3,6 +3,7 @@ using System.Text.Json;
 using backend.main.features.cache;
 using backend.main.features.clubs.contracts;
 using backend.main.features.clubs.follow;
+using backend.main.features.clubs.staff;
 using backend.main.features.clubs.versions;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
@@ -152,48 +153,132 @@ namespace backend.main.features.clubs
             return club;
         }
 
-        public async Task<Club> GetClubByUser(int userId)
+        public async Task<List<Club>> GetManagedClubsAsync(int userId)
         {
-            var key = GetClubUserCacheKey(userId);
+            return await _db.Clubs
+                .AsNoTracking()
+                .Where(club =>
+                    club.UserId == userId ||
+                    _db.ClubStaff.Any(staff =>
+                        staff.ClubId == club.Id &&
+                        staff.UserId == userId))
+                .OrderByDescending(club => club.CreatedAt)
+                .ToListAsync();
+        }
 
-            var cached = await _cache.GetValueAsync(key);
+        public async Task<ClubAccessInfo> GetClubAccessAsync(int clubId, int? userId, string? userRole = null)
+        {
+            var map = await GetClubAccessMapAsync([clubId], userId, userRole);
+            return map.TryGetValue(clubId, out var access)
+                ? access
+                : new ClubAccessInfo();
+        }
 
-            if (cached == NullSentinel)
-                throw new ResourceNotFoundException($"Club for user {userId} not found");
+        public async Task<Dictionary<int, ClubAccessInfo>> GetClubAccessMapAsync(
+            IEnumerable<int> clubIds,
+            int? userId,
+            string? userRole = null)
+        {
+            var ids = clubIds.Distinct().ToList();
+            var result = ids.ToDictionary(id => id, _ => new ClubAccessInfo());
 
-            Club club;
+            if (ids.Count == 0)
+                return result;
 
-            if (cached != null)
+            if (userId == null)
+                return result;
+
+            if (IsAdminRole(userRole))
             {
-                var dto = JsonSerializer.Deserialize<ClubCacheDto>(cached)!;
-                club = ClubCacheMapper.ToEntity(dto);
+                foreach (var id in ids)
+                    result[id] = new ClubAccessInfo { CanManage = true };
+
+                return result;
             }
-            else
-            {
-                var fetchedClub = await _clubRepository.GetByUserIdAsync(userId);
-                if (fetchedClub == null)
-                {
-                    await _cache.SetValueAsync(key, NullSentinel, NotFoundTTL);
-                    throw new ResourceNotFoundException($"Club for user {userId} not found");
-                }
 
-                club = fetchedClub;
-                await CacheClubAsync(club);
+            var ownedIds = await _db.Clubs
+                .AsNoTracking()
+                .Where(club => ids.Contains(club.Id) && club.UserId == userId.Value)
+                .Select(club => club.Id)
+                .ToListAsync();
+
+            var managerIds = await _db.ClubStaff
+                .AsNoTracking()
+                .Where(staff =>
+                    ids.Contains(staff.ClubId) &&
+                    staff.UserId == userId.Value)
+                .Select(staff => new { staff.ClubId, staff.Role })
+                .ToListAsync();
+
+            var ownedIdSet = ownedIds.ToHashSet();
+            var managerIdSet = managerIds
+                .Where(staff => staff.Role == ClubStaffRole.Manager)
+                .Select(staff => staff.ClubId)
+                .ToHashSet();
+            var volunteerIdSet = managerIds
+                .Where(staff => staff.Role == ClubStaffRole.Volunteer)
+                .Select(staff => staff.ClubId)
+                .ToHashSet();
+
+            foreach (var id in ids)
+            {
+                var isOwner = ownedIdSet.Contains(id);
+                var isManager = managerIdSet.Contains(id);
+                var isVolunteer = volunteerIdSet.Contains(id);
+                result[id] = new ClubAccessInfo
+                {
+                    IsOwner = isOwner,
+                    IsManager = isManager,
+                    IsVolunteer = isVolunteer,
+                    CanManage = isOwner || isManager
+                };
             }
 
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await TrackClubAccessAsync(club.Id);
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn(ex, "Failed to track club access for club");
-                }
-            });
+            return result;
+        }
 
-            return club;
+        public async Task<bool> CanManageClubAsync(int clubId, int userId, string? userRole = null)
+        {
+            if (IsAdminRole(userRole))
+                return await _db.Clubs.AsNoTracking().AnyAsync(club => club.Id == clubId);
+
+            return await _db.Clubs
+                .AsNoTracking()
+                .AnyAsync(club =>
+                    club.Id == clubId &&
+                    (club.UserId == userId ||
+                     _db.ClubStaff.Any(staff =>
+                         staff.ClubId == club.Id &&
+                         staff.UserId == userId &&
+                         staff.Role == ClubStaffRole.Manager)));
+        }
+
+        public async Task<bool> HasClubStaffAccessAsync(int clubId, int userId, string? userRole = null)
+        {
+            if (IsAdminRole(userRole))
+                return await _db.Clubs.AsNoTracking().AnyAsync(club => club.Id == clubId);
+
+            return await _db.Clubs
+                .AsNoTracking()
+                .AnyAsync(club =>
+                    club.Id == clubId &&
+                    (club.UserId == userId ||
+                     _db.ClubStaff.Any(staff =>
+                         staff.ClubId == club.Id &&
+                         staff.UserId == userId)));
+        }
+
+        public Task<bool> CanManageClubPostsAsync(int clubId, int userId, string? userRole = null) =>
+            HasClubStaffAccessAsync(clubId, userId, userRole);
+
+        public Task<bool> CanManageEventMediaAsync(int clubId, int userId, string? userRole = null) =>
+            HasClubStaffAccessAsync(clubId, userId, userRole);
+
+        public async Task<bool> IsClubOwnerAsync(int clubId, int userId, string? userRole = null)
+        {
+            return await _db.Clubs
+                .AsNoTracking()
+                .AnyAsync(club => club.Id == clubId && club.UserId == userId);
         }
 
         public async Task<List<Club>> GetAllClubs(
@@ -282,7 +367,7 @@ namespace backend.main.features.clubs
             string? email = null)
         {
             var existing = await GetTrackedClubOrThrowAsync(clubId);
-            EnsureOwnerOrAdmin(existing, userId, userRole);
+            await EnsureCanManageClubAsync(existing, userId, userRole);
 
             var previousSnapshot = BuildSnapshot(existing);
 
@@ -326,9 +411,7 @@ namespace backend.main.features.clubs
         public async Task DeleteClub(int clubId, int userId)
         {
             var club = await GetTrackedClubOrThrowAsync(clubId);
-
-            if (club.UserId != userId)
-                throw new ForbiddenException("Not allowed");
+            EnsureOwner(club, userId);
 
             await _fileUploadService.DeleteImageAsync(club.ClubImage);
 
@@ -336,8 +419,98 @@ namespace backend.main.features.clubs
             await _db.SaveChangesAsync();
 
             await _cache.DeleteKeyAsync(GetClubCacheKey(clubId));
-            await _cache.DeleteKeyAsync(GetClubUserCacheKey(club.UserId));
             await BumpClubListVersionAsync();
+        }
+
+        public async Task<IReadOnlyList<ClubStaff>> GetStaffAsync(int clubId, int userId, string userRole)
+        {
+            var club = await GetClubRecordOrThrowAsync(clubId);
+            EnsureOwner(club, userId);
+
+            return await _db.ClubStaff
+                .AsNoTracking()
+                .Where(staff => staff.ClubId == clubId)
+                .OrderBy(staff => staff.CreatedAt)
+                .ToListAsync();
+        }
+
+        public async Task<ClubStaff> AddStaffAsync(int clubId, int targetUserId, ClubStaffRole role, int actorUserId, string actorUserRole)
+        {
+            var club = await GetTrackedClubOrThrowAsync(clubId);
+            EnsureOwner(club, actorUserId);
+
+            if (club.UserId == targetUserId)
+                throw new ConflictException("The club owner already has full access.");
+
+            _ = await _userService.GetUserByIdAsync(targetUserId);
+
+            var existing = await _db.ClubStaff
+                .FirstOrDefaultAsync(staff => staff.ClubId == clubId && staff.UserId == targetUserId);
+
+            if (existing != null)
+                throw new ConflictException("User already has a staff role for this club.");
+
+            var now = GetUtcNow();
+            var staff = new ClubStaff
+            {
+                ClubId = clubId,
+                UserId = targetUserId,
+                Role = role,
+                GrantedByUserId = actorUserId,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            _db.ClubStaff.Add(staff);
+            await _db.SaveChangesAsync();
+
+            return staff;
+        }
+
+        public async Task RemoveStaffAsync(int clubId, int targetUserId, int actorUserId, string actorUserRole)
+        {
+            var club = await GetTrackedClubOrThrowAsync(clubId);
+            EnsureOwner(club, actorUserId);
+
+            if (club.UserId == targetUserId)
+                throw new BadRequestException("The club owner cannot be removed from staff.");
+
+            var staff = await _db.ClubStaff
+                .FirstOrDefaultAsync(entry =>
+                    entry.ClubId == clubId &&
+                    entry.UserId == targetUserId)
+                ?? throw new ResourceNotFoundException("Staff assignment was not found.");
+
+            _db.ClubStaff.Remove(staff);
+            await _db.SaveChangesAsync();
+        }
+
+        public async Task<Club> TransferOwnershipAsync(int clubId, int newOwnerUserId, int actorUserId, string actorUserRole)
+        {
+            var club = await GetTrackedClubOrThrowAsync(clubId);
+            EnsureOwner(club, actorUserId);
+
+            if (club.UserId == newOwnerUserId)
+                throw new ConflictException("This user already owns the club.");
+
+            _ = await _userService.GetUserByIdAsync(newOwnerUserId);
+
+            var now = GetUtcNow();
+            club.UserId = newOwnerUserId;
+            club.UpdatedAt = now;
+
+            var existingManagerRole = await _db.ClubStaff
+                .FirstOrDefaultAsync(entry => entry.ClubId == clubId && entry.UserId == newOwnerUserId);
+
+            if (existingManagerRole != null)
+                _db.ClubStaff.Remove(existingManagerRole);
+
+            await _db.SaveChangesAsync();
+
+            await CacheClubAsync(club);
+            await BumpClubListVersionAsync();
+
+            return club;
         }
 
         public async Task JoinClubAsync(int clubId, int userId)
@@ -385,7 +558,7 @@ namespace backend.main.features.clubs
             pageSize = NormalizePageSize(pageSize);
 
             var club = await GetClubRecordOrThrowAsync(clubId);
-            EnsureOwnerOrAdmin(club, userId, userRole);
+            await EnsureCanManageClubAsync(club, userId, userRole);
 
             var query = _db.ClubVersions
                 .AsNoTracking()
@@ -411,7 +584,7 @@ namespace backend.main.features.clubs
             string userRole)
         {
             var club = await GetClubRecordOrThrowAsync(clubId);
-            EnsureOwnerOrAdmin(club, userId, userRole);
+            await EnsureCanManageClubAsync(club, userId, userRole);
 
             var version = await _db.ClubVersions
                 .AsNoTracking()
@@ -440,7 +613,7 @@ namespace backend.main.features.clubs
             string userRole)
         {
             var club = await GetTrackedClubOrThrowAsync(clubId);
-            EnsureOwnerOrAdmin(club, userId, userRole);
+            await EnsureCanManageClubAsync(club, userId, userRole);
 
             var targetVersion = await _db.ClubVersions
                 .AsNoTracking()
@@ -501,7 +674,6 @@ namespace backend.main.features.clubs
             var expiry = WithJitter(ClubTTL);
 
             await _cache.SetValueAsync(GetClubCacheKey(club.Id), payload, expiry);
-            await _cache.SetValueAsync(GetClubUserCacheKey(club.UserId), payload, expiry);
         }
 
         private async Task<long> GetClubListVersionAsync()
@@ -730,17 +902,33 @@ namespace backend.main.features.clubs
 
         private static string GetClubCacheKey(int clubId) => $"club:{clubId}";
 
-        private static string GetClubUserCacheKey(int userId) => $"club:user:{userId}";
-
-        private static void EnsureOwnerOrAdmin(Club club, int userId, string userRole)
+        private async Task EnsureCanManageClubAsync(Club club, int userId, string userRole)
         {
             if (club.UserId == userId || IsAdminRole(userRole))
+                return;
+
+            var isManager = await _db.ClubStaff
+                .AsNoTracking()
+                .AnyAsync(staff =>
+                    staff.ClubId == club.Id &&
+                    staff.UserId == userId &&
+                    staff.Role == ClubStaffRole.Manager);
+
+            if (isManager)
                 return;
 
             throw new ForbiddenException("Not allowed");
         }
 
-        private static bool IsAdminRole(string userRole) =>
+        private static void EnsureOwner(Club club, int userId)
+        {
+            if (club.UserId == userId)
+                return;
+
+            throw new ForbiddenException("Not allowed");
+        }
+
+        private static bool IsAdminRole(string? userRole) =>
             string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase);
 
         private static string NormalizeActorRole(string actorRole) =>

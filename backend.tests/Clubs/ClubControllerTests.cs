@@ -1,7 +1,9 @@
 using System.Security.Claims;
 
 using backend.main.features.clubs;
+using backend.main.features.clubs.contracts.requests;
 using backend.main.features.clubs.contracts.responses;
+using backend.main.features.clubs.staff;
 using backend.main.features.clubs.versions;
 using backend.main.features.clubs.versions.contracts.responses;
 using backend.main.shared.responses;
@@ -89,6 +91,99 @@ public class ClubControllerTests
         response.Data!.RestoredFromVersionNumber.Should().Be(1);
         response.Data.NewVersionNumber.Should().Be(3);
         response.Data.Club.CurrentVersionNumber.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task GetManagedClubs_ShouldReturnOwnedAndManagedClubResponses()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.GetManagedClubsAsync(7))
+            .ReturnsAsync([
+                new Club
+                {
+                    Id = 4,
+                    UserId = 7,
+                    Name = "Chess Club",
+                    Description = "Weekly strategy nights",
+                    Clubtype = ClubType.Social,
+                    ClubImage = "https://cdn.test/clubs/chess.png",
+                    CurrentVersionNumber = 2,
+                }
+            ]);
+        service.Setup(s => s.GetClubAccessMapAsync(It.IsAny<IEnumerable<int>>(), 7, "Organizer"))
+            .ReturnsAsync(new Dictionary<int, ClubAccessInfo>
+            {
+                [4] = new() { IsOwner = true, CanManage = true }
+            });
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.GetManagedClubs();
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<IEnumerable<ClubResponse>>>().Subject;
+
+        response.Data.Should().ContainSingle();
+        response.Data!.Single().IsOwner.Should().BeTrue();
+        response.Data.Single().CanManage.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AddManager_ShouldReturnCreatedStaffPayload()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.AddStaffAsync(4, 55, ClubStaffRole.Manager, 7, "Organizer"))
+            .ReturnsAsync(new ClubStaff
+            {
+                Id = 3,
+                ClubId = 4,
+                UserId = 55,
+                Role = ClubStaffRole.Manager,
+                GrantedByUserId = 7,
+                CreatedAt = new DateTime(2026, 5, 14, 12, 0, 0, DateTimeKind.Utc),
+                UpdatedAt = new DateTime(2026, 5, 14, 12, 0, 0, DateTimeKind.Utc)
+            });
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.AddManager(4, new ClubStaffCreateRequest { UserId = 55 });
+
+        var created = result.Should().BeOfType<ObjectResult>().Subject;
+        created.StatusCode.Should().Be(201);
+
+        var response = created.Value.Should().BeOfType<ApiResponse<ClubStaffResponse>>().Subject;
+        response.Data.Should().NotBeNull();
+        response.Data!.UserId.Should().Be(55);
+        response.Data.Role.Should().Be("Manager");
+    }
+
+    [Fact]
+    public async Task AddVolunteer_ShouldReturnCreatedStaffPayload()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.AddStaffAsync(4, 66, ClubStaffRole.Volunteer, 7, "Organizer"))
+            .ReturnsAsync(new ClubStaff
+            {
+                Id = 4,
+                ClubId = 4,
+                UserId = 66,
+                Role = ClubStaffRole.Volunteer,
+                GrantedByUserId = 7,
+                CreatedAt = new DateTime(2026, 5, 14, 12, 0, 0, DateTimeKind.Utc),
+                UpdatedAt = new DateTime(2026, 5, 14, 12, 0, 0, DateTimeKind.Utc)
+            });
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.AddVolunteer(4, new ClubStaffCreateRequest { UserId = 66 });
+
+        var created = result.Should().BeOfType<ObjectResult>().Subject;
+        created.StatusCode.Should().Be(201);
+
+        var response = created.Value.Should().BeOfType<ApiResponse<ClubStaffResponse>>().Subject;
+        response.Data.Should().NotBeNull();
+        response.Data!.UserId.Should().Be(66);
+        response.Data.Role.Should().Be("Volunteer");
     }
 
     private static ClubController CreateController(IClubService service)

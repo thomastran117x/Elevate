@@ -90,6 +90,7 @@ namespace backend.main.features.events
         public async Task<Events> CreateEvent(
             int clubId,
             int userId,
+            string userRole,
             string name,
             string description,
             string location,
@@ -108,10 +109,7 @@ namespace backend.main.features.events
         {
             try
             {
-                var club = await _clubService.GetClub(clubId);
-
-                if (club.UserId != userId)
-                    throw new ForbiddenException("Not allowed");
+                await EnsureCanManageClubAsync(clubId, userId, userRole);
 
                 var requestedImageUrls = imageUrls.Take(5).ToList();
                 await ValidateUploadedImageUrlsAsync(clubId, userId, requestedImageUrls);
@@ -148,7 +146,7 @@ namespace backend.main.features.events
                     created,
                     EventVersionActions.Create,
                     actorUserId: userId,
-                    actorRole: "Organizer",
+                    actorRole: NormalizeActorRole(userRole),
                     rollbackSourceVersionNumber: null,
                     changedFields: BuildChangedFields(null, BuildSnapshot(created)),
                     createdAt: now);
@@ -210,12 +208,12 @@ namespace backend.main.features.events
             }
         }
 
-        public async Task<Events> GetVisibleEvent(int eventId, int? userId = null)
+        public async Task<Events> GetVisibleEvent(int eventId, int? userId = null, string? userRole = null)
         {
             try
             {
                 var ev = await GetEvent(eventId);
-                if (await CanViewEventAsync(ev, userId))
+                if (await CanViewEventAsync(ev, userId, userRole))
                     return ev;
 
                 throw new ResourceNotFoundException($"Event {eventId} not found");
@@ -328,6 +326,7 @@ namespace backend.main.features.events
         public async Task<Events> UpdateEvent(
             int eventId,
             int userId,
+            string userRole,
             string name,
             string description,
             string location,
@@ -347,10 +346,7 @@ namespace backend.main.features.events
             try
             {
                 var existing = await GetTrackedEventOrThrowAsync(eventId);
-                var club = await _clubService.GetClubByUser(userId);
-
-                if (existing.ClubId != club.Id)
-                    throw new ForbiddenException("Not allowed");
+                await EnsureCanManageEventAsync(existing, userId, userRole);
 
                 var previousSnapshot = BuildSnapshot(existing);
 
@@ -366,7 +362,7 @@ namespace backend.main.features.events
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
                     await ValidateUploadedImageUrlsAsync(
-                        club.Id,
+                        existing.ClubId,
                         userId,
                         requestedImageUrls,
                         eventId,
@@ -386,7 +382,6 @@ namespace backend.main.features.events
                 existing.isPrivate = isPrivate;
                 existing.maxParticipants = maxParticipants;
                 existing.registerCost = registerCost;
-                existing.ClubId = club.Id;
                 existing.Category = category;
                 existing.VenueName = venueName;
                 existing.City = city;
@@ -410,7 +405,7 @@ namespace backend.main.features.events
                     existing,
                     EventVersionActions.Update,
                     actorUserId: userId,
-                    actorRole: "Organizer",
+                    actorRole: NormalizeActorRole(userRole),
                     rollbackSourceVersionNumber: null,
                     changedFields: changedFields,
                     createdAt: existing.UpdatedAt);
@@ -440,20 +435,12 @@ namespace backend.main.features.events
             }
         }
 
-        public async Task DeleteEvent(int eventId, int userId)
+        public async Task DeleteEvent(int eventId, int userId, string userRole)
         {
             try
             {
-                var evTask = GetEvent(eventId);
-                var clubTask = _clubService.GetClubByUser(userId);
-
-                await Task.WhenAll(evTask, clubTask);
-
-                var ev = await evTask;
-                var club = await clubTask;
-
-                if (ev.ClubId != club.Id)
-                    throw new ForbiddenException("Not allowed");
+                var ev = await GetEvent(eventId);
+                await EnsureCanManageEventAsync(ev, userId, userRole);
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
@@ -544,7 +531,7 @@ namespace backend.main.features.events
         private static double DegreesToRadians(double degrees) =>
             degrees * (Math.PI / 180.0);
 
-        public async Task<List<Events>> GetVisibleEventsByIds(IEnumerable<int> ids, int? userId = null)
+        public async Task<List<Events>> GetVisibleEventsByIds(IEnumerable<int> ids, int? userId = null, string? userRole = null)
         {
             try
             {
@@ -561,7 +548,7 @@ namespace backend.main.features.events
                     if (!eventsById.TryGetValue(id, out var ev))
                         continue;
 
-                    if (await CanViewEventAsync(ev, userId))
+                    if (await CanViewEventAsync(ev, userId, userRole))
                         visible.Add(ev);
                 }
 
@@ -580,14 +567,12 @@ namespace backend.main.features.events
         public async Task<BatchCreateResultResponse> BatchCreateEvents(
             int clubId,
             int userId,
+            string userRole,
             IEnumerable<BatchCreateEventItem> items)
         {
             try
             {
-                var club = await _clubService.GetClubByUser(userId);
-
-                if (club.Id != clubId)
-                    throw new ForbiddenException("Not allowed");
+                await EnsureCanManageClubAsync(clubId, userId, userRole);
 
                 var itemList = items.ToList();
                 foreach (var item in itemList)
@@ -627,7 +612,7 @@ namespace backend.main.features.events
                         ev,
                         EventVersionActions.Create,
                         actorUserId: userId,
-                        actorRole: "Organizer",
+                        actorRole: NormalizeActorRole(userRole),
                         rollbackSourceVersionNumber: null,
                         changedFields: BuildChangedFields(null, BuildSnapshot(ev)),
                         createdAt: now);
@@ -659,11 +644,10 @@ namespace backend.main.features.events
             }
         }
 
-        public async Task<int> BatchUpdateEvents(int userId, IEnumerable<BatchUpdateEventItem> items)
+        public async Task<int> BatchUpdateEvents(int userId, string userRole, IEnumerable<BatchUpdateEventItem> items)
         {
             try
             {
-                var club = await _clubService.GetClubByUser(userId);
                 var itemList = items.ToList();
                 var ids = itemList.Select(i => i.EventId).ToList();
 
@@ -674,9 +658,11 @@ namespace backend.main.features.events
                 var existing = await _eventsRepository.GetByIdsAsync(requestedIds);
 
                 EnsureAllRequestedEventsExist(requestedIds, existing.Select(ev => ev.Id));
-
-                if (existing.Any(ev => ev.ClubId != club.Id))
-                    throw new ForbiddenException("One or more events do not belong to your club");
+                await EnsureCanManageAllClubIdsAsync(
+                    existing.Select(ev => ev.ClubId).Distinct(),
+                    userId,
+                    userRole,
+                    "One or more events do not belong to a club you can manage");
 
                 var trackedEvents = await _db.Events
                     .Where(ev => requestedIds.Contains(ev.Id))
@@ -698,7 +684,7 @@ namespace backend.main.features.events
                         ev,
                         EventVersionActions.Update,
                         actorUserId: userId,
-                        actorRole: "Organizer",
+                        actorRole: NormalizeActorRole(userRole),
                         rollbackSourceVersionNumber: null,
                         changedFields: BuildChangedFields(previousSnapshot, BuildSnapshot(ev)),
                         createdAt: now);
@@ -724,11 +710,10 @@ namespace backend.main.features.events
             }
         }
 
-        public async Task<int> BatchDeleteEvents(int userId, IEnumerable<int> ids)
+        public async Task<int> BatchDeleteEvents(int userId, string userRole, IEnumerable<int> ids)
         {
             try
             {
-                var club = await _clubService.GetClubByUser(userId);
                 var idList = ids.ToList();
 
                 EnsureNoDuplicateIds(idList);
@@ -738,9 +723,11 @@ namespace backend.main.features.events
                 var existing = await _eventsRepository.GetByIdsAsync(requestedIds);
 
                 EnsureAllRequestedEventsExist(requestedIds, existing.Select(ev => ev.Id));
-
-                if (existing.Any(ev => ev.ClubId != club.Id))
-                    throw new ForbiddenException("One or more events do not belong to your club");
+                await EnsureCanManageAllClubIdsAsync(
+                    existing.Select(ev => ev.ClubId).Distinct(),
+                    userId,
+                    userRole,
+                    "One or more events do not belong to a club you can manage");
 
                 var imageUrls = existing
                     .SelectMany(ev => ev.Images.Select(i => i.ImageUrl))
@@ -785,7 +772,7 @@ namespace backend.main.features.events
                 pageSize = NormalizePageSize(pageSize);
 
                 var ev = await GetEventRecordOrThrowAsync(eventId);
-                await EnsureOwnerOrAdminAsync(ev, userId, userRole);
+                await EnsureCanManageEventAsync(ev, userId, userRole);
 
                 var query = _db.EventVersions
                     .AsNoTracking()
@@ -822,7 +809,7 @@ namespace backend.main.features.events
             try
             {
                 var ev = await GetEventRecordOrThrowAsync(eventId);
-                await EnsureOwnerOrAdminAsync(ev, userId, userRole);
+                await EnsureCanManageEventAsync(ev, userId, userRole);
 
                 var version = await _db.EventVersions
                     .AsNoTracking()
@@ -862,7 +849,7 @@ namespace backend.main.features.events
             try
             {
                 var ev = await GetTrackedEventOrThrowAsync(eventId);
-                await EnsureOwnerOrAdminAsync(ev, userId, userRole);
+                await EnsureCanManageEventAsync(ev, userId, userRole);
 
                 var targetVersion = await _db.EventVersions
                     .AsNoTracking()
@@ -918,21 +905,23 @@ namespace backend.main.features.events
         public async Task<PresignedUploadResponse> GenerateImageUploadUrlAsync(
             int clubId,
             int userId,
+            string userRole,
             string fileName,
             string contentType,
             int? eventId = null)
         {
             try
             {
-                var club = await _clubService.GetClubByUser(userId);
-                if (club.Id != clubId)
-                    throw new ForbiddenException("Not allowed");
-
                 if (eventId.HasValue)
                 {
+                    await EnsureCanManageEventMediaAsync(clubId, userId, userRole);
                     var ev = await GetEvent(eventId.Value);
                     if (ev.ClubId != clubId)
                         throw new ForbiddenException("Not allowed");
+                }
+                else
+                {
+                    await EnsureCanManageClubAsync(clubId, userId, userRole);
                 }
 
                 var scope = eventId.HasValue
@@ -973,22 +962,14 @@ namespace backend.main.features.events
             }
         }
 
-        public async Task<EventImage> AddEventImageAsync(int eventId, int userId, string imageUrl)
+        public async Task<EventImage> AddEventImageAsync(int eventId, int userId, string userRole, string imageUrl)
         {
             try
             {
-                var evTask = GetEvent(eventId);
-                var clubTask = _clubService.GetClubByUser(userId);
+                var ev = await GetEvent(eventId);
+                await EnsureCanManageEventMediaAsync(ev.ClubId, userId, userRole);
 
-                await Task.WhenAll(evTask, clubTask);
-
-                var ev = await evTask;
-                var club = await clubTask;
-
-                if (ev.ClubId != club.Id)
-                    throw new ForbiddenException("Not allowed");
-
-                await ValidateUploadedImageUrlsAsync(club.Id, userId, new[] { imageUrl }, eventId);
+                await ValidateUploadedImageUrlsAsync(ev.ClubId, userId, new[] { imageUrl }, eventId);
 
                 var count = await _imageRepository.CountByEventIdAsync(eventId);
                 if (count >= 5)
@@ -1012,20 +993,12 @@ namespace backend.main.features.events
             }
         }
 
-        public async Task RemoveEventImageAsync(int eventId, int imageId, int userId)
+        public async Task RemoveEventImageAsync(int eventId, int imageId, int userId, string userRole)
         {
             try
             {
-                var evTask = GetEvent(eventId);
-                var clubTask = _clubService.GetClubByUser(userId);
-
-                await Task.WhenAll(evTask, clubTask);
-
-                var ev = await evTask;
-                var club = await clubTask;
-
-                if (ev.ClubId != club.Id)
-                    throw new ForbiddenException("Not allowed");
+                var ev = await GetEvent(eventId);
+                await EnsureCanManageEventMediaAsync(ev.ClubId, userId, userRole);
 
                 var image = await _imageRepository.GetByIdAsync(imageId, eventId)
                     ?? throw new ResourceNotFoundException(
@@ -1049,20 +1022,12 @@ namespace backend.main.features.events
             }
         }
 
-        public async Task<EventAnalyticsResponse> GetEventAnalytics(int eventId, int userId)
+        public async Task<EventAnalyticsResponse> GetEventAnalytics(int eventId, int userId, string userRole)
         {
             try
             {
-                var evTask = GetEvent(eventId);
-                var clubTask = _clubService.GetClubByUser(userId);
-
-                await Task.WhenAll(evTask, clubTask);
-
-                var ev = await evTask;
-                var club = await clubTask;
-
-                if (ev.ClubId != club.Id)
-                    throw new ForbiddenException("Not allowed");
+                var ev = await GetEvent(eventId);
+                await EnsureCanManageEventAsync(ev, userId, userRole);
 
                 var data = await _analyticsRepository.GetEventAnalyticsAsync(eventId);
 
@@ -1096,20 +1061,11 @@ namespace backend.main.features.events
             }
         }
 
-        public async Task<ClubAnalyticsResponse> GetClubAnalytics(int clubId, int userId)
+        public async Task<ClubAnalyticsResponse> GetClubAnalytics(int clubId, int userId, string userRole)
         {
             try
             {
-                var clubTask = _clubService.GetClub(clubId);
-                var callerClubTask = _clubService.GetClubByUser(userId);
-
-                await Task.WhenAll(clubTask, callerClubTask);
-
-                var club = await clubTask;
-                var callerClub = await callerClubTask;
-
-                if (club.Id != callerClub.Id)
-                    throw new ForbiddenException("Not allowed");
+                await EnsureCanManageClubAsync(clubId, userId, userRole);
 
                 var data = await _analyticsRepository.GetClubAnalyticsAsync(clubId);
 
@@ -1200,21 +1156,37 @@ namespace backend.main.features.events
                 ?? throw new ResourceNotFoundException($"Event {eventId} not found");
         }
 
-        private async Task EnsureOwnerOrAdminAsync(Events ev, int userId, string userRole)
+        private async Task EnsureCanManageEventAsync(Events ev, int userId, string userRole)
         {
-            if (IsAdminRole(userRole))
-                return;
-
-            var ownerUserId = await _db.Clubs
-                .Where(c => c.Id == ev.ClubId)
-                .Select(c => c.UserId)
-                .FirstOrDefaultAsync();
-
-            if (ownerUserId == 0)
-                throw new ResourceNotFoundException($"Club {ev.ClubId} not found");
-
-            if (ownerUserId != userId)
+            if (!await _clubService.CanManageClubAsync(ev.ClubId, userId, userRole))
                 throw new ForbiddenException("Not allowed");
+        }
+
+        private async Task EnsureCanManageClubAsync(int clubId, int userId, string userRole)
+        {
+            var club = await _clubService.GetClub(clubId);
+            if (!await _clubService.CanManageClubAsync(club.Id, userId, userRole))
+                throw new ForbiddenException("Not allowed");
+        }
+
+        private async Task EnsureCanManageEventMediaAsync(int clubId, int userId, string userRole)
+        {
+            var club = await _clubService.GetClub(clubId);
+            if (!await _clubService.CanManageEventMediaAsync(club.Id, userId, userRole))
+                throw new ForbiddenException("Not allowed");
+        }
+
+        private async Task EnsureCanManageAllClubIdsAsync(
+            IEnumerable<int> clubIds,
+            int userId,
+            string userRole,
+            string message)
+        {
+            foreach (var clubId in clubIds.Distinct())
+            {
+                if (!await _clubService.CanManageClubAsync(clubId, userId, userRole))
+                    throw new ForbiddenException(message);
+            }
         }
 
         private void AddVersionRecord(
@@ -1492,7 +1464,7 @@ namespace backend.main.features.events
         private static IReadOnlyList<EventVersionFieldChange> DeserializeChangedFields(string changedFieldsJson) =>
             JsonSerializer.Deserialize<List<EventVersionFieldChange>>(changedFieldsJson) ?? [];
 
-        private static bool IsAdminRole(string userRole) =>
+        private static bool IsAdminRole(string? userRole) =>
             string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase);
 
         private static string NormalizeActorRole(string actorRole) =>
@@ -1614,7 +1586,7 @@ namespace backend.main.features.events
             return $"event:image-upload:intent:{Convert.ToHexString(bytes)}";
         }
 
-        private async Task<bool> CanViewEventAsync(Events ev, int? userId)
+        private async Task<bool> CanViewEventAsync(Events ev, int? userId, string? userRole)
         {
             if (!ev.isPrivate)
                 return true;
@@ -1622,8 +1594,7 @@ namespace backend.main.features.events
             if (!userId.HasValue)
                 return false;
 
-            var club = await _clubService.GetClub(ev.ClubId);
-            if (club.UserId == userId.Value)
+            if (await _clubService.HasClubStaffAccessAsync(ev.ClubId, userId.Value, userRole))
                 return true;
 
             var registration = await _registrationRepository.IsRegisteredAsync(ev.Id, userId.Value);

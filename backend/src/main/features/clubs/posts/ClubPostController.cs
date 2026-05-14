@@ -28,7 +28,7 @@ namespace backend.main.features.clubs.posts
             var userPayload = User.GetUserPayload();
 
             ClubPost post = await _postService.CreateAsync(
-                clubId, userPayload.Id, request.Title, request.Content, request.PostType, request.IsPinned);
+                clubId, userPayload.Id, userPayload.Role, request.Title, request.Content, request.PostType, request.IsPinned);
 
             return StatusCode(
                 201,
@@ -49,11 +49,16 @@ namespace backend.main.features.clubs.posts
             [FromQuery] int pageSize = 20)
         {
             int? userId = null;
+            string? userRole = null;
             if (User.Identity?.IsAuthenticated == true)
-                userId = User.GetUserPayload().Id;
+            {
+                var userPayload = User.GetUserPayload();
+                userId = userPayload.Id;
+                userRole = userPayload.Role;
+            }
 
             var (items, totalCount, source) = await _postService.GetByClubIdAsync(
-                clubId, userId, search, sortBy, page, pageSize);
+                clubId, userId, userRole, search, sortBy, page, pageSize);
 
             var paged = new PagedResponse<ClubPostResponse>(
                 items.Select(MapToResponse),
@@ -82,7 +87,7 @@ namespace backend.main.features.clubs.posts
             var userPayload = User.GetUserPayload();
 
             ClubPost post = await _postService.UpdateAsync(
-                clubId, id, userPayload.Id, request.Title, request.Content, request.PostType, request.IsPinned);
+                clubId, id, userPayload.Id, userPayload.Role, request.Title, request.Content, request.PostType, request.IsPinned);
 
             return StatusCode(
                 200,
@@ -99,7 +104,7 @@ namespace backend.main.features.clubs.posts
         {
             var userPayload = User.GetUserPayload();
 
-            await _postService.DeleteAsync(clubId, id, userPayload.Id);
+            await _postService.DeleteAsync(clubId, id, userPayload.Id, userPayload.Role);
 
             return StatusCode(
                 200,
