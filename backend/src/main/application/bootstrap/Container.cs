@@ -9,11 +9,14 @@ using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.reviews;
+using backend.main.features.clubs.search;
+using backend.main.features.clubs.versions;
 using backend.main.features.events;
 using backend.main.features.events.analytics;
 using backend.main.features.events.images;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
+using backend.main.features.events.versions;
 using backend.main.features.payment;
 using backend.main.features.profile;
 using backend.main.seeders;
@@ -53,10 +56,19 @@ namespace backend.main.application.bootstrap
             return services;
         }
 
+        public static IServiceCollection AddClubSearchInfrastructure(this IServiceCollection services, IConfiguration config)
+        {
+            services.AddElasticsearchInfrastructure(config);
+            services.AddScoped<IClubSearchService, ClubSearchService>();
+
+            return services;
+        }
+
         public static IServiceCollection AddSearchInfrastructure(this IServiceCollection services, IConfiguration config)
         {
             services.AddElasticsearchInfrastructure(config);
             services.AddScoped<IEventSearchService, EventSearchService>();
+            services.AddScoped<IClubSearchService, ClubSearchService>();
             services.AddScoped<IClubPostSearchService, ClubPostSearchService>();
 
             return services;
@@ -64,6 +76,9 @@ namespace backend.main.application.bootstrap
 
         public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration config)
         {
+            services.Configure<ClubVersioningOptions>(config.GetSection("ClubVersioning"));
+            services.Configure<EventVersioningOptions>(config.GetSection("EventVersioning"));
+            services.AddSingleton(TimeProvider.System);
             services.AddSearchInfrastructure(config);
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
             services.AddSingleton<IRepositoryAttributeResolver, RepositoryAttributeResolver>();
@@ -88,6 +103,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IOAuthService, OAuthService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IClubService, ClubService>();
+            services.AddScoped<ClubVersionCleanupRunner>();
             services.AddScoped<IFollowService, FollowService>();
             services.AddScoped<IEventsService, EventsService>();
             services.AddScoped<IPaymentService, StripePaymentService>();
@@ -96,7 +112,11 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IClubPostService, ClubPostService>();
             services.AddScoped<IClubPostReindexService, ClubPostReindexService>();
             services.AddHostedService<ElasticsearchIndexInitializationService>();
+            services.AddHostedService<ClubVersionCleanupService>();
+            services.AddScoped<IClubReindexService, ClubReindexService>();
             services.AddScoped<IEventReindexService, EventReindexService>();
+            services.AddScoped<IClubSearchOutboxWriter, ClubSearchOutboxWriter>();
+            services.AddScoped<IClubPostSearchOutboxWriter, ClubPostSearchOutboxWriter>();
             services.AddScoped<IEventSearchOutboxWriter, EventSearchOutboxWriter>();
             services.AddScoped<IPostCommentService, PostCommentService>();
             services.AddScoped<IEventRegistrationService, EventRegistrationService>();

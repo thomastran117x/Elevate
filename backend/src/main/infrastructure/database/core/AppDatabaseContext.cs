@@ -5,11 +5,16 @@ using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
+using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.reviews;
+using backend.main.features.clubs.search;
+using backend.main.features.clubs.staff;
+using backend.main.features.clubs.versions;
 using backend.main.features.events;
 using backend.main.features.events.images;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
+using backend.main.features.events.versions;
 using backend.main.features.payment;
 using backend.main.features.profile;
 
@@ -22,7 +27,10 @@ namespace backend.main.infrastructure.database.core
     {
         public DbSet<User> Users { get; set; } = null!;
         public DbSet<Club> Clubs { get; set; } = null!;
+        public DbSet<ClubStaff> ClubStaff { get; set; } = null!;
+        public DbSet<ClubVersion> ClubVersions { get; set; } = null!;
         public DbSet<Events> Events { get; set; } = null!;
+        public DbSet<EventVersion> EventVersions { get; set; } = null!;
         public DbSet<FollowClub> FollowClubs { get; set; } = null!;
         public DbSet<Payment> Payments { get; set; } = null!;
         public DbSet<ClubReview> ClubReviews { get; set; } = null!;
@@ -32,6 +40,8 @@ namespace backend.main.infrastructure.database.core
         public DbSet<EventRegistration> EventRegistrations { get; set; } = null!;
         public DbSet<EventImage> EventImages { get; set; } = null!;
         public DbSet<EventSearchOutbox> EventSearchOutbox { get; set; } = null!;
+        public DbSet<ClubSearchOutbox> ClubSearchOutbox { get; set; } = null!;
+        public DbSet<ClubPostSearchOutbox> ClubPostSearchOutbox { get; set; } = null!;
         public AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : base(options) { }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -75,6 +85,64 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<Club>()
                 .HasIndex(c => c.UserId);
+
+            modelBuilder.Entity<ClubStaff>()
+                .HasOne<Club>()
+                .WithMany()
+                .HasForeignKey(cs => cs.ClubId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClubStaff>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(cs => cs.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClubStaff>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(cs => cs.GrantedByUserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ClubStaff>()
+                .Property(cs => cs.Role)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<ClubStaff>()
+                .HasIndex(cs => new { cs.ClubId, cs.UserId })
+                .IsUnique();
+
+            modelBuilder.Entity<ClubStaff>()
+                .HasIndex(cs => cs.UserId);
+
+            modelBuilder.Entity<ClubVersion>()
+                .HasOne<Club>()
+                .WithMany()
+                .HasForeignKey(v => v.ClubId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClubVersion>()
+                .Property(v => v.ActionType)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<ClubVersion>()
+                .Property(v => v.ActorRole)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<ClubVersion>()
+                .HasIndex(v => new { v.ClubId, v.VersionNumber })
+                .IsUnique();
+
+            modelBuilder.Entity<ClubVersion>()
+                .HasIndex(v => v.CreatedAt);
+
+            modelBuilder.Entity<ClubVersion>()
+                .HasIndex(v => v.ClubImage);
 
             modelBuilder.Entity<FollowClub>()
                 .HasOne<User>()
@@ -134,6 +202,28 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<Events>()
                 .HasIndex(e => new { e.Latitude, e.Longitude });
+
+            modelBuilder.Entity<EventVersion>()
+                .HasOne<Events>()
+                .WithMany()
+                .HasForeignKey(v => v.EventId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<EventVersion>()
+                .Property(v => v.ActionType)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<EventVersion>()
+                .Property(v => v.ActorRole)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<EventVersion>()
+                .HasIndex(v => new { v.EventId, v.VersionNumber })
+                .IsUnique();
+
+            modelBuilder.Entity<EventVersion>()
+                .HasIndex(v => v.CreatedAt);
 
             modelBuilder.Entity<EventImage>()
                 .HasOne(ei => ei.Event)
@@ -309,6 +399,74 @@ namespace backend.main.infrastructure.database.core
                 .HasColumnName("created_at");
 
             modelBuilder.Entity<EventSearchOutbox>()
+                .HasIndex(e => e.CreatedAt);
+
+            modelBuilder.Entity<ClubSearchOutbox>()
+                .ToTable("club_search_outbox");
+
+            modelBuilder.Entity<ClubSearchOutbox>()
+                .Property(e => e.Id)
+                .HasColumnName("id");
+
+            modelBuilder.Entity<ClubSearchOutbox>()
+                .Property(e => e.AggregateType)
+                .HasColumnName("aggregatetype")
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<ClubSearchOutbox>()
+                .Property(e => e.AggregateId)
+                .HasColumnName("aggregateid")
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<ClubSearchOutbox>()
+                .Property(e => e.Type)
+                .HasColumnName("type")
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<ClubSearchOutbox>()
+                .Property(e => e.Payload)
+                .HasColumnName("payload")
+                .HasColumnType("json");
+
+            modelBuilder.Entity<ClubSearchOutbox>()
+                .Property(e => e.CreatedAt)
+                .HasColumnName("created_at");
+
+            modelBuilder.Entity<ClubSearchOutbox>()
+                .HasIndex(e => e.CreatedAt);
+
+            modelBuilder.Entity<ClubPostSearchOutbox>()
+                .ToTable("club_post_search_outbox");
+
+            modelBuilder.Entity<ClubPostSearchOutbox>()
+                .Property(e => e.Id)
+                .HasColumnName("id");
+
+            modelBuilder.Entity<ClubPostSearchOutbox>()
+                .Property(e => e.AggregateType)
+                .HasColumnName("aggregatetype")
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<ClubPostSearchOutbox>()
+                .Property(e => e.AggregateId)
+                .HasColumnName("aggregateid")
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<ClubPostSearchOutbox>()
+                .Property(e => e.Type)
+                .HasColumnName("type")
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<ClubPostSearchOutbox>()
+                .Property(e => e.Payload)
+                .HasColumnName("payload")
+                .HasColumnType("json");
+
+            modelBuilder.Entity<ClubPostSearchOutbox>()
+                .Property(e => e.CreatedAt)
+                .HasColumnName("created_at");
+
+            modelBuilder.Entity<ClubPostSearchOutbox>()
                 .HasIndex(e => e.CreatedAt);
         }
     }

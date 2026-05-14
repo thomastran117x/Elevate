@@ -31,6 +31,12 @@ namespace backend.main.application.environment
         private static readonly string? _azureStorageContainerName;
         private static readonly string? _elasticsearchUrl;
         private static readonly string _kafkaBootstrapServers;
+        private static readonly string _clubIndexTopic;
+        private static readonly string _clubIndexGroupId;
+        private static readonly string _clubIndexDlqTopic;
+        private static readonly string _clubPostIndexTopic;
+        private static readonly string _clubPostIndexGroupId;
+        private static readonly string _clubPostIndexDlqTopic;
         private static readonly string _eventIndexTopic;
         private static readonly string _eventIndexGroupId;
         private static readonly string _eventIndexDlqTopic;
@@ -92,6 +98,30 @@ namespace backend.main.application.environment
             _kafkaBootstrapServers = GetOrDefault(
                 ["KAFKA_BOOTSTRAP_SERVERS"],
                 "localhost:9092"
+            );
+            _clubIndexTopic = GetOrDefault(
+                ["CLUB_INDEX_TOPIC"],
+                "club-index-events"
+            );
+            _clubIndexGroupId = GetOrDefault(
+                ["CLUB_INDEX_GROUP_ID"],
+                "club-indexer"
+            );
+            _clubIndexDlqTopic = GetOrDefault(
+                ["CLUB_INDEX_DLQ_TOPIC"],
+                "club-index-events-dlq"
+            );
+            _clubPostIndexTopic = GetOrDefault(
+                ["CLUB_POST_INDEX_TOPIC"],
+                "clubpost-index-events"
+            );
+            _clubPostIndexGroupId = GetOrDefault(
+                ["CLUB_POST_INDEX_GROUP_ID"],
+                "clubpost-indexer"
+            );
+            _clubPostIndexDlqTopic = GetOrDefault(
+                ["CLUB_POST_INDEX_DLQ_TOPIC"],
+                "clubpost-index-events-dlq"
             );
             _eventIndexTopic = GetOrDefault(
                 ["EVENT_INDEX_TOPIC"],
@@ -195,6 +225,12 @@ namespace backend.main.application.environment
         public static string? AzureStorageContainerName => _azureStorageContainerName;
         public static string? ElasticsearchUrl => _elasticsearchUrl;
         public static string KafkaBootstrapServers => _kafkaBootstrapServers;
+        public static string ClubIndexTopic => _clubIndexTopic;
+        public static string ClubIndexGroupId => _clubIndexGroupId;
+        public static string ClubIndexDlqTopic => _clubIndexDlqTopic;
+        public static string ClubPostIndexTopic => _clubPostIndexTopic;
+        public static string ClubPostIndexGroupId => _clubPostIndexGroupId;
+        public static string ClubPostIndexDlqTopic => _clubPostIndexDlqTopic;
         public static string EventIndexTopic => _eventIndexTopic;
         public static string EventIndexGroupId => _eventIndexGroupId;
         public static string EventIndexDlqTopic => _eventIndexDlqTopic;

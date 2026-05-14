@@ -20,6 +20,24 @@ export type EventCategory =
 export type EventStatus = 'Upcoming' | 'Ongoing' | 'Closed';
 
 export type EventSortBy = 'Relevance' | 'Date' | 'Distance' | 'Popularity';
+export type ClubType = 'Sports' | 'Academic' | 'Social' | 'Cultural' | 'Gaming' | 'Other';
+
+export interface EventHostClub {
+  id: number;
+  name: string;
+  description: string;
+  clubType: ClubType;
+  clubImage: string;
+  memberCount: number;
+  eventCount: number;
+  availableEventCount: number;
+  isPrivate: boolean;
+  email?: string;
+  phone?: string;
+  rating?: number;
+  websiteUrl?: string;
+  location?: string;
+}
 
 export interface EventItem {
   id: number;
@@ -43,6 +61,7 @@ export interface EventItem {
   tags: string[];
   registrationCount: number;
   distanceKm?: number;
+  club?: EventHostClub;
 }
 
 export interface EventsPagedData {
@@ -53,11 +72,12 @@ export interface EventsPagedData {
   totalPages: number;
 }
 
-export interface EventsResponseMeta {
+export interface EventsResponseMeta extends Record<string, unknown> {
   source?: string;
 }
 
 export type EventsApiResponse = ApiEnvelope<EventsPagedData, EventsResponseMeta>;
+export type EventApiResponse = ApiEnvelope<EventItem, EventsResponseMeta>;
 
 export interface EventSearchParams {
   search?: string;
@@ -67,6 +87,9 @@ export interface EventSearchParams {
   sortBy?: EventSortBy;
   isPrivate?: boolean;
   tags?: string;
+  lat?: number;
+  lng?: number;
+  radiusKm?: number;
   page?: number;
   pageSize?: number;
 }
@@ -76,6 +99,10 @@ export const ALL_CATEGORIES: EventCategory[] = [
   'Social', 'Cultural', 'Gaming', 'Food', 'Fitness',
   'Networking', 'Volunteer', 'Party', 'Arts', 'Other',
 ];
+
+export const ALL_STATUSES: EventStatus[] = ['Upcoming', 'Ongoing', 'Closed'];
+
+export const ALL_EVENT_SORTS: EventSortBy[] = ['Relevance', 'Date', 'Distance', 'Popularity'];
 
 export const CATEGORY_STYLES: Record<EventCategory, { badge: string; bg: string }> = {
   Sports:      { badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30',      bg: 'bg-blue-500' },

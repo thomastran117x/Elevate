@@ -1,7 +1,27 @@
+using System.Text.Json.Serialization;
+
 using backend.main.features.events;
 
 namespace backend.main.features.events.contracts.responses
 {
+    public class EventHostClubResponse
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string ClubType { get; set; } = string.Empty;
+        public string ClubImage { get; set; } = string.Empty;
+        public int MemberCount { get; set; }
+        public int EventCount { get; set; }
+        public int AvailableEventCount { get; set; }
+        public bool IsPrivate { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public double? Rating { get; set; }
+        public string? WebsiteUrl { get; set; }
+        public string? Location { get; set; }
+    }
+
     public class EventResponse
     {
         public int Id
@@ -36,6 +56,7 @@ namespace backend.main.features.events.contracts.responses
         {
             get; set;
         }
+        public int CurrentVersionNumber { get; set; }
         public DateTime CreatedAt
         {
             get; set;
@@ -52,6 +73,10 @@ namespace backend.main.features.events.contracts.responses
 
         // Populated only when a proximity search was performed.
         public double? DistanceKm { get; set; }
+
+        // Populated on the event detail endpoint.
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public EventHostClubResponse? Club { get; set; }
     }
 }
 

@@ -10,6 +10,7 @@ public sealed record ClubPostIndexerEnvelope(
     long Offset,
     string? Key,
     string Payload,
+    string? Operation,
     IReadOnlyDictionary<string, string?> Headers)
 {
     public static ClubPostIndexerEnvelope FromConsumeResult(ConsumeResult<string, string> result)
@@ -32,7 +33,13 @@ public sealed record ClubPostIndexerEnvelope(
             result.Offset.Value,
             result.Message.Key,
             result.Message.Value ?? string.Empty,
+            GetHeaderValue(headers, "eventType"),
             headers
         );
     }
+
+    private static string? GetHeaderValue(
+        IReadOnlyDictionary<string, string?> headers,
+        string key) =>
+        headers.TryGetValue(key, out var value) ? value : null;
 }

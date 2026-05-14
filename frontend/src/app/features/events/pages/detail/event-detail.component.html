@@ -1,0 +1,248 @@
+<div class="min-h-screen bg-slate-950 text-white overflow-x-hidden overflow-y-visible relative">
+  <div class="pointer-events-none absolute inset-0">
+    <div
+      class="absolute -top-24 left-1/2 -translate-x-1/2 h-[520px] w-[920px] rounded-full
+             bg-gradient-to-r from-purple-600/35 via-fuchsia-500/25 to-indigo-500/25 blur-3xl"
+    ></div>
+    <div
+      class="absolute top-[420px] -left-20 h-[420px] w-[420px] rounded-full
+             bg-gradient-to-br from-indigo-500/20 to-purple-500/10 blur-3xl"
+    ></div>
+    <div
+      class="absolute top-[620px] -right-20 h-[420px] w-[420px] rounded-full
+             bg-gradient-to-br from-fuchsia-500/20 to-purple-500/10 blur-3xl"
+    ></div>
+
+    <div
+      class="absolute inset-0 opacity-[0.10]"
+      style="
+        background-image: linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px),
+                          linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px);
+        background-size: 56px 56px;
+      "
+    ></div>
+  </div>
+
+  <main class="relative z-10">
+    <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-10 sm:pt-14 pb-16">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <button
+          type="button"
+          class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
+          (click)="goBack()"
+        >
+          <span>&larr;</span>
+          Back to events
+        </button>
+
+        <div *ngIf="event" class="flex flex-wrap gap-2">
+          <span
+            class="rounded-full border px-2.5 py-1 text-xs font-medium backdrop-blur"
+            [ngClass]="categoryStyles[event.category].badge"
+          >
+            {{ event.category }}
+          </span>
+          <span class="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-white/75">
+            {{ event.status }}
+          </span>
+          <span *ngIf="event.isPrivate" class="rounded-full border border-amber-300/20 bg-amber-400/10 px-2.5 py-1 text-xs text-amber-200">
+            Private event
+          </span>
+        </div>
+      </div>
+
+      <div *ngIf="loading" class="mt-8 grid gap-6 lg:grid-cols-12">
+        <div class="lg:col-span-7 h-[420px] rounded-3xl border border-white/10 bg-white/5 animate-pulse"></div>
+        <div class="lg:col-span-5 space-y-4">
+          <div class="h-32 rounded-3xl border border-white/10 bg-white/5 animate-pulse"></div>
+          <div class="h-64 rounded-3xl border border-white/10 bg-white/5 animate-pulse"></div>
+        </div>
+      </div>
+
+      <div *ngIf="error && !loading" class="mt-8 rounded-3xl border border-rose-500/20 bg-rose-500/10 p-6 text-rose-200">
+        <h1 class="text-xl font-semibold">We couldn't load this event</h1>
+        <p class="mt-2 text-sm text-rose-100/85">{{ error }}</p>
+      </div>
+
+      <div *ngIf="event && !loading" class="mt-8 grid gap-6 lg:grid-cols-12">
+        <div class="lg:col-span-7 space-y-4">
+          <div
+            class="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl shadow-fuchsia-500/10"
+          >
+            <div
+              *ngIf="heroImage; else heroFallback"
+              class="h-[320px] sm:h-[420px] bg-cover bg-center"
+              [style.background-image]="'linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.55)), url(' + heroImage + ')'"
+            ></div>
+            <ng-template #heroFallback>
+              <div class="h-[320px] sm:h-[420px] bg-gradient-to-br from-purple-500/35 via-fuchsia-500/15 to-indigo-500/25"></div>
+            </ng-template>
+
+            <div class="absolute inset-x-0 bottom-0 p-5 sm:p-6">
+              <div class="rounded-2xl border border-white/10 bg-slate-950/50 p-4 backdrop-blur">
+                <p class="text-xs uppercase tracking-[0.18em] text-white/45">Event details</p>
+                <h1 class="mt-2 text-2xl font-extrabold tracking-tight sm:text-4xl">{{ event.name }}</h1>
+                <p class="mt-3 max-w-2xl text-sm leading-relaxed text-white/70">
+                  {{ event.description || 'No description provided yet.' }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div *ngIf="event.imageUrls.length > 1" class="grid grid-cols-4 gap-3 sm:grid-cols-5">
+            <button
+              *ngFor="let image of event.imageUrls; let index = index"
+              type="button"
+              class="cursor-pointer overflow-hidden rounded-2xl border transition"
+              [ngClass]="index === selectedImageIndex
+                ? 'border-white/30 bg-white/10'
+                : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'"
+              (click)="selectImage(index)"
+            >
+              <span
+                class="block h-20 bg-cover bg-center"
+                [style.background-image]="'linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.35)), url(' + image + ')'"
+              ></span>
+            </button>
+          </div>
+
+          <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+            <h2 class="text-lg font-semibold">About this event</h2>
+            <p class="mt-3 text-sm leading-7 text-white/70">
+              {{ event.description || 'No description provided yet.' }}
+            </p>
+
+            <div *ngIf="event.tags.length > 0" class="mt-5 flex flex-wrap gap-2">
+              <span
+                *ngFor="let tag of event.tags"
+                class="rounded-full border border-white/10 bg-slate-950/35 px-3 py-1 text-xs text-white/65"
+              >
+                #{{ tag }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="lg:col-span-5 space-y-4">
+          <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur shadow-2xl shadow-purple-500/10">
+            <div class="grid grid-cols-2 gap-3">
+              <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                <div class="text-xs text-white/55">Price</div>
+                <div class="mt-1 text-xl font-bold">{{ formatCost(event.registerCost) }}</div>
+              </div>
+              <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                <div class="text-xs text-white/55">Hosted by</div>
+                <div class="mt-1 text-base font-bold">{{ event.club?.name || ('Club #' + event.clubId) }}</div>
+                <div *ngIf="event.club?.clubType" class="mt-1 text-xs text-white/55">
+                  {{ event.club?.clubType }} club
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-5 space-y-4">
+              <div>
+                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Schedule</div>
+                <div class="mt-2 text-sm leading-6 text-white/80">{{ formatSchedule(event) }}</div>
+              </div>
+
+              <div>
+                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Location</div>
+                <div class="mt-2 text-sm leading-6 text-white/80">
+                  <div>{{ event.venueName || event.location || 'Venue TBD' }}</div>
+                  <div class="text-white/60">
+                    {{ event.city || event.location || 'Location details coming soon' }}
+                  </div>
+                </div>
+              </div>
+
+              <div *ngIf="event.latitude != null && event.longitude != null">
+                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Coordinates</div>
+                <div class="mt-2 text-sm text-white/70">
+                  {{ event.latitude | number: '1.3-3' }}, {{ event.longitude | number: '1.3-3' }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div *ngIf="event.club" class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+            <div class="flex items-start gap-4">
+              <div
+                class="h-16 w-16 flex-shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/35"
+              >
+                <img
+                  *ngIf="event.club.clubImage; else clubImageFallback"
+                  [src]="event.club.clubImage"
+                  [alt]="event.club.name"
+                  class="h-full w-full object-cover"
+                />
+                <ng-template #clubImageFallback>
+                  <div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-purple-500/25 to-fuchsia-500/20 text-lg font-bold text-white/70">
+                    {{ event.club.name.charAt(0) }}
+                  </div>
+                </ng-template>
+              </div>
+
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h2 class="text-lg font-semibold">{{ event.club.name }}</h2>
+                  <span class="rounded-full border border-white/10 bg-slate-950/35 px-2 py-0.5 text-[11px] text-white/60">
+                    {{ event.club.clubType }}
+                  </span>
+                  <span *ngIf="event.club.rating != null" class="rounded-full border border-white/10 bg-slate-950/35 px-2 py-0.5 text-[11px] text-white/60">
+                    {{ event.club.rating | number: '1.1-1' }} rating
+                  </span>
+                </div>
+
+                <p class="mt-2 text-sm leading-7 text-white/70">
+                  {{ event.club.description || 'Host club details are not available yet.' }}
+                </p>
+
+                <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                    <div class="text-xs text-white/55">Members</div>
+                    <div class="mt-1 text-lg font-semibold">{{ event.club.memberCount }}</div>
+                  </div>
+                  <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                    <div class="text-xs text-white/55">Active events</div>
+                    <div class="mt-1 text-lg font-semibold">{{ event.club.availableEventCount }}</div>
+                  </div>
+                </div>
+
+                <div class="mt-4 space-y-1 text-sm text-white/65">
+                  <div *ngIf="event.club.location">Location: {{ event.club.location }}</div>
+                  <div *ngIf="event.club.email">Email: {{ event.club.email }}</div>
+                  <div *ngIf="event.club.phone">Phone: {{ event.club.phone }}</div>
+                  <div *ngIf="event.club.websiteUrl">Website: {{ event.club.websiteUrl }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-semibold">Registration progress</div>
+                <div class="mt-1 text-xs text-white/55">
+                  {{ event.registrationCount }} of {{ event.maxParticipants }} spots filled
+                </div>
+              </div>
+              <div class="text-lg font-bold">{{ registrationPercent(event) | number: '1.0-0' }}%</div>
+            </div>
+
+            <div class="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+              <div
+                class="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500"
+                [style.width.%]="registrationPercent(event)"
+              ></div>
+            </div>
+
+            <div class="mt-5 rounded-2xl border border-white/10 bg-slate-950/35 p-4 text-sm text-white/70">
+              This page is live from the same event API as search results, so it will stay aligned
+              with the event data users already discovered.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>

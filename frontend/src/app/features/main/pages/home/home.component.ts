@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Component } from '@angular/core';
 import { Router, RouterModule } from '@angular/router';
 
-type Category = { name: string; emoji: string; count: string };
+type Category = { name: string; icon: string; count: string };
 type Feature = { title: string; desc: string; icon: string };
 type EventCard = {
   title: string;
@@ -102,11 +102,11 @@ type Testimonial = { quote: string; name: string; role: string };
                        px-3 py-1 text-xs text-white/70 backdrop-blur"
               >
                 <span class="h-2 w-2 rounded-full bg-fuchsia-400"></span>
-                Live inventory • Verified tickets • Instant delivery
+                Live inventory &bull; Verified tickets &bull; Instant delivery
               </div>
 
               <h1 class="mt-5 text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight">
-                Book unforgettable events —
+                Book unforgettable events -
                 <span
                   class="bg-gradient-to-r from-purple-300 via-fuchsia-300 to-indigo-300 bg-clip-text text-transparent"
                 >
@@ -130,10 +130,10 @@ type Testimonial = { quote: string; name: string; role: string };
                     <div
                       class="flex items-center gap-2 rounded-xl bg-slate-950/50 border border-white/10 px-3 py-2"
                     >
-                      <span class="text-white/50">🔎</span>
+                      <span class="text-white/50">&#128269;</span>
                       <input
                         class="w-full bg-transparent outline-none text-sm placeholder:text-white/40"
-                        placeholder="Search artists, teams, venues…"
+                        placeholder="Search artists, teams, venues..."
                         [(ngModel)]="heroSearch"
                         (keyup.enter)="explore()"
                       />
@@ -145,10 +145,10 @@ type Testimonial = { quote: string; name: string; role: string };
                     <div
                       class="flex items-center gap-2 rounded-xl bg-slate-950/50 border border-white/10 px-3 py-2"
                     >
-                      <span class="text-white/50">📍</span>
+                      <span class="text-white/50">&#128205;</span>
                       <input
                         class="w-full bg-transparent outline-none text-sm placeholder:text-white/40"
-                        placeholder="Ottawa, Toronto…"
+                        placeholder="Ottawa, Toronto..."
                         [(ngModel)]="heroCity"
                         (keyup.enter)="explore()"
                       />
@@ -164,29 +164,49 @@ type Testimonial = { quote: string; name: string; role: string };
                              hover:opacity-95 transition"
                     >
                       Explore events
-                      <span class="text-white/90">→</span>
+                      <span class="text-white/90">&rarr;</span>
                     </button>
                   </div>
                 </div>
 
                 <div class="px-4 pb-4 flex flex-wrap gap-2 text-xs text-white/60">
-                  <button class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
-                    (click)="explore('Music')">🎤 Concerts</button>
-                  <button class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
-                    (click)="explore('Sports')">🏒 Sports</button>
-                  <button class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
-                    (click)="explore('Arts')">🎭 Theatre</button>
-                  <button class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
-                    (click)="explore('Academic')">🎓 Campus</button>
-                  <button class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
-                    (click)="explore('Party')">🌙 Nightlife</button>
+                  <button
+                    class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                    (click)="explore('Music')"
+                  >
+                    Concerts
+                  </button>
+                  <button
+                    class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                    (click)="explore('Sports')"
+                  >
+                    Sports
+                  </button>
+                  <button
+                    class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                    (click)="explore('Arts')"
+                  >
+                    Theatre
+                  </button>
+                  <button
+                    class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                    (click)="explore('Academic')"
+                  >
+                    Campus
+                  </button>
+                  <button
+                    class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                    (click)="explore('Party')"
+                  >
+                    Nightlife
+                  </button>
                 </div>
               </div>
 
               <!-- quick stats -->
               <div class="mt-8 grid grid-cols-3 gap-4 max-w-xl">
                 <div class="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-                  <div class="text-xl font-bold">4.9★</div>
+                  <div class="text-xl font-bold">4.9*</div>
                   <div class="text-xs text-white/60 mt-1">avg rating</div>
                 </div>
                 <div class="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
@@ -234,7 +254,7 @@ type Testimonial = { quote: string; name: string; role: string };
                               </span>
                             </div>
                             <div class="mt-1 text-xs text-white/60">
-                              {{ ev.date }} • {{ ev.venue }} • {{ ev.city }}
+                              {{ ev.date }} &bull; {{ ev.venue }} &bull; {{ ev.city }}
                             </div>
                           </div>
                           <div class="text-right">
@@ -245,13 +265,13 @@ type Testimonial = { quote: string; name: string; role: string };
 
                         <div class="mt-3 flex items-center justify-between">
                           <div class="text-xs text-white/60">
-                            <span class="text-white/80">●</span> Verified inventory
+                            <span class="text-white/80">&bull;</span> Verified inventory
                           </div>
                           <a
                             routerLink="/events"
                             class="text-xs font-semibold text-fuchsia-200 group-hover:text-white transition"
                           >
-                            View seats →
+                            View seats &rarr;
                           </a>
                         </div>
                       </div>
@@ -263,7 +283,7 @@ type Testimonial = { quote: string; name: string; role: string };
                       <div class="text-xs text-white/60">Best deal</div>
                       <div class="mt-1 text-sm font-semibold">Smart pricing</div>
                       <div class="mt-2 text-xs text-white/60 leading-relaxed">
-                        Auto-suggest seats based on budget & sightlines.
+                        Auto-suggest seats based on budget and sightlines.
                       </div>
                     </div>
                     <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -282,7 +302,7 @@ type Testimonial = { quote: string; name: string; role: string };
                              bg-white text-slate-950 font-semibold text-sm hover:bg-white/90 transition"
                     >
                       Browse all events
-                      <span>→</span>
+                      <span>&rarr;</span>
                     </a>
                   </div>
                 </div>
@@ -312,13 +332,13 @@ type Testimonial = { quote: string; name: string; role: string };
           <div class="flex items-end justify-between gap-6">
             <div>
               <h2 class="text-xl sm:text-2xl font-bold">Browse by category</h2>
-              <p class="mt-1 text-sm text-white/60">Pick a vibe. We’ll handle the rest.</p>
+              <p class="mt-1 text-sm text-white/60">Pick a vibe. We'll handle the rest.</p>
             </div>
             <a
               routerLink="/events"
               class="text-sm font-semibold text-fuchsia-200 hover:text-white transition"
             >
-              See all →
+              See all &rarr;
             </a>
           </div>
 
@@ -330,12 +350,12 @@ type Testimonial = { quote: string; name: string; role: string };
                        hover:bg-white/8 hover:border-white/15 transition"
               >
                 <div class="flex items-center justify-between">
-                  <div class="text-2xl">{{ c.emoji }}</div>
+                  <div class="text-xs font-semibold uppercase tracking-[0.2em]">{{ c.icon }}</div>
                   <div
                     class="h-9 w-9 rounded-xl bg-gradient-to-br from-purple-500/20 to-fuchsia-500/20
                               border border-white/10 flex items-center justify-center text-white/70 group-hover:text-white transition"
                   >
-                    →
+                    &rarr;
                   </div>
                 </div>
                 <div class="mt-4 text-sm font-semibold">{{ c.name }}</div>
@@ -362,7 +382,7 @@ type Testimonial = { quote: string; name: string; role: string };
                        shadow-lg shadow-purple-500/20 hover:opacity-95 transition"
               >
                 See pricing
-                <span>→</span>
+                <span>&rarr;</span>
               </a>
             </div>
 
@@ -398,7 +418,7 @@ type Testimonial = { quote: string; name: string; role: string };
               routerLink="/events"
               class="text-sm font-semibold text-fuchsia-200 hover:text-white transition"
             >
-              Explore →
+              Explore &rarr;
             </a>
           </div>
 
@@ -440,7 +460,7 @@ type Testimonial = { quote: string; name: string; role: string };
                     <div>
                       <div class="text-sm font-semibold">{{ e.title }}</div>
                       <div class="mt-1 text-xs text-white/60">{{ e.date }}</div>
-                      <div class="mt-1 text-xs text-white/60">{{ e.venue }} • {{ e.city }}</div>
+                      <div class="mt-1 text-xs text-white/60">{{ e.venue }} &bull; {{ e.city }}</div>
                     </div>
                     <div class="text-right">
                       <div class="text-sm font-semibold">{{ e.price }}</div>
@@ -450,12 +470,12 @@ type Testimonial = { quote: string; name: string; role: string };
 
                   <div class="mt-4 flex items-center justify-between">
                     <div class="text-xs text-white/60">
-                      <span class="text-white/80">●</span> Instant mobile tickets
+                      <span class="text-white/80">&bull;</span> Instant mobile tickets
                     </div>
                     <div
                       class="text-xs font-semibold text-fuchsia-200 group-hover:text-white transition"
                     >
-                      View →
+                      View &rarr;
                     </div>
                   </div>
                 </div>
@@ -469,10 +489,10 @@ type Testimonial = { quote: string; name: string; role: string };
           <div class="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 sm:p-8">
             <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
               <div>
-                <h2 class="text-xl sm:text-2xl font-bold">Loved by fans & organizers</h2>
+                <h2 class="text-xl sm:text-2xl font-bold">Loved by fans and organizers</h2>
                 <p class="mt-2 text-sm text-white/60 max-w-2xl">
-                  From pop-up campus events to arena shows — the experience stays fast, trustworthy,
-                  and elegant.
+                  From pop-up campus events to arena shows - the experience stays fast,
+                  trustworthy, and elegant.
                 </p>
               </div>
               <a
@@ -481,14 +501,16 @@ type Testimonial = { quote: string; name: string; role: string };
                        bg-white text-slate-950 font-semibold text-sm hover:bg-white/90 transition"
               >
                 Talk to sales
-                <span>→</span>
+                <span>&rarr;</span>
               </a>
             </div>
 
             <div class="mt-6 grid md:grid-cols-3 gap-4">
               <ng-container *ngFor="let t of testimonials; trackBy: trackByName">
                 <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-6">
-                  <p class="text-sm text-white/70 italic leading-relaxed">“{{ t.quote }}”</p>
+                  <p class="text-sm text-white/70 italic leading-relaxed">
+                    &ldquo;{{ t.quote }}&rdquo;
+                  </p>
                   <div class="mt-4 text-sm font-semibold">{{ t.name }}</div>
                   <div class="text-xs text-white/60">{{ t.role }}</div>
                 </div>
@@ -516,7 +538,8 @@ type Testimonial = { quote: string; name: string; role: string };
                   Ready to launch your next event?
                 </h3>
                 <p class="mt-2 text-sm sm:text-base text-white/70 max-w-2xl">
-                  Create listings, manage inventory, and sell tickets with a checkout that converts.
+                  Create listings, manage inventory, and sell tickets with a checkout that
+                  converts.
                 </p>
               </div>
 
@@ -527,7 +550,7 @@ type Testimonial = { quote: string; name: string; role: string };
                          bg-white text-slate-950 font-semibold text-sm hover:bg-white/90 transition"
                 >
                   Create an account
-                  <span>→</span>
+                  <span>&rarr;</span>
                 </a>
                 <a
                   routerLink="/events"
@@ -536,7 +559,7 @@ type Testimonial = { quote: string; name: string; role: string };
                          hover:bg-white/10 transition"
                 >
                   Browse events
-                  <span>→</span>
+                  <span>&rarr;</span>
                 </a>
               </div>
             </div>
@@ -545,7 +568,7 @@ type Testimonial = { quote: string; name: string; role: string };
           <!-- footer -->
           <footer class="mt-10 text-xs text-white/50">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>© {{ year }} EventXperience. All rights reserved.</div>
+              <div>&copy; {{ year }} EventXperience. All rights reserved.</div>
               <div class="flex items-center gap-4">
                 <a routerLink="/terms" class="hover:text-white/80 transition">Terms</a>
                 <a routerLink="/privacy" class="hover:text-white/80 transition">Privacy</a>
@@ -575,31 +598,31 @@ export class HomeComponent {
   }
 
   categories: Category[] = [
-    { name: 'Concerts', emoji: '🎤', count: '1,240 events' },
-    { name: 'Sports', emoji: '🏒', count: '540 events' },
-    { name: 'Theatre', emoji: '🎭', count: '320 events' },
-    { name: 'Campus', emoji: '🎓', count: '180 events' },
-    { name: 'Festivals', emoji: '🎪', count: '95 events' },
+    { name: 'Concerts', icon: 'MU', count: '1,240 events' },
+    { name: 'Sports', icon: 'SP', count: '540 events' },
+    { name: 'Theatre', icon: 'TH', count: '320 events' },
+    { name: 'Campus', icon: 'CA', count: '180 events' },
+    { name: 'Festivals', icon: 'FE', count: '95 events' },
   ];
 
   features: Feature[] = [
     {
-      icon: '✅',
+      icon: 'OK',
       title: 'Verified tickets',
-      desc: 'Reduce fraud with identity + inventory checks and protected transfers.',
+      desc: 'Reduce fraud with identity and inventory checks and protected transfers.',
     },
     {
-      icon: '⚡',
+      icon: 'GO',
       title: 'Fast checkout',
       desc: 'Designed for conversion with saved payment methods and smart defaults.',
     },
     {
-      icon: '🪪',
+      icon: 'RT',
       title: 'Real-time seats',
-      desc: 'Live availability and pricing—no more stale seat maps or surprises.',
+      desc: 'Live availability and pricing - no more stale seat maps or surprises.',
     },
     {
-      icon: '📲',
+      icon: 'MO',
       title: 'Mobile delivery',
       desc: 'Wallet-ready tickets with instant delivery and last-minute access.',
     },
@@ -608,7 +631,7 @@ export class HomeComponent {
   trending: EventCard[] = [
     {
       title: 'Neon Nights Tour',
-      date: 'Fri • 7:30 PM',
+      date: 'Fri - 7:30 PM',
       venue: 'Riverside Arena',
       city: 'Ottawa',
       price: '$49',
@@ -616,7 +639,7 @@ export class HomeComponent {
     },
     {
       title: 'Capital City Hockey',
-      date: 'Sat • 6:00 PM',
+      date: 'Sat - 6:00 PM',
       venue: 'North Dome',
       city: 'Ottawa',
       price: '$35',
@@ -624,7 +647,7 @@ export class HomeComponent {
     },
     {
       title: 'Indie Theatre Showcase',
-      date: 'Sun • 8:00 PM',
+      date: 'Sun - 8:00 PM',
       venue: 'Grand Hall',
       city: 'Toronto',
       price: '$28',
@@ -634,7 +657,7 @@ export class HomeComponent {
   popular: EventCard[] = [
     {
       title: 'Skyline Music Festival',
-      date: 'Jul 18–20',
+      date: 'Jul 18-20',
       venue: 'Harbour Grounds',
       city: 'Toronto',
       price: '$89',
@@ -650,7 +673,7 @@ export class HomeComponent {
     },
     {
       title: 'Championship Night',
-      date: 'Mar 03 • 7:00 PM',
+      date: 'Mar 03 - 7:00 PM',
       venue: 'City Stadium',
       city: 'Montreal',
       price: '$55',
@@ -662,18 +685,18 @@ export class HomeComponent {
     {
       quote: 'The checkout is insanely smooth. I had my tickets in my wallet in under a minute.',
       name: 'Ayesha K.',
-      role: 'Fan • Concerts',
+      role: 'Fan - Concerts',
     },
     {
       quote:
         'Our team sold out faster and support tickets dropped a lot. The organizer tools are clean.',
       name: 'Marco D.',
-      role: 'Organizer • Campus events',
+      role: 'Organizer - Campus events',
     },
     {
-      quote: 'Love the transparent pricing—what you see is what you pay. Finally.',
+      quote: 'Love the transparent pricing - what you see is what you pay. Finally.',
       name: 'Jules P.',
-      role: 'Fan • Sports',
+      role: 'Fan - Sports',
     },
   ];
 

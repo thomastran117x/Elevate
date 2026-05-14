@@ -3,6 +3,7 @@ using backend.main.features.events.contracts.responses;
 using backend.main.features.events;
 using backend.main.features.events.images;
 using backend.main.features.events.search;
+using backend.main.features.events.versions;
 
 namespace backend.main.features.events
 {
@@ -11,6 +12,7 @@ namespace backend.main.features.events
         Task<Events> CreateEvent(
             int clubId,
             int userId,
+            string userRole,
             string name,
             string description,
             string location,
@@ -29,7 +31,7 @@ namespace backend.main.features.events
         );
 
         Task<Events> GetEvent(int eventId);
-        Task<Events> GetVisibleEvent(int eventId, int? userId = null);
+        Task<Events> GetVisibleEvent(int eventId, int? userId = null, string? userRole = null);
 
         Task<(List<Events> Events, int TotalCount, Dictionary<int, double> DistanceKmById, string Source)> GetEvents(EventSearchCriteria criteria);
 
@@ -43,6 +45,7 @@ namespace backend.main.features.events
         Task<Events> UpdateEvent(
             int eventId,
             int userId,
+            string userRole,
             string name,
             string description,
             string location,
@@ -60,31 +63,49 @@ namespace backend.main.features.events
             List<string>? tags
         );
 
-        Task DeleteEvent(int eventId, int userId);
+        Task DeleteEvent(int eventId, int userId, string userRole);
 
         // Batch operations
         Task<List<Events>> GetEventsByIds(IEnumerable<int> ids);
-        Task<List<Events>> GetVisibleEventsByIds(IEnumerable<int> ids, int? userId = null);
-        Task<BatchCreateResultResponse> BatchCreateEvents(int clubId, int userId, IEnumerable<BatchCreateEventItem> items);
-        Task<int> BatchUpdateEvents(int userId, IEnumerable<BatchUpdateEventItem> items);
-        Task<int> BatchDeleteEvents(int userId, IEnumerable<int> ids);
+        Task<List<Events>> GetVisibleEventsByIds(IEnumerable<int> ids, int? userId = null, string? userRole = null);
+        Task<BatchCreateResultResponse> BatchCreateEvents(int clubId, int userId, string userRole, IEnumerable<BatchCreateEventItem> items);
+        Task<int> BatchUpdateEvents(int userId, string userRole, IEnumerable<BatchUpdateEventItem> items);
+        Task<int> BatchDeleteEvents(int userId, string userRole, IEnumerable<int> ids);
 
         // Analytics
-        Task<EventAnalyticsResponse> GetEventAnalytics(int eventId, int userId);
-        Task<ClubAnalyticsResponse> GetClubAnalytics(int clubId, int userId);
+        Task<EventAnalyticsResponse> GetEventAnalytics(int eventId, int userId, string userRole);
+        Task<ClubAnalyticsResponse> GetClubAnalytics(int clubId, int userId, string userRole);
 
         // Image management
         Task<PresignedUploadResponse> GenerateImageUploadUrlAsync(
             int clubId,
             int userId,
+            string userRole,
             string fileName,
             string contentType,
             int? eventId = null);
-        Task<EventImage> AddEventImageAsync(int eventId, int userId, string imageUrl);
-        Task RemoveEventImageAsync(int eventId, int imageId, int userId);
+        Task<EventImage> AddEventImageAsync(int eventId, int userId, string userRole, string imageUrl);
+        Task RemoveEventImageAsync(int eventId, int imageId, int userId, string userRole);
 
         // Registration count denorm (called by EventRegistrationService)
         Task NotifyRegistrationChangedAsync(int eventId);
+
+        Task<(List<EventVersionHistoryItem> Items, int TotalCount)> GetVersionHistoryAsync(
+            int eventId,
+            int userId,
+            string userRole,
+            int page = 1,
+            int pageSize = 20);
+        Task<EventVersionDetail> GetVersionDetailAsync(
+            int eventId,
+            int versionNumber,
+            int userId,
+            string userRole);
+        Task<EventRollbackResult> RollbackToVersionAsync(
+            int eventId,
+            int versionNumber,
+            int userId,
+            string userRole);
     }
 }
 

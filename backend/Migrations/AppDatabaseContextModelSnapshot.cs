@@ -88,6 +88,9 @@ namespace backend.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<int>("CurrentVersionNumber")
+                        .HasColumnType("int");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("longtext");
@@ -248,6 +251,49 @@ namespace backend.Migrations
                     b.ToTable("PostComments");
                 });
 
+            modelBuilder.Entity("backend.main.features.clubs.posts.search.ClubPostSearchOutbox", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AggregateId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("aggregateid");
+
+                    b.Property<string>("AggregateType")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("aggregatetype");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("json")
+                        .HasColumnName("payload");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.ToTable("club_post_search_outbox", (string)null);
+                });
+
             modelBuilder.Entity("backend.main.features.clubs.reviews.ClubReview", b =>
                 {
                     b.Property<int>("Id")
@@ -287,6 +333,145 @@ namespace backend.Migrations
                     b.ToTable("ClubReviews");
                 });
 
+            modelBuilder.Entity("backend.main.features.clubs.search.ClubSearchOutbox", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AggregateId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("aggregateid");
+
+                    b.Property<string>("AggregateType")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("aggregatetype");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("json")
+                        .HasColumnName("payload");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.ToTable("club_search_outbox", (string)null);
+                });
+
+            modelBuilder.Entity("backend.main.features.clubs.staff.ClubStaff", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ClubId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("GrantedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GrantedByUserId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ClubId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("ClubStaff");
+                });
+
+            modelBuilder.Entity("backend.main.features.clubs.versions.ClubVersion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<string>("ActorRole")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<int>("ActorUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ChangedFieldsJson")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("ClubId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ClubImage")
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int?>("RollbackSourceVersionNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClubImage");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("ClubId", "VersionNumber")
+                        .IsUnique();
+
+                    b.ToTable("ClubVersions");
+                });
+
             modelBuilder.Entity("backend.main.features.events.Events", b =>
                 {
                     b.Property<int>("Id")
@@ -307,6 +492,9 @@ namespace backend.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
+
+                    b.Property<int>("CurrentVersionNumber")
+                        .HasColumnType("int");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -466,6 +654,57 @@ namespace backend.Migrations
                     b.HasIndex("CreatedAt");
 
                     b.ToTable("event_search_outbox", (string)null);
+                });
+
+            modelBuilder.Entity("backend.main.features.events.versions.EventVersion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<string>("ActorRole")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<int>("ActorUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ChangedFieldsJson")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("EventId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RollbackSourceVersionNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("EventId", "VersionNumber")
+                        .IsUnique();
+
+                    b.ToTable("EventVersions");
                 });
 
             modelBuilder.Entity("backend.main.features.payment.Payment", b =>
@@ -682,6 +921,36 @@ namespace backend.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("backend.main.features.clubs.staff.ClubStaff", b =>
+                {
+                    b.HasOne("backend.main.features.clubs.Club", null)
+                        .WithMany()
+                        .HasForeignKey("ClubId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("backend.main.features.profile.User", null)
+                        .WithMany()
+                        .HasForeignKey("GrantedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("backend.main.features.profile.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("backend.main.features.clubs.versions.ClubVersion", b =>
+                {
+                    b.HasOne("backend.main.features.clubs.Club", null)
+                        .WithMany()
+                        .HasForeignKey("ClubId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("backend.main.features.events.Events", b =>
                 {
                     b.HasOne("backend.main.features.clubs.Club", null)
@@ -713,6 +982,15 @@ namespace backend.Migrations
                     b.HasOne("backend.main.features.profile.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("backend.main.features.events.versions.EventVersion", b =>
+                {
+                    b.HasOne("backend.main.features.events.Events", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
