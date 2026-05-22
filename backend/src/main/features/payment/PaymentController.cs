@@ -30,7 +30,7 @@ namespace backend.main.features.payment
                 var user = User.GetUserPayload();
                 var idempotencyKey = Request.Headers["Idempotency-Key"].FirstOrDefault();
 
-                var payment = await _paymentService.CreatePaymentSession(user.Id, eventId, idempotencyKey);
+                var payment = await _paymentService.CreatePaymentSession(user.Id, user.Role, eventId, idempotencyKey);
 
                 return StatusCode(201,
                     new ApiResponse<PaymentResponse>(

@@ -8,6 +8,7 @@ import {
 } from '../../services/auth.service';
 import { environment } from '../../../../../environments/environment';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
+import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 
 @Component({
   selector: 'app-google-callback',
@@ -30,6 +31,7 @@ export class GoogleCallbackComponent implements OnInit {
     private auth: AuthService,
     private sessionManager: SessionManagerService,
     private router: Router,
+    private authReturnUrl: AuthReturnUrlService,
   ) {}
 
   ngOnInit(): void {
@@ -76,7 +78,8 @@ export class GoogleCallbackComponent implements OnInit {
             await this.sessionManager.bootstrapSession(res.Auth);
             this.status.set('success');
             this.message.set('Login successful! Redirecting...');
-            setTimeout(() => this.router.navigate(['/dashboard']), 1500);
+            const target = this.authReturnUrl.consume();
+            setTimeout(() => this.router.navigateByUrl(target), 1500);
           } catch (err: any) {
             console.error('Google session bootstrap failed:', err);
             this.status.set('error');

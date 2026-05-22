@@ -1,11 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 import { environment } from '@environments/environment';
 import { AuthService, SignupRole } from '../../services/auth.service';
 import { RecaptchaV3Service } from '../../services/recaptcha.service';
+import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 
 @Component({
   selector: 'app-signup',
@@ -38,7 +39,13 @@ export class SignupComponent {
   constructor(
     private auth: AuthService,
     private recaptcha: RecaptchaV3Service,
+    private route: ActivatedRoute,
+    private authReturnUrl: AuthReturnUrlService,
   ) {}
+
+  ngOnInit(): void {
+    this.authReturnUrl.captureFromRoute(this.route);
+  }
 
   async submit(): Promise<void> {
     this.submitted = true;

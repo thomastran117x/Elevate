@@ -14,6 +14,7 @@ using backend.main.features.clubs.versions;
 using backend.main.features.events;
 using backend.main.features.events.analytics;
 using backend.main.features.events.images;
+using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
 using backend.main.features.events.versions;
@@ -78,6 +79,7 @@ namespace backend.main.application.bootstrap
         {
             services.Configure<ClubVersioningOptions>(config.GetSection("ClubVersioning"));
             services.Configure<EventVersioningOptions>(config.GetSection("EventVersioning"));
+            services.AddSingleton(EventInvitationStatusConsumerOptions.FromEnvironment());
             services.AddSingleton(TimeProvider.System);
             services.AddSearchInfrastructure(config);
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
@@ -106,6 +108,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<ClubVersionCleanupRunner>();
             services.AddScoped<IFollowService, FollowService>();
             services.AddScoped<IEventsService, EventsService>();
+            services.AddScoped<IEventInvitationService, EventInvitationService>();
             services.AddScoped<IPaymentService, StripePaymentService>();
             services.AddScoped<IClubReviewService, ClubReviewService>();
             services.AddScoped<IDeviceService, DeviceService>();
@@ -113,6 +116,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IClubPostReindexService, ClubPostReindexService>();
             services.AddHostedService<ElasticsearchIndexInitializationService>();
             services.AddHostedService<ClubVersionCleanupService>();
+            services.AddHostedService<EventInvitationStatusConsumer>();
             services.AddScoped<IClubReindexService, ClubReindexService>();
             services.AddScoped<IEventReindexService, EventReindexService>();
             services.AddScoped<IClubSearchOutboxWriter, ClubSearchOutboxWriter>();

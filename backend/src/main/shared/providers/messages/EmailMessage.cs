@@ -6,5 +6,7 @@ namespace backend.main.shared.providers.messages
         public required string Email { get; init; }
         public required string Token { get; init; }
         public string? Code { get; init; }
+        public int? EventInvitationId { get; init; }
+        public string? EventName { get; init; }
     }
 }

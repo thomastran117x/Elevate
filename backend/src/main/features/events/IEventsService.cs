@@ -32,6 +32,7 @@ namespace backend.main.features.events
 
         Task<Events> GetEvent(int eventId);
         Task<Events> GetVisibleEvent(int eventId, int? userId = null, string? userRole = null);
+        Task EnsureCanViewEventAsync(int eventId, int userId, string userRole);
 
         Task<(List<Events> Events, int TotalCount, Dictionary<int, double> DistanceKmById, string Source)> GetEvents(EventSearchCriteria criteria);
 

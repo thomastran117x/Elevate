@@ -40,6 +40,8 @@ namespace backend.main.application.environment
         private static readonly string _eventIndexTopic;
         private static readonly string _eventIndexGroupId;
         private static readonly string _eventIndexDlqTopic;
+        private static readonly string _emailStatusTopic;
+        private static readonly string _emailStatusGroupId;
         private static readonly string _appEnvironment;
         private static readonly string _logLevel;
         private const string DefaultJwtSecretAccess = "unit_test_secret_12345678901234567890";
@@ -134,6 +136,14 @@ namespace backend.main.application.environment
             _eventIndexDlqTopic = GetOrDefault(
                 ["EVENT_INDEX_DLQ_TOPIC"],
                 "event-index-events-dlq"
+            );
+            _emailStatusTopic = GetOrDefault(
+                ["EMAIL_STATUS_TOPIC"],
+                "eventxperience-email-status"
+            );
+            _emailStatusGroupId = GetOrDefault(
+                ["EMAIL_STATUS_GROUP_ID"],
+                "event-invitation-status-updater"
             );
 
             _appEnvironment = (
@@ -234,6 +244,8 @@ namespace backend.main.application.environment
         public static string EventIndexTopic => _eventIndexTopic;
         public static string EventIndexGroupId => _eventIndexGroupId;
         public static string EventIndexDlqTopic => _eventIndexDlqTopic;
+        public static string EmailStatusTopic => _emailStatusTopic;
+        public static string EmailStatusGroupId => _emailStatusGroupId;
         public static string AppEnvironment => _appEnvironment;
         public static string LogLevel => _logLevel;
 

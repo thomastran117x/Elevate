@@ -8,6 +8,7 @@ import {
   PendingOAuthSignupStorageKey,
   SignupRole,
 } from '../../services/auth.service';
+import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 
 type PendingOAuthSignup = {
   RequiresRoleSelection: true;
@@ -58,6 +59,7 @@ export class OAuthRoleComponent {
     private auth: AuthService,
     private sessionManager: SessionManagerService,
     private router: Router,
+    private authReturnUrl: AuthReturnUrlService,
   ) {}
 
   ngOnInit(): void {
@@ -107,8 +109,9 @@ export class OAuthRoleComponent {
           await this.sessionManager.bootstrapSession(session);
           sessionStorage.removeItem(PendingOAuthSignupStorageKey);
           this.status.set('ready');
-          this.message.set('Your account is ready. Redirecting to your dashboard...');
-          setTimeout(() => this.router.navigate(['/dashboard']), 800);
+          this.message.set('Your account is ready. Redirecting you back...');
+          const target = this.authReturnUrl.consume();
+          setTimeout(() => this.router.navigateByUrl(target), 800);
         } catch (err: any) {
           this.status.set('error');
           this.message.set(err?.error?.message || err?.message || 'We could not complete your signup. Please try again.');
