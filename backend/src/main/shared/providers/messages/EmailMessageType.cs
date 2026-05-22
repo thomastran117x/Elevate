@@ -5,6 +5,7 @@ namespace backend.main.shared.providers.messages
         VerifyEmail,
         ResetPassword,
         AccountConfirmation,
-        NewDevice
+        NewDevice,
+        EventInvite
     }
 }

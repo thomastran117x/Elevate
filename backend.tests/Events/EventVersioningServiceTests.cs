@@ -611,6 +611,7 @@ public class EventVersioningServiceTests
                 Mock.Of<IEventSearchService>(),
                 Mock.Of<IEventSearchOutboxWriter>(),
                 Mock.Of<IEventRegistrationRepository>(),
+                Mock.Of<backend.main.features.events.invitations.IEventInvitationService>(),
                 Options.Create(new EventVersioningOptions
                 {
                     RollbackWindowDays = 90

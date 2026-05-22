@@ -13,6 +13,7 @@ public sealed class EmailMessageProcessor
 {
     private readonly IEmailSender _emailSender;
     private readonly IEmailWorkerDlqPublisher _dlqPublisher;
+    private readonly IEmailDeliveryStatusPublisher _statusPublisher;
 
     private static readonly ResiliencePipeline RetryPipeline = new ResiliencePipelineBuilder()
         .AddRetry(new RetryStrategyOptions
@@ -26,10 +27,12 @@ public sealed class EmailMessageProcessor
 
     public EmailMessageProcessor(
         IEmailSender emailSender,
-        IEmailWorkerDlqPublisher dlqPublisher)
+        IEmailWorkerDlqPublisher dlqPublisher,
+        IEmailDeliveryStatusPublisher statusPublisher)
     {
         _emailSender = emailSender;
         _dlqPublisher = dlqPublisher;
+        _statusPublisher = statusPublisher;
     }
 
     public async Task ProcessAsync(
@@ -49,6 +52,8 @@ public sealed class EmailMessageProcessor
                 async (CancellationToken ct) => await _emailSender.SendAsync(message, ct),
                 cancellationToken
             );
+
+            await PublishStatusAsync(message, backend.main.features.events.invitations.EventInvitationDeliveryStatus.Sent, null, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -63,8 +68,34 @@ public sealed class EmailMessageProcessor
         {
             var destination = message?.Email ?? "unknown";
             Logger.Warn(ex, $"Email delivery failed for '{destination}'. Publishing to Kafka DLQ.");
+            if (message != null)
+            {
+                await PublishStatusAsync(
+                    message,
+                    backend.main.features.events.invitations.EventInvitationDeliveryStatus.Failed,
+                    ex.Message,
+                    cancellationToken);
+            }
             await _dlqPublisher.PublishAsync(envelope, ex.Message, cancellationToken);
         }
+    }
+
+    private async Task PublishStatusAsync(
+        EmailMessage message,
+        backend.main.features.events.invitations.EventInvitationDeliveryStatus status,
+        string? errorMessage,
+        CancellationToken cancellationToken)
+    {
+        if (message.EventInvitationId == null)
+            return;
+
+        await _statusPublisher.PublishAsync(new EmailDeliveryStatusMessage
+        {
+            Type = message.Type,
+            EventInvitationId = message.EventInvitationId,
+            DeliveryStatus = status,
+            ErrorMessage = errorMessage
+        }, cancellationToken);
     }
 
     private static void ValidateMessage(EmailMessage message)

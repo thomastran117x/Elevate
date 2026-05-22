@@ -586,6 +586,151 @@ namespace backend.Migrations
                     b.ToTable("EventImages");
                 });
 
+            modelBuilder.Entity("backend.main.features.events.invitations.EventInvitation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AcceptedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int?>("AcceptedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ClaimTokenHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeclinedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int?>("DeclinedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DeliveryError")
+                        .HasMaxLength(1024)
+                        .HasColumnType("varchar(1024)");
+
+                    b.Property<string>("DeliveryStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<int>("EventId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("EventInvitationLinkId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("LifecycleStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<string>("RecipientEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("varchar(320)");
+
+                    b.Property<string>("RecipientEmailNormalized")
+                        .HasMaxLength(320)
+                        .HasColumnType("varchar(320)");
+
+                    b.Property<int?>("RecipientUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int?>("RevokedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClaimTokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("EventId", "LifecycleStatus");
+
+                    b.HasIndex("EventInvitationLinkId", "RecipientUserId")
+                        .IsUnique();
+
+                    b.HasIndex("RecipientEmailNormalized", "LifecycleStatus");
+
+                    b.HasIndex("RecipientUserId", "LifecycleStatus");
+
+                    b.ToTable("EventInvitations");
+                });
+
+            modelBuilder.Entity("backend.main.features.events.invitations.EventInvitationLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("EventId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("MaxRedemptions")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RedemptionCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int?>("RevokedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("EventId", "RevokedAtUtc", "ExpiresAt");
+
+                    b.ToTable("EventInvitationLinks");
+                });
+
             modelBuilder.Entity("backend.main.features.events.registration.EventRegistration", b =>
                 {
                     b.Property<int>("Id")
@@ -971,6 +1116,35 @@ namespace backend.Migrations
                     b.Navigation("Event");
                 });
 
+            modelBuilder.Entity("backend.main.features.events.invitations.EventInvitation", b =>
+                {
+                    b.HasOne("backend.main.features.events.Events", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("backend.main.features.events.invitations.EventInvitationLink", "EventInvitationLink")
+                        .WithMany("Invitations")
+                        .HasForeignKey("EventInvitationLinkId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Event");
+
+                    b.Navigation("EventInvitationLink");
+                });
+
+            modelBuilder.Entity("backend.main.features.events.invitations.EventInvitationLink", b =>
+                {
+                    b.HasOne("backend.main.features.events.Events", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Event");
+                });
+
             modelBuilder.Entity("backend.main.features.events.registration.EventRegistration", b =>
                 {
                     b.HasOne("backend.main.features.events.Events", null)
@@ -1013,6 +1187,11 @@ namespace backend.Migrations
             modelBuilder.Entity("backend.main.features.events.Events", b =>
                 {
                     b.Navigation("Images");
+                });
+
+            modelBuilder.Entity("backend.main.features.events.invitations.EventInvitationLink", b =>
+                {
+                    b.Navigation("Invitations");
                 });
 #pragma warning restore 612, 618
         }

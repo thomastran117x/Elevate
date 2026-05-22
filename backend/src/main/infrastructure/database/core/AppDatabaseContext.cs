@@ -12,6 +12,7 @@ using backend.main.features.clubs.staff;
 using backend.main.features.clubs.versions;
 using backend.main.features.events;
 using backend.main.features.events.images;
+using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
 using backend.main.features.events.versions;
@@ -39,6 +40,8 @@ namespace backend.main.infrastructure.database.core
         public DbSet<PostComment> PostComments { get; set; } = null!;
         public DbSet<EventRegistration> EventRegistrations { get; set; } = null!;
         public DbSet<EventImage> EventImages { get; set; } = null!;
+        public DbSet<EventInvitation> EventInvitations { get; set; } = null!;
+        public DbSet<EventInvitationLink> EventInvitationLinks { get; set; } = null!;
         public DbSet<EventSearchOutbox> EventSearchOutbox { get; set; } = null!;
         public DbSet<ClubSearchOutbox> ClubSearchOutbox { get; set; } = null!;
         public DbSet<ClubPostSearchOutbox> ClubPostSearchOutbox { get; set; } = null!;
@@ -237,6 +240,85 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<EventImage>()
                 .HasIndex(ei => new { ei.EventId, ei.SortOrder });
+
+            modelBuilder.Entity<EventInvitation>()
+                .HasOne(i => i.Event)
+                .WithMany()
+                .HasForeignKey(i => i.EventId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<EventInvitation>()
+                .HasOne(i => i.EventInvitationLink)
+                .WithMany(l => l.Invitations)
+                .HasForeignKey(i => i.EventInvitationLinkId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<EventInvitation>()
+                .Property(i => i.SourceType)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<EventInvitation>()
+                .Property(i => i.LifecycleStatus)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<EventInvitation>()
+                .Property(i => i.DeliveryStatus)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<EventInvitation>()
+                .Property(i => i.RecipientEmail)
+                .HasMaxLength(320);
+
+            modelBuilder.Entity<EventInvitation>()
+                .Property(i => i.RecipientEmailNormalized)
+                .HasMaxLength(320);
+
+            modelBuilder.Entity<EventInvitation>()
+                .Property(i => i.ClaimTokenHash)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<EventInvitation>()
+                .Property(i => i.DeliveryError)
+                .HasMaxLength(1024);
+
+            modelBuilder.Entity<EventInvitation>()
+                .HasIndex(i => new { i.EventId, i.LifecycleStatus });
+
+            modelBuilder.Entity<EventInvitation>()
+                .HasIndex(i => new { i.RecipientUserId, i.LifecycleStatus });
+
+            modelBuilder.Entity<EventInvitation>()
+                .HasIndex(i => new { i.RecipientEmailNormalized, i.LifecycleStatus });
+
+            modelBuilder.Entity<EventInvitation>()
+                .HasIndex(i => i.ClaimTokenHash)
+                .IsUnique();
+
+            modelBuilder.Entity<EventInvitation>()
+                .HasIndex(i => new { i.EventInvitationLinkId, i.RecipientUserId })
+                .IsUnique();
+
+            modelBuilder.Entity<EventInvitationLink>()
+                .HasOne(l => l.Event)
+                .WithMany()
+                .HasForeignKey(l => l.EventId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<EventInvitationLink>()
+                .Property(l => l.TokenHash)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<EventInvitationLink>()
+                .HasIndex(l => l.TokenHash)
+                .IsUnique();
+
+            modelBuilder.Entity<EventInvitationLink>()
+                .HasIndex(l => new { l.EventId, l.RevokedAtUtc, l.ExpiresAt });
 
             modelBuilder.Entity<Payment>()
                 .HasOne<User>()

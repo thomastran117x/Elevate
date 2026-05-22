@@ -61,6 +61,7 @@ public sealed class SmtpEmailSender : IEmailSender
         var verifyUrl = $"{baseUrl}/auth/verify?token={Uri.EscapeDataString(message.Token)}";
         var deviceUrl = $"{baseUrl}/auth/device/verify?token={Uri.EscapeDataString(message.Token)}";
         var resetUrl = $"{baseUrl}/auth/change-password?token={Uri.EscapeDataString(message.Token)}";
+        var inviteUrl = $"{baseUrl}/events/invite?token={Uri.EscapeDataString(message.Token)}";
 
         return message.Type switch
         {
@@ -83,6 +84,18 @@ public sealed class SmtpEmailSender : IEmailSender
                 "Account confirmation",
                 BuildPlainText("Confirm your account", verifyUrl, message.Code),
                 BuildHtml("Confirm your account", verifyUrl, "Confirm account", message.Code)
+            ),
+            EmailMessageType.EventInvite => (
+                $"You're invited to {message.EventName ?? "a private event"}",
+                BuildPlainText(
+                    $"You're invited to {message.EventName ?? "a private event"}",
+                    inviteUrl,
+                    null),
+                BuildHtml(
+                    $"You're invited to {message.EventName ?? "a private event"}",
+                    inviteUrl,
+                    "View invitation",
+                    null)
             ),
             _ => throw new InvalidOperationException($"Unsupported email type '{message.Type}'.")
         };

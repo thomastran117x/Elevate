@@ -10,6 +10,8 @@ import { GoogleButtonComponent } from '../../components/google-button/google-but
 import { MicrosoftButtonComponent } from '../../components/microsoft-button/microsoft-button.component';
 import { environment } from '@environments/environment';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
+import { ActivatedRoute } from '@angular/router';
+import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 
 @Component({
   selector: 'app-login',
@@ -37,10 +39,13 @@ export class LoginComponent {
     private auth: AuthService,
     private sessionManager: SessionManagerService,
     private router: Router,
+    private route: ActivatedRoute,
     private recaptcha: RecaptchaV3Service,
+    private authReturnUrl: AuthReturnUrlService,
   ) {}
 
   ngOnInit() {
+    this.authReturnUrl.captureFromRoute(this.route);
     this.form = this.fb.nonNullable.group({
       email: this.fb.nonNullable.control('', [Validators.required, Validators.email]),
       password: this.fb.nonNullable.control('', [Validators.required, Validators.minLength(6)]),
@@ -68,7 +73,7 @@ export class LoginComponent {
           next: async (res) => {
             try {
               await this.sessionManager.bootstrapSession(res);
-              this.router.navigate(['/dashboard']);
+              await this.router.navigateByUrl(this.authReturnUrl.consume());
             } catch (err: any) {
               this.error = err?.error?.message || err?.message || 'Login failed.';
             }

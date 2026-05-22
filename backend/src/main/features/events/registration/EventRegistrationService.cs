@@ -40,7 +40,7 @@ namespace backend.main.features.events.registration
             _outboxWriter = outboxWriter;
         }
 
-        public async Task<BatchRegistrationResultResponse> BatchRegisterAsync(int userId, IEnumerable<int> eventIds)
+        public async Task<BatchRegistrationResultResponse> BatchRegisterAsync(int userId, string userRole, IEnumerable<int> eventIds)
         {
             var result = new BatchRegistrationResultResponse();
 
@@ -51,7 +51,7 @@ namespace backend.main.features.events.registration
             {
                 try
                 {
-                    await RegisterAsync(eventId, userId);
+                    await RegisterAsync(eventId, userId, userRole);
                     result.Succeeded.Add(eventId);
                 }
                 catch (AppException ex)
@@ -76,7 +76,7 @@ namespace backend.main.features.events.registration
             return result;
         }
 
-        public async Task<BatchRegistrationResultResponse> BatchUnregisterAsync(int userId, IEnumerable<int> eventIds)
+        public async Task<BatchRegistrationResultResponse> BatchUnregisterAsync(int userId, string userRole, IEnumerable<int> eventIds)
         {
             var result = new BatchRegistrationResultResponse();
 
@@ -84,7 +84,7 @@ namespace backend.main.features.events.registration
             {
                 try
                 {
-                    await UnregisterAsync(eventId, userId);
+                    await UnregisterAsync(eventId, userId, userRole);
                     result.Succeeded.Add(eventId);
                 }
                 catch (AppException ex)
@@ -129,8 +129,9 @@ namespace backend.main.features.events.registration
         private string UserIndexKey(int userId)
             => $"evtreg:index:u:{userId}";
 
-        public async Task RegisterAsync(int eventId, int userId)
+        public async Task RegisterAsync(int eventId, int userId, string userRole)
         {
+            await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
             var ev = await _eventsService.GetEvent(eventId);
 
             if (ev.registerCost > 0)
@@ -145,7 +146,7 @@ namespace backend.main.features.events.registration
 
             try
             {
-                if (await IsRegisteredAsync(eventId, userId))
+                if (await IsRegisteredAsync(eventId, userId, userRole))
                     throw new ConflictException("Already registered for this event");
 
                 await using var transaction = await _db.Database.BeginTransactionAsync(
@@ -204,11 +205,11 @@ namespace backend.main.features.events.registration
             }
         }
 
-        public async Task UnregisterAsync(int eventId, int userId)
+        public async Task UnregisterAsync(int eventId, int userId, string userRole)
         {
             try
             {
-                await _eventsService.GetEvent(eventId);
+                await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
 
                 await using var transaction = await _db.Database.BeginTransactionAsync(
                     IsolationLevel.Serializable);
@@ -246,10 +247,11 @@ namespace backend.main.features.events.registration
             }
         }
 
-        public async Task<bool> IsRegisteredAsync(int eventId, int userId)
+        public async Task<bool> IsRegisteredAsync(int eventId, int userId, string userRole)
         {
             try
             {
+                await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
                 var key = MembershipKey(userId, eventId);
                 var cached = await _cache.GetValueAsync(key);
 

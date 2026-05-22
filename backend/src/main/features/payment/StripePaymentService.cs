@@ -28,7 +28,7 @@ namespace backend.main.features.payment
                 ?? throw new InvalidOperationException("STRIPE_WEBHOOK_SECRET is not configured.");
         }
 
-        public async Task<Payment> CreatePaymentSession(int userId, int eventId, string? idempotencyKey = null)
+        public async Task<Payment> CreatePaymentSession(int userId, string userRole, int eventId, string? idempotencyKey = null)
         {
             try
             {
@@ -40,6 +40,7 @@ namespace backend.main.features.payment
                         return keyed;
                 }
 
+                await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
                 var ev = await _eventsService.GetEvent(eventId);
 
                 if (ev.registerCost == 0)

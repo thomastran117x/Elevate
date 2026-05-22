@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 using backend.main.application.security;
 using backend.main.shared.responses;
+using backend.main.features.events;
 using backend.main.features.events.registration.contracts.requests;
 using backend.main.features.events.registration.contracts.responses;
 using backend.main.shared.exceptions.http;
@@ -19,10 +20,12 @@ namespace backend.main.features.events.registration
     public class EventRegistrationController : ControllerBase
     {
         private readonly IEventRegistrationService _registrationService;
+        private readonly IEventsService _eventsService;
 
-        public EventRegistrationController(IEventRegistrationService registrationService)
+        public EventRegistrationController(IEventRegistrationService registrationService, IEventsService eventsService)
         {
             _registrationService = registrationService;
+            _eventsService = eventsService;
         }
 
         [Authorize]
@@ -33,7 +36,7 @@ namespace backend.main.features.events.registration
             {
                 var user = User.GetUserPayload();
 
-                await _registrationService.RegisterAsync(eventId, user.Id);
+                await _registrationService.RegisterAsync(eventId, user.Id, user.Role);
 
                 return StatusCode(201, new MessageResponse(
                     $"Successfully registered for event with ID {eventId}."
@@ -57,7 +60,7 @@ namespace backend.main.features.events.registration
             {
                 var user = User.GetUserPayload();
 
-                await _registrationService.UnregisterAsync(eventId, user.Id);
+                await _registrationService.UnregisterAsync(eventId, user.Id, user.Role);
 
                 return Ok(new MessageResponse(
                     $"Successfully unregistered from event with ID {eventId}."
@@ -78,6 +81,8 @@ namespace backend.main.features.events.registration
         {
             try
             {
+                var user = GetOptionalUserPayload();
+                await _eventsService.GetVisibleEvent(eventId, user?.Id, user?.Role);
                 var registrations = await _registrationService.GetRegistrationsByEventAsync(eventId, page, pageSize);
 
                 return Ok(new ApiResponse<IEnumerable<EventRegistrationResponse>>(
@@ -103,7 +108,7 @@ namespace backend.main.features.events.registration
             {
                 var user = User.GetUserPayload();
 
-                bool isRegistered = await _registrationService.IsRegisteredAsync(eventId, user.Id);
+                bool isRegistered = await _registrationService.IsRegisteredAsync(eventId, user.Id, user.Role);
 
                 return Ok(new ApiResponse<object>(
                     $"Registration status for event with ID {eventId} has been fetched successfully.",
@@ -128,7 +133,7 @@ namespace backend.main.features.events.registration
             {
                 var user = User.GetUserPayload();
 
-                var result = await _registrationService.BatchRegisterAsync(user.Id, request.EventIds);
+                var result = await _registrationService.BatchRegisterAsync(user.Id, user.Role, request.EventIds);
 
                 return StatusCode(207, new ApiResponse<BatchRegistrationResultResponse>(
                     $"{result.Succeeded.Count} registration(s) succeeded, {result.Failed.Count} failed.",
@@ -153,7 +158,7 @@ namespace backend.main.features.events.registration
             {
                 var user = User.GetUserPayload();
 
-                var result = await _registrationService.BatchUnregisterAsync(user.Id, request.EventIds);
+                var result = await _registrationService.BatchUnregisterAsync(user.Id, user.Role, request.EventIds);
 
                 return StatusCode(207, new ApiResponse<BatchRegistrationResultResponse>(
                     $"{result.Succeeded.Count} unregistration(s) succeeded, {result.Failed.Count} failed.",
@@ -172,6 +177,14 @@ namespace backend.main.features.events.registration
 
         private static EventRegistrationResponse MapToResponse(EventRegistration r)
             => new(r.Id, r.UserId, r.EventId, r.CreatedAt);
+
+        private UserIdentityPayload? GetOptionalUserPayload()
+        {
+            if (User.Identity?.IsAuthenticated != true)
+                return null;
+
+            return User.GetUserPayload();
+        }
     }
 
     [ApiController]

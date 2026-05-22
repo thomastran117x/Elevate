@@ -12,6 +12,8 @@ using backend.main.features.events.images;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
 using backend.main.features.events.versions;
+using backend.main.features.events.invitations;
+using backend.main.features.payment;
 using backend.main.shared.exceptions.http;
 using backend.main.features.clubs;
 using backend.main.features.cache;
@@ -37,6 +39,7 @@ namespace backend.main.features.events
         private readonly IEventSearchService _searchService;
         private readonly IEventSearchOutboxWriter _outboxWriter;
         private readonly IEventRegistrationRepository _registrationRepository;
+        private readonly IEventInvitationService _invitationService;
         private readonly EventVersioningOptions _versioningOptions;
         private readonly TimeProvider _timeProvider;
 
@@ -70,6 +73,7 @@ namespace backend.main.features.events
             IEventSearchService searchService,
             IEventSearchOutboxWriter outboxWriter,
             IEventRegistrationRepository registrationRepository,
+            IEventInvitationService invitationService,
             IOptions<EventVersioningOptions> versioningOptions,
             TimeProvider timeProvider)
         {
@@ -83,6 +87,7 @@ namespace backend.main.features.events
             _searchService = searchService;
             _outboxWriter = outboxWriter;
             _registrationRepository = registrationRepository;
+            _invitationService = invitationService;
             _versioningOptions = versioningOptions.Value;
             _timeProvider = timeProvider;
         }
@@ -226,6 +231,15 @@ namespace backend.main.features.events
                 Logger.Error($"[EventsService] GetVisibleEvent failed: {e}");
                 throw new InternalServerErrorException();
             }
+        }
+
+        public async Task EnsureCanViewEventAsync(int eventId, int userId, string userRole)
+        {
+            var ev = await GetEvent(eventId);
+            if (await CanViewEventAsync(ev, userId, userRole))
+                return;
+
+            throw new ResourceNotFoundException($"Event {eventId} not found");
         }
 
         public async Task<(List<Events> Events, int TotalCount, Dictionary<int, double> DistanceKmById, string Source)> GetEvents(EventSearchCriteria criteria)
@@ -1598,7 +1612,20 @@ namespace backend.main.features.events
                 return true;
 
             var registration = await _registrationRepository.IsRegisteredAsync(ev.Id, userId.Value);
-            return registration != null;
+            if (registration != null)
+                return true;
+
+            if (await _invitationService.HasAcceptedInvitationAccessAsync(ev.Id, userId.Value))
+                return true;
+
+            var payment = await _db.Payments
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p =>
+                    p.EventId == ev.Id &&
+                    p.UserId == userId.Value &&
+                    (p.Status == PaymentStatus.Pending || p.Status == PaymentStatus.Succeeded));
+
+            return payment != null;
         }
 
         public async Task NotifyRegistrationChangedAsync(int eventId)
