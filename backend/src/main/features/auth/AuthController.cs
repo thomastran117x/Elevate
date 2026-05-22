@@ -627,7 +627,7 @@ namespace backend.main.features.auth
         [HttpPost("change-password")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
-        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, [FromQuery] string token)
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, [FromQuery] string? token)
         {
             try
             {

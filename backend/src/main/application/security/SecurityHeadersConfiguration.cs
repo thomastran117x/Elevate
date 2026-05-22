@@ -34,7 +34,7 @@ namespace backend.main.application.security
         public static IApplicationBuilder UseHttpsEnforcement(this IApplicationBuilder app)
         {
             var env = EnvironmentSetting.AppEnvironment;
-            if (env is "development" or "test")
+            if (env is "development" or "test" or "testing")
                 return app;
 
             app.UseHsts();

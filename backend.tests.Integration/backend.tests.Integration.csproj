@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="FluentAssertions" Version="8.8.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.5" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.5" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Moq" Version="4.20.72" />
@@ -25,11 +26,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\backend\backend.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Include="..\backend\src\worker\club-indexer\ClubIndexerMessageParser.cs" Link="Worker\ClubIndexerMessageParser.cs" />
-    <Compile Include="..\backend\src\worker\clubpost-indexer\ClubPostIndexerMessageParser.cs" Link="Worker\ClubPostIndexerMessageParser.cs" />
   </ItemGroup>
 
 </Project>

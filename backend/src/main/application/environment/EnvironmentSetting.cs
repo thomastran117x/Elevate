@@ -251,7 +251,7 @@ namespace backend.main.application.environment
 
         public static void Validate()
         {
-            if (_appEnvironment is "development" or "test")
+            if (_appEnvironment is "development" or "test" or "testing")
             {
                 Logger.Warn("Skipping environment validation (dev/test mode).");
                 return;

@@ -10,10 +10,23 @@ namespace backend.main.infrastructure.database.core
             this IServiceCollection services,
             IConfiguration config)
         {
-            var connectionString = EnvironmentSetting.DbConnectionString;
+            var provider = (
+                config["Database:Provider"]
+                ?? config["DB_PROVIDER"]
+                ?? "mysql"
+            ).Trim().ToLowerInvariant();
+            var connectionString = config["Database:ConnectionString"]
+                ?? config["DB_CONNECTION_STRING"]
+                ?? EnvironmentSetting.DbConnectionString;
 
             services.AddDbContext<AppDatabaseContext>(options =>
             {
+                if (provider == "sqlite")
+                {
+                    options.UseSqlite(connectionString);
+                    return;
+                }
+
                 options.UseMySql(
                     connectionString,
                     ServerVersion.AutoDetect(connectionString),
