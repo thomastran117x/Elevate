@@ -49,15 +49,18 @@ public sealed class SeedClubContentSeeder : ISeeder
                 $"Expected 10 themed club seed definitions, but found {clubDefinitions.Count}.");
 
         var seasonStartUtc = DateTime.UtcNow.Date.AddDays(5).AddHours(16);
-        var desiredUserEmails = clubDefinitions
+        var requiredUserEmails = clubDefinitions
             .SelectMany(GetRequiredUserEmails)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var managedSeedUserEmails = UserSeedCatalog.All
+            .Select(user => user.Email)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var users = await _dbContext.Users
-            .Where(user => desiredUserEmails.Contains(user.Email))
+            .Where(user => requiredUserEmails.Contains(user.Email))
             .ToListAsync(cancellationToken);
         var usersByEmail = users.ToDictionary(user => user.Email, StringComparer.OrdinalIgnoreCase);
-        var missingUsers = desiredUserEmails.Where(email => !usersByEmail.ContainsKey(email)).ToList();
+        var missingUsers = requiredUserEmails.Where(email => !usersByEmail.ContainsKey(email)).ToList();
 
         if (missingUsers.Count > 0)
         {
@@ -150,7 +153,7 @@ public sealed class SeedClubContentSeeder : ISeeder
 
         await RefreshClubEventCountsAsync(currentClubs.Select(club => club.Id).ToList(), cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await CleanupStaleSeedUsersAsync(desiredUserEmails.ToHashSet(StringComparer.OrdinalIgnoreCase), cancellationToken);
+        await CleanupStaleSeedUsersAsync(managedSeedUserEmails, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(

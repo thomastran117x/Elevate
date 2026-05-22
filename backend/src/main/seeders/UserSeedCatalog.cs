@@ -4,7 +4,7 @@ namespace backend.main.seeders;
 
 public static class UserSeedCatalog
 {
-    public static IReadOnlyList<SeedUserDefinition> All { get; } =
+    public static IReadOnlyList<SeedUserDefinition> Staff { get; } =
     [
         new($"harbour.owner{SeedCatalogConstants.SeedEmailDomain}", "harbourowner", "Maya Chen", AuthRoles.Organizer),
         new($"harbour.manager{SeedCatalogConstants.SeedEmailDomain}", "harbourmanager", "Jordan Bell", AuthRoles.Organizer),
@@ -46,4 +46,24 @@ public static class UserSeedCatalog
         new($"kitchen.manager{SeedCatalogConstants.SeedEmailDomain}", "kitchenmanager", "Daniel Park", AuthRoles.Organizer),
         new($"kitchen.volunteer{SeedCatalogConstants.SeedEmailDomain}", "kitchenvolunteer", "Aisha Khan", AuthRoles.Volunteer)
     ];
+
+    public static IReadOnlyList<SeedUserDefinition> Participants { get; } =
+    [
+        new($"ava.participant{SeedCatalogConstants.SeedEmailDomain}", "avaparticipant", "Ava Thompson", AuthRoles.Participant),
+        new($"liam.participant{SeedCatalogConstants.SeedEmailDomain}", "liamparticipant", "Liam Walker", AuthRoles.Participant),
+        new($"mia.participant{SeedCatalogConstants.SeedEmailDomain}", "miaparticipant", "Mia Hughes", AuthRoles.Participant),
+        new($"elijah.participant{SeedCatalogConstants.SeedEmailDomain}", "elijahparticipant", "Elijah Reed", AuthRoles.Participant),
+        new($"charlotte.participant{SeedCatalogConstants.SeedEmailDomain}", "charlotteparticipant", "Charlotte Perry", AuthRoles.Participant),
+        new($"benjamin.participant{SeedCatalogConstants.SeedEmailDomain}", "benjaminparticipant", "Benjamin Cooper", AuthRoles.Participant),
+        new($"amelia.participant{SeedCatalogConstants.SeedEmailDomain}", "ameliaparticipant", "Amelia Ward", AuthRoles.Participant),
+        new($"lucas.participant{SeedCatalogConstants.SeedEmailDomain}", "lucasparticipant", "Lucas Hughes", AuthRoles.Participant),
+        new($"harper.participant{SeedCatalogConstants.SeedEmailDomain}", "harperparticipant", "Harper Diaz", AuthRoles.Participant),
+        new($"henry.participant{SeedCatalogConstants.SeedEmailDomain}", "henryparticipant", "Henry Bennett", AuthRoles.Participant),
+        new($"evelyn.participant{SeedCatalogConstants.SeedEmailDomain}", "evelynparticipant", "Evelyn Foster", AuthRoles.Participant),
+        new($"jack.participant{SeedCatalogConstants.SeedEmailDomain}", "jackparticipant", "Jack Sullivan", AuthRoles.Participant)
+    ];
+
+    public static IReadOnlyList<SeedUserDefinition> All { get; } = Staff
+        .Concat(Participants)
+        .ToList();
 }

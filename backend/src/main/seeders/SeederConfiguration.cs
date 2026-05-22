@@ -17,6 +17,7 @@ namespace backend.main.seeders
             services.AddScoped<ISeederOrchestrator, SeederOrchestrator>();
             services.AddScoped<ISeeder, SeedUsersSeeder>();
             services.AddScoped<ISeeder, SeedClubContentSeeder>();
+            services.AddScoped<ISeeder, SeedFeatureActivitySeeder>();
             return services;
         }
 

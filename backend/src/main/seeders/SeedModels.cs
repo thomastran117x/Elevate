@@ -1,6 +1,8 @@
 using backend.main.features.clubs;
 using backend.main.features.clubs.posts;
 using backend.main.features.events;
+using backend.main.features.events.invitations;
+using backend.main.features.payment;
 
 namespace backend.main.seeders;
 
@@ -9,6 +11,72 @@ public sealed record SeedUserDefinition(
     string Username,
     string Name,
     string Role);
+
+public sealed record SeedClubFollowDefinition(
+    string ClubSlug,
+    string UserEmail,
+    int DayOffset);
+
+public sealed record SeedClubReviewDefinition(
+    string ClubSlug,
+    string UserEmail,
+    string Title,
+    int Rating,
+    string? Comment,
+    int DayOffset);
+
+public sealed record SeedPostCommentDefinition(
+    string ClubSlug,
+    string PostTitle,
+    string UserEmail,
+    string Content,
+    int DayOffset);
+
+public sealed record SeedEventImageSetDefinition(
+    string ClubSlug,
+    string EventName,
+    IReadOnlyList<string> ImageUrls);
+
+public sealed record SeedEventRegistrationDefinition(
+    string ClubSlug,
+    string EventName,
+    string UserEmail,
+    int DayOffset);
+
+public sealed record SeedEventInvitationLinkDefinition(
+    string ClubSlug,
+    string EventName,
+    string CreatedByEmail,
+    int MaxRedemptions,
+    int RedemptionCount,
+    int DayOffset,
+    int ExpiresInDays,
+    bool IsRevoked);
+
+public sealed record SeedEventInvitationDefinition(
+    string ClubSlug,
+    string EventName,
+    EventInvitationSource SourceType,
+    EventInvitationLifecycleStatus LifecycleStatus,
+    EventInvitationDeliveryStatus DeliveryStatus,
+    string CreatedByEmail,
+    string? RecipientUserEmail,
+    string? RecipientEmail,
+    string? LinkRecipientUserEmail,
+    int DayOffset,
+    int ExpiresInDays,
+    bool IsLinkBased = false,
+    bool IsRevoked = false,
+    string? DeliveryError = null);
+
+public sealed record SeedPaymentDefinition(
+    string ClubSlug,
+    string EventName,
+    string UserEmail,
+    long Amount,
+    string Currency,
+    PaymentStatus Status,
+    int DayOffset);
 
 public sealed record SeedVenueDefinition(
     string Name,
