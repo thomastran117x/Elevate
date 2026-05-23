@@ -7,6 +7,7 @@ using backend.main.application.security;
 using backend.main.application.bootstrap;
 using backend.main.application.handlers;
 using backend.main.shared.utilities.logger;
+using backend.main.features.cache;
 
 Logger.Configure(o =>
 {
@@ -18,6 +19,7 @@ Logger.Configure(o =>
 });
 
 var builder = WebApplication.CreateBuilder(args);
+var isTesting = builder.Environment.IsEnvironment("Testing");
 
 builder.Services.AddSingleton(Logger.GetOptions());
 
@@ -39,12 +41,20 @@ builder.Services.AddControllersWithViews(options =>
 });
 builder.Services.AddApiResponseConventions();
 
-builder.Services.AddApplicationServices(builder.Configuration);
+builder.Services.AddApplicationServices(builder.Configuration, includeHostedServices: !isTesting);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddClientRequestInspection();
 
 builder.Services.AddAppDatabase(builder.Configuration);
-builder.Services.AddAppRedis(builder.Configuration);
+if (isTesting)
+{
+    builder.Services.AddSingleton(new RedisHealth());
+    builder.Services.AddSingleton<ICacheService, NoOpCacheService>();
+}
+else
+{
+    builder.Services.AddAppRedis(builder.Configuration);
+}
 
 builder.Services.AddJwtAuth(builder.Configuration);
 builder.Services.AddCustomCors(builder.Configuration);
@@ -59,9 +69,12 @@ var app = builder.Build();
 
 Logger.SetInstance(app.Services.GetRequiredService<ICustomLogger>());
 
-await DatabaseConfig.VerifyDatabaseConnectionAsync(app.Services);
-await DatabaseConfig.EnsureDatabaseMigratedAsync(app.Services);
-await app.Services.SeedAppDataAsync();
+if (!isTesting)
+{
+    await DatabaseConfig.VerifyDatabaseConnectionAsync(app.Services);
+    await DatabaseConfig.EnsureDatabaseMigratedAsync(app.Services);
+    await app.Services.SeedAppDataAsync();
+}
 
 app.UseForwardedHeaders();
 
@@ -109,3 +122,5 @@ var redisHealth = app.Services.GetRequiredService<RedisHealth>();
 Logger.Info($"Server is listening on port {port}");
 
 app.Run();
+
+public partial class Program;

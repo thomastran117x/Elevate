@@ -75,7 +75,10 @@ namespace backend.main.application.bootstrap
             return services;
         }
 
-        public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration config)
+        public static IServiceCollection AddApplicationServices(
+            this IServiceCollection services,
+            IConfiguration config,
+            bool includeHostedServices = true)
         {
             services.Configure<ClubVersioningOptions>(config.GetSection("ClubVersioning"));
             services.Configure<EventVersioningOptions>(config.GetSection("EventVersioning"));
@@ -114,9 +117,6 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IDeviceService, DeviceService>();
             services.AddScoped<IClubPostService, ClubPostService>();
             services.AddScoped<IClubPostReindexService, ClubPostReindexService>();
-            services.AddHostedService<ElasticsearchIndexInitializationService>();
-            services.AddHostedService<ClubVersionCleanupService>();
-            services.AddHostedService<EventInvitationStatusConsumer>();
             services.AddScoped<IClubReindexService, ClubReindexService>();
             services.AddScoped<IEventReindexService, EventReindexService>();
             services.AddScoped<IClubSearchOutboxWriter, ClubSearchOutboxWriter>();
@@ -126,6 +126,13 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IEventRegistrationService, EventRegistrationService>();
             services.AddScoped<IFileUploadService, FileUploadService>();
             services.AddScoped<IAzureBlobService, AzureBlobService>();
+
+            if (includeHostedServices)
+            {
+                services.AddHostedService<ElasticsearchIndexInitializationService>();
+                services.AddHostedService<ClubVersionCleanupService>();
+                services.AddHostedService<EventInvitationStatusConsumer>();
+            }
 
             services.AddSingleton<ICustomLogger, FileLogger>();
 
