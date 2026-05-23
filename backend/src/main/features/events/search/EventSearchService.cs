@@ -1,6 +1,6 @@
-using backend.main.infrastructure.elasticsearch;
-using backend.main.features.events.search;
 using backend.main.features.events;
+using backend.main.features.events.search;
+using backend.main.infrastructure.elasticsearch;
 using backend.main.shared.utilities.logger;
 
 using Elastic.Clients.Elasticsearch;
@@ -166,7 +166,8 @@ namespace backend.main.features.events.search
             cancellationToken.ThrowIfCancellationRequested();
 
             var client = GetWritableClientOrNull();
-            if (client == null) return;
+            if (client == null)
+                return;
 
             try
             {
@@ -188,7 +189,8 @@ namespace backend.main.features.events.search
             cancellationToken.ThrowIfCancellationRequested();
 
             var client = GetWritableClientOrNull();
-            if (client == null) return;
+            if (client == null)
+                return;
 
             await EnsureIndexAsync(cancellationToken);
 
@@ -211,7 +213,8 @@ namespace backend.main.features.events.search
             cancellationToken.ThrowIfCancellationRequested();
 
             var client = GetWritableClientOrNull();
-            if (client == null) return;
+            if (client == null)
+                return;
 
             try
             {
@@ -232,7 +235,8 @@ namespace backend.main.features.events.search
             cancellationToken.ThrowIfCancellationRequested();
 
             var client = GetWritableClientOrNull();
-            if (client == null) return;
+            if (client == null)
+                return;
 
             await EnsureIndexAsync(cancellationToken);
 
@@ -348,7 +352,8 @@ namespace backend.main.features.events.search
 
         private static double? ExtractDistanceKm(Elastic.Clients.Elasticsearch.Core.Search.Hit<EventDocument> hit, bool sortByDistance)
         {
-            if (!sortByDistance || hit.Sort == null) return null;
+            if (!sortByDistance || hit.Sort == null)
+                return null;
 
             foreach (var value in hit.Sort)
             {

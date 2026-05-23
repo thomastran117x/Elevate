@@ -1,9 +1,9 @@
 using backend.main.application.security;
+using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.contracts.requests;
 using backend.main.features.clubs.posts.contracts.responses;
 using backend.main.features.clubs.posts.search;
 using backend.main.shared.responses;
-using backend.main.features.clubs.posts;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -138,7 +138,10 @@ namespace backend.main.features.clubs.posts
             var count = await _reindexService.ReindexAllAsync(cancellationToken);
             return Ok(new ApiResponse<object>(
                 "Posts reindexed successfully.",
-                new { indexed = count }
+                new
+                {
+                    indexed = count
+                }
             ));
         }
 

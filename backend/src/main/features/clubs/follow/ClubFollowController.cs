@@ -1,7 +1,7 @@
 using backend.main.application.security;
+using backend.main.features.clubs.follow;
 using backend.main.features.clubs.follow.contracts.responses;
 using backend.main.shared.responses;
-using backend.main.features.clubs.follow;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -50,7 +50,10 @@ namespace backend.main.features.clubs.follow
                 200,
                 new ApiResponse<object>(
                     $"Membership status for club with ID {clubId} has been fetched successfully.",
-                    new { isMember }
+                    new
+                    {
+                        isMember
+                    }
                 )
             );
         }

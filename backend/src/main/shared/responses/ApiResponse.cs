@@ -20,19 +20,31 @@ namespace backend.main.shared.responses
         }
 
         [JsonPropertyName("success")]
-        public bool Success { get; set; }
+        public bool Success
+        {
+            get; set;
+        }
 
         [JsonPropertyName("message")]
         public string Message { get; set; } = string.Empty;
 
         [JsonPropertyName("data")]
-        public T? Data { get; set; }
+        public T? Data
+        {
+            get; set;
+        }
 
         [JsonPropertyName("error")]
-        public ApiError? Error { get; set; }
+        public ApiError? Error
+        {
+            get; set;
+        }
 
         [JsonPropertyName("meta")]
-        public object? Meta { get; set; }
+        public object? Meta
+        {
+            get; set;
+        }
 
         public static ApiResponse<T> WithMeta(string message, T? data, object? meta) =>
             new(true, message, data, null, meta);

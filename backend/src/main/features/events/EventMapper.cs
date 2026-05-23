@@ -1,6 +1,6 @@
+using backend.main.features.clubs;
 using backend.main.features.events.contracts.responses;
 using backend.main.shared.responses;
-using backend.main.features.clubs;
 
 namespace backend.main.features.events
 {
@@ -9,30 +9,30 @@ namespace backend.main.features.events
         public static EventResponse MapToResponse(
             Events ev,
             double? distanceKm = null) => new()
-        {
-            Id = ev.Id,
-            Name = ev.Name,
-            Description = ev.Description,
-            Location = ev.Location,
-            ImageUrls = ev.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl).ToList(),
-            IsPrivate = ev.isPrivate,
-            MaxParticipants = ev.maxParticipants,
-            RegisterCost = ev.registerCost,
-            StartTime = ev.StartTime,
-            EndTime = ev.EndTime,
-            ClubId = ev.ClubId,
-            CurrentVersionNumber = ev.CurrentVersionNumber,
-            CreatedAt = ev.CreatedAt,
-            Status = ResolveStatus(ev),
-            Category = ev.Category,
-            VenueName = ev.VenueName,
-            City = ev.City,
-            Latitude = ev.Latitude,
-            Longitude = ev.Longitude,
-            Tags = ev.Tags ?? new List<string>(),
-            RegistrationCount = ev.RegistrationCount,
-            DistanceKm = distanceKm
-        };
+            {
+                Id = ev.Id,
+                Name = ev.Name,
+                Description = ev.Description,
+                Location = ev.Location,
+                ImageUrls = ev.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl).ToList(),
+                IsPrivate = ev.isPrivate,
+                MaxParticipants = ev.maxParticipants,
+                RegisterCost = ev.registerCost,
+                StartTime = ev.StartTime,
+                EndTime = ev.EndTime,
+                ClubId = ev.ClubId,
+                CurrentVersionNumber = ev.CurrentVersionNumber,
+                CreatedAt = ev.CreatedAt,
+                Status = ResolveStatus(ev),
+                Category = ev.Category,
+                VenueName = ev.VenueName,
+                City = ev.City,
+                Latitude = ev.Latitude,
+                Longitude = ev.Longitude,
+                Tags = ev.Tags ?? new List<string>(),
+                RegistrationCount = ev.RegistrationCount,
+                DistanceKm = distanceKm
+            };
 
         public static EventHostClubResponse MapClubToResponse(Club club) => new()
         {

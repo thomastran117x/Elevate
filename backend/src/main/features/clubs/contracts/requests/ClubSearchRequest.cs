@@ -6,8 +6,14 @@ namespace backend.main.features.clubs.contracts.requests
 {
     public sealed record ClubSearchRequest : IValidatableObject
     {
-        public string? Query { get; init; }
-        public ClubSearchFilters? Filters { get; init; }
+        public string? Query
+        {
+            get; init;
+        }
+        public ClubSearchFilters? Filters
+        {
+            get; init;
+        }
         public ClubSortBy SortBy { get; init; } = ClubSortBy.Relevance;
 
         [Range(1, int.MaxValue, ErrorMessage = "page must be at least 1.")]
@@ -27,6 +33,9 @@ namespace backend.main.features.clubs.contracts.requests
 
     public sealed record ClubSearchFilters
     {
-        public ClubType? ClubType { get; init; }
+        public ClubType? ClubType
+        {
+            get; init;
+        }
     }
 }

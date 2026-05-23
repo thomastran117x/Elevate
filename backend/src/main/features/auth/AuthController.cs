@@ -1,22 +1,22 @@
-using backend.main.features.auth.contracts.requests;
-using backend.main.shared.requests;
+using backend.main.application.bootstrap;
+using backend.main.application.security;
 using backend.main.features.auth;
-using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.captcha;
+using backend.main.features.auth.contracts.requests;
+using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
-using backend.main.shared.responses;
-using backend.main.shared.exceptions.http;
 using backend.main.features.profile;
+using backend.main.shared.exceptions.http;
+using backend.main.shared.requests;
+using backend.main.shared.responses;
+using backend.main.shared.utilities.logger;
 using backend.main.utilities;
 
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using backend.main.application.security;
-using backend.main.application.bootstrap;
-using backend.main.shared.utilities.logger;
 
 namespace backend.main.features.auth
 {

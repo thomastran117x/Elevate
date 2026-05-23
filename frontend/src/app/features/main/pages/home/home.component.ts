@@ -460,7 +460,9 @@ type Testimonial = { quote: string; name: string; role: string };
                     <div>
                       <div class="text-sm font-semibold">{{ e.title }}</div>
                       <div class="mt-1 text-xs text-white/60">{{ e.date }}</div>
-                      <div class="mt-1 text-xs text-white/60">{{ e.venue }} &bull; {{ e.city }}</div>
+                      <div class="mt-1 text-xs text-white/60">
+                        {{ e.venue }} &bull; {{ e.city }}
+                      </div>
                     </div>
                     <div class="text-right">
                       <div class="text-sm font-semibold">{{ e.price }}</div>
@@ -491,8 +493,8 @@ type Testimonial = { quote: string; name: string; role: string };
               <div>
                 <h2 class="text-xl sm:text-2xl font-bold">Loved by fans and organizers</h2>
                 <p class="mt-2 text-sm text-white/60 max-w-2xl">
-                  From pop-up campus events to arena shows - the experience stays fast,
-                  trustworthy, and elegant.
+                  From pop-up campus events to arena shows - the experience stays fast, trustworthy,
+                  and elegant.
                 </p>
               </div>
               <a
@@ -538,8 +540,7 @@ type Testimonial = { quote: string; name: string; role: string };
                   Ready to launch your next event?
                 </h3>
                 <p class="mt-2 text-sm sm:text-base text-white/70 max-w-2xl">
-                  Create listings, manage inventory, and sell tickets with a checkout that
-                  converts.
+                  Create listings, manage inventory, and sell tickets with a checkout that converts.
                 </p>
               </div>
 

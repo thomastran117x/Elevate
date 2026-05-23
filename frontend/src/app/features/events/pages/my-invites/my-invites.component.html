@@ -5,34 +5,56 @@
         <p class="text-xs uppercase tracking-[0.18em] text-white/45">Private events</p>
         <h1 class="mt-2 text-3xl font-bold">My invitations</h1>
       </div>
-      <a routerLink="/events" class="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80">
+      <a
+        routerLink="/events"
+        class="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80"
+      >
         Browse public events
       </a>
     </div>
 
     <div *ngIf="loading" class="mt-8 grid gap-4 md:grid-cols-2">
-      <div *ngFor="let item of [1,2,3]" class="h-44 animate-pulse rounded-3xl bg-white/10"></div>
+      <div *ngFor="let item of [1, 2, 3]" class="h-44 animate-pulse rounded-3xl bg-white/10"></div>
     </div>
 
-    <div *ngIf="!loading && error" class="mt-8 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-rose-100">
+    <div
+      *ngIf="!loading && error"
+      class="mt-8 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-rose-100"
+    >
       <div>{{ error }}</div>
-      <button type="button" class="mt-3 rounded-xl bg-white px-4 py-2 text-slate-950" (click)="goToLogin()">
+      <button
+        type="button"
+        class="mt-3 rounded-xl bg-white px-4 py-2 text-slate-950"
+        (click)="goToLogin()"
+      >
         Sign in again
       </button>
     </div>
 
-    <div *ngIf="!loading && !error && invitations.length === 0" class="mt-8 rounded-3xl border border-white/10 bg-white/5 p-8 text-white/70">
+    <div
+      *ngIf="!loading && !error && invitations.length === 0"
+      class="mt-8 rounded-3xl border border-white/10 bg-white/5 p-8 text-white/70"
+    >
       You do not have any active private event invitations right now.
     </div>
 
     <div *ngIf="!loading && invitations.length > 0" class="mt-8 grid gap-4 md:grid-cols-2">
-      <article *ngFor="let invitation of invitations" class="rounded-3xl border border-white/10 bg-white/5 p-5">
+      <article
+        *ngFor="let invitation of invitations"
+        class="rounded-3xl border border-white/10 bg-white/5 p-5"
+      >
         <div class="flex items-start justify-between gap-3">
           <div>
-            <p class="text-xs uppercase tracking-[0.18em] text-white/45">{{ invitation.effectiveStatus }}</p>
-            <h2 class="mt-2 text-xl font-semibold">{{ invitation.event?.name || ('Event #' + invitation.eventId) }}</h2>
+            <p class="text-xs uppercase tracking-[0.18em] text-white/45">
+              {{ invitation.effectiveStatus }}
+            </p>
+            <h2 class="mt-2 text-xl font-semibold">
+              {{ invitation.event?.name || 'Event #' + invitation.eventId }}
+            </h2>
           </div>
-          <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
+          <span
+            class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70"
+          >
             {{ invitation.deliveryStatus }}
           </span>
         </div>
@@ -43,7 +65,9 @@
 
         <div class="mt-4 grid gap-3 text-sm text-white/70">
           <div>Starts: {{ invitation.event?.startTime | date: 'medium' }}</div>
-          <div *ngIf="invitation.expiresAt">Expires: {{ invitation.expiresAt | date: 'medium' }}</div>
+          <div *ngIf="invitation.expiresAt">
+            Expires: {{ invitation.expiresAt | date: 'medium' }}
+          </div>
         </div>
 
         <div class="mt-5 flex flex-wrap gap-3">

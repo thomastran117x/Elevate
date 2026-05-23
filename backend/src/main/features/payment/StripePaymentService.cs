@@ -1,10 +1,10 @@
-using backend.main.shared.exceptions.http;
 using backend.main.features.events;
 using backend.main.features.payment;
+using backend.main.shared.exceptions.http;
+using backend.main.shared.utilities.logger;
 
 using Stripe;
 using Stripe.Checkout;
-using backend.main.shared.utilities.logger;
 
 namespace backend.main.features.payment
 {
@@ -162,10 +162,12 @@ namespace backend.main.features.payment
                 if (stripeEvent.Type == EventTypes.CheckoutSessionCompleted)
                 {
                     var session = stripeEvent.Data.Object as Session;
-                    if (session == null) return;
+                    if (session == null)
+                        return;
 
                     var payment = await _paymentRepository.GetByExternalSessionIdAsync(session.Id);
-                    if (payment == null) return;
+                    if (payment == null)
+                        return;
 
                     await _paymentRepository.UpdateStatusAsync(
                         payment.Id,
@@ -175,10 +177,12 @@ namespace backend.main.features.payment
                 else if (stripeEvent.Type == EventTypes.CheckoutSessionExpired)
                 {
                     var session = stripeEvent.Data.Object as Session;
-                    if (session == null) return;
+                    if (session == null)
+                        return;
 
                     var payment = await _paymentRepository.GetByExternalSessionIdAsync(session.Id);
-                    if (payment == null) return;
+                    if (payment == null)
+                        return;
 
                     await _paymentRepository.UpdateStatusAsync(payment.Id, PaymentStatus.Failed, null);
                 }

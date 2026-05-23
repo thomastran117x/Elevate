@@ -1,5 +1,5 @@
-using backend.main.infrastructure.database.core;
 using backend.main.features.events.search;
+using backend.main.infrastructure.database.core;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -166,7 +166,8 @@ namespace backend.main.features.events
             foreach (var (id, patch) in updates)
             {
                 var ev = await _context.Events.FindAsync(id);
-                if (ev == null) continue;
+                if (ev == null)
+                    continue;
                 patch(ev);
                 ev.CurrentVersionNumber += 1;
                 ev.UpdatedAt = DateTime.UtcNow;
@@ -178,7 +179,8 @@ namespace backend.main.features.events
         public async Task<int> DeleteManyAsync(IEnumerable<int> ids)
         {
             var idList = ids.Distinct().ToList();
-            if (idList.Count == 0) return 0;
+            if (idList.Count == 0)
+                return 0;
 
             var entities = await _context.Events
                 .Where(e => idList.Contains(e.Id))

@@ -68,7 +68,8 @@ export class SignupComponent {
         .pipe(finalize(() => (this.loading = false)))
         .subscribe({
           next: () => {
-            this.success = 'Verification email sent. Check your inbox to finish creating your account.';
+            this.success =
+              'Verification email sent. Check your inbox to finish creating your account.';
           },
           error: (err) => {
             this.error = err?.error?.message || 'Signup failed.';

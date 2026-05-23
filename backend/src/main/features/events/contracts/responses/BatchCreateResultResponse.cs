@@ -8,7 +8,10 @@ namespace backend.main.features.events.contracts.responses
 
     public class BatchCreateFailure
     {
-        public int Index { get; set; }
+        public int Index
+        {
+            get; set;
+        }
         public string Reason { get; set; } = null!;
     }
 }

@@ -1,28 +1,28 @@
-using System.Security.Cryptography;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-using backend.main.infrastructure.database.core;
-using backend.main.shared.responses;
+using backend.main.features.cache;
+using backend.main.features.clubs;
 using backend.main.features.events.analytics;
 using backend.main.features.events.contracts.requests;
 using backend.main.features.events.contracts.responses;
 using backend.main.features.events.images;
+using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
 using backend.main.features.events.versions;
-using backend.main.features.events.invitations;
 using backend.main.features.payment;
+using backend.main.infrastructure.database.core;
+using backend.main.infrastructure.elasticsearch;
 using backend.main.shared.exceptions.http;
-using backend.main.features.clubs;
-using backend.main.features.cache;
+using backend.main.shared.responses;
 using backend.main.shared.storage;
+using backend.main.shared.utilities.logger;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using backend.main.infrastructure.elasticsearch;
-using backend.main.shared.utilities.logger;
 
 
 namespace backend.main.features.events
@@ -250,7 +250,10 @@ namespace backend.main.features.events
                     ? null
                     : criteria.Query.Trim().ToLowerInvariant();
 
-                var effective = criteria with { Query = normalized };
+                var effective = criteria with
+                {
+                    Query = normalized
+                };
 
                 // Prefer ES for full-text, tag, and geo search. If ES is unavailable, fall back to MySQL
                 // for the subset of filters/sorts we can honor safely.
@@ -1266,20 +1269,34 @@ namespace backend.main.features.events
 
         private static void ApplyBatchPatch(Events ev, BatchUpdateEventItem item)
         {
-            if (item.Name != null) ev.Name = item.Name;
-            if (item.Description != null) ev.Description = item.Description;
-            if (item.Location != null) ev.Location = item.Location;
-            if (item.IsPrivate.HasValue) ev.isPrivate = item.IsPrivate.Value;
-            if (item.MaxParticipants.HasValue) ev.maxParticipants = item.MaxParticipants.Value;
-            if (item.RegisterCost.HasValue) ev.registerCost = item.RegisterCost.Value;
-            if (item.StartTime.HasValue) ev.StartTime = item.StartTime.Value;
-            if (item.EndTime.HasValue) ev.EndTime = item.EndTime.Value;
-            if (item.Category.HasValue) ev.Category = item.Category.Value;
-            if (item.VenueName != null) ev.VenueName = item.VenueName;
-            if (item.City != null) ev.City = item.City;
-            if (item.Latitude.HasValue) ev.Latitude = item.Latitude;
-            if (item.Longitude.HasValue) ev.Longitude = item.Longitude;
-            if (item.Tags != null) ev.Tags = NormalizeTags(item.Tags);
+            if (item.Name != null)
+                ev.Name = item.Name;
+            if (item.Description != null)
+                ev.Description = item.Description;
+            if (item.Location != null)
+                ev.Location = item.Location;
+            if (item.IsPrivate.HasValue)
+                ev.isPrivate = item.IsPrivate.Value;
+            if (item.MaxParticipants.HasValue)
+                ev.maxParticipants = item.MaxParticipants.Value;
+            if (item.RegisterCost.HasValue)
+                ev.registerCost = item.RegisterCost.Value;
+            if (item.StartTime.HasValue)
+                ev.StartTime = item.StartTime.Value;
+            if (item.EndTime.HasValue)
+                ev.EndTime = item.EndTime.Value;
+            if (item.Category.HasValue)
+                ev.Category = item.Category.Value;
+            if (item.VenueName != null)
+                ev.VenueName = item.VenueName;
+            if (item.City != null)
+                ev.City = item.City;
+            if (item.Latitude.HasValue)
+                ev.Latitude = item.Latitude;
+            if (item.Longitude.HasValue)
+                ev.Longitude = item.Longitude;
+            if (item.Tags != null)
+                ev.Tags = NormalizeTags(item.Tags);
         }
 
         private static List<EventVersionFieldChange> BuildChangedFields(
@@ -1495,7 +1512,8 @@ namespace backend.main.features.events
 
         private static List<string> NormalizeTags(IEnumerable<string>? tags)
         {
-            if (tags == null) return new List<string>();
+            if (tags == null)
+                return new List<string>();
             return tags
                 .Where(t => !string.IsNullOrWhiteSpace(t))
                 .Select(t => t.Trim().ToLowerInvariant())

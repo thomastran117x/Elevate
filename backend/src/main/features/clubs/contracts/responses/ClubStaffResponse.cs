@@ -2,13 +2,31 @@ namespace backend.main.features.clubs.contracts.responses
 {
     public class ClubStaffResponse
     {
-        public int Id { get; set; }
-        public int ClubId { get; set; }
-        public int UserId { get; set; }
+        public int Id
+        {
+            get; set;
+        }
+        public int ClubId
+        {
+            get; set;
+        }
+        public int UserId
+        {
+            get; set;
+        }
         public string Role { get; set; } = string.Empty;
-        public int GrantedByUserId { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public DateTime UpdatedAt { get; set; }
+        public int GrantedByUserId
+        {
+            get; set;
+        }
+        public DateTime CreatedAt
+        {
+            get; set;
+        }
+        public DateTime UpdatedAt
+        {
+            get; set;
+        }
 
         public ClubStaffResponse(
             int id,

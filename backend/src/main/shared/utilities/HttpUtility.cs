@@ -1,5 +1,5 @@
-using backend.main.shared.requests;
 using backend.main.application.bootstrap;
+using backend.main.shared.requests;
 
 namespace backend.main.utilities
 {

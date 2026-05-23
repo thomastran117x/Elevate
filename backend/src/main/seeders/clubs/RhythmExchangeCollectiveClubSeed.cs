@@ -6,7 +6,10 @@ namespace backend.main.seeders.clubs;
 
 public sealed class RhythmExchangeCollectiveClubSeed : IClubSeedDefinitionSource
 {
-    public SeedClubDefinition Definition { get; } = new(
+    public SeedClubDefinition Definition
+    {
+        get;
+    } = new(
         Slug: "rhythm-exchange-collective",
         Name: "Rhythm Exchange Collective",
         Description: "A cultural music and dance club where members learn social movement basics, share playlists, and build confidence through guided practice nights.",

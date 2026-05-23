@@ -1,5 +1,5 @@
-using backend.main.shared.responses;
 using backend.main.shared.exceptions.http;
+using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Mvc;
 

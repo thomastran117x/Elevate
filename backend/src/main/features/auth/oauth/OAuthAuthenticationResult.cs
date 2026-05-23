@@ -4,8 +4,14 @@ namespace backend.main.features.auth.oauth
 {
     public sealed class OAuthAuthenticationResult
     {
-        public UserToken? UserToken { get; init; }
-        public PendingOAuthSignupChallenge? PendingSignup { get; init; }
+        public UserToken? UserToken
+        {
+            get; init;
+        }
+        public PendingOAuthSignupChallenge? PendingSignup
+        {
+            get; init;
+        }
 
         public bool RequiresRoleSelection => PendingSignup != null;
 
@@ -26,9 +32,21 @@ namespace backend.main.features.auth.oauth
 
     public sealed class PendingOAuthSignupChallenge
     {
-        public required string SignupToken { get; init; }
-        public required string Email { get; init; }
-        public required string Name { get; init; }
-        public required string Provider { get; init; }
+        public required string SignupToken
+        {
+            get; init;
+        }
+        public required string Email
+        {
+            get; init;
+        }
+        public required string Name
+        {
+            get; init;
+        }
+        public required string Provider
+        {
+            get; init;
+        }
     }
 }

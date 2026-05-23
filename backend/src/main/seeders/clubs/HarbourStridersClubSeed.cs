@@ -6,7 +6,10 @@ namespace backend.main.seeders.clubs;
 
 public sealed class HarbourStridersClubSeed : IClubSeedDefinitionSource
 {
-    public SeedClubDefinition Definition { get; } = new(
+    public SeedClubDefinition Definition
+    {
+        get;
+    } = new(
         Slug: "harbour-striders",
         Name: "Harbour Striders Club",
         Description: "A waterfront running club built around consistent training blocks, low-pressure pacing groups, and a cheerful post-run coffee culture.",

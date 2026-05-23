@@ -1,18 +1,19 @@
+using System.Security.Cryptography;
+
 using backend.main.application.security;
-using backend.main.shared.providers.messages;
-using backend.main.shared.requests;
 using backend.main.features.auth.contracts;
 using backend.main.features.auth.device;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
-using backend.main.shared.exceptions.http;
-using backend.main.features.profile;
 using backend.main.features.cache;
+using backend.main.features.profile;
+using backend.main.shared.exceptions.http;
+using backend.main.shared.providers;
+using backend.main.shared.providers.messages;
+using backend.main.shared.requests;
+using backend.main.shared.utilities.logger;
 
 using Newtonsoft.Json;
-using System.Security.Cryptography;
-using backend.main.shared.providers;
-using backend.main.shared.utilities.logger;
 
 namespace backend.main.features.auth
 {
@@ -788,11 +789,26 @@ namespace backend.main.features.auth
 
         private sealed class PendingOAuthSignupState
         {
-            public required string ProviderUserId { get; set; }
-            public required string Email { get; set; }
-            public required string Name { get; set; }
-            public required string Provider { get; set; }
-            public SessionTransport Transport { get; set; }
+            public required string ProviderUserId
+            {
+                get; set;
+            }
+            public required string Email
+            {
+                get; set;
+            }
+            public required string Name
+            {
+                get; set;
+            }
+            public required string Provider
+            {
+                get; set;
+            }
+            public SessionTransport Transport
+            {
+                get; set;
+            }
         }
     }
 }

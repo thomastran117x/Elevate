@@ -3,11 +3,7 @@ import { Component, inject, PLATFORM_ID, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
-import {
-  AuthService,
-  PendingOAuthSignupStorageKey,
-  SignupRole,
-} from '../../services/auth.service';
+import { AuthService, PendingOAuthSignupStorageKey, SignupRole } from '../../services/auth.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 
 type PendingOAuthSignup = {
@@ -114,12 +110,18 @@ export class OAuthRoleComponent {
           setTimeout(() => this.router.navigateByUrl(target), 800);
         } catch (err: any) {
           this.status.set('error');
-          this.message.set(err?.error?.message || err?.message || 'We could not complete your signup. Please try again.');
+          this.message.set(
+            err?.error?.message ||
+              err?.message ||
+              'We could not complete your signup. Please try again.',
+          );
         }
       },
       error: (err) => {
         this.status.set('error');
-        this.message.set(err?.error?.message || 'We could not complete your signup. Please try again.');
+        this.message.set(
+          err?.error?.message || 'We could not complete your signup. Please try again.',
+        );
       },
     });
   }

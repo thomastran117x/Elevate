@@ -131,7 +131,8 @@ namespace backend.main.features.clubs.posts
         public async Task IncrementViewCountAsync(IEnumerable<int> postIds)
         {
             var ids = postIds.ToList();
-            if (ids.Count == 0) return;
+            if (ids.Count == 0)
+                return;
 
             await _context.ClubPosts
                 .Where(p => ids.Contains(p.Id))

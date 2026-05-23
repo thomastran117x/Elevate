@@ -6,7 +6,10 @@ namespace backend.main.seeders.clubs;
 
 public sealed class NorthCampusBuildersClubSeed : IClubSeedDefinitionSource
 {
-    public SeedClubDefinition Definition { get; } = new(
+    public SeedClubDefinition Definition
+    {
+        get;
+    } = new(
         Slug: "north-campus-builders",
         Name: "North Campus Builders",
         Description: "A campus club for students building products, ventures, and side projects through hands-on sessions, mentor feedback, and founder community.",

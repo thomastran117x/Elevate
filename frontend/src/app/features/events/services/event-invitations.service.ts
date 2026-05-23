@@ -86,74 +86,174 @@ export class EventInvitationsService {
 
   resolve(token: string): Observable<EventInvitationResolve> {
     return this.http
-      .post<ApiEnvelope<ResolvePayload>>(`${this.base}/invitations/resolve`, { token }, { withCredentials: true })
-      .pipe(map((response) => this.normalizeResolve(requireEnvelopeData(response, 'Invitation response was incomplete.'))));
+      .post<
+        ApiEnvelope<ResolvePayload>
+      >(`${this.base}/invitations/resolve`, { token }, { withCredentials: true })
+      .pipe(
+        map((response) =>
+          this.normalizeResolve(
+            requireEnvelopeData(response, 'Invitation response was incomplete.'),
+          ),
+        ),
+      );
   }
 
   accept(token: string): Observable<EventInvitationDecision> {
     return this.http
-      .post<ApiEnvelope<DecisionPayload>>(`${this.base}/invitations/accept`, { token }, { withCredentials: true })
-      .pipe(map((response) => this.normalizeDecision(requireEnvelopeData(response, 'Invitation response was incomplete.'))));
+      .post<
+        ApiEnvelope<DecisionPayload>
+      >(`${this.base}/invitations/accept`, { token }, { withCredentials: true })
+      .pipe(
+        map((response) =>
+          this.normalizeDecision(
+            requireEnvelopeData(response, 'Invitation response was incomplete.'),
+          ),
+        ),
+      );
   }
 
   decline(token: string): Observable<EventInvitationDecision> {
     return this.http
-      .post<ApiEnvelope<DecisionPayload>>(`${this.base}/invitations/decline`, { token }, { withCredentials: true })
-      .pipe(map((response) => this.normalizeDecision(requireEnvelopeData(response, 'Invitation response was incomplete.'))));
+      .post<
+        ApiEnvelope<DecisionPayload>
+      >(`${this.base}/invitations/decline`, { token }, { withCredentials: true })
+      .pipe(
+        map((response) =>
+          this.normalizeDecision(
+            requireEnvelopeData(response, 'Invitation response was incomplete.'),
+          ),
+        ),
+      );
   }
 
   acceptById(invitationId: number): Observable<EventInvitationDecision> {
     return this.http
-      .post<ApiEnvelope<DecisionPayload>>(`${this.base}/invitations/${invitationId}/accept`, {}, { withCredentials: true })
-      .pipe(map((response) => this.normalizeDecision(requireEnvelopeData(response, 'Invitation response was incomplete.'))));
+      .post<
+        ApiEnvelope<DecisionPayload>
+      >(`${this.base}/invitations/${invitationId}/accept`, {}, { withCredentials: true })
+      .pipe(
+        map((response) =>
+          this.normalizeDecision(
+            requireEnvelopeData(response, 'Invitation response was incomplete.'),
+          ),
+        ),
+      );
   }
 
   declineById(invitationId: number): Observable<EventInvitationDecision> {
     return this.http
-      .post<ApiEnvelope<DecisionPayload>>(`${this.base}/invitations/${invitationId}/decline`, {}, { withCredentials: true })
-      .pipe(map((response) => this.normalizeDecision(requireEnvelopeData(response, 'Invitation response was incomplete.'))));
+      .post<
+        ApiEnvelope<DecisionPayload>
+      >(`${this.base}/invitations/${invitationId}/decline`, {}, { withCredentials: true })
+      .pipe(
+        map((response) =>
+          this.normalizeDecision(
+            requireEnvelopeData(response, 'Invitation response was incomplete.'),
+          ),
+        ),
+      );
   }
 
   getMine(): Observable<EventInvitation[]> {
     return this.http
       .get<ApiEnvelope<InvitationPayload[]>>(`${this.base}/me/invited`, { withCredentials: true })
-      .pipe(map((response) => (requireEnvelopeData(response, 'Invitations response was incomplete.') ?? []).map((item) => this.normalizeInvitation(item))));
+      .pipe(
+        map((response) =>
+          (requireEnvelopeData(response, 'Invitations response was incomplete.') ?? []).map(
+            (item) => this.normalizeInvitation(item),
+          ),
+        ),
+      );
   }
 
   getEventInvitations(eventId: number): Observable<EventInvitation[]> {
     return this.http
-      .get<ApiEnvelope<InvitationPayload[]>>(`${this.base}/${eventId}/invitations`, { withCredentials: true })
-      .pipe(map((response) => (requireEnvelopeData(response, 'Invitations response was incomplete.') ?? []).map((item) => this.normalizeInvitation(item))));
+      .get<
+        ApiEnvelope<InvitationPayload[]>
+      >(`${this.base}/${eventId}/invitations`, { withCredentials: true })
+      .pipe(
+        map((response) =>
+          (requireEnvelopeData(response, 'Invitations response was incomplete.') ?? []).map(
+            (item) => this.normalizeInvitation(item),
+          ),
+        ),
+      );
   }
 
-  createInvitations(eventId: number, payload: CreateEventInvitationsPayload): Observable<EventInvitation[]> {
+  createInvitations(
+    eventId: number,
+    payload: CreateEventInvitationsPayload,
+  ): Observable<EventInvitation[]> {
     return this.http
-      .post<ApiEnvelope<InvitationPayload[]>>(`${this.base}/${eventId}/invitations`, payload, { withCredentials: true })
-      .pipe(map((response) => (requireEnvelopeData(response, 'Invitations response was incomplete.') ?? []).map((item) => this.normalizeInvitation(item))));
+      .post<
+        ApiEnvelope<InvitationPayload[]>
+      >(`${this.base}/${eventId}/invitations`, payload, { withCredentials: true })
+      .pipe(
+        map((response) =>
+          (requireEnvelopeData(response, 'Invitations response was incomplete.') ?? []).map(
+            (item) => this.normalizeInvitation(item),
+          ),
+        ),
+      );
   }
 
   revokeInvitation(eventId: number, invitationId: number): Observable<EventInvitation> {
     return this.http
-      .post<ApiEnvelope<InvitationPayload>>(`${this.base}/${eventId}/invitations/${invitationId}/revoke`, {}, { withCredentials: true })
-      .pipe(map((response) => this.normalizeInvitation(requireEnvelopeData(response, 'Invitation response was incomplete.'))));
+      .post<
+        ApiEnvelope<InvitationPayload>
+      >(`${this.base}/${eventId}/invitations/${invitationId}/revoke`, {}, { withCredentials: true })
+      .pipe(
+        map((response) =>
+          this.normalizeInvitation(
+            requireEnvelopeData(response, 'Invitation response was incomplete.'),
+          ),
+        ),
+      );
   }
 
   getInvitationLinks(eventId: number): Observable<EventInvitationLink[]> {
     return this.http
-      .get<ApiEnvelope<InvitationLinkPayload[]>>(`${this.base}/${eventId}/invitation-links`, { withCredentials: true })
-      .pipe(map((response) => (requireEnvelopeData(response, 'Invitation links response was incomplete.') ?? []).map((item) => this.normalizeLink(item))));
+      .get<
+        ApiEnvelope<InvitationLinkPayload[]>
+      >(`${this.base}/${eventId}/invitation-links`, { withCredentials: true })
+      .pipe(
+        map((response) =>
+          (requireEnvelopeData(response, 'Invitation links response was incomplete.') ?? []).map(
+            (item) => this.normalizeLink(item),
+          ),
+        ),
+      );
   }
 
-  createInvitationLink(eventId: number, payload: CreateEventInvitationLinkPayload): Observable<EventInvitationLink> {
+  createInvitationLink(
+    eventId: number,
+    payload: CreateEventInvitationLinkPayload,
+  ): Observable<EventInvitationLink> {
     return this.http
-      .post<ApiEnvelope<InvitationLinkPayload>>(`${this.base}/${eventId}/invitation-links`, payload, { withCredentials: true })
-      .pipe(map((response) => this.normalizeLink(requireEnvelopeData(response, 'Invitation link response was incomplete.'))));
+      .post<
+        ApiEnvelope<InvitationLinkPayload>
+      >(`${this.base}/${eventId}/invitation-links`, payload, { withCredentials: true })
+      .pipe(
+        map((response) =>
+          this.normalizeLink(
+            requireEnvelopeData(response, 'Invitation link response was incomplete.'),
+          ),
+        ),
+      );
   }
 
   revokeInvitationLink(eventId: number, linkId: number): Observable<EventInvitationLink> {
     return this.http
-      .post<ApiEnvelope<InvitationLinkPayload>>(`${this.base}/${eventId}/invitation-links/${linkId}/revoke`, {}, { withCredentials: true })
-      .pipe(map((response) => this.normalizeLink(requireEnvelopeData(response, 'Invitation link response was incomplete.'))));
+      .post<
+        ApiEnvelope<InvitationLinkPayload>
+      >(`${this.base}/${eventId}/invitation-links/${linkId}/revoke`, {}, { withCredentials: true })
+      .pipe(
+        map((response) =>
+          this.normalizeLink(
+            requireEnvelopeData(response, 'Invitation link response was incomplete.'),
+          ),
+        ),
+      );
   }
 
   private normalizeInvitation(payload: InvitationPayload): EventInvitation {
@@ -174,7 +274,10 @@ export class EventInvitationsService {
       deliveryError: payload.deliveryError ?? payload.DeliveryError,
       createdAt: payload.createdAt ?? payload.CreatedAt ?? '',
       updatedAt: payload.updatedAt ?? payload.UpdatedAt ?? '',
-      event: payload.event ?? payload.Event ? this.normalizeSummaryEvent(payload.event ?? payload.Event!) : undefined,
+      event:
+        (payload.event ?? payload.Event)
+          ? this.normalizeSummaryEvent(payload.event ?? payload.Event!)
+          : undefined,
     };
   }
 
@@ -196,12 +299,16 @@ export class EventInvitationsService {
   private normalizeResolve(payload: ResolvePayload): EventInvitationResolve {
     return {
       state: payload.state ?? payload.State ?? '',
-      requiresAuthentication: payload.requiresAuthentication ?? payload.RequiresAuthentication ?? false,
+      requiresAuthentication:
+        payload.requiresAuthentication ?? payload.RequiresAuthentication ?? false,
       canAccept: payload.canAccept ?? payload.CanAccept ?? false,
       canDecline: payload.canDecline ?? payload.CanDecline ?? false,
       sourceType: payload.sourceType ?? payload.SourceType ?? '',
       expiresAt: payload.expiresAt ?? payload.ExpiresAt,
-      event: payload.event ?? payload.Event ? this.normalizeSummaryEvent(payload.event ?? payload.Event!) : undefined,
+      event:
+        (payload.event ?? payload.Event)
+          ? this.normalizeSummaryEvent(payload.event ?? payload.Event!)
+          : undefined,
     };
   }
 

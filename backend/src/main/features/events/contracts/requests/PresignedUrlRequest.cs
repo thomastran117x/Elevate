@@ -5,10 +5,16 @@ namespace backend.main.features.events.contracts.requests
     public class PresignedUrlRequest : IValidatableObject
     {
         [Range(1, int.MaxValue, ErrorMessage = "ClubId must be greater than 0.")]
-        public int ClubId { get; set; }
+        public int ClubId
+        {
+            get; set;
+        }
 
         [Range(1, int.MaxValue, ErrorMessage = "EventId must be greater than 0.")]
-        public int? EventId { get; set; }
+        public int? EventId
+        {
+            get; set;
+        }
 
         [Required]
         [StringLength(255, MinimumLength = 3)]

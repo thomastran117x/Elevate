@@ -6,7 +6,10 @@ namespace backend.main.seeders.clubs;
 
 public sealed class LanternSocialCollectiveClubSeed : IClubSeedDefinitionSource
 {
-    public SeedClubDefinition Definition { get; } = new(
+    public SeedClubDefinition Definition
+    {
+        get;
+    } = new(
         Slug: "lantern-social-collective",
         Name: "Lantern Social Collective",
         Description: "A city social club that organizes low-pressure mixers, hobby meetups, and welcoming nights for people building real friendships in Toronto.",

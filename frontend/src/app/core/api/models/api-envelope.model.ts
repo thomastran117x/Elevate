@@ -28,10 +28,7 @@ export function extractEnvelopeData<T>(response: ApiEnvelope<T> | T | null | und
   return response as T;
 }
 
-export function requireEnvelopeData<T>(
-  response: ApiEnvelope<T>,
-  fallbackMessage: string,
-): T {
+export function requireEnvelopeData<T>(response: ApiEnvelope<T>, fallbackMessage: string): T {
   const data = response.data ?? response.Data;
   if (data == null) {
     throw new Error(response.message || response.Message || fallbackMessage);

@@ -91,11 +91,13 @@ export class EventsService {
     if (params.category) httpParams = httpParams.set('category', params.category);
     if (params.status) httpParams = httpParams.set('status', params.status);
     if (params.sortBy) httpParams = httpParams.set('sortBy', params.sortBy);
-    if (params.isPrivate !== undefined) httpParams = httpParams.set('isPrivate', String(params.isPrivate));
+    if (params.isPrivate !== undefined)
+      httpParams = httpParams.set('isPrivate', String(params.isPrivate));
     if (params.tags?.trim()) httpParams = httpParams.set('tags', params.tags.trim());
     if (params.lat !== undefined) httpParams = httpParams.set('lat', String(params.lat));
     if (params.lng !== undefined) httpParams = httpParams.set('lng', String(params.lng));
-    if (params.radiusKm !== undefined) httpParams = httpParams.set('radiusKm', String(params.radiusKm));
+    if (params.radiusKm !== undefined)
+      httpParams = httpParams.set('radiusKm', String(params.radiusKm));
     if (params.page) httpParams = httpParams.set('page', String(params.page));
     if (params.pageSize) httpParams = httpParams.set('pageSize', String(params.pageSize));
 

@@ -11,9 +11,15 @@ namespace backend.main.shared.responses
         }
 
         [JsonPropertyName("code")]
-        public string Code { get; set; }
+        public string Code
+        {
+            get; set;
+        }
 
         [JsonPropertyName("details")]
-        public object? Details { get; set; }
+        public object? Details
+        {
+            get; set;
+        }
     }
 }

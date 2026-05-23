@@ -5,15 +5,15 @@ using System.Text;
 
 using backend.main.application.environment;
 using backend.main.application.security;
-using backend.main.shared.requests;
-using backend.main.shared.exceptions.http;
-using backend.main.features.profile;
 using backend.main.features.cache;
+using backend.main.features.profile;
+using backend.main.shared.exceptions.http;
+using backend.main.shared.requests;
+using backend.main.shared.utilities.logger;
 
 using Microsoft.IdentityModel.Tokens;
 
 using Newtonsoft.Json;
-using backend.main.shared.utilities.logger;
 
 namespace backend.main.features.auth.token
 {
@@ -710,45 +710,117 @@ namespace backend.main.features.auth.token
 
         private sealed class RefreshTokenRecord
         {
-            public required string SessionId { get; set; }
-            public int UserId { get; set; }
-            public DateTime CreatedAt { get; set; }
+            public required string SessionId
+            {
+                get; set;
+            }
+            public int UserId
+            {
+                get; set;
+            }
+            public DateTime CreatedAt
+            {
+                get; set;
+            }
         }
 
         private sealed class RefreshSessionState
         {
-            public required string SessionId { get; set; }
-            public int UserId { get; set; }
-            public SessionTransport Transport { get; set; }
-            public required string CurrentRefreshTokenHash { get; set; }
-            public required string CurrentBindingTokenHash { get; set; }
-            public bool RememberMe { get; set; }
+            public required string SessionId
+            {
+                get; set;
+            }
+            public int UserId
+            {
+                get; set;
+            }
+            public SessionTransport Transport
+            {
+                get; set;
+            }
+            public required string CurrentRefreshTokenHash
+            {
+                get; set;
+            }
+            public required string CurrentBindingTokenHash
+            {
+                get; set;
+            }
+            public bool RememberMe
+            {
+                get; set;
+            }
             public string LastSeenIpAddress { get; set; } = "Unknown";
             public string LastSeenClientName { get; set; } = "Unknown";
             public string LastSeenDeviceType { get; set; } = "Unknown";
-            public DateTime CreatedAt { get; set; }
-            public DateTime LastSeenAt { get; set; }
+            public DateTime CreatedAt
+            {
+                get; set;
+            }
+            public DateTime LastSeenAt
+            {
+                get; set;
+            }
         }
 
         private sealed class VerificationTokenPayload
         {
-            public required string Email { get; set; }
-            public string? Password { get; set; }
-            public required string Usertype { get; set; }
-            public VerificationPurpose Purpose { get; set; }
+            public required string Email
+            {
+                get; set;
+            }
+            public string? Password
+            {
+                get; set;
+            }
+            public required string Usertype
+            {
+                get; set;
+            }
+            public VerificationPurpose Purpose
+            {
+                get; set;
+            }
         }
 
         private sealed class VerificationDeliveryState
         {
-            public required string Email { get; set; }
-            public VerificationPurpose Purpose { get; set; }
-            public required string LinkToken { get; set; }
-            public required string OtpCode { get; set; }
-            public required string OtpChallenge { get; set; }
-            public required string OtpProof { get; set; }
-            public string? Password { get; set; }
-            public required string Usertype { get; set; }
-            public DateTime ExpiresAtUtc { get; set; }
+            public required string Email
+            {
+                get; set;
+            }
+            public VerificationPurpose Purpose
+            {
+                get; set;
+            }
+            public required string LinkToken
+            {
+                get; set;
+            }
+            public required string OtpCode
+            {
+                get; set;
+            }
+            public required string OtpChallenge
+            {
+                get; set;
+            }
+            public required string OtpProof
+            {
+                get; set;
+            }
+            public string? Password
+            {
+                get; set;
+            }
+            public required string Usertype
+            {
+                get; set;
+            }
+            public DateTime ExpiresAtUtc
+            {
+                get; set;
+            }
         }
     }
 }

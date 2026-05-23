@@ -10,6 +10,9 @@ namespace backend.main.features.auth.contracts.requests
             get; set;
         }
 
-        public string? Transport { get; set; }
+        public string? Transport
+        {
+            get; set;
+        }
     }
 }

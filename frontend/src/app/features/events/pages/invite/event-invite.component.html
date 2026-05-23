@@ -6,17 +6,24 @@
         <div class="h-64 animate-pulse rounded-3xl bg-white/10"></div>
       </div>
 
-      <div *ngIf="!loading && error" class="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-rose-100">
+      <div
+        *ngIf="!loading && error"
+        class="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-rose-100"
+      >
         {{ error }}
       </div>
 
       <ng-container *ngIf="!loading && invite">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p class="text-xs uppercase tracking-[0.18em] text-white/45">Private event invitation</p>
+            <p class="text-xs uppercase tracking-[0.18em] text-white/45">
+              Private event invitation
+            </p>
             <h1 class="mt-2 text-3xl font-bold">{{ invite.event?.name || 'Invitation' }}</h1>
           </div>
-          <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-white/70">
+          <span
+            class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-white/70"
+          >
             {{ invite.state }}
           </span>
         </div>
@@ -24,11 +31,20 @@
         <div class="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-slate-900/60">
           <div
             class="h-52 bg-cover bg-center"
-            [style.background-image]="imageUrl ? 'linear-gradient(180deg, rgba(15,23,42,0.12), rgba(15,23,42,0.65)), url(' + imageUrl + ')' : 'linear-gradient(135deg, rgba(14,165,233,.25), rgba(99,102,241,.25))'"
+            [style.background-image]="
+              imageUrl
+                ? 'linear-gradient(180deg, rgba(15,23,42,0.12), rgba(15,23,42,0.65)), url(' +
+                  imageUrl +
+                  ')'
+                : 'linear-gradient(135deg, rgba(14,165,233,.25), rgba(99,102,241,.25))'
+            "
           ></div>
           <div class="space-y-4 p-6">
             <p class="text-sm leading-7 text-white/75">
-              {{ invite.event?.description || 'Use this invitation to unlock access to a private event.' }}
+              {{
+                invite.event?.description ||
+                  'Use this invitation to unlock access to a private event.'
+              }}
             </p>
 
             <div class="grid gap-3 text-sm text-white/70 sm:grid-cols-2">
@@ -83,7 +99,10 @@
             </div>
 
             <div *ngIf="invite.state === 'AlreadyAccepted' && invite.event" class="flex gap-3">
-              <a [routerLink]="['/events', invite.event.id]" class="rounded-xl bg-white px-4 py-2 font-medium text-slate-950">
+              <a
+                [routerLink]="['/events', invite.event.id]"
+                class="rounded-xl bg-white px-4 py-2 font-medium text-slate-950"
+              >
                 Open event
               </a>
             </div>

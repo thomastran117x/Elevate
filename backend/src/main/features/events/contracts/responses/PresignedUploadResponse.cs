@@ -4,7 +4,10 @@ namespace backend.main.features.events.contracts.responses
     {
         public string UploadUrl { get; set; } = null!;
         public string PublicUrl { get; set; } = null!;
-        public DateTimeOffset ExpiresAt { get; set; }
+        public DateTimeOffset ExpiresAt
+        {
+            get; set;
+        }
     }
 }
 

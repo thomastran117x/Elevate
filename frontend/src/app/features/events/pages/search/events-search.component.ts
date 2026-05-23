@@ -74,7 +74,11 @@ export class EventsSearchComponent implements OnInit, OnDestroy {
   readonly categoryStyles = CATEGORY_STYLES;
   readonly suggestedTags = ['free', 'outdoor', 'student', 'career', 'community'];
   readonly baseRadiusOptions = [5, 10, 25, 50, 100, 250];
-  readonly sortOptions: Array<{ value: EventSortBy; label: string; requiresCoordinates?: boolean }> = [
+  readonly sortOptions: Array<{
+    value: EventSortBy;
+    label: string;
+    requiresCoordinates?: boolean;
+  }> = [
     { value: 'Relevance', label: 'Best match' },
     { value: 'Date', label: 'Soonest first' },
     { value: 'Popularity', label: 'Most popular' },
@@ -462,7 +466,8 @@ export class EventsSearchComponent implements OnInit, OnDestroy {
           const data = extractEnvelopeData(response);
           if (!data) {
             this.resetResults();
-            this.error = response.message || response.Message || 'Failed to load events. Please try again.';
+            this.error =
+              response.message || response.Message || 'Failed to load events. Please try again.';
             this.loading = false;
             return;
           }
@@ -566,7 +571,8 @@ export class EventsSearchComponent implements OnInit, OnDestroy {
     if (state.cityQuery) queryParams['city'] = state.cityQuery;
     if (state.selectedCategory) queryParams['category'] = state.selectedCategory;
     if (state.selectedStatus) queryParams['status'] = state.selectedStatus;
-    if (state.selectedSort !== EventsSearchComponent.DEFAULT_SORT) queryParams['sort'] = state.selectedSort;
+    if (state.selectedSort !== EventsSearchComponent.DEFAULT_SORT)
+      queryParams['sort'] = state.selectedSort;
     if (state.tags.length > 0) queryParams['tags'] = state.tags.join(',');
     if (state.latitude !== null && state.longitude !== null) {
       queryParams['lat'] = String(state.latitude);
@@ -603,7 +609,9 @@ export class EventsSearchComponent implements OnInit, OnDestroy {
   }
 
   private parseCategory(value: string | null): EventCategory | null {
-    return value && ALL_CATEGORIES.includes(value as EventCategory) ? (value as EventCategory) : null;
+    return value && ALL_CATEGORIES.includes(value as EventCategory)
+      ? (value as EventCategory)
+      : null;
   }
 
   private parseStatus(value: string | null): EventStatus | null {
@@ -640,7 +648,9 @@ export class EventsSearchComponent implements OnInit, OnDestroy {
     }
 
     const coordinate = Number.parseFloat(value);
-    return Number.isFinite(coordinate) && coordinate >= min && coordinate <= max ? coordinate : null;
+    return Number.isFinite(coordinate) && coordinate >= min && coordinate <= max
+      ? coordinate
+      : null;
   }
 
   private parseTagInput(value: string): string[] {

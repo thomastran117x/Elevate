@@ -1,5 +1,5 @@
-using backend.main.features.events.registration.contracts.responses;
 using backend.main.features.events.registration;
+using backend.main.features.events.registration.contracts.responses;
 
 namespace backend.main.features.events.registration
 {

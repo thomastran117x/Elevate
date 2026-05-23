@@ -160,5 +160,8 @@ public sealed record SeedClubDefinition(
 
 public interface IClubSeedDefinitionSource
 {
-    SeedClubDefinition Definition { get; }
+    SeedClubDefinition Definition
+    {
+        get;
+    }
 }

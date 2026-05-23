@@ -891,18 +891,18 @@ public sealed class SeedFeatureActivitySeeder : ISeeder
     private static ClubVersionSnapshot BuildPreviousClubSnapshot(
         SeedClubDefinition definition,
         ClubVersionSnapshot currentSnapshot) => new()
-    {
-        Name = currentSnapshot.Name,
-        Description = $"{definition.Name} started as a smaller pilot season for {definition.Theme.ToLowerInvariant()}.",
-        Clubtype = currentSnapshot.Clubtype,
-        ClubImage = currentSnapshot.ClubImage,
-        Phone = currentSnapshot.Phone,
-        Email = currentSnapshot.Email,
-        WebsiteUrl = currentSnapshot.WebsiteUrl,
-        Location = currentSnapshot.Location,
-        MaxMemberCount = Math.Max(40, currentSnapshot.MaxMemberCount - 20),
-        IsPrivate = currentSnapshot.IsPrivate
-    };
+        {
+            Name = currentSnapshot.Name,
+            Description = $"{definition.Name} started as a smaller pilot season for {definition.Theme.ToLowerInvariant()}.",
+            Clubtype = currentSnapshot.Clubtype,
+            ClubImage = currentSnapshot.ClubImage,
+            Phone = currentSnapshot.Phone,
+            Email = currentSnapshot.Email,
+            WebsiteUrl = currentSnapshot.WebsiteUrl,
+            Location = currentSnapshot.Location,
+            MaxMemberCount = Math.Max(40, currentSnapshot.MaxMemberCount - 20),
+            IsPrivate = currentSnapshot.IsPrivate
+        };
 
     private static IReadOnlyList<ClubVersionFieldChange> BuildClubChangedFields(
         ClubVersionSnapshot? previous,

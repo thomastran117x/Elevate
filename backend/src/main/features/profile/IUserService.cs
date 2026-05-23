@@ -1,6 +1,6 @@
-using backend.main.features.profile;
 using backend.main.features.auth.contracts;
 using backend.main.features.clubs.follow;
+using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 
 namespace backend.main.features.profile

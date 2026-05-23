@@ -58,7 +58,10 @@
   border-radius: 999px;
   font-weight: 700;
   text-decoration: none;
-  transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    background 150ms ease;
 }
 
 .verify-primary {

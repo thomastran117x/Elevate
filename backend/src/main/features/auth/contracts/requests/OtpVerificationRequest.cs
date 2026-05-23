@@ -6,11 +6,20 @@ namespace backend.main.features.auth.contracts.requests
     {
         [Required]
         [StringLength(6, MinimumLength = 6, ErrorMessage = "Code must be 6 digits.")]
-        public required string Code { get; set; }
+        public required string Code
+        {
+            get; set;
+        }
 
         [Required]
-        public required string Challenge { get; set; }
+        public required string Challenge
+        {
+            get; set;
+        }
 
-        public string? Transport { get; set; }
+        public string? Transport
+        {
+            get; set;
+        }
     }
 }

@@ -1,18 +1,18 @@
 using backend.main.application.security;
+using backend.main.features.clubs;
+using backend.main.features.events;
 using backend.main.features.events.contracts.requests;
 using backend.main.features.events.contracts.responses;
-using backend.main.shared.responses;
 using backend.main.features.events.search;
 using backend.main.features.events.versions;
 using backend.main.features.events.versions.contracts.responses;
 using backend.main.shared.exceptions.http;
-using backend.main.features.events;
+using backend.main.shared.responses;
+using backend.main.shared.utilities.logger;
 using backend.main.utilities;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using backend.main.shared.utilities.logger;
-using backend.main.features.clubs;
 
 namespace backend.main.features.events
 {
@@ -454,7 +454,10 @@ namespace backend.main.features.events
 
                 return Ok(new ApiResponse<object>(
                     $"{count} event(s) updated successfully.",
-                    new { updatedCount = count }
+                    new
+                    {
+                        updatedCount = count
+                    }
                 ));
             }
             catch (Exception e)
@@ -479,7 +482,10 @@ namespace backend.main.features.events
 
                 return Ok(new ApiResponse<object>(
                     $"{count} event(s) deleted successfully.",
-                    new { deletedCount = count }
+                    new
+                    {
+                        deletedCount = count
+                    }
                 ));
             }
             catch (Exception e)
@@ -560,7 +566,12 @@ namespace backend.main.features.events
 
                 return StatusCode(201, new ApiResponse<object>(
                     $"Image added to event {eventId} successfully.",
-                    new { image.Id, image.ImageUrl, image.SortOrder }
+                    new
+                    {
+                        image.Id,
+                        image.ImageUrl,
+                        image.SortOrder
+                    }
                 ));
             }
             catch (Exception e)
@@ -687,7 +698,10 @@ namespace backend.main.features.events
             var count = await _reindexService.ReindexAllAsync(cancellationToken);
             return Ok(new ApiResponse<object>(
                 "Events reindexed successfully.",
-                new { indexed = count }
+                new
+                {
+                    indexed = count
+                }
             ));
         }
     }
