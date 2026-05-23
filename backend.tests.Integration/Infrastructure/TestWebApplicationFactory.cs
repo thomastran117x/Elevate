@@ -22,6 +22,7 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly string _testConnectionString = $"Data Source=backend-tests-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
     private readonly SqliteConnection _connection;
+    private readonly Action<IServiceCollection>? _serviceOverrides;
 
     public InMemoryCacheService Cache { get; } = new();
     public CapturingPublisher Publisher { get; } = new();
@@ -30,9 +31,10 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
     public FakeFileUploadService Storage { get; } = new();
     public FakeAzureBlobService BlobStorage { get; } = new();
 
-    public TestWebApplicationFactory()
+    public TestWebApplicationFactory(Action<IServiceCollection>? serviceOverrides = null)
     {
         _connection = new SqliteConnection(_testConnectionString);
+        _serviceOverrides = serviceOverrides;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -71,6 +73,8 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
 
             services.RemoveAll<IAzureBlobService>();
             services.AddSingleton<IAzureBlobService>(BlobStorage);
+
+            _serviceOverrides?.Invoke(services);
         });
     }
 

@@ -41,9 +41,9 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         Client = client;
     }
 
-    public static Task<AuthApiTestApp> CreateAsync()
+    public static Task<AuthApiTestApp> CreateAsync(Action<IServiceCollection>? serviceOverrides = null)
     {
-        var factory = new TestWebApplicationFactory();
+        var factory = new TestWebApplicationFactory(serviceOverrides);
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
@@ -166,6 +166,31 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         verifyResponse.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
 
         var apiResponse = await ReadApiResponseAsync<AuthenticatedSessionResponse>(verifyResponse);
+        apiResponse.Data.Should().NotBeNull();
+        return apiResponse.Data!;
+    }
+
+    public async Task<AuthenticatedSessionResponse> LoginApiAsync(
+        string email,
+        string password = "Password123!",
+        string trustedDeviceToken = "known-device")
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")
+        {
+            Content = JsonContent.Create(new LoginRequest
+            {
+                Email = email,
+                Password = password,
+                Captcha = "captcha",
+                Transport = SessionTransportResolver.ApiValue
+            })
+        };
+        request.Headers.Add(HttpUtility.TrustedDeviceHeaderName, trustedDeviceToken);
+        request.Headers.Add(CsrfConfiguration.CsrfHeaderName, await GetCsrfTokenAsync());
+
+        var response = await Client.SendAsync(request);
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+        var apiResponse = await ReadApiResponseAsync<AuthenticatedSessionResponse>(response);
         apiResponse.Data.Should().NotBeNull();
         return apiResponse.Data!;
     }
