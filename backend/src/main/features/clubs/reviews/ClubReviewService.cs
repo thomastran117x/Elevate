@@ -1,5 +1,6 @@
 using backend.main.shared.exceptions.http;
 using backend.main.features.clubs.search;
+using backend.main.features.cache;
 using backend.main.infrastructure.database.core;
 
 namespace backend.main.features.clubs.reviews
@@ -10,17 +11,20 @@ namespace backend.main.features.clubs.reviews
         private readonly IClubReviewRepository _reviewRepository;
         private readonly IClubRepository _clubRepository;
         private readonly IClubSearchOutboxWriter _outboxWriter;
+        private readonly ICacheService _cache;
 
         public ClubReviewService(
             AppDatabaseContext db,
             IClubReviewRepository reviewRepository,
             IClubRepository clubRepository,
-            IClubSearchOutboxWriter outboxWriter)
+            IClubSearchOutboxWriter outboxWriter,
+            ICacheService cache)
         {
             _db = db;
             _reviewRepository = reviewRepository;
             _clubRepository = clubRepository;
             _outboxWriter = outboxWriter;
+            _cache = cache;
         }
 
         public async Task<ClubReview> CreateReviewAsync(int clubId, int userId, string title, int rating, string? comment)
@@ -110,6 +114,8 @@ namespace backend.main.features.clubs.reviews
 
             _outboxWriter.StageUpsert(club);
             await _db.SaveChangesAsync();
+            await _cache.DeleteKeyAsync($"club:{clubId}");
+            await _cache.IncrementAsync("clubs:version");
         }
     }
 }

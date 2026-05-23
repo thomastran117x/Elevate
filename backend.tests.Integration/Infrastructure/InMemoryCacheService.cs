@@ -1,4 +1,5 @@
 using StackExchange.Redis;
+using Moq;
 
 namespace backend.tests.Integration.Infrastructure;
 
@@ -214,7 +215,16 @@ public sealed class InMemoryCacheService : backend.main.features.cache.ICacheSer
     {
         lock (_gate)
         {
-            return _entries.Keys.ToArray();
+            if (string.IsNullOrWhiteSpace(pattern) || pattern == "*")
+                return _entries.Keys.ToArray();
+
+            var prefix = pattern.EndsWith('*')
+                ? pattern[..^1]
+                : pattern;
+
+            return _entries.Keys
+                .Where(key => key.StartsWith(prefix, StringComparison.Ordinal))
+                .ToArray();
         }
     }
 
@@ -244,7 +254,7 @@ public sealed class InMemoryCacheService : backend.main.features.cache.ICacheSer
         }
     }
 
-    public IServer GetServer() => throw new NotSupportedException();
+    public IServer GetServer() => Mock.Of<IServer>();
 
     public Task<Dictionary<string, string?>> GetManyAsync(IEnumerable<string> keys)
     {
