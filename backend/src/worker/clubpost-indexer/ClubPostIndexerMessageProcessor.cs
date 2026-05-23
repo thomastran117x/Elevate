@@ -1,8 +1,8 @@
 using backend.main.features.clubs.posts.search;
+using backend.main.shared.utilities.logger;
 
 using Polly;
 using Polly.Retry;
-using backend.main.shared.utilities.logger;
 
 namespace backend.worker.clubpost_indexer;
 

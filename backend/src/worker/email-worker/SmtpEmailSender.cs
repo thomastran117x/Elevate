@@ -3,9 +3,10 @@ using System.Net.Mail;
 using backend.main.shared.providers.messages;
 
 using MailKit.Security;
-using MailKitSmtpClient = MailKit.Net.Smtp.SmtpClient;
 
 using MimeKit;
+
+using MailKitSmtpClient = MailKit.Net.Smtp.SmtpClient;
 
 namespace backend.worker.email_worker;
 
