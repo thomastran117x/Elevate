@@ -5,12 +5,18 @@
         <p class="text-xs uppercase tracking-[0.18em] text-white/45">Organizer tools</p>
         <h1 class="mt-2 text-3xl font-bold">Manage invitations</h1>
       </div>
-      <a [routerLink]="['/events', eventId]" class="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80">
+      <a
+        [routerLink]="['/events', eventId]"
+        class="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80"
+      >
         Back to event
       </a>
     </div>
 
-    <div *ngIf="error" class="mt-6 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-rose-100">
+    <div
+      *ngIf="error"
+      class="mt-6 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-rose-100"
+    >
       {{ error }}
     </div>
 
@@ -20,17 +26,28 @@
         <form class="mt-5 space-y-4" [formGroup]="inviteForm" (ngSubmit)="submitInvites()">
           <label class="block text-sm">
             <span class="mb-2 block text-white/70">Emails</span>
-            <textarea formControlName="emails" rows="5" class="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white"></textarea>
+            <textarea
+              formControlName="emails"
+              rows="5"
+              class="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white"
+            ></textarea>
           </label>
 
           <label class="block text-sm">
             <span class="mb-2 block text-white/70">User IDs</span>
-            <input formControlName="userIds" class="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white" />
+            <input
+              formControlName="userIds"
+              class="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white"
+            />
           </label>
 
           <label class="block text-sm">
             <span class="mb-2 block text-white/70">Expires at</span>
-            <input type="datetime-local" formControlName="expiresAt" class="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white" />
+            <input
+              type="datetime-local"
+              formControlName="expiresAt"
+              class="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white"
+            />
           </label>
 
           <button type="submit" class="rounded-xl bg-white px-4 py-2 font-medium text-slate-950">
@@ -44,23 +61,42 @@
         <form class="mt-5 space-y-4" [formGroup]="linkForm" (ngSubmit)="submitLink()">
           <label class="block text-sm">
             <span class="mb-2 block text-white/70">Max redemptions</span>
-            <input type="number" min="1" formControlName="maxRedemptions" class="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white" />
+            <input
+              type="number"
+              min="1"
+              formControlName="maxRedemptions"
+              class="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white"
+            />
           </label>
 
           <label class="block text-sm">
             <span class="mb-2 block text-white/70">Expires at</span>
-            <input type="datetime-local" formControlName="expiresAt" class="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white" />
+            <input
+              type="datetime-local"
+              formControlName="expiresAt"
+              class="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white"
+            />
           </label>
 
-          <button type="submit" class="rounded-xl bg-emerald-400 px-4 py-2 font-medium text-slate-950">
+          <button
+            type="submit"
+            class="rounded-xl bg-emerald-400 px-4 py-2 font-medium text-slate-950"
+          >
             Create link
           </button>
         </form>
 
-        <div *ngIf="latestShareUrl" class="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+        <div
+          *ngIf="latestShareUrl"
+          class="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-4 text-sm text-emerald-100"
+        >
           <div class="font-medium">Latest share URL</div>
           <div class="mt-2 break-all">{{ latestShareUrl }}</div>
-          <button type="button" class="mt-3 rounded-xl bg-white px-3 py-2 text-slate-950" (click)="copyShareUrl(latestShareUrl)">
+          <button
+            type="button"
+            class="mt-3 rounded-xl bg-white px-3 py-2 text-slate-950"
+            (click)="copyShareUrl(latestShareUrl)"
+          >
             Copy link
           </button>
         </div>
@@ -68,22 +104,33 @@
     </div>
 
     <div *ngIf="loading" class="mt-8 grid gap-4 md:grid-cols-2">
-      <div *ngFor="let item of [1,2,3]" class="h-40 animate-pulse rounded-3xl bg-white/10"></div>
+      <div *ngFor="let item of [1, 2, 3]" class="h-40 animate-pulse rounded-3xl bg-white/10"></div>
     </div>
 
     <section *ngIf="!loading" class="mt-8 grid gap-6 lg:grid-cols-2">
       <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
         <h2 class="text-xl font-semibold">Invitations</h2>
-        <div *ngIf="invitations.length === 0" class="mt-4 text-sm text-white/60">No invitations yet.</div>
-        <div *ngFor="let invitation of invitations" class="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+        <div *ngIf="invitations.length === 0" class="mt-4 text-sm text-white/60">
+          No invitations yet.
+        </div>
+        <div
+          *ngFor="let invitation of invitations"
+          class="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+        >
           <div class="flex items-start justify-between gap-3">
             <div>
-              <div class="font-medium">{{ invitation.recipientEmail || ('User #' + invitation.recipientUserId) }}</div>
+              <div class="font-medium">
+                {{ invitation.recipientEmail || 'User #' + invitation.recipientUserId }}
+              </div>
               <div class="mt-1 text-sm text-white/60">
                 {{ invitation.effectiveStatus }} · {{ invitation.deliveryStatus }}
               </div>
             </div>
-            <button type="button" class="rounded-xl border border-white/10 px-3 py-2 text-sm" (click)="revokeInvitation(invitation)">
+            <button
+              type="button"
+              class="rounded-xl border border-white/10 px-3 py-2 text-sm"
+              (click)="revokeInvitation(invitation)"
+            >
               Revoke
             </button>
           </div>
@@ -93,21 +140,34 @@
       <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
         <h2 class="text-xl font-semibold">Shareable links</h2>
         <div *ngIf="links.length === 0" class="mt-4 text-sm text-white/60">No links yet.</div>
-        <div *ngFor="let link of links" class="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+        <div
+          *ngFor="let link of links"
+          class="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+        >
           <div class="flex items-start justify-between gap-3">
             <div>
               <div class="font-medium">Link #{{ link.id }}</div>
               <div class="mt-1 text-sm text-white/60">
                 {{ link.redemptionCount }} / {{ link.maxRedemptions }} redeemed
               </div>
-              <div class="mt-1 text-sm text-white/60">Expires {{ link.expiresAt | date: 'medium' }}</div>
+              <div class="mt-1 text-sm text-white/60">
+                Expires {{ link.expiresAt | date: 'medium' }}
+              </div>
             </div>
-            <button type="button" class="rounded-xl border border-white/10 px-3 py-2 text-sm" (click)="revokeLink(link)">
+            <button
+              type="button"
+              class="rounded-xl border border-white/10 px-3 py-2 text-sm"
+              (click)="revokeLink(link)"
+            >
               Revoke
             </button>
           </div>
           <div *ngIf="link.shareUrl" class="mt-3">
-            <button type="button" class="rounded-xl bg-white px-3 py-2 text-sm text-slate-950" (click)="copyShareUrl(link.shareUrl)">
+            <button
+              type="button"
+              class="rounded-xl bg-white px-3 py-2 text-sm text-slate-950"
+              (click)="copyShareUrl(link.shareUrl)"
+            >
               Copy share URL
             </button>
           </div>

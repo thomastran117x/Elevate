@@ -9,8 +9,8 @@ using backend.main.features.clubs.versions;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
 using backend.main.infrastructure.elasticsearch;
-using backend.main.shared.responses;
 using backend.main.shared.exceptions.http;
+using backend.main.shared.responses;
 using backend.main.shared.storage;
 using backend.main.shared.utilities.logger;
 
@@ -297,7 +297,10 @@ namespace backend.main.features.clubs
             var normalizedQuery = string.IsNullOrWhiteSpace(criteria.Query)
                 ? null
                 : criteria.Query.Trim().ToLowerInvariant();
-            var effective = criteria with { Query = normalizedQuery };
+            var effective = criteria with
+            {
+                Query = normalizedQuery
+            };
             var key = BuildClubListCacheKey(version, effective);
 
             var cached = await _cache.GetValueAsync(key);

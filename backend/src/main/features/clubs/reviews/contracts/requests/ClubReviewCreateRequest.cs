@@ -10,9 +10,15 @@ namespace backend.main.features.clubs.reviews.contracts.requests
 
         [Required]
         [Range(1, 5)]
-        public int Rating { get; set; }
+        public int Rating
+        {
+            get; set;
+        }
 
         [StringLength(500)]
-        public string? Comment { get; set; }
+        public string? Comment
+        {
+            get; set;
+        }
     }
 }

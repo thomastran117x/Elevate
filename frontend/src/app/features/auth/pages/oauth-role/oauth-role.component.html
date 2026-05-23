@@ -7,7 +7,9 @@
     <p class="oauth-role-copy">{{ message() }}</p>
 
     <div class="oauth-role-summary" *ngIf="pending() as pendingInfo">
-      <div><strong>{{ pendingInfo.Name || pendingInfo.Email }}</strong></div>
+      <div>
+        <strong>{{ pendingInfo.Name || pendingInfo.Email }}</strong>
+      </div>
       <div>{{ pendingInfo.Email }}</div>
       <div class="oauth-role-provider">Signing up with {{ pendingInfo.Provider }}</div>
     </div>

@@ -2,9 +2,18 @@ namespace backend.main.features.clubs.posts
 {
     public class ClubPost
     {
-        public int Id { get; set; }
-        public int ClubId { get; set; }
-        public int UserId { get; set; }
+        public int Id
+        {
+            get; set;
+        }
+        public int ClubId
+        {
+            get; set;
+        }
+        public int UserId
+        {
+            get; set;
+        }
         public string Title { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
         public PostType PostType { get; set; } = PostType.General;

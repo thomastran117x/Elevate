@@ -1,8 +1,8 @@
 using backend.main.application.security;
+using backend.main.features.clubs.reviews;
 using backend.main.features.clubs.reviews.contracts.requests;
 using backend.main.features.clubs.reviews.contracts.responses;
 using backend.main.shared.responses;
-using backend.main.features.clubs.reviews;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

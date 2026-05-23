@@ -20,11 +20,11 @@ using backend.main.features.events.search;
 using backend.main.features.events.versions;
 using backend.main.features.payment;
 using backend.main.features.profile;
-using backend.main.seeders;
 using backend.main.infrastructure.database.repository;
 using backend.main.infrastructure.elasticsearch;
-using backend.main.shared.storage;
+using backend.main.seeders;
 using backend.main.shared.providers;
+using backend.main.shared.storage;
 using backend.main.shared.utilities.logger;
 
 namespace backend.main.application.bootstrap

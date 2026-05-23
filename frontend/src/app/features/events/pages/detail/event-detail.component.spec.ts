@@ -7,8 +7,12 @@ import { EventsService } from '../../services/events.service';
 import { EventApiResponse } from '../../models/event.types';
 
 class ActivatedRouteStub {
-  private readonly paramSubject = new BehaviorSubject<ParamMap>(convertToParamMap({ eventId: '42' }));
-  private readonly querySubject = new BehaviorSubject<ParamMap>(convertToParamMap({ search: 'hack' }));
+  private readonly paramSubject = new BehaviorSubject<ParamMap>(
+    convertToParamMap({ eventId: '42' }),
+  );
+  private readonly querySubject = new BehaviorSubject<ParamMap>(
+    convertToParamMap({ search: 'hack' }),
+  );
 
   readonly paramMap = this.paramSubject.asObservable();
   readonly queryParamMap = this.querySubject.asObservable();

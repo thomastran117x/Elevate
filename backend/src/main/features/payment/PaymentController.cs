@@ -1,12 +1,12 @@
 using backend.main.application.security;
-using backend.main.shared.responses;
 using backend.main.features.payment.contracts.responses;
 using backend.main.shared.exceptions.http;
+using backend.main.shared.responses;
+using backend.main.shared.utilities.logger;
 using backend.main.utilities;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using backend.main.shared.utilities.logger;
 
 namespace backend.main.features.payment
 {

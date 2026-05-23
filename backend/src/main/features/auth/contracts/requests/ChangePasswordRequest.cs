@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+
 using backend.main.shared.attributes.validation;
 
 namespace backend.main.features.auth.contracts.requests

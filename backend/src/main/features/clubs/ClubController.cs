@@ -475,7 +475,10 @@ namespace backend.main.features.clubs
             var count = await _reindexService.ReindexAllAsync(cancellationToken);
             return Ok(new ApiResponse<object>(
                 "Clubs reindexed successfully.",
-                new { indexed = count }
+                new
+                {
+                    indexed = count
+                }
             ));
         }
     }

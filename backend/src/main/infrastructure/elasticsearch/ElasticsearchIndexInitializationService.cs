@@ -1,5 +1,5 @@
-using backend.main.features.clubs.search;
 using backend.main.features.clubs.posts.search;
+using backend.main.features.clubs.search;
 using backend.main.features.events.search;
 using backend.main.shared.utilities.logger;
 

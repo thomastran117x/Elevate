@@ -1,6 +1,6 @@
-using backend.main.features.profile;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
+using backend.main.features.profile;
 
 namespace backend.main.features.auth
 {

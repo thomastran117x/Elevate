@@ -2,9 +2,18 @@ namespace backend.main.features.events.images;
 
 public class EventImage
 {
-    public int Id { get; set; }
-    public int EventId { get; set; }
-    public required string ImageUrl { get; set; }
+    public int Id
+    {
+        get; set;
+    }
+    public int EventId
+    {
+        get; set;
+    }
+    public required string ImageUrl
+    {
+        get; set;
+    }
     public int SortOrder { get; set; } = 0;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

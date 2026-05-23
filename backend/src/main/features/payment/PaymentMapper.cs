@@ -1,5 +1,5 @@
-using backend.main.features.payment.contracts.responses;
 using backend.main.features.payment;
+using backend.main.features.payment.contracts.responses;
 
 namespace backend.main.features.payment
 {

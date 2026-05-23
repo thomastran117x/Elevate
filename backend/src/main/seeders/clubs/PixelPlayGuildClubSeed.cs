@@ -6,7 +6,10 @@ namespace backend.main.seeders.clubs;
 
 public sealed class PixelPlayGuildClubSeed : IClubSeedDefinitionSource
 {
-    public SeedClubDefinition Definition { get; } = new(
+    public SeedClubDefinition Definition
+    {
+        get;
+    } = new(
         Slug: "pixel-play-guild",
         Name: "Pixel Play Guild",
         Description: "A gaming club that brings together console, PC, and couch co-op fans for tournaments, learning nights, and good-humored community play.",

@@ -1,15 +1,15 @@
 using System.Data;
 using System.Text.Json;
 
-using backend.main.infrastructure.database.core;
+using backend.main.features.cache;
+using backend.main.features.events.registration;
 using backend.main.features.events.registration.contracts.responses;
 using backend.main.features.events.search;
+using backend.main.infrastructure.database.core;
 using backend.main.shared.exceptions.http;
-using backend.main.features.events.registration;
-using backend.main.features.cache;
+using backend.main.shared.utilities.logger;
 
 using Microsoft.EntityFrameworkCore;
-using backend.main.shared.utilities.logger;
 
 namespace backend.main.features.events.registration
 {

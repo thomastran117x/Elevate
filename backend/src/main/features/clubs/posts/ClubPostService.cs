@@ -1,9 +1,9 @@
-using backend.main.shared.responses;
-using backend.main.shared.exceptions.http;
-using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.follow;
+using backend.main.features.clubs.posts.search;
 using backend.main.infrastructure.database.core;
 using backend.main.infrastructure.elasticsearch;
+using backend.main.shared.exceptions.http;
+using backend.main.shared.responses;
 using backend.main.shared.utilities.logger;
 
 namespace backend.main.features.clubs.posts

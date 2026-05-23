@@ -1,5 +1,5 @@
-using backend.main.shared.exceptions.http;
 using backend.main.features.clubs.posts;
+using backend.main.shared.exceptions.http;
 using backend.main.shared.utilities.logger;
 
 namespace backend.main.features.clubs.posts.search
@@ -38,7 +38,8 @@ namespace backend.main.features.clubs.posts.search
                     token.ThrowIfCancellationRequested();
 
                     var posts = await _postRepository.GetAllForReindexAsync(page, BatchSize, token);
-                    if (posts.Count == 0) break;
+                    if (posts.Count == 0)
+                        break;
 
                     var documents = posts.Select(p => new ClubPostDocument
                     {
@@ -58,7 +59,8 @@ namespace backend.main.features.clubs.posts.search
                     totalIndexed += posts.Count;
                     page++;
 
-                    if (posts.Count < BatchSize) break;
+                    if (posts.Count < BatchSize)
+                        break;
                 }
 
                 Logger.Info($"Reindex complete. {totalIndexed} posts indexed.");

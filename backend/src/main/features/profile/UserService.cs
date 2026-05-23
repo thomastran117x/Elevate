@@ -1,10 +1,10 @@
-using backend.main.shared.exceptions.http;
-using backend.main.features.profile;
 using backend.main.features.auth;
 using backend.main.features.auth.contracts;
 using backend.main.features.auth.token;
 using backend.main.features.clubs.follow;
+using backend.main.features.profile;
 using backend.main.features.profile.contracts;
+using backend.main.shared.exceptions.http;
 using backend.main.shared.storage;
 
 

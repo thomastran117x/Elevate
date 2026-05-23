@@ -6,7 +6,10 @@ namespace backend.main.seeders.clubs;
 
 public sealed class NeighbourhoodKitchenTableClubSeed : IClubSeedDefinitionSource
 {
-    public SeedClubDefinition Definition { get; } = new(
+    public SeedClubDefinition Definition
+    {
+        get;
+    } = new(
         Slug: "neighbourhood-kitchen-table",
         Name: "Neighbourhood Kitchen Table",
         Description: "A community food club where members cook, learn, and gather around practical meals, neighborhood hospitality, and shared kitchen confidence.",

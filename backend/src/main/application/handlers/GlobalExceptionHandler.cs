@@ -1,9 +1,9 @@
-using backend.main.utilities;
 using backend.main.shared.responses;
+using backend.main.shared.utilities.logger;
+using backend.main.utilities;
 
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
-using backend.main.shared.utilities.logger;
 
 namespace backend.main.application.handlers
 {

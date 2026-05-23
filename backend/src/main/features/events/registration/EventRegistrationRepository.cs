@@ -1,7 +1,7 @@
 using System.Data;
 
-using backend.main.infrastructure.database.core;
 using backend.main.features.events.registration;
+using backend.main.infrastructure.database.core;
 
 using Microsoft.EntityFrameworkCore;
 

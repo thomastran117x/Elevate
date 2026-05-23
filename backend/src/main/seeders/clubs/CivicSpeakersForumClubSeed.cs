@@ -6,7 +6,10 @@ namespace backend.main.seeders.clubs;
 
 public sealed class CivicSpeakersForumClubSeed : IClubSeedDefinitionSource
 {
-    public SeedClubDefinition Definition { get; } = new(
+    public SeedClubDefinition Definition
+    {
+        get;
+    } = new(
         Slug: "civic-speakers-forum",
         Name: "Civic Speakers Forum",
         Description: "A public speaking and civic dialogue club where members practice persuasive communication, structured debate, and thoughtful community discussion.",

@@ -6,7 +6,10 @@ namespace backend.main.seeders.clubs;
 
 public sealed class WeekendMakersCommonsClubSeed : IClubSeedDefinitionSource
 {
-    public SeedClubDefinition Definition { get; } = new(
+    public SeedClubDefinition Definition
+    {
+        get;
+    } = new(
         Slug: "weekend-makers-commons",
         Name: "Weekend Makers Commons",
         Description: "A social maker club for casual DIY builds, collaborative tinkering, and low-barrier creative nights where people make things together.",

@@ -64,34 +64,38 @@ export class GoogleCallbackComponent implements OnInit {
       sessionStorage.removeItem(GoogleCallbackComponent.StateStorageKey);
       sessionStorage.removeItem(GoogleCallbackComponent.NonceStorageKey);
 
-      this.auth.googleCodeVerify(code, codeVerifier, `${environment.frontendUrl}/auth/google`, nonce).subscribe({
-        next: async (res: OAuthAuthResponse) => {
-          if (res.RequiresRoleSelection) {
-            sessionStorage.setItem(PendingOAuthSignupStorageKey, JSON.stringify(res));
-            this.status.set('success');
-            this.message.set('Choose your role to finish creating your account...');
-            setTimeout(() => this.router.navigate(['/auth/oauth/role']), 250);
-            return;
-          }
+      this.auth
+        .googleCodeVerify(code, codeVerifier, `${environment.frontendUrl}/auth/google`, nonce)
+        .subscribe({
+          next: async (res: OAuthAuthResponse) => {
+            if (res.RequiresRoleSelection) {
+              sessionStorage.setItem(PendingOAuthSignupStorageKey, JSON.stringify(res));
+              this.status.set('success');
+              this.message.set('Choose your role to finish creating your account...');
+              setTimeout(() => this.router.navigate(['/auth/oauth/role']), 250);
+              return;
+            }
 
-          try {
-            await this.sessionManager.bootstrapSession(res.Auth);
-            this.status.set('success');
-            this.message.set('Login successful! Redirecting...');
-            const target = this.authReturnUrl.consume();
-            setTimeout(() => this.router.navigateByUrl(target), 1500);
-          } catch (err: any) {
-            console.error('Google session bootstrap failed:', err);
+            try {
+              await this.sessionManager.bootstrapSession(res.Auth);
+              this.status.set('success');
+              this.message.set('Login successful! Redirecting...');
+              const target = this.authReturnUrl.consume();
+              setTimeout(() => this.router.navigateByUrl(target), 1500);
+            } catch (err: any) {
+              console.error('Google session bootstrap failed:', err);
+              this.status.set('error');
+              this.message.set(
+                err?.error?.message || err?.message || 'Google sign-in failed. Please try again.',
+              );
+            }
+          },
+          error: (err) => {
+            console.error('Google callback failed:', err);
             this.status.set('error');
-            this.message.set(err?.error?.message || err?.message || 'Google sign-in failed. Please try again.');
-          }
-        },
-        error: (err) => {
-          console.error('Google callback failed:', err);
-          this.status.set('error');
-          this.message.set(err?.error?.message || 'Google sign-in failed. Please try again.');
-        },
-      });
+            this.message.set(err?.error?.message || 'Google sign-in failed. Please try again.');
+          },
+        });
     } catch (err) {
       console.error('Google callback failed:', err);
       this.status.set('error');

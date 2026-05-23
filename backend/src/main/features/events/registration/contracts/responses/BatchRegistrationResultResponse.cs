@@ -8,7 +8,10 @@ namespace backend.main.features.events.registration.contracts.responses
 
     public class BatchRegistrationFailure
     {
-        public int EventId { get; set; }
+        public int EventId
+        {
+            get; set;
+        }
         public string Reason { get; set; } = null!;
     }
 }

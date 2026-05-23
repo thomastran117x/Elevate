@@ -1,8 +1,8 @@
-using backend.main.infrastructure.database.core;
 using backend.main.application.security;
-using backend.main.features.profile;
 using backend.main.features.auth.contracts;
+using backend.main.features.profile;
 using backend.main.features.profile.contracts;
+using backend.main.infrastructure.database.core;
 
 using Microsoft.EntityFrameworkCore;
 

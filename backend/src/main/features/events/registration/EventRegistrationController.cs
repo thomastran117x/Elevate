@@ -1,17 +1,17 @@
 using System.ComponentModel.DataAnnotations;
 
 using backend.main.application.security;
-using backend.main.shared.responses;
 using backend.main.features.events;
+using backend.main.features.events.registration;
 using backend.main.features.events.registration.contracts.requests;
 using backend.main.features.events.registration.contracts.responses;
 using backend.main.shared.exceptions.http;
-using backend.main.features.events.registration;
+using backend.main.shared.responses;
+using backend.main.shared.utilities.logger;
 using backend.main.utilities;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using backend.main.shared.utilities.logger;
 
 namespace backend.main.features.events.registration
 {
@@ -112,7 +112,10 @@ namespace backend.main.features.events.registration
 
                 return Ok(new ApiResponse<object>(
                     $"Registration status for event with ID {eventId} has been fetched successfully.",
-                    new { isRegistered }
+                    new
+                    {
+                        isRegistered
+                    }
                 ));
             }
             catch (Exception e)

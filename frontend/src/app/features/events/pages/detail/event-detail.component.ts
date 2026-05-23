@@ -32,18 +32,16 @@ export class EventDetailComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    this.route.queryParamMap
-      .pipe(takeUntil(this.destroy$))
-      .subscribe((params) => {
-        this.returnQueryParams = params.keys.reduce<Record<string, string>>((accumulator, key) => {
-          const value = params.get(key);
-          if (value !== null) {
-            accumulator[key] = value;
-          }
+    this.route.queryParamMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
+      this.returnQueryParams = params.keys.reduce<Record<string, string>>((accumulator, key) => {
+        const value = params.get(key);
+        if (value !== null) {
+          accumulator[key] = value;
+        }
 
-          return accumulator;
-        }, {});
-      });
+        return accumulator;
+      }, {});
+    });
 
     this.route.paramMap
       .pipe(takeUntil(this.destroy$))
@@ -156,9 +154,7 @@ export class EventDetailComponent implements OnInit, OnDestroy {
           this.event = null;
           this.loading = false;
           this.error =
-            response?.error?.message ||
-            response?.error?.Message ||
-            'Failed to load the event.';
+            response?.error?.message || response?.error?.Message || 'Failed to load the event.';
         },
       });
   }

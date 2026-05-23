@@ -6,7 +6,10 @@ namespace backend.main.seeders.clubs;
 
 public sealed class SummitTrailSocietyClubSeed : IClubSeedDefinitionSource
 {
-    public SeedClubDefinition Definition { get; } = new(
+    public SeedClubDefinition Definition
+    {
+        get;
+    } = new(
         Slug: "summit-trail-society",
         Name: "Summit Trail Society",
         Description: "An outdoor recreation club for urban hikers and trail-curious members who want guided practice, route confidence, and shared weekend adventure.",

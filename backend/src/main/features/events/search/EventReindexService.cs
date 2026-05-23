@@ -1,5 +1,5 @@
-using backend.main.shared.exceptions.http;
 using backend.main.features.events;
+using backend.main.shared.exceptions.http;
 using backend.main.shared.utilities.logger;
 
 namespace backend.main.features.events.search
@@ -38,7 +38,8 @@ namespace backend.main.features.events.search
                     token.ThrowIfCancellationRequested();
 
                     var events = await _eventsRepository.GetAllForReindexAsync(page, BatchSize, token);
-                    if (events.Count == 0) break;
+                    if (events.Count == 0)
+                        break;
 
                     var documents = events.Select(EventSearchDocumentMapper.ToDocument);
 
@@ -46,7 +47,8 @@ namespace backend.main.features.events.search
                     totalIndexed += events.Count;
                     page++;
 
-                    if (events.Count < BatchSize) break;
+                    if (events.Count < BatchSize)
+                        break;
                 }
 
                 Logger.Info($"Reindex complete. {totalIndexed} events indexed.");

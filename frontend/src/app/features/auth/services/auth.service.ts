@@ -72,9 +72,7 @@ export class AuthService {
     return this.postWithCsrf<ApiEnvelope<AuthenticatedSessionResponse>>(`${this.baseUrl}/login`, {
       ...payload,
       transport: 'browser' as const,
-    }).pipe(
-      map((res) => this.requireData(res, 'Login response was incomplete.')),
-    );
+    }).pipe(map((res) => this.requireData(res, 'Login response was incomplete.')));
   }
 
   signup(payload: SignupRequest): Observable<ApiEnvelope<VerificationChallengeResponse>> {
@@ -92,10 +90,13 @@ export class AuthService {
   }
 
   verifyDevice(token: string): Observable<ApiEnvelope<AuthenticatedSessionResponse>> {
-    return this.postWithCsrf<ApiEnvelope<AuthenticatedSessionResponse>>(`${this.baseUrl}/device/verify`, {
-      token,
-      transport: 'browser' as const,
-    });
+    return this.postWithCsrf<ApiEnvelope<AuthenticatedSessionResponse>>(
+      `${this.baseUrl}/device/verify`,
+      {
+        token,
+        transport: 'browser' as const,
+      },
+    );
   }
 
   googleVerify(idToken: string, nonce: string): Observable<OAuthAuthResponse> {
@@ -106,7 +107,12 @@ export class AuthService {
     }).pipe(map((res) => this.requireData(res, 'Google login response was incomplete.')));
   }
 
-  googleCodeVerify(code: string, codeVerifier: string, redirectUri: string, nonce: string): Observable<OAuthAuthResponse> {
+  googleCodeVerify(
+    code: string,
+    codeVerifier: string,
+    redirectUri: string,
+    nonce: string,
+  ): Observable<OAuthAuthResponse> {
     return this.postWithCsrf<ApiEnvelope<OAuthAuthResponse>>(`${this.baseUrl}/google/code`, {
       code,
       codeVerifier,
@@ -124,19 +130,27 @@ export class AuthService {
     }).pipe(map((res) => this.requireData(res, 'Microsoft login response was incomplete.')));
   }
 
-  completeOAuthSignup(signupToken: string, usertype: SignupRole): Observable<AuthenticatedSessionResponse> {
-    return this.postWithCsrf<ApiEnvelope<AuthenticatedSessionResponse>>(`${this.baseUrl}/oauth/complete`, {
-      signupToken,
-      usertype,
-      transport: 'browser' as const,
-    }).pipe(map((res) => this.requireData(res, 'OAuth signup completion response was incomplete.')));
+  completeOAuthSignup(
+    signupToken: string,
+    usertype: SignupRole,
+  ): Observable<AuthenticatedSessionResponse> {
+    return this.postWithCsrf<ApiEnvelope<AuthenticatedSessionResponse>>(
+      `${this.baseUrl}/oauth/complete`,
+      {
+        signupToken,
+        usertype,
+        transport: 'browser' as const,
+      },
+    ).pipe(map((res) => this.requireData(res, 'OAuth signup completion response was incomplete.')));
   }
 
   me(): Observable<ApiEnvelope<CurrentUserResponse>> {
     return from(this.authToken.ensureCsrfToken()).pipe(
-      switchMap(() => this.http.get<ApiEnvelope<CurrentUserResponse>>(`${this.baseUrl}/me`, {
-        withCredentials: true,
-      })),
+      switchMap(() =>
+        this.http.get<ApiEnvelope<CurrentUserResponse>>(`${this.baseUrl}/me`, {
+          withCredentials: true,
+        }),
+      ),
     );
   }
 
@@ -144,7 +158,9 @@ export class AuthService {
     return this.postWithCsrf<void>(`${this.baseUrl}/logout`, {});
   }
 
-  forgotPassword(payload: ForgotPasswordRequest): Observable<ApiEnvelope<VerificationChallengeResponse>> {
+  forgotPassword(
+    payload: ForgotPasswordRequest,
+  ): Observable<ApiEnvelope<VerificationChallengeResponse>> {
     return this.postWithCsrf<ApiEnvelope<VerificationChallengeResponse>>(
       `${this.baseUrl}/forgot-password`,
       payload,

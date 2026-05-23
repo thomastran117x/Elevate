@@ -1,5 +1,5 @@
-using backend.main.shared.requests;
 using backend.main.features.auth.token;
+using backend.main.shared.requests;
 
 namespace backend.main.features.auth.device
 {

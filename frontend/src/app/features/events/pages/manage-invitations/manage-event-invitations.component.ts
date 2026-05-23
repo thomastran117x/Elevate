@@ -53,44 +53,50 @@ export class ManageEventInvitationsComponent {
   }
 
   submitInvites(): void {
-    const emails = this.inviteForm.getRawValue().emails
-      .split(/[\n,]/g)
+    const emails = this.inviteForm
+      .getRawValue()
+      .emails.split(/[\n,]/g)
       .map((item) => item.trim())
       .filter(Boolean);
-    const userIds = this.inviteForm.getRawValue().userIds
-      .split(/[,\s]+/g)
+    const userIds = this.inviteForm
+      .getRawValue()
+      .userIds.split(/[,\s]+/g)
       .map((item) => Number.parseInt(item, 10))
       .filter((item) => Number.isFinite(item) && item > 0);
 
-    this.invitationsService.createInvitations(this.eventId, {
-      emails,
-      userIds,
-      expiresAt: this.toIso(this.inviteForm.getRawValue().expiresAt),
-    }).subscribe({
-      next: () => {
-        this.inviteForm.patchValue({ emails: '', userIds: '' });
-        this.reload();
-      },
-      error: (err) => {
-        this.error = err?.error?.message || 'We could not create invitations.';
-      },
-    });
+    this.invitationsService
+      .createInvitations(this.eventId, {
+        emails,
+        userIds,
+        expiresAt: this.toIso(this.inviteForm.getRawValue().expiresAt),
+      })
+      .subscribe({
+        next: () => {
+          this.inviteForm.patchValue({ emails: '', userIds: '' });
+          this.reload();
+        },
+        error: (err) => {
+          this.error = err?.error?.message || 'We could not create invitations.';
+        },
+      });
   }
 
   submitLink(): void {
     const value = this.linkForm.getRawValue();
-    this.invitationsService.createInvitationLink(this.eventId, {
-      maxRedemptions: value.maxRedemptions,
-      expiresAt: this.toIso(value.expiresAt) ?? '',
-    }).subscribe({
-      next: (link) => {
-        this.latestShareUrl = link.shareUrl ?? '';
-        this.reload();
-      },
-      error: (err) => {
-        this.error = err?.error?.message || 'We could not create an invitation link.';
-      },
-    });
+    this.invitationsService
+      .createInvitationLink(this.eventId, {
+        maxRedemptions: value.maxRedemptions,
+        expiresAt: this.toIso(value.expiresAt) ?? '',
+      })
+      .subscribe({
+        next: (link) => {
+          this.latestShareUrl = link.shareUrl ?? '';
+          this.reload();
+        },
+        error: (err) => {
+          this.error = err?.error?.message || 'We could not create an invitation link.';
+        },
+      });
   }
 
   revokeInvitation(invitation: EventInvitation): void {

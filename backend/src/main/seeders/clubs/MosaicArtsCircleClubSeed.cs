@@ -6,7 +6,10 @@ namespace backend.main.seeders.clubs;
 
 public sealed class MosaicArtsCircleClubSeed : IClubSeedDefinitionSource
 {
-    public SeedClubDefinition Definition { get; } = new(
+    public SeedClubDefinition Definition
+    {
+        get;
+    } = new(
         Slug: "mosaic-arts-circle",
         Name: "Mosaic Arts Circle",
         Description: "A cultural arts club for sketching, gallery conversation, creative critique, and community art nights that feel welcoming rather than intimidating.",

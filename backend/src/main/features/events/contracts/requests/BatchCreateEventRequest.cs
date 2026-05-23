@@ -33,28 +33,52 @@ namespace backend.main.features.events.contracts.requests
         public int RegisterCost { get; set; } = 0;
 
         [Required]
-        public DateTime StartTime { get; set; }
+        public DateTime StartTime
+        {
+            get; set;
+        }
 
-        public DateTime? EndTime { get; set; }
+        public DateTime? EndTime
+        {
+            get; set;
+        }
 
         [Required(ErrorMessage = "Category is required.")]
         [EnumDataType(typeof(EventCategory))]
-        public EventCategory Category { get; set; }
+        public EventCategory Category
+        {
+            get; set;
+        }
 
         [StringLength(100)]
-        public string? VenueName { get; set; }
+        public string? VenueName
+        {
+            get; set;
+        }
 
         [StringLength(100)]
-        public string? City { get; set; }
+        public string? City
+        {
+            get; set;
+        }
 
         [Range(-90, 90)]
-        public double? Latitude { get; set; }
+        public double? Latitude
+        {
+            get; set;
+        }
 
         [Range(-180, 180)]
-        public double? Longitude { get; set; }
+        public double? Longitude
+        {
+            get; set;
+        }
 
         [MaxLength(10)]
-        public List<string>? Tags { get; set; }
+        public List<string>? Tags
+        {
+            get; set;
+        }
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {

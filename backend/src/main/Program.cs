@@ -1,13 +1,14 @@
-using backend.main.application.environment;
-using backend.main.seeders;
-using Serilog;
-using backend.main.infrastructure.redis;
-using backend.main.infrastructure.database.core;
-using backend.main.application.security;
 using backend.main.application.bootstrap;
+using backend.main.application.environment;
 using backend.main.application.handlers;
-using backend.main.shared.utilities.logger;
+using backend.main.application.security;
 using backend.main.features.cache;
+using backend.main.infrastructure.database.core;
+using backend.main.infrastructure.redis;
+using backend.main.seeders;
+using backend.main.shared.utilities.logger;
+
+using Serilog;
 
 Logger.Configure(o =>
 {

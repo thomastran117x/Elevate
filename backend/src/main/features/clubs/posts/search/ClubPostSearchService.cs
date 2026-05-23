@@ -1,5 +1,5 @@
-using backend.main.infrastructure.elasticsearch;
 using backend.main.features.clubs.posts;
+using backend.main.infrastructure.elasticsearch;
 using backend.main.shared.utilities.logger;
 
 using Elastic.Clients.Elasticsearch;
@@ -99,7 +99,8 @@ namespace backend.main.features.clubs.posts.search
             cancellationToken.ThrowIfCancellationRequested();
 
             var client = GetWritableClientOrNull();
-            if (client == null) return;
+            if (client == null)
+                return;
 
             try
             {
@@ -121,7 +122,8 @@ namespace backend.main.features.clubs.posts.search
             cancellationToken.ThrowIfCancellationRequested();
 
             var client = GetWritableClientOrNull();
-            if (client == null) return;
+            if (client == null)
+                return;
 
             await EnsureIndexAsync(cancellationToken);
 
@@ -144,7 +146,8 @@ namespace backend.main.features.clubs.posts.search
             cancellationToken.ThrowIfCancellationRequested();
 
             var client = GetWritableClientOrNull();
-            if (client == null) return;
+            if (client == null)
+                return;
 
             try
             {
@@ -165,7 +168,8 @@ namespace backend.main.features.clubs.posts.search
             cancellationToken.ThrowIfCancellationRequested();
 
             var client = GetWritableClientOrNull();
-            if (client == null) return;
+            if (client == null)
+                return;
 
             await EnsureIndexAsync(cancellationToken);
 

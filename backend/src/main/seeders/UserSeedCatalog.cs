@@ -4,7 +4,10 @@ namespace backend.main.seeders;
 
 public static class UserSeedCatalog
 {
-    public static IReadOnlyList<SeedUserDefinition> Staff { get; } =
+    public static IReadOnlyList<SeedUserDefinition> Staff
+    {
+        get;
+    } =
     [
         new($"harbour.owner{SeedCatalogConstants.SeedEmailDomain}", "harbourowner", "Maya Chen", AuthRoles.Organizer),
         new($"harbour.manager{SeedCatalogConstants.SeedEmailDomain}", "harbourmanager", "Jordan Bell", AuthRoles.Organizer),
@@ -47,7 +50,10 @@ public static class UserSeedCatalog
         new($"kitchen.volunteer{SeedCatalogConstants.SeedEmailDomain}", "kitchenvolunteer", "Aisha Khan", AuthRoles.Volunteer)
     ];
 
-    public static IReadOnlyList<SeedUserDefinition> Participants { get; } =
+    public static IReadOnlyList<SeedUserDefinition> Participants
+    {
+        get;
+    } =
     [
         new($"ava.participant{SeedCatalogConstants.SeedEmailDomain}", "avaparticipant", "Ava Thompson", AuthRoles.Participant),
         new($"liam.participant{SeedCatalogConstants.SeedEmailDomain}", "liamparticipant", "Liam Walker", AuthRoles.Participant),
@@ -63,7 +69,10 @@ public static class UserSeedCatalog
         new($"jack.participant{SeedCatalogConstants.SeedEmailDomain}", "jackparticipant", "Jack Sullivan", AuthRoles.Participant)
     ];
 
-    public static IReadOnlyList<SeedUserDefinition> All { get; } = Staff
+    public static IReadOnlyList<SeedUserDefinition> All
+    {
+        get;
+    } = Staff
         .Concat(Participants)
         .ToList();
 }

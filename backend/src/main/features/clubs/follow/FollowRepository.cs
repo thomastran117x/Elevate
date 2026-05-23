@@ -1,5 +1,5 @@
-using backend.main.infrastructure.database.core;
 using backend.main.features.clubs.follow;
+using backend.main.infrastructure.database.core;
 
 using Microsoft.EntityFrameworkCore;
 

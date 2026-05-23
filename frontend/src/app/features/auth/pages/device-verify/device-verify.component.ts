@@ -60,7 +60,9 @@ export class DeviceVerifyComponent {
           setTimeout(() => this.router.navigateByUrl(target), 1500);
         } catch (err: any) {
           this.status.set('error');
-          this.message.set(err?.error?.message || err?.message || 'Device verification failed. Please try again.');
+          this.message.set(
+            err?.error?.message || err?.message || 'Device verification failed. Please try again.',
+          );
         }
       },
       error: (err) => {

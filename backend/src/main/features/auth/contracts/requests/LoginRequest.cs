@@ -19,7 +19,10 @@ namespace backend.main.features.auth.contracts.requests
 
         public bool RememberMe { get; set; } = false;
 
-        public string? Transport { get; set; }
+        public string? Transport
+        {
+            get; set;
+        }
 
         [Required]
         public required string Captcha

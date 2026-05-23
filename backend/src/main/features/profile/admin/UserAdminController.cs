@@ -1,7 +1,7 @@
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
-using backend.main.shared.responses;
 using backend.main.features.profile;
+using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

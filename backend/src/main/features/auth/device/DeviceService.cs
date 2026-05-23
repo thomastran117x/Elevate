@@ -1,17 +1,17 @@
 using System.Security.Cryptography;
 
+using backend.main.features.auth.token;
+using backend.main.features.cache;
+using backend.main.features.profile;
+using backend.main.shared.exceptions.app;
+using backend.main.shared.exceptions.http;
+using backend.main.shared.providers;
 using backend.main.shared.providers.messages;
 using backend.main.shared.requests;
-using backend.main.features.auth.token;
-using backend.main.shared.exceptions.http;
-using backend.main.features.profile;
-using backend.main.features.cache;
+using backend.main.shared.utilities.logger;
+using backend.main.utilities;
 
 using Newtonsoft.Json;
-using backend.main.shared.exceptions.app;
-using backend.main.utilities;
-using backend.main.shared.utilities.logger;
-using backend.main.shared.providers;
 
 namespace backend.main.features.auth.device
 {
@@ -200,11 +200,26 @@ namespace backend.main.features.auth.device
 
         private sealed class PendingDevice
         {
-            public int UserId { get; set; }
-            public required string Email { get; set; }
-            public required string DeviceType { get; set; }
-            public required string ClientName { get; set; }
-            public required string TrustedDeviceId { get; set; }
+            public int UserId
+            {
+                get; set;
+            }
+            public required string Email
+            {
+                get; set;
+            }
+            public required string DeviceType
+            {
+                get; set;
+            }
+            public required string ClientName
+            {
+                get; set;
+            }
+            public required string TrustedDeviceId
+            {
+                get; set;
+            }
             public string IpAddress { get; set; } = "Unknown";
         }
 
