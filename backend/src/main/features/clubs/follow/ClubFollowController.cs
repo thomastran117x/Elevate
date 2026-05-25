@@ -8,6 +8,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace backend.main.features.clubs.follow
 {
+    /// <summary>
+    /// Membership and follow-list endpoints for clubs and users.
+    /// </summary>
     [ApiController]
     [Route("clubs")]
     public class ClubFollowController : ControllerBase
@@ -20,6 +23,7 @@ namespace backend.main.features.clubs.follow
         }
 
         [HttpGet("{clubId}/members")]
+        [ProducesResponseType(typeof(ApiResponse<IEnumerable<FollowResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubMembers(
             int clubId,
             [FromQuery] int page = 1,
@@ -40,6 +44,7 @@ namespace backend.main.features.clubs.follow
 
         [Authorize]
         [HttpGet("{clubId}/members/me")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         public async Task<IActionResult> CheckMembership(int clubId)
         {
             var userPayload = User.GetUserPayload();
@@ -77,6 +82,7 @@ namespace backend.main.features.clubs.follow
 
         [Authorize]
         [HttpGet("{userId}/clubs/following")]
+        [ProducesResponseType(typeof(ApiResponse<IEnumerable<FollowResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubsFollowedByUser(
             int userId,
             [FromQuery] int page = 1,
@@ -98,6 +104,5 @@ namespace backend.main.features.clubs.follow
         }
     }
 }
-
 
 

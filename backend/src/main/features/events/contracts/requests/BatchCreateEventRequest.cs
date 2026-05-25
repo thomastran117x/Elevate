@@ -19,9 +19,6 @@ namespace backend.main.features.events.contracts.requests
         [StringLength(50)]
         public string Location { get; set; } = null!;
 
-        [Required]
-        [MinLength(1, ErrorMessage = "At least one image is required.")]
-        [MaxLength(5, ErrorMessage = "A maximum of 5 images are allowed.")]
         public List<string> ImageUrls { get; set; } = new();
 
         public bool IsPrivate { get; set; } = false;
@@ -74,7 +71,6 @@ namespace backend.main.features.events.contracts.requests
             get; set;
         }
 
-        [MaxLength(10)]
         public List<string>? Tags
         {
             get; set;
@@ -103,6 +99,20 @@ namespace backend.main.features.events.contracts.requests
                     new[] { nameof(RegisterCost), nameof(IsPrivate) });
             }
 
+            if (ImageUrls.Count == 0)
+            {
+                yield return new ValidationResult(
+                    "At least one image is required.",
+                    new[] { nameof(ImageUrls) });
+            }
+
+            if (ImageUrls.Count > 5)
+            {
+                yield return new ValidationResult(
+                    "A maximum of 5 images are allowed.",
+                    new[] { nameof(ImageUrls) });
+            }
+
             foreach (var url in ImageUrls)
             {
                 if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
@@ -120,6 +130,13 @@ namespace backend.main.features.events.contracts.requests
 
             if (Tags != null)
             {
+                if (Tags.Count > 10)
+                {
+                    yield return new ValidationResult(
+                        "A maximum of 10 tags are allowed.",
+                        new[] { nameof(Tags) });
+                }
+
                 foreach (var tag in Tags)
                 {
                     if (string.IsNullOrWhiteSpace(tag) || tag.Length > 30
@@ -136,7 +153,6 @@ namespace backend.main.features.events.contracts.requests
 
     public class BatchCreateEventRequest : IValidatableObject
     {
-        [Required]
         public List<BatchCreateEventItem> Events { get; set; } = new();
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -150,5 +166,4 @@ namespace backend.main.features.events.contracts.requests
         }
     }
 }
-
 

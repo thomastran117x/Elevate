@@ -9,6 +9,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace backend.main.features.clubs.posts.comments
 {
+    /// <summary>
+    /// Comment creation and moderation endpoints for club posts.
+    /// </summary>
     [ApiController]
     [Route("clubs")]
     public class PostCommentController : ControllerBase
@@ -22,6 +25,7 @@ namespace backend.main.features.clubs.posts.comments
 
         [Authorize]
         [HttpPost("{clubId}/posts/{postId}/comments")]
+        [ProducesResponseType(typeof(ApiResponse<PostCommentResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> CreateComment(
             int clubId,
             int postId,
@@ -43,6 +47,7 @@ namespace backend.main.features.clubs.posts.comments
 
         [AllowAnonymous]
         [HttpGet("{clubId}/posts/{postId}/comments")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<PostCommentResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetComments(
             int clubId,
             int postId,
@@ -70,6 +75,7 @@ namespace backend.main.features.clubs.posts.comments
 
         [Authorize]
         [HttpPut("{clubId}/posts/{postId}/comments/{commentId}")]
+        [ProducesResponseType(typeof(ApiResponse<PostCommentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateComment(
             int clubId,
             int postId,
@@ -92,6 +98,7 @@ namespace backend.main.features.clubs.posts.comments
 
         [Authorize]
         [HttpDelete("{clubId}/posts/{postId}/comments/{commentId}")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> DeleteComment(int clubId, int postId, int commentId)
         {
             var userPayload = User.GetUserPayload();
@@ -110,7 +117,6 @@ namespace backend.main.features.clubs.posts.comments
             new(c.Id, c.PostId, c.UserId, c.Content, c.CreatedAt, c.UpdatedAt);
     }
 }
-
 
 
 

@@ -30,6 +30,12 @@ namespace backend.main.features.events.registration
                     return null;
                 }
 
+                if (!EventLifecyclePolicy.AllowsRegistration(ev.LifecycleState))
+                {
+                    await transaction.RollbackAsync();
+                    return null;
+                }
+
                 if (ev.EndTime.HasValue && ev.EndTime <= DateTime.UtcNow)
                 {
                     await transaction.RollbackAsync();
@@ -137,5 +143,4 @@ namespace backend.main.features.events.registration
         }
     }
 }
-
 

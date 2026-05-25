@@ -2,6 +2,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace backend.main.features.clubs.contracts.requests
 {
+    /// <summary>
+    /// Multipart form payload used to update an existing club.
+    /// </summary>
     public class ClubUpdateRequest
     {
         [StringLength(30, ErrorMessage = "Name cannot exceed 30 characters.")]

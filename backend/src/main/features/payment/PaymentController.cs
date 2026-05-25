@@ -10,6 +10,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace backend.main.features.payment
 {
+    /// <summary>
+    /// Checkout, payment retrieval, refund, and Stripe webhook endpoints.
+    /// </summary>
     [ApiController]
     [Route("payments")]
     public class PaymentController : ControllerBase
@@ -22,7 +25,8 @@ namespace backend.main.features.payment
         }
 
         [Authorize]
-        [HttpPost("{eventId}")]
+        [HttpPost("{eventId:int}")]
+        [ProducesResponseType(typeof(ApiResponse<PaymentResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> CreatePaymentSession(int eventId)
         {
             try
@@ -49,7 +53,8 @@ namespace backend.main.features.payment
         }
 
         [Authorize]
-        [HttpGet("{paymentId}")]
+        [HttpGet("{paymentId:int}")]
+        [ProducesResponseType(typeof(ApiResponse<PaymentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetPayment(int paymentId)
         {
             try
@@ -77,6 +82,7 @@ namespace backend.main.features.payment
 
         [Authorize]
         [HttpGet("me")]
+        [ProducesResponseType(typeof(ApiResponse<IEnumerable<PaymentResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetMyPayments(int page = 1, int pageSize = 20)
         {
             try
@@ -99,8 +105,11 @@ namespace backend.main.features.payment
             }
         }
 
+        [AllowAnonymous]
         [HttpPost("webhook")]
         [RequestSizeLimit(65_536)]
+        [Consumes("application/json")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> HandleWebhook()
         {
             try
@@ -123,7 +132,8 @@ namespace backend.main.features.payment
         }
 
         [Authorize]
-        [HttpPost("{paymentId}/refund")]
+        [HttpPost("{paymentId:int}/refund")]
+        [ProducesResponseType(typeof(ApiResponse<PaymentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> RefundPayment(int paymentId)
         {
             try
@@ -147,4 +157,3 @@ namespace backend.main.features.payment
         }
     }
 }
-

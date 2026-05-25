@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 
 using backend.main.features.payment;
 using backend.main.features.payment.contracts.responses;
@@ -102,7 +103,7 @@ public class PaymentEndpointsTests
 
         var webhook = new HttpRequestMessage(HttpMethod.Post, "/api/payments/webhook")
         {
-            Content = new StringContent("{\"id\":\"evt_test\"}")
+            Content = new StringContent("{\"id\":\"evt_test\"}", Encoding.UTF8, "application/json")
         };
         webhook.Headers.Add("Stripe-Signature", "sig_test");
 

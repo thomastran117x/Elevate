@@ -131,6 +131,7 @@ namespace backend.main.features.events.search
                                     .GeoPoint(f => f.LocationGeo)
                                     .IntegerNumber(f => f.RegistrationCount)
                                     .Boolean(f => f.IsPrivate)
+                                    .Keyword(f => f.LifecycleState)
                                     .Date(f => f.StartTime)
                                     .Date(f => f.EndTime)
                                     .Date(f => f.CreatedAt)
@@ -411,8 +412,17 @@ namespace backend.main.features.events.search
         {
             var filters = new List<Action<QueryDescriptor<EventDocument>>>
             {
-                f => f.Term(t => t.Field(d => d.IsPrivate).Value(criteria.IsPrivate))
             };
+
+            if (criteria.IsPrivate.HasValue)
+            {
+                filters.Add(f => f.Term(t => t.Field(d => d.IsPrivate).Value(criteria.IsPrivate.Value)));
+            }
+
+            if (criteria.LifecycleState.HasValue)
+            {
+                filters.Add(f => f.Term(t => t.Field(d => d.LifecycleState).Value(criteria.LifecycleState.Value.ToString())));
+            }
 
             if (criteria.ClubId.HasValue)
             {
@@ -538,4 +548,3 @@ namespace backend.main.features.events.search
         }
     }
 }
-

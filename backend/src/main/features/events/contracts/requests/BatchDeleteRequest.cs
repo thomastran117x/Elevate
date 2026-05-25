@@ -4,7 +4,6 @@ namespace backend.main.features.events.contracts.requests
 {
     public class BatchDeleteRequest : IValidatableObject
     {
-        [Required]
         public List<int> Ids { get; set; } = new();
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -31,4 +30,3 @@ namespace backend.main.features.events.contracts.requests
         }
     }
 }
-

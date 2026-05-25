@@ -35,6 +35,7 @@ public sealed class EventInvitationSummaryEventResponse
     {
         get; init;
     }
+    public string LifecycleState { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
     public string Category { get; init; } = string.Empty;
     public List<string> ImageUrls { get; init; } = [];

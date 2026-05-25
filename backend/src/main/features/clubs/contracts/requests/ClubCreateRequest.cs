@@ -2,6 +2,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace backend.main.features.clubs.contracts.requests
 {
+    /// <summary>
+    /// Multipart form payload used to create a club.
+    /// </summary>
     public class ClubCreateRequest
     {
         [Required]

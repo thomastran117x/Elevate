@@ -1,6 +1,7 @@
 using backend.main.application.bootstrap;
 using backend.main.application.environment;
 using backend.main.application.handlers;
+using backend.main.application.openapi;
 using backend.main.application.security;
 using backend.main.features.cache;
 using backend.main.infrastructure.database.core;
@@ -21,6 +22,8 @@ Logger.Configure(o =>
 
 var builder = WebApplication.CreateBuilder(args);
 var isTesting = builder.Environment.IsEnvironment("Testing");
+var isOpenApiDocumentMode = OpenApiDocumentMode.ShouldSkipStartupSideEffects;
+var suppressStartupSideEffects = isTesting || isOpenApiDocumentMode;
 
 builder.Services.AddSingleton(Logger.GetOptions());
 
@@ -32,7 +35,10 @@ builder.WebHost.ConfigureKestrel(options =>
 
 var port = builder.ConfigureServerUrls();
 
-EnvironmentSetting.Validate();
+if (!isOpenApiDocumentMode)
+{
+    EnvironmentSetting.Validate();
+}
 
 builder.Host.UseMinimalSerilog();
 
@@ -41,13 +47,20 @@ builder.Services.AddControllersWithViews(options =>
     options.Conventions.Insert(0, new RoutePrefixConvention(RoutePaths.ApiPrefix));
 });
 builder.Services.AddApiResponseConventions();
+builder.Services.AddAppOpenApi();
 
-builder.Services.AddApplicationServices(builder.Configuration, includeHostedServices: !isTesting);
+builder.Services.AddApplicationServices(
+    builder.Configuration,
+    includeHostedServices: !suppressStartupSideEffects
+);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddClientRequestInspection();
 
-builder.Services.AddAppDatabase(builder.Configuration);
-if (isTesting)
+builder.Services.AddAppDatabase(
+    builder.Configuration,
+    useInMemorySqlite: isOpenApiDocumentMode
+);
+if (suppressStartupSideEffects)
 {
     builder.Services.AddSingleton(new RedisHealth());
     builder.Services.AddSingleton<ICacheService, NoOpCacheService>();
@@ -70,7 +83,7 @@ var app = builder.Build();
 
 Logger.SetInstance(app.Services.GetRequiredService<ICustomLogger>());
 
-if (!isTesting)
+if (!suppressStartupSideEffects)
 {
     await DatabaseConfig.VerifyDatabaseConnectionAsync(app.Services);
     await DatabaseConfig.EnsureDatabaseMigratedAsync(app.Services);
@@ -113,6 +126,11 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseClientRequestInspection();
+
+if (OpenApiDocumentMode.ShouldExposeRuntimeDocuments(app.Environment))
+{
+    app.MapAppOpenApi();
+}
 
 app.MapControllers();
 

@@ -134,6 +134,9 @@ namespace backend.main.features.events.registration
             await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
             var ev = await _eventsService.GetEvent(eventId);
 
+            if (!EventLifecyclePolicy.AllowsRegistration(ev.LifecycleState))
+                throw new ConflictException("Registration is only available for published events.");
+
             if (ev.registerCost > 0)
                 throw new BadRequestException("Paid events require checkout");
 
@@ -173,7 +176,10 @@ namespace backend.main.features.events.registration
                 _db.EventRegistrations.Add(registration);
                 trackedEvent.RegistrationCount += 1;
                 trackedEvent.UpdatedAt = DateTime.UtcNow;
-                _outboxWriter.StageUpsert(trackedEvent);
+                if (!EventLifecyclePolicy.AllowsRegistration(trackedEvent.LifecycleState))
+                    throw new ConflictException("Registration is only available for published events.");
+
+                _outboxWriter.StageSync(trackedEvent);
 
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -227,7 +233,7 @@ namespace backend.main.features.events.registration
                 {
                     trackedEvent.RegistrationCount = Math.Max(0, trackedEvent.RegistrationCount - 1);
                     trackedEvent.UpdatedAt = DateTime.UtcNow;
-                    _outboxWriter.StageUpsert(trackedEvent);
+                    _outboxWriter.StageSync(trackedEvent);
                 }
 
                 await _db.SaveChangesAsync();
@@ -363,5 +369,4 @@ namespace backend.main.features.events.registration
         }
     }
 }
-
 

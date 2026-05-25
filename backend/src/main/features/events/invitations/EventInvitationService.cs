@@ -710,7 +710,10 @@ public sealed class EventInvitationService : IEventInvitationService
         if (!ev.isPrivate)
             throw new BadRequestException("Invitations are only supported for private events.");
 
-        if (!await _clubService.HasClubStaffAccessAsync(ev.ClubId, actorUserId, actorRole))
+        if (!EventLifecyclePolicy.AllowsInvitations(ev))
+            throw new BadRequestException("Invitations are only supported for published private events.");
+
+        if (!await _clubService.CanManageClubAsync(ev.ClubId, actorUserId, actorRole))
             throw new ForbiddenException("Not allowed");
 
         return ev;
@@ -812,15 +815,16 @@ public sealed class EventInvitationService : IEventInvitationService
         return new EventInvitationSummaryEventResponse
         {
             Id = ev.Id,
-            Name = ev.Name,
-            Description = ev.Description,
-            Location = ev.Location,
+            Name = ev.Name ?? string.Empty,
+            Description = ev.Description ?? string.Empty,
+            Location = ev.Location ?? string.Empty,
             IsPrivate = ev.isPrivate,
             RegisterCost = ev.registerCost,
             MaxParticipants = ev.maxParticipants,
             RegistrationCount = ev.RegistrationCount,
-            StartTime = ev.StartTime,
+            StartTime = ev.StartTime ?? ev.CreatedAt,
             EndTime = ev.EndTime,
+            LifecycleState = ev.LifecycleState.ToString(),
             Status = EventMapper.ResolveStatus(ev).ToString(),
             Category = ev.Category.ToString(),
             ImageUrls = ev.Images

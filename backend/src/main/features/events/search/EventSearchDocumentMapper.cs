@@ -10,11 +10,12 @@ namespace backend.main.features.events.search
         {
             Id = ev.Id,
             ClubId = ev.ClubId,
-            Name = ev.Name,
-            Description = ev.Description,
-            Location = ev.Location,
+            Name = ev.Name ?? string.Empty,
+            Description = ev.Description ?? string.Empty,
+            Location = ev.Location ?? string.Empty,
             IsPrivate = ev.isPrivate,
-            StartTime = ev.StartTime,
+            LifecycleState = ev.LifecycleState.ToString(),
+            StartTime = ev.StartTime ?? ev.CreatedAt,
             EndTime = ev.EndTime,
             CreatedAt = ev.CreatedAt,
             UpdatedAt = ev.UpdatedAt,
@@ -33,4 +34,3 @@ namespace backend.main.features.events.search
         };
     }
 }
-

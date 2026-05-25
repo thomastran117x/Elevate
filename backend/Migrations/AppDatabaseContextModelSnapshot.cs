@@ -497,7 +497,6 @@ namespace backend.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("Description")
-                        .IsRequired()
                         .HasColumnType("longtext");
 
                     b.Property<DateTime?>("EndTime")
@@ -506,21 +505,22 @@ namespace backend.Migrations
                     b.Property<double?>("Latitude")
                         .HasColumnType("double");
 
+                    b.Property<int>("LifecycleState")
+                        .HasColumnType("int");
+
                     b.Property<string>("Location")
-                        .IsRequired()
                         .HasColumnType("longtext");
 
                     b.Property<double?>("Longitude")
                         .HasColumnType("double");
 
                     b.Property<string>("Name")
-                        .IsRequired()
                         .HasColumnType("longtext");
 
                     b.Property<int>("RegistrationCount")
                         .HasColumnType("int");
 
-                    b.Property<DateTime>("StartTime")
+                    b.Property<DateTime?>("StartTime")
                         .HasColumnType("datetime(6)");
 
                     b.Property<string>("Tags")

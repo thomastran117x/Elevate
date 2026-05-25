@@ -207,6 +207,7 @@ public sealed class EventInvitationServiceTests
                 EndTime = DateTime.UtcNow.AddDays(2).AddHours(3),
                 ClubId = club.Id,
                 isPrivate = true,
+                LifecycleState = EventLifecycleState.Published,
                 Category = EventCategory.Gaming
             };
             db.Events.Add(ev);

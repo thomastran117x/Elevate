@@ -11,18 +11,19 @@ namespace backend.main.features.events
             double? distanceKm = null) => new()
             {
                 Id = ev.Id,
-                Name = ev.Name,
-                Description = ev.Description,
-                Location = ev.Location,
+                Name = ev.Name ?? string.Empty,
+                Description = ev.Description ?? string.Empty,
+                Location = ev.Location ?? string.Empty,
                 ImageUrls = ev.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl).ToList(),
                 IsPrivate = ev.isPrivate,
                 MaxParticipants = ev.maxParticipants,
                 RegisterCost = ev.registerCost,
-                StartTime = ev.StartTime,
+                StartTime = ev.StartTime ?? ev.CreatedAt,
                 EndTime = ev.EndTime,
                 ClubId = ev.ClubId,
                 CurrentVersionNumber = ev.CurrentVersionNumber,
                 CreatedAt = ev.CreatedAt,
+                LifecycleState = ev.LifecycleState,
                 Status = ResolveStatus(ev),
                 Category = ev.Category,
                 VenueName = ev.VenueName,
@@ -52,17 +53,45 @@ namespace backend.main.features.events
             Location = club.Location
         };
 
+        public static ManagedEventResponse MapToManagedResponse(
+            Events ev,
+            IReadOnlyList<string> publishIssues) => new()
+            {
+                Id = ev.Id,
+                Name = ev.Name,
+                Description = ev.Description,
+                Location = ev.Location,
+                ImageUrls = ev.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl).ToList(),
+                IsPrivate = ev.isPrivate,
+                MaxParticipants = ev.maxParticipants == 0 ? null : ev.maxParticipants,
+                RegisterCost = ev.registerCost,
+                StartTime = ev.StartTime,
+                EndTime = ev.EndTime,
+                ClubId = ev.ClubId,
+                CurrentVersionNumber = ev.CurrentVersionNumber,
+                CreatedAt = ev.CreatedAt,
+                UpdatedAt = ev.UpdatedAt,
+                Status = ResolveOptionalStatus(ev),
+                LifecycleState = ev.LifecycleState,
+                Category = ev.Category,
+                VenueName = ev.VenueName,
+                City = ev.City,
+                Latitude = ev.Latitude,
+                Longitude = ev.Longitude,
+                Tags = ev.Tags ?? new List<string>(),
+                RegistrationCount = ev.RegistrationCount,
+                PublishReady = publishIssues.Count == 0,
+                PublishIssues = publishIssues.ToList()
+            };
+
         public static EventStatus ResolveStatus(Events ev)
         {
-            var now = DateTime.UtcNow;
-            if (ev.StartTime > now)
-                return EventStatus.Upcoming;
-            if (ev.EndTime == null || ev.EndTime > now)
-                return EventStatus.Ongoing;
-            return EventStatus.Closed;
+            return ResolveOptionalStatus(ev) ?? EventStatus.Upcoming;
         }
+
+        public static EventStatus? ResolveOptionalStatus(Events ev) =>
+            EventLifecyclePolicy.ResolveStatus(ev, DateTime.UtcNow);
     }
 }
-
 
 

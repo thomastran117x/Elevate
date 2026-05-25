@@ -18,6 +18,7 @@ export type EventCategory =
   | 'Other';
 
 export type EventStatus = 'Upcoming' | 'Ongoing' | 'Closed';
+export type EventLifecycleState = 'Draft' | 'Published' | 'Cancelled' | 'Archived';
 
 export type EventSortBy = 'Relevance' | 'Date' | 'Distance' | 'Popularity';
 export type ClubType = 'Sports' | 'Academic' | 'Social' | 'Cultural' | 'Gaming' | 'Other';
@@ -52,6 +53,7 @@ export interface EventItem {
   endTime?: string;
   clubId: number;
   createdAt: string;
+  lifecycleState: EventLifecycleState;
   status: EventStatus;
   category: EventCategory;
   venueName?: string;
@@ -72,6 +74,63 @@ export interface EventsPagedData {
   totalPages: number;
 }
 
+export interface ManagedEvent {
+  id: number;
+  name?: string;
+  description?: string;
+  location?: string;
+  imageUrls: string[];
+  isPrivate: boolean;
+  maxParticipants?: number;
+  registerCost: number;
+  startTime?: string;
+  endTime?: string;
+  clubId: number;
+  currentVersionNumber: number;
+  createdAt: string;
+  updatedAt: string;
+  status?: EventStatus;
+  lifecycleState: EventLifecycleState;
+  category: EventCategory;
+  venueName?: string;
+  city?: string;
+  latitude?: number;
+  longitude?: number;
+  tags: string[];
+  registrationCount: number;
+  publishReady: boolean;
+  publishIssues: string[];
+}
+
+export interface ManagedEventsPagedData {
+  items: ManagedEvent[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export type ManagedEventsApiResponse = ApiEnvelope<ManagedEventsPagedData, EventsResponseMeta>;
+export type ManagedEventApiResponse = ApiEnvelope<ManagedEvent, EventsResponseMeta>;
+
+export interface EventDraftPayload {
+  name?: string;
+  description?: string;
+  location?: string;
+  imageUrls?: string[];
+  isPrivate?: boolean;
+  maxParticipants?: number;
+  registerCost?: number;
+  startTime?: string;
+  endTime?: string | null;
+  category?: EventCategory;
+  venueName?: string | null;
+  city?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  tags?: string[];
+}
+
 export interface EventsResponseMeta extends Record<string, unknown> {
   source?: string;
 }
@@ -85,11 +144,16 @@ export interface EventSearchParams {
   category?: EventCategory;
   status?: EventStatus;
   sortBy?: EventSortBy;
-  isPrivate?: boolean;
   tags?: string;
   lat?: number;
   lng?: number;
   radiusKm?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ManageEventsParams {
+  lifecycleState?: EventLifecycleState | null;
   page?: number;
   pageSize?: number;
 }
@@ -113,6 +177,12 @@ export const ALL_CATEGORIES: EventCategory[] = [
 ];
 
 export const ALL_STATUSES: EventStatus[] = ['Upcoming', 'Ongoing', 'Closed'];
+export const ALL_LIFECYCLE_STATES: EventLifecycleState[] = [
+  'Draft',
+  'Published',
+  'Cancelled',
+  'Archived',
+];
 
 export const ALL_EVENT_SORTS: EventSortBy[] = ['Relevance', 'Date', 'Distance', 'Popularity'];
 

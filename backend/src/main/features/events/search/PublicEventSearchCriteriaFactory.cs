@@ -85,7 +85,9 @@ namespace backend.main.features.events.search
             return new EventSearchCriteria
             {
                 Query = NormalizeText(input.Query),
-                IsPrivate = input.IsPrivate,
+                // Public event discovery is always constrained to public events.
+                IsPrivate = false,
+                LifecycleState = EventLifecycleState.Published,
                 Status = input.Status,
                 Category = input.Category,
                 Tags = input.Tags,

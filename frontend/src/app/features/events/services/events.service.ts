@@ -10,6 +10,7 @@ import {
   EventCategory,
   EventHostClub,
   EventItem,
+  EventLifecycleState,
   EventSearchParams,
   EventsApiResponse,
   EventsPagedData,
@@ -30,6 +31,7 @@ type EventItemPayload = EventItem & {
   EndTime?: string;
   ClubId?: number;
   CreatedAt?: string;
+  LifecycleState?: string | number;
   Status?: string | number;
   Category?: string | number;
   VenueName?: string;
@@ -91,8 +93,6 @@ export class EventsService {
     if (params.category) httpParams = httpParams.set('category', params.category);
     if (params.status) httpParams = httpParams.set('status', params.status);
     if (params.sortBy) httpParams = httpParams.set('sortBy', params.sortBy);
-    if (params.isPrivate !== undefined)
-      httpParams = httpParams.set('isPrivate', String(params.isPrivate));
     if (params.tags?.trim()) httpParams = httpParams.set('tags', params.tags.trim());
     if (params.lat !== undefined) httpParams = httpParams.set('lat', String(params.lat));
     if (params.lng !== undefined) httpParams = httpParams.set('lng', String(params.lng));
@@ -156,6 +156,7 @@ export class EventsService {
       endTime: item.endTime ?? item.EndTime,
       clubId: item.clubId ?? item.ClubId ?? 0,
       createdAt: item.createdAt ?? item.CreatedAt ?? '',
+      lifecycleState: this.normalizeLifecycleState(item.lifecycleState ?? item.LifecycleState),
       status: this.normalizeStatus(item.status ?? item.Status),
       category: this.normalizeCategory(item.category ?? item.Category),
       venueName: item.venueName ?? item.VenueName,
@@ -199,6 +200,18 @@ export class EventsService {
     }
 
     return ALL_STATUSES.includes(value as EventStatus) ? (value as EventStatus) : 'Upcoming';
+  }
+
+  private normalizeLifecycleState(value: string | number | undefined): EventLifecycleState {
+    const lifecycles: EventLifecycleState[] = ['Draft', 'Published', 'Cancelled', 'Archived'];
+
+    if (typeof value === 'number') {
+      return lifecycles[value] ?? 'Published';
+    }
+
+    return lifecycles.includes(value as EventLifecycleState)
+      ? (value as EventLifecycleState)
+      : 'Published';
   }
 
   private normalizeCategory(value: string | number | undefined): EventCategory {

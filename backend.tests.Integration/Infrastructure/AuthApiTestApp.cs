@@ -9,6 +9,10 @@ using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
 using backend.main.features.auth.device;
+using backend.main.features.clubs.staff;
+using backend.main.features.events.invitations;
+using backend.main.features.events.registration;
+using backend.main.features.payment;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
 using backend.main.utilities;
@@ -105,6 +109,80 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         await using var scope = _factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
         return await db.Users.SingleOrDefaultAsync(user => user.Email == email);
+    }
+
+    public async Task AddClubStaffAsync(int clubId, int userId, int grantedByUserId, ClubStaffRole role = ClubStaffRole.Manager)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+
+        db.ClubStaff.Add(new ClubStaff
+        {
+            ClubId = clubId,
+            UserId = userId,
+            GrantedByUserId = grantedByUserId,
+            Role = role
+        });
+
+        await db.SaveChangesAsync();
+    }
+
+    public async Task AddAcceptedInvitationAsync(int eventId, int userId, string email)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+
+        db.EventInvitations.Add(new EventInvitation
+        {
+            EventId = eventId,
+            RecipientUserId = userId,
+            RecipientEmail = email,
+            RecipientEmailNormalized = email.Trim().ToLowerInvariant(),
+            SourceType = EventInvitationSource.DirectUser,
+            LifecycleStatus = EventInvitationLifecycleStatus.Accepted,
+            DeliveryStatus = EventInvitationDeliveryStatus.Sent,
+            AcceptedAtUtc = DateTime.UtcNow,
+            AcceptedByUserId = userId
+        });
+
+        await db.SaveChangesAsync();
+    }
+
+    public async Task AddRegistrationAsync(int eventId, int userId)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+
+        db.EventRegistrations.Add(new EventRegistration
+        {
+            EventId = eventId,
+            UserId = userId
+        });
+
+        var ev = await db.Events.FirstAsync(existing => existing.Id == eventId);
+        ev.RegistrationCount += 1;
+        ev.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+    }
+
+    public async Task AddPaymentAsync(int eventId, int userId, PaymentStatus status)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+
+        db.Payments.Add(new Payment
+        {
+            EventId = eventId,
+            UserId = userId,
+            Amount = 1000,
+            Currency = "usd",
+            Status = status,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+
+        await db.SaveChangesAsync();
     }
 
     public async Task DeletePendingOAuthSignupAsync(string signupToken)

@@ -61,6 +61,7 @@ namespace backend.main.features.events
             existing.StartTime = updated.StartTime;
             existing.EndTime = updated.EndTime;
             existing.ClubId = updated.ClubId;
+            existing.LifecycleState = updated.LifecycleState;
             existing.Category = updated.Category;
             existing.VenueName = updated.VenueName;
             existing.City = updated.City;
@@ -210,7 +211,11 @@ namespace backend.main.features.events
             if (criteria.ClubId.HasValue)
                 query = query.Where(e => e.ClubId == criteria.ClubId.Value);
 
-            query = query.Where(e => e.isPrivate == criteria.IsPrivate);
+            if (criteria.IsPrivate.HasValue)
+                query = query.Where(e => e.isPrivate == criteria.IsPrivate.Value);
+
+            if (criteria.LifecycleState.HasValue)
+                query = query.Where(e => e.LifecycleState == criteria.LifecycleState.Value);
 
             if (criteria.Category.HasValue)
                 query = query.Where(e => e.Category == criteria.Category.Value);
@@ -240,9 +245,9 @@ namespace backend.main.features.events
             }
 
             if (criteria.Status == EventStatus.Upcoming)
-                query = query.Where(e => e.StartTime > now);
+                query = query.Where(e => e.StartTime.HasValue && e.StartTime.Value > now);
             else if (criteria.Status == EventStatus.Ongoing)
-                query = query.Where(e => e.StartTime <= now && (e.EndTime == null || e.EndTime > now));
+                query = query.Where(e => e.StartTime.HasValue && e.StartTime.Value <= now && (e.EndTime == null || e.EndTime > now));
             else if (criteria.Status == EventStatus.Closed)
                 query = query.Where(e => e.EndTime != null && e.EndTime <= now);
 
@@ -288,5 +293,4 @@ namespace backend.main.features.events
         }
     }
 }
-
 

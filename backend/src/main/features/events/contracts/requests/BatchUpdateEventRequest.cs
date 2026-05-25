@@ -87,7 +87,6 @@ namespace backend.main.features.events.contracts.requests
             get; set;
         }
 
-        [MaxLength(10)]
         public List<string>? Tags
         {
             get; set;
@@ -96,7 +95,6 @@ namespace backend.main.features.events.contracts.requests
 
     public class BatchUpdateEventRequest : IValidatableObject
     {
-        [Required]
         public List<BatchUpdateEventItem> Events { get; set; } = new();
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -120,8 +118,16 @@ namespace backend.main.features.events.contracts.requests
                     $"Duplicate event IDs are not allowed: {string.Join(", ", duplicateIds)}.",
                     new[] { nameof(Events) });
             }
+
+            for (var index = 0; index < Events.Count; index++)
+            {
+                if (Events[index].Tags is { Count: > 10 })
+                {
+                    yield return new ValidationResult(
+                        "A maximum of 10 tags are allowed.",
+                        new[] { $"{nameof(Events)}[{index}].{nameof(BatchUpdateEventItem.Tags)}" });
+                }
+            }
         }
     }
 }
-
-

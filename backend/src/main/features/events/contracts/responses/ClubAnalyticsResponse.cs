@@ -10,6 +10,22 @@ namespace backend.main.features.events.contracts.responses
         {
             get; set;
         }
+        public int DraftEvents
+        {
+            get; set;
+        }
+        public int PublishedEvents
+        {
+            get; set;
+        }
+        public int CancelledEvents
+        {
+            get; set;
+        }
+        public int ArchivedEvents
+        {
+            get; set;
+        }
         public int UpcomingEvents
         {
             get; set;
@@ -105,4 +121,3 @@ namespace backend.main.features.events.contracts.responses
         }
     }
 }
-

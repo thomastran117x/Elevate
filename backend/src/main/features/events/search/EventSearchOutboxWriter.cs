@@ -29,6 +29,17 @@ namespace backend.main.features.events.search
             });
         }
 
+        public void StageSync(Events ev)
+        {
+            if (EventLifecyclePolicy.IsVisibleInPublicListings(ev.LifecycleState))
+            {
+                StageUpsert(ev);
+                return;
+            }
+
+            StageDelete(ev.Id);
+        }
+
         public void StageDelete(int eventId)
         {
             _context.EventSearchOutbox.Add(new EventSearchOutbox
@@ -41,4 +52,3 @@ namespace backend.main.features.events.search
         }
     }
 }
-

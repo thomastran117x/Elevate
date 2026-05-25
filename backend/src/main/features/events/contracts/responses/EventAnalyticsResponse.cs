@@ -7,6 +7,10 @@ namespace backend.main.features.events.contracts.responses
             get; set;
         }
         public string EventName { get; set; } = null!;
+        public EventLifecycleState LifecycleState
+        {
+            get; set;
+        }
         public int RegistrationCount
         {
             get; set;
@@ -53,4 +57,3 @@ namespace backend.main.features.events.contracts.responses
         }
     }
 }
-

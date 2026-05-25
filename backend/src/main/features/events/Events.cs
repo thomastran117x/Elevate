@@ -8,22 +8,22 @@ public class Events
     {
         get; set;
     }
-    public required string Name
+    public string? Name
     {
         get; set;
     }
-    public required string Description
+    public string? Description
     {
         get; set;
     }
-    public required string Location
+    public string? Location
     {
         get; set;
     }
     public bool isPrivate { get; set; } = false;
-    public int maxParticipants { get; set; } = 100;
+    public int maxParticipants { get; set; } = 0;
     public int registerCost { get; set; } = 0;
-    public required DateTime StartTime
+    public DateTime? StartTime
     {
         get; set;
     }
@@ -35,6 +35,7 @@ public class Events
     {
         get; set;
     }
+    public EventLifecycleState LifecycleState { get; set; } = EventLifecycleState.Draft;
     public int CurrentVersionNumber { get; set; } = 0;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
@@ -71,5 +72,4 @@ public class Events
     // Navigation
     public ICollection<EventImage> Images { get; set; } = new List<EventImage>();
 }
-
 
