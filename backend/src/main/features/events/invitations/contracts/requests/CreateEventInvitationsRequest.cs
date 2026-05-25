@@ -2,15 +2,13 @@ using System.ComponentModel.DataAnnotations;
 
 namespace backend.main.features.events.invitations.contracts.requests;
 
-public sealed class CreateEventInvitationsRequest
+public sealed class CreateEventInvitationsRequest : IValidatableObject
 {
-    [MaxLength(100)]
     public List<int>? UserIds
     {
         get; set;
     }
 
-    [MaxLength(100)]
     public List<string>? Emails
     {
         get; set;
@@ -19,5 +17,22 @@ public sealed class CreateEventInvitationsRequest
     public DateTime? ExpiresAt
     {
         get; set;
+    }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (UserIds is { Count: > 100 })
+        {
+            yield return new ValidationResult(
+                "A maximum of 100 user IDs is allowed.",
+                new[] { nameof(UserIds) });
+        }
+
+        if (Emails is { Count: > 100 })
+        {
+            yield return new ValidationResult(
+                "A maximum of 100 email addresses is allowed.",
+                new[] { nameof(Emails) });
+        }
     }
 }

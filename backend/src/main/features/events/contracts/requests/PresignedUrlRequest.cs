@@ -2,6 +2,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace backend.main.features.events.contracts.requests
 {
+    /// <summary>
+    /// Request for a presigned upload URL used by event image workflows.
+    /// </summary>
     public class PresignedUrlRequest : IValidatableObject
     {
         [Range(1, int.MaxValue, ErrorMessage = "ClubId must be greater than 0.")]
@@ -36,4 +39,3 @@ namespace backend.main.features.events.contracts.requests
         }
     }
 }
-

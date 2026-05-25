@@ -15,6 +15,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace backend.main.features.events.registration
 {
+    /// <summary>
+    /// Registration endpoints for event attendance and registration status lookups.
+    /// </summary>
     [ApiController]
     [Route("events")]
     public class EventRegistrationController : ControllerBase
@@ -30,6 +33,7 @@ namespace backend.main.features.events.registration
 
         [Authorize]
         [HttpPost("{eventId}/register")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status201Created)]
         public async Task<IActionResult> Register([Range(1, int.MaxValue)] int eventId)
         {
             try
@@ -54,6 +58,7 @@ namespace backend.main.features.events.registration
 
         [Authorize]
         [HttpDelete("{eventId}/register")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> Unregister([Range(1, int.MaxValue)] int eventId)
         {
             try
@@ -77,6 +82,7 @@ namespace backend.main.features.events.registration
         }
 
         [HttpGet("{eventId}/registrations")]
+        [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventRegistrationResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetRegistrations([Range(1, int.MaxValue)] int eventId, int page = 1, int pageSize = 20)
         {
             try
@@ -102,6 +108,7 @@ namespace backend.main.features.events.registration
 
         [Authorize]
         [HttpGet("{eventId}/registrations/me")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         public async Task<IActionResult> CheckRegistration([Range(1, int.MaxValue)] int eventId)
         {
             try
@@ -130,6 +137,7 @@ namespace backend.main.features.events.registration
 
         [Authorize]
         [HttpPost("batch/register")]
+        [ProducesResponseType(typeof(ApiResponse<BatchRegistrationResultResponse>), StatusCodes.Status207MultiStatus)]
         public async Task<IActionResult> BatchRegister([FromBody] BatchRegistrationRequest request)
         {
             try
@@ -155,6 +163,7 @@ namespace backend.main.features.events.registration
 
         [Authorize]
         [HttpDelete("batch/register")]
+        [ProducesResponseType(typeof(ApiResponse<BatchRegistrationResultResponse>), StatusCodes.Status207MultiStatus)]
         public async Task<IActionResult> BatchUnregister([FromBody] BatchRegistrationRequest request)
         {
             try
@@ -203,6 +212,7 @@ namespace backend.main.features.events.registration
 
         [Authorize]
         [HttpGet("{userId}/events/registered")]
+        [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventRegistrationResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetRegisteredEvents([Range(1, int.MaxValue)] int userId, int page = 1, int pageSize = 20)
         {
             try
@@ -225,6 +235,5 @@ namespace backend.main.features.events.registration
         }
     }
 }
-
 
 

@@ -10,6 +10,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace backend.main.features.clubs.posts
 {
+    /// <summary>
+    /// Club post feeds, editing, and administrative post-management endpoints.
+    /// </summary>
     [ApiController]
     [Route("clubs")]
     public class ClubPostController : ControllerBase
@@ -23,6 +26,7 @@ namespace backend.main.features.clubs.posts
 
         [Authorize]
         [HttpPost("{clubId}/posts")]
+        [ProducesResponseType(typeof(ApiResponse<ClubPostResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> CreatePost(int clubId, [FromBody] ClubPostCreateRequest request)
         {
             var userPayload = User.GetUserPayload();
@@ -41,6 +45,7 @@ namespace backend.main.features.clubs.posts
 
         [AllowAnonymous]
         [HttpGet("{clubId}/posts")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubPostResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetPosts(
             int clubId,
             [FromQuery] string? search,
@@ -79,6 +84,7 @@ namespace backend.main.features.clubs.posts
 
         [Authorize]
         [HttpPut("{clubId}/posts/{id}")]
+        [ProducesResponseType(typeof(ApiResponse<ClubPostResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdatePost(
             int clubId,
             int id,
@@ -100,6 +106,7 @@ namespace backend.main.features.clubs.posts
 
         [Authorize]
         [HttpDelete("{clubId}/posts/{id}")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> DeletePost(int clubId, int id)
         {
             var userPayload = User.GetUserPayload();
@@ -133,6 +140,7 @@ namespace backend.main.features.clubs.posts
         }
 
         [HttpPost("posts/reindex")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ReindexPosts(CancellationToken cancellationToken)
         {
             var count = await _reindexService.ReindexAllAsync(cancellationToken);
@@ -146,6 +154,7 @@ namespace backend.main.features.clubs.posts
         }
 
         [HttpGet("posts")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubPostResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetAllPosts(
             [FromQuery] string? search,
             [FromQuery] PostSortBy sortBy = PostSortBy.Recent,
@@ -175,7 +184,6 @@ namespace backend.main.features.clubs.posts
             new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt);
     }
 }
-
 
 
 

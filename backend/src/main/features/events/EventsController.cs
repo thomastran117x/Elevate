@@ -16,6 +16,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace backend.main.features.events
 {
+    /// <summary>
+    /// Event CRUD, drafts, discovery, analytics, images, and version-history endpoints.
+    /// </summary>
     [ApiController]
     [Route("events")]
     public class EventsController : ControllerBase
@@ -31,6 +34,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("{clubId}")]
+        [ProducesResponseType(typeof(ApiResponse<EventResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> CreateEvent([FromBody] EventCreateRequest request, int clubId)
         {
             try
@@ -78,6 +82,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPut("{eventId}")]
+        [ProducesResponseType(typeof(ApiResponse<EventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateEvent([FromBody] EventUpdateRequest request, int eventId)
         {
             try
@@ -122,6 +127,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpDelete("{eventId}")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> DeleteEvent(int eventId)
         {
             try
@@ -146,6 +152,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpGet("{eventId}/versions")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<EventVersionListItemResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEventVersions(
             int eventId,
             [FromQuery] int page = 1,
@@ -181,6 +188,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpGet("{eventId}/versions/{versionNumber}")]
+        [ProducesResponseType(typeof(ApiResponse<EventVersionDetailResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEventVersion(int eventId, int versionNumber)
         {
             var userPayload = User.GetUserPayload();
@@ -198,6 +206,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("{eventId}/versions/{versionNumber}/rollback")]
+        [ProducesResponseType(typeof(ApiResponse<EventRollbackResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> RollbackEventVersion(int eventId, int versionNumber)
         {
             var userPayload = User.GetUserPayload();
@@ -219,6 +228,7 @@ namespace backend.main.features.events
         }
 
         [HttpGet("clubs/{clubId}")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<EventResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEventsByClub(int clubId, EventStatus? status = null, int page = 1, int pageSize = 20)
         {
             try
@@ -256,6 +266,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpGet("clubs/{clubId}/manage")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<ManagedEventResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetManageableEventsByClub(
             int clubId,
             EventLifecycleState? lifecycleState = null,
@@ -303,6 +314,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpGet("{eventId}/manage")]
+        [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetManageableEvent(int eventId)
         {
             try
@@ -327,6 +339,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("clubs/{clubId}/drafts")]
+        [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> CreateDraftEvent([FromBody] EventDraftUpsertRequest request, int clubId)
         {
             try
@@ -351,6 +364,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPatch("{eventId}/draft")]
+        [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateDraftEvent([FromBody] EventDraftUpsertRequest request, int eventId)
         {
             try
@@ -375,6 +389,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("{eventId}/publish")]
+        [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> PublishEvent(int eventId)
         {
             try
@@ -399,6 +414,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("{eventId}/cancel")]
+        [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> CancelEvent(int eventId)
         {
             try
@@ -423,6 +439,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("{eventId}/archive")]
+        [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ArchiveEvent(int eventId)
         {
             try
@@ -446,6 +463,7 @@ namespace backend.main.features.events
         }
 
         [HttpGet("{eventId}")]
+        [ProducesResponseType(typeof(ApiResponse<EventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEvent(int eventId)
         {
             try
@@ -472,6 +490,7 @@ namespace backend.main.features.events
         }
 
         [HttpGet("")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<EventResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEvents(
             string? search = null,
             bool isPrivate = false,
@@ -530,6 +549,7 @@ namespace backend.main.features.events
         }
 
         [HttpPost("search")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<EventResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> SearchEvents([FromBody] EventSearchRequest request)
         {
             try
@@ -564,6 +584,7 @@ namespace backend.main.features.events
         }
 
         [HttpGet("batch")]
+        [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEventsBatch([FromQuery] string ids)
         {
             try
@@ -610,6 +631,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("batch/{clubId}")]
+        [ProducesResponseType(typeof(ApiResponse<BatchCreateResultResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> BatchCreateEvents([FromBody] BatchCreateEventRequest request, int clubId)
         {
             try
@@ -635,6 +657,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPut("batch")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         public async Task<IActionResult> BatchUpdateEvents([FromBody] BatchUpdateEventRequest request)
         {
             try
@@ -663,6 +686,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpDelete("batch")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         public async Task<IActionResult> BatchDeleteEvents([FromBody] BatchDeleteRequest request)
         {
             try
@@ -691,6 +715,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpGet("{eventId}/analytics")]
+        [ProducesResponseType(typeof(ApiResponse<EventAnalyticsResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEventAnalytics(int eventId)
         {
             try
@@ -716,6 +741,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("images/presigned-url")]
+        [ProducesResponseType(typeof(ApiResponse<PresignedUploadResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetPresignedUploadUrl([FromBody] PresignedUrlRequest request)
         {
             try
@@ -747,6 +773,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("{eventId}/images")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status201Created)]
         public async Task<IActionResult> AddEventImage([FromBody] AddEventImageRequest request, int eventId)
         {
             try
@@ -777,6 +804,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpDelete("{eventId}/images/{imageId}")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> RemoveEventImage(int eventId, int imageId)
         {
             try
@@ -801,6 +829,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpGet("clubs/{clubId}/analytics")]
+        [ProducesResponseType(typeof(ApiResponse<ClubAnalyticsResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubAnalytics(int clubId)
         {
             try
@@ -890,6 +919,7 @@ namespace backend.main.features.events
         }
 
         [HttpPost("reindex")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ReindexEvents(CancellationToken cancellationToken)
         {
             var count = await _reindexService.ReindexAllAsync(cancellationToken);

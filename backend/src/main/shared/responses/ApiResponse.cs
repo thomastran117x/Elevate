@@ -2,6 +2,9 @@ using System.Text.Json.Serialization;
 
 namespace backend.main.shared.responses
 {
+    /// <summary>
+    /// Standard JSON envelope returned by API endpoints.
+    /// </summary>
     public class ApiResponse<T>
     {
         public ApiResponse(string message, T? data)
@@ -19,27 +22,42 @@ namespace backend.main.shared.responses
             Meta = meta;
         }
 
+        /// <summary>
+        /// Indicates whether the request succeeded.
+        /// </summary>
         [JsonPropertyName("success")]
         public bool Success
         {
             get; set;
         }
 
+        /// <summary>
+        /// Human-readable message summarizing the outcome.
+        /// </summary>
         [JsonPropertyName("message")]
         public string Message { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Endpoint-specific response payload.
+        /// </summary>
         [JsonPropertyName("data")]
         public T? Data
         {
             get; set;
         }
 
+        /// <summary>
+        /// Structured error details when the request fails.
+        /// </summary>
         [JsonPropertyName("error")]
         public ApiError? Error
         {
             get; set;
         }
 
+        /// <summary>
+        /// Optional metadata such as pagination or response source details.
+        /// </summary>
         [JsonPropertyName("meta")]
         public object? Meta
         {

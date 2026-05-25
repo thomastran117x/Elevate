@@ -20,6 +20,9 @@ using Microsoft.AspNetCore.RateLimiting;
 
 namespace backend.main.features.auth
 {
+    /// <summary>
+    /// Authentication, session, verification, and password-recovery endpoints.
+    /// </summary>
     [ApiController]
     [Route(RoutePaths.AuthPrefix)]
     public class AuthController : ControllerBase
@@ -49,6 +52,7 @@ namespace backend.main.features.auth
         [HttpPost("login")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> LocalAuthenticate([FromBody] LoginRequest request)
         {
             try
@@ -89,6 +93,7 @@ namespace backend.main.features.auth
         [HttpPost("signup")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<VerificationChallengeResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> LocalSignup([FromBody] SignUpRequest request)
         {
             try
@@ -127,6 +132,7 @@ namespace backend.main.features.auth
         [HttpPost("verify/otp")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> LocalVerifyOtp([FromBody] OtpVerificationRequest request)
         {
             try
@@ -161,6 +167,8 @@ namespace backend.main.features.auth
 
         [HttpGet("verify")]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status302Found)]
         public IActionResult LocalVerify([FromQuery] string token)
         {
             var redirectUrl = BuildFrontendAuthUrl("verify", token);
@@ -177,6 +185,7 @@ namespace backend.main.features.auth
         [HttpPost("verify")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> LocalVerify([FromBody] VerificationTokenRequest request)
         {
             try
@@ -211,6 +220,7 @@ namespace backend.main.features.auth
         [HttpPost("google")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<OAuthAuthenticationResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GoogleAuthenticate([FromBody] GoogleRequest request)
         {
             try
@@ -245,6 +255,7 @@ namespace backend.main.features.auth
         [HttpPost("google/code")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<OAuthAuthenticationResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GoogleCodeAuthenticate([FromBody] GoogleCodeRequest request)
         {
             try
@@ -281,6 +292,7 @@ namespace backend.main.features.auth
         [HttpPost("microsoft")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<OAuthAuthenticationResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> MicrosoftAuthenticate([FromBody] MicrosoftRequest request)
         {
             try
@@ -314,6 +326,7 @@ namespace backend.main.features.auth
 
         [Authorize]
         [HttpGet("me")]
+        [ProducesResponseType(typeof(ApiResponse<CurrentUserResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> Me()
         {
             try
@@ -341,6 +354,7 @@ namespace backend.main.features.auth
 
         [HttpPost("refresh")]
         [ValidateAntiForgeryToken]
+        [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest? request)
         {
             try
@@ -381,6 +395,7 @@ namespace backend.main.features.auth
         [HttpPost("oauth/complete")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> CompleteOAuthSignup(
             [FromBody] CompleteOAuthSignupRequest request
         )
@@ -414,6 +429,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("api/refresh")]
+        [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ApiRefresh([FromBody] RefreshTokenRequest? request)
         {
             try
@@ -450,6 +466,7 @@ namespace backend.main.features.auth
         }
 
         [HttpGet("csrf")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         public IActionResult Csrf()
         {
             var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
@@ -466,6 +483,7 @@ namespace backend.main.features.auth
 
         [HttpPost("logout")]
         [ValidateAntiForgeryToken]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> Logout([FromBody] RefreshTokenRequest? request)
         {
             try
@@ -506,6 +524,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("api/logout")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> ApiLogout([FromBody] RefreshTokenRequest? request)
         {
             try
@@ -543,6 +562,8 @@ namespace backend.main.features.auth
 
         [HttpGet("device/verify")]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status302Found)]
         public IActionResult VerifyDevice([FromQuery] string token)
         {
             var redirectUrl = BuildFrontendAuthUrl("device/verify", token);
@@ -559,6 +580,7 @@ namespace backend.main.features.auth
         [HttpPost("device/verify")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> VerifyDevice([FromBody] VerificationTokenRequest request)
         {
             try
@@ -593,6 +615,7 @@ namespace backend.main.features.auth
         [HttpPost("forgot-password")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<VerificationChallengeResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
         {
             try
@@ -627,6 +650,7 @@ namespace backend.main.features.auth
         [HttpPost("change-password")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, [FromQuery] string? token)
         {
             try
@@ -746,6 +770,5 @@ namespace backend.main.features.auth
         }
     }
 }
-
 
 

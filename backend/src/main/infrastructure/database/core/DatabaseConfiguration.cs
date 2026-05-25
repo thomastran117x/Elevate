@@ -8,8 +8,17 @@ namespace backend.main.infrastructure.database.core
     {
         public static IServiceCollection AddAppDatabase(
             this IServiceCollection services,
-            IConfiguration config)
+            IConfiguration config,
+            bool useInMemorySqlite = false)
         {
+            if (useInMemorySqlite)
+            {
+                services.AddDbContext<AppDatabaseContext>(options =>
+                    options.UseSqlite("Data Source=openapi-docs;Mode=Memory;Cache=Shared"));
+
+                return services;
+            }
+
             var provider = (
                 config["Database:Provider"]
                 ?? config["DB_PROVIDER"]

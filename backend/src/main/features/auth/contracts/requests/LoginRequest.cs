@@ -2,6 +2,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace backend.main.features.auth.contracts.requests
 {
+    /// <summary>
+    /// Credentials and client transport details for local sign-in.
+    /// </summary>
     public class LoginRequest
     {
         [Required]

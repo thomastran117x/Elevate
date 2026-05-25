@@ -8,6 +8,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace backend.main.features.profile.admin
 {
+    /// <summary>
+    /// Administrative user-management endpoints.
+    /// </summary>
     [ApiController]
     [Route("admin/users")]
     [Authorize("AdminOnly")]
@@ -21,6 +24,7 @@ namespace backend.main.features.profile.admin
         }
 
         [HttpPatch("{id}/status")]
+        [ProducesResponseType(typeof(ApiResponse<UserStatusResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateUserStatus(int id, [FromBody] UpdateUserStatusRequest request)
         {
             var user = await _userService.UpdateUserStatusAsync(id, request.IsDisabled, request.Reason);
@@ -44,4 +48,3 @@ namespace backend.main.features.profile.admin
         }
     }
 }
-

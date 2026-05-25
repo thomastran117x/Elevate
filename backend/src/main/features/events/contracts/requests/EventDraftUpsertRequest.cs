@@ -3,6 +3,9 @@ using System.Text.RegularExpressions;
 
 namespace backend.main.features.events.contracts.requests
 {
+    /// <summary>
+    /// Partial event payload used when creating or updating drafts.
+    /// </summary>
     public sealed class EventDraftUpsertRequest : IValidatableObject
     {
         [StringLength(30, MinimumLength = 3)]
@@ -23,7 +26,6 @@ namespace backend.main.features.events.contracts.requests
             get; set;
         }
 
-        [MaxLength(5, ErrorMessage = "A maximum of 5 images are allowed.")]
         public List<string>? ImageUrls
         {
             get; set;
@@ -85,7 +87,6 @@ namespace backend.main.features.events.contracts.requests
             get; set;
         }
 
-        [MaxLength(10, ErrorMessage = "A maximum of 10 tags are allowed.")]
         public List<string>? Tags
         {
             get; set;
@@ -123,6 +124,13 @@ namespace backend.main.features.events.contracts.requests
 
             if (ImageUrls != null)
             {
+                if (ImageUrls.Count > 5)
+                {
+                    yield return new ValidationResult(
+                        "A maximum of 5 images are allowed.",
+                        new[] { nameof(ImageUrls) });
+                }
+
                 foreach (var url in ImageUrls)
                 {
                     if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
@@ -136,6 +144,13 @@ namespace backend.main.features.events.contracts.requests
 
             if (Tags != null)
             {
+                if (Tags.Count > 10)
+                {
+                    yield return new ValidationResult(
+                        "A maximum of 10 tags are allowed.",
+                        new[] { nameof(Tags) });
+                }
+
                 foreach (var tag in Tags)
                 {
                     if (string.IsNullOrWhiteSpace(tag) || tag.Length > 30

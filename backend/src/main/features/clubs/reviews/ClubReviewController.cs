@@ -9,6 +9,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace backend.main.features.clubs.reviews
 {
+    /// <summary>
+    /// Club review creation, editing, and administrative review lookup endpoints.
+    /// </summary>
     [ApiController]
     [Route("clubs")]
     public class ClubReviewController : ControllerBase
@@ -22,6 +25,7 @@ namespace backend.main.features.clubs.reviews
 
         [Authorize]
         [HttpPost("{clubId}/reviews")]
+        [ProducesResponseType(typeof(ApiResponse<ClubReviewResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> CreateReview(int clubId, [FromBody] ClubReviewCreateRequest request)
         {
             var userPayload = User.GetUserPayload();
@@ -46,6 +50,7 @@ namespace backend.main.features.clubs.reviews
         }
 
         [HttpGet("{clubId}/reviews")]
+        [ProducesResponseType(typeof(ApiResponse<IEnumerable<ClubReviewResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetReviewsByClub(
             int clubId,
             [FromQuery] int page = 1,
@@ -66,6 +71,7 @@ namespace backend.main.features.clubs.reviews
 
         [Authorize]
         [HttpPut("{clubId}/reviews/{reviewId}")]
+        [ProducesResponseType(typeof(ApiResponse<ClubReviewResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateReview(int clubId, int reviewId, [FromBody] ClubReviewUpdateRequest request)
         {
             var userPayload = User.GetUserPayload();
@@ -91,6 +97,7 @@ namespace backend.main.features.clubs.reviews
 
         [Authorize]
         [HttpDelete("{clubId}/reviews/{reviewId}")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> DeleteReview(int clubId, int reviewId)
         {
             var userPayload = User.GetUserPayload();
@@ -132,6 +139,7 @@ namespace backend.main.features.clubs.reviews
 
         [Authorize("AdminOnly")]
         [HttpGet("{userId}/reviews")]
+        [ProducesResponseType(typeof(ApiResponse<IEnumerable<ClubReviewResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetReviewsByUser(
             int userId,
             [FromQuery] int page = 1,
@@ -159,6 +167,5 @@ namespace backend.main.features.clubs.reviews
         }
     }
 }
-
 
 

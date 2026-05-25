@@ -10,6 +10,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace backend.main.features.events.invitations;
 
+/// <summary>
+/// Invitation and invite-link flows for private or managed events.
+/// </summary>
 [ApiController]
 [Route("events")]
 public sealed class EventInvitationController : ControllerBase
@@ -23,6 +26,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpPost("{eventId}/invitations")]
+    [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventInvitationResponse>>), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateInvitations(int eventId, [FromBody] CreateEventInvitationsRequest request)
     {
         try
@@ -51,6 +55,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpGet("{eventId}/invitations")]
+    [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventInvitationResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetInvitations(int eventId)
     {
         try
@@ -73,6 +78,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpPost("{eventId}/invitations/{invitationId}/revoke")]
+    [ProducesResponseType(typeof(ApiResponse<EventInvitationResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RevokeInvitation(int eventId, int invitationId)
     {
         try
@@ -95,6 +101,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpPost("{eventId}/invitation-links")]
+    [ProducesResponseType(typeof(ApiResponse<EventInvitationLinkResponse>), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateInvitationLink(int eventId, [FromBody] CreateEventInvitationLinkRequest request)
     {
         try
@@ -122,6 +129,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpGet("{eventId}/invitation-links")]
+    [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventInvitationLinkResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetInvitationLinks(int eventId)
     {
         try
@@ -144,6 +152,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpPost("{eventId}/invitation-links/{linkId}/revoke")]
+    [ProducesResponseType(typeof(ApiResponse<EventInvitationLinkResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RevokeInvitationLink(int eventId, int linkId)
     {
         try
@@ -165,6 +174,7 @@ public sealed class EventInvitationController : ControllerBase
     }
 
     [HttpPost("invitations/resolve")]
+    [ProducesResponseType(typeof(ApiResponse<EventInvitationResolveResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ResolveInvitation([FromBody] ResolveEventInvitationRequest request)
     {
         try
@@ -187,6 +197,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpPost("invitations/accept")]
+    [ProducesResponseType(typeof(ApiResponse<EventInvitationDecisionResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> AcceptInvitation([FromBody] DecideEventInvitationRequest request)
     {
         try
@@ -209,6 +220,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpPost("invitations/{invitationId}/accept")]
+    [ProducesResponseType(typeof(ApiResponse<EventInvitationDecisionResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> AcceptInvitationById(int invitationId)
     {
         try
@@ -231,6 +243,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpPost("invitations/decline")]
+    [ProducesResponseType(typeof(ApiResponse<EventInvitationDecisionResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeclineInvitation([FromBody] DecideEventInvitationRequest request)
     {
         try
@@ -253,6 +266,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpPost("invitations/{invitationId}/decline")]
+    [ProducesResponseType(typeof(ApiResponse<EventInvitationDecisionResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeclineInvitationById(int invitationId)
     {
         try
@@ -275,6 +289,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpGet("me/invited")]
+    [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventInvitationResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMyInvitations()
     {
         try

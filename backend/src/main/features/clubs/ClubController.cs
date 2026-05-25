@@ -11,6 +11,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace backend.main.features.clubs
 {
+    /// <summary>
+    /// Club discovery, management, staff, ownership, and version-history endpoints.
+    /// </summary>
     [ApiController]
     [Route("clubs")]
     public class ClubController : ControllerBase
@@ -24,6 +27,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpPost("{clubId}/join")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> JoinClub(int clubId)
         {
             var userPayload = User.GetUserPayload();
@@ -40,6 +44,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpDelete("{clubId}/join")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> LeaveClub(int clubId)
         {
             var userPayload = User.GetUserPayload();
@@ -56,6 +61,8 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpPost("")]
+        [Consumes("multipart/form-data")]
+        [ProducesResponseType(typeof(ApiResponse<ClubResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> CreateClub([FromForm] ClubCreateRequest request)
         {
             var userPayload = User.GetUserPayload();
@@ -87,6 +94,8 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpPut("{id}")]
+        [Consumes("multipart/form-data")]
+        [ProducesResponseType(typeof(ApiResponse<ClubResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateClub([FromForm] ClubUpdateRequest request, int id)
         {
             var userPayload = User.GetUserPayload();
@@ -117,6 +126,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpDelete("{id}")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> DeleteClub(int id)
         {
             var userPayload = User.GetUserPayload();
@@ -132,6 +142,7 @@ namespace backend.main.features.clubs
         }
 
         [HttpGet("{id}")]
+        [ProducesResponseType(typeof(ApiResponse<ClubResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClub(int id)
         {
             Club club = await _clubService.GetClub(id);
@@ -148,6 +159,7 @@ namespace backend.main.features.clubs
         }
 
         [HttpGet("")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubs(
             [FromQuery] string? search,
             [FromQuery] ClubType? clubType,
@@ -178,6 +190,7 @@ namespace backend.main.features.clubs
         }
 
         [HttpPost("search")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> SearchClubs([FromBody] ClubSearchRequest request)
         {
             var criteria = PublicClubSearchCriteriaFactory.FromRequest(request);
@@ -196,6 +209,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpGet("managed")]
+        [ProducesResponseType(typeof(ApiResponse<IEnumerable<ClubResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetManagedClubs()
         {
             var userPayload = User.GetUserPayload();
@@ -213,6 +227,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpGet("{id}/staff")]
+        [ProducesResponseType(typeof(ApiResponse<IEnumerable<ClubStaffResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubStaff(int id)
         {
             var userPayload = User.GetUserPayload();
@@ -226,6 +241,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpPost("{id}/staff/managers")]
+        [ProducesResponseType(typeof(ApiResponse<ClubStaffResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> AddManager(int id, [FromBody] ClubStaffCreateRequest request)
         {
             var userPayload = User.GetUserPayload();
@@ -244,6 +260,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpPost("{id}/staff/volunteers")]
+        [ProducesResponseType(typeof(ApiResponse<ClubStaffResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> AddVolunteer(int id, [FromBody] ClubStaffCreateRequest request)
         {
             var userPayload = User.GetUserPayload();
@@ -262,6 +279,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpDelete("{id}/staff/{userId}")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> RemoveStaff(int id, int userId)
         {
             var userPayload = User.GetUserPayload();
@@ -274,6 +292,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpPost("{id}/transfer-ownership")]
+        [ProducesResponseType(typeof(ApiResponse<ClubResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> TransferOwnership(int id, [FromBody] ClubOwnershipTransferRequest request)
         {
             var userPayload = User.GetUserPayload();
@@ -292,6 +311,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpGet("{id}/versions")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubVersionListItemResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubVersions(
             int id,
             [FromQuery] int page = 1,
@@ -327,6 +347,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpGet("{id}/versions/{versionNumber}")]
+        [ProducesResponseType(typeof(ApiResponse<ClubVersionDetailResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubVersion(int id, int versionNumber)
         {
             var userPayload = User.GetUserPayload();
@@ -344,6 +365,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpPost("{id}/versions/{versionNumber}/rollback")]
+        [ProducesResponseType(typeof(ApiResponse<ClubRollbackResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> RollbackClubVersion(int id, int versionNumber)
         {
             var userPayload = User.GetUserPayload();
@@ -470,6 +492,7 @@ namespace backend.main.features.clubs
         }
 
         [HttpPost("reindex")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ReindexClubs(CancellationToken cancellationToken)
         {
             var count = await _reindexService.ReindexAllAsync(cancellationToken);
