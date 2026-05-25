@@ -1187,7 +1187,7 @@ namespace backend.main.features.events
                 if (eventId.HasValue)
                 {
                     var ev = await GetEvent(eventId.Value);
-                    await EnsureCanManageEventAsync(ev, userId, userRole);
+                    await EnsureCanManageEventMediaAsync(ev, userId, userRole);
                     if (ev.ClubId != clubId)
                         throw new ForbiddenException("Not allowed");
                 }
@@ -1239,7 +1239,7 @@ namespace backend.main.features.events
             try
             {
                 var ev = await GetEvent(eventId);
-                await EnsureCanManageEventAsync(ev, userId, userRole);
+                await EnsureCanManageEventMediaAsync(ev, userId, userRole);
 
                 await ValidateUploadedImageUrlsAsync(ev.ClubId, userId, new[] { imageUrl }, eventId);
 
@@ -1270,7 +1270,7 @@ namespace backend.main.features.events
             try
             {
                 var ev = await GetEvent(eventId);
-                await EnsureCanManageEventAsync(ev, userId, userRole);
+                await EnsureCanManageEventMediaAsync(ev, userId, userRole);
 
                 var image = await _imageRepository.GetByIdAsync(imageId, eventId)
                     ?? throw new ResourceNotFoundException(
@@ -1503,6 +1503,12 @@ namespace backend.main.features.events
         private async Task EnsureCanManageEventAsync(Events ev, int userId, string userRole)
         {
             if (!await _clubService.CanManageClubAsync(ev.ClubId, userId, userRole))
+                throw new ForbiddenException("Not allowed");
+        }
+
+        private async Task EnsureCanManageEventMediaAsync(Events ev, int userId, string userRole)
+        {
+            if (!await _clubService.CanManageEventMediaAsync(ev.ClubId, userId, userRole))
                 throw new ForbiddenException("Not allowed");
         }
 
