@@ -25,7 +25,7 @@ namespace backend.main.features.payment
         }
 
         [Authorize]
-        [HttpPost("{eventId}")]
+        [HttpPost("{eventId:int}")]
         [ProducesResponseType(typeof(ApiResponse<PaymentResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> CreatePaymentSession(int eventId)
         {
@@ -53,7 +53,7 @@ namespace backend.main.features.payment
         }
 
         [Authorize]
-        [HttpGet("{paymentId}")]
+        [HttpGet("{paymentId:int}")]
         [ProducesResponseType(typeof(ApiResponse<PaymentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetPayment(int paymentId)
         {
@@ -105,6 +105,7 @@ namespace backend.main.features.payment
             }
         }
 
+        [AllowAnonymous]
         [HttpPost("webhook")]
         [RequestSizeLimit(65_536)]
         [Consumes("application/json")]
@@ -131,7 +132,7 @@ namespace backend.main.features.payment
         }
 
         [Authorize]
-        [HttpPost("{paymentId}/refund")]
+        [HttpPost("{paymentId:int}/refund")]
         [ProducesResponseType(typeof(ApiResponse<PaymentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> RefundPayment(int paymentId)
         {
