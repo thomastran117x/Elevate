@@ -3,15 +3,16 @@ using backend.main.features.events;
 namespace backend.main.features.events.versions.contracts.responses;
 
 public sealed record EventVersionSnapshotResponse(
-    string Name,
-    string Description,
-    string Location,
+    string? Name,
+    string? Description,
+    string? Location,
     bool IsPrivate,
     int MaxParticipants,
     int RegisterCost,
-    DateTime StartTime,
+    DateTime? StartTime,
     DateTime? EndTime,
     int ClubId,
+    EventLifecycleState LifecycleState,
     EventCategory Category,
     string? VenueName,
     string? City,

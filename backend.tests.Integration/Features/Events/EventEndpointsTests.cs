@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
+using backend.main.features.clubs.staff;
 using backend.main.features.events;
 using backend.main.features.events.contracts.responses;
 using backend.main.features.payment;
@@ -52,7 +53,8 @@ public class EventEndpointsTests
 
         created.StatusCode.Should().Be(HttpStatusCode.Created);
         var createdBody = await app.ReadApiResponseAsync<EventResponse>(created);
-        var ev = createdBody.Data!;
+        createdBody.Data!.LifecycleState.Should().Be(EventLifecycleState.Draft);
+        var ev = await PublishEventAsync(app, organizerSession.AccessToken, createdBody.Data!.Id);
         ev.Name.Should().Be("Board Game Night");
         ev.ImageUrls.Should().ContainSingle(url => url == image.PublicUrl);
 
@@ -151,6 +153,90 @@ public class EventEndpointsTests
         var detailAfterRemove = await app.Client.GetAsync($"/api/events/{ev.Id}");
         var detailAfterRemoveBody = await app.ReadApiResponseAsync<EventResponse>(detailAfterRemove);
         detailAfterRemoveBody.Data!.ImageUrls.Should().ContainSingle(url => url == firstImage.PublicUrl);
+    }
+
+    [Fact]
+    public async Task DraftEvent_ShouldStayPrivateUntilPublished_AndAppearInManageEndpoints()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, organizer) = await CreateUserSessionAsync(app, "events-draft-owner@example.com", "Organizer");
+        var (managerSession, manager) = await CreateUserSessionAsync(app, "events-draft-manager@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Draft Workflow Club");
+        await app.AddClubStaffAsync(club.Id, manager!.Id, organizer!.Id, ClubStaffRole.Manager);
+
+        var createResponse = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{club.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Draft First Showcase",
+                description = "This event starts life as a private organizer draft.",
+                location = "Student Center",
+                imageUrls = new[] { (await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id)).PublicUrl },
+                isPrivate = false,
+                maxParticipants = 50,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(7),
+                endTime = DateTime.UtcNow.AddDays(7).AddHours(2),
+                category = EventCategory.Other
+            })));
+
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = (await app.ReadApiResponseAsync<EventResponse>(createResponse)).Data!;
+        created.LifecycleState.Should().Be(EventLifecycleState.Draft);
+
+        var publicDetailBeforePublish = await app.Client.GetAsync($"/api/events/{created.Id}");
+        publicDetailBeforePublish.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var managerDetail = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/{created.Id}/manage",
+            managerSession.AccessToken));
+        managerDetail.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var managerList = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/clubs/{club.Id}/manage?page=1&pageSize=20",
+            managerSession.AccessToken));
+        managerList.StatusCode.Should().Be(HttpStatusCode.OK);
+        var managerListBody = await app.ReadApiResponseAsync<PagedResponse<ManagedEventResponse>>(managerList);
+        managerListBody.Data!.Items.Should().ContainSingle(item => item.Id == created.Id);
+
+        await PublishEventAsync(app, organizerSession.AccessToken, created.Id);
+
+        var publicDetailAfterPublish = await app.Client.GetAsync($"/api/events/{created.Id}");
+        publicDetailAfterPublish.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task ArchivedEvent_ShouldBeHiddenFromPublicDetail_ButRemainManageable()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-archive-owner@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Archive Workflow Club");
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Archive Candidate");
+
+        var archiveResponse = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/archive",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        archiveResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var archived = (await app.ReadApiResponseAsync<ManagedEventResponse>(archiveResponse)).Data!;
+        archived.LifecycleState.Should().Be(EventLifecycleState.Archived);
+
+        var publicDetail = await app.Client.GetAsync($"/api/events/{ev.Id}");
+        publicDetail.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var manageDetail = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/{ev.Id}/manage",
+            organizerSession.AccessToken));
+        manageDetail.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -475,7 +561,51 @@ public class EventEndpointsTests
                 tags = new[] { "testing" }
             })));
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        return (await app.ReadApiResponseAsync<EventResponse>(response)).Data!;
+        var created = (await app.ReadApiResponseAsync<EventResponse>(response)).Data!;
+        return await PublishEventAsync(app, accessToken, created.Id);
+    }
+
+    private static async Task<EventResponse> PublishEventAsync(
+        AuthApiTestApp app,
+        string accessToken,
+        int eventId)
+    {
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{eventId}/publish",
+            accessToken,
+            JsonContent.Create(new { })));
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        return (await app.ReadApiResponseAsync<ManagedEventResponse>(response)).Data switch
+        {
+            null => throw new InvalidOperationException("Publish response did not include event data."),
+            var managed => new EventResponse
+            {
+                Id = managed.Id,
+                Name = managed.Name ?? string.Empty,
+                Description = managed.Description ?? string.Empty,
+                Location = managed.Location ?? string.Empty,
+                ImageUrls = managed.ImageUrls,
+                IsPrivate = managed.IsPrivate,
+                MaxParticipants = managed.MaxParticipants ?? 0,
+                RegisterCost = managed.RegisterCost,
+                StartTime = managed.StartTime.HasValue ? managed.StartTime.Value : DateTime.UtcNow,
+                EndTime = managed.EndTime,
+                ClubId = managed.ClubId,
+                CurrentVersionNumber = managed.CurrentVersionNumber,
+                CreatedAt = managed.CreatedAt,
+                LifecycleState = managed.LifecycleState,
+                Status = managed.Status ?? EventStatus.Upcoming,
+                Category = managed.Category,
+                VenueName = managed.VenueName,
+                City = managed.City,
+                Latitude = managed.Latitude,
+                Longitude = managed.Longitude,
+                Tags = managed.Tags,
+                RegistrationCount = managed.RegistrationCount
+            }
+        };
     }
 
     private static HttpRequestMessage CreateAuthorizedRequest(

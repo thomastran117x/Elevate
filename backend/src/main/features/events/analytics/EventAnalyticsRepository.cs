@@ -67,9 +67,13 @@ namespace backend.main.features.events.analytics
                 .Select(g => new
                 {
                     Total = g.Count(),
-                    Upcoming = g.Count(e => e.StartTime > now),
-                    Ongoing = g.Count(e => e.StartTime <= now && (e.EndTime == null || e.EndTime > now)),
-                    Past = g.Count(e => e.EndTime != null && e.EndTime <= now)
+                    Draft = g.Count(e => e.LifecycleState == EventLifecycleState.Draft),
+                    Published = g.Count(e => e.LifecycleState == EventLifecycleState.Published),
+                    Cancelled = g.Count(e => e.LifecycleState == EventLifecycleState.Cancelled),
+                    Archived = g.Count(e => e.LifecycleState == EventLifecycleState.Archived),
+                    Upcoming = g.Count(e => e.LifecycleState == EventLifecycleState.Published && e.StartTime.HasValue && e.StartTime.Value > now),
+                    Ongoing = g.Count(e => e.LifecycleState == EventLifecycleState.Published && e.StartTime.HasValue && e.StartTime.Value <= now && (e.EndTime == null || e.EndTime > now)),
+                    Past = g.Count(e => e.LifecycleState == EventLifecycleState.Published && e.EndTime != null && e.EndTime <= now)
                 })
                 .FirstOrDefaultAsync();
 
@@ -79,7 +83,8 @@ namespace backend.main.features.events.analytics
                 .Where(e => e.ClubId == clubId)
                 .Select(e => new PerEventAnalytics(
                     e.Id,
-                    e.Name,
+                    e.Name ?? string.Empty,
+                    e.LifecycleState,
                     e.maxParticipants,
                     _context.EventRegistrations.Count(r => r.EventId == e.Id),
                     _context.Payments
@@ -192,6 +197,10 @@ namespace backend.main.features.events.analytics
 
             return new ClubAnalyticsData(
                 TotalEvents: eventStats?.Total ?? 0,
+                DraftEvents: eventStats?.Draft ?? 0,
+                PublishedEvents: eventStats?.Published ?? 0,
+                CancelledEvents: eventStats?.Cancelled ?? 0,
+                ArchivedEvents: eventStats?.Archived ?? 0,
                 UpcomingEvents: eventStats?.Upcoming ?? 0,
                 OngoingEvents: eventStats?.Ongoing ?? 0,
                 PastEvents: eventStats?.Past ?? 0,
@@ -207,4 +216,3 @@ namespace backend.main.features.events.analytics
         }
     }
 }
-

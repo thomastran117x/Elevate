@@ -254,6 +254,197 @@ namespace backend.main.features.events
             }
         }
 
+        [Authorize]
+        [HttpGet("clubs/{clubId}/manage")]
+        public async Task<IActionResult> GetManageableEventsByClub(
+            int clubId,
+            EventLifecycleState? lifecycleState = null,
+            int page = 1,
+            int pageSize = 20)
+        {
+            try
+            {
+                if (page < 1)
+                    return BadRequestResponse("page must be at least 1.");
+
+                if (pageSize < 1 || pageSize > 100)
+                    return BadRequestResponse("pageSize must be between 1 and 100.");
+
+                var user = User.GetUserPayload();
+                var (events, totalCount) = await _eventService.GetManageableEventsByClub(
+                    clubId,
+                    user.Id,
+                    user.Role,
+                    lifecycleState,
+                    page,
+                    pageSize);
+
+                var paged = new PagedResponse<ManagedEventResponse>(
+                    events.Select(MapManagedEvent),
+                    totalCount,
+                    page,
+                    pageSize
+                );
+
+                return Ok(new ApiResponse<PagedResponse<ManagedEventResponse>>(
+                    $"The manageable events for club {clubId} have been fetched successfully.",
+                    paged
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] GetManageableEventsByClub failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [HttpGet("{eventId}/manage")]
+        public async Task<IActionResult> GetManageableEvent(int eventId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+                var ev = await _eventService.GetManageableEvent(eventId, user.Id, user.Role);
+
+                return Ok(new ApiResponse<ManagedEventResponse>(
+                    $"The event with ID {eventId} has been fetched for management successfully.",
+                    MapManagedEvent(ev)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] GetManageableEvent failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [HttpPost("clubs/{clubId}/drafts")]
+        public async Task<IActionResult> CreateDraftEvent([FromBody] EventDraftUpsertRequest request, int clubId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+                var ev = await _eventService.CreateDraftEvent(clubId, user.Id, user.Role, request);
+
+                return StatusCode(201, new ApiResponse<ManagedEventResponse>(
+                    $"A draft event for club {clubId} has been created successfully.",
+                    MapManagedEvent(ev)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] CreateDraftEvent failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [HttpPatch("{eventId}/draft")]
+        public async Task<IActionResult> UpdateDraftEvent([FromBody] EventDraftUpsertRequest request, int eventId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+                var ev = await _eventService.UpdateDraftEvent(eventId, user.Id, user.Role, request);
+
+                return Ok(new ApiResponse<ManagedEventResponse>(
+                    $"The draft event with ID {eventId} has been updated successfully.",
+                    MapManagedEvent(ev)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] UpdateDraftEvent failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [HttpPost("{eventId}/publish")]
+        public async Task<IActionResult> PublishEvent(int eventId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+                var ev = await _eventService.PublishEvent(eventId, user.Id, user.Role);
+
+                return Ok(new ApiResponse<ManagedEventResponse>(
+                    $"The event with ID {eventId} has been published successfully.",
+                    MapManagedEvent(ev)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] PublishEvent failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [HttpPost("{eventId}/cancel")]
+        public async Task<IActionResult> CancelEvent(int eventId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+                var ev = await _eventService.CancelEvent(eventId, user.Id, user.Role);
+
+                return Ok(new ApiResponse<ManagedEventResponse>(
+                    $"The event with ID {eventId} has been cancelled successfully.",
+                    MapManagedEvent(ev)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] CancelEvent failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [HttpPost("{eventId}/archive")]
+        public async Task<IActionResult> ArchiveEvent(int eventId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+                var ev = await _eventService.ArchiveEvent(eventId, user.Id, user.Role);
+
+                return Ok(new ApiResponse<ManagedEventResponse>(
+                    $"The event with ID {eventId} has been archived successfully.",
+                    MapManagedEvent(ev)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] ArchiveEvent failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
         [HttpGet("{eventId}")]
         public async Task<IActionResult> GetEvent(int eventId)
         {
@@ -667,6 +858,7 @@ namespace backend.main.features.events
                     detail.Snapshot.StartTime,
                     detail.Snapshot.EndTime,
                     detail.Snapshot.ClubId,
+                    detail.Snapshot.LifecycleState,
                     detail.Snapshot.Category,
                     detail.Snapshot.VenueName,
                     detail.Snapshot.City,
@@ -678,6 +870,11 @@ namespace backend.main.features.events
 
         private static EventVersionFieldChangeResponse MapToFieldChangeResponse(EventVersionFieldChange change) =>
             new(change.Field, change.OldValue, change.NewValue);
+
+        private static ManagedEventResponse MapManagedEvent(Events ev) =>
+            EventMapper.MapToManagedResponse(
+                ev,
+                EventLifecyclePolicy.GetPublishIssues(ev, DateTime.UtcNow));
     }
 
     [ApiController]
@@ -706,5 +903,3 @@ namespace backend.main.features.events
         }
     }
 }
-
-

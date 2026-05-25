@@ -42,6 +42,14 @@ namespace backend.main.features.events
             int page = 1,
             int pageSize = 20
         );
+        Task<(List<Events> Events, int TotalCount)> GetManageableEventsByClub(
+            int clubId,
+            int userId,
+            string userRole,
+            EventLifecycleState? lifecycleState = null,
+            int page = 1,
+            int pageSize = 20);
+        Task<Events> GetManageableEvent(int eventId, int userId, string userRole);
 
         Task<Events> UpdateEvent(
             int eventId,
@@ -63,6 +71,11 @@ namespace backend.main.features.events
             double? longitude,
             List<string>? tags
         );
+        Task<Events> CreateDraftEvent(int clubId, int userId, string userRole, EventDraftUpsertRequest request);
+        Task<Events> UpdateDraftEvent(int eventId, int userId, string userRole, EventDraftUpsertRequest request);
+        Task<Events> PublishEvent(int eventId, int userId, string userRole);
+        Task<Events> CancelEvent(int eventId, int userId, string userRole);
+        Task<Events> ArchiveEvent(int eventId, int userId, string userRole);
 
         Task DeleteEvent(int eventId, int userId, string userRole);
 
@@ -109,5 +122,4 @@ namespace backend.main.features.events
             string userRole);
     }
 }
-
 

@@ -19,6 +19,7 @@ namespace backend.main.features.events.search
         {
             get; set;
         }
+        public string LifecycleState { get; set; } = string.Empty;
         public DateTime StartTime
         {
             get; set;
@@ -56,4 +57,3 @@ namespace backend.main.features.events.search
         }
     }
 }
-

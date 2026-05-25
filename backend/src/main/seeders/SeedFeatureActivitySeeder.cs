@@ -207,7 +207,7 @@ public sealed class SeedFeatureActivitySeeder : ISeeder
                 {
                     EventId = ev.Id,
                     UserId = usersByEmail[definition.UserEmail].Id,
-                    CreatedAt = ev.StartTime.AddDays(-Math.Abs(definition.DayOffset + 2)).AddMinutes(index)
+                    CreatedAt = ev.StartTime!.Value.AddDays(-Math.Abs(definition.DayOffset + 2)).AddMinutes(index)
                 };
             })
             .ToList();
@@ -219,7 +219,7 @@ public sealed class SeedFeatureActivitySeeder : ISeeder
                 var ev = club.PublicEvents.Single(entry => string.Equals(entry.Name, definition.EventName, StringComparison.OrdinalIgnoreCase));
                 var seedKey = $"{definition.ClubSlug}|{definition.EventName}|{definition.UserEmail}|{definition.Status}";
                 var token = ComputeStableHash(seedKey);
-                var createdAt = ev.StartTime.AddDays(-Math.Abs(definition.DayOffset + 3)).AddMinutes(index + 2);
+                var createdAt = ev.StartTime!.Value.AddDays(-Math.Abs(definition.DayOffset + 3)).AddMinutes(index + 2);
 
                 return new Payment
                 {
@@ -246,7 +246,7 @@ public sealed class SeedFeatureActivitySeeder : ISeeder
             {
                 var club = resolvedClubs.Single(entry => entry.Definition.Slug == definition.ClubSlug);
                 var ev = club.PrivateEvents.Single(entry => string.Equals(entry.Name, definition.EventName, StringComparison.OrdinalIgnoreCase));
-                var createdAt = ev.StartTime.AddDays(-Math.Abs(definition.DayOffset + 4));
+                var createdAt = ev.StartTime!.Value.AddDays(-Math.Abs(definition.DayOffset + 4));
                 var link = new EventInvitationLink
                 {
                     EventId = ev.Id,
@@ -272,7 +272,7 @@ public sealed class SeedFeatureActivitySeeder : ISeeder
                 var club = resolvedClubs.Single(entry => entry.Definition.Slug == definition.ClubSlug);
                 var ev = club.PrivateEvents.Single(entry => string.Equals(entry.Name, definition.EventName, StringComparison.OrdinalIgnoreCase));
                 var recipientEmail = definition.RecipientEmail ?? definition.RecipientUserEmail;
-                var createdAt = ev.StartTime.AddDays(-Math.Abs(definition.DayOffset + 5)).AddMinutes(index + 1);
+                var createdAt = ev.StartTime!.Value.AddDays(-Math.Abs(definition.DayOffset + 5)).AddMinutes(index + 1);
                 var acceptedAt = definition.LifecycleStatus == EventInvitationLifecycleStatus.Accepted ? createdAt.AddHours(12) : (DateTime?)null;
                 var declinedAt = definition.LifecycleStatus == EventInvitationLifecycleStatus.Declined ? createdAt.AddHours(10) : (DateTime?)null;
                 var revokedAt = definition.IsRevoked ? createdAt.AddHours(8) : (DateTime?)null;

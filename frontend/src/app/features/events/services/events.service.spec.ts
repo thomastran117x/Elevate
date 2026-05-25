@@ -134,6 +134,7 @@ describe('EventsService', () => {
           endTime: '2026-05-20T21:00:00Z',
           clubId: 7,
           createdAt: '2026-05-01T12:00:00Z',
+          lifecycleState: 'Published',
           status: 'Upcoming',
           category: 'Workshop',
           venueName: 'Main Hall',
@@ -198,6 +199,7 @@ describe('EventsService', () => {
       items: [
         jasmine.objectContaining({
           id: 7,
+          lifecycleState: 'Published',
           status: 'Upcoming',
           category: 'Social',
         }),
@@ -278,6 +280,7 @@ describe('EventsService', () => {
       endTime: '2026-05-20T21:00:00Z',
       clubId: 7,
       createdAt: '2026-05-01T12:00:00Z',
+      lifecycleState: 'Published',
       status: 'Upcoming',
       category: 'Workshop',
       venueName: 'Main Hall',

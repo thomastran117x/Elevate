@@ -198,6 +198,10 @@ namespace backend.main.infrastructure.database.core
                 .HasMaxLength(100);
 
             modelBuilder.Entity<Events>()
+                .Property(e => e.LifecycleState)
+                .HasConversion<int>();
+
+            modelBuilder.Entity<Events>()
                 .HasIndex(e => e.Category);
 
             modelBuilder.Entity<Events>()

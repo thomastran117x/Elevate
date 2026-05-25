@@ -2,15 +2,15 @@ namespace backend.main.features.events.versions;
 
 public sealed class EventVersionSnapshot
 {
-    public required string Name
+    public string? Name
     {
         get; init;
     }
-    public required string Description
+    public string? Description
     {
         get; init;
     }
-    public required string Location
+    public string? Location
     {
         get; init;
     }
@@ -26,7 +26,7 @@ public sealed class EventVersionSnapshot
     {
         get; init;
     }
-    public DateTime StartTime
+    public DateTime? StartTime
     {
         get; init;
     }
@@ -35,6 +35,10 @@ public sealed class EventVersionSnapshot
         get; init;
     }
     public int ClubId
+    {
+        get; init;
+    }
+    public EventLifecycleState LifecycleState
     {
         get; init;
     }

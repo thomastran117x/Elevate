@@ -19,6 +19,7 @@ namespace backend.main.features.events.analytics
     public record PerEventAnalytics(
         int EventId,
         string EventName,
+        EventLifecycleState LifecycleState,
         int MaxParticipants,
         int RegistrationCount,
         long Revenue
@@ -26,6 +27,10 @@ namespace backend.main.features.events.analytics
 
     public record ClubAnalyticsData(
         int TotalEvents,
+        int DraftEvents,
+        int PublishedEvents,
+        int CancelledEvents,
+        int ArchivedEvents,
         int UpcomingEvents,
         int OngoingEvents,
         int PastEvents,

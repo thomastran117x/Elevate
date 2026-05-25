@@ -12,7 +12,11 @@ namespace backend.main.features.events.search
         {
             get; init;
         }
-        public bool IsPrivate
+        public bool? IsPrivate
+        {
+            get; init;
+        }
+        public EventLifecycleState? LifecycleState
         {
             get; init;
         }
@@ -49,5 +53,4 @@ namespace backend.main.features.events.search
         public int PageSize { get; init; } = 20;
     }
 }
-
 

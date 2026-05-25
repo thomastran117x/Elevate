@@ -32,6 +32,10 @@ namespace backend.main.features.events.search
         {
             get; init;
         }
+        public EventLifecycleState? LifecycleState
+        {
+            get; init;
+        }
         public DateTime? StartTime
         {
             get; init;
@@ -79,5 +83,4 @@ namespace backend.main.features.events.search
         }
     }
 }
-
 

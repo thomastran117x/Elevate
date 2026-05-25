@@ -75,6 +75,14 @@
       <div *ngIf="event && !loading" class="mt-8 grid gap-6 lg:grid-cols-12">
         <div class="lg:col-span-7 space-y-4">
           <div
+            *ngIf="event.lifecycleState === 'Cancelled'"
+            class="rounded-3xl border border-rose-400/30 bg-rose-500/10 p-5 text-sm text-rose-100"
+          >
+            This event has been cancelled. The details remain available here for attendees and
+            organizers, but it is no longer an active listing.
+          </div>
+
+          <div
             class="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl shadow-fuchsia-500/10"
           >
             <div

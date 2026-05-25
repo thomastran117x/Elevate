@@ -94,6 +94,10 @@ namespace backend.main.features.events.contracts.responses
         {
             get; set;
         }
+        public EventLifecycleState LifecycleState
+        {
+            get; set;
+        }
         public EventStatus Status
         {
             get; set;
@@ -139,5 +143,4 @@ namespace backend.main.features.events.contracts.responses
         }
     }
 }
-
 

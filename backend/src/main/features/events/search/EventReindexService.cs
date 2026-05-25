@@ -41,10 +41,13 @@ namespace backend.main.features.events.search
                     if (events.Count == 0)
                         break;
 
-                    var documents = events.Select(EventSearchDocumentMapper.ToDocument);
+                    var publishable = events
+                        .Where(e => EventLifecyclePolicy.IsVisibleInPublicListings(e.LifecycleState))
+                        .ToList();
+                    var documents = publishable.Select(EventSearchDocumentMapper.ToDocument);
 
                     await _searchService.BulkIndexAsync(documents, token);
-                    totalIndexed += events.Count;
+                    totalIndexed += publishable.Count;
                     page++;
 
                     if (events.Count < BatchSize)

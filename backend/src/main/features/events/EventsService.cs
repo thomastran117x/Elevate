@@ -131,6 +131,7 @@ namespace backend.main.features.events
                     maxParticipants = maxParticipants,
                     registerCost = registerCost,
                     ClubId = clubId,
+                    LifecycleState = EventLifecycleState.Draft,
                     Category = category,
                     VenueName = venueName,
                     City = city,
@@ -157,7 +158,7 @@ namespace backend.main.features.events
                     createdAt: now);
 
                 await _imageRepository.AddImagesAsync(created.Id, requestedImageUrls);
-                _outboxWriter.StageUpsert(created);
+                _outboxWriter.StageSync(created);
 
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -323,6 +324,7 @@ namespace backend.main.features.events
                     Query = null,
                     ClubId = clubId,
                     IsPrivate = false,
+                    LifecycleState = EventLifecycleState.Published,
                     Status = status,
                     Page = page,
                     PageSize = pageSize
@@ -339,6 +341,248 @@ namespace backend.main.features.events
                 throw new InternalServerErrorException();
             }
         }
+
+        public async Task<(List<Events> Events, int TotalCount)> GetManageableEventsByClub(
+            int clubId,
+            int userId,
+            string userRole,
+            EventLifecycleState? lifecycleState = null,
+            int page = 1,
+            int pageSize = 20)
+        {
+            try
+            {
+                await EnsureCanManageClubAsync(clubId, userId, userRole);
+
+                var criteria = new EventSearchCriteria
+                {
+                    ClubId = clubId,
+                    LifecycleState = lifecycleState,
+                    Page = NormalizePage(page),
+                    PageSize = NormalizePageSize(pageSize),
+                    SortBy = EventSortBy.Date
+                };
+
+                var (events, totalCount) = await _eventsRepository.SearchAsync(criteria);
+                return (events, totalCount);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] GetManageableEventsByClub failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<Events> GetManageableEvent(int eventId, int userId, string userRole)
+        {
+            try
+            {
+                var ev = await GetEvent(eventId);
+                await EnsureCanManageEventAsync(ev, userId, userRole);
+                return ev;
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] GetManageableEvent failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<Events> CreateDraftEvent(int clubId, int userId, string userRole, EventDraftUpsertRequest request)
+        {
+            try
+            {
+                await EnsureCanManageClubAsync(clubId, userId, userRole);
+
+                var requestedImageUrls = request.ImageUrls?.Take(5).ToList() ?? [];
+                await ValidateUploadedImageUrlsAsync(clubId, userId, requestedImageUrls);
+
+                var now = GetUtcNow();
+                var ev = new Events
+                {
+                    Name = request.Name?.Trim(),
+                    Description = request.Description?.Trim(),
+                    Location = request.Location?.Trim(),
+                    isPrivate = request.IsPrivate ?? false,
+                    maxParticipants = request.MaxParticipants ?? 0,
+                    registerCost = request.RegisterCost ?? 0,
+                    StartTime = request.StartTime,
+                    EndTime = request.EndTime,
+                    ClubId = clubId,
+                    LifecycleState = EventLifecycleState.Draft,
+                    Category = request.Category ?? EventCategory.Other,
+                    VenueName = request.VenueName?.Trim(),
+                    City = request.City?.Trim(),
+                    Latitude = request.Latitude,
+                    Longitude = request.Longitude,
+                    Tags = NormalizeTags(request.Tags),
+                    CurrentVersionNumber = 1,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+
+                var created = await _eventsRepository.CreateAsync(ev);
+                await _db.SaveChangesAsync();
+
+                AddVersionRecord(
+                    created,
+                    EventVersionActions.Create,
+                    actorUserId: userId,
+                    actorRole: NormalizeActorRole(userRole),
+                    rollbackSourceVersionNumber: null,
+                    changedFields: BuildChangedFields(null, BuildSnapshot(created)),
+                    createdAt: now);
+
+                if (requestedImageUrls.Count > 0)
+                    await _imageRepository.AddImagesAsync(created.Id, requestedImageUrls);
+
+                _outboxWriter.StageSync(created);
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var withImages = await _eventsRepository.GetByIdAsync(created.Id)
+                    ?? throw new InternalServerErrorException("Failed to reload created draft event");
+
+                await CacheEventAsync(withImages);
+                await BumpEventListVersionAsync();
+
+                return withImages;
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] CreateDraftEvent failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<Events> UpdateDraftEvent(int eventId, int userId, string userRole, EventDraftUpsertRequest request)
+        {
+            try
+            {
+                var existing = await GetTrackedEventOrThrowAsync(eventId);
+                await EnsureCanManageEventAsync(existing, userId, userRole);
+
+                var previousSnapshot = BuildSnapshot(existing);
+                var now = GetUtcNow();
+
+                List<string>? oldUrls = null;
+                List<string>? removedUrls = null;
+                var requestedImageUrls = request.ImageUrls?.Take(5).ToList();
+
+                if (requestedImageUrls != null)
+                {
+                    var existingUrls = existing.Images
+                        .Select(i => i.ImageUrl)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    await ValidateUploadedImageUrlsAsync(
+                        existing.ClubId,
+                        userId,
+                        requestedImageUrls,
+                        eventId,
+                        existingUrls);
+
+                    oldUrls = existing.Images.Select(i => i.ImageUrl).ToList();
+                    removedUrls = oldUrls
+                        .Except(requestedImageUrls, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                }
+
+                if (request.Name != null)
+                    existing.Name = request.Name.Trim();
+                if (request.Description != null)
+                    existing.Description = request.Description.Trim();
+                if (request.Location != null)
+                    existing.Location = request.Location.Trim();
+                if (request.IsPrivate.HasValue)
+                    existing.isPrivate = request.IsPrivate.Value;
+                if (request.MaxParticipants.HasValue)
+                    existing.maxParticipants = request.MaxParticipants.Value;
+                if (request.RegisterCost.HasValue)
+                    existing.registerCost = request.RegisterCost.Value;
+                if (request.StartTime.HasValue)
+                    existing.StartTime = request.StartTime.Value;
+                if (request.EndTime.HasValue || request.StartTime.HasValue)
+                    existing.EndTime = request.EndTime;
+                if (request.Category.HasValue)
+                    existing.Category = request.Category.Value;
+                if (request.VenueName != null)
+                    existing.VenueName = request.VenueName.Trim();
+                if (request.City != null)
+                    existing.City = request.City.Trim();
+                if (request.Latitude.HasValue || request.Longitude.HasValue)
+                {
+                    existing.Latitude = request.Latitude;
+                    existing.Longitude = request.Longitude;
+                }
+                if (request.Tags != null)
+                    existing.Tags = NormalizeTags(request.Tags);
+
+                existing.CurrentVersionNumber += 1;
+                existing.UpdatedAt = now;
+
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+
+                if (requestedImageUrls != null)
+                {
+                    await _imageRepository.DeleteAllByEventIdAsync(eventId);
+                    if (requestedImageUrls.Count > 0)
+                        await _imageRepository.AddImagesAsync(eventId, requestedImageUrls);
+                }
+
+                AddVersionRecord(
+                    existing,
+                    EventVersionActions.Update,
+                    actorUserId: userId,
+                    actorRole: NormalizeActorRole(userRole),
+                    rollbackSourceVersionNumber: null,
+                    changedFields: BuildChangedFields(previousSnapshot, BuildSnapshot(existing)),
+                    createdAt: now);
+
+                _outboxWriter.StageSync(existing);
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var withImages = await _eventsRepository.GetByIdAsync(eventId)
+                    ?? throw new InternalServerErrorException("Failed to reload updated draft event");
+
+                if (removedUrls != null && removedUrls.Count > 0)
+                    _ = Task.WhenAll(removedUrls.Select(u => _blobService.DeleteBlobAsync(u)));
+
+                await CacheEventAsync(withImages);
+                await BumpEventListVersionAsync();
+
+                return withImages;
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] UpdateDraftEvent failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public Task<Events> PublishEvent(int eventId, int userId, string userRole) =>
+            TransitionLifecycleAsync(eventId, userId, userRole, EventLifecycleState.Published, EventVersionActions.Publish);
+
+        public Task<Events> CancelEvent(int eventId, int userId, string userRole) =>
+            TransitionLifecycleAsync(eventId, userId, userRole, EventLifecycleState.Cancelled, EventVersionActions.Cancel);
+
+        public Task<Events> ArchiveEvent(int eventId, int userId, string userRole) =>
+            TransitionLifecycleAsync(eventId, userId, userRole, EventLifecycleState.Archived, EventVersionActions.Archive);
 
         public async Task<Events> UpdateEvent(
             int eventId,
@@ -427,7 +671,7 @@ namespace backend.main.features.events
                     changedFields: changedFields,
                     createdAt: existing.UpdatedAt);
 
-                _outboxWriter.StageUpsert(existing);
+                _outboxWriter.StageSync(existing);
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -607,6 +851,7 @@ namespace backend.main.features.events
                     maxParticipants = item.MaxParticipants,
                     registerCost = item.RegisterCost,
                     ClubId = clubId,
+                    LifecycleState = EventLifecycleState.Published,
                     Category = item.Category,
                     VenueName = item.VenueName,
                     City = item.City,
@@ -634,7 +879,7 @@ namespace backend.main.features.events
                         changedFields: BuildChangedFields(null, BuildSnapshot(ev)),
                         createdAt: now);
                     await _imageRepository.AddImagesAsync(ev.Id, item.ImageUrls.Take(5));
-                    _outboxWriter.StageUpsert(ev);
+                    _outboxWriter.StageSync(ev);
                 }
 
                 await _db.SaveChangesAsync();
@@ -691,11 +936,21 @@ namespace backend.main.features.events
                 foreach (var item in itemList)
                 {
                     var ev = trackedEvents[item.EventId];
+                    if (ev.LifecycleState == EventLifecycleState.Draft)
+                        throw new BadRequestException($"Event {ev.Id} must be updated through the draft workflow.");
+
                     var previousSnapshot = BuildSnapshot(ev);
 
                     ApplyBatchPatch(ev, item);
                     ev.CurrentVersionNumber += 1;
                     ev.UpdatedAt = now;
+
+                    var publishIssues = EventLifecyclePolicy.GetPublishIssues(ev, now);
+                    if (publishIssues.Count > 0)
+                    {
+                        throw new BadRequestException(
+                            $"Event {ev.Id} is not publish-ready: {string.Join(" ", publishIssues)}");
+                    }
 
                     AddVersionRecord(
                         ev,
@@ -706,7 +961,7 @@ namespace backend.main.features.events
                         changedFields: BuildChangedFields(previousSnapshot, BuildSnapshot(ev)),
                         createdAt: now);
 
-                    _outboxWriter.StageUpsert(ev);
+                    _outboxWriter.StageSync(ev);
                 }
 
                 await _db.SaveChangesAsync();
@@ -900,7 +1155,7 @@ namespace backend.main.features.events
                     changedFields: changedFields,
                     createdAt: ev.UpdatedAt);
 
-                _outboxWriter.StageUpsert(ev);
+                _outboxWriter.StageSync(ev);
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -931,8 +1186,8 @@ namespace backend.main.features.events
             {
                 if (eventId.HasValue)
                 {
-                    await EnsureCanManageEventMediaAsync(clubId, userId, userRole);
                     var ev = await GetEvent(eventId.Value);
+                    await EnsureCanManageEventAsync(ev, userId, userRole);
                     if (ev.ClubId != clubId)
                         throw new ForbiddenException("Not allowed");
                 }
@@ -984,7 +1239,7 @@ namespace backend.main.features.events
             try
             {
                 var ev = await GetEvent(eventId);
-                await EnsureCanManageEventMediaAsync(ev.ClubId, userId, userRole);
+                await EnsureCanManageEventAsync(ev, userId, userRole);
 
                 await ValidateUploadedImageUrlsAsync(ev.ClubId, userId, new[] { imageUrl }, eventId);
 
@@ -1015,7 +1270,7 @@ namespace backend.main.features.events
             try
             {
                 var ev = await GetEvent(eventId);
-                await EnsureCanManageEventMediaAsync(ev.ClubId, userId, userRole);
+                await EnsureCanManageEventAsync(ev, userId, userRole);
 
                 var image = await _imageRepository.GetByIdAsync(imageId, eventId)
                     ?? throw new ResourceNotFoundException(
@@ -1055,7 +1310,8 @@ namespace backend.main.features.events
                 return new EventAnalyticsResponse
                 {
                     EventId = ev.Id,
-                    EventName = ev.Name,
+                    EventName = ev.Name ?? string.Empty,
+                    LifecycleState = ev.LifecycleState,
                     RegistrationCount = data.RegistrationCount,
                     MaxParticipants = ev.maxParticipants,
                     FillRate = fillRate,
@@ -1127,6 +1383,10 @@ namespace backend.main.features.events
                 {
                     ClubId = clubId,
                     TotalEvents = data.TotalEvents,
+                    DraftEvents = data.DraftEvents,
+                    PublishedEvents = data.PublishedEvents,
+                    CancelledEvents = data.CancelledEvents,
+                    ArchivedEvents = data.ArchivedEvents,
                     UpcomingEvents = data.UpcomingEvents,
                     OngoingEvents = data.OngoingEvents,
                     PastEvents = data.PastEvents,
@@ -1157,6 +1417,73 @@ namespace backend.main.features.events
             }
         }
 
+        private async Task<Events> TransitionLifecycleAsync(
+            int eventId,
+            int userId,
+            string userRole,
+            EventLifecycleState targetState,
+            string versionAction)
+        {
+            try
+            {
+                var ev = await GetTrackedEventOrThrowAsync(eventId);
+                await EnsureCanManageEventAsync(ev, userId, userRole);
+
+                if (!EventLifecyclePolicy.CanTransition(ev.LifecycleState, targetState))
+                {
+                    throw new BadRequestException(
+                        $"Cannot transition an event from {ev.LifecycleState} to {targetState}.");
+                }
+
+                var now = GetUtcNow();
+                var previousSnapshot = BuildSnapshot(ev);
+
+                if (targetState == EventLifecycleState.Published)
+                {
+                    var publishIssues = EventLifecyclePolicy.GetPublishIssues(ev, now);
+                    if (publishIssues.Count > 0)
+                    {
+                        throw new BadRequestException(
+                            $"This event is not ready to publish. {string.Join(" ", publishIssues)}");
+                    }
+                }
+
+                ev.LifecycleState = targetState;
+                ev.CurrentVersionNumber += 1;
+                ev.UpdatedAt = now;
+
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+
+                AddVersionRecord(
+                    ev,
+                    versionAction,
+                    actorUserId: userId,
+                    actorRole: NormalizeActorRole(userRole),
+                    rollbackSourceVersionNumber: null,
+                    changedFields: BuildChangedFields(previousSnapshot, BuildSnapshot(ev)),
+                    createdAt: now);
+
+                _outboxWriter.StageSync(ev);
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var withImages = await _eventsRepository.GetByIdAsync(eventId)
+                    ?? throw new InternalServerErrorException("Failed to reload lifecycle transition result.");
+
+                await CacheEventAsync(withImages);
+                await BumpEventListVersionAsync();
+                return withImages;
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] TransitionLifecycleAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
         private async Task<Events> GetTrackedEventOrThrowAsync(int eventId)
         {
             return await _db.Events
@@ -1183,13 +1510,6 @@ namespace backend.main.features.events
         {
             var club = await _clubService.GetClub(clubId);
             if (!await _clubService.CanManageClubAsync(club.Id, userId, userRole))
-                throw new ForbiddenException("Not allowed");
-        }
-
-        private async Task EnsureCanManageEventMediaAsync(int clubId, int userId, string userRole)
-        {
-            var club = await _clubService.GetClub(clubId);
-            if (!await _clubService.CanManageEventMediaAsync(club.Id, userId, userRole))
                 throw new ForbiddenException("Not allowed");
         }
 
@@ -1240,6 +1560,7 @@ namespace backend.main.features.events
             StartTime = ev.StartTime,
             EndTime = ev.EndTime,
             ClubId = ev.ClubId,
+            LifecycleState = ev.LifecycleState,
             Category = ev.Category,
             VenueName = ev.VenueName,
             City = ev.City,
@@ -1259,6 +1580,7 @@ namespace backend.main.features.events
             ev.StartTime = snapshot.StartTime;
             ev.EndTime = snapshot.EndTime;
             ev.ClubId = snapshot.ClubId;
+            ev.LifecycleState = snapshot.LifecycleState;
             ev.Category = snapshot.Category;
             ev.VenueName = snapshot.VenueName;
             ev.City = snapshot.City;
@@ -1314,6 +1636,7 @@ namespace backend.main.features.events
             AddChange(changes, "startTime", previous?.StartTime, current.StartTime);
             AddChange(changes, "endTime", previous?.EndTime, current.EndTime);
             AddChange(changes, "clubId", previous?.ClubId, current.ClubId);
+            AddChange(changes, "lifecycleState", previous?.LifecycleState, current.LifecycleState);
             AddChange(changes, "category", previous?.Category, current.Category);
             AddChange(changes, "venueName", previous?.VenueName, current.VenueName);
             AddChange(changes, "city", previous?.City, current.City);
@@ -1379,23 +1702,6 @@ namespace backend.main.features.events
             ICollection<EventVersionFieldChange> changes,
             string field,
             DateTime? oldValue,
-            DateTime newValue)
-        {
-            if (oldValue.HasValue && oldValue.Value == newValue)
-                return;
-
-            changes.Add(new EventVersionFieldChange
-            {
-                Field = field,
-                OldValue = oldValue?.ToString("O", CultureInfo.InvariantCulture),
-                NewValue = newValue.ToString("O", CultureInfo.InvariantCulture)
-            });
-        }
-
-        private static void AddChange(
-            ICollection<EventVersionFieldChange> changes,
-            string field,
-            DateTime? oldValue,
             DateTime? newValue)
         {
             if (oldValue == newValue)
@@ -1406,6 +1712,23 @@ namespace backend.main.features.events
                 Field = field,
                 OldValue = oldValue?.ToString("O", CultureInfo.InvariantCulture),
                 NewValue = newValue?.ToString("O", CultureInfo.InvariantCulture)
+            });
+        }
+
+        private static void AddChange(
+            ICollection<EventVersionFieldChange> changes,
+            string field,
+            EventLifecycleState? oldValue,
+            EventLifecycleState newValue)
+        {
+            if (oldValue.HasValue && oldValue.Value == newValue)
+                return;
+
+            changes.Add(new EventVersionFieldChange
+            {
+                Field = field,
+                OldValue = oldValue?.ToString(),
+                NewValue = newValue.ToString()
             });
         }
 
@@ -1621,6 +1944,9 @@ namespace backend.main.features.events
         private async Task<bool> CanViewEventAsync(Events ev, int? userId, string? userRole)
         {
             // This is the single visibility policy for private event reads across public endpoints.
+            if (!EventLifecyclePolicy.IsVisibleInPublicDetail(ev.LifecycleState))
+                return false;
+
             if (!ev.isPrivate)
                 return true;
 
@@ -1657,7 +1983,7 @@ namespace backend.main.features.events
                 if (ev == null)
                     return;
 
-                _outboxWriter.StageUpsert(ev);
+                _outboxWriter.StageSync(ev);
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
                 await _cache.DeleteKeyAsync($"event:{eventId}");
@@ -1702,6 +2028,3 @@ namespace backend.main.features.events
         }
     }
 }
-
-
-
