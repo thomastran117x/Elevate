@@ -102,6 +102,46 @@ public class PublicEventSearchCriteriaFactoryTests
     }
 
     [Fact]
+    public void FromQuery_ShouldRejectPrivateSearch()
+    {
+        var act = () => PublicEventSearchCriteriaFactory.FromQuery(
+            "invite only",
+            true,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            EventSortBy.Relevance,
+            1,
+            20);
+
+        act.Should()
+            .Throw<BadRequestException>()
+            .WithMessage("Private events are not available through the public events endpoint.");
+    }
+
+    [Fact]
+    public void FromRequest_ShouldRejectPrivateSearch()
+    {
+        var request = new EventSearchRequest
+        {
+            Filters = new EventSearchFilters
+            {
+                IsPrivate = true
+            }
+        };
+
+        var act = () => PublicEventSearchCriteriaFactory.FromRequest(request);
+
+        act.Should()
+            .Throw<BadRequestException>()
+            .WithMessage("Private events are not available through the public events endpoint.");
+    }
+
+    [Fact]
     public void ValidateRequest_ShouldRejectTooManyTagsAndPrivateSearch()
     {
         var request = new EventSearchRequest

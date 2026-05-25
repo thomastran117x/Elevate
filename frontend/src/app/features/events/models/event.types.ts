@@ -85,7 +85,6 @@ export interface EventSearchParams {
   category?: EventCategory;
   status?: EventStatus;
   sortBy?: EventSortBy;
-  isPrivate?: boolean;
   tags?: string;
   lat?: number;
   lng?: number;

@@ -1620,6 +1620,7 @@ namespace backend.main.features.events
 
         private async Task<bool> CanViewEventAsync(Events ev, int? userId, string? userRole)
         {
+            // This is the single visibility policy for private event reads across public endpoints.
             if (!ev.isPrivate)
                 return true;
 

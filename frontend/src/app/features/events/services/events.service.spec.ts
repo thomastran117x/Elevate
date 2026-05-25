@@ -52,6 +52,22 @@ describe('EventsService', () => {
     expect(request.request.params.get('radiusKm')).toBe('25');
     expect(request.request.params.get('page')).toBe('2');
     expect(request.request.params.get('pageSize')).toBe('12');
+    expect(request.request.params.has('isPrivate')).toBeFalse();
+
+    request.flush({ success: true, message: 'ok', data: null, error: null, meta: null });
+  });
+
+  it('does not serialize private visibility flags for public discovery', () => {
+    const unsafeParams = { page: 1, pageSize: 20, isPrivate: true } as unknown as Parameters<
+      EventsService['getEvents']
+    >[0];
+
+    service.getEvents(unsafeParams).subscribe();
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/events'));
+
+    expect(request.request.method).toBe('GET');
+    expect(request.request.params.has('isPrivate')).toBeFalse();
 
     request.flush({ success: true, message: 'ok', data: null, error: null, meta: null });
   });
