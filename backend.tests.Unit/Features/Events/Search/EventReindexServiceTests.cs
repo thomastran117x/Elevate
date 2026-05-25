@@ -58,6 +58,7 @@ public class EventReindexServiceTests
         Category = EventCategory.Fitness,
         StartTime = new DateTime(2026, 5, 10, 18, 0, 0, DateTimeKind.Utc),
         EndTime = new DateTime(2026, 5, 10, 20, 0, 0, DateTimeKind.Utc),
+        LifecycleState = EventLifecycleState.Published,
         CreatedAt = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc),
         UpdatedAt = new DateTime(2026, 5, 2, 0, 0, 0, DateTimeKind.Utc),
         Tags = ["fitness", "community"],
