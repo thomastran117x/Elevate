@@ -3,6 +3,10 @@
     "angular-cli": {
       "command": "npx",
       "args": ["ng", "mcp"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp"]
     }
   }
 }
