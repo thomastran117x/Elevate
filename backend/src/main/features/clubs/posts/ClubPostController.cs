@@ -45,6 +45,28 @@ namespace backend.main.features.clubs.posts
         }
 
         [AllowAnonymous]
+        [HttpGet("{clubId}/posts/{id}")]
+        [ProducesResponseType(typeof(ApiResponse<ClubPostResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetPost(int clubId, int id)
+        {
+            int? userId = null;
+            string? userRole = null;
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                var p = User.GetUserPayload();
+                userId = p.Id;
+                userRole = p.Role;
+            }
+
+            var (post, author) = await _postService.GetByIdAsync(clubId, id, userId, userRole);
+
+            return StatusCode(200, new ApiResponse<ClubPostResponse>(
+                $"Post with ID {id} has been fetched successfully.",
+                MapToResponse(post, author)
+            ));
+        }
+
+        [AllowAnonymous]
         [HttpGet("{clubId}/posts")]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubPostResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetPosts(

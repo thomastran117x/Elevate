@@ -1,3 +1,4 @@
+using backend.main.features.cache;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.profile;
@@ -12,6 +13,11 @@ namespace backend.main.features.clubs.posts
 {
     public class ClubPostService : IClubPostService
     {
+        private static readonly TimeSpan PostTTL = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan NotFoundTTL = TimeSpan.FromSeconds(15);
+
+        private static string PostCacheKey(int postId) => $"post:{postId}";
+
         private readonly AppDatabaseContext _db;
         private readonly IClubPostRepository _postRepository;
         private readonly IClubService _clubService;
@@ -19,6 +25,7 @@ namespace backend.main.features.clubs.posts
         private readonly IClubPostSearchService _searchService;
         private readonly IClubPostSearchOutboxWriter _outboxWriter;
         private readonly IUserRepository _userRepository;
+        private readonly IRefreshAheadCache _cache;
 
         public ClubPostService(
             AppDatabaseContext db,
@@ -27,7 +34,8 @@ namespace backend.main.features.clubs.posts
             IFollowRepository followRepository,
             IClubPostSearchService searchService,
             IClubPostSearchOutboxWriter outboxWriter,
-            IUserRepository userRepository)
+            IUserRepository userRepository,
+            IRefreshAheadCache cache)
         {
             _db = db;
             _postRepository = postRepository;
@@ -36,6 +44,7 @@ namespace backend.main.features.clubs.posts
             _searchService = searchService;
             _outboxWriter = outboxWriter;
             _userRepository = userRepository;
+            _cache = cache;
         }
 
         public async Task<ClubPost> CreateAsync(int clubId, int userId, string userRole, string title, string content, PostType postType, bool isPinned)
@@ -63,6 +72,38 @@ namespace backend.main.features.clubs.posts
             await transaction.CommitAsync();
 
             return post;
+        }
+
+        public async Task<(ClubPost Post, UserListRecord? Author)> GetByIdAsync(
+            int clubId, int postId, int? requestingUserId, string? requestingUserRole)
+        {
+            var club = await _clubService.GetClub(clubId);
+
+            if (club.isPrivate)
+            {
+                if (requestingUserId == null)
+                    throw new UnauthorizedException("Authentication is required to view posts for a private club.");
+
+                var hasStaffAccess = await _clubService.HasClubStaffAccessAsync(clubId, requestingUserId.Value, requestingUserRole);
+                if (!hasStaffAccess)
+                {
+                    var membership = await _followRepository.IsFollowingClubAsync(clubId, requestingUserId.Value);
+                    if (membership == null)
+                        throw new ForbiddenException("You must be a member of this club to view its posts.");
+                }
+            }
+
+            var post = await _cache.GetOrSetAsync(
+                PostCacheKey(postId),
+                () => _postRepository.GetByIdAsync(postId),
+                PostTTL,
+                nullSentinelTtl: NotFoundTTL);
+
+            if (post == null || post.ClubId != clubId)
+                throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
+
+            var users = await _userRepository.GetByIdsAsync([post.UserId]);
+            return (post, users.Count > 0 ? users[0] : null);
         }
 
         public async Task<(List<ClubPost> Items, int TotalCount, string Source, Dictionary<int, UserListRecord> Authors)> GetByClubIdAsync(
@@ -122,14 +163,6 @@ namespace backend.main.features.clubs.posts
             return (resultPosts, countTask.Result, ResponseSource.Database, await FetchAuthorLookupAsync(resultPosts));
         }
 
-        private async Task<Dictionary<int, UserListRecord>> FetchAuthorLookupAsync(List<ClubPost> posts)
-        {
-            var userIds = posts.Select(p => p.UserId).Distinct().ToList();
-            if (userIds.Count == 0) return [];
-            var users = await _userRepository.GetByIdsAsync(userIds);
-            return users.ToDictionary(u => u.Id);
-        }
-
         public async Task<ClubPost> UpdateAsync(int clubId, int postId, int userId, string userRole, string title, string content, PostType postType, bool isPinned)
         {
             var post = await _postRepository.GetByIdAsync(postId)
@@ -155,6 +188,8 @@ namespace backend.main.features.clubs.posts
             await _db.SaveChangesAsync();
             await transaction.CommitAsync();
 
+            await _cache.RemoveAsync(PostCacheKey(postId));
+
             return updated;
         }
 
@@ -175,6 +210,8 @@ namespace backend.main.features.clubs.posts
             _outboxWriter.StageDelete(postId);
             await _db.SaveChangesAsync();
             await transaction.CommitAsync();
+
+            await _cache.RemoveAsync(PostCacheKey(postId));
         }
 
         public async Task<(List<ClubPost> Items, int TotalCount, string Source)> GetAllAdminAsync(
@@ -211,9 +248,13 @@ namespace backend.main.features.clubs.posts
 
             return (itemsTask.Result, countTask.Result, ResponseSource.Database);
         }
+
+        private async Task<Dictionary<int, UserListRecord>> FetchAuthorLookupAsync(List<ClubPost> posts)
+        {
+            var userIds = posts.Select(p => p.UserId).Distinct().ToList();
+            if (userIds.Count == 0) return [];
+            var users = await _userRepository.GetByIdsAsync(userIds);
+            return users.ToDictionary(u => u.Id);
+        }
     }
 }
-
-
-
-
