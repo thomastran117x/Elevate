@@ -5,7 +5,12 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 
 import { ClubPostsService, ClubPostsSearchParams } from '../../services/club-posts.service';
-import { ClubPost, PostSortBy, ALL_POST_SORTS } from '../../models/club-post.types';
+import {
+  ClubPost,
+  POST_TYPE_STYLES,
+  PostSortBy,
+  ALL_POST_SORTS,
+} from '../../models/club-post.types';
 
 @Component({
   selector: 'app-club-posts',
@@ -28,6 +33,7 @@ export class ClubPostsComponent implements OnInit, OnDestroy {
   error = '';
 
   readonly allSorts = ALL_POST_SORTS;
+  readonly postTypeStyles = POST_TYPE_STYLES;
 
   private readonly destroy$ = new Subject<void>();
   private readonly searchInput$ = new Subject<string>();
@@ -83,6 +89,10 @@ export class ClubPostsComponent implements OnInit, OnDestroy {
       day: 'numeric',
       year: 'numeric',
     });
+  }
+
+  goBack(): void {
+    this.router.navigate(['/clubs', this.clubId]);
   }
 
   navigateToPost(post: ClubPost): void {

@@ -1,9 +1,20 @@
-<div class="min-h-screen bg-gray-50 py-8 px-4">
-  <div class="max-w-3xl mx-auto">
-    <!-- Back -->
+<div
+  class="min-h-screen bg-gradient-to-br from-[#0b0822] via-[#160f3d] to-[#24135f] text-white relative overflow-x-hidden"
+>
+  <!-- Orb blobs -->
+  <div class="pointer-events-none absolute inset-0 overflow-hidden">
+    <div
+      class="absolute -top-40 -left-40 w-[520px] h-[520px] bg-purple-600/30 rounded-full blur-3xl animate-pulse"
+    ></div>
+    <div
+      class="absolute top-[40%] -right-40 w-[380px] h-[380px] bg-fuchsia-600/20 rounded-full blur-3xl animate-pulse"
+    ></div>
+  </div>
+
+  <div class="relative z-10 mx-auto max-w-3xl px-6 py-10">
     <button
       (click)="goBack()"
-      class="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-6 transition-colors"
+      class="flex items-center gap-1.5 text-sm text-white/55 hover:text-white transition-colors mb-8"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -11,95 +22,92 @@
       Back to posts
     </button>
 
-    <!-- Loading -->
-    <div
-      *ngIf="loading"
-      class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-pulse"
-    >
-      <div class="h-5 bg-gray-200 rounded w-1/2 mb-4"></div>
-      <div class="h-3 bg-gray-200 rounded w-full mb-2"></div>
-      <div class="h-3 bg-gray-200 rounded w-full mb-2"></div>
-      <div class="h-3 bg-gray-200 rounded w-3/4"></div>
-    </div>
+    <!-- Loading skeleton -->
+    @if (loading) {
+      <div class="rounded-3xl border border-white/[0.12] bg-white/[0.06] p-6 animate-pulse mb-4">
+        <div class="h-3 bg-white/10 rounded w-1/4 mb-4"></div>
+        <div class="h-6 bg-white/10 rounded w-2/3 mb-4"></div>
+        <div class="h-3 bg-white/10 rounded w-full mb-2"></div>
+        <div class="h-3 bg-white/10 rounded w-full mb-2"></div>
+        <div class="h-3 bg-white/10 rounded w-3/4"></div>
+      </div>
+    }
 
     <!-- Error -->
-    <div
-      *ngIf="error && !loading"
-      class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm"
-    >
-      {{ error }}
-    </div>
+    @if (error && !loading) {
+      <div
+        class="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300 mb-4"
+      >
+        {{ error }}
+      </div>
+    }
 
     <!-- Post -->
-    <div
-      *ngIf="post && !loading"
-      class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6"
-    >
-      <!-- Badges -->
-      <div class="flex items-center gap-2 mb-3">
-        <span
-          *ngIf="post.isPinned"
-          class="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200"
-        >
-          Pinned
-        </span>
-        <span
-          class="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200"
-        >
-          {{ post.postType }}
-        </span>
-      </div>
-
-      <!-- Title -->
-      <h1 class="text-xl font-bold text-gray-900 mb-4">{{ post.title }}</h1>
-
-      <!-- Content -->
-      <p class="text-sm text-gray-700 whitespace-pre-wrap mb-6">{{ post.content }}</p>
-
-      <!-- Footer -->
-      <div
-        class="flex items-center justify-between pt-4 border-t border-gray-100 text-xs text-gray-500"
-      >
-        <div class="flex items-center gap-4">
-          <span>{{ authorDisplay(post) }}</span>
-          <span class="flex items-center gap-1">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-              />
-            </svg>
-            {{ post.likesCount }}
-          </span>
-          <span class="flex items-center gap-1">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-              />
-            </svg>
-            {{ post.viewCount }}
+    @if (post && !loading) {
+      <article class="rounded-3xl border border-white/[0.12] bg-white/[0.06] p-6 sm:p-8 mb-6">
+        <!-- Badges -->
+        <div class="flex items-center gap-2 mb-4">
+          @if (post.isPinned) {
+            <span
+              class="text-xs font-semibold px-2.5 py-0.5 rounded-full border bg-amber-500/20 text-amber-300 border-amber-500/30"
+            >
+              Pinned
+            </span>
+          }
+          <span
+            class="text-xs font-medium px-2.5 py-0.5 rounded-full border"
+            [ngClass]="postTypeStyles[post.postType]"
+          >
+            {{ post.postType }}
           </span>
         </div>
-        <span>{{ formatDate(post.createdAt) }}</span>
-      </div>
-    </div>
 
-    <!-- Comment thread -->
-    <app-comment-thread
-      *ngIf="post && !loading"
-      [clubId]="clubId"
-      [postId]="postId"
-    ></app-comment-thread>
+        <h1 class="text-2xl font-extrabold tracking-tight mb-5">{{ post.title }}</h1>
+
+        <p class="text-sm leading-relaxed text-white/75 whitespace-pre-wrap mb-6">
+          {{ post.content }}
+        </p>
+
+        <div
+          class="flex items-center justify-between pt-4 border-t border-white/10 text-xs text-white/45"
+        >
+          <div class="flex items-center gap-4">
+            <span class="text-white/60">{{ authorDisplay(post) }}</span>
+            <span class="flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                />
+              </svg>
+              {{ post.likesCount }}
+            </span>
+            <span class="flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                />
+              </svg>
+              {{ post.viewCount }}
+            </span>
+          </div>
+          <span>{{ formatDate(post.createdAt) }}</span>
+        </div>
+      </article>
+
+      <!-- Comment thread -->
+      <app-comment-thread [clubId]="clubId" [postId]="postId"></app-comment-thread>
+    }
   </div>
 </div>
