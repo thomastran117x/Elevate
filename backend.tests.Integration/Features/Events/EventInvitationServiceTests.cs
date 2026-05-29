@@ -217,14 +217,15 @@ public sealed class EventInvitationServiceTests
             clubService.Setup(service => service.HasClubStaffAccessAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string?>()))
                 .ReturnsAsync(false);
 
+            var noOpCache = new NoOpCacheService();
+
             var invitationService = new EventInvitationService(
                 db,
                 clubService.Object,
                 Mock.Of<IUserRepository>(),
                 Mock.Of<IPublisher>(),
-                TimeProvider.System);
-
-            var noOpCache = new NoOpCacheService();
+                TimeProvider.System,
+                new RefreshAheadCache(noOpCache));
             var eventsService = new EventsService(
                 db,
                 new EventsRepository(db),

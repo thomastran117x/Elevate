@@ -1,3 +1,4 @@
+using backend.main.features.cache;
 using backend.main.features.payment;
 using backend.main.infrastructure.database.core;
 
@@ -8,10 +9,29 @@ namespace backend.main.features.events.analytics
     public class EventAnalyticsRepository : IEventAnalyticsRepository
     {
         private readonly AppDatabaseContext _context;
+        private readonly IRefreshAheadCache _refreshCache;
 
-        public EventAnalyticsRepository(AppDatabaseContext context) => _context = context;
+        private static readonly TimeSpan EventAnalyticsTTL = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan ClubAnalyticsTTL = TimeSpan.FromMinutes(10);
 
-        public async Task<EventAnalyticsData> GetEventAnalyticsAsync(int eventId)
+        private static string GetEventAnalyticsCacheKey(int eventId) => $"analytics:event:{eventId}";
+        private static string GetClubAnalyticsCacheKey(int clubId) => $"analytics:club:{clubId}";
+
+        public EventAnalyticsRepository(AppDatabaseContext context, IRefreshAheadCache refreshCache)
+        {
+            _context = context;
+            _refreshCache = refreshCache;
+        }
+
+        public Task<EventAnalyticsData> GetEventAnalyticsAsync(int eventId)
+        {
+            return _refreshCache.GetOrSetAsync(
+                GetEventAnalyticsCacheKey(eventId),
+                () => FetchEventAnalyticsAsync(eventId),
+                EventAnalyticsTTL)!;
+        }
+
+        private async Task<EventAnalyticsData> FetchEventAnalyticsAsync(int eventId)
         {
             var now = DateTime.UtcNow;
             var todayStart = now.Date;
@@ -54,7 +74,15 @@ namespace backend.main.features.events.analytics
             );
         }
 
-        public async Task<ClubAnalyticsData> GetClubAnalyticsAsync(int clubId)
+        public Task<ClubAnalyticsData> GetClubAnalyticsAsync(int clubId)
+        {
+            return _refreshCache.GetOrSetAsync(
+                GetClubAnalyticsCacheKey(clubId),
+                () => FetchClubAnalyticsAsync(clubId),
+                ClubAnalyticsTTL)!;
+        }
+
+        private async Task<ClubAnalyticsData> FetchClubAnalyticsAsync(int clubId)
         {
             var now = DateTime.UtcNow;
             var sevenDaysAgo = now.Date.AddDays(-6);

@@ -1,6 +1,7 @@
 using backend.main.features.auth;
 using backend.main.features.auth.contracts;
 using backend.main.features.auth.token;
+using backend.main.features.cache;
 using backend.main.features.clubs.follow;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
@@ -21,10 +22,18 @@ public class UserServiceTests
     [Fact]
     public async Task GetUserByIdAsync_ShouldThrowWhenUserDoesNotExist()
     {
-        var repository = new Mock<IUserRepository>();
-        repository.Setup(repo => repo.GetUserAsync(44)).ReturnsAsync((User?)null);
+        var refreshCache = new Mock<IRefreshAheadCache>();
+        refreshCache
+            .Setup(c => c.GetOrSetAsync<User>(
+                "user:44",
+                It.IsAny<Func<Task<User?>>>(),
+                It.IsAny<TimeSpan>(),
+                It.IsAny<TimeSpan?>(),
+                It.IsAny<double>(),
+                It.IsAny<System.Text.Json.JsonSerializerOptions?>()))
+            .ReturnsAsync((User?)null);
 
-        var service = CreateService(userRepository: repository);
+        var service = CreateService(refreshCache: refreshCache);
 
         var act = () => service.GetUserByIdAsync(44);
 
@@ -33,7 +42,31 @@ public class UserServiceTests
     }
 
     [Fact]
-    public async Task UpdateUserStatusAsync_ShouldRevokeRefreshSessions()
+    public async Task GetUserByIdAsync_ShouldReturnCachedUser()
+    {
+        var cachedUser = new TestUserBuilder().WithId(5).WithEmail("cached@example.com").Build();
+        var refreshCache = new Mock<IRefreshAheadCache>();
+        refreshCache
+            .Setup(c => c.GetOrSetAsync<User>(
+                "user:5",
+                It.IsAny<Func<Task<User?>>>(),
+                It.IsAny<TimeSpan>(),
+                It.IsAny<TimeSpan?>(),
+                It.IsAny<double>(),
+                It.IsAny<System.Text.Json.JsonSerializerOptions?>()))
+            .ReturnsAsync(cachedUser);
+
+        var repository = new Mock<IUserRepository>();
+        var service = CreateService(userRepository: repository, refreshCache: refreshCache);
+
+        var result = await service.GetUserByIdAsync(5);
+
+        result.Should().Be(cachedUser);
+        repository.Verify(r => r.GetUserAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateUserStatusAsync_ShouldRevokeRefreshSessionsAndInvalidateCache()
     {
         var authRepository = new Mock<IAuthUserRepository>();
         authRepository.Setup(repo => repo.UpdateUserStatusAsync(9, true, "policy"))
@@ -47,16 +80,18 @@ public class UserServiceTests
             });
 
         var tokenService = new Mock<ITokenService>();
-        var service = CreateService(authRepository: authRepository, tokenService: tokenService);
+        var refreshCache = new Mock<IRefreshAheadCache>();
+        var service = CreateService(authRepository: authRepository, tokenService: tokenService, refreshCache: refreshCache);
 
         var result = await service.UpdateUserStatusAsync(9, true, "policy");
 
         result.IsDisabled.Should().BeTrue();
         tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(9), Times.Once);
+        refreshCache.Verify(c => c.RemoveAsync("user:9"), Times.Once);
     }
 
     [Fact]
-    public async Task UpdateAvatarAsync_ShouldUploadAndPersistAvatar()
+    public async Task UpdateAvatarAsync_ShouldUploadAndPersistAvatarAndInvalidateCache()
     {
         var fileService = new Mock<IFileUploadService>();
         fileService.Setup(service => service.UploadImageAsync(It.IsAny<IFormFile>(), "users"))
@@ -68,12 +103,40 @@ public class UserServiceTests
         repository.Setup(repo => repo.UpdatePartialAsync(It.Is<User>(user => user.Avatar == "https://cdn.test/users/avatar.png")))
             .ReturnsAsync((User user) => user);
 
-        var service = CreateService(userRepository: repository, fileService: fileService);
+        var refreshCache = new Mock<IRefreshAheadCache>();
+        var service = CreateService(userRepository: repository, fileService: fileService, refreshCache: refreshCache);
         var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
 
         var updated = await service.UpdateAvatarAsync(7, formFile);
 
         updated!.Avatar.Should().Be("https://cdn.test/users/avatar.png");
+        refreshCache.Verify(c => c.RemoveAsync("user:7"), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateUserAsync_ShouldInvalidateCacheAfterUpdate()
+    {
+        var user = new TestUserBuilder().WithId(3).WithEmail("user@example.com").Build();
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(r => r.UpdatePartialAsync(user)).ReturnsAsync(user);
+
+        var refreshCache = new Mock<IRefreshAheadCache>();
+        var service = CreateService(userRepository: repository, refreshCache: refreshCache);
+
+        await service.UpdateUserAsync(3, user);
+
+        refreshCache.Verify(c => c.RemoveAsync("user:3"), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteUserAsync_ShouldInvalidateCacheAfterDeletion()
+    {
+        var refreshCache = new Mock<IRefreshAheadCache>();
+        var service = CreateService(refreshCache: refreshCache);
+
+        await service.DeleteUserAsync(5);
+
+        refreshCache.Verify(c => c.RemoveAsync("user:5"), Times.Once);
     }
 
     [Fact]
@@ -103,19 +166,22 @@ public class UserServiceTests
         Mock<IAuthUserRepository>? authRepository = null,
         Mock<IFileUploadService>? fileService = null,
         Mock<IFollowService>? followService = null,
-        Mock<ITokenService>? tokenService = null)
+        Mock<ITokenService>? tokenService = null,
+        Mock<IRefreshAheadCache>? refreshCache = null)
     {
         userRepository ??= new Mock<IUserRepository>();
         authRepository ??= new Mock<IAuthUserRepository>();
         fileService ??= new Mock<IFileUploadService>();
         followService ??= new Mock<IFollowService>();
         tokenService ??= new Mock<ITokenService>();
+        refreshCache ??= new Mock<IRefreshAheadCache>();
 
         return new UserService(
             userRepository.Object,
             authRepository.Object,
             fileService.Object,
             followService.Object,
-            tokenService.Object);
+            tokenService.Object,
+            refreshCache.Object);
     }
 }

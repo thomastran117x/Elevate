@@ -2,6 +2,7 @@ using System.Net.Mail;
 using System.Security.Cryptography;
 using System.Text;
 
+using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.events.contracts.responses;
 using backend.main.features.events.invitations.contracts.responses;
@@ -24,19 +25,35 @@ public sealed class EventInvitationService : IEventInvitationService
     private readonly IUserRepository _userRepository;
     private readonly IPublisher _publisher;
     private readonly TimeProvider _timeProvider;
+    private readonly IRefreshAheadCache _refreshCache;
+
+    private static readonly TimeSpan MyInvitationsTTL = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan EventInvitationsTTL = TimeSpan.FromMinutes(3);
+    private static readonly TimeSpan InvitationLinksTTL = TimeSpan.FromMinutes(5);
+
+    private static string GetMyInvitationsCacheKey(int userId, string normalizedEmail) =>
+        $"invitation:user:{userId}:{normalizedEmail}";
+
+    private static string GetEventInvitationsCacheKey(int eventId) =>
+        $"invitation:event:{eventId}:list";
+
+    private static string GetInvitationLinksCacheKey(int eventId) =>
+        $"invitation:event:{eventId}:links";
 
     public EventInvitationService(
         AppDatabaseContext db,
         IClubService clubService,
         IUserRepository userRepository,
         IPublisher publisher,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IRefreshAheadCache refreshCache)
     {
         _db = db;
         _clubService = clubService;
         _userRepository = userRepository;
         _publisher = publisher;
         _timeProvider = timeProvider;
+        _refreshCache = refreshCache;
     }
 
     public async Task<bool> HasAcceptedInvitationAccessAsync(int eventId, int userId)
@@ -147,6 +164,7 @@ public sealed class EventInvitationService : IEventInvitationService
                 queuedEmail.RecipientEmail);
         }
 
+        await _refreshCache.RemoveAsync(GetEventInvitationsCacheKey(eventId));
         return await MapInvitationResponsesAsync(createdOrExisting, includeEvents: false);
     }
 
@@ -154,13 +172,19 @@ public sealed class EventInvitationService : IEventInvitationService
     {
         await GetManageablePrivateEventAsync(eventId, actorUserId, actorRole);
 
-        var invitations = await _db.EventInvitations
-            .AsNoTracking()
-            .Where(i => i.EventId == eventId)
-            .OrderByDescending(i => i.CreatedAt)
-            .ToListAsync();
+        return await _refreshCache.GetOrSetAsync(
+            GetEventInvitationsCacheKey(eventId),
+            async () =>
+            {
+                var invitations = await _db.EventInvitations
+                    .AsNoTracking()
+                    .Where(i => i.EventId == eventId)
+                    .OrderByDescending(i => i.CreatedAt)
+                    .ToListAsync();
 
-        return await MapInvitationResponsesAsync(invitations, includeEvents: true);
+                return (IReadOnlyList<EventInvitationResponse>)await MapInvitationResponsesAsync(invitations, includeEvents: true);
+            },
+            EventInvitationsTTL) ?? [];
     }
 
     public async Task<EventInvitationResponse> RevokeInvitationAsync(int eventId, int invitationId, int actorUserId, string actorRole)
@@ -180,6 +204,7 @@ public sealed class EventInvitationService : IEventInvitationService
             await _db.SaveChangesAsync();
         }
 
+        await _refreshCache.RemoveAsync(GetEventInvitationsCacheKey(eventId));
         return (await MapInvitationResponsesAsync([invitation], includeEvents: true)).Single();
     }
 
@@ -215,6 +240,7 @@ public sealed class EventInvitationService : IEventInvitationService
         _db.EventInvitationLinks.Add(entity);
         await _db.SaveChangesAsync();
 
+        await _refreshCache.RemoveAsync(GetInvitationLinksCacheKey(eventId));
         return MapLinkResponse(entity, token);
     }
 
@@ -222,12 +248,15 @@ public sealed class EventInvitationService : IEventInvitationService
     {
         await GetManageablePrivateEventAsync(eventId, actorUserId, actorRole);
 
-        return await _db.EventInvitationLinks
-            .AsNoTracking()
-            .Where(l => l.EventId == eventId)
-            .OrderByDescending(l => l.CreatedAt)
-            .Select(l => MapLinkResponse(l, null))
-            .ToListAsync();
+        return await _refreshCache.GetOrSetAsync(
+            GetInvitationLinksCacheKey(eventId),
+            async () => (IReadOnlyList<EventInvitationLinkResponse>)await _db.EventInvitationLinks
+                .AsNoTracking()
+                .Where(l => l.EventId == eventId)
+                .OrderByDescending(l => l.CreatedAt)
+                .Select(l => MapLinkResponse(l, null))
+                .ToListAsync(),
+            InvitationLinksTTL) ?? [];
     }
 
     public async Task<EventInvitationLinkResponse> RevokeInvitationLinkAsync(int eventId, int linkId, int actorUserId, string actorRole)
@@ -246,6 +275,7 @@ public sealed class EventInvitationService : IEventInvitationService
             await _db.SaveChangesAsync();
         }
 
+        await _refreshCache.RemoveAsync(GetInvitationLinksCacheKey(eventId));
         return MapLinkResponse(link, null);
     }
 
@@ -309,6 +339,8 @@ public sealed class EventInvitationService : IEventInvitationService
             await _db.SaveChangesAsync();
             await transaction.CommitAsync();
 
+            await _refreshCache.RemoveAsync(GetMyInvitationsCacheKey(userId, normalizedEmail));
+            await _refreshCache.RemoveAsync(GetEventInvitationsCacheKey(invitation.EventId));
             return new EventInvitationDecisionResponse
             {
                 Invitation = (await MapInvitationResponsesAsync([invitation], includeEvents: true)).Single()
@@ -368,6 +400,8 @@ public sealed class EventInvitationService : IEventInvitationService
         await _db.SaveChangesAsync();
         await transaction.CommitAsync();
 
+        await _refreshCache.RemoveAsync(GetMyInvitationsCacheKey(userId, normalizedEmail));
+        await _refreshCache.RemoveAsync(GetEventInvitationsCacheKey(link.EventId));
         return new EventInvitationDecisionResponse
         {
             Invitation = (await MapInvitationResponsesAsync([acceptedClaim], includeEvents: true)).Single()
@@ -396,6 +430,8 @@ public sealed class EventInvitationService : IEventInvitationService
         invitation.UpdatedAt = now;
         await _db.SaveChangesAsync();
 
+        await _refreshCache.RemoveAsync(GetMyInvitationsCacheKey(userId, normalizedEmail));
+        await _refreshCache.RemoveAsync(GetEventInvitationsCacheKey(invitation.EventId));
         return new EventInvitationDecisionResponse
         {
             Invitation = (await MapInvitationResponsesAsync([invitation], includeEvents: true)).Single()
@@ -429,6 +465,8 @@ public sealed class EventInvitationService : IEventInvitationService
             await _db.SaveChangesAsync();
             await transaction.CommitAsync();
 
+            await _refreshCache.RemoveAsync(GetMyInvitationsCacheKey(userId, normalizedEmail));
+            await _refreshCache.RemoveAsync(GetEventInvitationsCacheKey(invitation.EventId));
             return new EventInvitationDecisionResponse
             {
                 Invitation = (await MapInvitationResponsesAsync([invitation], includeEvents: true)).Single()
@@ -477,6 +515,8 @@ public sealed class EventInvitationService : IEventInvitationService
         await _db.SaveChangesAsync();
         await transaction.CommitAsync();
 
+        await _refreshCache.RemoveAsync(GetMyInvitationsCacheKey(userId, normalizedEmail));
+        await _refreshCache.RemoveAsync(GetEventInvitationsCacheKey(link.EventId));
         return new EventInvitationDecisionResponse
         {
             Invitation = (await MapInvitationResponsesAsync([declinedClaim], includeEvents: true)).Single()
@@ -505,6 +545,8 @@ public sealed class EventInvitationService : IEventInvitationService
         invitation.UpdatedAt = now;
         await _db.SaveChangesAsync();
 
+        await _refreshCache.RemoveAsync(GetMyInvitationsCacheKey(userId, normalizedEmail));
+        await _refreshCache.RemoveAsync(GetEventInvitationsCacheKey(invitation.EventId));
         return new EventInvitationDecisionResponse
         {
             Invitation = (await MapInvitationResponsesAsync([invitation], includeEvents: true)).Single()
@@ -514,24 +556,31 @@ public sealed class EventInvitationService : IEventInvitationService
     public async Task<IReadOnlyList<EventInvitationResponse>> GetMyInvitationsAsync(int userId, string userEmail)
     {
         var normalizedEmail = NormalizeEmail(userEmail);
-        var now = GetUtcNow();
 
-        var invitations = await _db.EventInvitations
-            .AsNoTracking()
-            .Where(i =>
-                (i.RecipientUserId == userId ||
-                 (i.RecipientUserId == null && i.RecipientEmailNormalized == normalizedEmail)) &&
-                i.LifecycleStatus != EventInvitationLifecycleStatus.Revoked)
-            .OrderByDescending(i => i.CreatedAt)
-            .ToListAsync();
+        return await _refreshCache.GetOrSetAsync(
+            GetMyInvitationsCacheKey(userId, normalizedEmail),
+            async () =>
+            {
+                var now = GetUtcNow();
 
-        var filtered = invitations
-            .Where(i =>
-                GetEffectiveStatus(i, now) == EventInvitationEffectiveStatus.Pending ||
-                GetEffectiveStatus(i, now) == EventInvitationEffectiveStatus.Accepted)
-            .ToList();
+                var invitations = await _db.EventInvitations
+                    .AsNoTracking()
+                    .Where(i =>
+                        (i.RecipientUserId == userId ||
+                         (i.RecipientUserId == null && i.RecipientEmailNormalized == normalizedEmail)) &&
+                        i.LifecycleStatus != EventInvitationLifecycleStatus.Revoked)
+                    .OrderByDescending(i => i.CreatedAt)
+                    .ToListAsync();
 
-        return await MapInvitationResponsesAsync(filtered, includeEvents: true);
+                var filtered = invitations
+                    .Where(i =>
+                        GetEffectiveStatus(i, now) == EventInvitationEffectiveStatus.Pending ||
+                        GetEffectiveStatus(i, now) == EventInvitationEffectiveStatus.Accepted)
+                    .ToList();
+
+                return (IReadOnlyList<EventInvitationResponse>)await MapInvitationResponsesAsync(filtered, includeEvents: true);
+            },
+            MyInvitationsTTL) ?? [];
     }
 
     public async Task MarkInvitationDeliveryStatusAsync(int invitationId, EventInvitationDeliveryStatus status, string? errorMessage)
