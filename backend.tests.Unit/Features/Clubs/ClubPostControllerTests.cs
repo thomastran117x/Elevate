@@ -3,6 +3,7 @@ using System.Security.Claims;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.contracts.requests;
 using backend.main.features.clubs.posts.contracts.responses;
+using backend.main.features.profile.contracts;
 using backend.main.shared.responses;
 
 using FluentAssertions;
@@ -67,7 +68,8 @@ public class ClubPostControllerTests
                     }
                 },
                 1,
-                "database"));
+                "database",
+                new Dictionary<int, UserListRecord>()));
 
         var controller = CreateController(service.Object);
 

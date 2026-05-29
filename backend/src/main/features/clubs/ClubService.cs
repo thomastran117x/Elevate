@@ -27,6 +27,7 @@ namespace backend.main.features.clubs
         private readonly IFollowService _followService;
         private readonly IFileUploadService _fileUploadService;
         private readonly ICacheService _cache;
+        private readonly IRefreshAheadCache _refreshCache;
         private readonly IClubSearchService _searchService;
         private readonly IClubSearchOutboxWriter _outboxWriter;
         private readonly ClubVersioningOptions _versioningOptions;
@@ -48,6 +49,7 @@ namespace backend.main.features.clubs
             IFileUploadService fileUploadService,
             IFollowService followService,
             ICacheService cache,
+            IRefreshAheadCache refreshCache,
             IClubSearchService searchService,
             IClubSearchOutboxWriter outboxWriter,
             IOptions<ClubVersioningOptions> versioningOptions,
@@ -59,6 +61,7 @@ namespace backend.main.features.clubs
             _userService = userService;
             _fileUploadService = fileUploadService;
             _cache = cache;
+            _refreshCache = refreshCache;
             _searchService = searchService;
             _outboxWriter = outboxWriter;
             _versioningOptions = versioningOptions.Value;
@@ -121,32 +124,16 @@ namespace backend.main.features.clubs
 
         public async Task<Club> GetClub(int clubId)
         {
-            var key = GetClubCacheKey(clubId);
+            var club = await _refreshCache.GetOrSetAsync(
+                GetClubCacheKey(clubId),
+                () => _clubRepository.GetByIdAsync(clubId),
+                ClubCacheMapper.ToDto,
+                ClubCacheMapper.ToEntity,
+                ClubTTL,
+                nullSentinelTtl: NotFoundTTL);
 
-            var cached = await _cache.GetValueAsync(key);
-
-            if (cached == NullSentinel)
+            if (club == null)
                 throw new ResourceNotFoundException($"Club {clubId} not found");
-
-            Club club;
-
-            if (cached != null)
-            {
-                var dto = JsonSerializer.Deserialize<ClubCacheDto>(cached)!;
-                club = ClubCacheMapper.ToEntity(dto);
-            }
-            else
-            {
-                var fetchedClub = await _clubRepository.GetByIdAsync(clubId);
-                if (fetchedClub == null)
-                {
-                    await _cache.SetValueAsync(key, NullSentinel, NotFoundTTL);
-                    throw new ResourceNotFoundException($"Club {clubId} not found");
-                }
-
-                club = fetchedClub;
-                await CacheClubAsync(club);
-            }
 
             _ = Task.Run(async () =>
             {
@@ -154,10 +141,7 @@ namespace backend.main.features.clubs
                 {
                     await TrackClubAccessAsync(clubId);
                 }
-                catch (Exception ex)
-                {
-                    Logger.Warn(ex, "Failed to track club access for club");
-                }
+                catch (Exception ex) { Logger.Warn(ex, "Failed to track club access for club"); }
             });
 
             return club;
@@ -452,7 +436,7 @@ namespace backend.main.features.clubs
             _db.Clubs.Remove(club);
             await _db.SaveChangesAsync();
 
-            await _cache.DeleteKeyAsync(GetClubCacheKey(clubId));
+            await _refreshCache.RemoveAsync(GetClubCacheKey(clubId));
             await BumpClubListVersionAsync();
         }
 
@@ -710,13 +694,8 @@ namespace backend.main.features.clubs
             throw new shared.exceptions.http.NotImplementedException();
         }
 
-        private async Task CacheClubAsync(Club club)
-        {
-            var payload = JsonSerializer.Serialize(ClubCacheMapper.ToDto(club));
-            var expiry = WithJitter(ClubTTL);
-
-            await _cache.SetValueAsync(GetClubCacheKey(club.Id), payload, expiry);
-        }
+        private Task CacheClubAsync(Club club) =>
+            _refreshCache.SetAsync(GetClubCacheKey(club.Id), ClubCacheMapper.ToDto(club), ClubTTL);
 
         private async Task CacheClubListAsync(string key, IEnumerable<Club> clubs, int totalCount, string source)
         {

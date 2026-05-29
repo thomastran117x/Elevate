@@ -35,6 +35,10 @@ namespace backend.main.features.clubs.posts.contracts.responses
         {
             get; set;
         }
+        public AuthorInfo? Author
+        {
+            get; set;
+        }
         public DateTime CreatedAt
         {
             get; set;
@@ -61,6 +65,3 @@ namespace backend.main.features.clubs.posts.contracts.responses
         }
     }
 }
-
-
-

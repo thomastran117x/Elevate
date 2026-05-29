@@ -1,3 +1,5 @@
+using backend.main.shared.responses;
+
 namespace backend.main.features.clubs.posts.comments.contracts.responses
 {
     public class PostCommentResponse
@@ -15,6 +17,10 @@ namespace backend.main.features.clubs.posts.comments.contracts.responses
             get; set;
         }
         public string Content { get; set; } = string.Empty;
+        public AuthorInfo? Author
+        {
+            get; set;
+        }
         public DateTime CreatedAt
         {
             get; set;

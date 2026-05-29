@@ -1,5 +1,4 @@
 using System.Data;
-using System.Text.Json;
 
 using backend.main.features.cache;
 using backend.main.features.events.registration;
@@ -19,24 +18,26 @@ namespace backend.main.features.events.registration
         private readonly IEventRegistrationRepository _registrationRepository;
         private readonly IEventsService _eventsService;
         private readonly ICacheService _cache;
+        private readonly IRefreshAheadCache _refreshCache;
         private readonly IEventSearchOutboxWriter _outboxWriter;
 
         private static readonly TimeSpan MembershipTTL = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan ListTTL = TimeSpan.FromMinutes(3);
         private static readonly TimeSpan LockTTL = TimeSpan.FromSeconds(10);
-        private const string NullSentinel = "__null__";
 
         public EventRegistrationService(
             AppDatabaseContext db,
             IEventRegistrationRepository registrationRepository,
             IEventsService eventsService,
             ICacheService cache,
+            IRefreshAheadCache refreshCache,
             IEventSearchOutboxWriter outboxWriter)
         {
             _db = db;
             _registrationRepository = registrationRepository;
             _eventsService = eventsService;
             _cache = cache;
+            _refreshCache = refreshCache;
             _outboxWriter = outboxWriter;
         }
 
@@ -184,13 +185,9 @@ namespace backend.main.features.events.registration
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                await _cache.SetValueAsync(
-                    MembershipKey(userId, eventId),
-                    JsonSerializer.Serialize(registration),
-                    MembershipTTL
-                );
+                await _refreshCache.SetAsync(MembershipKey(userId, eventId), registration, MembershipTTL);
                 await InvalidateListsAsync(userId, eventId);
-                await _cache.DeleteKeyAsync($"event:{eventId}");
+                await _refreshCache.RemoveAsync($"event:{eventId}");
             }
             catch (DbUpdateException)
             {
@@ -239,9 +236,9 @@ namespace backend.main.features.events.registration
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                await _cache.DeleteKeyAsync(MembershipKey(userId, eventId));
+                await _refreshCache.RemoveAsync(MembershipKey(userId, eventId));
                 await InvalidateListsAsync(userId, eventId);
-                await _cache.DeleteKeyAsync($"event:{eventId}");
+                await _refreshCache.RemoveAsync($"event:{eventId}");
             }
             catch (Exception e)
             {
@@ -255,88 +252,38 @@ namespace backend.main.features.events.registration
 
         public async Task<bool> IsRegisteredAsync(int eventId, int userId, string userRole)
         {
-            try
-            {
-                await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
-                var key = MembershipKey(userId, eventId);
-                var cached = await _cache.GetValueAsync(key);
+            await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
 
-                if (cached != null)
-                    return cached != NullSentinel;
+            var registration = await _refreshCache.GetOrSetAsync(
+                MembershipKey(userId, eventId),
+                () => _registrationRepository.IsRegisteredAsync(eventId, userId),
+                MembershipTTL);
 
-                var registration = await _registrationRepository.IsRegisteredAsync(eventId, userId);
-
-                if (registration == null)
-                {
-                    await _cache.SetValueAsync(key, NullSentinel, MembershipTTL);
-                    return false;
-                }
-
-                await _cache.SetValueAsync(key, JsonSerializer.Serialize(registration), MembershipTTL);
-                return true;
-            }
-            catch (Exception e)
-            {
-                if (e is AppException)
-                    throw;
-
-                Logger.Error($"[EventRegistrationService] IsRegisteredAsync failed: {e}");
-                throw new InternalServerErrorException();
-            }
+            return registration != null;
         }
 
         public async Task<IEnumerable<EventRegistration>> GetRegistrationsByEventAsync(int eventId, int page = 1, int pageSize = 20)
         {
-            try
-            {
-                var key = EventListKey(eventId, page, pageSize);
-                var cached = await _cache.GetValueAsync(key);
+            var key = EventListKey(eventId, page, pageSize);
+            var registrations = await _refreshCache.GetOrSetAsync(
+                key,
+                async () => (await _registrationRepository.GetRegistrationsByEventAsync(eventId, page, pageSize)).ToList(),
+                ListTTL) ?? [];
 
-                if (cached != null)
-                    return JsonSerializer.Deserialize<List<EventRegistration>>(cached)!;
-
-                var registrations = (await _registrationRepository.GetRegistrationsByEventAsync(eventId, page, pageSize)).ToList();
-
-                await _cache.SetValueAsync(key, JsonSerializer.Serialize(registrations), ListTTL);
-                await TrackEventListKeyAsync(eventId, key);
-
-                return registrations;
-            }
-            catch (Exception e)
-            {
-                if (e is AppException)
-                    throw;
-
-                Logger.Error($"[EventRegistrationService] GetRegistrationsByEventAsync failed: {e}");
-                throw new InternalServerErrorException();
-            }
+            await TrackEventListKeyAsync(eventId, key);
+            return registrations;
         }
 
         public async Task<IEnumerable<EventRegistration>> GetRegistrationsByUserAsync(int userId, int page = 1, int pageSize = 20)
         {
-            try
-            {
-                var key = UserListKey(userId, page, pageSize);
-                var cached = await _cache.GetValueAsync(key);
+            var key = UserListKey(userId, page, pageSize);
+            var registrations = await _refreshCache.GetOrSetAsync(
+                key,
+                async () => (await _registrationRepository.GetRegistrationsByUserAsync(userId, page, pageSize)).ToList(),
+                ListTTL) ?? [];
 
-                if (cached != null)
-                    return JsonSerializer.Deserialize<List<EventRegistration>>(cached)!;
-
-                var registrations = (await _registrationRepository.GetRegistrationsByUserAsync(userId, page, pageSize)).ToList();
-
-                await _cache.SetValueAsync(key, JsonSerializer.Serialize(registrations), ListTTL);
-                await TrackUserListKeyAsync(userId, key);
-
-                return registrations;
-            }
-            catch (Exception e)
-            {
-                if (e is AppException)
-                    throw;
-
-                Logger.Error($"[EventRegistrationService] GetRegistrationsByUserAsync failed: {e}");
-                throw new InternalServerErrorException();
-            }
+            await TrackUserListKeyAsync(userId, key);
+            return registrations;
         }
 
         private async Task TrackEventListKeyAsync(int eventId, string key)

@@ -1,6 +1,8 @@
 using backend.main.features.clubs;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
+using backend.main.features.profile;
+using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
 
 using FluentAssertions;
@@ -38,7 +40,7 @@ public class PostCommentServiceTests
                 Content = "Hello"
             });
 
-        var service = new PostCommentService(comments.Object, posts.Object, clubs.Object);
+        var service = new PostCommentService(comments.Object, posts.Object, clubs.Object, Mock.Of<IUserRepository>());
 
         var act = () => service.CreateAsync(4, 11, 20, "Nice update");
 
@@ -85,7 +87,12 @@ public class PostCommentServiceTests
         comments.Setup(repo => repo.CountByPostIdAsync(11))
             .ReturnsAsync(6);
 
-        var service = new PostCommentService(comments.Object, posts.Object, clubs.Object);
+        var userRepository = new Mock<IUserRepository>();
+        userRepository
+            .Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), It.IsAny<UserReadDetailLevel>()))
+            .ReturnsAsync([]);
+
+        var service = new PostCommentService(comments.Object, posts.Object, clubs.Object, userRepository.Object);
 
         var result = await service.GetByPostIdAsync(4, 11, 2, 5);
 
@@ -110,7 +117,8 @@ public class PostCommentServiceTests
         var service = new PostCommentService(
             comments.Object,
             Mock.Of<IClubPostRepository>(),
-            Mock.Of<IClubRepository>());
+            Mock.Of<IClubRepository>(),
+            Mock.Of<IUserRepository>());
 
         var act = () => service.UpdateAsync(11, 15, 20, "Updated");
 
@@ -134,7 +142,8 @@ public class PostCommentServiceTests
         var service = new PostCommentService(
             comments.Object,
             Mock.Of<IClubPostRepository>(),
-            Mock.Of<IClubRepository>());
+            Mock.Of<IClubRepository>(),
+            Mock.Of<IUserRepository>());
 
         var act = () => service.DeleteAsync(11, 15, 20);
 

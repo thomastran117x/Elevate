@@ -18,4 +18,8 @@ export const routes: Routes = [
     path: 'events',
     loadChildren: () => import('./features/events/events.routes').then((m) => m.EVENTS_ROUTES),
   },
+  {
+    path: 'clubs',
+    loadChildren: () => import('./features/clubs/clubs.routes').then((m) => m.CLUBS_ROUTES),
+  },
 ];

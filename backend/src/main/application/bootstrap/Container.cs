@@ -3,6 +3,7 @@ using backend.main.features.auth.captcha;
 using backend.main.features.auth.device;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
+using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts;
@@ -123,6 +124,8 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IClubPostSearchOutboxWriter, ClubPostSearchOutboxWriter>();
             services.AddScoped<IEventSearchOutboxWriter, EventSearchOutboxWriter>();
             services.AddScoped<IPostCommentService, PostCommentService>();
+            services.AddSingleton<CommentEventBroker>();
+            services.AddSingleton<IRefreshAheadCache, RefreshAheadCache>();
             services.AddScoped<IEventRegistrationService, EventRegistrationService>();
             services.AddScoped<IFileUploadService, FileUploadService>();
             services.AddScoped<IAzureBlobService, AzureBlobService>();

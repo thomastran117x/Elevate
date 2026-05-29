@@ -35,6 +35,7 @@ namespace backend.main.features.events
         private readonly IClubService _clubService;
         private readonly IAzureBlobService _blobService;
         private readonly ICacheService _cache;
+        private readonly IRefreshAheadCache _refreshCache;
         private readonly IEventAnalyticsRepository _analyticsRepository;
         private readonly IEventSearchService _searchService;
         private readonly IEventSearchOutboxWriter _outboxWriter;
@@ -69,6 +70,7 @@ namespace backend.main.features.events
             IClubService clubService,
             IAzureBlobService blobService,
             ICacheService cache,
+            IRefreshAheadCache refreshCache,
             IEventAnalyticsRepository analyticsRepository,
             IEventSearchService searchService,
             IEventSearchOutboxWriter outboxWriter,
@@ -83,6 +85,7 @@ namespace backend.main.features.events
             _clubService = clubService;
             _blobService = blobService;
             _cache = cache;
+            _refreshCache = refreshCache;
             _analyticsRepository = analyticsRepository;
             _searchService = searchService;
             _outboxWriter = outboxWriter;
@@ -183,35 +186,14 @@ namespace backend.main.features.events
 
         public async Task<Events> GetEvent(int eventId)
         {
-            try
-            {
-                var key = $"event:{eventId}";
-                var cached = await _cache.GetValueAsync(key);
+            var ev = await _refreshCache.GetOrSetAsync(
+                $"event:{eventId}",
+                () => _eventsRepository.GetByIdAsync(eventId),
+                EventTTL,
+                nullSentinelTtl: NotFoundTTL,
+                serializerOptions: EventCacheSerializerOptions);
 
-                if (cached == NullSentinel)
-                    throw new ResourceNotFoundException($"Event {eventId} not found");
-
-                if (cached != null)
-                    return JsonSerializer.Deserialize<Events>(cached)!;
-
-                var ev = await _eventsRepository.GetByIdAsync(eventId);
-                if (ev == null)
-                {
-                    await _cache.SetValueAsync(key, NullSentinel, NotFoundTTL);
-                    throw new ResourceNotFoundException($"Event {eventId} not found");
-                }
-
-                await CacheEventAsync(ev);
-                return ev;
-            }
-            catch (Exception e)
-            {
-                if (e is AppException)
-                    throw;
-
-                Logger.Error($"[EventsService] GetEvent failed: {e}");
-                throw new InternalServerErrorException();
-            }
+            return ev ?? throw new ResourceNotFoundException($"Event {eventId} not found");
         }
 
         public async Task<Events> GetVisibleEvent(int eventId, int? userId = null, string? userRole = null)
@@ -716,7 +698,7 @@ namespace backend.main.features.events
                 if (urls.Count > 0)
                     _ = Task.WhenAll(urls.Select(u => _blobService.DeleteBlobAsync(u)));
 
-                await _cache.DeleteKeyAsync($"event:{eventId}");
+                await _refreshCache.RemoveAsync($"event:{eventId}");
                 await BumpEventListVersionAsync();
             }
             catch (Exception e)
@@ -967,7 +949,7 @@ namespace backend.main.features.events
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                await Task.WhenAll(requestedIds.Select(id => _cache.DeleteKeyAsync($"event:{id}")));
+                await Task.WhenAll(requestedIds.Select(id => _refreshCache.RemoveAsync($"event:{id}")));
                 await BumpEventListVersionAsync();
 
                 return trackedEvents.Count;
@@ -1016,7 +998,7 @@ namespace backend.main.features.events
 
                 if (imageUrls.Count > 0)
                     _ = Task.WhenAll(imageUrls.Select(url => _blobService.DeleteBlobAsync(url)));
-                await Task.WhenAll(requestedIds.Select(id => _cache.DeleteKeyAsync($"event:{id}")));
+                await Task.WhenAll(requestedIds.Select(id => _refreshCache.RemoveAsync($"event:{id}")));
                 await BumpEventListVersionAsync();
 
                 return deleted;
@@ -1250,7 +1232,7 @@ namespace backend.main.features.events
                 var images = await _imageRepository.AddImagesAsync(eventId, new[] { imageUrl });
                 await _db.SaveChangesAsync();
 
-                await _cache.DeleteKeyAsync($"event:{eventId}");
+                await _refreshCache.RemoveAsync($"event:{eventId}");
                 await BumpEventListVersionAsync();
 
                 return images[0];
@@ -1281,7 +1263,7 @@ namespace backend.main.features.events
 
                 _ = _blobService.DeleteBlobAsync(image.ImageUrl);
 
-                await _cache.DeleteKeyAsync($"event:{eventId}");
+                await _refreshCache.RemoveAsync($"event:{eventId}");
                 await BumpEventListVersionAsync();
             }
             catch (Exception e)
@@ -1992,7 +1974,7 @@ namespace backend.main.features.events
                 _outboxWriter.StageSync(ev);
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
-                await _cache.DeleteKeyAsync($"event:{eventId}");
+                await _refreshCache.RemoveAsync($"event:{eventId}");
             }
             catch (Exception e)
             {
@@ -2000,14 +1982,8 @@ namespace backend.main.features.events
             }
         }
 
-        private async Task CacheEventAsync(Events ev)
-        {
-            await _cache.SetValueAsync(
-                $"event:{ev.Id}",
-                JsonSerializer.Serialize(ev, EventCacheSerializerOptions),
-                WithJitter(EventTTL)
-            );
-        }
+        private Task CacheEventAsync(Events ev) =>
+            _refreshCache.SetAsync($"event:{ev.Id}", ev, EventTTL, EventCacheSerializerOptions);
 
         private async Task<long> GetEventListVersionAsync()
         {
