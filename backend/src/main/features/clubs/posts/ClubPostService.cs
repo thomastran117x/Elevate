@@ -1,5 +1,7 @@
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts.search;
+using backend.main.features.profile;
+using backend.main.features.profile.contracts;
 using backend.main.infrastructure.database.core;
 using backend.main.infrastructure.elasticsearch;
 using backend.main.shared.exceptions.http;
@@ -16,6 +18,7 @@ namespace backend.main.features.clubs.posts
         private readonly IFollowRepository _followRepository;
         private readonly IClubPostSearchService _searchService;
         private readonly IClubPostSearchOutboxWriter _outboxWriter;
+        private readonly IUserRepository _userRepository;
 
         public ClubPostService(
             AppDatabaseContext db,
@@ -23,7 +26,8 @@ namespace backend.main.features.clubs.posts
             IClubService clubService,
             IFollowRepository followRepository,
             IClubPostSearchService searchService,
-            IClubPostSearchOutboxWriter outboxWriter)
+            IClubPostSearchOutboxWriter outboxWriter,
+            IUserRepository userRepository)
         {
             _db = db;
             _postRepository = postRepository;
@@ -31,6 +35,7 @@ namespace backend.main.features.clubs.posts
             _followRepository = followRepository;
             _searchService = searchService;
             _outboxWriter = outboxWriter;
+            _userRepository = userRepository;
         }
 
         public async Task<ClubPost> CreateAsync(int clubId, int userId, string userRole, string title, string content, PostType postType, bool isPinned)
@@ -60,7 +65,7 @@ namespace backend.main.features.clubs.posts
             return post;
         }
 
-        public async Task<(List<ClubPost> Items, int TotalCount, string Source)> GetByClubIdAsync(
+        public async Task<(List<ClubPost> Items, int TotalCount, string Source, Dictionary<int, UserListRecord> Authors)> GetByClubIdAsync(
             int clubId, int? requestingUserId, string? requestingUserRole, string? search, PostSortBy sortBy, int page, int pageSize)
         {
             var club = await _clubService.GetClub(clubId);
@@ -89,7 +94,7 @@ namespace backend.main.features.clubs.posts
                         : [];
                     if (posts.Count > 0)
                         await _postRepository.IncrementViewCountAsync(posts.Select(p => p.Id));
-                    return (posts, total, ResponseSource.Elasticsearch);
+                    return (posts, total, ResponseSource.Elasticsearch, await FetchAuthorLookupAsync(posts));
                 }
                 catch (ElasticsearchDisabledException ex)
                 {
@@ -114,7 +119,15 @@ namespace backend.main.features.clubs.posts
             if (resultPosts.Count > 0)
                 await _postRepository.IncrementViewCountAsync(resultPosts.Select(p => p.Id));
 
-            return (resultPosts, countTask.Result, ResponseSource.Database);
+            return (resultPosts, countTask.Result, ResponseSource.Database, await FetchAuthorLookupAsync(resultPosts));
+        }
+
+        private async Task<Dictionary<int, UserListRecord>> FetchAuthorLookupAsync(List<ClubPost> posts)
+        {
+            var userIds = posts.Select(p => p.UserId).Distinct().ToList();
+            if (userIds.Count == 0) return [];
+            var users = await _userRepository.GetByIdsAsync(userIds);
+            return users.ToDictionary(u => u.Id);
         }
 
         public async Task<ClubPost> UpdateAsync(int clubId, int postId, int userId, string userRole, string title, string content, PostType postType, bool isPinned)

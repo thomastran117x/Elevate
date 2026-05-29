@@ -1,7 +1,12 @@
+using System.Text.Json;
+using System.Threading.Channels;
+
 using backend.main.application.security;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.comments.contracts.requests;
 using backend.main.features.clubs.posts.comments.contracts.responses;
+using backend.main.features.profile;
+using backend.main.features.profile.contracts;
 using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Authorization;
@@ -10,17 +15,24 @@ using Microsoft.AspNetCore.Mvc;
 namespace backend.main.features.clubs.posts.comments
 {
     /// <summary>
-    /// Comment creation and moderation endpoints for club posts.
+    /// Comment creation, moderation, and live-stream endpoints for club posts.
     /// </summary>
     [ApiController]
     [Route("clubs")]
     public class PostCommentController : ControllerBase
     {
         private readonly IPostCommentService _commentService;
+        private readonly IUserRepository _userRepository;
+        private readonly CommentEventBroker _broker;
 
-        public PostCommentController(IPostCommentService commentService)
+        public PostCommentController(
+            IPostCommentService commentService,
+            IUserRepository userRepository,
+            CommentEventBroker broker)
         {
             _commentService = commentService;
+            _userRepository = userRepository;
+            _broker = broker;
         }
 
         [Authorize]
@@ -36,13 +48,15 @@ namespace backend.main.features.clubs.posts.comments
             PostComment comment = await _commentService.CreateAsync(
                 clubId, postId, userPayload.Id, request.Content);
 
-            return StatusCode(
-                201,
-                new ApiResponse<PostCommentResponse>(
-                    $"Comment on post with ID {postId} has been created successfully.",
-                    MapToResponse(comment)
-                )
-            );
+            var author = await GetAuthorAsync(userPayload.Id);
+            var response = MapToResponse(comment, author);
+
+            _broker.Publish(postId, new CommentEvent("CommentCreated", response));
+
+            return StatusCode(201, new ApiResponse<PostCommentResponse>(
+                $"Comment on post with ID {postId} has been created successfully.",
+                response
+            ));
         }
 
         [AllowAnonymous]
@@ -54,23 +68,51 @@ namespace backend.main.features.clubs.posts.comments
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
-            var (items, totalCount) = await _commentService.GetByPostIdAsync(
+            var (items, totalCount, authors) = await _commentService.GetByPostIdAsync(
                 clubId, postId, page, pageSize);
 
             var paged = new PagedResponse<PostCommentResponse>(
-                items.Select(MapToResponse),
+                items.Select(c => MapToResponse(c, authors.GetValueOrDefault(c.UserId))),
                 totalCount,
                 page,
                 pageSize
             );
 
-            return StatusCode(
-                200,
-                new ApiResponse<PagedResponse<PostCommentResponse>>(
-                    $"Comments for post with ID {postId} have been fetched successfully.",
-                    paged
-                )
-            );
+            return StatusCode(200, new ApiResponse<PagedResponse<PostCommentResponse>>(
+                $"Comments for post with ID {postId} have been fetched successfully.",
+                paged
+            ));
+        }
+
+        [AllowAnonymous]
+        [HttpGet("{clubId}/posts/{postId}/comments/events")]
+        public async Task StreamComments(int clubId, int postId, CancellationToken cancellationToken)
+        {
+            Response.Headers["Content-Type"] = "text/event-stream";
+            Response.Headers["Cache-Control"] = "no-cache";
+            Response.Headers["X-Accel-Buffering"] = "no";
+
+            var id = Guid.NewGuid();
+            var channel = Channel.CreateUnbounded<CommentEvent>();
+            _broker.Subscribe(postId, id, channel.Writer);
+
+            try
+            {
+                await Response.WriteAsync(": keepalive\n\n", cancellationToken);
+                await Response.Body.FlushAsync(cancellationToken);
+
+                await foreach (var evt in channel.Reader.ReadAllAsync(cancellationToken))
+                {
+                    var json = JsonSerializer.Serialize(evt.Payload);
+                    await Response.WriteAsync($"event: {evt.Type}\ndata: {json}\n\n", cancellationToken);
+                    await Response.Body.FlushAsync(cancellationToken);
+                }
+            }
+            finally
+            {
+                _broker.Unsubscribe(postId, id);
+                channel.Writer.Complete();
+            }
         }
 
         [Authorize]
@@ -87,13 +129,15 @@ namespace backend.main.features.clubs.posts.comments
             PostComment comment = await _commentService.UpdateAsync(
                 postId, commentId, userPayload.Id, request.Content);
 
-            return StatusCode(
-                200,
-                new ApiResponse<PostCommentResponse>(
-                    $"Comment with ID {commentId} has been updated successfully.",
-                    MapToResponse(comment)
-                )
-            );
+            var author = await GetAuthorAsync(userPayload.Id);
+            var response = MapToResponse(comment, author);
+
+            _broker.Publish(postId, new CommentEvent("CommentUpdated", response));
+
+            return StatusCode(200, new ApiResponse<PostCommentResponse>(
+                $"Comment with ID {commentId} has been updated successfully.",
+                response
+            ));
         }
 
         [Authorize]
@@ -105,18 +149,23 @@ namespace backend.main.features.clubs.posts.comments
 
             await _commentService.DeleteAsync(postId, commentId, userPayload.Id);
 
-            return StatusCode(
-                200,
-                new MessageResponse(
-                    $"Comment with ID {commentId} has been deleted successfully."
-                )
-            );
+            _broker.Publish(postId, new CommentEvent("CommentDeleted", new { postId, commentId }));
+
+            return StatusCode(200, new MessageResponse(
+                $"Comment with ID {commentId} has been deleted successfully."
+            ));
         }
 
-        private static PostCommentResponse MapToResponse(PostComment c) =>
-            new(c.Id, c.PostId, c.UserId, c.Content, c.CreatedAt, c.UpdatedAt);
+        private async Task<UserListRecord?> GetAuthorAsync(int userId)
+        {
+            var users = await _userRepository.GetByIdsAsync([userId]);
+            return users.FirstOrDefault();
+        }
+
+        private static PostCommentResponse MapToResponse(PostComment c, UserListRecord? user = null) =>
+            new(c.Id, c.PostId, c.UserId, c.Content, c.CreatedAt, c.UpdatedAt)
+            {
+                Author = new AuthorInfo { Id = c.UserId, Name = user?.Name, Username = user?.Username, Avatar = user?.Avatar }
+            };
     }
 }
-
-
-

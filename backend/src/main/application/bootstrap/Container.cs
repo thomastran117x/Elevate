@@ -123,6 +123,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IClubPostSearchOutboxWriter, ClubPostSearchOutboxWriter>();
             services.AddScoped<IEventSearchOutboxWriter, EventSearchOutboxWriter>();
             services.AddScoped<IPostCommentService, PostCommentService>();
+            services.AddSingleton<CommentEventBroker>();
             services.AddScoped<IEventRegistrationService, EventRegistrationService>();
             services.AddScoped<IFileUploadService, FileUploadService>();
             services.AddScoped<IAzureBlobService, AzureBlobService>();

@@ -3,6 +3,7 @@ using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.contracts.requests;
 using backend.main.features.clubs.posts.contracts.responses;
 using backend.main.features.clubs.posts.search;
+using backend.main.features.profile.contracts;
 using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Authorization;
@@ -62,11 +63,11 @@ namespace backend.main.features.clubs.posts
                 userRole = userPayload.Role;
             }
 
-            var (items, totalCount, source) = await _postService.GetByClubIdAsync(
+            var (items, totalCount, source, authors) = await _postService.GetByClubIdAsync(
                 clubId, userId, userRole, search, sortBy, page, pageSize);
 
             var paged = new PagedResponse<ClubPostResponse>(
-                items.Select(MapToResponse),
+                items.Select(p => MapToResponse(p, authors.GetValueOrDefault(p.UserId))),
                 totalCount,
                 page,
                 pageSize
@@ -121,8 +122,11 @@ namespace backend.main.features.clubs.posts
             );
         }
 
-        private static ClubPostResponse MapToResponse(ClubPost p) =>
-            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt);
+        private static ClubPostResponse MapToResponse(ClubPost p, UserListRecord? user = null) =>
+            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt)
+            {
+                Author = new AuthorInfo { Id = p.UserId, Name = user?.Name, Username = user?.Username, Avatar = user?.Avatar }
+            };
     }
 
     [ApiController]
@@ -164,7 +168,7 @@ namespace backend.main.features.clubs.posts
             var (items, totalCount, source) = await _postService.GetAllAdminAsync(search, sortBy, page, pageSize);
 
             var paged = new PagedResponse<ClubPostResponse>(
-                items.Select(MapToResponse),
+                items.Select(p => MapToResponse(p)),
                 totalCount,
                 page,
                 pageSize
@@ -180,8 +184,11 @@ namespace backend.main.features.clubs.posts
             );
         }
 
-        private static ClubPostResponse MapToResponse(ClubPost p) =>
-            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt);
+        private static ClubPostResponse MapToResponse(ClubPost p, UserListRecord? user = null) =>
+            new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt)
+            {
+                Author = new AuthorInfo { Id = p.UserId, Name = user?.Name, Username = user?.Username, Avatar = user?.Avatar }
+            };
     }
 }
 

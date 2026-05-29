@@ -1,3 +1,5 @@
+using backend.main.features.profile;
+using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
 
 namespace backend.main.features.clubs.posts.comments
@@ -7,15 +9,18 @@ namespace backend.main.features.clubs.posts.comments
         private readonly IPostCommentRepository _commentRepository;
         private readonly IClubPostRepository _postRepository;
         private readonly IClubRepository _clubRepository;
+        private readonly IUserRepository _userRepository;
 
         public PostCommentService(
             IPostCommentRepository commentRepository,
             IClubPostRepository postRepository,
-            IClubRepository clubRepository)
+            IClubRepository clubRepository,
+            IUserRepository userRepository)
         {
             _commentRepository = commentRepository;
             _postRepository = postRepository;
             _clubRepository = clubRepository;
+            _userRepository = userRepository;
         }
 
         public async Task<PostComment> CreateAsync(int clubId, int postId, int userId, string content)
@@ -32,7 +37,7 @@ namespace backend.main.features.clubs.posts.comments
             return await _commentRepository.CreateAsync(comment);
         }
 
-        public async Task<(List<PostComment> Items, int TotalCount)> GetByPostIdAsync(
+        public async Task<(List<PostComment> Items, int TotalCount, Dictionary<int, UserListRecord> Authors)> GetByPostIdAsync(
             int clubId, int postId, int page, int pageSize)
         {
             await ValidatePostBelongsToClub(clubId, postId);
@@ -41,7 +46,14 @@ namespace backend.main.features.clubs.posts.comments
             var countTask = _commentRepository.CountByPostIdAsync(postId);
             await Task.WhenAll(itemsTask, countTask);
 
-            return (itemsTask.Result, countTask.Result);
+            var items = itemsTask.Result;
+            var userIds = items.Select(c => c.UserId).Distinct().ToList();
+            var users = userIds.Count > 0
+                ? await _userRepository.GetByIdsAsync(userIds)
+                : [];
+            var authorLookup = users.ToDictionary(u => u.Id);
+
+            return (items, countTask.Result, authorLookup);
         }
 
         public async Task<PostComment> UpdateAsync(int postId, int commentId, int userId, string content)
@@ -86,6 +98,3 @@ namespace backend.main.features.clubs.posts.comments
         }
     }
 }
-
-
-
