@@ -4,7 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 
 import { ClubPostsService } from '../../services/club-posts.service';
-import { ClubPost } from '../../models/club-post.types';
+import { ClubPost, POST_TYPE_STYLES } from '../../models/club-post.types';
 import { CommentThreadComponent } from '../../components/comment-thread/comment-thread.component';
 
 @Component({
@@ -19,6 +19,8 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
   post: ClubPost | null = null;
   loading = true;
   error = '';
+
+  readonly postTypeStyles = POST_TYPE_STYLES;
 
   private readonly destroy$ = new Subject<void>();
 

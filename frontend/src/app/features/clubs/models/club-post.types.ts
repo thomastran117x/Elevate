@@ -9,6 +9,13 @@ export const POST_TYPE_LABELS: Record<PostType, string> = {
   Poll: 'Poll',
 };
 
+export const POST_TYPE_STYLES: Record<PostType, string> = {
+  General: 'bg-white/10 text-white/70 border-white/15',
+  Announcement: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+  Event: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  Poll: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+};
+
 export const ALL_POST_SORTS = ['Recent', 'Popular'] as const;
 export type PostSortBy = (typeof ALL_POST_SORTS)[number];
 

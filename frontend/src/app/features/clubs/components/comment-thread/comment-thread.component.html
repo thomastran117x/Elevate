@@ -1,160 +1,197 @@
-<div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+<div class="rounded-3xl border border-white/[0.12] bg-white/[0.06] p-6 sm:p-8">
   <!-- Header -->
-  <h2 class="text-base font-semibold text-gray-900 mb-5">
+  <h2 class="text-base font-bold mb-6">
     Comments
-    <span *ngIf="totalCount > 0" class="ml-1 text-sm font-normal text-gray-500"
-      >({{ totalCount }})</span
-    >
+    @if (totalCount > 0) {
+      <span class="ml-1.5 text-sm font-normal text-white/45">({{ totalCount }})</span>
+    }
   </h2>
 
   <!-- Add comment form -->
-  <div *ngIf="isLoggedIn" class="mb-6">
-    <textarea
-      [(ngModel)]="newCommentText"
-      placeholder="Write a comment..."
-      rows="3"
-      maxlength="1000"
-      class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-    ></textarea>
-    <div class="flex items-center justify-between mt-2">
-      <span *ngIf="submitError" class="text-xs text-red-600">{{ submitError }}</span>
-      <span class="flex-1"></span>
-      <button
-        (click)="submitComment()"
-        [disabled]="!newCommentText.trim() || submitting"
-        class="px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
-        <span *ngIf="!submitting">Post</span>
-        <span *ngIf="submitting">Posting...</span>
-      </button>
+  @if (isLoggedIn) {
+    <div class="mb-7">
+      <textarea
+        [(ngModel)]="newCommentText"
+        placeholder="Write a comment..."
+        rows="3"
+        maxlength="1000"
+        class="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-purple-500/50 resize-none transition"
+      ></textarea>
+      <div class="flex items-center justify-between mt-2">
+        @if (submitError) {
+          <span class="text-xs text-red-400">{{ submitError }}</span>
+        } @else {
+          <span></span>
+        }
+        <button
+          (click)="submitComment()"
+          [disabled]="!newCommentText.trim() || submitting"
+          class="cursor-pointer px-5 py-1.5 rounded-full text-sm font-semibold bg-gradient-to-r from-purple-500 to-fuchsia-500 disabled:opacity-40 disabled:cursor-not-allowed transition hover:opacity-90"
+        >
+          @if (submitting) {
+            <span class="animate-pulse">Posting...</span>
+          } @else {
+            Post
+          }
+        </button>
+      </div>
     </div>
-  </div>
+  }
 
-  <!-- Not logged in notice -->
-  <div
-    *ngIf="!isLoggedIn"
-    class="mb-5 text-sm text-gray-500 bg-gray-50 rounded-lg px-4 py-3 border border-gray-200"
-  >
-    <a routerLink="/auth/login" class="text-blue-600 hover:underline">Sign in</a> to leave a
-    comment.
-  </div>
+  <!-- Not logged in -->
+  @if (!isLoggedIn) {
+    <div
+      class="mb-6 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/55"
+    >
+      <a routerLink="/auth/login" class="text-purple-300 hover:text-purple-200 transition-colors"
+        >Sign in</a
+      >
+      to leave a comment.
+    </div>
+  }
 
   <!-- Load error -->
-  <div *ngIf="loadError" class="text-sm text-red-600 mb-4">{{ loadError }}</div>
+  @if (loadError) {
+    <div class="text-sm text-red-400 mb-4">{{ loadError }}</div>
+  }
 
   <!-- Loading skeleton -->
-  <div *ngIf="loading">
-    <div *ngFor="let _ of [1, 2, 3]" class="flex gap-3 mb-5 animate-pulse">
-      <div class="w-8 h-8 bg-gray-200 rounded-full flex-shrink-0"></div>
-      <div class="flex-1">
-        <div class="h-3 bg-gray-200 rounded w-1/4 mb-2"></div>
-        <div class="h-3 bg-gray-200 rounded w-full mb-1"></div>
-        <div class="h-3 bg-gray-200 rounded w-3/4"></div>
+  @if (loading) {
+    @for (item of [1, 2, 3]; track item) {
+      <div class="flex gap-3 mb-5 animate-pulse">
+        <div class="w-8 h-8 bg-white/10 rounded-full flex-shrink-0"></div>
+        <div class="flex-1">
+          <div class="h-3 bg-white/10 rounded w-1/4 mb-2"></div>
+          <div class="h-3 bg-white/10 rounded w-full mb-1.5"></div>
+          <div class="h-3 bg-white/10 rounded w-3/4"></div>
+        </div>
       </div>
-    </div>
-  </div>
+    }
+  }
 
   <!-- Empty state -->
-  <div
-    *ngIf="!loading && comments.length === 0 && !loadError"
-    class="text-center py-8 text-gray-400 text-sm"
-  >
-    No comments yet. Be the first!
-  </div>
+  @if (!loading && comments.length === 0 && !loadError) {
+    <div class="text-center py-10 text-white/35 text-sm">No comments yet. Be the first!</div>
+  }
 
   <!-- Comment list -->
-  <div *ngIf="!loading">
-    <div *ngFor="let comment of comments" class="flex gap-3 mb-5">
-      <!-- Avatar -->
-      <div class="flex-shrink-0">
-        <img
-          *ngIf="comment.author?.avatar"
-          [src]="comment.author!.avatar!"
-          [alt]="authorDisplay(comment)"
-          class="w-8 h-8 rounded-full object-cover"
-        />
-        <div
-          *ngIf="!comment.author?.avatar"
-          class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold"
-        >
-          {{ authorInitials(comment) }}
-        </div>
-      </div>
-
-      <!-- Body -->
-      <div class="flex-1 min-w-0">
-        <div class="flex items-baseline gap-2 mb-1">
-          <span class="text-sm font-medium text-gray-900">{{ authorDisplay(comment) }}</span>
-          <span class="text-xs text-gray-400">{{ formatDate(comment.createdAt) }}</span>
-          <span *ngIf="comment.updatedAt !== comment.createdAt" class="text-xs text-gray-400 italic"
-            >(edited)</span
-          >
+  @if (!loading) {
+    @for (comment of comments; track comment.id) {
+      <div class="flex gap-3 mb-5">
+        <!-- Avatar -->
+        <div class="flex-shrink-0">
+          @if (comment.author?.avatar) {
+            <img
+              [src]="comment.author!.avatar!"
+              [alt]="authorDisplay(comment)"
+              class="w-8 h-8 rounded-full object-cover ring-1 ring-white/10"
+            />
+          } @else {
+            <div
+              class="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-fuchsia-500 flex items-center justify-center text-xs font-bold text-white"
+            >
+              {{ authorInitials(comment) }}
+            </div>
+          }
         </div>
 
-        <!-- Viewing mode -->
-        <ng-container *ngIf="editingId !== comment.id">
-          <p class="text-sm text-gray-700 whitespace-pre-wrap break-words">{{ comment.content }}</p>
-
-          <!-- Delete confirmation -->
-          <div *ngIf="deletingId === comment.id" class="mt-2 flex items-center gap-3 text-xs">
-            <span class="text-gray-600">Delete this comment?</span>
-            <button
-              (click)="deleteComment(comment.id)"
-              class="text-red-600 font-medium hover:underline"
-            >
-              Delete
-            </button>
-            <button (click)="cancelDelete()" class="text-gray-500 hover:underline">Cancel</button>
+        <!-- Body -->
+        <div class="flex-1 min-w-0">
+          <div class="flex items-baseline gap-2 mb-1.5">
+            <span class="text-sm font-semibold text-white/90">{{ authorDisplay(comment) }}</span>
+            <span class="text-xs text-white/35">{{ formatDate(comment.createdAt) }}</span>
+            @if (comment.updatedAt !== comment.createdAt) {
+              <span class="text-xs text-white/30 italic">(edited)</span>
+            }
           </div>
 
-          <!-- Own comment actions -->
-          <div *ngIf="isOwnComment(comment) && deletingId !== comment.id" class="flex gap-3 mt-1">
-            <button (click)="startEdit(comment)" class="text-xs text-blue-600 hover:underline">
-              Edit
-            </button>
-            <button
-              (click)="confirmDelete(comment.id)"
-              class="text-xs text-red-500 hover:underline"
-            >
-              Delete
-            </button>
-          </div>
-        </ng-container>
+          <!-- View mode -->
+          @if (editingId !== comment.id) {
+            <p class="text-sm text-white/70 whitespace-pre-wrap break-words leading-relaxed">
+              {{ comment.content }}
+            </p>
 
-        <!-- Edit mode -->
-        <ng-container *ngIf="editingId === comment.id">
-          <textarea
-            [(ngModel)]="editText"
-            rows="3"
-            maxlength="1000"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-          ></textarea>
-          <div class="flex gap-2 mt-1">
-            <button
-              (click)="saveEdit(comment)"
-              [disabled]="!editText.trim()"
-              class="text-xs text-blue-600 font-medium hover:underline disabled:opacity-50"
-            >
-              Save
-            </button>
-            <button (click)="cancelEdit()" class="text-xs text-gray-500 hover:underline">
-              Cancel
-            </button>
-          </div>
-        </ng-container>
+            <!-- Delete confirmation -->
+            @if (deletingId === comment.id) {
+              <div class="mt-2 flex items-center gap-3 text-xs">
+                <span class="text-white/55">Delete this comment?</span>
+                <button
+                  (click)="deleteComment(comment.id)"
+                  class="cursor-pointer text-red-400 font-medium hover:text-red-300 transition-colors"
+                >
+                  Delete
+                </button>
+                <button
+                  (click)="cancelDelete()"
+                  class="cursor-pointer text-white/40 hover:text-white/70 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            }
+
+            <!-- Own comment actions -->
+            @if (isOwnComment(comment) && deletingId !== comment.id) {
+              <div class="flex gap-3 mt-1.5">
+                <button
+                  (click)="startEdit(comment)"
+                  class="cursor-pointer text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                >
+                  Edit
+                </button>
+                <button
+                  (click)="confirmDelete(comment.id)"
+                  class="cursor-pointer text-xs text-red-400/70 hover:text-red-400 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            }
+          }
+
+          <!-- Edit mode -->
+          @if (editingId === comment.id) {
+            <textarea
+              [(ngModel)]="editText"
+              rows="3"
+              maxlength="1000"
+              class="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-purple-500/50 resize-none transition"
+            ></textarea>
+            <div class="flex gap-3 mt-1.5">
+              <button
+                (click)="saveEdit(comment)"
+                [disabled]="!editText.trim()"
+                class="cursor-pointer text-xs text-purple-400 font-medium hover:text-purple-300 disabled:opacity-40 transition-colors"
+              >
+                Save
+              </button>
+              <button
+                (click)="cancelEdit()"
+                class="cursor-pointer text-xs text-white/40 hover:text-white/70 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          }
+        </div>
       </div>
-    </div>
-  </div>
+    }
+  }
 
   <!-- Load more -->
-  <div *ngIf="!loading && currentPage < totalPages" class="text-center mt-2">
-    <button
-      (click)="loadMore()"
-      [disabled]="loadingMore"
-      class="text-sm text-blue-600 hover:underline disabled:opacity-50"
-    >
-      <span *ngIf="!loadingMore">Load more comments</span>
-      <span *ngIf="loadingMore">Loading...</span>
-    </button>
-  </div>
+  @if (!loading && currentPage < totalPages) {
+    <div class="text-center mt-4">
+      <button
+        (click)="loadMore()"
+        [disabled]="loadingMore"
+        class="cursor-pointer px-6 py-2 rounded-full border border-white/15 bg-white/[0.06] text-xs font-medium text-white/60 hover:bg-white/10 hover:text-white/80 disabled:opacity-40 transition"
+      >
+        @if (loadingMore) {
+          <span class="animate-pulse">Loading...</span>
+        } @else {
+          Load more comments
+        }
+      </button>
+    </div>
+  }
 </div>

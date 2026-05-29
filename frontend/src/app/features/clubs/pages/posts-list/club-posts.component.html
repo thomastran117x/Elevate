@@ -1,136 +1,196 @@
-<div class="min-h-screen bg-gray-50 py-8 px-4">
-  <div class="max-w-3xl mx-auto">
+<div
+  class="min-h-screen bg-gradient-to-br from-[#0b0822] via-[#160f3d] to-[#24135f] text-white relative overflow-x-hidden"
+>
+  <!-- Orb blobs -->
+  <div class="pointer-events-none absolute inset-0 overflow-hidden">
+    <div
+      class="absolute -top-40 -left-40 w-[520px] h-[520px] bg-purple-600/30 rounded-full blur-3xl animate-pulse"
+    ></div>
+    <div
+      class="absolute top-[35%] -right-40 w-[420px] h-[420px] bg-fuchsia-600/20 rounded-full blur-3xl animate-pulse"
+    ></div>
+  </div>
+
+  <main class="relative z-10 mx-auto max-w-3xl px-6 py-10">
+    <!-- Back -->
+    <button
+      (click)="goBack()"
+      class="flex items-center gap-1.5 text-sm text-white/55 hover:text-white transition-colors mb-8"
+    >
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+      Back to club
+    </button>
+
     <!-- Header -->
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Club Posts</h1>
+    <div class="mb-8">
+      <span
+        class="inline-flex items-center px-4 py-1.5 rounded-full bg-white/10 text-sm mb-4 gap-2"
+      >
+        <span class="h-2 w-2 rounded-full bg-purple-400 animate-pulse"></span>
+        Club Posts
+      </span>
+      <h1 class="text-3xl font-extrabold tracking-tight">Browse Posts</h1>
     </div>
 
     <!-- Search + Sort -->
-    <div class="flex flex-col sm:flex-row gap-3 mb-6">
-      <input
-        type="text"
-        [ngModel]="searchQuery"
-        (ngModelChange)="onSearchChange($event)"
-        placeholder="Search posts..."
-        class="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+    <div
+      class="rounded-2xl border border-white/10 bg-white/[0.06] backdrop-blur p-3 mb-6 flex flex-col sm:flex-row gap-3"
+    >
+      <div
+        class="flex flex-1 items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5"
+      >
+        <span class="text-white/40">&#128269;</span>
+        <input
+          type="text"
+          [ngModel]="searchQuery"
+          (ngModelChange)="onSearchChange($event)"
+          placeholder="Search posts..."
+          class="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+        />
+        @if (searchQuery) {
+          <button
+            type="button"
+            class="cursor-pointer text-xs text-white/40 transition hover:text-white/80"
+            (click)="onSearchChange('')"
+          >
+            Clear
+          </button>
+        }
+      </div>
       <div class="flex gap-2">
-        <button
-          *ngFor="let sort of allSorts"
-          (click)="setSort(sort)"
-          [class.bg-blue-600]="selectedSort === sort"
-          [class.text-white]="selectedSort === sort"
-          [class.bg-white]="selectedSort !== sort"
-          [class.text-gray-700]="selectedSort !== sort"
-          class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium transition-colors"
-        >
-          {{ sort }}
-        </button>
+        @for (sort of allSorts; track sort) {
+          <button
+            type="button"
+            class="cursor-pointer px-4 py-2 rounded-xl border text-sm font-medium transition"
+            [ngClass]="
+              selectedSort === sort
+                ? 'border-transparent bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white'
+                : 'border-white/10 bg-white/5 text-white/65 hover:bg-white/10'
+            "
+            (click)="setSort(sort)"
+          >
+            {{ sort }}
+          </button>
+        }
       </div>
     </div>
 
     <!-- Loading skeleton -->
-    <ng-container *ngIf="loading">
-      <div
-        *ngFor="let _ of [1, 2, 3]"
-        class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-4 animate-pulse"
-      >
-        <div class="h-4 bg-gray-200 rounded w-3/4 mb-3"></div>
-        <div class="h-3 bg-gray-200 rounded w-full mb-2"></div>
-        <div class="h-3 bg-gray-200 rounded w-2/3"></div>
-      </div>
-    </ng-container>
+    @if (loading) {
+      @for (item of [1, 2, 3]; track item) {
+        <div class="rounded-3xl border border-white/[0.12] bg-white/[0.06] p-5 mb-4 animate-pulse">
+          <div class="h-3 bg-white/10 rounded w-1/4 mb-3"></div>
+          <div class="h-5 bg-white/10 rounded w-3/4 mb-3"></div>
+          <div class="h-3 bg-white/10 rounded w-full mb-2"></div>
+          <div class="h-3 bg-white/10 rounded w-2/3"></div>
+        </div>
+      }
+    }
 
     <!-- Error -->
-    <div
-      *ngIf="error && !loading"
-      class="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-red-700 text-sm"
-    >
-      {{ error }}
-    </div>
+    @if (error && !loading) {
+      <div
+        class="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300 mb-4"
+      >
+        {{ error }}
+      </div>
+    }
 
     <!-- Empty state -->
-    <div *ngIf="!loading && !error && posts.length === 0" class="text-center py-16 text-gray-500">
-      <p class="text-lg font-medium">No posts yet</p>
-      <p class="text-sm mt-1" *ngIf="searchQuery">Try a different search term.</p>
-    </div>
+    @if (!loading && !error && posts.length === 0) {
+      <div class="rounded-3xl border border-white/[0.12] bg-white/[0.04] p-12 text-center">
+        <div class="text-4xl mb-4">&#128221;</div>
+        <p class="text-lg font-semibold">No posts yet</p>
+        @if (searchQuery) {
+          <p class="text-sm mt-1 text-white/55">Try a different search term.</p>
+        }
+      </div>
+    }
 
     <!-- Post cards -->
-    <div *ngIf="!loading">
-      <div
-        *ngFor="let post of posts"
-        (click)="navigateToPost(post)"
-        class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-4 cursor-pointer hover:shadow-md transition-shadow"
-      >
-        <!-- Pinned + Type badge -->
-        <div class="flex items-center gap-2 mb-2">
-          <span
-            *ngIf="post.isPinned"
-            class="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200"
-          >
-            Pinned
-          </span>
-          <span
-            class="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200"
-          >
-            {{ post.postType }}
-          </span>
-        </div>
-
-        <!-- Title -->
-        <h2 class="text-base font-semibold text-gray-900 mb-1 line-clamp-2">{{ post.title }}</h2>
-
-        <!-- Content preview -->
-        <p class="text-sm text-gray-600 line-clamp-3 mb-3">{{ post.content }}</p>
-
-        <!-- Footer: author + stats + date -->
-        <div class="flex items-center justify-between text-xs text-gray-500">
-          <div class="flex items-center gap-3">
-            <span>{{ authorDisplay(post) }}</span>
-            <span class="flex items-center gap-1">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                />
-              </svg>
-              {{ post.likesCount }}
-            </span>
-            <span class="flex items-center gap-1">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                />
-              </svg>
-              {{ post.viewCount }}
+    @if (!loading) {
+      @for (post of posts; track post.id) {
+        <article
+          class="rounded-3xl border border-white/[0.12] bg-white/[0.06] p-5 mb-4 cursor-pointer transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_28px_60px_rgba(168,85,247,0.18)] hover:border-white/20"
+          (click)="navigateToPost(post)"
+          (keyup.enter)="navigateToPost(post)"
+          tabindex="0"
+        >
+          <!-- Badges -->
+          <div class="flex items-center gap-2 mb-3">
+            @if (post.isPinned) {
+              <span
+                class="text-xs font-semibold px-2.5 py-0.5 rounded-full border bg-amber-500/20 text-amber-300 border-amber-500/30"
+              >
+                Pinned
+              </span>
+            }
+            <span
+              class="text-xs font-medium px-2.5 py-0.5 rounded-full border"
+              [ngClass]="postTypeStyles[post.postType]"
+            >
+              {{ post.postType }}
             </span>
           </div>
-          <span>{{ formatDate(post.createdAt) }}</span>
-        </div>
-      </div>
-    </div>
+
+          <h2 class="text-base font-bold leading-snug mb-2 line-clamp-2">{{ post.title }}</h2>
+          <p class="text-sm text-white/60 line-clamp-3 mb-4 leading-relaxed">{{ post.content }}</p>
+
+          <div class="flex items-center justify-between text-xs text-white/45">
+            <div class="flex items-center gap-3">
+              <span class="text-white/60">{{ authorDisplay(post) }}</span>
+              <span class="flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                  />
+                </svg>
+                {{ post.likesCount }}
+              </span>
+              <span class="flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                  />
+                </svg>
+                {{ post.viewCount }}
+              </span>
+            </div>
+            <span>{{ formatDate(post.createdAt) }}</span>
+          </div>
+        </article>
+      }
+    }
 
     <!-- Load more -->
-    <div *ngIf="!loading && currentPage < totalPages" class="text-center mt-4">
-      <button
-        (click)="loadMore()"
-        [disabled]="loadingMore"
-        class="px-6 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-      >
-        <span *ngIf="!loadingMore">Load more</span>
-        <span *ngIf="loadingMore">Loading...</span>
-      </button>
-    </div>
-  </div>
+    @if (!loading && currentPage < totalPages) {
+      <div class="text-center mt-6">
+        <button
+          (click)="loadMore()"
+          [disabled]="loadingMore"
+          class="cursor-pointer px-8 py-2.5 rounded-full border border-white/15 bg-white/[0.06] text-sm font-medium text-white/75 hover:bg-white/10 hover:text-white disabled:opacity-40 transition"
+        >
+          @if (loadingMore) {
+            <span class="animate-pulse">Loading...</span>
+          } @else {
+            Load more
+          }
+        </button>
+      </div>
+    }
+  </main>
 </div>

@@ -112,6 +112,20 @@ export class EventsService {
       .pipe(map((response) => this.normalizeEventResponse(response)));
   }
 
+  getEventsByClub(
+    clubId: number,
+    params: { status?: EventStatus; page?: number; pageSize?: number } = {},
+  ): Observable<EventsApiResponse> {
+    let httpParams = new HttpParams();
+    if (params.status) httpParams = httpParams.set('status', params.status);
+    if (params.page) httpParams = httpParams.set('page', String(params.page));
+    if (params.pageSize) httpParams = httpParams.set('pageSize', String(params.pageSize));
+
+    return this.http
+      .get<EventsApiPayload>(`${this.base}/clubs/${clubId}`, { params: httpParams })
+      .pipe(map((response) => this.normalizeResponse(response)));
+  }
+
   private normalizeResponse(response: EventsApiPayload): EventsApiResponse {
     const payload = response.data ?? response.Data ?? null;
 
