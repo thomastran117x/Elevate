@@ -1,6 +1,7 @@
 using backend.main.features.auth;
 using backend.main.features.auth.contracts;
 using backend.main.features.auth.token;
+using backend.main.features.cache;
 using backend.main.features.clubs.follow;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
@@ -17,12 +18,20 @@ namespace backend.main.features.profile
         private readonly IFileUploadService _fileService;
         private readonly IFollowService _followService;
         private readonly ITokenService _tokenService;
+        private readonly IRefreshAheadCache _refreshCache;
+
+        private static readonly TimeSpan UserTTL = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan NotFoundTTL = TimeSpan.FromSeconds(15);
+
+        private static string GetUserCacheKey(int userId) => $"user:{userId}";
+
         public UserService(
             IUserRepository userRepository,
             IAuthUserRepository authUserRepository,
             IFileUploadService fileService,
             IFollowService followService,
-            ITokenService tokenService
+            ITokenService tokenService,
+            IRefreshAheadCache refreshCache
         )
         {
             _userRepository = userRepository;
@@ -30,6 +39,7 @@ namespace backend.main.features.profile
             _fileService = fileService;
             _followService = followService;
             _tokenService = tokenService;
+            _refreshCache = refreshCache;
         }
 
         public async Task<IReadOnlyList<UserListRecord>> GetAllUsersAsync(
@@ -42,11 +52,15 @@ namespace backend.main.features.profile
 
         public async Task<User> GetUserByIdAsync(int id)
         {
-            var user = await _userRepository.GetUserAsync(id);
+            var user = await _refreshCache.GetOrSetAsync(
+                GetUserCacheKey(id),
+                () => _userRepository.GetUserAsync(id),
+                UserTTL,
+                nullSentinelTtl: NotFoundTTL);
+
             if (user == null)
-            {
                 throw new ResourceNotFoundException($"User with the id {id} is not found");
-            }
+
             return user;
         }
 
@@ -54,16 +68,16 @@ namespace backend.main.features.profile
         {
             var existingUser = await _userRepository.UpdatePartialAsync(updatedUser);
             if (existingUser == null)
-            {
                 throw new ResourceNotFoundException($"User with the id {id} is not found");
-            }
 
+            await _refreshCache.RemoveAsync(GetUserCacheKey(id));
             return existingUser;
         }
 
         public async Task<bool> DeleteUserAsync(int id)
         {
             _ = await _userRepository.DeleteUserAsync(id);
+            await _refreshCache.RemoveAsync(GetUserCacheKey(id));
             return true;
         }
 
@@ -74,6 +88,7 @@ namespace backend.main.features.profile
                 throw new ResourceNotFoundException($"User with the id {id} is not found");
 
             await _tokenService.RevokeAllRefreshSessionsAsync(id);
+            await _refreshCache.RemoveAsync(GetUserCacheKey(id));
             return user;
         }
 
@@ -89,6 +104,7 @@ namespace backend.main.features.profile
             User updatedUser = await _userRepository.UpdatePartialAsync(user)
                 ?? throw new ResourceNotFoundException($"User with the id {id} is not found");
 
+            await _refreshCache.RemoveAsync(GetUserCacheKey(id));
             return updatedUser;
         }
 
