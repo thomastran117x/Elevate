@@ -2,6 +2,7 @@ using System.Data;
 
 using backend.main.features.cache;
 using backend.main.features.events.registration;
+using backend.main.features.events.registration.contracts.requests;
 using backend.main.features.events.registration.contracts.responses;
 using backend.main.features.events.search;
 using backend.main.infrastructure.database.core;
@@ -130,7 +131,7 @@ namespace backend.main.features.events.registration
         private string UserIndexKey(int userId)
             => $"evtreg:index:u:{userId}";
 
-        public async Task RegisterAsync(int eventId, int userId, string userRole)
+        public async Task RegisterAsync(int eventId, int userId, string userRole, RegisterEventRequest? request = null)
         {
             await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
             var ev = await _eventsService.GetEvent(eventId);
@@ -150,9 +151,6 @@ namespace backend.main.features.events.registration
 
             try
             {
-                if (await IsRegisteredAsync(eventId, userId, userRole))
-                    throw new ConflictException("Already registered for this event");
-
                 await using var transaction = await _db.Database.BeginTransactionAsync(
                     IsolationLevel.Serializable);
 
@@ -160,38 +158,67 @@ namespace backend.main.features.events.registration
                 if (trackedEvent == null)
                     throw new ResourceNotFoundException($"Event {eventId} not found");
 
-                if (trackedEvent.EndTime.HasValue && trackedEvent.EndTime <= DateTime.UtcNow)
-                    throw new ConflictException("Event is full");
-
-                var count = await _db.EventRegistrations.CountAsync(r => r.EventId == eventId);
-                if (count >= trackedEvent.maxParticipants)
-                    throw new ConflictException("Event is full");
-
-                var registration = new EventRegistration
-                {
-                    EventId = eventId,
-                    UserId = userId,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                _db.EventRegistrations.Add(registration);
-                trackedEvent.RegistrationCount += 1;
-                trackedEvent.UpdatedAt = DateTime.UtcNow;
                 if (!EventLifecyclePolicy.AllowsRegistration(trackedEvent.LifecycleState))
                     throw new ConflictException("Registration is only available for published events.");
+
+                if (trackedEvent.EndTime.HasValue && trackedEvent.EndTime <= DateTime.UtcNow)
+                    throw new ConflictException("Event has already ended");
+
+                if (trackedEvent.StartTime.HasValue && trackedEvent.StartTime <= DateTime.UtcNow)
+                    throw new ConflictException("Registration is closed — the event has already started");
+
+                if (trackedEvent.maxParticipants > 0)
+                {
+                    var count = await _db.EventRegistrations
+                        .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Active);
+                    if (count >= trackedEvent.maxParticipants)
+                        throw new ConflictException("Event is full");
+                }
+
+                var existing = await _db.EventRegistrations
+                    .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
+
+                if (existing != null)
+                {
+                    if (existing.Status == RegistrationStatus.Active)
+                        throw new ConflictException("Already registered for this event");
+
+                    // Reactivate the cancelled row
+                    existing.Status = RegistrationStatus.Active;
+                    existing.CancelledAt = null;
+                    existing.Notes = request?.Notes;
+                    existing.PhoneNumber = request?.PhoneNumber;
+                    existing.DietaryNeeds = request?.DietaryNeeds;
+                }
+                else
+                {
+                    _db.EventRegistrations.Add(new EventRegistration
+                    {
+                        EventId = eventId,
+                        UserId = userId,
+                        CreatedAt = DateTime.UtcNow,
+                        Status = RegistrationStatus.Active,
+                        Notes = request?.Notes,
+                        PhoneNumber = request?.PhoneNumber,
+                        DietaryNeeds = request?.DietaryNeeds
+                    });
+                }
+
+                trackedEvent.RegistrationCount += 1;
+                trackedEvent.UpdatedAt = DateTime.UtcNow;
 
                 _outboxWriter.StageSync(trackedEvent);
 
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                await _refreshCache.SetAsync(MembershipKey(userId, eventId), registration, MembershipTTL);
+                await _refreshCache.RemoveAsync(MembershipKey(userId, eventId));
                 await InvalidateListsAsync(userId, eventId);
                 await _refreshCache.RemoveAsync($"event:{eventId}");
             }
             catch (DbUpdateException)
             {
-                // Unique constraint on (EventId, UserId) caught a duplicate that slipped past the cache check
+                // Unique constraint on (EventId, UserId) caught a duplicate that slipped past the lock
                 throw new ConflictException("Already registered for this event");
             }
             catch (Exception e)
@@ -217,15 +244,22 @@ namespace backend.main.features.events.registration
                 await using var transaction = await _db.Database.BeginTransactionAsync(
                     IsolationLevel.Serializable);
 
+                var trackedEvent = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+                if (trackedEvent != null && trackedEvent.StartTime.HasValue && trackedEvent.StartTime.Value <= DateTime.UtcNow)
+                    throw new ConflictException("Cannot unregister — the event has already started");
+
                 var registration = await _db.EventRegistrations
-                    .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
+                    .FirstOrDefaultAsync(r =>
+                        r.EventId == eventId &&
+                        r.UserId == userId &&
+                        r.Status == RegistrationStatus.Active);
 
                 if (registration == null)
                     throw new ResourceNotFoundException("Registration not found");
 
-                _db.EventRegistrations.Remove(registration);
+                registration.Status = RegistrationStatus.Cancelled;
+                registration.CancelledAt = DateTime.UtcNow;
 
-                var trackedEvent = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
                 if (trackedEvent != null)
                 {
                     trackedEvent.RegistrationCount = Math.Max(0, trackedEvent.RegistrationCount - 1);
@@ -246,6 +280,42 @@ namespace backend.main.features.events.registration
                     throw;
 
                 Logger.Error($"[EventRegistrationService] UnregisterAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<EventRegistration> UpdateRegistrationAsync(int eventId, int userId, string userRole, UpdateRegistrationRequest request)
+        {
+            try
+            {
+                await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
+
+                var registration = await _db.EventRegistrations
+                    .FirstOrDefaultAsync(r =>
+                        r.EventId == eventId &&
+                        r.UserId == userId &&
+                        r.Status == RegistrationStatus.Active);
+
+                if (registration == null)
+                    throw new ResourceNotFoundException("Registration not found");
+
+                registration.Notes = request.Notes;
+                registration.PhoneNumber = request.PhoneNumber;
+                registration.DietaryNeeds = request.DietaryNeeds;
+
+                await _db.SaveChangesAsync();
+
+                await _refreshCache.RemoveAsync(MembershipKey(userId, eventId));
+                await InvalidateListsAsync(userId, eventId);
+
+                return registration;
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventRegistrationService] UpdateRegistrationAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
         }
@@ -316,4 +386,3 @@ namespace backend.main.features.events.registration
         }
     }
 }
-

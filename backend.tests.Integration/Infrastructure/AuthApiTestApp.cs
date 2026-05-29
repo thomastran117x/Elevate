@@ -156,13 +156,45 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         db.EventRegistrations.Add(new EventRegistration
         {
             EventId = eventId,
-            UserId = userId
+            UserId = userId,
+            Status = RegistrationStatus.Active
         });
 
         var ev = await db.Events.FirstAsync(existing => existing.Id == eventId);
         ev.RegistrationCount += 1;
         ev.UpdatedAt = DateTime.UtcNow;
 
+        await db.SaveChangesAsync();
+    }
+
+    public async Task SetEventStartTimeToPast(int eventId, int minutesAgo = 10)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+        var ev = await db.Events.FirstAsync(e => e.Id == eventId);
+        ev.StartTime = DateTime.UtcNow.AddMinutes(-minutesAgo);
+        ev.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+    }
+
+    public async Task SetEventEndTimeToPast(int eventId, int minutesAgo = 5)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+        var ev = await db.Events.FirstAsync(e => e.Id == eventId);
+        ev.StartTime = DateTime.UtcNow.AddHours(-2);
+        ev.EndTime = DateTime.UtcNow.AddMinutes(-minutesAgo);
+        ev.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+    }
+
+    public async Task SetMaxParticipants(int eventId, int max)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+        var ev = await db.Events.FirstAsync(e => e.Id == eventId);
+        ev.maxParticipants = max;
+        ev.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
     }
 

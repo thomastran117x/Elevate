@@ -29,7 +29,7 @@ public class EventRegistrationControllerTests
         created.StatusCode.Should().Be(201);
         created.Value.Should().BeOfType<MessageResponse>()
             .Which.Message.Should().Contain("Successfully registered for event with ID 9.");
-        registrationService.Verify(service => service.RegisterAsync(9, 7, "Organizer"), Times.Once);
+        registrationService.Verify(service => service.RegisterAsync(9, 7, "Organizer", null), Times.Once);
     }
 
     [Fact]

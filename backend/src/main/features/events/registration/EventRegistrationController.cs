@@ -34,13 +34,15 @@ namespace backend.main.features.events.registration
         [Authorize]
         [HttpPost("{eventId}/register")]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status201Created)]
-        public async Task<IActionResult> Register([Range(1, int.MaxValue)] int eventId)
+        public async Task<IActionResult> Register(
+            [Range(1, int.MaxValue)] int eventId,
+            [FromBody] RegisterEventRequest? request = null)
         {
             try
             {
                 var user = User.GetUserPayload();
 
-                await _registrationService.RegisterAsync(eventId, user.Id, user.Role);
+                await _registrationService.RegisterAsync(eventId, user.Id, user.Role, request);
 
                 return StatusCode(201, new MessageResponse(
                     $"Successfully registered for event with ID {eventId}."
@@ -77,6 +79,34 @@ namespace backend.main.features.events.registration
                     return HandleError.Resolve(e);
 
                 Logger.Error($"[EventRegistrationController] Unregister failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [HttpPatch("{eventId}/register")]
+        [ProducesResponseType(typeof(ApiResponse<EventRegistrationResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> UpdateRegistration(
+            [Range(1, int.MaxValue)] int eventId,
+            [FromBody] UpdateRegistrationRequest request)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+
+                var registration = await _registrationService.UpdateRegistrationAsync(eventId, user.Id, user.Role, request);
+
+                return Ok(new ApiResponse<EventRegistrationResponse>(
+                    $"Registration details for event with ID {eventId} have been updated.",
+                    MapToResponse(registration)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventRegistrationController] UpdateRegistration failed: {e}");
                 return HandleError.Resolve(e);
             }
         }
@@ -188,7 +218,7 @@ namespace backend.main.features.events.registration
         }
 
         private static EventRegistrationResponse MapToResponse(EventRegistration r)
-            => new(r.Id, r.UserId, r.EventId, r.CreatedAt);
+            => new(r.Id, r.UserId, r.EventId, r.CreatedAt, r.Status, r.CancelledAt, r.Notes, r.PhoneNumber, r.DietaryNeeds);
 
         private UserIdentityPayload? GetOptionalUserPayload()
         {
@@ -221,7 +251,7 @@ namespace backend.main.features.events.registration
 
                 return Ok(new ApiResponse<IEnumerable<EventRegistrationResponse>>(
                     $"Registered events for user with ID {userId} have been fetched successfully.",
-                    registrations.Select(r => new EventRegistrationResponse(r.Id, r.UserId, r.EventId, r.CreatedAt))
+                    registrations.Select(r => new EventRegistrationResponse(r.Id, r.UserId, r.EventId, r.CreatedAt, r.Status, r.CancelledAt, r.Notes, r.PhoneNumber, r.DietaryNeeds))
                 ));
             }
             catch (Exception e)
@@ -235,5 +265,3 @@ namespace backend.main.features.events.registration
         }
     }
 }
-
-

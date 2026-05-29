@@ -1,16 +1,24 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
+import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
-import { Subject, takeUntil } from 'rxjs';
+import { Store } from '@ngrx/store';
+import { Subject, take, takeUntil } from 'rxjs';
 
-import { EventItem, CATEGORY_STYLES } from '../../models/event.types';
-import { EventsService } from '../../services/events.service';
 import { extractEnvelopeData } from '../../../../core/api/models/api-envelope.model';
+import { UserState } from '../../../../core/stores/user.reducer';
+import { selectUser } from '../../../../core/stores/user.selectors';
+import { EventItem, CATEGORY_STYLES } from '../../models/event.types';
+import {
+  EventRegistrationService,
+  RegistrationDetails,
+} from '../../services/event-registration.service';
+import { EventsService } from '../../services/events.service';
 
 @Component({
   selector: 'app-event-detail',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './event-detail.component.html',
 })
 export class EventDetailComponent implements OnInit, OnDestroy {
@@ -20,6 +28,16 @@ export class EventDetailComponent implements OnInit, OnDestroy {
   selectedImageIndex = 0;
   returnQueryParams: Record<string, string> = {};
 
+  isRegistered = false;
+  registrationLoading = false;
+  registrationError = '';
+  currentUserId: number | null = null;
+  showRegistrationForm = false;
+  isEditing = false;
+  registrationDetails: RegistrationDetails | null = null;
+
+  registrationForm: FormGroup;
+
   readonly categoryStyles = CATEGORY_STYLES;
 
   private readonly destroy$ = new Subject<void>();
@@ -27,9 +45,18 @@ export class EventDetailComponent implements OnInit, OnDestroy {
 
   constructor(
     private eventsService: EventsService,
+    private registrationService: EventRegistrationService,
+    private store: Store<{ user: UserState }>,
     private route: ActivatedRoute,
     private router: Router,
-  ) {}
+    private fb: FormBuilder,
+  ) {
+    this.registrationForm = this.fb.group({
+      notes: [''],
+      phoneNumber: [''],
+      dietaryNeeds: [''],
+    });
+  }
 
   ngOnInit(): void {
     this.route.queryParamMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
@@ -59,6 +86,20 @@ export class EventDetailComponent implements OnInit, OnDestroy {
     }
 
     return this.event.imageUrls[this.selectedImageIndex] ?? this.event.imageUrls[0] ?? null;
+  }
+
+  get canRegister(): boolean {
+    if (!this.event) return false;
+    if (this.event.lifecycleState !== 'Published') return false;
+    if (this.isEventStarted(this.event)) return false;
+    if (this.event.registerCost > 0) return false;
+    if (this.event.maxParticipants > 0 && this.event.registrationCount >= this.event.maxParticipants)
+      return false;
+    return true;
+  }
+
+  isEventStarted(event: EventItem): boolean {
+    return new Date(event.startTime) <= new Date();
   }
 
   goBack(): void {
@@ -108,6 +149,143 @@ export class EventDetailComponent implements OnInit, OnDestroy {
     return Math.min(100, (event.registrationCount / event.maxParticipants) * 100);
   }
 
+  openRegistrationForm(): void {
+    this.isEditing = false;
+    this.registrationForm.reset();
+    this.showRegistrationForm = true;
+    this.registrationError = '';
+  }
+
+  openEditForm(): void {
+    this.isEditing = true;
+    this.registrationForm.patchValue({
+      notes: this.registrationDetails?.notes ?? '',
+      phoneNumber: this.registrationDetails?.phoneNumber ?? '',
+      dietaryNeeds: this.registrationDetails?.dietaryNeeds ?? '',
+    });
+    this.showRegistrationForm = true;
+    this.registrationError = '';
+  }
+
+  closeRegistrationForm(): void {
+    this.showRegistrationForm = false;
+  }
+
+  submitRegistration(): void {
+    if (!this.event || this.registrationLoading) return;
+    this.registrationLoading = true;
+    this.registrationError = '';
+
+    const details: RegistrationDetails = {
+      notes: this.registrationForm.value.notes || undefined,
+      phoneNumber: this.registrationForm.value.phoneNumber || undefined,
+      dietaryNeeds: this.registrationForm.value.dietaryNeeds || undefined,
+    };
+
+    this.registrationService
+      .register(this.event.id, details)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.isRegistered = true;
+          this.registrationLoading = false;
+          this.showRegistrationForm = false;
+          this.registrationDetails = details;
+          if (this.event) {
+            this.event = { ...this.event, registrationCount: this.event.registrationCount + 1 };
+          }
+        },
+        error: (response) => {
+          this.registrationLoading = false;
+          this.registrationError =
+            response?.error?.message || response?.error?.Message || 'Registration failed.';
+        },
+      });
+  }
+
+  submitUpdate(): void {
+    if (!this.event || this.registrationLoading) return;
+    this.registrationLoading = true;
+    this.registrationError = '';
+
+    const details: RegistrationDetails = {
+      notes: this.registrationForm.value.notes || undefined,
+      phoneNumber: this.registrationForm.value.phoneNumber || undefined,
+      dietaryNeeds: this.registrationForm.value.dietaryNeeds || undefined,
+    };
+
+    this.registrationService
+      .updateRegistration(this.event.id, details)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.registrationLoading = false;
+          this.showRegistrationForm = false;
+          this.registrationDetails = details;
+        },
+        error: (response) => {
+          this.registrationLoading = false;
+          this.registrationError =
+            response?.error?.message ||
+            response?.error?.Message ||
+            'Failed to update registration details.';
+        },
+      });
+  }
+
+  unregister(): void {
+    if (!this.event || this.registrationLoading) return;
+    this.registrationLoading = true;
+    this.registrationError = '';
+
+    this.registrationService
+      .unregister(this.event.id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.isRegistered = false;
+          this.registrationLoading = false;
+          this.registrationDetails = null;
+          if (this.event) {
+            this.event = {
+              ...this.event,
+              registrationCount: Math.max(0, this.event.registrationCount - 1),
+            };
+          }
+        },
+        error: (response) => {
+          this.registrationLoading = false;
+          this.registrationError =
+            response?.error?.message || response?.error?.Message || 'Unregistration failed.';
+        },
+      });
+  }
+
+  private loadRegistrationStatus(eventId: number): void {
+    this.store
+      .select(selectUser)
+      .pipe(take(1))
+      .subscribe((user) => {
+        this.currentUserId = user?.Id ?? null;
+        if (!user) {
+          this.isRegistered = false;
+          return;
+        }
+
+        this.registrationService
+          .checkRegistration(eventId)
+          .pipe(takeUntil(this.destroy$))
+          .subscribe({
+            next: (registered) => {
+              this.isRegistered = registered;
+            },
+            error: () => {
+              this.isRegistered = false;
+            },
+          });
+      });
+  }
+
   private loadEventFromParams(params: ParamMap): void {
     const eventId = this.parseEventId(params.get('eventId'));
     if (eventId === null) {
@@ -145,6 +323,7 @@ export class EventDetailComponent implements OnInit, OnDestroy {
           this.event = event;
           this.selectedImageIndex = 0;
           this.loading = false;
+          this.loadRegistrationStatus(event.id);
         },
         error: (response) => {
           if (requestVersion !== this.requestVersion) {

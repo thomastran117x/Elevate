@@ -620,6 +620,248 @@ public class EventEndpointsTests
         return request;
     }
 
+    [Fact]
+    public async Task Registration_ShouldBeRejected_WhenEventHasAlreadyStarted()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "reg-started-org@example.com", "Organizer");
+        var (participantSession, _) = await CreateUserSessionAsync(app, "reg-started-user@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Started Event Club");
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Past Start Event");
+        await app.SetEventStartTimeToPast(ev.Id);
+
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/register",
+            participantSession.AccessToken));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().ContainAny("started", "already started");
+    }
+
+    [Fact]
+    public async Task Unregistration_ShouldBeRejected_WhenEventHasAlreadyStarted()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "unreg-started-org@example.com", "Organizer");
+        var (participantSession, participant) = await CreateUserSessionAsync(app, "unreg-started-user@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Unregister Started Club");
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Locked Event");
+        await app.AddRegistrationAsync(ev.Id, participant!.Id);
+        await app.SetEventStartTimeToPast(ev.Id);
+
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/events/{ev.Id}/register",
+            participantSession.AccessToken));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().ContainAny("started", "already started");
+    }
+
+    [Fact]
+    public async Task Registration_ShouldSucceed_WhenMaxParticipantsIsZero_Unlimited()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "unlimited-org@example.com", "Organizer");
+        var (userASession, _) = await CreateUserSessionAsync(app, "unlimited-user-a@example.com");
+        var (userBSession, _) = await CreateUserSessionAsync(app, "unlimited-user-b@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Unlimited Club");
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Unlimited Event");
+        // SetMaxParticipants(0) must be called after publish (publish gate requires >= 1)
+        await app.SetMaxParticipants(ev.Id, 0);
+
+        var regA = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post, $"/api/events/{ev.Id}/register", userASession.AccessToken));
+        regA.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var regB = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post, $"/api/events/{ev.Id}/register", userBSession.AccessToken));
+        regB.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task Registration_ShouldSucceed_WhenReRegisteringAfterCancellation()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "reregister-org@example.com", "Organizer");
+        var (participantSession, _) = await CreateUserSessionAsync(app, "reregister-user@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Reregister Club");
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Reregister Event");
+
+        var reg1 = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post, $"/api/events/{ev.Id}/register", participantSession.AccessToken));
+        reg1.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var unreg = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete, $"/api/events/{ev.Id}/register", participantSession.AccessToken));
+        unreg.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var reg2 = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post, $"/api/events/{ev.Id}/register", participantSession.AccessToken));
+        reg2.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var check = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get, $"/api/events/{ev.Id}/registrations/me", participantSession.AccessToken));
+        check.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await check.Content.ReadAsStringAsync()).Should().Contain("\"isRegistered\":true");
+    }
+
+    [Fact]
+    public async Task Registration_ShouldBeRejected_WithCorrectMessage_WhenEventHasEnded()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "ended-org@example.com", "Organizer");
+        var (participantSession, _) = await CreateUserSessionAsync(app, "ended-user@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Ended Event Club");
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Ended Event");
+        await app.SetEventEndTimeToPast(ev.Id);
+
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post, $"/api/events/{ev.Id}/register", participantSession.AccessToken));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().NotContain("Event is full");
+        body.Should().ContainAny("ended", "already ended");
+    }
+
+    [Fact]
+    public async Task Registration_ShouldBeRejected_WhenEventIsAtCapacity()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, organizer) = await CreateUserSessionAsync(app, "capacity-org@example.com", "Organizer");
+        var (participantSession, _) = await CreateUserSessionAsync(app, "capacity-user@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Capacity Club");
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Full Event");
+        await app.SetMaxParticipants(ev.Id, 1);
+        await app.AddRegistrationAsync(ev.Id, organizer!.Id);
+
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post, $"/api/events/{ev.Id}/register", participantSession.AccessToken));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().Contain("full");
+    }
+
+    [Fact]
+    public async Task Registration_CancelledRegistration_ShouldNotAppearInRegistrationsList()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "cancel-list-org@example.com", "Organizer");
+        var (participantSession, participant) = await CreateUserSessionAsync(app, "cancel-list-user@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Soft Delete Club");
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Soft Delete Event");
+
+        await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post, $"/api/events/{ev.Id}/register", participantSession.AccessToken));
+
+        await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete, $"/api/events/{ev.Id}/register", participantSession.AccessToken));
+
+        var registrations = await app.Client.GetAsync($"/api/events/{ev.Id}/registrations");
+        registrations.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await app.ReadApiResponseAsync<IEnumerable<EventRegistrationResponse>>(registrations);
+        body.Data.Should().NotContain(r => r.UserId == participant!.Id);
+    }
+
+    [Fact]
+    public async Task Registration_ShouldPersistDetailFields_Notes_Phone_Dietary()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "details-org@example.com", "Organizer");
+        var (participantSession, participant) = await CreateUserSessionAsync(app, "details-user@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Details Club");
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Details Event");
+
+        var reg = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/register",
+            participantSession.AccessToken,
+            JsonContent.Create(new
+            {
+                notes = "Please seat me near the front.",
+                phoneNumber = "416-555-0123",
+                dietaryNeeds = "Vegetarian, no nuts"
+            })));
+        reg.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var registrations = await app.Client.GetAsync($"/api/events/{ev.Id}/registrations");
+        var body = await app.ReadApiResponseAsync<IEnumerable<EventRegistrationResponse>>(registrations);
+        var entry = body.Data.Should().ContainSingle(r => r.UserId == participant!.Id).Subject;
+        entry.Notes.Should().Be("Please seat me near the front.");
+        entry.PhoneNumber.Should().Be("416-555-0123");
+        entry.DietaryNeeds.Should().Be("Vegetarian, no nuts");
+        entry.Status.Should().Be("Active");
+    }
+
+    [Fact]
+    public async Task Registration_ShouldUpdateDetails_WhenPatchIsCalled()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "update-details-org@example.com", "Organizer");
+        var (participantSession, participant) = await CreateUserSessionAsync(app, "update-details-user@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Update Details Club");
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Update Details Event");
+
+        await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/register",
+            participantSession.AccessToken,
+            JsonContent.Create(new { notes = "Original note" })));
+
+        var patch = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Patch,
+            $"/api/events/{ev.Id}/register",
+            participantSession.AccessToken,
+            JsonContent.Create(new
+            {
+                notes = "Updated note",
+                phoneNumber = "647-555-9999",
+                dietaryNeeds = "Gluten free"
+            })));
+        patch.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var registrations = await app.Client.GetAsync($"/api/events/{ev.Id}/registrations");
+        var body = await app.ReadApiResponseAsync<IEnumerable<EventRegistrationResponse>>(registrations);
+        var entry = body.Data.Should().ContainSingle(r => r.UserId == participant!.Id).Subject;
+        entry.Notes.Should().Be("Updated note");
+        entry.PhoneNumber.Should().Be("647-555-9999");
+        entry.DietaryNeeds.Should().Be("Gluten free");
+        entry.Status.Should().Be("Active");
+    }
+
+    [Fact]
+    public async Task Registration_UpdateDetails_ShouldFail_WhenNotRegistered()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "update-notfound-org@example.com", "Organizer");
+        var (participantSession, _) = await CreateUserSessionAsync(app, "update-notfound-user@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Notfound Club");
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Notfound Event");
+
+        var patch = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Patch,
+            $"/api/events/{ev.Id}/register",
+            participantSession.AccessToken,
+            JsonContent.Create(new { notes = "Should fail" })));
+
+        patch.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
     private sealed class ClubApiModel
     {
         public int Id { get; init; }

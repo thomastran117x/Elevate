@@ -111,7 +111,10 @@ namespace backend.main.features.events.registration
         {
             return await _context.EventRegistrations
                 .AsNoTracking()
-                .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
+                .FirstOrDefaultAsync(r =>
+                    r.EventId == eventId &&
+                    r.UserId == userId &&
+                    r.Status == RegistrationStatus.Active);
         }
 
         public async Task<IEnumerable<EventRegistration>> GetRegistrationsByEventAsync(int eventId, int page = 1, int pageSize = 20)
@@ -121,7 +124,7 @@ namespace backend.main.features.events.registration
 
             return await _context.EventRegistrations
                 .AsNoTracking()
-                .Where(r => r.EventId == eventId)
+                .Where(r => r.EventId == eventId && r.Status == RegistrationStatus.Active)
                 .OrderByDescending(r => r.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
@@ -135,7 +138,7 @@ namespace backend.main.features.events.registration
 
             return await _context.EventRegistrations
                 .AsNoTracking()
-                .Where(r => r.UserId == userId)
+                .Where(r => r.UserId == userId && r.Status == RegistrationStatus.Active)
                 .OrderByDescending(r => r.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)

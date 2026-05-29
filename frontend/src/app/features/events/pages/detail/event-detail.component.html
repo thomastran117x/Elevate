@@ -265,31 +265,163 @@
           </div>
 
           <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <div class="text-sm font-semibold">Registration progress</div>
-                <div class="mt-1 text-xs text-white/55">
-                  {{ event.registrationCount }} of {{ event.maxParticipants }} spots filled
+            <!-- Progress bar — only when there's a cap -->
+            <ng-container *ngIf="event.maxParticipants > 0">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <div class="text-sm font-semibold">Registration progress</div>
+                  <div class="mt-1 text-xs text-white/55">
+                    {{ event.registrationCount }} of {{ event.maxParticipants }} spots filled
+                  </div>
+                </div>
+                <div class="text-lg font-bold">
+                  {{ registrationPercent(event) | number: '1.0-0' }}%
                 </div>
               </div>
-              <div class="text-lg font-bold">
-                {{ registrationPercent(event) | number: '1.0-0' }}%
+              <div class="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                  class="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500"
+                  [style.width.%]="registrationPercent(event)"
+                ></div>
               </div>
-            </div>
+              <div class="mt-4 mb-2 border-t border-white/10"></div>
+            </ng-container>
 
-            <div class="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
-              <div
-                class="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500"
-                [style.width.%]="registrationPercent(event)"
-              ></div>
-            </div>
+            <!-- Unlimited capacity indicator -->
+            <ng-container *ngIf="event.maxParticipants <= 0">
+              <div class="text-sm text-white/55 mb-4">
+                {{ event.registrationCount }} registered &bull; Unlimited spots
+              </div>
+            </ng-container>
 
+            <!-- Registration error -->
             <div
-              class="mt-5 rounded-2xl border border-white/10 bg-slate-950/35 p-4 text-sm text-white/70"
+              *ngIf="registrationError"
+              class="mb-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-200"
             >
-              This page is live from the same event API as search results, so it will stay aligned
-              with the event data users already discovered.
+              {{ registrationError }}
             </div>
+
+            <!-- Not logged in -->
+            <div
+              *ngIf="currentUserId === null && canRegister"
+              class="rounded-2xl border border-white/10 bg-slate-950/35 p-4 text-sm text-white/70 text-center"
+            >
+              Sign in to register for this event.
+            </div>
+
+            <!-- Logged in -->
+            <ng-container *ngIf="currentUserId !== null">
+
+              <!-- Registration form (register or edit) -->
+              <div *ngIf="showRegistrationForm" class="space-y-3">
+                <div class="text-sm font-semibold text-white/80">
+                  {{ isEditing ? 'Update your registration details' : 'Complete your registration' }}
+                </div>
+
+                <div [formGroup]="registrationForm" class="space-y-3">
+                  <div>
+                    <label class="block text-xs text-white/55 mb-1">Notes for organizer (optional)</label>
+                    <input
+                      formControlName="notes"
+                      type="text"
+                      placeholder="e.g. dietary requirements, questions..."
+                      class="w-full rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs text-white/55 mb-1">Phone number (optional)</label>
+                    <input
+                      formControlName="phoneNumber"
+                      type="tel"
+                      placeholder="e.g. 416-555-0123"
+                      class="w-full rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs text-white/55 mb-1">Dietary / accessibility needs (optional)</label>
+                    <input
+                      formControlName="dietaryNeeds"
+                      type="text"
+                      placeholder="e.g. vegetarian, wheelchair access..."
+                      class="w-full rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50"
+                    />
+                  </div>
+                </div>
+
+                <div class="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    [disabled]="registrationLoading"
+                    (click)="isEditing ? submitUpdate() : submitRegistration()"
+                    class="flex-1 rounded-2xl bg-gradient-to-r from-purple-500/30 to-fuchsia-500/30 border border-purple-500/30 px-4 py-2.5 text-sm font-semibold text-white transition hover:from-purple-500/40 hover:to-fuchsia-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span *ngIf="!registrationLoading">{{ isEditing ? 'Save changes' : 'Confirm registration' }}</span>
+                    <span *ngIf="registrationLoading">Please wait...</span>
+                  </button>
+                  <button
+                    type="button"
+                    (click)="closeRegistrationForm()"
+                    class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white/70 transition hover:bg-white/10"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+
+              <!-- Registered state -->
+              <div *ngIf="isRegistered && !showRegistrationForm" class="space-y-2">
+                <div class="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200 text-center">
+                  You're registered for this event
+                </div>
+                <button
+                  type="button"
+                  (click)="openEditForm()"
+                  class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white/70 transition hover:bg-white/10"
+                >
+                  Edit my registration details
+                </button>
+                <button
+                  type="button"
+                  [disabled]="registrationLoading"
+                  (click)="unregister()"
+                  class="w-full rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span *ngIf="!registrationLoading">Unregister from event</span>
+                  <span *ngIf="registrationLoading">Please wait...</span>
+                </button>
+              </div>
+
+              <!-- Can register (not yet registered, form not open) -->
+              <button
+                *ngIf="!isRegistered && canRegister && !showRegistrationForm"
+                type="button"
+                (click)="openRegistrationForm()"
+                class="w-full rounded-2xl border border-purple-500/30 bg-gradient-to-r from-purple-500/20 to-fuchsia-500/20 px-4 py-3 text-sm font-semibold text-white transition hover:from-purple-500/30 hover:to-fuchsia-500/30"
+              >
+                Register for this event
+              </button>
+
+              <!-- Cannot register -->
+              <div
+                *ngIf="!isRegistered && !canRegister && !showRegistrationForm"
+                class="rounded-2xl border border-white/10 bg-slate-950/35 p-4 text-sm text-white/50 text-center"
+              >
+                <ng-container *ngIf="event.lifecycleState === 'Cancelled'">
+                  This event has been cancelled.
+                </ng-container>
+                <ng-container *ngIf="event.lifecycleState === 'Published' && event.maxParticipants > 0 && event.registrationCount >= event.maxParticipants">
+                  This event is full.
+                </ng-container>
+                <ng-container *ngIf="event.lifecycleState === 'Published' && event.registerCost > 0">
+                  Paid registration is required.
+                </ng-container>
+                <ng-container *ngIf="event.lifecycleState === 'Published' && isEventStarted(event) && event.maxParticipants <= 0 || (event.lifecycleState === 'Published' && isEventStarted(event) && event.maxParticipants > 0 && event.registrationCount < event.maxParticipants && event.registerCost === 0)">
+                  Registration is closed — this event has started.
+                </ng-container>
+              </div>
+
+            </ng-container>
           </div>
         </div>
       </div>
