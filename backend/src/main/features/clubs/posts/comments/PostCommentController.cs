@@ -149,7 +149,11 @@ namespace backend.main.features.clubs.posts.comments
 
             await _commentService.DeleteAsync(postId, commentId, userPayload.Id);
 
-            _broker.Publish(postId, new CommentEvent("CommentDeleted", new { postId, commentId }));
+            _broker.Publish(postId, new CommentEvent("CommentDeleted", new
+            {
+                postId,
+                commentId
+            }));
 
             return StatusCode(200, new MessageResponse(
                 $"Comment with ID {commentId} has been deleted successfully."

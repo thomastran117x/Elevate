@@ -37,12 +37,17 @@ export class ClubPostsService {
       })
       .pipe(
         map((response) => {
-          const raw = (response as ApiEnvelope<unknown> & { Data?: unknown }).data ??
+          const raw =
+            (response as ApiEnvelope<unknown> & { Data?: unknown }).data ??
             (response as { Data?: unknown }).Data ??
             null;
           return {
             ...response,
-            data: raw ? normalizeClubPostsPagedData(raw as Parameters<typeof normalizeClubPostsPagedData>[0]) : null,
+            data: raw
+              ? normalizeClubPostsPagedData(
+                  raw as Parameters<typeof normalizeClubPostsPagedData>[0],
+                )
+              : null,
           } as ClubPostsApiResponse;
         }),
       );
@@ -55,7 +60,8 @@ export class ClubPostsService {
       })
       .pipe(
         map((response) => {
-          const raw = (response as ApiEnvelope<unknown> & { Data?: unknown }).data ??
+          const raw =
+            (response as ApiEnvelope<unknown> & { Data?: unknown }).data ??
             (response as { Data?: unknown }).Data ??
             null;
           return {

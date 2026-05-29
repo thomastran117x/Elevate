@@ -130,8 +130,7 @@ export class ClubPostsComponent implements OnInit, OnDestroy {
         },
         error: (err) => {
           if (version !== this.requestVersion) return;
-          this.error =
-            err?.error?.message || err?.error?.Message || 'Failed to load posts.';
+          this.error = err?.error?.message || err?.error?.Message || 'Failed to load posts.';
           this.loading = false;
           this.loadingMore = false;
         },

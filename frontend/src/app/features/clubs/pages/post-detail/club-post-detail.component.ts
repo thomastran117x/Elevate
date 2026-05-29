@@ -80,8 +80,7 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
           }
         },
         error: (err) => {
-          this.error =
-            err?.error?.message || err?.error?.Message || 'Failed to load post.';
+          this.error = err?.error?.message || err?.error?.Message || 'Failed to load post.';
           this.loading = false;
         },
       });

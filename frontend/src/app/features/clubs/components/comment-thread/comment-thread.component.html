@@ -1,9 +1,10 @@
 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-
   <!-- Header -->
   <h2 class="text-base font-semibold text-gray-900 mb-5">
     Comments
-    <span *ngIf="totalCount > 0" class="ml-1 text-sm font-normal text-gray-500">({{ totalCount }})</span>
+    <span *ngIf="totalCount > 0" class="ml-1 text-sm font-normal text-gray-500"
+      >({{ totalCount }})</span
+    >
   </h2>
 
   <!-- Add comment form -->
@@ -30,8 +31,12 @@
   </div>
 
   <!-- Not logged in notice -->
-  <div *ngIf="!isLoggedIn" class="mb-5 text-sm text-gray-500 bg-gray-50 rounded-lg px-4 py-3 border border-gray-200">
-    <a routerLink="/auth/login" class="text-blue-600 hover:underline">Sign in</a> to leave a comment.
+  <div
+    *ngIf="!isLoggedIn"
+    class="mb-5 text-sm text-gray-500 bg-gray-50 rounded-lg px-4 py-3 border border-gray-200"
+  >
+    <a routerLink="/auth/login" class="text-blue-600 hover:underline">Sign in</a> to leave a
+    comment.
   </div>
 
   <!-- Load error -->
@@ -39,7 +44,7 @@
 
   <!-- Loading skeleton -->
   <div *ngIf="loading">
-    <div *ngFor="let _ of [1,2,3]" class="flex gap-3 mb-5 animate-pulse">
+    <div *ngFor="let _ of [1, 2, 3]" class="flex gap-3 mb-5 animate-pulse">
       <div class="w-8 h-8 bg-gray-200 rounded-full flex-shrink-0"></div>
       <div class="flex-1">
         <div class="h-3 bg-gray-200 rounded w-1/4 mb-2"></div>
@@ -50,14 +55,16 @@
   </div>
 
   <!-- Empty state -->
-  <div *ngIf="!loading && comments.length === 0 && !loadError" class="text-center py-8 text-gray-400 text-sm">
+  <div
+    *ngIf="!loading && comments.length === 0 && !loadError"
+    class="text-center py-8 text-gray-400 text-sm"
+  >
     No comments yet. Be the first!
   </div>
 
   <!-- Comment list -->
   <div *ngIf="!loading">
     <div *ngFor="let comment of comments" class="flex gap-3 mb-5">
-
       <!-- Avatar -->
       <div class="flex-shrink-0">
         <img
@@ -79,7 +86,9 @@
         <div class="flex items-baseline gap-2 mb-1">
           <span class="text-sm font-medium text-gray-900">{{ authorDisplay(comment) }}</span>
           <span class="text-xs text-gray-400">{{ formatDate(comment.createdAt) }}</span>
-          <span *ngIf="comment.updatedAt !== comment.createdAt" class="text-xs text-gray-400 italic">(edited)</span>
+          <span *ngIf="comment.updatedAt !== comment.createdAt" class="text-xs text-gray-400 italic"
+            >(edited)</span
+          >
         </div>
 
         <!-- Viewing mode -->
@@ -89,14 +98,26 @@
           <!-- Delete confirmation -->
           <div *ngIf="deletingId === comment.id" class="mt-2 flex items-center gap-3 text-xs">
             <span class="text-gray-600">Delete this comment?</span>
-            <button (click)="deleteComment(comment.id)" class="text-red-600 font-medium hover:underline">Delete</button>
+            <button
+              (click)="deleteComment(comment.id)"
+              class="text-red-600 font-medium hover:underline"
+            >
+              Delete
+            </button>
             <button (click)="cancelDelete()" class="text-gray-500 hover:underline">Cancel</button>
           </div>
 
           <!-- Own comment actions -->
           <div *ngIf="isOwnComment(comment) && deletingId !== comment.id" class="flex gap-3 mt-1">
-            <button (click)="startEdit(comment)" class="text-xs text-blue-600 hover:underline">Edit</button>
-            <button (click)="confirmDelete(comment.id)" class="text-xs text-red-500 hover:underline">Delete</button>
+            <button (click)="startEdit(comment)" class="text-xs text-blue-600 hover:underline">
+              Edit
+            </button>
+            <button
+              (click)="confirmDelete(comment.id)"
+              class="text-xs text-red-500 hover:underline"
+            >
+              Delete
+            </button>
           </div>
         </ng-container>
 
@@ -116,10 +137,11 @@
             >
               Save
             </button>
-            <button (click)="cancelEdit()" class="text-xs text-gray-500 hover:underline">Cancel</button>
+            <button (click)="cancelEdit()" class="text-xs text-gray-500 hover:underline">
+              Cancel
+            </button>
           </div>
         </ng-container>
-
       </div>
     </div>
   </div>
@@ -135,5 +157,4 @@
       <span *ngIf="loadingMore">Loading...</span>
     </button>
   </div>
-
 </div>

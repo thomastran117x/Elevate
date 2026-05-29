@@ -1,10 +1,7 @@
 import { Injectable, NgZone } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '@environments/environment';
-import {
-  PostComment,
-  normalizePostComment,
-} from '../models/club-post.types';
+import { PostComment, normalizePostComment } from '../models/club-post.types';
 
 export type SseCommentEvent =
   | { type: 'CommentCreated'; comment: PostComment }
@@ -47,7 +44,11 @@ export class CommentSseService {
         this.zone.run(() => {
           try {
             const payload = JSON.parse(e.data) as { postId: number; commentId: number };
-            subscriber.next({ type: 'CommentDeleted', postId: payload.postId, commentId: payload.commentId });
+            subscriber.next({
+              type: 'CommentDeleted',
+              postId: payload.postId,
+              commentId: payload.commentId,
+            });
           } catch {
             // malformed event — ignore
           }

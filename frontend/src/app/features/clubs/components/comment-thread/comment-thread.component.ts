@@ -49,9 +49,12 @@ export class CommentThreadComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    this.store.select(selectUser).pipe(takeUntil(this.destroy$)).subscribe((user) => {
-      this.currentUser = user;
-    });
+    this.store
+      .select(selectUser)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((user) => {
+        this.currentUser = user;
+      });
     this.loadComments(false);
     this.connectSse();
   }
@@ -75,11 +78,13 @@ export class CommentThreadComponent implements OnInit, OnDestroy {
 
   authorInitials(comment: PostComment): string {
     const name = comment.author?.name ?? comment.author?.username ?? '';
-    return name
-      .split(' ')
-      .slice(0, 2)
-      .map((w) => w[0]?.toUpperCase() ?? '')
-      .join('') || '?';
+    return (
+      name
+        .split(' ')
+        .slice(0, 2)
+        .map((w) => w[0]?.toUpperCase() ?? '')
+        .join('') || '?'
+    );
   }
 
   formatDate(iso: string): string {
@@ -202,9 +207,7 @@ export class CommentThreadComponent implements OnInit, OnDestroy {
             this.totalCount++;
           }
         } else if (event.type === 'CommentUpdated') {
-          this.comments = this.comments.map((c) =>
-            c.id === event.comment.id ? event.comment : c,
-          );
+          this.comments = this.comments.map((c) => (c.id === event.comment.id ? event.comment : c));
         } else if (event.type === 'CommentDeleted') {
           if (this.comments.some((c) => c.id === event.commentId)) {
             this.comments = this.comments.filter((c) => c.id !== event.commentId);
@@ -237,8 +240,7 @@ export class CommentThreadComponent implements OnInit, OnDestroy {
           this.loadingMore = false;
         },
         error: (err) => {
-          this.loadError =
-            err?.error?.message || err?.error?.Message || 'Failed to load comments.';
+          this.loadError = err?.error?.message || err?.error?.Message || 'Failed to load comments.';
           this.loading = false;
           this.loadingMore = false;
         },

@@ -24,7 +24,8 @@ namespace backend.main.features.clubs.posts.comments
 
         public void Publish(int postId, CommentEvent evt)
         {
-            if (!_streams.TryGetValue(postId, out var subs)) return;
+            if (!_streams.TryGetValue(postId, out var subs))
+                return;
             foreach (var (_, writer) in subs)
                 writer.TryWrite(evt);
         }

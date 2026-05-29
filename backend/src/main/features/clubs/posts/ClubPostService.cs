@@ -252,7 +252,8 @@ namespace backend.main.features.clubs.posts
         private async Task<Dictionary<int, UserListRecord>> FetchAuthorLookupAsync(List<ClubPost> posts)
         {
             var userIds = posts.Select(p => p.UserId).Distinct().ToList();
-            if (userIds.Count == 0) return [];
+            if (userIds.Count == 0)
+                return [];
             var users = await _userRepository.GetByIdsAsync(userIds);
             return users.ToDictionary(u => u.Id);
         }

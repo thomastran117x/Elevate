@@ -137,7 +137,10 @@ namespace backend.main.features.clubs
 
             _ = Task.Run(async () =>
             {
-                try { await TrackClubAccessAsync(clubId); }
+                try
+                {
+                    await TrackClubAccessAsync(clubId);
+                }
                 catch (Exception ex) { Logger.Warn(ex, "Failed to track club access for club"); }
             });
 
