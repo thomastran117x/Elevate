@@ -224,13 +224,15 @@ public sealed class EventInvitationServiceTests
                 Mock.Of<IPublisher>(),
                 TimeProvider.System);
 
+            var noOpCache = new NoOpCacheService();
             var eventsService = new EventsService(
                 db,
                 new EventsRepository(db),
                 new EventImageRepository(db),
                 clubService.Object,
                 Mock.Of<backend.main.shared.storage.IAzureBlobService>(),
-                new NoOpCacheService(),
+                noOpCache,
+                new RefreshAheadCache(noOpCache),
                 Mock.Of<backend.main.features.events.analytics.IEventAnalyticsRepository>(),
                 Mock.Of<IEventSearchService>(),
                 Mock.Of<IEventSearchOutboxWriter>(),

@@ -1,3 +1,4 @@
+using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts;
@@ -49,7 +50,7 @@ public class ClubPostServiceTests
         await using var harness = await ClubPostServiceHarness.CreateAsync(isPrivate: true);
         await harness.SeedPostAsync(userId: 7, title: "Private owner post");
 
-        var (items, totalCount, source) = await harness.Service.GetByClubIdAsync(
+        var (items, totalCount, source, _) = await harness.Service.GetByClubIdAsync(
             4,
             66,
             "Participant",
@@ -166,13 +167,23 @@ public class ClubPostServiceTests
 
             var outboxWriter = new Mock<IClubPostSearchOutboxWriter>();
 
+            var refreshCache = new Mock<IRefreshAheadCache>();
+            refreshCache.Setup(c => c.RemoveAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+
+            var userRepository = new Mock<IUserRepository>();
+            userRepository
+                .Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), It.IsAny<backend.main.features.profile.contracts.UserReadDetailLevel>()))
+                .ReturnsAsync([]);
+
             var service = new ClubPostService(
                 db,
                 new ClubPostRepository(db),
                 clubService.Object,
                 new FollowRepository(db),
                 Mock.Of<IClubPostSearchService>(),
-                outboxWriter.Object);
+                outboxWriter.Object,
+                userRepository.Object,
+                refreshCache.Object);
 
             return new ClubPostServiceHarness(connection, db, service);
         }

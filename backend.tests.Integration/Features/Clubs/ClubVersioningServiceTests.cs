@@ -618,6 +618,7 @@ public class ClubVersioningServiceTests
                 fileUpload.Object,
                 followService.Object,
                 cache.Object,
+                new RefreshAheadCache(cache.Object),
                 searchService.Object,
                 outboxWriter.Object,
                 Options.Create(new ClubVersioningOptions

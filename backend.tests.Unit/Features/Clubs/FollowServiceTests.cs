@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 using backend.main.features.cache;
 using backend.main.features.clubs.follow;
 
@@ -14,42 +12,45 @@ namespace backend.tests.Unit.Features.Clubs;
 public class FollowServiceTests
 {
     [Fact]
-    public async Task IsMemberAsync_ShouldCacheMissingMembershipAsNullSentinel()
+    public async Task IsMemberAsync_ShouldReturnFalseWhenMembershipIsNotFound()
     {
         var repository = new Mock<IFollowRepository>();
-        repository.Setup(repo => repo.IsFollowingClubAsync(9, 44))
+        var cache = new Mock<ICacheService>();
+        var refreshCache = new Mock<IRefreshAheadCache>();
+        refreshCache
+            .Setup(c => c.GetOrSetAsync<FollowClub>(
+                "follow:u:44:c:9",
+                It.IsAny<Func<Task<FollowClub?>>>(),
+                It.IsAny<TimeSpan>(),
+                It.IsAny<TimeSpan?>(),
+                It.IsAny<double>(),
+                It.IsAny<System.Text.Json.JsonSerializerOptions?>()))
             .ReturnsAsync((FollowClub?)null);
 
-        var cache = new Mock<ICacheService>();
-        cache.Setup(service => service.GetValueAsync("follow:u:44:c:9"))
-            .ReturnsAsync((string?)null);
-
-        var service = new FollowService(repository.Object, cache.Object);
+        var service = new FollowService(repository.Object, cache.Object, refreshCache.Object);
 
         var result = await service.IsMemberAsync(9, 44);
 
         result.Should().BeFalse();
-        cache.Verify(service => service.SetValueAsync(
-            "follow:u:44:c:9",
-            "__null__",
-            It.IsAny<TimeSpan?>()),
-            Times.Once);
     }
 
     [Fact]
-    public async Task IsMemberAsync_ShouldReturnCachedMembershipWithoutRepositoryLookup()
+    public async Task IsMemberAsync_ShouldReturnTrueWhenMembershipIsCached()
     {
         var repository = new Mock<IFollowRepository>();
         var cache = new Mock<ICacheService>();
-        cache.Setup(service => service.GetValueAsync("follow:u:44:c:9"))
-            .ReturnsAsync(JsonSerializer.Serialize(new FollowClub
-            {
-                Id = 3,
-                ClubId = 9,
-                UserId = 44
-            }));
+        var refreshCache = new Mock<IRefreshAheadCache>();
+        refreshCache
+            .Setup(c => c.GetOrSetAsync<FollowClub>(
+                "follow:u:44:c:9",
+                It.IsAny<Func<Task<FollowClub?>>>(),
+                It.IsAny<TimeSpan>(),
+                It.IsAny<TimeSpan?>(),
+                It.IsAny<double>(),
+                It.IsAny<System.Text.Json.JsonSerializerOptions?>()))
+            .ReturnsAsync(new FollowClub { Id = 3, ClubId = 9, UserId = 44 });
 
-        var service = new FollowService(repository.Object, cache.Object);
+        var service = new FollowService(repository.Object, cache.Object, refreshCache.Object);
 
         var result = await service.IsMemberAsync(9, 44);
 
@@ -63,12 +64,7 @@ public class FollowServiceTests
         var server = Mock.Of<IServer>();
         var repository = new Mock<IFollowRepository>();
         repository.Setup(repo => repo.FollowClubAsync(9, 44))
-            .ReturnsAsync(new FollowClub
-            {
-                Id = 8,
-                ClubId = 9,
-                UserId = 44
-            });
+            .ReturnsAsync(new FollowClub { Id = 8, ClubId = 9, UserId = 44 });
 
         var cache = new Mock<ICacheService>();
         cache.Setup(service => service.GetServer()).Returns(server);
@@ -77,21 +73,24 @@ public class FollowServiceTests
         cache.Setup(service => service.ScanKeys(server, "follow:list:c:9:*"))
             .Returns(["follow:list:c:9:1:20"]);
 
-        var service = new FollowService(repository.Object, cache.Object);
+        var refreshCache = new Mock<IRefreshAheadCache>();
+
+        var service = new FollowService(repository.Object, cache.Object, refreshCache.Object);
 
         await service.AddMembershipAsync(9, 44);
 
-        cache.Verify(service => service.SetValueAsync(
-            "follow:u:44:c:9",
-            It.Is<string>(payload => payload.Contains("\"ClubId\":9")),
-            It.IsAny<TimeSpan?>()),
+        refreshCache.Verify(c => c.SetAsync(
+                "follow:u:44:c:9",
+                It.Is<FollowClub>(f => f.ClubId == 9),
+                It.IsAny<TimeSpan>(),
+                It.IsAny<System.Text.Json.JsonSerializerOptions?>()),
             Times.Once);
         cache.Verify(service => service.DeleteKeyAsync("follow:list:u:44:1:20"), Times.Once);
         cache.Verify(service => service.DeleteKeyAsync("follow:list:c:9:1:20"), Times.Once);
     }
 
     [Fact]
-    public async Task RemoveMembershipAsync_ShouldDeleteFollowKeyAndInvalidateLists()
+    public async Task RemoveMembershipAsync_ShouldRemoveFollowKeyAndInvalidateLists()
     {
         var server = Mock.Of<IServer>();
         var repository = new Mock<IFollowRepository>();
@@ -102,12 +101,14 @@ public class FollowServiceTests
         cache.Setup(service => service.ScanKeys(server, "follow:list:c:9:*"))
             .Returns(["follow:list:c:9:1:20"]);
 
-        var service = new FollowService(repository.Object, cache.Object);
+        var refreshCache = new Mock<IRefreshAheadCache>();
+
+        var service = new FollowService(repository.Object, cache.Object, refreshCache.Object);
 
         await service.RemoveMembershipAsync(9, 44);
 
         repository.Verify(repo => repo.UnfollowClubAsync(9, 44), Times.Once);
-        cache.Verify(service => service.DeleteKeyAsync("follow:u:44:c:9"), Times.Once);
+        refreshCache.Verify(c => c.RemoveAsync("follow:u:44:c:9"), Times.Once);
         cache.Verify(service => service.DeleteKeyAsync("follow:list:u:44:1:20"), Times.Once);
         cache.Verify(service => service.DeleteKeyAsync("follow:list:c:9:1:20"), Times.Once);
     }

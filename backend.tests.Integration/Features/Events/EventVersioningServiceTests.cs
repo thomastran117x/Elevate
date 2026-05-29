@@ -607,6 +607,7 @@ public class EventVersioningServiceTests
                 clubService.Object,
                 blobService.Object,
                 cache.Object,
+                new RefreshAheadCache(cache.Object),
                 Mock.Of<IEventAnalyticsRepository>(),
                 Mock.Of<IEventSearchService>(),
                 Mock.Of<IEventSearchOutboxWriter>(),
