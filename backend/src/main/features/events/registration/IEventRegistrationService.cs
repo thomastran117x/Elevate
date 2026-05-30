@@ -10,6 +10,7 @@ namespace backend.main.features.events.registration
         Task UnregisterAsync(int eventId, int userId, string userRole);
         Task<EventRegistration> UpdateRegistrationAsync(int eventId, int userId, string userRole, UpdateRegistrationRequest request);
         Task<bool> IsRegisteredAsync(int eventId, int userId, string userRole);
+        Task<EventRegistration?> GetMyRegistrationAsync(int eventId, int userId, string userRole);
         Task<IEnumerable<EventRegistration>> GetRegistrationsByEventAsync(int eventId, int page = 1, int pageSize = 20);
         Task<IEnumerable<EventRegistration>> GetRegistrationsByUserAsync(int userId, int page = 1, int pageSize = 20);
         Task<BatchRegistrationResultResponse> BatchRegisterAsync(int userId, string userRole, IEnumerable<int> eventIds);

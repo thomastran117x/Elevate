@@ -591,6 +591,14 @@ namespace backend.main.features.events
                 var existing = await GetTrackedEventOrThrowAsync(eventId);
                 await EnsureCanManageEventAsync(existing, userId, userRole);
 
+                if (existing.LifecycleState is EventLifecycleState.Cancelled or EventLifecycleState.Archived)
+                    throw new ConflictException(
+                        $"Cannot update a {existing.LifecycleState.ToString().ToLower()} event.");
+
+                if (maxParticipants > 0 && maxParticipants < existing.RegistrationCount)
+                    throw new BadRequestException(
+                        $"maxParticipants ({maxParticipants}) cannot be less than the current registration count ({existing.RegistrationCount}).");
+
                 var previousSnapshot = BuildSnapshot(existing);
 
                 List<string>? oldUrls = null;
@@ -1120,7 +1128,12 @@ namespace backend.main.features.events
                 var currentSnapshot = BuildSnapshot(ev);
                 var targetSnapshot = DeserializeSnapshot(targetVersion.SnapshotJson);
 
+                // Preserve the current lifecycle state — rollback restores field values
+                // only, not the event's published/cancelled state. Changing lifecycle
+                // state must go through the explicit transition endpoints.
+                var preservedLifecycleState = ev.LifecycleState;
                 ApplySnapshot(ev, targetSnapshot);
+                ev.LifecycleState = preservedLifecycleState;
                 ev.CurrentVersionNumber += 1;
                 ev.UpdatedAt = GetUtcNow();
 

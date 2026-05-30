@@ -416,7 +416,7 @@
                 <ng-container *ngIf="event.lifecycleState === 'Published' && event.registerCost > 0">
                   Paid registration is required.
                 </ng-container>
-                <ng-container *ngIf="event.lifecycleState === 'Published' && isEventStarted(event) && event.maxParticipants <= 0 || (event.lifecycleState === 'Published' && isEventStarted(event) && event.maxParticipants > 0 && event.registrationCount < event.maxParticipants && event.registerCost === 0)">
+                <ng-container *ngIf="event.lifecycleState === 'Published' && isEventStarted(event)">
                   Registration is closed — this event has started.
                 </ng-container>
               </div>

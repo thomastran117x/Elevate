@@ -12,6 +12,7 @@ import { EventItem, CATEGORY_STYLES } from '../../models/event.types';
 import {
   EventRegistrationService,
   RegistrationDetails,
+  MyRegistrationStatus,
 } from '../../services/event-registration.service';
 import { EventsService } from '../../services/events.service';
 
@@ -276,8 +277,9 @@ export class EventDetailComponent implements OnInit, OnDestroy {
           .checkRegistration(eventId)
           .pipe(takeUntil(this.destroy$))
           .subscribe({
-            next: (registered) => {
-              this.isRegistered = registered;
+            next: (status: MyRegistrationStatus) => {
+              this.isRegistered = status.isRegistered;
+              this.registrationDetails = status.details;
             },
             error: () => {
               this.isRegistered = false;

@@ -10,9 +10,20 @@ export interface RegistrationDetails {
   dietaryNeeds?: string;
 }
 
+export interface MyRegistrationStatus {
+  isRegistered: boolean;
+  details: RegistrationDetails | null;
+}
+
 type CheckPayload = {
   isRegistered?: boolean;
   IsRegistered?: boolean;
+  notes?: string;
+  Notes?: string;
+  phoneNumber?: string;
+  PhoneNumber?: string;
+  dietaryNeeds?: string;
+  DietaryNeeds?: string;
 };
 
 @Injectable({ providedIn: 'root' })
@@ -49,7 +60,7 @@ export class EventRegistrationService {
       .pipe(map(() => void 0));
   }
 
-  checkRegistration(eventId: number): Observable<boolean> {
+  checkRegistration(eventId: number): Observable<MyRegistrationStatus> {
     return this.http
       .get<ApiEnvelope<CheckPayload>>(`${this.base}/${eventId}/registrations/me`, {
         withCredentials: true,
@@ -59,7 +70,17 @@ export class EventRegistrationService {
           const payload =
             response.data ??
             (response as unknown as { Data?: CheckPayload }).Data;
-          return payload?.isRegistered ?? payload?.IsRegistered ?? false;
+          const isRegistered = payload?.isRegistered ?? payload?.IsRegistered ?? false;
+          return {
+            isRegistered,
+            details: isRegistered
+              ? {
+                  notes: payload?.notes ?? payload?.Notes ?? undefined,
+                  phoneNumber: payload?.phoneNumber ?? payload?.PhoneNumber ?? undefined,
+                  dietaryNeeds: payload?.dietaryNeeds ?? payload?.DietaryNeeds ?? undefined,
+                }
+              : null,
+          };
         }),
       );
   }

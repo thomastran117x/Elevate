@@ -113,7 +113,7 @@ namespace backend.main.features.events.registration
 
         [HttpGet("{eventId}/registrations")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventRegistrationResponse>>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetRegistrations([Range(1, int.MaxValue)] int eventId, int page = 1, int pageSize = 20)
+        public async Task<IActionResult> GetRegistrations([Range(1, int.MaxValue)] int eventId, [Range(1, int.MaxValue)] int page = 1, [Range(1, 100)] int pageSize = 20)
         {
             try
             {
@@ -147,13 +147,16 @@ namespace backend.main.features.events.registration
             {
                 var user = User.GetUserPayload();
 
-                bool isRegistered = await _registrationService.IsRegisteredAsync(eventId, user.Id, user.Role);
+                var registration = await _registrationService.GetMyRegistrationAsync(eventId, user.Id, user.Role);
 
                 return Ok(new ApiResponse<object>(
                     $"Registration status for event with ID {eventId} has been fetched successfully.",
                     new
                     {
-                        isRegistered
+                        isRegistered = registration != null,
+                        notes = registration?.Notes,
+                        phoneNumber = registration?.PhoneNumber,
+                        dietaryNeeds = registration?.DietaryNeeds
                     }
                 ));
             }
@@ -263,7 +266,7 @@ namespace backend.main.features.events.registration
         [Authorize]
         [HttpGet("{userId}/events/registered")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventRegistrationResponse>>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetRegisteredEvents([Range(1, int.MaxValue)] int userId, int page = 1, int pageSize = 20)
+        public async Task<IActionResult> GetRegisteredEvents([Range(1, int.MaxValue)] int userId, [Range(1, int.MaxValue)] int page = 1, [Range(1, 100)] int pageSize = 20)
         {
             try
             {

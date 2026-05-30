@@ -23,7 +23,7 @@ namespace backend.main.features.events.registration
         private readonly IEventSearchOutboxWriter _outboxWriter;
 
         private static readonly TimeSpan MembershipTTL = TimeSpan.FromMinutes(5);
-        private static readonly TimeSpan ListTTL = TimeSpan.FromMinutes(3);
+        private static readonly TimeSpan ListTTL = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan LockTTL = TimeSpan.FromSeconds(10);
 
         public EventRegistrationService(
@@ -117,6 +117,9 @@ namespace backend.main.features.events.registration
         private string UpdateLockKey(int userId, int eventId)
             => $"evtreg:update:u:{userId}:e:{eventId}";
 
+        private static string? Sanitize(string? value)
+            => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
         private string MembershipKey(int userId, int eventId)
             => $"evtreg:u:{userId}:e:{eventId}";
 
@@ -192,9 +195,9 @@ namespace backend.main.features.events.registration
                     // Reactivate the cancelled row
                     existing.Status = RegistrationStatus.Active;
                     existing.CancelledAt = null;
-                    existing.Notes = request?.Notes;
-                    existing.PhoneNumber = request?.PhoneNumber;
-                    existing.DietaryNeeds = request?.DietaryNeeds;
+                    existing.Notes = Sanitize(request?.Notes);
+                    existing.PhoneNumber = Sanitize(request?.PhoneNumber);
+                    existing.DietaryNeeds = Sanitize(request?.DietaryNeeds);
                 }
                 else
                 {
@@ -204,9 +207,9 @@ namespace backend.main.features.events.registration
                         UserId = userId,
                         CreatedAt = DateTime.UtcNow,
                         Status = RegistrationStatus.Active,
-                        Notes = request?.Notes,
-                        PhoneNumber = request?.PhoneNumber,
-                        DietaryNeeds = request?.DietaryNeeds
+                        Notes = Sanitize(request?.Notes),
+                        PhoneNumber = Sanitize(request?.PhoneNumber),
+                        DietaryNeeds = Sanitize(request?.DietaryNeeds)
                     });
                 }
 
@@ -310,6 +313,11 @@ namespace backend.main.features.events.registration
 
             try
             {
+                await using var transaction = await _db.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+
+                // Re-read inside the transaction so concurrent UnregisterAsync cannot
+                // soft-delete the row between our Status check and SaveChanges.
                 var registration = await _db.EventRegistrations
                     .FirstOrDefaultAsync(r =>
                         r.EventId == eventId &&
@@ -319,11 +327,12 @@ namespace backend.main.features.events.registration
                 if (registration == null)
                     throw new ResourceNotFoundException("Registration not found");
 
-                registration.Notes = request.Notes;
-                registration.PhoneNumber = request.PhoneNumber;
-                registration.DietaryNeeds = request.DietaryNeeds;
+                registration.Notes = Sanitize(request.Notes);
+                registration.PhoneNumber = Sanitize(request.PhoneNumber);
+                registration.DietaryNeeds = Sanitize(request.DietaryNeeds);
 
                 await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
 
                 await _refreshCache.RemoveAsync(MembershipKey(userId, eventId));
                 await InvalidateListsAsync(userId, eventId);
@@ -354,6 +363,16 @@ namespace backend.main.features.events.registration
                 MembershipTTL);
 
             return registration != null;
+        }
+
+        public async Task<EventRegistration?> GetMyRegistrationAsync(int eventId, int userId, string userRole)
+        {
+            await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
+
+            return await _refreshCache.GetOrSetAsync(
+                MembershipKey(userId, eventId),
+                () => _registrationRepository.IsRegisteredAsync(eventId, userId),
+                MembershipTTL);
         }
 
         public async Task<IEnumerable<EventRegistration>> GetRegistrationsByEventAsync(int eventId, int page = 1, int pageSize = 20)

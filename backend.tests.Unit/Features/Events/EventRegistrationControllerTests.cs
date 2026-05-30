@@ -36,8 +36,8 @@ public class EventRegistrationControllerTests
     public async Task CheckRegistration_ShouldReturnCurrentMembershipState()
     {
         var registrationService = new Mock<IEventRegistrationService>();
-        registrationService.Setup(service => service.IsRegisteredAsync(9, 7, "Organizer"))
-            .ReturnsAsync(true);
+        registrationService.Setup(service => service.GetMyRegistrationAsync(9, 7, "Organizer"))
+            .ReturnsAsync(new EventRegistration { Id = 1, EventId = 9, UserId = 7 });
 
         var controller = CreateController(registrationService.Object, Mock.Of<IEventsService>());
 

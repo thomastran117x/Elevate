@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient } from '@angular/common/http';
 
-import { EventRegistrationService } from './event-registration.service';
+import { EventRegistrationService, MyRegistrationStatus } from './event-registration.service';
 
 describe('EventRegistrationService', () => {
   let service: EventRegistrationService;
@@ -64,23 +64,26 @@ describe('EventRegistrationService', () => {
     req.flush({ success: true, message: 'ok', data: null, error: null, meta: null });
   });
 
-  it('returns true when the user is registered (camelCase payload)', () => {
-    let result: boolean | undefined;
+  it('returns isRegistered=true and details when registered (camelCase payload)', () => {
+    let result: MyRegistrationStatus | undefined;
     service.checkRegistration(42).subscribe((v) => (result = v));
 
     const req = httpMock.expectOne((r) => r.url.includes('/events/42/registrations/me'));
     req.flush({
       success: true,
       message: 'ok',
-      data: { isRegistered: true },
+      data: { isRegistered: true, notes: 'front row', phoneNumber: '416-555-0000', dietaryNeeds: 'Vegan' },
       error: null,
       meta: null,
     });
-    expect(result).toBeTrue();
+    expect(result?.isRegistered).toBeTrue();
+    expect(result?.details?.notes).toBe('front row');
+    expect(result?.details?.phoneNumber).toBe('416-555-0000');
+    expect(result?.details?.dietaryNeeds).toBe('Vegan');
   });
 
-  it('returns false when the user is not registered (camelCase payload)', () => {
-    let result: boolean | undefined;
+  it('returns isRegistered=false with null details when not registered (camelCase)', () => {
+    let result: MyRegistrationStatus | undefined;
     service.checkRegistration(42).subscribe((v) => (result = v));
 
     const req = httpMock.expectOne((r) => r.url.includes('/events/42/registrations/me'));
@@ -91,11 +94,12 @@ describe('EventRegistrationService', () => {
       error: null,
       meta: null,
     });
-    expect(result).toBeFalse();
+    expect(result?.isRegistered).toBeFalse();
+    expect(result?.details).toBeNull();
   });
 
-  it('returns false when the user is not registered (PascalCase payload)', () => {
-    let result: boolean | undefined;
+  it('returns isRegistered=false with null details when not registered (PascalCase)', () => {
+    let result: MyRegistrationStatus | undefined;
     service.checkRegistration(42).subscribe((v) => (result = v));
 
     const req = httpMock.expectOne((r) => r.url.includes('/events/42/registrations/me'));
@@ -106,6 +110,7 @@ describe('EventRegistrationService', () => {
       error: null,
       meta: null,
     });
-    expect(result).toBeFalse();
+    expect(result?.isRegistered).toBeFalse();
+    expect(result?.details).toBeNull();
   });
 });
