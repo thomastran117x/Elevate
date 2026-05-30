@@ -797,13 +797,23 @@ public class EventEndpointsTests
             })));
         reg.StatusCode.Should().Be(HttpStatusCode.Created);
 
-        var registrations = await app.Client.GetAsync($"/api/events/{ev.Id}/registrations");
+        // Organizer sees full PII
+        var registrations = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get, $"/api/events/{ev.Id}/registrations", organizerSession.AccessToken));
         var body = await app.ReadApiResponseAsync<IEnumerable<EventRegistrationResponse>>(registrations);
         var entry = body.Data.Should().ContainSingle(r => r.UserId == participant!.Id).Subject;
         entry.Notes.Should().Be("Please seat me near the front.");
         entry.PhoneNumber.Should().Be("416-555-0123");
         entry.DietaryNeeds.Should().Be("Vegetarian, no nuts");
         entry.Status.Should().Be("Active");
+
+        // Anonymous caller sees the registration but not the PII
+        var publicRegistrations = await app.Client.GetAsync($"/api/events/{ev.Id}/registrations");
+        var publicBody = await app.ReadApiResponseAsync<IEnumerable<EventRegistrationResponse>>(publicRegistrations);
+        var publicEntry = publicBody.Data.Should().ContainSingle(r => r.UserId == participant!.Id).Subject;
+        publicEntry.Notes.Should().BeNull();
+        publicEntry.PhoneNumber.Should().BeNull();
+        publicEntry.DietaryNeeds.Should().BeNull();
     }
 
     [Fact]
@@ -834,7 +844,9 @@ public class EventEndpointsTests
             })));
         patch.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var registrations = await app.Client.GetAsync($"/api/events/{ev.Id}/registrations");
+        // Use organizer auth so PII fields are included in the response
+        var registrations = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get, $"/api/events/{ev.Id}/registrations", organizerSession.AccessToken));
         var body = await app.ReadApiResponseAsync<IEnumerable<EventRegistrationResponse>>(registrations);
         var entry = body.Data.Should().ContainSingle(r => r.UserId == participant!.Id).Subject;
         entry.Notes.Should().Be("Updated note");
@@ -860,6 +872,46 @@ public class EventEndpointsTests
             JsonContent.Create(new { notes = "Should fail" })));
 
         patch.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task GetRegisteredEvents_ShouldForbid_WhenCallerViewsAnotherUsersRegistrations()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (sessionA, userA) = await CreateUserSessionAsync(app, "idor-user-a@example.com");
+        var (sessionB, _) = await CreateUserSessionAsync(app, "idor-user-b@example.com");
+
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/users/{userA!.Id}/events/registered",
+            sessionB.AccessToken));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task GetRegistrations_ShouldRedactPii_ForAnonymousCaller()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "pii-redact-org@example.com", "Organizer");
+        var (participantSession, participant) = await CreateUserSessionAsync(app, "pii-redact-user@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "PII Club");
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "PII Event");
+
+        await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/register",
+            participantSession.AccessToken,
+            JsonContent.Create(new { notes = "Secret note", phoneNumber = "416-000-0000" })));
+
+        var response = await app.Client.GetAsync($"/api/events/{ev.Id}/registrations");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await app.ReadApiResponseAsync<IEnumerable<EventRegistrationResponse>>(response);
+        var entry = body.Data.Should().ContainSingle(r => r.UserId == participant!.Id).Subject;
+        entry.Notes.Should().BeNull();
+        entry.PhoneNumber.Should().BeNull();
+        entry.DietaryNeeds.Should().BeNull();
     }
 
     private sealed class ClubApiModel

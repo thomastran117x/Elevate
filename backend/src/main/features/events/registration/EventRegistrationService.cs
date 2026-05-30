@@ -114,6 +114,9 @@ namespace backend.main.features.events.registration
         private string LockKey(int eventId)
             => $"evtreg:lock:{eventId}";
 
+        private string UpdateLockKey(int userId, int eventId)
+            => $"evtreg:update:u:{userId}:e:{eventId}";
+
         private string MembershipKey(int userId, int eventId)
             => $"evtreg:u:{userId}:e:{eventId}";
 
@@ -161,19 +164,22 @@ namespace backend.main.features.events.registration
                 if (!EventLifecyclePolicy.AllowsRegistration(trackedEvent.LifecycleState))
                     throw new ConflictException("Registration is only available for published events.");
 
-                if (trackedEvent.EndTime.HasValue && trackedEvent.EndTime <= DateTime.UtcNow)
-                    throw new ConflictException("Event has already ended");
-
                 if (trackedEvent.StartTime.HasValue && trackedEvent.StartTime <= DateTime.UtcNow)
-                    throw new ConflictException("Registration is closed — the event has already started");
-
-                if (trackedEvent.maxParticipants > 0)
                 {
-                    var count = await _db.EventRegistrations
-                        .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Active);
-                    if (count >= trackedEvent.maxParticipants)
-                        throw new ConflictException("Event is full");
+                    var message = trackedEvent.EndTime.HasValue && trackedEvent.EndTime <= DateTime.UtcNow
+                        ? "Event has already ended"
+                        : "Registration is closed — the event has already started";
+                    throw new ConflictException(message);
                 }
+
+                // Single COUNT query serves both capacity enforcement and counter reconciliation.
+                // Done inside the SERIALIZABLE transaction so no concurrent registration can
+                // slip in between the count read and the insert/reactivation.
+                var activeCount = await _db.EventRegistrations
+                    .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Active);
+
+                if (trackedEvent.maxParticipants > 0 && activeCount >= trackedEvent.maxParticipants)
+                    throw new ConflictException("Event is full");
 
                 var existing = await _db.EventRegistrations
                     .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
@@ -204,7 +210,10 @@ namespace backend.main.features.events.registration
                     });
                 }
 
-                trackedEvent.RegistrationCount += 1;
+                // Set the counter from source truth rather than blindly incrementing.
+                // The new/reactivated registration is not yet saved, so the DB count
+                // is still activeCount; the correct post-save value is activeCount + 1.
+                trackedEvent.RegistrationCount = activeCount + 1;
                 trackedEvent.UpdatedAt = DateTime.UtcNow;
 
                 _outboxWriter.StageSync(trackedEvent);
@@ -262,7 +271,11 @@ namespace backend.main.features.events.registration
 
                 if (trackedEvent != null)
                 {
-                    trackedEvent.RegistrationCount = Math.Max(0, trackedEvent.RegistrationCount - 1);
+                    // COUNT before SaveChanges still sees this registration as Active;
+                    // the correct post-save count is activeCount - 1.
+                    var activeCount = await _db.EventRegistrations
+                        .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Active);
+                    trackedEvent.RegistrationCount = Math.Max(0, activeCount - 1);
                     trackedEvent.UpdatedAt = DateTime.UtcNow;
                     _outboxWriter.StageSync(trackedEvent);
                 }
@@ -286,10 +299,17 @@ namespace backend.main.features.events.registration
 
         public async Task<EventRegistration> UpdateRegistrationAsync(int eventId, int userId, string userRole, UpdateRegistrationRequest request)
         {
+            await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
+
+            var lockKey = UpdateLockKey(userId, eventId);
+            var lockValue = Guid.NewGuid().ToString();
+            var acquired = await _cache.AcquireLockAsync(lockKey, lockValue, LockTTL);
+
+            if (!acquired)
+                throw new ConflictException("Registration update is busy, please try again");
+
             try
             {
-                await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
-
                 var registration = await _db.EventRegistrations
                     .FirstOrDefaultAsync(r =>
                         r.EventId == eventId &&
@@ -317,6 +337,10 @@ namespace backend.main.features.events.registration
 
                 Logger.Error($"[EventRegistrationService] UpdateRegistrationAsync failed: {e}");
                 throw new InternalServerErrorException();
+            }
+            finally
+            {
+                await _cache.ReleaseLockAsync(lockKey, lockValue);
             }
         }
 

@@ -121,9 +121,11 @@ namespace backend.main.features.events.registration
                 await _eventsService.GetVisibleEvent(eventId, user?.Id, user?.Role);
                 var registrations = await _registrationService.GetRegistrationsByEventAsync(eventId, page, pageSize);
 
+                var canSeePii = user != null && await CanManageEventAsync(eventId, user.Id, user.Role);
+
                 return Ok(new ApiResponse<IEnumerable<EventRegistrationResponse>>(
                     $"Registrations for event with ID {eventId} have been fetched successfully.",
-                    registrations.Select(MapToResponse)
+                    registrations.Select(r => MapToResponse(r, canSeePii))
                 ));
             }
             catch (Exception e)
@@ -217,8 +219,26 @@ namespace backend.main.features.events.registration
             }
         }
 
-        private static EventRegistrationResponse MapToResponse(EventRegistration r)
-            => new(r.Id, r.UserId, r.EventId, r.CreatedAt, r.Status, r.CancelledAt, r.Notes, r.PhoneNumber, r.DietaryNeeds);
+        private static EventRegistrationResponse MapToResponse(EventRegistration r, bool includePii = true)
+            => new(
+                r.Id, r.UserId, r.EventId, r.CreatedAt, r.Status, r.CancelledAt,
+                includePii ? r.Notes : null,
+                includePii ? r.PhoneNumber : null,
+                includePii ? r.DietaryNeeds : null
+            );
+
+        private async Task<bool> CanManageEventAsync(int eventId, int userId, string userRole)
+        {
+            try
+            {
+                await _eventsService.GetManageableEvent(eventId, userId, userRole);
+                return true;
+            }
+            catch (AppException)
+            {
+                return false;
+            }
+        }
 
         private UserIdentityPayload? GetOptionalUserPayload()
         {
@@ -247,6 +267,10 @@ namespace backend.main.features.events.registration
         {
             try
             {
+                var caller = User.GetUserPayload();
+                if (caller.Id != userId && caller.Role != AuthRoles.Admin)
+                    throw new ForbiddenException("You can only view your own registrations.");
+
                 var registrations = await _registrationService.GetRegistrationsByUserAsync(userId, page, pageSize);
 
                 return Ok(new ApiResponse<IEnumerable<EventRegistrationResponse>>(
