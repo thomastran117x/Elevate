@@ -312,16 +312,19 @@
 
             <!-- Logged in -->
             <ng-container *ngIf="currentUserId !== null">
-
               <!-- Registration form (register or edit) -->
               <div *ngIf="showRegistrationForm" class="space-y-3">
                 <div class="text-sm font-semibold text-white/80">
-                  {{ isEditing ? 'Update your registration details' : 'Complete your registration' }}
+                  {{
+                    isEditing ? 'Update your registration details' : 'Complete your registration'
+                  }}
                 </div>
 
                 <div [formGroup]="registrationForm" class="space-y-3">
                   <div>
-                    <label class="block text-xs text-white/55 mb-1">Notes for organizer (optional)</label>
+                    <label class="block text-xs text-white/55 mb-1"
+                      >Notes for organizer (optional)</label
+                    >
                     <input
                       formControlName="notes"
                       type="text"
@@ -339,7 +342,9 @@
                     />
                   </div>
                   <div>
-                    <label class="block text-xs text-white/55 mb-1">Dietary / accessibility needs (optional)</label>
+                    <label class="block text-xs text-white/55 mb-1"
+                      >Dietary / accessibility needs (optional)</label
+                    >
                     <input
                       formControlName="dietaryNeeds"
                       type="text"
@@ -356,7 +361,9 @@
                     (click)="isEditing ? submitUpdate() : submitRegistration()"
                     class="flex-1 rounded-2xl bg-gradient-to-r from-purple-500/30 to-fuchsia-500/30 border border-purple-500/30 px-4 py-2.5 text-sm font-semibold text-white transition hover:from-purple-500/40 hover:to-fuchsia-500/40 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <span *ngIf="!registrationLoading">{{ isEditing ? 'Save changes' : 'Confirm registration' }}</span>
+                    <span *ngIf="!registrationLoading">{{
+                      isEditing ? 'Save changes' : 'Confirm registration'
+                    }}</span>
                     <span *ngIf="registrationLoading">Please wait...</span>
                   </button>
                   <button
@@ -371,7 +378,9 @@
 
               <!-- Registered state -->
               <div *ngIf="isRegistered && !showRegistrationForm" class="space-y-2">
-                <div class="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200 text-center">
+                <div
+                  class="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200 text-center"
+                >
                   You're registered for this event
                 </div>
                 <button
@@ -410,17 +419,24 @@
                 <ng-container *ngIf="event.lifecycleState === 'Cancelled'">
                   This event has been cancelled.
                 </ng-container>
-                <ng-container *ngIf="event.lifecycleState === 'Published' && event.maxParticipants > 0 && event.registrationCount >= event.maxParticipants">
+                <ng-container
+                  *ngIf="
+                    event.lifecycleState === 'Published' &&
+                    event.maxParticipants > 0 &&
+                    event.registrationCount >= event.maxParticipants
+                  "
+                >
                   This event is full.
                 </ng-container>
-                <ng-container *ngIf="event.lifecycleState === 'Published' && event.registerCost > 0">
+                <ng-container
+                  *ngIf="event.lifecycleState === 'Published' && event.registerCost > 0"
+                >
                   Paid registration is required.
                 </ng-container>
                 <ng-container *ngIf="event.lifecycleState === 'Published' && isEventStarted(event)">
                   Registration is closed — this event has started.
                 </ng-container>
               </div>
-
             </ng-container>
           </div>
         </div>

@@ -32,7 +32,11 @@ describe('EventRegistrationService', () => {
 
   it('sends a POST with detail fields when details are provided', () => {
     service
-      .register(42, { notes: 'front row please', phoneNumber: '416-555-0001', dietaryNeeds: 'Vegan' })
+      .register(42, {
+        notes: 'front row please',
+        phoneNumber: '416-555-0001',
+        dietaryNeeds: 'Vegan',
+      })
       .subscribe();
 
     const req = httpMock.expectOne((r) => r.url.includes('/events/42/register'));
@@ -54,9 +58,7 @@ describe('EventRegistrationService', () => {
   });
 
   it('sends a PATCH to update registration details', () => {
-    service
-      .updateRegistration(42, { notes: 'updated', phoneNumber: '647-555-9999' })
-      .subscribe();
+    service.updateRegistration(42, { notes: 'updated', phoneNumber: '647-555-9999' }).subscribe();
 
     const req = httpMock.expectOne((r) => r.url.includes('/events/42/register'));
     expect(req.request.method).toBe('PATCH');
@@ -72,7 +74,12 @@ describe('EventRegistrationService', () => {
     req.flush({
       success: true,
       message: 'ok',
-      data: { isRegistered: true, notes: 'front row', phoneNumber: '416-555-0000', dietaryNeeds: 'Vegan' },
+      data: {
+        isRegistered: true,
+        notes: 'front row',
+        phoneNumber: '416-555-0000',
+        dietaryNeeds: 'Vegan',
+      },
       error: null,
       meta: null,
     });

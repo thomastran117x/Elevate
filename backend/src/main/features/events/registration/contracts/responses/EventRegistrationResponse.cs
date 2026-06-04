@@ -39,7 +39,10 @@ namespace backend.main.features.events.registration.contracts.responses
             get; set;
         }
 
-        public EventRegistrationResponse() { Status = string.Empty; }
+        public EventRegistrationResponse()
+        {
+            Status = string.Empty;
+        }
 
         public EventRegistrationResponse(
             int id,

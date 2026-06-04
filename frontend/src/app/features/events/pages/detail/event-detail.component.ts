@@ -94,7 +94,10 @@ export class EventDetailComponent implements OnInit, OnDestroy {
     if (this.event.lifecycleState !== 'Published') return false;
     if (this.isEventStarted(this.event)) return false;
     if (this.event.registerCost > 0) return false;
-    if (this.event.maxParticipants > 0 && this.event.registrationCount >= this.event.maxParticipants)
+    if (
+      this.event.maxParticipants > 0 &&
+      this.event.registrationCount >= this.event.maxParticipants
+    )
       return false;
     return true;
   }
