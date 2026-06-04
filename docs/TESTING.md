@@ -35,6 +35,22 @@ Run only the auth integration flow coverage:
 dotnet test backend.tests.Integration\backend.tests.Integration.csproj --filter "FullyQualifiedName~backend.tests.Integration.Features.Auth.AuthEndpointsTests"
 ```
 
+Run backend unit coverage with generated code and seed data excluded from the count:
+
+```powershell
+dotnet test backend.tests.Unit\backend.tests.Unit.csproj --settings backend.coverage.runsettings --collect:"XPlat Code Coverage" --results-directory TestResultsCoverage
+```
+
+The coverage run keeps application code such as services, controllers, repositories, utilities, and DTO/contracts in scope, while excluding:
+
+- EF Core migrations and designer files
+- `src/main/seeders/**`
+- compiler/generated-code attributed files
+
+The current backend coverage improvement plan lives in:
+
+- `docs/COVERAGE_ROADMAP.md`
+
 ## Test Structure
 
 - `backend.tests.Unit/Features`
