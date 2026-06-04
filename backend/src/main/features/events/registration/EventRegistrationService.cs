@@ -2,6 +2,7 @@ using System.Data;
 
 using backend.main.features.cache;
 using backend.main.features.events.registration;
+using backend.main.features.events.registration.contracts.requests;
 using backend.main.features.events.registration.contracts.responses;
 using backend.main.features.events.search;
 using backend.main.infrastructure.database.core;
@@ -22,7 +23,7 @@ namespace backend.main.features.events.registration
         private readonly IEventSearchOutboxWriter _outboxWriter;
 
         private static readonly TimeSpan MembershipTTL = TimeSpan.FromMinutes(5);
-        private static readonly TimeSpan ListTTL = TimeSpan.FromMinutes(3);
+        private static readonly TimeSpan ListTTL = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan LockTTL = TimeSpan.FromSeconds(10);
 
         public EventRegistrationService(
@@ -113,6 +114,12 @@ namespace backend.main.features.events.registration
         private string LockKey(int eventId)
             => $"evtreg:lock:{eventId}";
 
+        private string UpdateLockKey(int userId, int eventId)
+            => $"evtreg:update:u:{userId}:e:{eventId}";
+
+        private static string? Sanitize(string? value)
+            => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
         private string MembershipKey(int userId, int eventId)
             => $"evtreg:u:{userId}:e:{eventId}";
 
@@ -130,7 +137,7 @@ namespace backend.main.features.events.registration
         private string UserIndexKey(int userId)
             => $"evtreg:index:u:{userId}";
 
-        public async Task RegisterAsync(int eventId, int userId, string userRole)
+        public async Task RegisterAsync(int eventId, int userId, string userRole, RegisterEventRequest? request = null)
         {
             await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
             var ev = await _eventsService.GetEvent(eventId);
@@ -150,9 +157,6 @@ namespace backend.main.features.events.registration
 
             try
             {
-                if (await IsRegisteredAsync(eventId, userId, userRole))
-                    throw new ConflictException("Already registered for this event");
-
                 await using var transaction = await _db.Database.BeginTransactionAsync(
                     IsolationLevel.Serializable);
 
@@ -160,38 +164,73 @@ namespace backend.main.features.events.registration
                 if (trackedEvent == null)
                     throw new ResourceNotFoundException($"Event {eventId} not found");
 
-                if (trackedEvent.EndTime.HasValue && trackedEvent.EndTime <= DateTime.UtcNow)
-                    throw new ConflictException("Event is full");
-
-                var count = await _db.EventRegistrations.CountAsync(r => r.EventId == eventId);
-                if (count >= trackedEvent.maxParticipants)
-                    throw new ConflictException("Event is full");
-
-                var registration = new EventRegistration
-                {
-                    EventId = eventId,
-                    UserId = userId,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                _db.EventRegistrations.Add(registration);
-                trackedEvent.RegistrationCount += 1;
-                trackedEvent.UpdatedAt = DateTime.UtcNow;
                 if (!EventLifecyclePolicy.AllowsRegistration(trackedEvent.LifecycleState))
                     throw new ConflictException("Registration is only available for published events.");
+
+                if (trackedEvent.StartTime.HasValue && trackedEvent.StartTime <= DateTime.UtcNow)
+                {
+                    var message = trackedEvent.EndTime.HasValue && trackedEvent.EndTime <= DateTime.UtcNow
+                        ? "Event has already ended"
+                        : "Registration is closed — the event has already started";
+                    throw new ConflictException(message);
+                }
+
+                // Single COUNT query serves both capacity enforcement and counter reconciliation.
+                // Done inside the SERIALIZABLE transaction so no concurrent registration can
+                // slip in between the count read and the insert/reactivation.
+                var activeCount = await _db.EventRegistrations
+                    .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Active);
+
+                if (trackedEvent.maxParticipants > 0 && activeCount >= trackedEvent.maxParticipants)
+                    throw new ConflictException("Event is full");
+
+                var existing = await _db.EventRegistrations
+                    .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
+
+                if (existing != null)
+                {
+                    if (existing.Status == RegistrationStatus.Active)
+                        throw new ConflictException("Already registered for this event");
+
+                    // Reactivate the cancelled row
+                    existing.Status = RegistrationStatus.Active;
+                    existing.CancelledAt = null;
+                    existing.Notes = Sanitize(request?.Notes);
+                    existing.PhoneNumber = Sanitize(request?.PhoneNumber);
+                    existing.DietaryNeeds = Sanitize(request?.DietaryNeeds);
+                }
+                else
+                {
+                    _db.EventRegistrations.Add(new EventRegistration
+                    {
+                        EventId = eventId,
+                        UserId = userId,
+                        CreatedAt = DateTime.UtcNow,
+                        Status = RegistrationStatus.Active,
+                        Notes = Sanitize(request?.Notes),
+                        PhoneNumber = Sanitize(request?.PhoneNumber),
+                        DietaryNeeds = Sanitize(request?.DietaryNeeds)
+                    });
+                }
+
+                // Set the counter from source truth rather than blindly incrementing.
+                // The new/reactivated registration is not yet saved, so the DB count
+                // is still activeCount; the correct post-save value is activeCount + 1.
+                trackedEvent.RegistrationCount = activeCount + 1;
+                trackedEvent.UpdatedAt = DateTime.UtcNow;
 
                 _outboxWriter.StageSync(trackedEvent);
 
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                await _refreshCache.SetAsync(MembershipKey(userId, eventId), registration, MembershipTTL);
+                await _refreshCache.RemoveAsync(MembershipKey(userId, eventId));
                 await InvalidateListsAsync(userId, eventId);
                 await _refreshCache.RemoveAsync($"event:{eventId}");
             }
             catch (DbUpdateException)
             {
-                // Unique constraint on (EventId, UserId) caught a duplicate that slipped past the cache check
+                // Unique constraint on (EventId, UserId) caught a duplicate that slipped past the lock
                 throw new ConflictException("Already registered for this event");
             }
             catch (Exception e)
@@ -217,18 +256,29 @@ namespace backend.main.features.events.registration
                 await using var transaction = await _db.Database.BeginTransactionAsync(
                     IsolationLevel.Serializable);
 
+                var trackedEvent = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+                if (trackedEvent != null && trackedEvent.StartTime.HasValue && trackedEvent.StartTime.Value <= DateTime.UtcNow)
+                    throw new ConflictException("Cannot unregister — the event has already started");
+
                 var registration = await _db.EventRegistrations
-                    .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
+                    .FirstOrDefaultAsync(r =>
+                        r.EventId == eventId &&
+                        r.UserId == userId &&
+                        r.Status == RegistrationStatus.Active);
 
                 if (registration == null)
                     throw new ResourceNotFoundException("Registration not found");
 
-                _db.EventRegistrations.Remove(registration);
+                registration.Status = RegistrationStatus.Cancelled;
+                registration.CancelledAt = DateTime.UtcNow;
 
-                var trackedEvent = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
                 if (trackedEvent != null)
                 {
-                    trackedEvent.RegistrationCount = Math.Max(0, trackedEvent.RegistrationCount - 1);
+                    // COUNT before SaveChanges still sees this registration as Active;
+                    // the correct post-save count is activeCount - 1.
+                    var activeCount = await _db.EventRegistrations
+                        .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Active);
+                    trackedEvent.RegistrationCount = Math.Max(0, activeCount - 1);
                     trackedEvent.UpdatedAt = DateTime.UtcNow;
                     _outboxWriter.StageSync(trackedEvent);
                 }
@@ -250,6 +300,59 @@ namespace backend.main.features.events.registration
             }
         }
 
+        public async Task<EventRegistration> UpdateRegistrationAsync(int eventId, int userId, string userRole, UpdateRegistrationRequest request)
+        {
+            await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
+
+            var lockKey = UpdateLockKey(userId, eventId);
+            var lockValue = Guid.NewGuid().ToString();
+            var acquired = await _cache.AcquireLockAsync(lockKey, lockValue, LockTTL);
+
+            if (!acquired)
+                throw new ConflictException("Registration update is busy, please try again");
+
+            try
+            {
+                await using var transaction = await _db.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+
+                // Re-read inside the transaction so concurrent UnregisterAsync cannot
+                // soft-delete the row between our Status check and SaveChanges.
+                var registration = await _db.EventRegistrations
+                    .FirstOrDefaultAsync(r =>
+                        r.EventId == eventId &&
+                        r.UserId == userId &&
+                        r.Status == RegistrationStatus.Active);
+
+                if (registration == null)
+                    throw new ResourceNotFoundException("Registration not found");
+
+                registration.Notes = Sanitize(request.Notes);
+                registration.PhoneNumber = Sanitize(request.PhoneNumber);
+                registration.DietaryNeeds = Sanitize(request.DietaryNeeds);
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                await _refreshCache.RemoveAsync(MembershipKey(userId, eventId));
+                await InvalidateListsAsync(userId, eventId);
+
+                return registration;
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventRegistrationService] UpdateRegistrationAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+            finally
+            {
+                await _cache.ReleaseLockAsync(lockKey, lockValue);
+            }
+        }
+
         public async Task<bool> IsRegisteredAsync(int eventId, int userId, string userRole)
         {
             await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
@@ -260,6 +363,16 @@ namespace backend.main.features.events.registration
                 MembershipTTL);
 
             return registration != null;
+        }
+
+        public async Task<EventRegistration?> GetMyRegistrationAsync(int eventId, int userId, string userRole)
+        {
+            await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
+
+            return await _refreshCache.GetOrSetAsync(
+                MembershipKey(userId, eventId),
+                () => _registrationRepository.IsRegisteredAsync(eventId, userId),
+                MembershipTTL);
         }
 
         public async Task<IEnumerable<EventRegistration>> GetRegistrationsByEventAsync(int eventId, int page = 1, int pageSize = 20)
@@ -316,4 +429,3 @@ namespace backend.main.features.events.registration
         }
     }
 }
-

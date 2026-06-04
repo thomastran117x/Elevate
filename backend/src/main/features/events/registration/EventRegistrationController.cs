@@ -34,13 +34,15 @@ namespace backend.main.features.events.registration
         [Authorize]
         [HttpPost("{eventId}/register")]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status201Created)]
-        public async Task<IActionResult> Register([Range(1, int.MaxValue)] int eventId)
+        public async Task<IActionResult> Register(
+            [Range(1, int.MaxValue)] int eventId,
+            [FromBody] RegisterEventRequest? request = null)
         {
             try
             {
                 var user = User.GetUserPayload();
 
-                await _registrationService.RegisterAsync(eventId, user.Id, user.Role);
+                await _registrationService.RegisterAsync(eventId, user.Id, user.Role, request);
 
                 return StatusCode(201, new MessageResponse(
                     $"Successfully registered for event with ID {eventId}."
@@ -81,9 +83,37 @@ namespace backend.main.features.events.registration
             }
         }
 
+        [Authorize]
+        [HttpPatch("{eventId}/register")]
+        [ProducesResponseType(typeof(ApiResponse<EventRegistrationResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> UpdateRegistration(
+            [Range(1, int.MaxValue)] int eventId,
+            [FromBody] UpdateRegistrationRequest request)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+
+                var registration = await _registrationService.UpdateRegistrationAsync(eventId, user.Id, user.Role, request);
+
+                return Ok(new ApiResponse<EventRegistrationResponse>(
+                    $"Registration details for event with ID {eventId} have been updated.",
+                    MapToResponse(registration)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventRegistrationController] UpdateRegistration failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
         [HttpGet("{eventId}/registrations")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventRegistrationResponse>>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetRegistrations([Range(1, int.MaxValue)] int eventId, int page = 1, int pageSize = 20)
+        public async Task<IActionResult> GetRegistrations([Range(1, int.MaxValue)] int eventId, [Range(1, int.MaxValue)] int page = 1, [Range(1, 100)] int pageSize = 20)
         {
             try
             {
@@ -91,9 +121,11 @@ namespace backend.main.features.events.registration
                 await _eventsService.GetVisibleEvent(eventId, user?.Id, user?.Role);
                 var registrations = await _registrationService.GetRegistrationsByEventAsync(eventId, page, pageSize);
 
+                var canSeePii = user != null && await CanManageEventAsync(eventId, user.Id, user.Role);
+
                 return Ok(new ApiResponse<IEnumerable<EventRegistrationResponse>>(
                     $"Registrations for event with ID {eventId} have been fetched successfully.",
-                    registrations.Select(MapToResponse)
+                    registrations.Select(r => MapToResponse(r, canSeePii))
                 ));
             }
             catch (Exception e)
@@ -115,13 +147,16 @@ namespace backend.main.features.events.registration
             {
                 var user = User.GetUserPayload();
 
-                bool isRegistered = await _registrationService.IsRegisteredAsync(eventId, user.Id, user.Role);
+                var registration = await _registrationService.GetMyRegistrationAsync(eventId, user.Id, user.Role);
 
                 return Ok(new ApiResponse<object>(
                     $"Registration status for event with ID {eventId} has been fetched successfully.",
                     new
                     {
-                        isRegistered
+                        isRegistered = registration != null,
+                        notes = registration?.Notes,
+                        phoneNumber = registration?.PhoneNumber,
+                        dietaryNeeds = registration?.DietaryNeeds
                     }
                 ));
             }
@@ -187,8 +222,26 @@ namespace backend.main.features.events.registration
             }
         }
 
-        private static EventRegistrationResponse MapToResponse(EventRegistration r)
-            => new(r.Id, r.UserId, r.EventId, r.CreatedAt);
+        private static EventRegistrationResponse MapToResponse(EventRegistration r, bool includePii = true)
+            => new(
+                r.Id, r.UserId, r.EventId, r.CreatedAt, r.Status, r.CancelledAt,
+                includePii ? r.Notes : null,
+                includePii ? r.PhoneNumber : null,
+                includePii ? r.DietaryNeeds : null
+            );
+
+        private async Task<bool> CanManageEventAsync(int eventId, int userId, string userRole)
+        {
+            try
+            {
+                await _eventsService.GetManageableEvent(eventId, userId, userRole);
+                return true;
+            }
+            catch (AppException)
+            {
+                return false;
+            }
+        }
 
         private UserIdentityPayload? GetOptionalUserPayload()
         {
@@ -213,15 +266,19 @@ namespace backend.main.features.events.registration
         [Authorize]
         [HttpGet("{userId}/events/registered")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventRegistrationResponse>>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetRegisteredEvents([Range(1, int.MaxValue)] int userId, int page = 1, int pageSize = 20)
+        public async Task<IActionResult> GetRegisteredEvents([Range(1, int.MaxValue)] int userId, [Range(1, int.MaxValue)] int page = 1, [Range(1, 100)] int pageSize = 20)
         {
             try
             {
+                var caller = User.GetUserPayload();
+                if (caller.Id != userId && caller.Role != AuthRoles.Admin)
+                    throw new ForbiddenException("You can only view your own registrations.");
+
                 var registrations = await _registrationService.GetRegistrationsByUserAsync(userId, page, pageSize);
 
                 return Ok(new ApiResponse<IEnumerable<EventRegistrationResponse>>(
                     $"Registered events for user with ID {userId} have been fetched successfully.",
-                    registrations.Select(r => new EventRegistrationResponse(r.Id, r.UserId, r.EventId, r.CreatedAt))
+                    registrations.Select(r => new EventRegistrationResponse(r.Id, r.UserId, r.EventId, r.CreatedAt, r.Status, r.CancelledAt, r.Notes, r.PhoneNumber, r.DietaryNeeds))
                 ));
             }
             catch (Exception e)
@@ -235,5 +292,3 @@ namespace backend.main.features.events.registration
         }
     }
 }
-
-

@@ -329,6 +329,7 @@ public sealed class EventInvitationService : IEventInvitationService
         if (invitation != null)
         {
             EnsureDirectInvitationCanBeAccepted(invitation, userId, normalizedEmail, now);
+            await EnsureEventAcceptsInvitationsAsync(invitation.EventId);
             invitation.LifecycleStatus = EventInvitationLifecycleStatus.Accepted;
             invitation.AcceptedAtUtc = now;
             invitation.AcceptedByUserId = userId;
@@ -352,6 +353,7 @@ public sealed class EventInvitationService : IEventInvitationService
             ?? throw new ResourceNotFoundException("Invitation was not found.");
 
         EnsureLinkCanBeAccepted(link, now);
+        await EnsureEventAcceptsInvitationsAsync(link.EventId);
 
         var existingClaim = await _db.EventInvitations
             .FirstOrDefaultAsync(i =>
@@ -420,6 +422,7 @@ public sealed class EventInvitationService : IEventInvitationService
         var now = GetUtcNow();
         var normalizedEmail = NormalizeEmail(userEmail);
         EnsureDirectInvitationCanBeAccepted(invitation, userId, normalizedEmail, now);
+        await EnsureEventAcceptsInvitationsAsync(invitation.EventId);
 
         invitation.LifecycleStatus = EventInvitationLifecycleStatus.Accepted;
         invitation.AcceptedAtUtc = now;
@@ -927,6 +930,16 @@ public sealed class EventInvitationService : IEventInvitationService
 
         return !string.IsNullOrWhiteSpace(normalizedEmail) &&
                string.Equals(invitation.RecipientEmailNormalized, normalizedEmail, StringComparison.Ordinal);
+    }
+
+    private async Task EnsureEventAcceptsInvitationsAsync(int eventId)
+    {
+        var ev = await _db.Events
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == eventId);
+
+        if (ev == null || ev.LifecycleState != EventLifecycleState.Published)
+            throw new ConflictException("Invitations can only be accepted for published events.");
     }
 
     private static void EnsureDirectInvitationCanBeAccepted(

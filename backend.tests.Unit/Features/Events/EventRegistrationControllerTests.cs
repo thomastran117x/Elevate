@@ -29,15 +29,15 @@ public class EventRegistrationControllerTests
         created.StatusCode.Should().Be(201);
         created.Value.Should().BeOfType<MessageResponse>()
             .Which.Message.Should().Contain("Successfully registered for event with ID 9.");
-        registrationService.Verify(service => service.RegisterAsync(9, 7, "Organizer"), Times.Once);
+        registrationService.Verify(service => service.RegisterAsync(9, 7, "Organizer", null), Times.Once);
     }
 
     [Fact]
     public async Task CheckRegistration_ShouldReturnCurrentMembershipState()
     {
         var registrationService = new Mock<IEventRegistrationService>();
-        registrationService.Setup(service => service.IsRegisteredAsync(9, 7, "Organizer"))
-            .ReturnsAsync(true);
+        registrationService.Setup(service => service.GetMyRegistrationAsync(9, 7, "Organizer"))
+            .ReturnsAsync(new EventRegistration { Id = 1, EventId = 9, UserId = 7 });
 
         var controller = CreateController(registrationService.Object, Mock.Of<IEventsService>());
 

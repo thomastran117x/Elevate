@@ -198,13 +198,21 @@ namespace backend.main.features.events
         {
             if (!string.IsNullOrWhiteSpace(criteria.Query))
             {
-                var term = criteria.Query.Trim();
+                // Escape LIKE special characters so user input is matched literally.
+                // Without escaping, a search for "100%" would match any event containing
+                // "100" followed by anything (the % acts as a wildcard in the pattern).
+                var raw = criteria.Query.Trim();
+                var term = raw
+                    .Replace("\\", "\\\\")
+                    .Replace("%", "\\%")
+                    .Replace("_", "\\_");
+
                 query = query.Where(e =>
-                    EF.Functions.Like(e.Name, $"%{term}%") ||
-                    EF.Functions.Like(e.Description, $"%{term}%") ||
-                    EF.Functions.Like(e.Location, $"%{term}%") ||
-                    (e.VenueName != null && EF.Functions.Like(e.VenueName, $"%{term}%")) ||
-                    (e.City != null && EF.Functions.Like(e.City, $"%{term}%"))
+                    EF.Functions.Like(e.Name, $"%{term}%", "\\") ||
+                    EF.Functions.Like(e.Description, $"%{term}%", "\\") ||
+                    EF.Functions.Like(e.Location, $"%{term}%", "\\") ||
+                    (e.VenueName != null && EF.Functions.Like(e.VenueName, $"%{term}%", "\\")) ||
+                    (e.City != null && EF.Functions.Like(e.City, $"%{term}%", "\\"))
                 );
             }
 
