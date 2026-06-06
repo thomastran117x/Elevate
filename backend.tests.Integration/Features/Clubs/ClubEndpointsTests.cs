@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text;
 
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
@@ -30,11 +29,12 @@ public class ClubEndpointsTests
             HttpMethod.Post,
             "/api/clubs",
             ownerSession.AccessToken,
-            CreateClubForm(
+            JsonContent.Create(CreateClubPayload(
+                app,
                 name: "Chess Club",
                 description: "Board games",
                 clubtype: "social",
-                email: "chess@example.com")));
+                email: "chess@example.com"))));
 
         created.StatusCode.Should().Be(HttpStatusCode.Created);
         var createdBody = await app.ReadApiResponseAsync<ClubApiModel>(created);
@@ -42,7 +42,7 @@ public class ClubEndpointsTests
         club.Name.Should().Be("Chess Club");
         club.IsOwner.Should().BeTrue();
         club.CanManage.Should().BeTrue();
-        club.ClubImage.Should().StartWith("https://localhost/uploads/clubs/");
+        club.ClubImage.Should().StartWith("https://storage.test/event-assets/clubs/");
 
         var fetched = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Get,
@@ -56,11 +56,12 @@ public class ClubEndpointsTests
             HttpMethod.Put,
             $"/api/clubs/{club.Id}",
             ownerSession.AccessToken,
-            CreateClubForm(
+            JsonContent.Create(CreateClubPayload(
+                app,
                 name: "Campus Chess Club",
                 description: "Board nights",
                 clubtype: "social",
-                email: "campus-chess@example.com")));
+                email: "campus-chess@example.com"))));
         updated.StatusCode.Should().Be(HttpStatusCode.OK);
         var updatedBody = await app.ReadApiResponseAsync<ClubApiModel>(updated);
         updatedBody.Data!.Name.Should().Be("Campus Chess Club");
@@ -356,11 +357,12 @@ public class ClubEndpointsTests
             HttpMethod.Post,
             "/api/clubs",
             accessToken,
-            CreateClubForm(
+            JsonContent.Create(CreateClubPayload(
+                app,
                 name: name,
                 description: "Campus group",
                 clubtype: "social",
-                email: $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com")));
+                email: $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"))));
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         return (await app.ReadApiResponseAsync<ClubApiModel>(response)).Data!;
     }
@@ -377,23 +379,21 @@ public class ClubEndpointsTests
         return request;
     }
 
-    private static MultipartFormDataContent CreateClubForm(
+    private static object CreateClubPayload(
+        AuthApiTestApp app,
         string name,
         string description,
         string clubtype,
         string? email = null)
     {
-        var content = new MultipartFormDataContent();
-        content.Add(new StringContent(name), "Name");
-        content.Add(new StringContent(description), "Description");
-        content.Add(new StringContent(clubtype), "Clubtype");
-        if (email != null)
-            content.Add(new StringContent(email), "Email");
-
-        var bytes = new ByteArrayContent(Encoding.UTF8.GetBytes("fake-image"));
-        bytes.Headers.ContentType = new MediaTypeHeaderValue("image/png");
-        content.Add(bytes, "ClubImage", "club.png");
-        return content;
+        return new
+        {
+            Name = name,
+            Description = description,
+            Clubtype = clubtype,
+            ClubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club.png"),
+            Email = email
+        };
     }
 
     private sealed class ClubApiModel

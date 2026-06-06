@@ -146,8 +146,37 @@ namespace backend.main.shared.utilities.logger
         private string GetLogFilePath(DateTime now)
         {
             var dateToken = now.ToString("yyyyMMdd");
-            var fileName = _options.FileNamePattern.Replace("{date}", dateToken);
+            var fileName = NormalizeRelativePath(_options.FileNamePattern.Replace("{date}", dateToken));
             return Path.Combine(_logDirectory, fileName);
+        }
+
+        private static string NormalizeRelativePath(string path)
+        {
+            var segments = path
+                .Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToArray();
+
+            var safeSegments = new List<string>();
+            foreach (var segment in segments)
+            {
+                if (segment == ".")
+                    continue;
+
+                if (segment == "..")
+                {
+                    if (safeSegments.Count > 0)
+                        safeSegments.RemoveAt(safeSegments.Count - 1);
+
+                    continue;
+                }
+
+                safeSegments.Add(segment);
+            }
+
+            if (safeSegments.Count == 0)
+                throw new InvalidOperationException("Log file path is invalid.");
+
+            return Path.Combine([.. safeSegments]);
         }
     }
 }

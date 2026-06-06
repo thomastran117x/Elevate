@@ -55,6 +55,30 @@ public class AzureBlobServiceTests
     }
 
     [Fact]
+    public void ResolveImageContentType_ShouldInferType_FromFileExtension_WhenMissing()
+    {
+        var contentType = InvokePrivateStatic<string>(
+            typeof(AzureBlobService),
+            "ResolveImageContentType",
+            "avatar.png",
+            null);
+
+        contentType.Should().Be("image/png");
+    }
+
+    [Fact]
+    public void NormalizeBlobPathPrefix_ShouldNormalizeWindowsSeparators_AndCollapseDotSegments()
+    {
+        var prefix = InvokePrivateStatic<string>(
+            typeof(AzureBlobService),
+            "NormalizeBlobPathPrefix",
+            @"..\clubs\images\.\covers",
+            "uploads");
+
+        prefix.Should().Be("clubs/images/covers");
+    }
+
+    [Fact]
     public void IsOwnedBlobUrl_ShouldReturnTrue_ForManagedHttpsUrl()
     {
         var service = CreateServiceWithContainer();

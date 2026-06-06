@@ -93,8 +93,8 @@ public class UserServiceTests
     [Fact]
     public async Task UpdateAvatarAsync_ShouldUploadAndPersistAvatarAndInvalidateCache()
     {
-        var fileService = new Mock<IFileUploadService>();
-        fileService.Setup(service => service.UploadImageAsync(It.IsAny<IFormFile>(), "users"))
+        var blobService = new Mock<IAzureBlobService>();
+        blobService.Setup(service => service.UploadImageAsync(It.IsAny<IFormFile>(), "users"))
             .ReturnsAsync("https://cdn.test/users/avatar.png");
 
         var repository = new Mock<IUserRepository>();
@@ -104,7 +104,7 @@ public class UserServiceTests
             .ReturnsAsync((User user) => user);
 
         var refreshCache = new Mock<IRefreshAheadCache>();
-        var service = CreateService(userRepository: repository, fileService: fileService, refreshCache: refreshCache);
+        var service = CreateService(userRepository: repository, blobService: blobService, refreshCache: refreshCache);
         var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
 
         var updated = await service.UpdateAvatarAsync(7, formFile);
@@ -164,14 +164,14 @@ public class UserServiceTests
     private static UserService CreateService(
         Mock<IUserRepository>? userRepository = null,
         Mock<IAuthUserRepository>? authRepository = null,
-        Mock<IFileUploadService>? fileService = null,
+        Mock<IAzureBlobService>? blobService = null,
         Mock<IFollowService>? followService = null,
         Mock<ITokenService>? tokenService = null,
         Mock<IRefreshAheadCache>? refreshCache = null)
     {
         userRepository ??= new Mock<IUserRepository>();
         authRepository ??= new Mock<IAuthUserRepository>();
-        fileService ??= new Mock<IFileUploadService>();
+        blobService ??= new Mock<IAzureBlobService>();
         followService ??= new Mock<IFollowService>();
         tokenService ??= new Mock<ITokenService>();
         refreshCache ??= new Mock<IRefreshAheadCache>();
@@ -179,7 +179,7 @@ public class UserServiceTests
         return new UserService(
             userRepository.Object,
             authRepository.Object,
-            fileService.Object,
+            blobService.Object,
             followService.Object,
             tokenService.Object,
             refreshCache.Object);

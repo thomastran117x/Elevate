@@ -9,18 +9,18 @@ namespace backend.main.features.clubs.versions;
 public sealed class ClubVersionCleanupRunner
 {
     private readonly AppDatabaseContext _db;
-    private readonly IFileUploadService _fileUploadService;
+    private readonly IAzureBlobService _blobService;
     private readonly ClubVersioningOptions _options;
     private readonly TimeProvider _timeProvider;
 
     public ClubVersionCleanupRunner(
         AppDatabaseContext db,
-        IFileUploadService fileUploadService,
+        IAzureBlobService blobService,
         IOptions<ClubVersioningOptions> options,
         TimeProvider timeProvider)
     {
         _db = db;
-        _fileUploadService = fileUploadService;
+        _blobService = blobService;
         _options = options.Value;
         _timeProvider = timeProvider;
     }
@@ -60,7 +60,7 @@ public sealed class ClubVersionCleanupRunner
             if (referencedByRollbackableVersion)
                 continue;
 
-            await _fileUploadService.DeleteImageAsync(imageUrl);
+            await _blobService.DeleteBlobAsync(imageUrl);
         }
     }
 }

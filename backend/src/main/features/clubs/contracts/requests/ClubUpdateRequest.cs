@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace backend.main.features.clubs.contracts.requests
 {
     /// <summary>
-    /// Multipart form payload used to update an existing club.
+    /// JSON payload used to update an existing club.
     /// </summary>
     public class ClubUpdateRequest
     {
@@ -24,8 +24,9 @@ namespace backend.main.features.clubs.contracts.requests
             get; set;
         }
 
-        [Required(ErrorMessage = "Club image is required.")]
-        public IFormFile ClubImage { get; set; } = default!;
+        [Required(ErrorMessage = "Club image URL is required.")]
+        [Url(ErrorMessage = "Club image URL must be a valid URL.")]
+        public string ClubImageUrl { get; set; } = string.Empty;
         [Phone]
         public string? Phone
         {

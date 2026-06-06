@@ -32,8 +32,6 @@ public class ClubServiceTests
     public async Task CreateClub_ShouldPersistVersion_StageUpsert_AndRefreshCaches()
     {
         await using var harness = await ClubServiceHarness.CreateAsync();
-        var file = new Mock<IFormFile>();
-
         harness.UserServiceMock
             .Setup(service => service.GetUserByIdAsync(harness.OwnerUserId))
             .ReturnsAsync(new User
@@ -42,16 +40,13 @@ public class ClubServiceTests
                 Email = "owner@test.local",
                 Usertype = " Organizer "
             });
-        harness.FileUploadServiceMock
-            .Setup(service => service.UploadImageAsync(file.Object, "clubs"))
-            .ReturnsAsync("https://cdn.test/clubs/new-club.png");
 
         var created = await harness.Service.CreateClub(
             "Chess Club",
             harness.OwnerUserId,
             "A focused club for competitive and casual chess players.",
             " gaming ",
-            file.Object,
+            "https://cdn.test/clubs/new-club.png",
             phone: "555-0100",
             email: "chess@test.local");
 
@@ -249,12 +244,7 @@ public class ClubServiceTests
     public async Task UpdateClub_ShouldPersistVersion_StageUpsert_AndRefreshCaches()
     {
         await using var harness = await ClubServiceHarness.CreateAsync();
-        var file = new Mock<IFormFile>();
         var existing = await harness.SeedPersistedClubAsync(id: 61, userId: harness.OwnerUserId);
-
-        harness.FileUploadServiceMock
-            .Setup(service => service.UploadImageAsync(file.Object, "clubs"))
-            .ReturnsAsync("https://cdn.test/clubs/updated.png");
 
         var updated = await harness.Service.UpdateClub(
             existing.Id,
@@ -263,7 +253,7 @@ public class ClubServiceTests
             "Updated Club",
             "An updated description for the club.",
             "music",
-            file.Object,
+            "https://cdn.test/clubs/updated.png",
             phone: "555-0111",
             email: "updated@test.local");
 
@@ -303,10 +293,36 @@ public class ClubServiceTests
         await harness.Service.DeleteClub(existing.Id, harness.OwnerUserId);
 
         (await harness.Db.Clubs.FindAsync(existing.Id)).Should().BeNull();
-        harness.FileUploadServiceMock.Verify(service => service.DeleteImageAsync(existing.ClubImage), Times.Once);
+        harness.BlobServiceMock.Verify(service => service.DeleteBlobAsync(existing.ClubImage), Times.Once);
         harness.OutboxWriterMock.Verify(writer => writer.StageDelete(existing.Id), Times.Once);
         harness.RefreshCacheMock.Verify(cache => cache.RemoveAsync($"club:{existing.Id}"), Times.Once);
         harness.CacheMock.Verify(cache => cache.IncrementAsync("clubs:version", 1), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateClub_ShouldRejectUnownedBlobUrls()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+
+        harness.UserServiceMock
+            .Setup(service => service.GetUserByIdAsync(harness.OwnerUserId))
+            .ReturnsAsync(new User
+            {
+                Id = harness.OwnerUserId,
+                Email = "owner@test.local",
+                Usertype = "Organizer"
+            });
+
+        var act = () => harness.Service.CreateClub(
+            "Chess Club",
+            harness.OwnerUserId,
+            "A focused club for competitive and casual chess players.",
+            "gaming",
+            "https://example.com/clubs/chess.png");
+
+        await act.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("Club images must reference uploads issued by this service.");
     }
 
     [Fact]
@@ -969,7 +985,7 @@ public class ClubServiceTests
         public Mock<IClubRepository> ClubRepositoryMock { get; } = new();
         public Mock<IUserService> UserServiceMock { get; } = new();
         public Mock<IFollowService> FollowServiceMock { get; } = new();
-        public Mock<IFileUploadService> FileUploadServiceMock { get; } = new();
+        public Mock<IAzureBlobService> BlobServiceMock { get; } = new();
         public Mock<ICacheService> CacheMock { get; } = new();
         public Mock<IRefreshAheadCache> RefreshCacheMock { get; } = new();
         public Mock<IClubSearchService> SearchServiceMock { get; } = new();
@@ -1022,15 +1038,18 @@ public class ClubServiceTests
                 .Setup(service => service.RemoveMembershipAsync(It.IsAny<int>(), It.IsAny<int>()))
                 .Returns(Task.CompletedTask);
 
-            FileUploadServiceMock
-                .Setup(service => service.DeleteImageAsync(It.IsAny<string>()))
+            BlobServiceMock
+                .Setup(service => service.DeleteBlobAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
+            BlobServiceMock
+                .Setup(service => service.IsOwnedBlobUrl(It.Is<string>(url => url.StartsWith("https://cdn.test/clubs/", StringComparison.Ordinal))))
+                .Returns(true);
 
             Service = new ClubService(
                 db,
                 ClubRepositoryMock.Object,
                 UserServiceMock.Object,
-                FileUploadServiceMock.Object,
+                BlobServiceMock.Object,
                 FollowServiceMock.Object,
                 CacheMock.Object,
                 RefreshCacheMock.Object,

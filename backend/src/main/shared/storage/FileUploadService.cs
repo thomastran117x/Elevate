@@ -2,6 +2,7 @@ using backend.main.shared.utilities.logger;
 
 namespace backend.main.shared.storage
 {
+    [Obsolete("Use IAzureBlobService instead.")]
     public class FileUploadService : IFileUploadService
     {
         private readonly IWebHostEnvironment _env;
@@ -18,7 +19,7 @@ namespace backend.main.shared.storage
             if (image == null || image.Length == 0)
                 throw new ArgumentException("Image is null or empty");
 
-            var safeFolder = Path.GetFileName(folder);
+            var safeFolder = GetSafeFolderName(folder);
 
             var uploadsFolder = Path.Combine(_env.WebRootPath, "uploads", safeFolder);
             if (!Directory.Exists(uploadsFolder))
@@ -60,6 +61,20 @@ namespace backend.main.shared.storage
             }
 
             return Task.CompletedTask;
+        }
+
+        private static string GetSafeFolderName(string folder)
+        {
+            var segments = folder
+                .Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(segment => segment is not "." and not "..")
+                .ToArray();
+
+            var safeFolder = segments.LastOrDefault();
+            if (string.IsNullOrWhiteSpace(safeFolder))
+                throw new ArgumentException("Folder is invalid", nameof(folder));
+
+            return safeFolder;
         }
     }
 }

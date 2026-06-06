@@ -25,7 +25,7 @@ namespace backend.main.features.clubs
         private readonly IClubRepository _clubRepository;
         private readonly IUserService _userService;
         private readonly IFollowService _followService;
-        private readonly IFileUploadService _fileUploadService;
+        private readonly IAzureBlobService _blobService;
         private readonly ICacheService _cache;
         private readonly IRefreshAheadCache _refreshCache;
         private readonly IClubSearchService _searchService;
@@ -46,7 +46,7 @@ namespace backend.main.features.clubs
             AppDatabaseContext db,
             IClubRepository clubRepository,
             IUserService userService,
-            IFileUploadService fileUploadService,
+            IAzureBlobService blobService,
             IFollowService followService,
             ICacheService cache,
             IRefreshAheadCache refreshCache,
@@ -59,7 +59,7 @@ namespace backend.main.features.clubs
             _clubRepository = clubRepository;
             _followService = followService;
             _userService = userService;
-            _fileUploadService = fileUploadService;
+            _blobService = blobService;
             _cache = cache;
             _refreshCache = refreshCache;
             _searchService = searchService;
@@ -73,15 +73,14 @@ namespace backend.main.features.clubs
             int userId,
             string description,
             string clubtype,
-            IFormFile clubimage,
+            string clubImageUrl,
             string? phone = null,
             string? email = null)
         {
             var user = await _userService.GetUserByIdAsync(userId)
                 ?? throw new ResourceNotFoundException("User not found");
 
-            var imageUrl = await _fileUploadService.UploadImageAsync(clubimage, "clubs")
-                ?? throw new InternalServerErrorException("Image upload failed");
+            ValidateClubImageUrl(clubImageUrl);
 
             var now = GetUtcNow();
             var club = new Club
@@ -89,7 +88,7 @@ namespace backend.main.features.clubs
                 Name = name,
                 Description = description,
                 Clubtype = ParseClubType(clubtype),
-                ClubImage = imageUrl,
+                ClubImage = clubImageUrl,
                 Phone = phone,
                 Email = email,
                 UserId = userId,
@@ -378,7 +377,7 @@ namespace backend.main.features.clubs
             string name,
             string description,
             string clubtype,
-            IFormFile clubimage,
+            string clubImageUrl,
             string? phone = null,
             string? email = null)
         {
@@ -387,13 +386,12 @@ namespace backend.main.features.clubs
 
             var previousSnapshot = BuildSnapshot(existing);
 
-            var newImage = await _fileUploadService.UploadImageAsync(clubimage, "clubs")
-                ?? throw new InternalServerErrorException("Image upload failed");
+            ValidateClubImageUrl(clubImageUrl);
 
             existing.Name = name;
             existing.Description = description;
             existing.Clubtype = ParseClubType(clubtype);
-            existing.ClubImage = newImage;
+            existing.ClubImage = clubImageUrl;
             existing.Phone = phone;
             existing.Email = email;
             existing.CurrentVersionNumber += 1;
@@ -430,7 +428,7 @@ namespace backend.main.features.clubs
             var club = await GetTrackedClubOrThrowAsync(clubId);
             EnsureOwner(club, userId);
 
-            await _fileUploadService.DeleteImageAsync(club.ClubImage);
+            await _blobService.DeleteBlobAsync(club.ClubImage);
 
             _outboxWriter.StageDelete(clubId);
             _db.Clubs.Remove(club);
@@ -438,6 +436,21 @@ namespace backend.main.features.clubs
 
             await _refreshCache.RemoveAsync(GetClubCacheKey(clubId));
             await BumpClubListVersionAsync();
+        }
+
+        private void ValidateClubImageUrl(string clubImageUrl)
+        {
+            if (!Uri.TryCreate(clubImageUrl, UriKind.Absolute, out var uri) ||
+                !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BadRequestException("Club images must use a valid HTTPS URL.");
+            }
+
+            if (!_blobService.IsOwnedBlobUrl(clubImageUrl))
+            {
+                throw new BadRequestException(
+                    "Club images must reference uploads issued by this service.");
+            }
         }
 
         public async Task<IReadOnlyList<ClubStaff>> GetStaffAsync(int clubId, int userId, string userRole)

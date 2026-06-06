@@ -61,9 +61,8 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpPost("")]
-        [Consumes("multipart/form-data")]
         [ProducesResponseType(typeof(ApiResponse<ClubResponse>), StatusCodes.Status201Created)]
-        public async Task<IActionResult> CreateClub([FromForm] ClubCreateRequest request)
+        public async Task<IActionResult> CreateClub([FromBody] ClubCreateRequest request)
         {
             var userPayload = User.GetUserPayload();
 
@@ -72,7 +71,7 @@ namespace backend.main.features.clubs
                 userId: userPayload.Id,
                 description: request.Description,
                 clubtype: request.Clubtype,
-                clubimage: request.ClubImage,
+                clubImageUrl: request.ClubImageUrl,
                 phone: request.Phone,
                 email: request.Email
             );
@@ -94,9 +93,8 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpPut("{id}")]
-        [Consumes("multipart/form-data")]
         [ProducesResponseType(typeof(ApiResponse<ClubResponse>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> UpdateClub([FromForm] ClubUpdateRequest request, int id)
+        public async Task<IActionResult> UpdateClub([FromBody] ClubUpdateRequest request, int id)
         {
             var userPayload = User.GetUserPayload();
 
@@ -107,7 +105,7 @@ namespace backend.main.features.clubs
                 name: request.Name,
                 description: request.Description,
                 clubtype: request.Clubtype,
-                clubimage: request.ClubImage,
+                clubImageUrl: request.ClubImageUrl,
                 phone: request.Phone,
                 email: request.Email
             );
