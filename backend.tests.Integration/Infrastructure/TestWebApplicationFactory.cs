@@ -28,7 +28,6 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
     public CapturingPublisher Publisher { get; } = new();
     public FakeCaptchaService Captcha { get; } = new();
     public FakeOAuthService OAuth { get; } = new();
-    public FakeFileUploadService Storage { get; } = new();
     public FakeAzureBlobService BlobStorage { get; } = new();
 
     public TestWebApplicationFactory(Action<IServiceCollection>? serviceOverrides = null)
@@ -67,9 +66,6 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
 
             services.RemoveAll<IOAuthService>();
             services.AddSingleton<IOAuthService>(OAuth);
-
-            services.RemoveAll<IFileUploadService>();
-            services.AddSingleton<IFileUploadService>(Storage);
 
             services.RemoveAll<IAzureBlobService>();
             services.AddSingleton<IAzureBlobService>(BlobStorage);

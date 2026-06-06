@@ -35,7 +35,7 @@ public class ClubVersioningServiceTests
             7,
             "Weekly strategy nights",
             "Social",
-            CreateFormFile("club-v1.png"));
+            CreateClubImageUrl("club-v1.png"));
 
         club.CurrentVersionNumber.Should().Be(1);
 
@@ -62,7 +62,7 @@ public class ClubVersioningServiceTests
             7,
             "Weekly strategy nights",
             "Social",
-            CreateFormFile("club-v1.png"));
+            CreateClubImageUrl("club-v1.png"));
 
         var updated = await harness.Service.UpdateClub(
             created.Id,
@@ -71,7 +71,7 @@ public class ClubVersioningServiceTests
             name: "Campus Chess Club",
             description: "Competitive ladder and casual boards",
             clubtype: "Social",
-            clubimage: CreateFormFile("club-v2.png"),
+            clubImageUrl: CreateClubImageUrl("club-v2.png"),
             phone: "555-111-2222",
             email: "club@test.local");
 
@@ -101,7 +101,7 @@ public class ClubVersioningServiceTests
             7,
             "Weekly strategy nights",
             "Social",
-            CreateFormFile("club-v1.png"));
+            CreateClubImageUrl("club-v1.png"));
 
         harness.TimeProvider.Advance(TimeSpan.FromDays(5));
 
@@ -112,7 +112,7 @@ public class ClubVersioningServiceTests
             name: "Campus Chess Club",
             description: "Competitive ladder and casual boards",
             clubtype: "Social",
-            clubimage: CreateFormFile("club-v2.png"),
+            clubImageUrl: CreateClubImageUrl("club-v2.png"),
             phone: "555-111-2222",
             email: "club@test.local");
 
@@ -159,7 +159,7 @@ public class ClubVersioningServiceTests
             7,
             "Weekly strategy nights",
             "Social",
-            CreateFormFile("club-v1.png"));
+            CreateClubImageUrl("club-v1.png"));
 
         harness.TimeProvider.Advance(TimeSpan.FromDays(91));
 
@@ -170,7 +170,7 @@ public class ClubVersioningServiceTests
             name: "Campus Chess Club",
             description: "Competitive ladder and casual boards",
             clubtype: "Social",
-            clubimage: CreateFormFile("club-v2.png"));
+            clubImageUrl: CreateClubImageUrl("club-v2.png"));
 
         var act = () => harness.Service.RollbackToVersionAsync(
             created.Id,
@@ -193,7 +193,7 @@ public class ClubVersioningServiceTests
             7,
             "Weekly strategy nights",
             "Social",
-            CreateFormFile("club-v1.png"));
+            CreateClubImageUrl("club-v1.png"));
 
         var act = () => harness.Service.GetVersionHistoryAsync(
             created.Id,
@@ -215,14 +215,14 @@ public class ClubVersioningServiceTests
             7,
             "Weekly strategy nights",
             "Social",
-            CreateFormFile("club-v1.png"));
+            CreateClubImageUrl("club-v1.png"));
 
         var second = await harness.Service.CreateClub(
             "Robotics Club",
             7,
             "Building and competing together.",
             "Academic",
-            CreateFormFile("club-v2.png"));
+            CreateClubImageUrl("club-v2.png"));
 
         await harness.Service.AddStaffAsync(first.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
 
@@ -243,7 +243,7 @@ public class ClubVersioningServiceTests
             7,
             "Weekly strategy nights",
             "Social",
-            CreateFormFile("club-v1.png"));
+            CreateClubImageUrl("club-v1.png"));
 
         var manager = await harness.Service.AddStaffAsync(created.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
 
@@ -267,7 +267,7 @@ public class ClubVersioningServiceTests
             7,
             "Weekly strategy nights",
             "Social",
-            CreateFormFile("club-v1.png"));
+            CreateClubImageUrl("club-v1.png"));
 
         await harness.Service.AddStaffAsync(created.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
 
@@ -278,7 +278,7 @@ public class ClubVersioningServiceTests
             name: "Campus Chess Club",
             description: "Manager-updated description",
             clubtype: "Social",
-            clubimage: CreateFormFile("club-v2.png"));
+            clubImageUrl: CreateClubImageUrl("club-v2.png"));
 
         updated.Name.Should().Be("Campus Chess Club");
         updated.UserId.Should().Be(7);
@@ -301,7 +301,7 @@ public class ClubVersioningServiceTests
             7,
             "Weekly strategy nights",
             "Social",
-            CreateFormFile("club-v1.png"));
+            CreateClubImageUrl("club-v1.png"));
 
         await harness.Service.AddStaffAsync(created.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
 
@@ -322,7 +322,7 @@ public class ClubVersioningServiceTests
             7,
             "Weekly strategy nights",
             "Social",
-            CreateFormFile("club-v1.png"));
+            CreateClubImageUrl("club-v1.png"));
 
         await harness.Service.AddStaffAsync(
             created.Id,
@@ -338,7 +338,7 @@ public class ClubVersioningServiceTests
             name: "Volunteer Edit",
             description: "Should not be allowed",
             clubtype: "Social",
-            clubimage: CreateFormFile("club-v2.png"));
+            clubImageUrl: CreateClubImageUrl("club-v2.png"));
 
         await act.Should()
             .ThrowAsync<ForbiddenException>()
@@ -355,7 +355,7 @@ public class ClubVersioningServiceTests
             7,
             "Weekly strategy nights",
             "Social",
-            CreateFormFile("club-v1.png"));
+            CreateClubImageUrl("club-v1.png"));
 
         await harness.Service.AddStaffAsync(created.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
 
@@ -373,7 +373,7 @@ public class ClubVersioningServiceTests
             name: "Former Owner Edit",
             description: "Should not be allowed",
             clubtype: "Social",
-            clubimage: CreateFormFile("club-v3.png"));
+            clubImageUrl: CreateClubImageUrl("club-v3.png"));
 
         await act.Should()
             .ThrowAsync<ForbiddenException>()
@@ -467,10 +467,10 @@ public class ClubVersioningServiceTests
 
         await db.SaveChangesAsync();
 
-        var fileUpload = new Mock<IFileUploadService>();
+        var blobService = new Mock<IAzureBlobService>();
         var deletedUrls = new List<string>();
-        fileUpload
-            .Setup(service => service.DeleteImageAsync(It.IsAny<string>()))
+        blobService
+            .Setup(service => service.DeleteBlobAsync(It.IsAny<string>()))
             .Returns<string>(url =>
             {
                 deletedUrls.Add(url);
@@ -479,7 +479,7 @@ public class ClubVersioningServiceTests
 
         var runner = new ClubVersionCleanupRunner(
             db,
-            fileUpload.Object,
+            blobService.Object,
             Options.Create(new ClubVersioningOptions
             {
                 RollbackWindowDays = 90,
@@ -496,11 +496,7 @@ public class ClubVersioningServiceTests
         await connection.DisposeAsync();
     }
 
-    private static FormFile CreateFormFile(string fileName)
-    {
-        var bytes = new byte[] { 1, 2, 3, 4 };
-        return new FormFile(new MemoryStream(bytes), 0, bytes.Length, "clubImage", fileName);
-    }
+    private static string CreateClubImageUrl(string fileName) => $"https://cdn.test/clubs/{fileName}";
 
     private sealed class ClubServiceHarness : IAsyncDisposable
     {
@@ -572,13 +568,11 @@ public class ClubVersioningServiceTests
             cache.Setup(service => service.SetExpiryAsync(It.IsAny<string>(), It.IsAny<TimeSpan>()))
                 .ReturnsAsync(true);
 
-            var fileUpload = new Mock<IFileUploadService>();
-            fileUpload.SetupSequence(service => service.UploadImageAsync(It.IsAny<IFormFile>(), "clubs"))
-                .ReturnsAsync("https://cdn.test/clubs/club-v1.png")
-                .ReturnsAsync("https://cdn.test/clubs/club-v2.png")
-                .ReturnsAsync("https://cdn.test/clubs/club-v3.png");
-            fileUpload.Setup(service => service.DeleteImageAsync(It.IsAny<string>()))
+            var blobService = new Mock<IAzureBlobService>();
+            blobService.Setup(service => service.DeleteBlobAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
+            blobService.Setup(service => service.IsOwnedBlobUrl(It.Is<string>(url => url.StartsWith("https://cdn.test/clubs/", StringComparison.Ordinal))))
+                .Returns(true);
 
             var userService = new Mock<IUserService>();
             userService.Setup(service => service.GetUserByIdAsync(7))
@@ -615,7 +609,7 @@ public class ClubVersioningServiceTests
                 db,
                 new ClubRepository(db),
                 userService.Object,
-                fileUpload.Object,
+                blobService.Object,
                 followService.Object,
                 cache.Object,
                 new RefreshAheadCache(cache.Object),

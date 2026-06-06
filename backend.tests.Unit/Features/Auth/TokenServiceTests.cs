@@ -1,3 +1,6 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+
 using backend.main.features.auth.token;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
@@ -9,6 +12,28 @@ namespace backend.tests.Unit.Features.Auth;
 
 public class TokenServiceTests
 {
+    [Fact]
+    public void GenerateAccessToken_ShouldIncludeIdentityRoleAndAuthVersionClaims()
+    {
+        var service = new TokenService(new InMemoryCacheService());
+        var user = new User
+        {
+            Id = 23,
+            Email = "claims@example.com",
+            Usertype = "participant",
+            AuthVersion = 7
+        };
+
+        var issue = service.GenerateAccessToken(user);
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(issue.Value);
+
+        jwt.Claims.Should().Contain(claim => (claim.Type == ClaimTypes.NameIdentifier || claim.Type == "nameid") && claim.Value == "23");
+        jwt.Claims.Should().Contain(claim => (claim.Type == ClaimTypes.Name || claim.Type == "unique_name") && claim.Value == "claims@example.com");
+        jwt.Claims.Should().Contain(claim => (claim.Type == ClaimTypes.Role || claim.Type == "role") && claim.Value == "Participant");
+        jwt.Claims.Should().Contain(claim => claim.Type == TokenService.AuthVersionClaimType && claim.Value == "7");
+        issue.ExpiresAtUtc.Should().BeAfter(DateTime.UtcNow.AddMinutes(10));
+    }
+
     [Fact]
     public async Task ValidateRefreshToken_ShouldRejectTransportMismatch()
     {
@@ -26,6 +51,25 @@ public class TokenServiceTests
 
         await act.Should().ThrowAsync<UnauthorizedException>()
             .WithMessage("Refresh token transport mismatch.");
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldRejectMissingBindingToken()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var requestInfo = CreateRequestInfo();
+
+        var issue = await service.GenerateRefreshToken(8, requestInfo, SessionTransport.BrowserCookie);
+
+        var act = () => service.ValidateRefreshToken(
+            issue.Value,
+            null,
+            SessionTransport.BrowserCookie,
+            requestInfo);
+
+        await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Missing session binding token.");
     }
 
     [Fact]
@@ -125,6 +169,156 @@ public class TokenServiceTests
         result.UserId.Should().Be(14);
         result.Transport.Should().Be(SessionTransport.ApiToken);
         result.SessionId.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task GenerateRefreshToken_ShouldRejectUserMismatch_WhenReusingExistingSession()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var requestInfo = CreateRequestInfo();
+
+        var issue = await service.GenerateRefreshToken(8, requestInfo, SessionTransport.BrowserCookie);
+        var validation = await service.ValidateRefreshToken(
+            issue.Value,
+            issue.SessionBindingToken,
+            SessionTransport.BrowserCookie,
+            requestInfo);
+
+        var act = () => service.GenerateRefreshToken(
+            9,
+            requestInfo,
+            SessionTransport.BrowserCookie,
+            validation.SessionId);
+
+        await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh session user mismatch.");
+    }
+
+    [Fact]
+    public async Task GenerateRefreshToken_ShouldRejectTransportMismatch_WhenReusingExistingSession()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var requestInfo = CreateRequestInfo();
+
+        var issue = await service.GenerateRefreshToken(8, requestInfo, SessionTransport.BrowserCookie);
+        var validation = await service.ValidateRefreshToken(
+            issue.Value,
+            issue.SessionBindingToken,
+            SessionTransport.BrowserCookie,
+            requestInfo);
+
+        var act = () => service.GenerateRefreshToken(
+            8,
+            requestInfo,
+            SessionTransport.ApiToken,
+            validation.SessionId);
+
+        await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh session transport mismatch.");
+    }
+
+    [Fact]
+    public async Task GenerateVerificationArtifactsAsync_ShouldReuseExistingState_ForSameEmailAndPurpose()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var user = new User
+        {
+            Email = "signup@example.com",
+            Password = "hashed-password",
+            Usertype = "Organizer"
+        };
+
+        var first = await service.GenerateVerificationArtifactsAsync(user, VerificationPurpose.SignUp);
+        var second = await service.GenerateVerificationArtifactsAsync(user, VerificationPurpose.SignUp);
+
+        second.LinkToken.Should().Be(first.LinkToken);
+        second.OtpChallenge.Challenge.Should().Be(first.OtpChallenge.Challenge);
+        second.OtpChallenge.Code.Should().Be(first.OtpChallenge.Code);
+        second.Purpose.Should().Be(VerificationPurpose.SignUp);
+    }
+
+    [Fact]
+    public async Task VerifyVerificationToken_ShouldReturnUser_AndClearStoredState()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var user = new User
+        {
+            Email = "verify@example.com",
+            Password = "hashed-password",
+            Usertype = "Organizer"
+        };
+
+        var artifacts = await service.GenerateVerificationArtifactsAsync(user, VerificationPurpose.SignUp);
+        var verifiedUser = await service.VerifyVerificationToken(
+            artifacts.LinkToken,
+            VerificationPurpose.SignUp);
+
+        verifiedUser.Email.Should().Be("verify@example.com");
+        verifiedUser.Password.Should().Be("hashed-password");
+        verifiedUser.Usertype.Should().Be("Organizer");
+        (await service.VerificationTokenExist("verify@example.com", VerificationPurpose.SignUp)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task VerifyVerificationToken_ShouldRejectPurposeMismatch()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var user = new User
+        {
+            Email = "verify@example.com",
+            Password = "hashed-password",
+            Usertype = "Organizer"
+        };
+
+        var artifacts = await service.GenerateVerificationArtifactsAsync(user, VerificationPurpose.SignUp);
+
+        var act = () => service.VerifyVerificationToken(
+            artifacts.LinkToken,
+            VerificationPurpose.ResetPassword);
+
+        await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Verification token purpose mismatch.");
+    }
+
+    [Fact]
+    public async Task RevokeAllRefreshSessionsAsync_ShouldInvalidateEverySessionForUser()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var browserRequest = CreateRequestInfo();
+        var apiRequest = new ClientRequestInfo
+        {
+            IpAddress = "10.0.0.9",
+            ClientName = "ApiClient",
+            DeviceType = "Server",
+            IsBrowserClient = false
+        };
+
+        var browserIssue = await service.GenerateRefreshToken(44, browserRequest, SessionTransport.BrowserCookie);
+        var apiIssue = await service.GenerateRefreshToken(44, apiRequest, SessionTransport.ApiToken);
+
+        await service.RevokeAllRefreshSessionsAsync(44);
+
+        var browserAct = () => service.ValidateRefreshToken(
+            browserIssue.Value,
+            browserIssue.SessionBindingToken,
+            SessionTransport.BrowserCookie,
+            browserRequest);
+        var apiAct = () => service.ValidateRefreshToken(
+            apiIssue.Value,
+            apiIssue.SessionBindingToken,
+            SessionTransport.ApiToken,
+            apiRequest);
+
+        await browserAct.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Invalid or expired refresh token.");
+        await apiAct.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Invalid or expired refresh token.");
     }
 
     private static ClientRequestInfo CreateRequestInfo() => new()

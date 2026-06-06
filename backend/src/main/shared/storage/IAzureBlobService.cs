@@ -4,6 +4,7 @@ namespace backend.main.shared.storage
 {
     public interface IAzureBlobService
     {
+        Task<string> UploadImageAsync(IFormFile image, string blobPathPrefix);
         Task<PresignedUploadResponse> GenerateUploadUrlAsync(string blobPathPrefix, string fileName, string contentType);
         bool IsOwnedBlobUrl(string blobUrl);
         Task DeleteBlobAsync(string blobUrl);

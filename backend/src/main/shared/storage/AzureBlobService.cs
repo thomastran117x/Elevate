@@ -20,6 +20,15 @@ namespace backend.main.shared.storage
                 ["image/webp"] = new[] { ".webp" },
                 ["image/gif"] = new[] { ".gif" }
             };
+        private static readonly Dictionary<string, string> CanonicalContentTypesByExtension =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                [".jpg"] = "image/jpeg",
+                [".jpeg"] = "image/jpeg",
+                [".png"] = "image/png",
+                [".webp"] = "image/webp",
+                [".gif"] = "image/gif"
+            };
 
         private readonly BlobContainerClient? _container;
         private readonly string? _configurationError;
@@ -44,6 +53,34 @@ namespace backend.main.shared.storage
             _container = new BlobContainerClient(connectionString, containerName);
         }
 
+        public async Task<string> UploadImageAsync(IFormFile image, string blobPathPrefix)
+        {
+            if (image == null || image.Length == 0)
+                throw new ArgumentException("Image is null or empty");
+
+            var container = GetRequiredContainer();
+            await container.CreateIfNotExistsAsync(PublicAccessType.Blob);
+
+            var contentType = ResolveImageContentType(image.FileName, image.ContentType);
+            var extension = ValidateAndNormalizeImageExtension(image.FileName, contentType);
+            var normalizedPrefix = NormalizeBlobPathPrefix(blobPathPrefix, "uploads");
+            var blobName = $"{normalizedPrefix}/{Guid.NewGuid():N}{extension}";
+            var blobClient = container.GetBlobClient(blobName);
+
+            await using var stream = image.OpenReadStream();
+            await blobClient.UploadAsync(
+                stream,
+                new BlobUploadOptions
+                {
+                    HttpHeaders = new BlobHttpHeaders
+                    {
+                        ContentType = contentType
+                    }
+                });
+
+            return blobClient.Uri.ToString();
+        }
+
         public async Task<PresignedUploadResponse> GenerateUploadUrlAsync(
             string blobPathPrefix,
             string fileName,
@@ -53,10 +90,9 @@ namespace backend.main.shared.storage
 
             await container.CreateIfNotExistsAsync(PublicAccessType.Blob);
 
-            var extension = ValidateAndNormalizeImageExtension(fileName, contentType);
-            var normalizedPrefix = string.IsNullOrWhiteSpace(blobPathPrefix)
-                ? "events"
-                : blobPathPrefix.Trim().Trim('/');
+            var normalizedContentType = ResolveImageContentType(fileName, contentType);
+            var extension = ValidateAndNormalizeImageExtension(fileName, normalizedContentType);
+            var normalizedPrefix = NormalizeBlobPathPrefix(blobPathPrefix, "events");
             var blobName = $"{normalizedPrefix}/{Guid.NewGuid():N}{extension}";
             var blobClient = container.GetBlobClient(blobName);
 
@@ -114,6 +150,25 @@ namespace backend.main.shared.storage
             );
         }
 
+        private static string ResolveImageContentType(string fileName, string? contentType)
+        {
+            var normalizedContentType = (contentType ?? string.Empty).Trim().ToLowerInvariant();
+            if (!string.IsNullOrWhiteSpace(normalizedContentType) &&
+                normalizedContentType != "application/octet-stream")
+            {
+                return normalizedContentType;
+            }
+
+            var extension = Path.GetExtension(Path.GetFileName(fileName?.Trim() ?? string.Empty)).ToLowerInvariant();
+            if (!string.IsNullOrWhiteSpace(extension) &&
+                CanonicalContentTypesByExtension.TryGetValue(extension, out var inferredContentType))
+            {
+                return inferredContentType;
+            }
+
+            return normalizedContentType;
+        }
+
         private static string ValidateAndNormalizeImageExtension(string fileName, string contentType)
         {
             var safeFileName = Path.GetFileName(fileName?.Trim() ?? string.Empty);
@@ -135,6 +190,34 @@ namespace backend.main.shared.storage
             }
 
             return extension;
+        }
+
+        private static string NormalizeBlobPathPrefix(string blobPathPrefix, string fallbackPrefix)
+        {
+            var segments = (blobPathPrefix ?? string.Empty)
+                .Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToArray();
+
+            var safeSegments = new List<string>();
+            foreach (var segment in segments)
+            {
+                if (segment == ".")
+                    continue;
+
+                if (segment == "..")
+                {
+                    if (safeSegments.Count > 0)
+                        safeSegments.RemoveAt(safeSegments.Count - 1);
+
+                    continue;
+                }
+
+                safeSegments.Add(segment);
+            }
+
+            return safeSegments.Count == 0
+                ? fallbackPrefix
+                : string.Join('/', safeSegments);
         }
 
         private bool TryGetManagedBlobPath(string blobUrl, out string blobPath)

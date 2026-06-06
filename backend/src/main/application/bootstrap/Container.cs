@@ -127,7 +127,6 @@ namespace backend.main.application.bootstrap
             services.AddSingleton<CommentEventBroker>();
             services.AddSingleton<IRefreshAheadCache, RefreshAheadCache>();
             services.AddScoped<IEventRegistrationService, EventRegistrationService>();
-            services.AddScoped<IFileUploadService, FileUploadService>();
             services.AddScoped<IAzureBlobService, AzureBlobService>();
 
             if (includeHostedServices)

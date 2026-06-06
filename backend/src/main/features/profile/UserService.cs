@@ -15,7 +15,7 @@ namespace backend.main.features.profile
     {
         private readonly IUserRepository _userRepository;
         private readonly IAuthUserRepository _authUserRepository;
-        private readonly IFileUploadService _fileService;
+        private readonly IAzureBlobService _blobService;
         private readonly IFollowService _followService;
         private readonly ITokenService _tokenService;
         private readonly IRefreshAheadCache _refreshCache;
@@ -28,7 +28,7 @@ namespace backend.main.features.profile
         public UserService(
             IUserRepository userRepository,
             IAuthUserRepository authUserRepository,
-            IFileUploadService fileService,
+            IAzureBlobService blobService,
             IFollowService followService,
             ITokenService tokenService,
             IRefreshAheadCache refreshCache
@@ -36,7 +36,7 @@ namespace backend.main.features.profile
         {
             _userRepository = userRepository;
             _authUserRepository = authUserRepository;
-            _fileService = fileService;
+            _blobService = blobService;
             _followService = followService;
             _tokenService = tokenService;
             _refreshCache = refreshCache;
@@ -94,7 +94,7 @@ namespace backend.main.features.profile
 
         public async Task<User?> UpdateAvatarAsync(int id, IFormFile image)
         {
-            string filePath = await _fileService.UploadImageAsync(image, "users");
+            string filePath = await _blobService.UploadImageAsync(image, "users");
 
             User user = await _userRepository.GetUserAsync(id)
                 ?? throw new ResourceNotFoundException($"User with the id {id} is not found");
@@ -114,4 +114,3 @@ namespace backend.main.features.profile
         }
     }
 }
-

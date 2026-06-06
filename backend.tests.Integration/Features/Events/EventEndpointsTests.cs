@@ -488,23 +488,18 @@ public class EventEndpointsTests
 
     private static async Task<ClubApiModel> CreateClubAsync(AuthApiTestApp app, string accessToken, string name)
     {
-        var content = new MultipartFormDataContent
-        {
-            { new StringContent(name), "Name" },
-            { new StringContent("Event testing group"), "Description" },
-            { new StringContent("social"), "Clubtype" },
-            { new StringContent($"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"), "Email" }
-        };
-
-        var imageBytes = new ByteArrayContent("club-image"u8.ToArray());
-        imageBytes.Headers.ContentType = new MediaTypeHeaderValue("image/png");
-        content.Add(imageBytes, "ClubImage", "club.png");
-
         var response = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Post,
             "/api/clubs",
             accessToken,
-            content));
+            JsonContent.Create(new
+            {
+                Name = name,
+                Description = "Event testing group",
+                Clubtype = "social",
+                ClubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club.png"),
+                Email = $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"
+            })));
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
         return (await app.ReadApiResponseAsync<ClubApiModel>(response)).Data!;

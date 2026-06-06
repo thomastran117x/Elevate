@@ -8,12 +8,27 @@ public sealed class FakeAzureBlobService : IAzureBlobService
     private const string BaseUrl = "https://storage.test/event-assets";
     private readonly HashSet<string> _ownedUrls = [];
 
-    public Task<PresignedUploadResponse> GenerateUploadUrlAsync(string blobPathPrefix, string fileName, string contentType)
+    public string CreateOwnedBlobUrl(string blobPathPrefix, string fileName)
     {
-        var safePrefix = blobPathPrefix.Trim('/').Replace(' ', '-');
+        var safePrefix = string.Join(
+            '/',
+            blobPathPrefix
+                .Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(segment => segment is not "." and not ".."));
         var safeFileName = Path.GetFileName(fileName);
         var publicUrl = $"{BaseUrl}/{safePrefix}/{Guid.NewGuid():N}-{safeFileName}";
         _ownedUrls.Add(publicUrl);
+        return publicUrl;
+    }
+
+    public Task<string> UploadImageAsync(IFormFile image, string blobPathPrefix)
+    {
+        return Task.FromResult(CreateOwnedBlobUrl(blobPathPrefix, image.FileName));
+    }
+
+    public Task<PresignedUploadResponse> GenerateUploadUrlAsync(string blobPathPrefix, string fileName, string contentType)
+    {
+        var publicUrl = CreateOwnedBlobUrl(blobPathPrefix.Replace(' ', '-'), fileName);
 
         return Task.FromResult(new PresignedUploadResponse
         {

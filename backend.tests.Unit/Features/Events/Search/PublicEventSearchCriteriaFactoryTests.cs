@@ -158,4 +158,117 @@ public class PublicEventSearchCriteriaFactoryTests
         errors.Should().Contain(error => error.Message == "Private events are not available through the public events endpoint.");
         errors.Should().Contain(error => error.Message == "A maximum of 5 tags are allowed per query.");
     }
+
+    [Fact]
+    public void ValidateRequest_ShouldRejectPagingAndGeoInputProblems()
+    {
+        var request = new EventSearchRequest
+        {
+            Page = 0,
+            PageSize = 101,
+            SortBy = EventSortBy.Distance,
+            Geo = new EventGeoFilter
+            {
+                Lat = 91,
+                RadiusKm = 501
+            }
+        };
+
+        var errors = PublicEventSearchCriteriaFactory.ValidateRequest(request);
+
+        errors.Should().Contain(error => error.Message == "page must be at least 1.");
+        errors.Should().Contain(error => error.Message == "pageSize must be between 1 and 100.");
+        errors.Should().Contain(error => error.Message == "Both lat and lng must be provided together.");
+        errors.Should().Contain(error => error.Message == "lat must be between -90 and 90.");
+        errors.Should().Contain(error => error.Message == "radiusKm must be between 0 (exclusive) and 500.");
+        errors.Should().Contain(error => error.Message == "sortBy=Distance requires lat and lng.");
+    }
+
+    [Fact]
+    public void ValidateRequest_ShouldRejectInvalidLongitude()
+    {
+        var request = new EventSearchRequest
+        {
+            Geo = new EventGeoFilter
+            {
+                Lat = 45,
+                Lng = 181,
+                RadiusKm = 10
+            }
+        };
+
+        var errors = PublicEventSearchCriteriaFactory.ValidateRequest(request);
+
+        errors.Should().Contain(error => error.Message == "lng must be between -180 and 180.");
+    }
+
+    [Fact]
+    public void ValidateRequest_ShouldAcceptWellFormedDistanceQuery()
+    {
+        var request = new EventSearchRequest
+        {
+            Query = " music ",
+            Filters = new EventSearchFilters
+            {
+                Tags = [" Tech ", "tech", "Community"]
+            },
+            Geo = new EventGeoFilter
+            {
+                Lat = 45.4215,
+                Lng = -75.6972,
+                RadiusKm = 15
+            },
+            SortBy = EventSortBy.Distance,
+            Page = 1,
+            PageSize = 20
+        };
+
+        PublicEventSearchCriteriaFactory.ValidateRequest(request).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FromQuery_ShouldRejectInvalidPaging()
+    {
+        var act = () => PublicEventSearchCriteriaFactory.FromQuery(
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            EventSortBy.Relevance,
+            0,
+            20);
+
+        act.Should()
+            .Throw<BadRequestException>()
+            .WithMessage("page must be at least 1.");
+    }
+
+    [Fact]
+    public void FromQuery_ShouldNormalizeEmptyTagString_ToNull()
+    {
+        var criteria = PublicEventSearchCriteriaFactory.FromQuery(
+            null,
+            false,
+            null,
+            null,
+            " , , ",
+            "  ",
+            null,
+            null,
+            null,
+            EventSortBy.Relevance,
+            1,
+            20);
+
+        criteria.Tags.Should().BeNull();
+        criteria.Query.Should().BeNull();
+        criteria.City.Should().BeNull();
+        criteria.IsPrivate.Should().BeFalse();
+        criteria.LifecycleState.Should().Be(EventLifecycleState.Published);
+    }
 }

@@ -22,8 +22,8 @@ namespace backend.main.features.clubs
         Task<bool> CanManageClubPostsAsync(int clubId, int userId, string? userRole = null);
         Task<bool> CanManageEventMediaAsync(int clubId, int userId, string? userRole = null);
         Task<bool> IsClubOwnerAsync(int clubId, int userId, string? userRole = null);
-        Task<Club> CreateClub(string name, int userId, string description, string clubtype, IFormFile clubimage, string? phone = null, string? email = null);
-        Task<Club> UpdateClub(int clubId, int userId, string userRole, string name, string description, string clubtype, IFormFile clubimage, string? phone = null, string? email = null);
+        Task<Club> CreateClub(string name, int userId, string description, string clubtype, string clubImageUrl, string? phone = null, string? email = null);
+        Task<Club> UpdateClub(int clubId, int userId, string userRole, string name, string description, string clubtype, string clubImageUrl, string? phone = null, string? email = null);
         Task<List<Club>> GetClubsByIdsAsync(IEnumerable<int> clubIds);
         Task DeleteClub(int clubId, int userId);
         Task<IReadOnlyList<ClubStaff>> GetStaffAsync(int clubId, int userId, string userRole);
@@ -52,4 +52,3 @@ namespace backend.main.features.clubs
             string userRole);
     }
 }
-

@@ -38,6 +38,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
     public InMemoryCacheService Cache => _factory.Cache;
     public CapturingPublisher Publisher => _factory.Publisher;
     public FakeOAuthService OAuth => _factory.OAuth;
+    public FakeAzureBlobService BlobStorage => _factory.BlobStorage;
 
     private AuthApiTestApp(TestWebApplicationFactory factory, HttpClient client)
     {
