@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 using backend.main.features.events;
 using backend.main.features.events.search;
@@ -209,6 +210,72 @@ public class EventSearchServiceTests
         noDistance.Should().BeNull();
     }
 
+    [Fact]
+    public void ExtractDistanceKm_ShouldReturnNull_WhenSortDoesNotContainDistance()
+    {
+        var hit = new Hit<EventDocument>
+        {
+            Sort = [(Elastic.Clients.Elasticsearch.FieldValue)"n/a"]
+        };
+
+        var distance = InvokePrivateStatic<double?>(
+            typeof(EventSearchService),
+            "ExtractDistanceKm",
+            hit,
+            true);
+
+        distance.Should().BeNull();
+    }
+
+    [Fact]
+    public void ApplySort_ShouldHandlePopularityAndRelevanceBranches()
+    {
+        var popularitySort = new Elastic.Clients.Elasticsearch.SearchRequestDescriptor<EventDocument>();
+        var relevanceSort = new Elastic.Clients.Elasticsearch.SearchRequestDescriptor<EventDocument>();
+
+        InvokePrivateStatic<object?>(
+            typeof(EventSearchService),
+            "ApplySort",
+            popularitySort,
+            new EventSearchCriteria { SortBy = EventSortBy.Popularity },
+            false);
+        InvokePrivateStatic<object?>(
+            typeof(EventSearchService),
+            "ApplySort",
+            relevanceSort,
+            new EventSearchCriteria { SortBy = EventSortBy.Relevance },
+            false);
+    }
+
+    [Fact]
+    public void PrivateClientHelpers_ShouldHandleInjectedClientAndUnavailableStates()
+    {
+        var injectedClient = (Elastic.Clients.Elasticsearch.ElasticsearchClient)RuntimeHelpers
+            .GetUninitializedObject(typeof(Elastic.Clients.Elasticsearch.ElasticsearchClient));
+        var health = new ElasticsearchHealth();
+        SetHealth(health, isConfigured: true, failure: null);
+
+        var withClient = new EventSearchService(new ElasticsearchCircuitBreaker(), health, injectedClient);
+        var unavailable = new EventSearchService(new ElasticsearchCircuitBreaker(), health);
+
+        InvokePrivateInstance<Elastic.Clients.Elasticsearch.ElasticsearchClient>(
+                withClient,
+                "GetRequiredClient")
+            .Should().BeSameAs(injectedClient);
+        InvokePrivateInstance<Elastic.Clients.Elasticsearch.ElasticsearchClient?>(
+                withClient,
+                "GetWritableClientOrNull")
+            .Should().BeSameAs(injectedClient);
+
+        var requiredAction = () => InvokePrivateInstance<object?>(unavailable, "GetRequiredClient");
+        var writableAction = () => InvokePrivateInstance<object?>(unavailable, "GetWritableClientOrNull");
+
+        requiredAction.Should().Throw<TargetInvocationException>()
+            .WithInnerException<ElasticsearchUnavailableException>();
+        writableAction.Should().Throw<TargetInvocationException>()
+            .WithInnerException<ElasticsearchUnavailableException>();
+    }
+
     private static EventSearchService CreateService(bool isConfigured, Exception? failure = null)
     {
         var health = new ElasticsearchHealth();
@@ -230,5 +297,13 @@ public class EventSearchServiceTests
         method.Should().NotBeNull();
 
         return (T)method!.Invoke(null, args)!;
+    }
+
+    private static T InvokePrivateInstance<T>(object target, string methodName, params object?[] args)
+    {
+        var method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+
+        return (T)method!.Invoke(target, args)!;
     }
 }

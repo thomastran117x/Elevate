@@ -108,6 +108,39 @@ public class OpenApiYamlSerializerTests
             .WithMessage("OpenAPI JSON output could not be parsed.");
     }
 
+    [Theory]
+    [InlineData("{}", "{}\n")]
+    [InlineData("[]", "[]\n")]
+    [InlineData("42", "42\n")]
+    public void ConvertJsonDocumentToYaml_ShouldHandleEmptyAndScalarRoots(string json, string expectedYaml)
+    {
+        var yaml = ConvertJsonDocumentToYaml(json);
+
+        NormalizeLineEndings(yaml).Should().Be(expectedYaml);
+    }
+
+    [Fact]
+    public void ConvertJsonDocumentToYaml_ShouldRenderNullAndEmptyArrayItems()
+    {
+        const string json = """
+            [
+              null,
+              {},
+              []
+            ]
+            """;
+
+        var yaml = ConvertJsonDocumentToYaml(json);
+
+        NormalizeLineEndings(yaml).Should().Be(
+            """
+            - null
+            - {}
+            - []
+
+            """);
+    }
+
     private static string ConvertJsonDocumentToYaml(string json)
     {
         var type = Type.GetType("backend.main.application.openapi.OpenApiYamlSerializer, backend")

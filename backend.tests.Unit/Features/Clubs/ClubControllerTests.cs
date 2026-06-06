@@ -23,6 +23,140 @@ namespace backend.tests.Clubs;
 public class ClubControllerTests
 {
     [Fact]
+    public async Task JoinAndLeaveClub_ShouldReturnSuccessMessages()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.JoinClubAsync(4, 7)).Returns(Task.CompletedTask);
+        service.Setup(s => s.LeaveClubAsync(4, 7)).Returns(Task.CompletedTask);
+
+        var controller = CreateController(service.Object);
+
+        var joinResult = await controller.JoinClub(4);
+        joinResult.Should().BeOfType<ObjectResult>().Subject.Value.Should().BeOfType<MessageResponse>()
+            .Which.Message.Should().Be("The club with ID `4` has been followed successfully.");
+
+        var leaveResult = await controller.LeaveClub(4);
+        leaveResult.Should().BeOfType<ObjectResult>().Subject.Value.Should().BeOfType<MessageResponse>()
+            .Which.Message.Should().Be("The club with ID `4` has been unfollowed successfully.");
+    }
+
+    [Fact]
+    public async Task CreateClub_ShouldReturnCreatedClubResponse()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.CreateClub("Chess Club", 7, "Strategy nights", "social", "https://cdn.test/clubs/chess.png", "555-0100", "club@example.com"))
+            .ReturnsAsync(new Club
+            {
+                Id = 4,
+                UserId = 7,
+                Name = "Chess Club",
+                Description = "Strategy nights",
+                Clubtype = ClubType.Social,
+                ClubImage = "https://cdn.test/clubs/chess.png",
+                Phone = "555-0100",
+                Email = "club@example.com"
+            });
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.CreateClub(new ClubCreateRequest
+        {
+            Name = "Chess Club",
+            Description = "Strategy nights",
+            Clubtype = "social",
+            ClubImageUrl = "https://cdn.test/clubs/chess.png",
+            Phone = "555-0100",
+            Email = "club@example.com"
+        });
+
+        var created = result.Should().BeOfType<ObjectResult>().Subject;
+        created.StatusCode.Should().Be(201);
+        var response = created.Value.Should().BeOfType<ApiResponse<ClubResponse>>().Subject;
+        response.Data!.Name.Should().Be("Chess Club");
+        response.Data.IsOwner.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UpdateClub_ShouldReturnUpdatedClubResponse()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.UpdateClub(4, 7, "Organizer", "Updated Club", "Updated description", "social", "https://cdn.test/clubs/updated.png", null, "updated@example.com"))
+            .ReturnsAsync(new Club
+            {
+                Id = 4,
+                UserId = 7,
+                Name = "Updated Club",
+                Description = "Updated description",
+                Clubtype = ClubType.Social,
+                ClubImage = "https://cdn.test/clubs/updated.png",
+                Email = "updated@example.com"
+            });
+        service.Setup(s => s.GetClubAccessAsync(4, 7, "Organizer"))
+            .ReturnsAsync(new ClubAccessInfo { IsOwner = true, CanManage = true });
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.UpdateClub(new ClubUpdateRequest
+        {
+            Name = "Updated Club",
+            Description = "Updated description",
+            Clubtype = "social",
+            ClubImageUrl = "https://cdn.test/clubs/updated.png",
+            Email = "updated@example.com"
+        }, 4);
+
+        var ok = result.Should().BeOfType<ObjectResult>().Subject;
+        ok.StatusCode.Should().Be(200);
+        var response = ok.Value.Should().BeOfType<ApiResponse<ClubResponse>>().Subject;
+        response.Data!.Name.Should().Be("Updated Club");
+    }
+
+    [Fact]
+    public async Task DeleteClub_ShouldReturnSuccessMessage()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.DeleteClub(4, 7)).Returns(Task.CompletedTask);
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.DeleteClub(4);
+
+        result.Should().BeOfType<ObjectResult>().Subject.Value.Should().BeOfType<MessageResponse>()
+            .Which.Message.Should().Be("The club with ID 4 has been deleted successfully.");
+    }
+
+    [Fact]
+    public async Task GetClub_ShouldReturnClubResponseWithAccessFlags()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.GetClub(4))
+            .ReturnsAsync(new Club
+            {
+                Id = 4,
+                UserId = 7,
+                Name = "Chess Club",
+                Description = "Strategy nights",
+                Clubtype = ClubType.Social,
+                ClubImage = "https://cdn.test/clubs/chess.png"
+            });
+        service.Setup(s => s.GetClubAccessMapAsync(It.Is<IEnumerable<int>>(ids => ids.SequenceEqual(new[] { 4 })), 7, "Organizer"))
+            .ReturnsAsync(new Dictionary<int, ClubAccessInfo>
+            {
+                [4] = new ClubAccessInfo { IsOwner = true, CanManage = true }
+            });
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.GetClub(4);
+
+        var ok = result.Should().BeOfType<ObjectResult>().Subject;
+        ok.StatusCode.Should().Be(200);
+        var response = ok.Value.Should().BeOfType<ApiResponse<ClubResponse>>().Subject;
+        response.Data!.IsOwner.Should().BeTrue();
+        response.Data.CanManage.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task GetClubs_ShouldReturnPagedSearchResponse()
     {
         var service = new Mock<IClubService>();
@@ -230,6 +364,33 @@ public class ClubControllerTests
     }
 
     [Fact]
+    public async Task GetClubStaff_ShouldReturnStaffResponses()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.GetStaffAsync(4, 7, "Organizer"))
+            .ReturnsAsync([
+                new ClubStaff
+                {
+                    Id = 10,
+                    ClubId = 4,
+                    UserId = 55,
+                    Role = ClubStaffRole.Manager,
+                    GrantedByUserId = 7,
+                    CreatedAt = new DateTime(2026, 5, 14, 12, 0, 0, DateTimeKind.Utc),
+                    UpdatedAt = new DateTime(2026, 5, 14, 12, 0, 0, DateTimeKind.Utc)
+                }
+            ]);
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.GetClubStaff(4);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<IEnumerable<ClubStaffResponse>>>().Subject;
+        response.Data!.Single().Role.Should().Be("Manager");
+    }
+
+    [Fact]
     public async Task AddManager_ShouldReturnCreatedStaffPayload()
     {
         var service = new Mock<IClubService>();
@@ -285,6 +446,86 @@ public class ClubControllerTests
         response.Data.Should().NotBeNull();
         response.Data!.UserId.Should().Be(66);
         response.Data.Role.Should().Be("Volunteer");
+    }
+
+    [Fact]
+    public async Task RemoveStaff_ShouldReturnSuccessMessage()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.RemoveStaffAsync(4, 55, 7, "Organizer"))
+            .Returns(Task.CompletedTask);
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.RemoveStaff(4, 55);
+
+        result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<MessageResponse>()
+            .Which.Message.Should().Be("Staff member with user ID 55 has been removed from club with ID 4 successfully.");
+    }
+
+    [Fact]
+    public async Task TransferOwnership_ShouldReturnUpdatedClubResponse()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.TransferOwnershipAsync(4, 99, 7, "Organizer"))
+            .ReturnsAsync(new Club
+            {
+                Id = 4,
+                UserId = 99,
+                Name = "Chess Club",
+                Description = "Strategy nights",
+                Clubtype = ClubType.Social,
+                ClubImage = "https://cdn.test/clubs/chess.png"
+            });
+        service.Setup(s => s.GetClubAccessAsync(4, 7, "Organizer"))
+            .ReturnsAsync(new ClubAccessInfo { IsOwner = false, CanManage = false });
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.TransferOwnership(4, new ClubOwnershipTransferRequest
+        {
+            NewOwnerUserId = 99
+        });
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<ClubResponse>>().Subject;
+        response.Data!.IsOwner.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetClubVersion_ShouldReturnDetailedVersionPayload()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.GetVersionDetailAsync(4, 2, 7, "Organizer"))
+            .ReturnsAsync(new ClubVersionDetail(
+                4,
+                2,
+                ClubVersionActions.Update,
+                new DateTime(2026, 5, 15, 12, 0, 0, DateTimeKind.Utc),
+                7,
+                "Organizer",
+                true,
+                new DateTime(2026, 8, 15, 12, 0, 0, DateTimeKind.Utc),
+                null,
+                [new ClubVersionFieldChange { Field = "name", OldValue = "Old", NewValue = "New" }],
+                new ClubVersionSnapshot
+                {
+                    Name = "Chess Club",
+                    Description = "Strategy nights",
+                    Clubtype = ClubType.Social.ToString(),
+                    ClubImage = "https://cdn.test/club.png",
+                    MaxMemberCount = 100,
+                    IsPrivate = false
+                }));
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.GetClubVersion(4, 2);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<ClubVersionDetailResponse>>().Subject;
+        response.Data!.VersionNumber.Should().Be(2);
+        response.Data.Snapshot.Name.Should().Be("Chess Club");
     }
 
     [Fact]

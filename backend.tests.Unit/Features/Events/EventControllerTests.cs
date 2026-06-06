@@ -221,6 +221,77 @@ public class EventControllerTests
     }
 
     [Fact]
+    public async Task UpdateDraftEvent_ShouldReturnUpdatedManagedEvent()
+    {
+        var updated = BuildEvent(31, clubId: 4, name: "Updated Draft", lifecycleState: EventLifecycleState.Draft);
+        var service = new Mock<IEventsService>();
+        service.Setup(s => s.UpdateDraftEvent(31, 7, "Organizer", It.IsAny<EventDraftUpsertRequest>()))
+            .ReturnsAsync(updated);
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.UpdateDraftEvent(new EventDraftUpsertRequest
+        {
+            Name = "Updated Draft"
+        }, 31);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<ManagedEventResponse>>().Subject;
+        response.Data!.Name.Should().Be("Updated Draft");
+    }
+
+    [Fact]
+    public async Task PublishEvent_ShouldReturnManagedEvent()
+    {
+        var published = BuildEvent(41, clubId: 4, lifecycleState: EventLifecycleState.Published);
+        var service = new Mock<IEventsService>();
+        service.Setup(s => s.PublishEvent(41, 7, "Organizer"))
+            .ReturnsAsync(published);
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.PublishEvent(41);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<ManagedEventResponse>>().Subject;
+        response.Data!.LifecycleState.Should().Be(EventLifecycleState.Published);
+    }
+
+    [Fact]
+    public async Task CancelEvent_ShouldReturnManagedEvent()
+    {
+        var cancelled = BuildEvent(42, clubId: 4, lifecycleState: EventLifecycleState.Cancelled);
+        var service = new Mock<IEventsService>();
+        service.Setup(s => s.CancelEvent(42, 7, "Organizer"))
+            .ReturnsAsync(cancelled);
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.CancelEvent(42);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<ManagedEventResponse>>().Subject;
+        response.Data!.LifecycleState.Should().Be(EventLifecycleState.Cancelled);
+    }
+
+    [Fact]
+    public async Task ArchiveEvent_ShouldReturnManagedEvent()
+    {
+        var archived = BuildEvent(43, clubId: 4, lifecycleState: EventLifecycleState.Archived);
+        var service = new Mock<IEventsService>();
+        service.Setup(s => s.ArchiveEvent(43, 7, "Organizer"))
+            .ReturnsAsync(archived);
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.ArchiveEvent(43);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<ManagedEventResponse>>().Subject;
+        response.Data!.LifecycleState.Should().Be(EventLifecycleState.Archived);
+    }
+
+    [Fact]
     public async Task GetEvent_ShouldAttachClubPayload()
     {
         var eventService = new Mock<IEventsService>();
@@ -250,6 +321,289 @@ public class EventControllerTests
         var response = ok.Value.Should().BeOfType<ApiResponse<EventResponse>>().Subject;
         response.Data!.Club.Should().NotBeNull();
         response.Data.Club!.Name.Should().Be("Games Club");
+    }
+
+    [Fact]
+    public async Task GetEvents_ShouldReturnPagedSearchResults_WithDistanceMetadata()
+    {
+        var service = new Mock<IEventsService>();
+        service.Setup(s => s.GetEvents(It.IsAny<EventSearchCriteria>()))
+            .ReturnsAsync((
+                new List<backend.main.features.events.Events> { BuildEvent(51, clubId: 4, name: "Nearby Event") },
+                1,
+                new Dictionary<int, double> { [51] = 1.25 },
+                "elasticsearch"));
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.GetEvents(
+            search: "music",
+            city: "Ottawa",
+            lat: 45.4215,
+            lng: -75.6972,
+            radiusKm: 10,
+            sortBy: EventSortBy.Distance,
+            page: 1,
+            pageSize: 20);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<PagedResponse<EventResponse>>>().Subject;
+        response.Data!.Items.Should().ContainSingle();
+        response.Data.Items.Single().DistanceKm.Should().Be(1.25);
+        response.Meta.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task SearchEvents_ShouldReturnPagedSearchResults()
+    {
+        var service = new Mock<IEventsService>();
+        service.Setup(s => s.GetEvents(It.IsAny<EventSearchCriteria>()))
+            .ReturnsAsync((
+                new List<backend.main.features.events.Events> { BuildEvent(52, clubId: 4, name: "Workshop Night") },
+                1,
+                new Dictionary<int, double>(),
+                "database"));
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.SearchEvents(new EventSearchRequest
+        {
+            Query = "workshop",
+            Filters = new EventSearchFilters
+            {
+                City = "Ottawa"
+            },
+            Page = 1,
+            PageSize = 20
+        });
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<PagedResponse<EventResponse>>>().Subject;
+        response.Data!.Items.Single().Name.Should().Be("Workshop Night");
+    }
+
+    [Fact]
+    public async Task GetEventsBatch_ShouldRejectWhenNoValidIdsAreProvided()
+    {
+        var controller = CreateController(Mock.Of<IEventsService>());
+
+        var result = await controller.GetEventsBatch("abc, , nope");
+
+        var badRequest = result.Should().BeOfType<ObjectResult>().Subject;
+        badRequest.StatusCode.Should().Be(400);
+        badRequest.Value.Should().BeOfType<ApiResponse<object>>()
+            .Which.Message.Should().Be("No valid IDs provided.");
+    }
+
+    [Fact]
+    public async Task GetEventsBatch_ShouldReturnMappedVisibleEvents()
+    {
+        var service = new Mock<IEventsService>();
+        service.Setup(s => s.GetVisibleEventsByIds(It.Is<IEnumerable<int>>(ids => ids.SequenceEqual(new[] { 9, 10 })), null, null))
+            .ReturnsAsync([
+                BuildEvent(9, clubId: 4, name: "Event One"),
+                BuildEvent(10, clubId: 4, name: "Event Two")
+            ]);
+
+        var controller = CreateController(service.Object, user: new ClaimsPrincipal(new ClaimsIdentity()));
+
+        var result = await controller.GetEventsBatch("9,10");
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<IEnumerable<EventResponse>>>().Subject;
+        response.Data!.Select(item => item.Name).Should().Equal("Event One", "Event Two");
+    }
+
+    [Fact]
+    public async Task BatchCreateEvents_ShouldReturnCreatedPayload()
+    {
+        var service = new Mock<IEventsService>();
+        service.Setup(s => s.BatchCreateEvents(4, 7, "Organizer", It.IsAny<IEnumerable<BatchCreateEventItem>>()))
+            .ReturnsAsync(new BatchCreateResultResponse
+            {
+                Created =
+                [
+                    new EventResponse
+                    {
+                        Id = 61,
+                        Name = "Created Event",
+                        Description = "Created in batch",
+                        Location = "Hall",
+                        StartTime = DateTime.UtcNow.AddDays(2),
+                        ClubId = 4
+                    }
+                ]
+            });
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.BatchCreateEvents(new BatchCreateEventRequest
+        {
+            Events =
+            [
+                new BatchCreateEventItem
+                {
+                    Name = "Created Event",
+                    Description = "Created in batch",
+                    Location = "Hall",
+                    ImageUrls = ["https://cdn.test/created.png"],
+                    StartTime = DateTime.UtcNow.AddDays(2),
+                    Category = EventCategory.Social
+                }
+            ]
+        }, 4);
+
+        var created = result.Should().BeOfType<ObjectResult>().Subject;
+        created.StatusCode.Should().Be(201);
+        var response = created.Value.Should().BeOfType<ApiResponse<BatchCreateResultResponse>>().Subject;
+        response.Data!.Created.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task BatchUpdateEvents_ShouldReturnUpdatedCount()
+    {
+        var service = new Mock<IEventsService>();
+        service.Setup(s => s.BatchUpdateEvents(7, "Organizer", It.IsAny<IEnumerable<BatchUpdateEventItem>>()))
+            .ReturnsAsync(2);
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.BatchUpdateEvents(new BatchUpdateEventRequest
+        {
+            Events =
+            [
+                new BatchUpdateEventItem { EventId = 1, Name = "One" },
+                new BatchUpdateEventItem { EventId = 2, Name = "Two" }
+            ]
+        });
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeOfType<ApiResponse<object>>()
+            .Which.Message.Should().Be("2 event(s) updated successfully.");
+    }
+
+    [Fact]
+    public async Task BatchDeleteEvents_ShouldReturnDeletedCount()
+    {
+        var service = new Mock<IEventsService>();
+        service.Setup(s => s.BatchDeleteEvents(7, "Organizer", It.IsAny<IEnumerable<int>>()))
+            .ReturnsAsync(3);
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.BatchDeleteEvents(new BatchDeleteRequest
+        {
+            Ids = [1, 2, 3]
+        });
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeOfType<ApiResponse<object>>()
+            .Which.Message.Should().Be("3 event(s) deleted successfully.");
+    }
+
+    [Fact]
+    public async Task GetEventAnalytics_ShouldReturnAnalyticsPayload()
+    {
+        var service = new Mock<IEventsService>();
+        service.Setup(s => s.GetEventAnalytics(71, 7, "Organizer"))
+            .ReturnsAsync(new EventAnalyticsResponse
+            {
+                EventId = 71,
+                EventName = "Analytics Event",
+                LifecycleState = EventLifecycleState.Published,
+                RegistrationCount = 45,
+                MaxParticipants = 100
+            });
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.GetEventAnalytics(71);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<EventAnalyticsResponse>>().Subject;
+        response.Data!.EventName.Should().Be("Analytics Event");
+    }
+
+    [Fact]
+    public async Task GetPresignedUploadUrl_ShouldReturnUploadPayload()
+    {
+        var service = new Mock<IEventsService>();
+        service.Setup(s => s.GenerateImageUploadUrlAsync(4, 7, "Organizer", "cover.png", "image/png", 99))
+            .ReturnsAsync(new PresignedUploadResponse
+            {
+                UploadUrl = "https://upload.test",
+                PublicUrl = "https://public.test",
+                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
+            });
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.GetPresignedUploadUrl(new PresignedUrlRequest
+        {
+            ClubId = 4,
+            EventId = 99,
+            FileName = "cover.png",
+            ContentType = "image/png"
+        });
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<PresignedUploadResponse>>().Subject;
+        response.Data!.PublicUrl.Should().Be("https://public.test");
+    }
+
+    [Fact]
+    public async Task AddAndRemoveEventImage_ShouldReturnExpectedResponses()
+    {
+        var service = new Mock<IEventsService>();
+        service.Setup(s => s.AddEventImageAsync(88, 7, "Organizer", "https://cdn.test/new.png"))
+            .ReturnsAsync(new EventImage
+            {
+                Id = 5,
+                EventId = 88,
+                ImageUrl = "https://cdn.test/new.png",
+                SortOrder = 1,
+                Event = BuildEvent(88, 4)
+            });
+        service.Setup(s => s.RemoveEventImageAsync(88, 5, 7, "Organizer"))
+            .Returns(Task.CompletedTask);
+
+        var controller = CreateController(service.Object);
+
+        var addResult = await controller.AddEventImage(new AddEventImageRequest
+        {
+            ImageUrl = "https://cdn.test/new.png"
+        }, 88);
+
+        var created = addResult.Should().BeOfType<ObjectResult>().Subject;
+        created.StatusCode.Should().Be(201);
+        created.Value.Should().BeOfType<ApiResponse<object>>()
+            .Which.Message.Should().Be("Image added to event 88 successfully.");
+
+        var removeResult = await controller.RemoveEventImage(88, 5);
+        var ok = removeResult.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeOfType<MessageResponse>()
+            .Which.Message.Should().Be("Image 5 removed from event 88 successfully.");
+    }
+
+    [Fact]
+    public async Task GetClubAnalytics_ShouldReturnClubAnalyticsPayload()
+    {
+        var service = new Mock<IEventsService>();
+        service.Setup(s => s.GetClubAnalytics(4, 7, "Organizer"))
+            .ReturnsAsync(new ClubAnalyticsResponse
+            {
+                ClubId = 4,
+                TotalEvents = 8,
+                PublishedEvents = 5
+            });
+
+        var controller = CreateController(service.Object);
+
+        var result = await controller.GetClubAnalytics(4);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<ClubAnalyticsResponse>>().Subject;
+        response.Data!.ClubId.Should().Be(4);
     }
 
     [Fact]
