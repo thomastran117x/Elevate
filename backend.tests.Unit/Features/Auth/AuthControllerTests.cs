@@ -2,7 +2,9 @@ using backend.main.features.auth;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
+using backend.main.features.profile;
 using backend.main.shared.responses;
 
 using backend.tests.Unit.Support;
@@ -14,6 +16,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 
 using Moq;
+
+using System.Security.Claims;
 
 namespace backend.tests.Unit.Features.Auth;
 
@@ -98,14 +102,323 @@ public class AuthControllerTests
         controller.Response.Headers.SetCookie.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task LocalAuthenticate_ShouldReturnBadRequest_WhenCaptchaIsInvalid()
+    {
+        var captchaService = new Mock<ICaptchaService>();
+        var controller = CreateController(captchaService: captchaService);
+        captchaService.Setup(service => service.VerifyCaptchaAsync("bad-captcha", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var result = await controller.LocalAuthenticate(new LoginRequest
+        {
+            Email = "user@example.com",
+            Password = "Password123!",
+            Captcha = "bad-captcha"
+        });
+
+        AssertErrorResult(result, 400, "Invalid captcha.");
+    }
+
+    [Fact]
+    public async Task LocalSignup_ShouldReturnVerificationChallenge()
+    {
+        var authService = new Mock<IAuthService>();
+        authService.Setup(service => service.SignUpAsync("new@example.com", "Password123!", "Organizer"))
+            .ReturnsAsync(new VerificationOtpChallenge
+            {
+                Code = "123456",
+                Challenge = "signup-challenge",
+                ExpiresAtUtc = new DateTime(2026, 6, 5, 12, 0, 0, DateTimeKind.Utc)
+            });
+
+        var controller = CreateController(authService: authService);
+
+        var result = await controller.LocalSignup(new SignUpRequest
+        {
+            Email = "new@example.com",
+            Password = "Password123!",
+            Usertype = "Organizer",
+            Captcha = "captcha"
+        });
+
+        var response = ExtractApiResponse<VerificationChallengeResponse>(result, 200);
+        response.Message.Should().Be("Verification email sent.");
+        response.Data!.Challenge.Should().Be("signup-challenge");
+    }
+
+    [Fact]
+    public async Task LocalVerifyOtp_ShouldReturnSessionTokens_ForApiTransport()
+    {
+        var authService = new Mock<IAuthService>();
+        authService.Setup(service => service.VerifyOtpAsync("123456", "otp-challenge", SessionTransport.ApiToken))
+            .ReturnsAsync(CreateUserToken(
+                "verified@example.com",
+                SessionTransport.ApiToken,
+                refreshToken: "otp-refresh",
+                bindingToken: "otp-binding"));
+
+        var controller = CreateController(authService: authService);
+
+        var result = await controller.LocalVerifyOtp(new OtpVerificationRequest
+        {
+            Code = "123456",
+            Challenge = "otp-challenge",
+            Transport = SessionTransportResolver.ApiValue
+        });
+
+        var response = ExtractApiResponse<AuthenticatedSessionResponse>(result, 200);
+        response.Message.Should().Be("Verification successful");
+        response.Data!.RefreshToken.Should().Be("otp-refresh");
+        response.Data.SessionBindingToken.Should().Be("otp-binding");
+    }
+
+    [Fact]
+    public async Task GoogleAuthenticate_ShouldReturnRoleSelectionPayload_WhenSignupMustBeCompleted()
+    {
+        var authService = new Mock<IAuthService>();
+        authService.Setup(service => service.GoogleAsync("google-token", SessionTransport.BrowserCookie, "nonce"))
+            .ReturnsAsync(OAuthAuthenticationResult.RoleSelectionRequired(new PendingOAuthSignupChallenge
+            {
+                SignupToken = "signup-token",
+                Email = "oauth@example.com",
+                Name = "OAuth User",
+                Provider = "google"
+            }));
+
+        var controller = CreateController(authService: authService);
+
+        var result = await controller.GoogleAuthenticate(new GoogleRequest
+        {
+            Token = "google-token",
+            Nonce = "nonce"
+        });
+
+        var response = ExtractApiResponse<OAuthAuthenticationResponse>(result, 200);
+        response.Message.Should().Be("Role selection is required to complete signup.");
+        response.Data!.RequiresRoleSelection.Should().BeTrue();
+        response.Data.SignupToken.Should().Be("signup-token");
+        response.Data.Email.Should().Be("oauth@example.com");
+    }
+
+    [Fact]
+    public async Task Me_ShouldReturnCurrentUserResponse()
+    {
+        var authService = new Mock<IAuthService>();
+        authService.Setup(service => service.GetCurrentUserAsync(42))
+            .ReturnsAsync(new User
+            {
+                Id = 42,
+                Email = "me@example.com",
+                Username = "",
+                Name = "Current User",
+                Usertype = "Participant"
+            });
+
+        var controller = CreateController(authService: authService);
+        controller.ControllerContext.HttpContext.User = CreatePrincipal(42, "me@example.com", "Participant");
+
+        var result = await controller.Me();
+
+        var response = ExtractApiResponse<CurrentUserResponse>(result, 200);
+        response.Data!.Id.Should().Be(42);
+        response.Data.Email.Should().Be("me@example.com");
+        response.Data.Username.Should().Be("me@example.com");
+        response.Data.Usertype.Should().Be("Participant");
+    }
+
+    [Fact]
+    public async Task Refresh_ShouldReturnUnauthorized_AndClearCookies_WhenRefreshTokenIsMissing()
+    {
+        var controller = CreateController();
+
+        var result = await controller.Refresh(null);
+
+        AssertErrorResult(result, 401, "Missing refresh token");
+        controller.Response.Headers.SetCookie.Should().Contain(value => value.Contains("refreshToken="));
+        controller.Response.Headers.SetCookie.Should().Contain(value => value.Contains("refreshBinding="));
+    }
+
+    [Fact]
+    public async Task ApiRefresh_ShouldReturnSessionPayload_FromRequestBodyTokens()
+    {
+        var authService = new Mock<IAuthService>();
+        authService.Setup(service => service.HandleTokensAsync("api-refresh", "api-binding", SessionTransport.ApiToken))
+            .ReturnsAsync(CreateUserToken(
+                "api-refresh@example.com",
+                SessionTransport.ApiToken,
+                refreshToken: "new-refresh",
+                bindingToken: "new-binding"));
+
+        var controller = CreateController(authService: authService);
+
+        var result = await controller.ApiRefresh(new RefreshTokenRequest
+        {
+            RefreshToken = "api-refresh",
+            SessionBindingToken = "api-binding"
+        });
+
+        var response = ExtractApiResponse<AuthenticatedSessionResponse>(result, 200);
+        response.Message.Should().Be("Session refreshed successfully.");
+        response.Data!.RefreshToken.Should().Be("new-refresh");
+        response.Data.SessionBindingToken.Should().Be("new-binding");
+    }
+
+    [Fact]
+    public void Csrf_ShouldReturnAntiforgeryToken()
+    {
+        var antiforgery = new Mock<IAntiforgery>();
+        var controller = CreateController(antiforgery: antiforgery);
+        antiforgery.Setup(service => service.GetAndStoreTokens(It.IsAny<HttpContext>()))
+            .Returns(new AntiforgeryTokenSet("csrf-token", "cookie-token", "form-field", "header-name"));
+
+        var result = controller.Csrf();
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var payload = ((ApiResponse<object>)ok.Value!).Data!;
+        payload.Should().NotBeNull();
+        payload!.GetType().GetProperty("token")!.GetValue(payload).Should().Be("csrf-token");
+    }
+
+    [Fact]
+    public async Task Logout_ShouldReturnAlreadyLoggedOut_WhenBrowserTokenIsMissing()
+    {
+        var controller = CreateController();
+
+        var result = await controller.Logout(null);
+
+        var response = ExtractMessageResponse(result, 200);
+        response.Message.Should().Be("The user is already logged out.");
+        controller.Response.Headers.SetCookie.Should().Contain(value => value.Contains("refreshToken="));
+    }
+
+    [Fact]
+    public async Task ApiLogout_ShouldReturnUnauthorized_WhenBindingTokenIsMissing()
+    {
+        var controller = CreateController();
+
+        var result = await controller.ApiLogout(new RefreshTokenRequest
+        {
+            RefreshToken = "api-refresh"
+        });
+
+        AssertErrorResult(result, 401, "Missing session binding token");
+    }
+
+    [Fact]
+    public void VerifyDeviceGet_ShouldRedirectToFrontendDeviceVerificationPage()
+    {
+        var controller = CreateController();
+
+        var result = controller.VerifyDevice("device token");
+
+        var redirect = result.Should().BeOfType<RedirectResult>().Subject;
+        redirect.Url.Should().Be("https://frontend.example.com/auth/device/verify?token=device%20token");
+    }
+
+    [Fact]
+    public async Task VerifyDevicePost_ShouldReturnAuthenticatedSession()
+    {
+        var authService = new Mock<IAuthService>();
+        authService.Setup(service => service.VerifyDeviceLoginAsync("device-token", SessionTransport.ApiToken))
+            .ReturnsAsync(CreateUserToken(
+                "device@example.com",
+                SessionTransport.ApiToken,
+                refreshToken: "device-refresh",
+                bindingToken: "device-binding"));
+        var controller = CreateController(authService: authService);
+
+        var result = await controller.VerifyDevice(new VerificationTokenRequest
+        {
+            Token = "device-token",
+            Transport = SessionTransportResolver.ApiValue
+        });
+
+        var response = ExtractApiResponse<AuthenticatedSessionResponse>(result, 200);
+        response.Message.Should().Be("Device verified. Login successful.");
+        response.Data!.RefreshToken.Should().Be("device-refresh");
+    }
+
+    [Fact]
+    public async Task ForgotPassword_ShouldReturnBadRequest_WhenCaptchaIsInvalid()
+    {
+        var captchaService = new Mock<ICaptchaService>();
+        var controller = CreateController(captchaService: captchaService);
+        captchaService.Setup(service => service.VerifyCaptchaAsync("bad-captcha", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var result = await controller.ForgotPassword(new ForgotPasswordRequest
+        {
+            Email = "forgot@example.com",
+            Captcha = "bad-captcha"
+        });
+
+        AssertErrorResult(result, 400, "Invalid captcha.");
+    }
+
+    [Fact]
+    public async Task ChangePassword_ShouldUseTokenFlow_WhenQueryTokenIsPresent()
+    {
+        var authService = new Mock<IAuthService>();
+        authService.Setup(service => service.ChangePasswordAsync("reset-token", "Password123!"))
+            .Returns(Task.CompletedTask);
+        var controller = CreateController(authService: authService);
+
+        var result = await controller.ChangePassword(
+            new ChangePasswordRequest { Password = "Password123!" },
+            "reset-token");
+
+        var response = ExtractMessageResponse(result, 200);
+        response.Message.Should().Be("Password reset successful. Please login");
+        authService.Verify(service => service.ChangePasswordAsync("reset-token", "Password123!"), Times.Once);
+    }
+
+    [Fact]
+    public async Task ChangePassword_ShouldUseOtpFlow_WhenChallengeAndCodeArePresent()
+    {
+        var authService = new Mock<IAuthService>();
+        authService.Setup(service => service.ChangePasswordWithOtpAsync("123456", "challenge", "Password123!"))
+            .Returns(Task.CompletedTask);
+        var controller = CreateController(authService: authService);
+
+        var result = await controller.ChangePassword(
+            new ChangePasswordRequest
+            {
+                Password = "Password123!",
+                Code = "123456",
+                Challenge = "challenge"
+            },
+            null);
+
+        var response = ExtractMessageResponse(result, 200);
+        response.Message.Should().Be("Password reset successful. Please login");
+        authService.Verify(service => service.ChangePasswordWithOtpAsync("123456", "challenge", "Password123!"), Times.Once);
+    }
+
+    [Fact]
+    public async Task ChangePassword_ShouldReturnBadRequest_WhenResetProofIsMissing()
+    {
+        var controller = CreateController();
+
+        var result = await controller.ChangePassword(
+            new ChangePasswordRequest { Password = "Password123!" },
+            null);
+
+        AssertErrorResult(result, 400, "Missing password reset token or OTP challenge.");
+    }
+
     private static AuthController CreateController(
         Mock<IAuthService>? authService = null,
-        Mock<ICaptchaService>? captchaService = null)
+        Mock<ICaptchaService>? captchaService = null,
+        Mock<IAntiforgery>? antiforgery = null)
     {
         authService ??= new Mock<IAuthService>();
         captchaService ??= new Mock<ICaptchaService>();
+        antiforgery ??= new Mock<IAntiforgery>();
         captchaService.Setup(service => service.VerifyCaptchaAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
+        antiforgery.Setup(service => service.GetAndStoreTokens(It.IsAny<HttpContext>()))
+            .Returns(new AntiforgeryTokenSet("csrf-default", "cookie-default", "form", "header"));
 
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -116,7 +429,7 @@ public class AuthControllerTests
 
         var controller = new AuthController(
             authService.Object,
-            Mock.Of<IAntiforgery>(),
+            antiforgery.Object,
             captchaService.Object,
             TestRequestInfoFactory.Browser(),
             configuration);
@@ -144,5 +457,38 @@ public class AuthControllerTests
                 TimeSpan.FromDays(1),
                 transport),
             new TestUserBuilder().WithEmail(email).Build());
+    }
+
+    private static ClaimsPrincipal CreatePrincipal(int id, string email, string role)
+    {
+        return new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.NameIdentifier, id.ToString()),
+            new Claim(ClaimTypes.Name, email),
+            new Claim(ClaimTypes.Role, role)
+        ], "TestAuth"));
+    }
+
+    private static ApiResponse<T> ExtractApiResponse<T>(IActionResult result, int expectedStatusCode)
+    {
+        var objectResult = result.Should().BeAssignableTo<ObjectResult>().Subject;
+        objectResult.StatusCode.Should().Be(expectedStatusCode);
+        return objectResult.Value.Should().BeOfType<ApiResponse<T>>().Subject;
+    }
+
+    private static MessageResponse ExtractMessageResponse(IActionResult result, int expectedStatusCode)
+    {
+        var objectResult = result.Should().BeAssignableTo<ObjectResult>().Subject;
+        objectResult.StatusCode.Should().Be(expectedStatusCode);
+        return objectResult.Value.Should().BeOfType<MessageResponse>().Subject;
+    }
+
+    private static void AssertErrorResult(IActionResult result, int expectedStatusCode, string expectedMessage)
+    {
+        var objectResult = result.Should().BeAssignableTo<ObjectResult>().Subject;
+        objectResult.StatusCode.Should().Be(expectedStatusCode);
+        var response = objectResult.Value.Should().BeOfType<ApiResponse<object?>>().Subject;
+        response.Message.Should().Be(expectedMessage);
+        response.Success.Should().BeFalse();
     }
 }

@@ -287,6 +287,24 @@ public class ClubControllerTests
         response.Data.Role.Should().Be("Volunteer");
     }
 
+    [Fact]
+    public async Task AdminClubsController_ReindexClubs_ShouldReturnIndexedCount()
+    {
+        var reindexService = new Mock<IClubReindexService>();
+        reindexService.Setup(service => service.ReindexAllAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(8);
+
+        var controller = new AdminClubsController(reindexService.Object);
+
+        var result = await controller.ReindexClubs(CancellationToken.None);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<object>>().Subject;
+        response.Message.Should().Be("Clubs reindexed successfully.");
+        response.Data.Should().NotBeNull();
+        response.Data!.ToString().Should().Contain("8");
+    }
+
     private static ClubController CreateController(IClubService service)
     {
         var controller = new ClubController(service);

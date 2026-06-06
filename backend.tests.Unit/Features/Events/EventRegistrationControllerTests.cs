@@ -4,6 +4,7 @@ using backend.main.features.events;
 using backend.main.features.events.registration;
 using backend.main.features.events.registration.contracts.requests;
 using backend.main.features.events.registration.contracts.responses;
+using backend.main.shared.exceptions.http;
 using backend.main.shared.responses;
 
 using FluentAssertions;
@@ -80,6 +81,58 @@ public class EventRegistrationControllerTests
             .Which.Data!.Succeeded.Should().ContainSingle().Which.Should().Be(9);
     }
 
+    [Fact]
+    public async Task UserEventRegistrationController_ShouldReturnRegistrations_ForMatchingUser()
+    {
+        var registrationService = new Mock<IEventRegistrationService>();
+        registrationService.Setup(service => service.GetRegistrationsByUserAsync(7, 1, 20))
+            .ReturnsAsync([
+                new EventRegistration
+                {
+                    Id = 1,
+                    UserId = 7,
+                    EventId = 9,
+                    Status = RegistrationStatus.Active,
+                    CreatedAt = new DateTime(2026, 5, 15, 12, 0, 0, DateTimeKind.Utc)
+                }
+            ]);
+
+        var controller = CreateUserController(registrationService.Object, "Organizer", 7);
+
+        var result = await controller.GetRegisteredEvents(7, 1, 20);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<IEnumerable<EventRegistrationResponse>>>().Subject;
+        response.Data.Should().ContainSingle();
+        response.Data!.Single().EventId.Should().Be(9);
+    }
+
+    [Fact]
+    public async Task UserEventRegistrationController_ShouldForbidOtherUsers_UnlessAdmin()
+    {
+        var controller = CreateUserController(Mock.Of<IEventRegistrationService>(), "Organizer", 7);
+
+        var result = await controller.GetRegisteredEvents(99, 1, 20);
+
+        result.Should().BeOfType<ObjectResult>()
+            .Which.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+    }
+
+    [Fact]
+    public async Task UserEventRegistrationController_ShouldAllowAdmins_ToViewOtherUsers()
+    {
+        var registrationService = new Mock<IEventRegistrationService>();
+        registrationService.Setup(service => service.GetRegistrationsByUserAsync(99, 2, 5))
+            .ReturnsAsync(Array.Empty<EventRegistration>());
+
+        var controller = CreateUserController(registrationService.Object, "Admin", 7);
+
+        var result = await controller.GetRegisteredEvents(99, 2, 5);
+
+        result.Should().BeOfType<OkObjectResult>();
+        registrationService.Verify(service => service.GetRegistrationsByUserAsync(99, 2, 5), Times.Once);
+    }
+
     private static EventRegistrationController CreateController(
         IEventRegistrationService registrationService,
         IEventsService eventsService)
@@ -94,6 +147,28 @@ public class EventRegistrationControllerTests
                     new Claim(ClaimTypes.NameIdentifier, "7"),
                     new Claim(ClaimTypes.Name, "organizer@example.com"),
                     new Claim(ClaimTypes.Role, "Organizer")
+                ], "TestAuth"))
+            }
+        };
+
+        return controller;
+    }
+
+    private static UserEventRegistrationController CreateUserController(
+        IEventRegistrationService registrationService,
+        string role,
+        int userId)
+    {
+        var controller = new UserEventRegistrationController(registrationService);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+                    new Claim(ClaimTypes.Name, "user@example.com"),
+                    new Claim(ClaimTypes.Role, role)
                 ], "TestAuth"))
             }
         };
