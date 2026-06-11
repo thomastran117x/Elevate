@@ -191,13 +191,16 @@ public class RefreshAheadCacheTests
         await WaitUntilWithinRefreshWindowAsync(sut, "key", ttl);
 
         var calls = 0;
-        var release = new TaskCompletionSource<bool>();
+        var refreshStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var first = sut.GetOrSetAsync(
             "key",
             async () =>
             {
-                Interlocked.Increment(ref calls);
+                if (Interlocked.Increment(ref calls) == 1)
+                    refreshStarted.TrySetResult(true);
+
                 await release.Task.WaitAsync(TimeSpan.FromSeconds(2));
                 return new Item(2);
             },
@@ -214,10 +217,13 @@ public class RefreshAheadCacheTests
             ttl);
 
         await Task.WhenAll(first, second);
-        release.TrySetResult(true);
-        await Task.Delay(100);
+        await refreshStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
         calls.Should().Be(1, "only one background refresh should run per key at a time");
+
+        release.TrySetResult(true);
+        await Task.Delay(100);
+        calls.Should().Be(1, "the second request should reuse the in-flight background refresh");
     }
 
     [Fact]
