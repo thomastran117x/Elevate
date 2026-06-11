@@ -917,6 +917,7 @@ namespace backend.main.features.events
                     "One or more events do not belong to a club you can manage");
 
                 var trackedEvents = await _db.Events
+                    .Include(ev => ev.Images)
                     .Where(ev => requestedIds.Contains(ev.Id))
                     .ToDictionaryAsync(ev => ev.Id);
 

@@ -7,6 +7,7 @@ using backend.main.features.auth.token;
 using backend.main.features.clubs.staff;
 using backend.main.features.events;
 using backend.main.features.events.contracts.responses;
+using backend.main.features.events.versions.contracts.responses;
 using backend.main.features.payment;
 using backend.main.features.events.registration.contracts.responses;
 using backend.main.shared.responses;
@@ -909,6 +910,772 @@ public class EventEndpointsTests
         entry.DietaryNeeds.Should().BeNull();
     }
 
+    [Fact]
+    public async Task DraftWorkflowEndpoints_ShouldCreateUpdateAndPublishDrafts()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "draft-workflow-owner@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Draft Endpoint Club");
+        var image = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id);
+
+        var createDraft = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/clubs/{club.Id}/drafts",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Draft Summit",
+                description = "Draft event created through the integration coverage flow.",
+                location = "Studio 1",
+                imageUrls = new[] { image.PublicUrl },
+                isPrivate = false,
+                maxParticipants = 25,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(5),
+                endTime = DateTime.UtcNow.AddDays(5).AddHours(2),
+                category = EventCategory.Other,
+                venueName = "North Hall",
+                city = "Toronto",
+                tags = new[] { "draft", "workflow" }
+            })));
+
+        createDraft.StatusCode.Should().Be(HttpStatusCode.Created);
+        var createdDraft = (await app.ReadApiResponseAsync<ManagedEventResponse>(createDraft)).Data!;
+        createdDraft.LifecycleState.Should().Be(EventLifecycleState.Draft);
+        createdDraft.PublishReady.Should().BeTrue();
+
+        var updateDraft = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Patch,
+            $"/api/events/{createdDraft.Id}/draft",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Draft Summit Updated",
+                location = "Studio 2",
+                maxParticipants = 40,
+                tags = new[] { "draft", "updated" }
+            })));
+
+        updateDraft.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updatedDraft = (await app.ReadApiResponseAsync<ManagedEventResponse>(updateDraft)).Data!;
+        updatedDraft.Name.Should().Be("Draft Summit Updated");
+        updatedDraft.Location.Should().Be("Studio 2");
+        updatedDraft.MaxParticipants.Should().Be(40);
+        updatedDraft.Tags.Should().Contain(new[] { "draft", "updated" });
+
+        var publish = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{createdDraft.Id}/publish",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+
+        publish.StatusCode.Should().Be(HttpStatusCode.OK);
+        var published = (await app.ReadApiResponseAsync<ManagedEventResponse>(publish)).Data!;
+        published.LifecycleState.Should().Be(EventLifecycleState.Published);
+
+        var publicDetail = await app.Client.GetAsync($"/api/events/{createdDraft.Id}");
+        publicDetail.StatusCode.Should().Be(HttpStatusCode.OK);
+        var publicBody = await app.ReadApiResponseAsync<EventResponse>(publicDetail);
+        publicBody.Data!.Name.Should().Be("Draft Summit Updated");
+    }
+
+    [Fact]
+    public async Task VersionLifecycleAndAnalyticsEndpoints_ShouldReturnHistoryRollbackAndMetrics()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, organizer) = await CreateUserSessionAsync(app, "version-analytics-owner@example.com", "Organizer");
+        var (_, attendeeOne) = await CreateUserSessionAsync(app, "version-analytics-attendee1@example.com");
+        var (_, attendeeTwo) = await CreateUserSessionAsync(app, "version-analytics-attendee2@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Versioning Club");
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Versioned Event");
+
+        var update = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/events/{ev.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Versioned Event Updated",
+                description = "A detailed event description for integration testing coverage.",
+                location = "Innovation Hub",
+                imageUrls = ev.ImageUrls,
+                isPrivate = false,
+                maxParticipants = 50,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(7),
+                endTime = DateTime.UtcNow.AddDays(7).AddHours(2),
+                category = EventCategory.Other,
+                venueName = "Room 202",
+                city = "Toronto",
+                tags = new[] { "versioned", "updated" }
+            })));
+        update.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        await app.AddRegistrationAsync(ev.Id, attendeeOne!.Id);
+        await app.AddRegistrationAsync(ev.Id, attendeeTwo!.Id);
+        await app.AddPaymentAsync(ev.Id, attendeeOne.Id, PaymentStatus.Succeeded);
+        await app.AddPaymentAsync(ev.Id, attendeeTwo.Id, PaymentStatus.Pending);
+
+        var versions = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/{ev.Id}/versions?page=0&pageSize=200",
+            organizerSession.AccessToken));
+        versions.StatusCode.Should().Be(HttpStatusCode.OK);
+        var versionsBody = await app.ReadApiResponseAsync<PagedResponse<EventVersionListItemResponse>>(versions);
+        versionsBody.Data!.Page.Should().Be(1);
+        versionsBody.Data.PageSize.Should().Be(100);
+        versionsBody.Data.Items.Should().HaveCountGreaterThanOrEqualTo(2);
+        versionsBody.Data.Items.Should().Contain(item => item.ActionType == "create");
+        versionsBody.Data.Items.Should().Contain(item => item.ActionType == "update");
+
+        var versionDetail = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/{ev.Id}/versions/1",
+            organizerSession.AccessToken));
+        versionDetail.StatusCode.Should().Be(HttpStatusCode.OK);
+        var versionDetailBody = await app.ReadApiResponseAsync<EventVersionDetailResponse>(versionDetail);
+        versionDetailBody.Data!.VersionNumber.Should().Be(1);
+        versionDetailBody.Data.Snapshot.Name.Should().Be("Versioned Event");
+
+        var rollback = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/versions/1/rollback",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        rollback.StatusCode.Should().Be(HttpStatusCode.OK);
+        var rollbackBody = await app.ReadApiResponseAsync<EventRollbackResponse>(rollback);
+        rollbackBody.Data!.Event.Name.Should().Be("Versioned Event");
+        rollbackBody.Data.RestoredFromVersionNumber.Should().Be(1);
+
+        var eventAnalytics = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/{ev.Id}/analytics",
+            organizerSession.AccessToken));
+        eventAnalytics.StatusCode.Should().Be(HttpStatusCode.OK);
+        var eventAnalyticsBody = await app.ReadApiResponseAsync<EventAnalyticsResponse>(eventAnalytics);
+        eventAnalyticsBody.Data!.EventId.Should().Be(ev.Id);
+        eventAnalyticsBody.Data.RegistrationCount.Should().Be(2);
+        eventAnalyticsBody.Data.TotalRevenue.Should().Be(1000);
+        eventAnalyticsBody.Data.PendingRevenue.Should().Be(1000);
+        eventAnalyticsBody.Data.SpotsRemaining.Should().BeGreaterThanOrEqualTo(0);
+
+        var clubAnalytics = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/clubs/{club.Id}/analytics",
+            organizerSession.AccessToken));
+        clubAnalytics.StatusCode.Should().Be(HttpStatusCode.OK);
+        var clubAnalyticsBody = await app.ReadApiResponseAsync<ClubAnalyticsResponse>(clubAnalytics);
+        clubAnalyticsBody.Data!.ClubId.Should().Be(club.Id);
+        clubAnalyticsBody.Data.TotalEvents.Should().BeGreaterThanOrEqualTo(1);
+        clubAnalyticsBody.Data.TotalRegistrations.Should().Be(2);
+        clubAnalyticsBody.Data.UniqueAttendees.Should().Be(2);
+        clubAnalyticsBody.Data.TotalRevenue.Should().Be(1000);
+        clubAnalyticsBody.Data.PendingRevenue.Should().Be(1000);
+        clubAnalyticsBody.Data.TopEventsByRegistrations.Should().Contain(item => item.Id == ev.Id);
+
+        var cancel = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/cancel",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        cancel.StatusCode.Should().Be(HttpStatusCode.OK);
+        var cancelled = (await app.ReadApiResponseAsync<ManagedEventResponse>(cancel)).Data!;
+        cancelled.LifecycleState.Should().Be(EventLifecycleState.Cancelled);
+
+        organizer.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task BatchAndListingEndpoints_ShouldCreateListUpdateAndDeleteEvents()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "batch-endpoints-owner@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Batch Events Club");
+        var firstImage = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id);
+        var secondImage = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id);
+
+        var batchCreate = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/batch/{club.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                events = new object[]
+                {
+                    new
+                    {
+                        name = "Batch Event One",
+                        description = "The first published batch event for endpoint coverage.",
+                        location = "Hall A",
+                        imageUrls = new[] { firstImage.PublicUrl },
+                        isPrivate = false,
+                        maxParticipants = 20,
+                        registerCost = 0,
+                        startTime = DateTime.UtcNow.AddDays(9),
+                        endTime = DateTime.UtcNow.AddDays(9).AddHours(2),
+                        category = EventCategory.Other,
+                        venueName = "Hall A",
+                        city = "Toronto",
+                        tags = new[] { "batch", "one" }
+                    },
+                    new
+                    {
+                        name = "Batch Event Two",
+                        description = "The second published batch event for endpoint coverage.",
+                        location = "Hall B",
+                        imageUrls = new[] { secondImage.PublicUrl },
+                        isPrivate = false,
+                        maxParticipants = 30,
+                        registerCost = 0,
+                        startTime = DateTime.UtcNow.AddDays(10),
+                        endTime = DateTime.UtcNow.AddDays(10).AddHours(2),
+                        category = EventCategory.Other,
+                        venueName = "Hall B",
+                        city = "Toronto",
+                        tags = new[] { "batch", "two" }
+                    }
+                }
+            })));
+        batchCreate.StatusCode.Should().Be(HttpStatusCode.Created);
+        var batchCreateBody = await app.ReadApiResponseAsync<BatchCreateResultResponse>(batchCreate);
+        batchCreateBody.Data!.Created.Should().HaveCount(2);
+        var createdIds = batchCreateBody.Data.Created.Select(item => item.Id).ToArray();
+
+        var list = await app.Client.GetAsync("/api/events?search=Batch%20Event&page=1&pageSize=20");
+        list.StatusCode.Should().Be(HttpStatusCode.OK);
+        var listBody = await app.ReadApiResponseAsync<PagedResponse<EventResponse>>(list);
+        listBody.Data!.Items.Select(item => item.Id).Should().Contain(createdIds);
+
+        var batchUpdate = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            "/api/events/batch",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                events = new object[]
+                {
+                    new
+                    {
+                        eventId = createdIds[0],
+                        name = "Batch Event One Updated",
+                        city = "Ottawa"
+                    },
+                    new
+                    {
+                        eventId = createdIds[1],
+                        tags = new[] { "batch", "refined" },
+                        maxParticipants = 45
+                    }
+                }
+            })));
+        batchUpdate.StatusCode.Should().Be(HttpStatusCode.OK);
+        var batchUpdateBody = await app.ReadApiResponseAsync<BatchMutationCountResponse>(batchUpdate);
+        batchUpdateBody.Data!.UpdatedCount.Should().Be(2);
+
+        var updatedDetail = await app.Client.GetAsync($"/api/events/{createdIds[0]}");
+        updatedDetail.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updatedDetailBody = await app.ReadApiResponseAsync<EventResponse>(updatedDetail);
+        updatedDetailBody.Data!.Name.Should().Be("Batch Event One Updated");
+        updatedDetailBody.Data.City.Should().Be("Ottawa");
+
+        var batchDelete = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            "/api/events/batch",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { ids = createdIds })));
+        batchDelete.StatusCode.Should().Be(HttpStatusCode.OK);
+        var batchDeleteBody = await app.ReadApiResponseAsync<BatchDeleteCountResponse>(batchDelete);
+        batchDeleteBody.Data!.DeletedCount.Should().Be(2);
+
+        var missing = await app.Client.GetAsync($"/api/events/{createdIds[0]}");
+        missing.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task EventManagementEndpoints_ShouldReturnForbidden_ForOutsiders()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-authz-owner@example.com", "Organizer");
+        var (outsiderSession, _) = await CreateUserSessionAsync(app, "events-authz-outsider@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Authz Events Club");
+        var creationImage = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id);
+
+        var draftCreate = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{club.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Protected Draft Event",
+                description = "A draft event used to verify forbidden management responses.",
+                location = "Student Center",
+                imageUrls = new[] { creationImage.PublicUrl },
+                isPrivate = false,
+                maxParticipants = 25,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(7),
+                endTime = DateTime.UtcNow.AddDays(7).AddHours(2),
+                category = EventCategory.Other,
+                venueName = "Room 10",
+                city = "Toronto",
+                tags = new[] { "authz", "draft" }
+            })));
+        draftCreate.StatusCode.Should().Be(HttpStatusCode.Created);
+        var draftEvent = (await app.ReadApiResponseAsync<EventResponse>(draftCreate)).Data!;
+
+        var publishedEvent = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Protected Published Event");
+        var secondaryImage = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id, publishedEvent.Id);
+
+        var update = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/events/{publishedEvent.Id}",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Outsider Update Attempt",
+                description = "An outsider should not be able to update this protected event.",
+                location = "Elsewhere",
+                imageUrls = publishedEvent.ImageUrls,
+                isPrivate = false,
+                maxParticipants = 30,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(8),
+                endTime = DateTime.UtcNow.AddDays(8).AddHours(2),
+                category = EventCategory.Other,
+                venueName = "Room 11",
+                city = "Toronto",
+                tags = new[] { "authz" }
+            })));
+        update.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var delete = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/events/{publishedEvent.Id}",
+            outsiderSession.AccessToken));
+        delete.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var publish = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{draftEvent.Id}/publish",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new { })));
+        publish.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var cancel = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{publishedEvent.Id}/cancel",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new { })));
+        cancel.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var archive = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{publishedEvent.Id}/archive",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new { })));
+        archive.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var manageDetail = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/{publishedEvent.Id}/manage",
+            outsiderSession.AccessToken));
+        manageDetail.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var manageList = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/clubs/{club.Id}/manage?page=1&pageSize=20",
+            outsiderSession.AccessToken));
+        manageList.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var versions = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/{publishedEvent.Id}/versions",
+            outsiderSession.AccessToken));
+        versions.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var versionDetail = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/{publishedEvent.Id}/versions/1",
+            outsiderSession.AccessToken));
+        versionDetail.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var rollback = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{publishedEvent.Id}/versions/1/rollback",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new { })));
+        rollback.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var analytics = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/{publishedEvent.Id}/analytics",
+            outsiderSession.AccessToken));
+        analytics.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var clubAnalytics = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/clubs/{club.Id}/analytics",
+            outsiderSession.AccessToken));
+        clubAnalytics.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var imagePresign = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            "/api/events/images/presigned-url",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new
+            {
+                clubId = club.Id,
+                eventId = publishedEvent.Id,
+                fileName = "outsider.png",
+                contentType = "image/png"
+            })));
+        imagePresign.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var addImage = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{publishedEvent.Id}/images",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new { imageUrl = secondaryImage.PublicUrl })));
+        addImage.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var batchCreate = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/batch/{club.Id}",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new
+            {
+                events = new object[]
+                {
+                    new
+                    {
+                        name = "Forbidden Batch Event",
+                        description = "An outsider should not be able to create batch events here.",
+                        location = "Hall A",
+                        imageUrls = new[] { creationImage.PublicUrl },
+                        isPrivate = false,
+                        maxParticipants = 20,
+                        registerCost = 0,
+                        startTime = DateTime.UtcNow.AddDays(9),
+                        endTime = DateTime.UtcNow.AddDays(9).AddHours(2),
+                        category = EventCategory.Other,
+                        venueName = "Hall A",
+                        city = "Toronto",
+                        tags = new[] { "authz" }
+                    }
+                }
+            })));
+        batchCreate.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var batchUpdate = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            "/api/events/batch",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new
+            {
+                events = new object[]
+                {
+                    new
+                    {
+                        eventId = publishedEvent.Id,
+                        name = "Forbidden Batch Update"
+                    }
+                }
+            })));
+        batchUpdate.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var batchDelete = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            "/api/events/batch",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new { ids = new[] { publishedEvent.Id } })));
+        batchDelete.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task VolunteerEventMediaAccess_ShouldAllowImages_ButRejectBroaderEventManagement()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, organizer) = await CreateUserSessionAsync(app, "events-volunteer-owner@example.com", "Organizer");
+        var (volunteerSession, volunteer) = await CreateUserSessionAsync(app, "events-volunteer@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Volunteer Media Club");
+        await app.AddClubStaffAsync(club.Id, volunteer!.Id, organizer!.Id, ClubStaffRole.Volunteer);
+
+        var initialImage = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id);
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Volunteer Media Event", initialImage.PublicUrl);
+
+        var clubLevelPresign = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            "/api/events/images/presigned-url",
+            volunteerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                clubId = club.Id,
+                fileName = "club-level.png",
+                contentType = "image/png"
+            })));
+        clubLevelPresign.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var eventPresign = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            "/api/events/images/presigned-url",
+            volunteerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                clubId = club.Id,
+                eventId = ev.Id,
+                fileName = "volunteer.png",
+                contentType = "image/png"
+            })));
+        eventPresign.StatusCode.Should().Be(HttpStatusCode.OK);
+        var presignBody = await app.ReadApiResponseAsync<PresignedUploadResponse>(eventPresign);
+
+        var addImage = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/images",
+            volunteerSession.AccessToken,
+            JsonContent.Create(new { imageUrl = presignBody.Data!.PublicUrl })));
+        addImage.StatusCode.Should().Be(HttpStatusCode.Created);
+        var addedImage = (await app.ReadApiResponseAsync<EventImageApiModel>(addImage)).Data!;
+
+        var removeImage = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/events/{ev.Id}/images/{addedImage.Id}",
+            volunteerSession.AccessToken));
+        removeImage.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var update = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/events/{ev.Id}",
+            volunteerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Volunteer Update Attempt",
+                description = "Volunteers should not be able to update broader event details here.",
+                location = "Elsewhere",
+                imageUrls = ev.ImageUrls,
+                isPrivate = false,
+                maxParticipants = 30,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(8),
+                endTime = DateTime.UtcNow.AddDays(8).AddHours(2),
+                category = EventCategory.Other,
+                venueName = "Room 12",
+                city = "Toronto",
+                tags = new[] { "volunteer" }
+            })));
+        update.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var cancel = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/cancel",
+            volunteerSession.AccessToken,
+            JsonContent.Create(new { })));
+        cancel.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task ProtectedEventEndpoints_ShouldReturnUnauthorized_WhenCallerIsUnauthenticated()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-unauth-owner@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Unauth Events Club");
+        var creationImage = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id);
+
+        var draftCreate = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{club.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Unauth Draft Event",
+                description = "A draft event used to verify unauthenticated event management responses.",
+                location = "Student Center",
+                imageUrls = new[] { creationImage.PublicUrl },
+                isPrivate = false,
+                maxParticipants = 25,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(7),
+                endTime = DateTime.UtcNow.AddDays(7).AddHours(2),
+                category = EventCategory.Other,
+                venueName = "Room 13",
+                city = "Toronto",
+                tags = new[] { "authz", "unauthenticated" }
+            })));
+        draftCreate.StatusCode.Should().Be(HttpStatusCode.Created);
+        var draftEvent = (await app.ReadApiResponseAsync<EventResponse>(draftCreate)).Data!;
+
+        var publishedEvent = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Unauth Published Event");
+        var eventImage = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id, publishedEvent.Id);
+
+        var create = await app.Client.PostAsJsonAsync($"/api/events/{club.Id}", new
+        {
+            name = "Anonymous Create Attempt",
+            description = "Unauthenticated callers should not be able to create events.",
+            location = "Elsewhere",
+            imageUrls = new[] { creationImage.PublicUrl },
+            isPrivate = false,
+            maxParticipants = 25,
+            registerCost = 0,
+            startTime = DateTime.UtcNow.AddDays(10),
+            endTime = DateTime.UtcNow.AddDays(10).AddHours(2),
+            category = EventCategory.Other,
+            venueName = "Room 14",
+            city = "Toronto",
+            tags = new[] { "unauthenticated" }
+        });
+        create.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var update = await app.Client.PutAsJsonAsync($"/api/events/{publishedEvent.Id}", new
+        {
+            name = "Anonymous Update Attempt",
+            description = "Unauthenticated callers should not be able to update events.",
+            location = "Elsewhere",
+            imageUrls = publishedEvent.ImageUrls,
+            isPrivate = false,
+            maxParticipants = 30,
+            registerCost = 0,
+            startTime = DateTime.UtcNow.AddDays(8),
+            endTime = DateTime.UtcNow.AddDays(8).AddHours(2),
+            category = EventCategory.Other,
+            venueName = "Room 15",
+            city = "Toronto",
+            tags = new[] { "unauthenticated" }
+        });
+        update.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var delete = await app.Client.DeleteAsync($"/api/events/{publishedEvent.Id}");
+        delete.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var publish = await app.Client.PostAsJsonAsync($"/api/events/{draftEvent.Id}/publish", new { });
+        publish.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var cancel = await app.Client.PostAsJsonAsync($"/api/events/{publishedEvent.Id}/cancel", new { });
+        cancel.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var archive = await app.Client.PostAsJsonAsync($"/api/events/{publishedEvent.Id}/archive", new { });
+        archive.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var manageDetail = await app.Client.GetAsync($"/api/events/{publishedEvent.Id}/manage");
+        manageDetail.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var manageList = await app.Client.GetAsync($"/api/events/clubs/{club.Id}/manage?page=1&pageSize=20");
+        manageList.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var versions = await app.Client.GetAsync($"/api/events/{publishedEvent.Id}/versions");
+        versions.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var versionDetail = await app.Client.GetAsync($"/api/events/{publishedEvent.Id}/versions/1");
+        versionDetail.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var rollback = await app.Client.PostAsJsonAsync($"/api/events/{publishedEvent.Id}/versions/1/rollback", new { });
+        rollback.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var analytics = await app.Client.GetAsync($"/api/events/{publishedEvent.Id}/analytics");
+        analytics.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var clubAnalytics = await app.Client.GetAsync($"/api/events/clubs/{club.Id}/analytics");
+        clubAnalytics.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var imagePresign = await app.Client.PostAsJsonAsync("/api/events/images/presigned-url", new
+        {
+            clubId = club.Id,
+            eventId = publishedEvent.Id,
+            fileName = "anonymous.png",
+            contentType = "image/png"
+        });
+        imagePresign.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var addImage = await app.Client.PostAsJsonAsync($"/api/events/{publishedEvent.Id}/images", new
+        {
+            imageUrl = eventImage.PublicUrl
+        });
+        addImage.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var register = await app.Client.PostAsJsonAsync($"/api/events/{publishedEvent.Id}/register", new
+        {
+            notes = "Anonymous register attempt"
+        });
+        register.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var unregister = await app.Client.SendAsync(new HttpRequestMessage(HttpMethod.Delete, $"/api/events/{publishedEvent.Id}/register"));
+        unregister.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var updateRegistration = await app.Client.PatchAsync(
+            $"/api/events/{publishedEvent.Id}/register",
+            JsonContent.Create(new { notes = "Anonymous patch attempt" }));
+        updateRegistration.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var myRegistration = await app.Client.GetAsync($"/api/events/{publishedEvent.Id}/registrations/me");
+        myRegistration.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var batchRegister = await app.Client.PostAsJsonAsync("/api/events/batch/register", new
+        {
+            eventIds = new[] { publishedEvent.Id }
+        });
+        batchRegister.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var batchUnregister = await app.Client.SendAsync(new HttpRequestMessage(HttpMethod.Delete, "/api/events/batch/register")
+        {
+            Content = JsonContent.Create(new
+            {
+                eventIds = new[] { publishedEvent.Id }
+            })
+        });
+        batchUnregister.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var batchCreate = await app.Client.PostAsJsonAsync($"/api/events/batch/{club.Id}", new
+        {
+            events = new object[]
+            {
+                new
+                {
+                    name = "Anonymous Batch Event",
+                    description = "Unauthenticated callers should not be able to create batch events.",
+                    location = "Hall A",
+                    imageUrls = new[] { creationImage.PublicUrl },
+                    isPrivate = false,
+                    maxParticipants = 20,
+                    registerCost = 0,
+                    startTime = DateTime.UtcNow.AddDays(11),
+                    endTime = DateTime.UtcNow.AddDays(11).AddHours(2),
+                    category = EventCategory.Other,
+                    venueName = "Hall A",
+                    city = "Toronto",
+                    tags = new[] { "unauthenticated" }
+                }
+            }
+        });
+        batchCreate.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var batchUpdate = await app.Client.PutAsJsonAsync("/api/events/batch", new
+        {
+            events = new object[]
+            {
+                new
+                {
+                    eventId = publishedEvent.Id,
+                    name = "Anonymous Batch Update"
+                }
+            }
+        });
+        batchUpdate.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var batchDelete = await app.Client.SendAsync(new HttpRequestMessage(HttpMethod.Delete, "/api/events/batch")
+        {
+            Content = JsonContent.Create(new
+            {
+                ids = new[] { publishedEvent.Id }
+            })
+        });
+        batchDelete.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
     private sealed class ClubApiModel
     {
         public int Id { get; init; }
@@ -919,5 +1686,15 @@ public class EventEndpointsTests
         public int Id { get; init; }
         public string ImageUrl { get; init; } = string.Empty;
         public int SortOrder { get; init; }
+    }
+
+    private sealed class BatchMutationCountResponse
+    {
+        public int UpdatedCount { get; init; }
+    }
+
+    private sealed class BatchDeleteCountResponse
+    {
+        public int DeletedCount { get; init; }
     }
 }

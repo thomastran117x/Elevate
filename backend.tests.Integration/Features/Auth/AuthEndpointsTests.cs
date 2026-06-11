@@ -353,4 +353,176 @@ public class AuthEndpointsTests
         body.Data!.Email.Should().Be("me@example.com");
         body.Data.Usertype.Should().Be("Organizer");
     }
+
+    [Fact]
+    public async Task BrowserLogout_AndVerificationLinkEndpoints_ShouldSupportRedirectAndRevocation()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+
+        var signup = await app.PostJsonWithCsrfAsync("/api/auth/signup", new SignUpRequest
+        {
+            Email = "browser-logout@example.com",
+            Password = "Password123!",
+            Usertype = "Participant",
+            Captcha = "captcha"
+        });
+        signup.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var verifyEmail = app.Publisher.EmailMessages.Last(message =>
+            message.Type == EmailMessageType.VerifyEmail && message.Email == "browser-logout@example.com");
+
+        var verifyRedirect = await app.Client.GetAsync($"/api/auth/verify?token={Uri.EscapeDataString(verifyEmail.Token)}");
+        verifyRedirect.StatusCode.Should().Be(HttpStatusCode.Found);
+        verifyRedirect.Headers.Location.Should().NotBeNull();
+        verifyRedirect.Headers.Location!.ToString()
+            .Should().Be($"http://localhost:3090/auth/verify?token={Uri.EscapeDataString(verifyEmail.Token)}");
+
+        var verify = await app.PostJsonWithCsrfAsync("/api/auth/verify", new VerificationTokenRequest
+        {
+            Token = verifyEmail.Token
+        });
+        verify.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var refresh = await app.PostJsonWithCsrfAsync("/api/auth/refresh", new RefreshTokenRequest());
+        refresh.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var logout = await app.PostJsonWithCsrfAsync("/api/auth/logout", new RefreshTokenRequest());
+        logout.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await logout.Content.ReadAsStringAsync()).Should().Contain("logout is successful");
+
+        var replayRefresh = await app.PostJsonWithCsrfAsync("/api/auth/refresh", new RefreshTokenRequest());
+        replayRefresh.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var secondLogout = await app.PostJsonWithCsrfAsync("/api/auth/logout", new RefreshTokenRequest());
+        secondLogout.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await secondLogout.Content.ReadAsStringAsync()).Should().Contain("already logged out");
+    }
+
+    [Fact]
+    public async Task DeviceVerificationEndpoints_ShouldRedirectAndAuthenticatePendingDevice()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        await app.SeedUserAsync("new-device@example.com");
+
+        var login = await app.PostJsonWithCsrfAsync("/api/auth/login", new LoginRequest
+        {
+            Email = "new-device@example.com",
+            Password = "Password123!",
+            Captcha = "captcha",
+            Transport = SessionTransportResolver.ApiValue
+        });
+        login.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await login.Content.ReadAsStringAsync()).Should().Contain("Device verification required");
+
+        var deviceEmail = app.Publisher.EmailMessages.Last(message =>
+            message.Type == EmailMessageType.NewDevice && message.Email == "new-device@example.com");
+
+        var verifyRedirect = await app.Client.GetAsync($"/api/auth/device/verify?token={Uri.EscapeDataString(deviceEmail.Token)}");
+        verifyRedirect.StatusCode.Should().Be(HttpStatusCode.Found);
+        verifyRedirect.Headers.Location.Should().NotBeNull();
+        verifyRedirect.Headers.Location!.ToString()
+            .Should().Be($"http://localhost:3090/auth/device/verify?token={Uri.EscapeDataString(deviceEmail.Token)}");
+
+        var verify = await app.PostJsonWithCsrfAsync("/api/auth/device/verify", new VerificationTokenRequest
+        {
+            Token = deviceEmail.Token,
+            Transport = SessionTransportResolver.ApiValue
+        });
+        verify.StatusCode.Should().Be(HttpStatusCode.OK);
+        var verifyBody = await app.ReadApiResponseAsync<AuthenticatedSessionResponse>(verify);
+        verifyBody.Data!.AccessToken.Should().NotBeNullOrWhiteSpace();
+        verifyBody.Data.RefreshToken.Should().NotBeNullOrWhiteSpace();
+        verifyBody.Data.SessionBindingToken.Should().NotBeNullOrWhiteSpace();
+
+        var refresh = await app.Client.PostAsJsonAsync("/api/auth/api/refresh", new RefreshTokenRequest
+        {
+            RefreshToken = verifyBody.Data.RefreshToken,
+            SessionBindingToken = verifyBody.Data.SessionBindingToken
+        });
+        refresh.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task OAuthCodeAndMicrosoftEndpoints_ShouldAuthenticateLinkedUsers()
+    {
+        await using var googleApp = await AuthApiTestApp.CreateAsync();
+
+        googleApp.OAuth.RegisterGoogleToken(
+            "google-code-token",
+            new OAuthUser("google-linked-id", "google.code@example.com", "Google Code User", "google"));
+
+        var googleUser = await googleApp.SeedUserAsync(
+            "google.code@example.com",
+            googleId: "google-linked-id");
+        await googleApp.SeedKnownDeviceAsync(googleUser.Id, "google-code-device");
+
+        var googleRequest = await CreateCsrfRequestAsync(
+            googleApp,
+            "/api/auth/google/code",
+            new GoogleCodeRequest
+            {
+                Code = "google-code-token",
+                CodeVerifier = "verifier",
+                RedirectUri = "https://app.test/oauth/callback",
+                Transport = SessionTransportResolver.ApiValue
+            },
+            trustedDeviceToken: "google-code-device");
+
+        var googleResponse = await googleApp.Client.SendAsync(googleRequest);
+        googleResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var googleBody = await googleApp.ReadApiResponseAsync<OAuthAuthenticationResponse>(googleResponse);
+        googleBody.Data!.RequiresRoleSelection.Should().BeFalse();
+        googleBody.Data.Auth.Should().NotBeNull();
+        googleBody.Data.Auth!.AccessToken.Should().NotBeNullOrWhiteSpace();
+        googleBody.Data.Auth.RefreshToken.Should().NotBeNullOrWhiteSpace();
+
+        await using var microsoftApp = await AuthApiTestApp.CreateAsync();
+
+        microsoftApp.OAuth.RegisterMicrosoftToken(
+            "microsoft-token",
+            new OAuthUser("microsoft-linked-id", "microsoft.user@example.com", "Microsoft User", "microsoft"));
+
+        var microsoftUser = await microsoftApp.SeedUserAsync(
+            "microsoft.user@example.com",
+            microsoftId: "microsoft-linked-id");
+        await microsoftApp.SeedKnownDeviceAsync(microsoftUser.Id, "microsoft-device");
+
+        var microsoftRequest = await CreateCsrfRequestAsync(
+            microsoftApp,
+            "/api/auth/microsoft",
+            new MicrosoftRequest
+            {
+                Token = "microsoft-token",
+                Transport = SessionTransportResolver.ApiValue
+            },
+            trustedDeviceToken: "microsoft-device");
+
+        var microsoftResponse = await microsoftApp.Client.SendAsync(microsoftRequest);
+        microsoftResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var microsoftBody = await microsoftApp.ReadApiResponseAsync<OAuthAuthenticationResponse>(microsoftResponse);
+        microsoftBody.Data!.RequiresRoleSelection.Should().BeFalse();
+        microsoftBody.Data.Auth.Should().NotBeNull();
+        microsoftBody.Data.Auth!.AccessToken.Should().NotBeNullOrWhiteSpace();
+        microsoftBody.Data.Auth.RefreshToken.Should().NotBeNullOrWhiteSpace();
+    }
+
+    private static async Task<HttpRequestMessage> CreateCsrfRequestAsync(
+        AuthApiTestApp app,
+        string path,
+        object payload,
+        string? trustedDeviceToken = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = JsonContent.Create(payload)
+        };
+        request.Headers.Add(
+            backend.main.application.security.CsrfConfiguration.CsrfHeaderName,
+            await app.GetCsrfTokenAsync());
+
+        if (!string.IsNullOrWhiteSpace(trustedDeviceToken))
+            request.Headers.Add(HttpUtility.TrustedDeviceHeaderName, trustedDeviceToken);
+
+        return request;
+    }
 }

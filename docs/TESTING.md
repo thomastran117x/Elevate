@@ -47,6 +47,12 @@ Run backend unit coverage with generated code and seed data excluded from the co
 .\bin\backend-unit-coverage.ps1
 ```
 
+Run the integration endpoint audit:
+
+```powershell
+.\bin\backend-integration-endpoint-coverage.ps1
+```
+
 The coverage script:
 
 - runs `backend.tests.Unit` in `Release`
@@ -59,6 +65,8 @@ The filtered coverage scope keeps application code such as services, controllers
 - EF Core migrations and designer files
 - `src/main/seeders/**`
 - compiler/generated-code attributed files
+
+The integration endpoint audit is a separate metric. It reports the percentage of controller actions that have at least one matching `/api/...` request in the integration test sources. It is useful for endpoint surface coverage, but it is not a substitute for backend code coverage.
 
 The current backend coverage improvement plan lives in:
 
