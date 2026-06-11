@@ -1734,6 +1734,73 @@ public class EventsServiceTests
         jittered.Should().BeLessThanOrEqualTo(TimeSpan.FromSeconds(12));
     }
 
+    [Fact]
+    public void ApplyBatchPatch_ShouldUpdateAllSupportedOptionalFields()
+    {
+        var ev = new backend.main.features.events.Events
+        {
+            Name = "Original",
+            Description = "Original description",
+            Location = "Old Location",
+            isPrivate = false,
+            maxParticipants = 10,
+            registerCost = 0,
+            StartTime = DateTime.UtcNow.AddDays(1),
+            EndTime = DateTime.UtcNow.AddDays(1).AddHours(1),
+            Category = EventCategory.Gaming,
+            VenueName = "Old Venue",
+            City = "Old City",
+            Latitude = 10,
+            Longitude = 20,
+            Tags = ["existing"]
+        };
+
+        var startTime = DateTime.UtcNow.AddDays(3);
+        var endTime = startTime.AddHours(2);
+        var patch = new backend.main.features.events.contracts.requests.BatchUpdateEventItem
+        {
+            Description = "Updated description",
+            IsPrivate = true,
+            RegisterCost = 2500,
+            StartTime = startTime,
+            EndTime = endTime,
+            Category = EventCategory.Academic,
+            VenueName = "New Venue",
+            City = "Toronto",
+            Latitude = 43.6532,
+            Longitude = -79.3832
+        };
+
+        InvokePrivateStatic<object?>(typeof(EventsService), "ApplyBatchPatch", ev, patch);
+
+        ev.Description.Should().Be("Updated description");
+        ev.isPrivate.Should().BeTrue();
+        ev.registerCost.Should().Be(2500);
+        ev.StartTime.Should().Be(startTime);
+        ev.EndTime.Should().Be(endTime);
+        ev.Category.Should().Be(EventCategory.Academic);
+        ev.VenueName.Should().Be("New Venue");
+        ev.City.Should().Be("Toronto");
+        ev.Latitude.Should().Be(43.6532);
+        ev.Longitude.Should().Be(-79.3832);
+    }
+
+    [Fact]
+    public void NormalizePageSize_ShouldClampToSupportedRange()
+    {
+        InvokePrivateStatic<int>(typeof(EventsService), "NormalizePageSize", 0).Should().Be(20);
+        InvokePrivateStatic<int>(typeof(EventsService), "NormalizePageSize", 101).Should().Be(100);
+        InvokePrivateStatic<int>(typeof(EventsService), "NormalizePageSize", 25).Should().Be(25);
+    }
+
+    [Fact]
+    public void NormalizeTags_ShouldReturnEmptyList_WhenTagsAreNull()
+    {
+        var normalized = InvokePrivateStatic<List<string>>(typeof(EventsService), "NormalizeTags", (object?)null);
+
+        normalized.Should().BeEmpty();
+    }
+
     private static async Task<T> InvokePrivateAsync<T>(object target, string methodName, params object?[] args)
     {
         var method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);

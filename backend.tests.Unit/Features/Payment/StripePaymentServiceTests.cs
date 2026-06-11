@@ -4,12 +4,15 @@ using backend.main.shared.exceptions.http;
 
 using FluentAssertions;
 
+using backend.tests.Unit.Support;
+
 using Moq;
 
 using PaymentEntity = backend.main.features.payment.Payment;
 
 namespace backend.tests.Unit.Features.Payment;
 
+[Collection(EnvironmentVariableTestCollection.Name)]
 public class StripePaymentServiceTests
 {
     [Fact]

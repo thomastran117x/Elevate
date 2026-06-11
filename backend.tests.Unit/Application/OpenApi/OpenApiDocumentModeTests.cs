@@ -2,12 +2,15 @@ using backend.main.application.openapi;
 
 using FluentAssertions;
 
+using backend.tests.Unit.Support;
+
 using Microsoft.Extensions.Hosting;
 
 using Moq;
 
 namespace backend.tests.Unit.Application.OpenApi;
 
+[Collection(EnvironmentVariableTestCollection.Name)]
 public class OpenApiDocumentModeTests
 {
     [Fact]

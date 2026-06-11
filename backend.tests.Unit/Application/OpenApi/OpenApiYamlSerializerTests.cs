@@ -133,12 +133,13 @@ public class OpenApiYamlSerializerTests
         var yaml = ConvertJsonDocumentToYaml(json);
 
         NormalizeLineEndings(yaml).Should().Be(
+            NormalizeLineEndings(
             """
             - null
             - {}
             - []
 
-            """);
+            """));
     }
 
     private static string ConvertJsonDocumentToYaml(string json)
