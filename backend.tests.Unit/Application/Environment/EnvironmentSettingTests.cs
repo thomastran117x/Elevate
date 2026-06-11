@@ -3,8 +3,11 @@ using System.Runtime.Loader;
 
 using FluentAssertions;
 
+using backend.tests.Unit.Support;
+
 namespace backend.tests.Unit.Application.EnvironmentConfig;
 
+[Collection(EnvironmentVariableTestCollection.Name)]
 public class EnvironmentSettingTests
 {
     [Fact]
@@ -91,6 +94,8 @@ public class EnvironmentSettingTests
         {
             ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
             ["ENVIRONMENT"] = "production",
+            ["JWT_SECRET_ACCESS"] = "production-access-secret-1234567890",
+            ["JWT_SECRET_VERIFICATION"] = "production-verification-secret-1234567890",
             ["AZURE_STORAGE_CONNECTION_STRING"] = null,
             ["AZURE_STORAGE_CONTAINER_NAME"] = null
         });

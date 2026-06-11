@@ -16,6 +16,12 @@ Run the unit suite:
 dotnet test backend.tests.Unit\backend.tests.Unit.csproj
 ```
 
+Run the unit suite with the enforced backend coverage gate:
+
+```powershell
+.\bin\backend-unit-coverage.ps1
+```
+
 Run the integration suite:
 
 ```powershell
@@ -25,7 +31,7 @@ dotnet test backend.tests.Integration\backend.tests.Integration.csproj
 Run the full backend test pass:
 
 ```powershell
-dotnet test backend.tests.Unit\backend.tests.Unit.csproj
+.\bin\backend-unit-coverage.ps1
 dotnet test backend.tests.Integration\backend.tests.Integration.csproj
 ```
 
@@ -38,10 +44,17 @@ dotnet test backend.tests.Integration\backend.tests.Integration.csproj --filter 
 Run backend unit coverage with generated code and seed data excluded from the count:
 
 ```powershell
-dotnet test backend.tests.Unit\backend.tests.Unit.csproj --settings backend.coverage.runsettings --collect:"XPlat Code Coverage" --results-directory TestResultsCoverage
+.\bin\backend-unit-coverage.ps1
 ```
 
-The coverage run keeps application code such as services, controllers, repositories, utilities, and DTO/contracts in scope, while excluding:
+The coverage script:
+
+- runs `backend.tests.Unit` in `Release`
+- uses `backend.coverage.runsettings`
+- reads the generated Cobertura report from a repo-local `.tmp` directory
+- fails if filtered backend unit line coverage is below `90.00%`
+
+The filtered coverage scope keeps application code such as services, controllers, repositories, utilities, and DTO/contracts in scope, while excluding:
 
 - EF Core migrations and designer files
 - `src/main/seeders/**`

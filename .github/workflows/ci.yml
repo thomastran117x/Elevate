@@ -55,17 +55,9 @@ jobs:
       - name: Verify frontend formatting
         run: npm run format:check
 
-  backend-tests:
-    name: ${{ matrix.name }}
+  backend-unit-tests:
+    name: Backend Unit Tests
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Backend Unit Tests
-            project: backend.tests.Unit/backend.tests.Unit.csproj
-          - name: Backend Integration Tests
-            project: backend.tests.Integration/backend.tests.Integration.csproj
 
     steps:
       - name: Checkout
@@ -76,8 +68,27 @@ jobs:
         with:
           dotnet-version: 9.0.x
 
-      - name: Restore test project
-        run: dotnet restore ${{ matrix.project }}
+      - name: Restore unit test project
+        run: dotnet restore backend.tests.Unit/backend.tests.Unit.csproj
 
-      - name: Run tests
-        run: dotnet test ${{ matrix.project }} --no-restore --configuration Release
+      - name: Run unit tests with coverage gate
+        run: pwsh ./bin/backend-unit-coverage.ps1
+
+  backend-integration-tests:
+    name: Backend Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore integration test project
+        run: dotnet restore backend.tests.Integration/backend.tests.Integration.csproj
+
+      - name: Run integration tests
+        run: dotnet test backend.tests.Integration/backend.tests.Integration.csproj --no-restore --configuration Release

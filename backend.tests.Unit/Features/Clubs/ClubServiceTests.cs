@@ -300,6 +300,19 @@ public class ClubServiceTests
     }
 
     [Fact]
+    public async Task DeleteClub_ShouldRejectNonOwner()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        var existing = await harness.SeedPersistedClubAsync(id: 72, userId: harness.OwnerUserId);
+
+        var action = () => harness.Service.DeleteClub(existing.Id, harness.MemberUserId);
+
+        await action.Should()
+            .ThrowAsync<ForbiddenException>()
+            .WithMessage("Not allowed");
+    }
+
+    [Fact]
     public async Task CreateClub_ShouldRejectUnownedBlobUrls()
     {
         await using var harness = await ClubServiceHarness.CreateAsync();
@@ -323,6 +336,32 @@ public class ClubServiceTests
         await act.Should()
             .ThrowAsync<BadRequestException>()
             .WithMessage("Club images must reference uploads issued by this service.");
+    }
+
+    [Fact]
+    public async Task CreateClub_ShouldRejectNonHttpsClubImageUrls()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+
+        harness.UserServiceMock
+            .Setup(service => service.GetUserByIdAsync(harness.OwnerUserId))
+            .ReturnsAsync(new User
+            {
+                Id = harness.OwnerUserId,
+                Email = "owner@test.local",
+                Usertype = "Organizer"
+            });
+
+        var act = () => harness.Service.CreateClub(
+            "Chess Club",
+            harness.OwnerUserId,
+            "A focused club for competitive and casual chess players.",
+            "gaming",
+            "http://cdn.test/clubs/chess.png");
+
+        await act.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("Club images must use a valid HTTPS URL.");
     }
 
     [Fact]
@@ -952,6 +991,29 @@ public class ClubServiceTests
 
         jittered.Should().BeGreaterThanOrEqualTo(TimeSpan.FromSeconds(8));
         jittered.Should().BeLessThanOrEqualTo(TimeSpan.FromSeconds(12));
+    }
+
+    [Fact]
+    public void NormalizePageSize_ShouldClampToSupportedRange()
+    {
+        InvokePrivateStatic<int>(typeof(ClubService), "NormalizePageSize", 0).Should().Be(20);
+        InvokePrivateStatic<int>(typeof(ClubService), "NormalizePageSize", 101).Should().Be(100);
+        InvokePrivateStatic<int>(typeof(ClubService), "NormalizePageSize", 25).Should().Be(25);
+    }
+
+    [Fact]
+    public void ParseClubType_ShouldMapAliases_AndFallbackToEnumParsing()
+    {
+        InvokePrivateStatic<ClubType>(typeof(ClubService), "ParseClubType", "sport")
+            .Should().Be(ClubType.Sports);
+        InvokePrivateStatic<ClubType>(typeof(ClubService), "ParseClubType", "academic")
+            .Should().Be(ClubType.Academic);
+        InvokePrivateStatic<ClubType>(typeof(ClubService), "ParseClubType", "social")
+            .Should().Be(ClubType.Social);
+        InvokePrivateStatic<ClubType>(typeof(ClubService), "ParseClubType", "other")
+            .Should().Be(ClubType.Other);
+        InvokePrivateStatic<ClubType>(typeof(ClubService), "ParseClubType", "Gaming")
+            .Should().Be(ClubType.Gaming);
     }
 
     private static async Task<T> InvokePrivateAsync<T>(object target, string methodName, params object?[] args)

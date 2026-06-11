@@ -7,10 +7,13 @@ using Azure.Storage.Blobs;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.storage;
 
+using backend.tests.Unit.Support;
+
 using FluentAssertions;
 
 namespace backend.tests.Unit.Shared.Storage;
 
+[Collection(EnvironmentVariableTestCollection.Name)]
 public class AzureBlobServiceTests
 {
     [Fact]
