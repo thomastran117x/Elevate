@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
@@ -154,6 +156,46 @@ public class EventEndpointsTests
         var detailAfterRemove = await app.Client.GetAsync($"/api/events/{ev.Id}");
         var detailAfterRemoveBody = await app.ReadApiResponseAsync<EventResponse>(detailAfterRemove);
         detailAfterRemoveBody.Data!.ImageUrls.Should().ContainSingle(url => url == firstImage.PublicUrl);
+    }
+
+    [Fact]
+    public async Task EventImageEndpoints_ShouldRejectUploadsForDifferentOrganizerEventOrMissingIntent()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, owner) = await CreateUserSessionAsync(app, "events-images-owner@example.com", "Organizer");
+        var (managerSession, manager) = await CreateUserSessionAsync(app, "events-images-manager@example.com");
+
+        var club = await CreateClubAsync(app, ownerSession.AccessToken, "Intent Validation Club");
+        await app.AddClubStaffAsync(club.Id, manager!.Id, owner!.Id, ClubStaffRole.Manager);
+
+        var firstEvent = await CreateEventAsync(app, ownerSession.AccessToken, club.Id, "Intent Event One");
+        var secondEvent = await CreateEventAsync(app, ownerSession.AccessToken, club.Id, "Intent Event Two");
+
+        var ownerPending = await CreatePendingImageAsync(app, ownerSession.AccessToken, club.Id, firstEvent.Id);
+        var wrongOrganizer = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{firstEvent.Id}/images",
+            managerSession.AccessToken,
+            JsonContent.Create(new { imageUrl = ownerPending.PublicUrl })));
+        wrongOrganizer.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var eventScopedPending = await CreatePendingImageAsync(app, ownerSession.AccessToken, club.Id, firstEvent.Id);
+        var wrongEvent = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{secondEvent.Id}/images",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { imageUrl = eventScopedPending.PublicUrl })));
+        wrongEvent.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var expiredPending = await CreatePendingImageAsync(app, ownerSession.AccessToken, club.Id, firstEvent.Id);
+        await app.Cache.DeleteKeyAsync(GetImageUploadIntentKey(expiredPending.PublicUrl));
+
+        var missingIntent = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{firstEvent.Id}/images",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { imageUrl = expiredPending.PublicUrl })));
+        missingIntent.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -312,6 +354,87 @@ public class EventEndpointsTests
         batchUnregister.StatusCode.Should().Be((HttpStatusCode)207);
         var batchUnregisterBody = await app.ReadApiResponseAsync<BatchRegistrationResultResponse>(batchUnregister);
         batchUnregisterBody.Data!.Succeeded.Should().Contain([firstEvent.Id, secondEvent.Id]);
+    }
+
+    [Fact]
+    public async Task EventValidationEndpoints_ShouldRejectInvalidDraftAndRegistrationPayloads()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-validation-owner@example.com", "Organizer");
+        var (participantSession, participant) = await CreateUserSessionAsync(app, "events-validation-user@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Validation Club");
+        var image = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id);
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Validation Event");
+
+        var invalidDraft = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/clubs/{club.Id}/drafts",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Bad Draft",
+                description = "A private paid draft should be rejected.",
+                location = "Room Z",
+                imageUrls = new[] { image.PublicUrl },
+                isPrivate = true,
+                maxParticipants = 10,
+                registerCost = 100,
+                startTime = DateTime.UtcNow.AddDays(3),
+                endTime = DateTime.UtcNow.AddDays(3).AddHours(1),
+                category = EventCategory.Other
+            })));
+        invalidDraft.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var invalidRegister = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/register",
+            participantSession.AccessToken,
+            JsonContent.Create(new
+            {
+                notes = new string('n', 501)
+            })));
+        invalidRegister.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var register = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/register",
+            participantSession.AccessToken,
+            JsonContent.Create(new { notes = "Registered for validation coverage." })));
+        register.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var invalidPatch = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Patch,
+            $"/api/events/{ev.Id}/register",
+            participantSession.AccessToken,
+            JsonContent.Create(new
+            {
+                phoneNumber = new string('1', 31)
+            })));
+        invalidPatch.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var invalidRegistrationsPage = await app.Client.GetAsync($"/api/events/{ev.Id}/registrations?page=0&pageSize=20");
+        invalidRegistrationsPage.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var invalidRegisteredEventsPage = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/users/{participant!.Id}/events/registered?page=1&pageSize=101",
+            participantSession.AccessToken));
+        invalidRegisteredEventsPage.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var invalidBatchRegister = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            "/api/events/batch/register",
+            participantSession.AccessToken,
+            JsonContent.Create(new { eventIds = Array.Empty<int>() })));
+        invalidBatchRegister.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var invalidEventId = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            "/api/events/0/register",
+            participantSession.AccessToken,
+            JsonContent.Create(new { })));
+        invalidEventId.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -474,6 +597,183 @@ public class EventEndpointsTests
         authenticatedBody.Data.Items.Should().NotContain(item => item.Id == privateEvent.Id);
     }
 
+    [Fact]
+    public async Task EventDiscoveryEndpoints_ShouldRejectInvalidPublicQueries()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-invalid-query-owner@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Invalid Query Club");
+        await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Queryable Event");
+
+        var invalidClubPage = await app.Client.GetAsync($"/api/events/clubs/{club.Id}?page=0&pageSize=20");
+        invalidClubPage.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var invalidClubPageSize = await app.Client.GetAsync($"/api/events/clubs/{club.Id}?page=1&pageSize=101");
+        invalidClubPageSize.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var privateFilter = await app.Client.GetAsync("/api/events?isPrivate=true&page=1&pageSize=20");
+        privateFilter.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var missingDistanceCoordinates = await app.Client.GetAsync("/api/events?sortBy=Distance&page=1&pageSize=20");
+        missingDistanceCoordinates.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var invalidBatchIds = await app.Client.GetAsync("/api/events/batch?ids=foo,bar");
+        invalidBatchIds.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var invalidSearch = await app.Client.PostAsJsonAsync("/api/events/search", new
+        {
+            query = "Queryable",
+            sortBy = "Distance",
+            page = 1,
+            pageSize = 20,
+            geo = new
+            {
+                lat = 43.65
+            }
+        });
+        invalidSearch.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task EventMutationEndpoints_ShouldRejectInvalidImagesAndCurrentVersionRollback()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-invalid-mutation-owner@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Invalid Mutation Club");
+        var firstImage = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id);
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Invalid Mutation Event", firstImage.PublicUrl);
+
+        var nonOwnedImage = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/images",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { imageUrl = "https://example.com/not-owned.png" })));
+        nonOwnedImage.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        for (var i = 0; i < 4; i++)
+        {
+            var pending = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id, ev.Id);
+            var addImage = await app.Client.SendAsync(CreateAuthorizedRequest(
+                HttpMethod.Post,
+                $"/api/events/{ev.Id}/images",
+                organizerSession.AccessToken,
+                JsonContent.Create(new { imageUrl = pending.PublicUrl })));
+            addImage.StatusCode.Should().Be(HttpStatusCode.Created);
+        }
+
+        var sixthImage = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id, ev.Id);
+        var imageLimit = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/images",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { imageUrl = sixthImage.PublicUrl })));
+        imageLimit.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var rollbackCurrentVersion = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/versions/{ev.CurrentVersionNumber}/rollback",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        rollbackCurrentVersion.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task EventLifecycleEndpoints_ShouldRejectInvalidTransitions_AndInvalidPublishedUpdates()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-lifecycle-invalid-owner@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Lifecycle Invalid Club");
+        var image = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id);
+
+        var createDraft = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/clubs/{club.Id}/drafts",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Transition Draft",
+                description = "A draft event used to verify invalid lifecycle transitions.",
+                location = "Studio 3",
+                imageUrls = new[] { image.PublicUrl },
+                isPrivate = false,
+                maxParticipants = 20,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(4),
+                endTime = DateTime.UtcNow.AddDays(4).AddHours(2),
+                category = EventCategory.Other
+            })));
+        createDraft.StatusCode.Should().Be(HttpStatusCode.Created);
+        var draft = (await app.ReadApiResponseAsync<ManagedEventResponse>(createDraft)).Data!;
+
+        var cancelDraft = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{draft.Id}/cancel",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        cancelDraft.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var archiveDraft = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{draft.Id}/archive",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        archiveDraft.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var publish = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{draft.Id}/publish",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        publish.StatusCode.Should().Be(HttpStatusCode.OK);
+        var published = (await app.ReadApiResponseAsync<ManagedEventResponse>(publish)).Data!;
+
+        var republish = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{published.Id}/publish",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        republish.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var cancel = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{published.Id}/cancel",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        cancel.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var updateCancelled = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/events/{published.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Cancelled Update Attempt",
+                description = "A cancelled event should reject standard updates.",
+                location = "Elsewhere",
+                imageUrls = published.ImageUrls,
+                isPrivate = false,
+                maxParticipants = 20,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(5),
+                endTime = DateTime.UtcNow.AddDays(5).AddHours(2),
+                category = EventCategory.Other,
+                venueName = "Room B",
+                city = "Toronto",
+                tags = new[] { "cancelled" }
+            })));
+        updateCancelled.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var cancelAgain = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{published.Id}/cancel",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        cancelAgain.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
     private static async Task<(AuthenticatedSessionResponse Session, backend.main.features.profile.User? User)> CreateUserSessionAsync(
         AuthApiTestApp app,
         string email,
@@ -614,6 +914,12 @@ public class EventEndpointsTests
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         request.Content = content;
         return request;
+    }
+
+    private static string GetImageUploadIntentKey(string imageUrl)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(imageUrl));
+        return $"event:image-upload:intent:{Convert.ToHexString(bytes)}";
     }
 
     [Fact]
@@ -1088,6 +1394,29 @@ public class EventEndpointsTests
     }
 
     [Fact]
+    public async Task EventVersioningEndpoints_ShouldReturnNotFound_ForUnknownVersions()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "version-missing-owner@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Missing Version Club");
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Missing Version Event");
+
+        var versionDetail = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/{ev.Id}/versions/999",
+            organizerSession.AccessToken));
+        versionDetail.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var rollback = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/versions/999/rollback",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        rollback.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task BatchAndListingEndpoints_ShouldCreateListUpdateAndDeleteEvents()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
@@ -1192,6 +1521,90 @@ public class EventEndpointsTests
 
         var missing = await app.Client.GetAsync($"/api/events/{createdIds[0]}");
         missing.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task BatchEventMutationEndpoints_ShouldRejectInvalidPayloads_Drafts_AndMissingEvents()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "batch-negative-owner@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Batch Negative Club");
+        var published = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Published Batch Event");
+
+        var createDraft = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{club.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Draft Batch Event",
+                description = "A draft event used to reject batch mutations cleanly.",
+                location = "Studio Draft",
+                imageUrls = new[] { (await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id)).PublicUrl },
+                isPrivate = false,
+                maxParticipants = 25,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(5),
+                endTime = DateTime.UtcNow.AddDays(5).AddHours(2),
+                category = EventCategory.Other,
+                venueName = "Draft Room",
+                city = "Toronto",
+                tags = new[] { "draft", "batch" }
+            })));
+        createDraft.StatusCode.Should().Be(HttpStatusCode.Created);
+        var draft = (await app.ReadApiResponseAsync<EventResponse>(createDraft)).Data!;
+
+        var duplicateUpdate = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            "/api/events/batch",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                events = new object[]
+                {
+                    new { eventId = published.Id, name = "Duplicate Update One" },
+                    new { eventId = published.Id, name = "Duplicate Update Two" }
+                }
+            })));
+        duplicateUpdate.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var draftBatchUpdate = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            "/api/events/batch",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                events = new object[]
+                {
+                    new { eventId = draft.Id, name = "Draft Batch Update" }
+                }
+            })));
+        draftBatchUpdate.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var duplicateDelete = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            "/api/events/batch",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { ids = new[] { published.Id, published.Id } })));
+        duplicateDelete.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var missingDelete = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            "/api/events/batch",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { ids = new[] { published.Id, 999999 } })));
+        missingDelete.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var emptyBatchCreate = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/batch/{club.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                events = Array.Empty<object>()
+            })));
+        emptyBatchCreate.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]

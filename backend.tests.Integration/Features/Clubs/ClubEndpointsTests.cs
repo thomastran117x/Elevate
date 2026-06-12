@@ -390,6 +390,220 @@ public class ClubEndpointsTests
     }
 
     [Fact]
+    public async Task ClubContentAndAdminEndpoints_ShouldReturnForbidden_ForUnauthorizedActors()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, _) = await CreateUserSessionAsync(app, "club-content-owner@example.com", "Organizer");
+        var (commenterSession, _) = await CreateUserSessionAsync(app, "club-content-commenter@example.com");
+        var (reviewerSession, reviewer) = await CreateUserSessionAsync(app, "club-content-reviewer@example.com");
+        var (outsiderSession, _) = await CreateUserSessionAsync(app, "club-content-outsider@example.com");
+
+        var club = await CreateClubAsync(app, ownerSession.AccessToken, "Club Content Auth");
+
+        var createdPost = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/posts",
+            ownerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                title = "Protected Post",
+                content = "Only club managers should mutate this post.",
+                postType = PostType.Announcement,
+                isPinned = false
+            })));
+        createdPost.StatusCode.Should().Be(HttpStatusCode.Created);
+        var post = (await app.ReadApiResponseAsync<ClubPostResponse>(createdPost)).Data!;
+
+        var createdComment = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/posts/{post.Id}/comments",
+            commenterSession.AccessToken,
+            JsonContent.Create(new { content = "My protected comment." })));
+        createdComment.StatusCode.Should().Be(HttpStatusCode.Created);
+        var comment = (await app.ReadApiResponseAsync<PostCommentResponse>(createdComment)).Data!;
+
+        var createdReview = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/reviews",
+            reviewerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                title = "Protected Review",
+                rating = 4,
+                comment = "Only the author should mutate this review."
+            })));
+        createdReview.StatusCode.Should().Be(HttpStatusCode.Created);
+        var review = (await app.ReadApiResponseAsync<ClubReviewResponse>(createdReview)).Data!;
+
+        var createPost = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/posts",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new
+            {
+                title = "Outsider Post",
+                content = "An outsider should not be able to create this post.",
+                postType = PostType.General,
+                isPinned = false
+            })));
+        createPost.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var updatePost = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/clubs/{club.Id}/posts/{post.Id}",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new
+            {
+                title = "Outsider Update",
+                content = "Blocked outsider post update.",
+                postType = PostType.General,
+                isPinned = false
+            })));
+        updatePost.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var deletePost = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/clubs/{club.Id}/posts/{post.Id}",
+            outsiderSession.AccessToken));
+        deletePost.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var updateComment = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/clubs/{club.Id}/posts/{post.Id}/comments/{comment.Id}",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new { content = "Outsider edit attempt." })));
+        updateComment.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var deleteComment = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/clubs/{club.Id}/posts/{post.Id}/comments/{comment.Id}",
+            outsiderSession.AccessToken));
+        deleteComment.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var updateReview = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/clubs/{club.Id}/reviews/{review.Id}",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new
+            {
+                title = "Outsider Review Update",
+                rating = 2,
+                comment = "Blocked outsider review update."
+            })));
+        updateReview.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var deleteReview = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/clubs/{club.Id}/reviews/{review.Id}",
+            outsiderSession.AccessToken));
+        deleteReview.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        reviewer.Should().NotBeNull();
+
+        var userReviews = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/users/{reviewer.Id}/reviews?page=1&pageSize=20",
+            outsiderSession.AccessToken));
+        userReviews.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var adminPosts = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            "/api/admin/clubs/posts?page=1&pageSize=20",
+            outsiderSession.AccessToken));
+        adminPosts.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var adminPostReindex = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            "/api/admin/clubs/posts/reindex",
+            outsiderSession.AccessToken));
+        adminPostReindex.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var adminClubReindex = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            "/api/admin/clubs/reindex",
+            outsiderSession.AccessToken));
+        adminClubReindex.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task ClubContentEndpoints_ShouldReturnNotFound_WhenRouteIdsDoNotMatchEntities()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, _) = await CreateUserSessionAsync(app, "club-mismatch-owner@example.com", "Organizer");
+        var (commenterSession, _) = await CreateUserSessionAsync(app, "club-mismatch-commenter@example.com");
+        var (reviewerSession, _) = await CreateUserSessionAsync(app, "club-mismatch-reviewer@example.com");
+
+        var primaryClub = await CreateClubAsync(app, ownerSession.AccessToken, "Primary Club");
+        var otherClub = await CreateClubAsync(app, ownerSession.AccessToken, "Other Club");
+
+        var createdPost = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{primaryClub.Id}/posts",
+            ownerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                title = "Primary Post",
+                content = "A post used to validate route/entity mismatch handling.",
+                postType = PostType.General,
+                isPinned = false
+            })));
+        createdPost.StatusCode.Should().Be(HttpStatusCode.Created);
+        var post = (await app.ReadApiResponseAsync<ClubPostResponse>(createdPost)).Data!;
+
+        var createdComment = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{primaryClub.Id}/posts/{post.Id}/comments",
+            commenterSession.AccessToken,
+            JsonContent.Create(new { content = "Route mismatch comment." })));
+        createdComment.StatusCode.Should().Be(HttpStatusCode.Created);
+        var comment = (await app.ReadApiResponseAsync<PostCommentResponse>(createdComment)).Data!;
+
+        var createdReview = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{primaryClub.Id}/reviews",
+            reviewerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                title = "Primary Review",
+                rating = 5,
+                comment = "Route mismatch review."
+            })));
+        createdReview.StatusCode.Should().Be(HttpStatusCode.Created);
+        var review = (await app.ReadApiResponseAsync<ClubReviewResponse>(createdReview)).Data!;
+
+        var postDetailMismatch = await app.Client.GetAsync($"/api/clubs/{otherClub.Id}/posts/{post.Id}");
+        postDetailMismatch.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var commentListMismatch = await app.Client.GetAsync($"/api/clubs/{otherClub.Id}/posts/{post.Id}/comments");
+        commentListMismatch.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var commentUpdateMismatch = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/clubs/{primaryClub.Id}/posts/{post.Id + 999}/comments/{comment.Id}",
+            commenterSession.AccessToken,
+            JsonContent.Create(new { content = "Should not resolve." })));
+        commentUpdateMismatch.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var reviewUpdateMismatch = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/clubs/{otherClub.Id}/reviews/{review.Id}",
+            reviewerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                title = "Wrong Club",
+                rating = 2,
+                comment = "Should not resolve."
+            })));
+        reviewUpdateMismatch.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var reviewDeleteMismatch = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/clubs/{otherClub.Id}/reviews/{review.Id}",
+            reviewerSession.AccessToken));
+        reviewDeleteMismatch.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task DiscoveryEndpoints_ShouldListAndSearchClubs()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
@@ -508,6 +722,188 @@ public class ClubEndpointsTests
         fetchedBody.Data!.Name.Should().Be("Service Club");
         fetchedBody.Data.IsVolunteer.Should().BeTrue();
         fetchedBody.Data.CanManage.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ClubMutationEndpoints_ShouldRejectDuplicateAndInvalidMembershipStaffAndOwnershipChanges()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, owner) = await CreateUserSessionAsync(app, "clubs-negative-owner@example.com", "Organizer");
+        var (memberSession, member) = await CreateUserSessionAsync(app, "clubs-negative-member@example.com");
+        var (_, manager) = await CreateUserSessionAsync(app, "clubs-negative-manager@example.com");
+
+        var club = await CreateClubAsync(app, ownerSession.AccessToken, "Negative Club");
+
+        var firstJoin = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/join",
+            memberSession.AccessToken));
+        firstJoin.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var duplicateJoin = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/join",
+            memberSession.AccessToken));
+        duplicateJoin.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var firstLeave = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/clubs/{club.Id}/join",
+            memberSession.AccessToken));
+        firstLeave.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var duplicateLeave = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/clubs/{club.Id}/join",
+            memberSession.AccessToken));
+        duplicateLeave.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var addManager = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/staff/managers",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { userId = manager!.Id })));
+        addManager.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var duplicateManager = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/staff/managers",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { userId = manager.Id })));
+        duplicateManager.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var ownerAsManager = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/staff/managers",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { userId = owner!.Id })));
+        ownerAsManager.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var removeOwner = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/clubs/{club.Id}/staff/{owner.Id}",
+            ownerSession.AccessToken));
+        removeOwner.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var transferToCurrentOwner = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/transfer-ownership",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { newOwnerUserId = owner.Id })));
+        transferToCurrentOwner.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var rollbackCurrentVersion = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/versions/{club.CurrentVersionNumber}/rollback",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { })));
+        rollbackCurrentVersion.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task ClubManagementEndpoints_ShouldReturnForbidden_ForOutsiders()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, _) = await CreateUserSessionAsync(app, "clubs-authz-owner@example.com", "Organizer");
+        var (outsiderSession, outsider) = await CreateUserSessionAsync(app, "clubs-authz-outsider@example.com");
+        var (_, targetUser) = await CreateUserSessionAsync(app, "clubs-authz-target@example.com");
+
+        var club = await CreateClubAsync(app, ownerSession.AccessToken, "Protected Club");
+
+        var update = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/clubs/{club.Id}",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Outsider Update",
+                description = "Blocked update",
+                clubtype = "social",
+                clubImageUrl = club.ClubImage,
+                email = "outsider-update@example.com"
+            })));
+        update.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var delete = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/clubs/{club.Id}",
+            outsiderSession.AccessToken));
+        delete.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var staff = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/clubs/{club.Id}/staff",
+            outsiderSession.AccessToken));
+        staff.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var addManager = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/staff/managers",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new { userId = targetUser!.Id })));
+        addManager.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var addVolunteer = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/staff/volunteers",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new { userId = targetUser.Id })));
+        addVolunteer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var removeStaff = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/clubs/{club.Id}/staff/{outsider!.Id}",
+            outsiderSession.AccessToken));
+        removeStaff.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var transferOwnership = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/transfer-ownership",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new { newOwnerUserId = targetUser.Id })));
+        transferOwnership.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var versions = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/clubs/{club.Id}/versions",
+            outsiderSession.AccessToken));
+        versions.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var versionDetail = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/clubs/{club.Id}/versions/1",
+            outsiderSession.AccessToken));
+        versionDetail.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var rollback = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/versions/1/rollback",
+            outsiderSession.AccessToken,
+            JsonContent.Create(new { })));
+        rollback.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task ClubDiscoveryEndpoints_ShouldRejectInvalidPaging()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, _) = await CreateUserSessionAsync(app, "clubs-discovery-invalid-owner@example.com", "Organizer");
+
+        await CreateClubAsync(app, ownerSession.AccessToken, "Paging Club");
+
+        var invalidListPage = await app.Client.GetAsync("/api/clubs?page=0&pageSize=20");
+        invalidListPage.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var invalidListPageSize = await app.Client.GetAsync("/api/clubs?page=1&pageSize=101");
+        invalidListPageSize.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var invalidSearch = await app.Client.PostAsJsonAsync("/api/clubs/search", new
+        {
+            query = "Paging",
+            page = 0,
+            pageSize = 101
+        });
+        invalidSearch.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -693,6 +1089,7 @@ public class ClubEndpointsTests
     {
         public int Id { get; init; }
         public int OwnerId { get; init; }
+        public int CurrentVersionNumber { get; init; }
         public string Name { get; init; } = string.Empty;
         public string ClubImage { get; init; } = string.Empty;
         public string? Email { get; init; }
