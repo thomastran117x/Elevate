@@ -9,6 +9,7 @@ using backend.main.features.auth.token;
 using backend.main.features.clubs.staff;
 using backend.main.features.events;
 using backend.main.features.events.contracts.responses;
+using backend.main.features.events.search;
 using backend.main.features.events.versions.contracts.responses;
 using backend.main.features.payment;
 using backend.main.features.events.registration.contracts.responses;
@@ -17,6 +18,9 @@ using backend.main.shared.responses;
 using backend.tests.Integration.Infrastructure;
 
 using FluentAssertions;
+
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace backend.tests.Integration.Features.Events;
 
@@ -636,6 +640,333 @@ public class EventEndpointsTests
     }
 
     [Fact]
+    public async Task EventSearchEndpoints_ShouldEscapeLiteralWildcards_AndExcludePrivateOrDraftMatches()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-search-visibility@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Search Visibility Club");
+        var literalMatch = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Campus Search 100% Match");
+        var wildcardDecoy = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Campus Search 100 Days");
+        var privateMatch = await CreateEventAsync(
+            app,
+            organizerSession.AccessToken,
+            club.Id,
+            "Campus Search 100% Private",
+            isPrivate: true);
+
+        var draftCreate = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{club.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Campus Search 100% Draft",
+                description = "Draft events should stay hidden from public search results.",
+                location = "Student Center",
+                imageUrls = new[] { (await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id)).PublicUrl },
+                isPrivate = false,
+                maxParticipants = 20,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(7),
+                endTime = DateTime.UtcNow.AddDays(7).AddHours(2),
+                category = EventCategory.Other,
+                venueName = "Room Search",
+                city = "Toronto",
+                tags = new[] { "search" }
+            })));
+        draftCreate.StatusCode.Should().Be(HttpStatusCode.Created);
+        var draftEvent = (await app.ReadApiResponseAsync<EventResponse>(draftCreate)).Data!;
+
+        var search = await app.Client.GetAsync("/api/events?search=100%25&page=1&pageSize=20");
+        search.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var searchBody = await app.ReadApiResponseAsync<PagedResponse<EventResponse>>(search);
+        searchBody.Data!.Items.Select(item => item.Id).Should().Contain(literalMatch.Id);
+        searchBody.Data.Items.Select(item => item.Id).Should().NotContain(wildcardDecoy.Id);
+        searchBody.Data.Items.Select(item => item.Id).Should().NotContain(privateMatch.Id);
+        searchBody.Data.Items.Select(item => item.Id).Should().NotContain(draftEvent.Id);
+    }
+
+    [Fact]
+    public async Task EventSearchEndpoints_ShouldFilterByStatusAcrossGetAndPostSearch()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-search-status@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Search Status Club");
+        var upcoming = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Status Search Upcoming");
+        var ongoing = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Status Search Ongoing");
+        var closed = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Status Search Closed");
+
+        await app.SetEventStartTimeToPast(ongoing.Id);
+        await app.SetEventEndTimeToPast(closed.Id);
+
+        var upcomingSearch = await app.Client.GetAsync("/api/events?search=Status%20Search&status=Upcoming&page=1&pageSize=20");
+        upcomingSearch.StatusCode.Should().Be(HttpStatusCode.OK);
+        var upcomingBody = await app.ReadApiResponseAsync<PagedResponse<EventResponse>>(upcomingSearch);
+        upcomingBody.Data!.Items.Select(item => item.Id).Should().ContainSingle().Which.Should().Be(upcoming.Id);
+
+        var ongoingSearch = await app.Client.PostAsJsonAsync("/api/events/search", new
+        {
+            query = "Status Search",
+            sortBy = EventSortBy.Relevance,
+            page = 1,
+            pageSize = 20,
+            filters = new
+            {
+                status = EventStatus.Ongoing
+            }
+        });
+        ongoingSearch.StatusCode.Should().Be(HttpStatusCode.OK);
+        var ongoingBody = await app.ReadApiResponseAsync<PagedResponse<EventResponse>>(ongoingSearch);
+        ongoingBody.Data!.Items.Select(item => item.Id).Should().ContainSingle().Which.Should().Be(ongoing.Id);
+
+        var closedSearch = await app.Client.GetAsync("/api/events?search=Status%20Search&status=Closed&page=1&pageSize=20");
+        closedSearch.StatusCode.Should().Be(HttpStatusCode.OK);
+        var closedBody = await app.ReadApiResponseAsync<PagedResponse<EventResponse>>(closedSearch);
+        closedBody.Data!.Items.Select(item => item.Id).Should().ContainSingle().Which.Should().Be(closed.Id);
+    }
+
+    [Fact]
+    public async Task EventSearchEndpoints_ShouldSortByPopularity_AndPaginateResults()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-search-popularity@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Search Popularity Club");
+        var mostPopular = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Popularity Search Alpha");
+        var middlePopular = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Popularity Search Beta");
+        var leastPopular = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Popularity Search Gamma");
+
+        var userA = await app.SeedUserAsync("popularity-a@example.com");
+        var userB = await app.SeedUserAsync("popularity-b@example.com");
+        var userC = await app.SeedUserAsync("popularity-c@example.com");
+
+        await app.AddRegistrationAsync(mostPopular.Id, userA.Id);
+        await app.AddRegistrationAsync(mostPopular.Id, userB.Id);
+        await app.AddRegistrationAsync(middlePopular.Id, userC.Id);
+
+        var pageOne = await app.Client.PostAsJsonAsync("/api/events/search", new
+        {
+            query = "Popularity Search",
+            sortBy = EventSortBy.Popularity,
+            page = 1,
+            pageSize = 3
+        });
+        pageOne.StatusCode.Should().Be(HttpStatusCode.OK);
+        var pageOneBody = await app.ReadApiResponseAsync<PagedResponse<EventResponse>>(pageOne);
+        pageOneBody.Data!.Items.Select(item => item.Id).Should().ContainInOrder(
+            mostPopular.Id,
+            middlePopular.Id,
+            leastPopular.Id);
+
+        var pageTwo = await app.Client.PostAsJsonAsync("/api/events/search", new
+        {
+            query = "Popularity Search",
+            sortBy = EventSortBy.Popularity,
+            page = 2,
+            pageSize = 1
+        });
+        pageTwo.StatusCode.Should().Be(HttpStatusCode.OK);
+        var pageTwoBody = await app.ReadApiResponseAsync<PagedResponse<EventResponse>>(pageTwo);
+        pageTwoBody.Data!.TotalCount.Should().Be(3);
+        pageTwoBody.Data.Page.Should().Be(2);
+        pageTwoBody.Data.PageSize.Should().Be(1);
+        pageTwoBody.Data.Items.Select(item => item.Id).Should().ContainSingle().Which.Should().Be(middlePopular.Id);
+    }
+
+    [Fact]
+    public async Task EventSearchEndpoints_ShouldRejectInvalidTagAndGeoParameters()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+
+        var tooManyTags = await app.Client.GetAsync("/api/events?tags=one,two,three,four,five,six&page=1&pageSize=20");
+        tooManyTags.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var invalidLatitude = await app.Client.GetAsync("/api/events?lat=91&lng=-79.38&page=1&pageSize=20");
+        invalidLatitude.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var invalidRadius = await app.Client.PostAsJsonAsync("/api/events/search", new
+        {
+            query = "Search",
+            page = 1,
+            pageSize = 20,
+            geo = new
+            {
+                lat = 43.65,
+                lng = -79.38,
+                radiusKm = 501
+            }
+        });
+        invalidRadius.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var invalidSearchTags = await app.Client.PostAsJsonAsync("/api/events/search", new
+        {
+            query = "Search",
+            page = 1,
+            pageSize = 20,
+            filters = new
+            {
+                tags = new[] { "one", "two", "three", "four", "five", "six" }
+            }
+        });
+        invalidSearchTags.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task EventSearchEndpoints_ShouldFilterByCategoryAndTrimCityOnPostSearch()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-search-filters@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Search Filters Club");
+        var matching = await CreateEventAsync(
+            app,
+            organizerSession.AccessToken,
+            club.Id,
+            "Filter Search Match",
+            category: EventCategory.Gaming,
+            city: "Toronto");
+        var wrongCategory = await CreateEventAsync(
+            app,
+            organizerSession.AccessToken,
+            club.Id,
+            "Filter Search Wrong Category",
+            category: EventCategory.Academic,
+            city: "Toronto");
+        var wrongCity = await CreateEventAsync(
+            app,
+            organizerSession.AccessToken,
+            club.Id,
+            "Filter Search Wrong City",
+            category: EventCategory.Gaming,
+            city: "Ottawa");
+
+        var search = await app.Client.PostAsJsonAsync("/api/events/search", new
+        {
+            query = "  Filter Search  ",
+            page = 1,
+            pageSize = 20,
+            filters = new
+            {
+                category = EventCategory.Gaming,
+                city = " Toronto "
+            }
+        });
+        search.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var body = await app.ReadApiResponseAsync<PagedResponse<EventResponse>>(search);
+        body.Data!.Items.Select(item => item.Id).Should().ContainSingle().Which.Should().Be(matching.Id);
+        body.Data.Items.Select(item => item.Id).Should().NotContain(wrongCategory.Id);
+        body.Data.Items.Select(item => item.Id).Should().NotContain(wrongCity.Id);
+    }
+
+    [Fact]
+    public async Task EventSearchEndpoints_ShouldReturnServiceUnavailable_ForUnsupportedFallbackQueries()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+
+        var tagSearch = await app.Client.GetAsync("/api/events?tags=testing&page=1&pageSize=20");
+        tagSearch.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+
+        var distanceSearch = await app.Client.GetAsync("/api/events?lat=43.6532&lng=-79.3832&sortBy=Distance&page=1&pageSize=20");
+        distanceSearch.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+
+        var geoSearch = await app.Client.PostAsJsonAsync("/api/events/search", new
+        {
+            query = "Search",
+            page = 1,
+            pageSize = 20,
+            geo = new
+            {
+                lat = 43.6532,
+                lng = -79.3832,
+                radiusKm = 5
+            }
+        });
+        geoSearch.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+    }
+
+    [Fact]
+    public async Task EventSearchEndpoints_ShouldMapDistanceResultsAndNormalizeCriteria_WhenSearchServiceIsAvailable()
+    {
+        var searchService = new StubEventSearchService();
+
+        await using var app = await AuthApiTestApp.CreateAsync(services =>
+        {
+            services.RemoveAll<IEventSearchService>();
+            services.AddSingleton<IEventSearchService>(searchService);
+        });
+
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-search-service@example.com", "Organizer");
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Search Service Club");
+
+        var farther = await CreateEventAsync(
+            app,
+            organizerSession.AccessToken,
+            club.Id,
+            "Service Search Farther",
+            category: EventCategory.Gaming,
+            city: "Toronto",
+            latitude: 43.70,
+            longitude: -79.40);
+        var nearer = await CreateEventAsync(
+            app,
+            organizerSession.AccessToken,
+            club.Id,
+            "Service Search Nearer",
+            category: EventCategory.Gaming,
+            city: "Toronto",
+            latitude: 43.65,
+            longitude: -79.38);
+
+        searchService.Result = new EventSearchResult(
+            [
+                new EventSearchHit(nearer.Id, 0.8),
+                new EventSearchHit(farther.Id, 4.2)
+            ],
+            2);
+
+        var search = await app.Client.PostAsJsonAsync("/api/events/search", new
+        {
+            query = "  Strategy Night  ",
+            sortBy = EventSortBy.Distance,
+            page = 1,
+            pageSize = 20,
+            filters = new
+            {
+                category = EventCategory.Gaming,
+                city = " Toronto ",
+                tags = new[] { " Games ", "games", " Indoor " }
+            },
+            geo = new
+            {
+                lat = 43.6532,
+                lng = -79.3832,
+                radiusKm = 10
+            }
+        });
+        search.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var body = await app.ReadApiResponseAsync<PagedResponse<EventResponse>>(search);
+        body.Data!.Items.Select(item => item.Id).Should().ContainInOrder(nearer.Id, farther.Id);
+        body.Data.Items.Select(item => item.DistanceKm).Should().ContainInOrder(0.8, 4.2);
+
+        searchService.LastCriteria.Should().NotBeNull();
+        searchService.LastCriteria!.Query.Should().Be("strategy night");
+        searchService.LastCriteria.IsPrivate.Should().BeFalse();
+        searchService.LastCriteria.LifecycleState.Should().Be(EventLifecycleState.Published);
+        searchService.LastCriteria.Category.Should().Be(EventCategory.Gaming);
+        searchService.LastCriteria.City.Should().Be("Toronto");
+        searchService.LastCriteria.Tags.Should().Equal("games", "indoor");
+        searchService.LastCriteria.SortBy.Should().Be(EventSortBy.Distance);
+        searchService.LastCriteria.Lat.Should().Be(43.6532);
+        searchService.LastCriteria.Lng.Should().Be(-79.3832);
+        searchService.LastCriteria.RadiusKm.Should().Be(10);
+    }
+
+    [Fact]
     public async Task EventMutationEndpoints_ShouldRejectInvalidImagesAndCurrentVersionRollback()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
@@ -833,7 +1164,13 @@ public class EventEndpointsTests
         int clubId,
         string name,
         string? imageUrl = null,
-        bool isPrivate = false)
+        bool isPrivate = false,
+        EventCategory category = EventCategory.Other,
+        string city = "Toronto",
+        string venueName = "Room A",
+        double? latitude = null,
+        double? longitude = null,
+        string[]? tags = null)
     {
         var resolvedImageUrl = imageUrl ?? (await CreatePendingImageAsync(app, accessToken, clubId)).PublicUrl;
         var response = await app.Client.SendAsync(CreateAuthorizedRequest(
@@ -851,10 +1188,12 @@ public class EventEndpointsTests
                 registerCost = 0,
                 startTime = DateTime.UtcNow.AddDays(6),
                 endTime = DateTime.UtcNow.AddDays(6).AddHours(2),
-                category = EventCategory.Other,
-                venueName = "Room A",
-                city = "Toronto",
-                tags = new[] { "testing" }
+                category,
+                venueName,
+                city,
+                latitude,
+                longitude,
+                tags = tags ?? ["testing"]
             })));
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var created = (await app.ReadApiResponseAsync<EventResponse>(response)).Data!;
@@ -2109,5 +2448,27 @@ public class EventEndpointsTests
     private sealed class BatchDeleteCountResponse
     {
         public int DeletedCount { get; init; }
+    }
+
+    private sealed class StubEventSearchService : IEventSearchService
+    {
+        public EventSearchCriteria? LastCriteria { get; private set; }
+        public EventSearchResult Result { get; set; } = new([], 0);
+
+        public Task EnsureIndexAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task DeleteIndexAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task IndexAsync(EventDocument document, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task DeleteAsync(int eventId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task BulkIndexAsync(IEnumerable<EventDocument> documents, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task<EventSearchResult> SearchAsync(EventSearchCriteria criteria)
+        {
+            LastCriteria = criteria;
+            return Task.FromResult(Result);
+        }
     }
 }
