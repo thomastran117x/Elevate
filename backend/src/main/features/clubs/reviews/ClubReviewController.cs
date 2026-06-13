@@ -77,6 +77,7 @@ namespace backend.main.features.clubs.reviews
             var userPayload = User.GetUserPayload();
 
             ClubReview review = await _reviewService.UpdateReviewAsync(
+                clubId: clubId,
                 reviewId: reviewId,
                 userId: userPayload.Id,
                 title: request.Title,
@@ -102,7 +103,7 @@ namespace backend.main.features.clubs.reviews
         {
             var userPayload = User.GetUserPayload();
 
-            await _reviewService.DeleteReviewAsync(reviewId, userPayload.Id);
+            await _reviewService.DeleteReviewAsync(clubId, reviewId, userPayload.Id);
 
             return StatusCode(
                 200,
@@ -167,5 +168,4 @@ namespace backend.main.features.clubs.reviews
         }
     }
 }
-
 

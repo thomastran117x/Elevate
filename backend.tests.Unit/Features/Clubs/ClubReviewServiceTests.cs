@@ -118,7 +118,7 @@ public class ClubReviewServiceTests
                 Rating = 3
             });
 
-        var action = () => harness.Service.UpdateReviewAsync(30, harness.UserId, "Updated", 4, "Changed");
+        var action = () => harness.Service.UpdateReviewAsync(harness.ClubId, 30, harness.UserId, "Updated", 4, "Changed");
 
         await action.Should()
             .ThrowAsync<ForbiddenException>()
@@ -155,7 +155,7 @@ public class ClubReviewServiceTests
             .Setup(repo => repo.GetAverageRatingAsync(harness.ClubId))
             .ReturnsAsync(3.84);
 
-        var updated = await harness.Service.UpdateReviewAsync(31, harness.UserId, "Updated", 4, "Better");
+        var updated = await harness.Service.UpdateReviewAsync(harness.ClubId, 31, harness.UserId, "Updated", 4, "Better");
 
         updated.Title.Should().Be("Updated");
         updated.Rating.Should().Be(4);
@@ -180,7 +180,7 @@ public class ClubReviewServiceTests
                 Rating = 3
             });
 
-        var action = () => harness.Service.DeleteReviewAsync(32, harness.UserId);
+        var action = () => harness.Service.DeleteReviewAsync(harness.ClubId, 32, harness.UserId);
 
         await action.Should()
             .ThrowAsync<ForbiddenException>()
@@ -211,7 +211,7 @@ public class ClubReviewServiceTests
             .Setup(repo => repo.GetAverageRatingAsync(harness.ClubId))
             .ReturnsAsync((double?)null);
 
-        await harness.Service.DeleteReviewAsync(33, harness.UserId);
+        await harness.Service.DeleteReviewAsync(harness.ClubId, 33, harness.UserId);
 
         var club = await harness.Db.Clubs.SingleAsync(item => item.Id == harness.ClubId);
         club.Rating.Should().BeNull();

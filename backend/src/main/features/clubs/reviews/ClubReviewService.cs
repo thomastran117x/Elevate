@@ -63,10 +63,13 @@ namespace backend.main.features.clubs.reviews
             return await _reviewRepository.GetByUserIdAsync(userId, page, pageSize);
         }
 
-        public async Task<ClubReview> UpdateReviewAsync(int reviewId, int userId, string title, int rating, string? comment)
+        public async Task<ClubReview> UpdateReviewAsync(int clubId, int reviewId, int userId, string title, int rating, string? comment)
         {
             var review = await _reviewRepository.GetByIdAsync(reviewId)
                 ?? throw new ResourceNotFoundException($"Review with ID {reviewId} was not found.");
+
+            if (review.ClubId != clubId)
+                throw new ResourceNotFoundException($"Review with ID {reviewId} was not found.");
 
             if (review.UserId != userId)
                 throw new ForbiddenException("You are not allowed to update this review.");
@@ -83,10 +86,13 @@ namespace backend.main.features.clubs.reviews
             return updated;
         }
 
-        public async Task DeleteReviewAsync(int reviewId, int userId)
+        public async Task DeleteReviewAsync(int clubId, int reviewId, int userId)
         {
             var review = await _reviewRepository.GetByIdAsync(reviewId)
                 ?? throw new ResourceNotFoundException($"Review with ID {reviewId} was not found.");
+
+            if (review.ClubId != clubId)
+                throw new ResourceNotFoundException($"Review with ID {reviewId} was not found.");
 
             if (review.UserId != userId)
                 throw new ForbiddenException("You are not allowed to delete this review.");
@@ -119,5 +125,4 @@ namespace backend.main.features.clubs.reviews
         }
     }
 }
-
 
