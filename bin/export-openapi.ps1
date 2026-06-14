@@ -1,5 +1,5 @@
 param(
-    [string]$OutputPath = "docs/openapi.yaml",
+    [string]$OutputPath = "backend/openapi.yaml",
     [int]$Port = 8091
 )
 
@@ -11,9 +11,24 @@ $projectPath = Join-Path $backendDir "backend.csproj"
 $backendDll = Join-Path $backendDir "bin/Debug/net9.0/backend.dll"
 $resolvedOutputPath = Join-Path $repoRoot $OutputPath
 $outputDirectory = Split-Path -Parent $resolvedOutputPath
+$outputExtension = [System.IO.Path]::GetExtension($resolvedOutputPath).ToLowerInvariant()
 
 if (-not (Test-Path $outputDirectory)) {
     New-Item -ItemType Directory -Path $outputDirectory | Out-Null
+}
+
+switch ($outputExtension) {
+    ".json" {
+        $documentUrl = "http://127.0.0.1:$Port/openapi.json"
+        $documentLabel = "JSON"
+    }
+    ".yaml" {
+        $documentUrl = "http://127.0.0.1:$Port/openapi.yaml"
+        $documentLabel = "YAML"
+    }
+    default {
+        throw "Unsupported OpenAPI output extension '$outputExtension'. Use .json or .yaml."
+    }
 }
 
 dotnet build $projectPath | Out-Host
@@ -32,7 +47,6 @@ $process = $null
 
 try {
     $process = Start-Process dotnet -ArgumentList $backendDll -WorkingDirectory $backendDir -PassThru -WindowStyle Hidden
-    $documentUrl = "http://127.0.0.1:$Port/openapi/v1.yaml"
     $downloaded = $false
 
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
@@ -54,11 +68,12 @@ try {
         throw "Timed out waiting for $documentUrl."
     }
 
-    Write-Host "OpenAPI YAML exported to $resolvedOutputPath"
+    Write-Host "OpenAPI $documentLabel exported to $resolvedOutputPath"
 }
 finally {
     if ($process -and -not $process.HasExited) {
         Stop-Process -Id $process.Id -Force
+        Wait-Process -Id $process.Id -ErrorAction SilentlyContinue
     }
 
     $env:PORT = $previousPort

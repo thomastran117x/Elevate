@@ -1807,6 +1807,17 @@ paths:
           required: true
           schema:
             '$ref': '#/components/schemas/Int329'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              '$ref': '#/components/schemas/RegisterEventRequest'
+          text/json:
+            schema:
+              '$ref': '#/components/schemas/RegisterEventRequest'
+          'application/*+json':
+            schema:
+              '$ref': '#/components/schemas/RegisterEventRequest'
       responses:
         201:
           description: Created
@@ -1897,6 +1908,68 @@ paths:
       security:
         - bearerAuth:
             []
+    patch:
+      tags:
+        - events
+      operationId: EventRegistration_UpdateRegistration
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            '$ref': '#/components/schemas/Int329'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              '$ref': '#/components/schemas/UpdateRegistrationRequest'
+          text/json:
+            schema:
+              '$ref': '#/components/schemas/UpdateRegistrationRequest'
+          'application/*+json':
+            schema:
+              '$ref': '#/components/schemas/UpdateRegistrationRequest'
+        required: true
+      responses:
+        200:
+          description: OK
+          content:
+            text/plain:
+              schema:
+                '$ref': '#/components/schemas/ApiResponseOfEventRegistrationResponse'
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ApiResponseOfEventRegistrationResponse'
+            text/json:
+              schema:
+                '$ref': '#/components/schemas/ApiResponseOfEventRegistrationResponse'
+        400:
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ApiResponseOfObject'
+        500:
+          description: 'Unexpected server error.'
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ApiResponseOfObject'
+        401:
+          description: 'Authentication is required or the access token is invalid/expired.'
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ApiResponseOfObject'
+        403:
+          description: 'The authenticated user does not have permission to perform this action.'
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ApiResponseOfObject'
+      security:
+        - bearerAuth:
+            []
   '/api/events/{eventId}/registrations':
     get:
       tags:
@@ -1911,11 +1984,11 @@ paths:
         - name: page
           in: query
           schema:
-            '$ref': '#/components/schemas/Int325'
+            '$ref': '#/components/schemas/Int3213'
         - name: pageSize
           in: query
           schema:
-            '$ref': '#/components/schemas/Int326'
+            '$ref': '#/components/schemas/Int3214'
       responses:
         200:
           description: OK
@@ -2119,11 +2192,11 @@ paths:
         - name: page
           in: query
           schema:
-            '$ref': '#/components/schemas/Int325'
+            '$ref': '#/components/schemas/Int3213'
         - name: pageSize
           in: query
           schema:
-            '$ref': '#/components/schemas/Int326'
+            '$ref': '#/components/schemas/Int3214'
       responses:
         200:
           description: OK
@@ -2913,22 +2986,15 @@ paths:
       operationId: Club_CreateClub
       requestBody:
         content:
-          multipart/form-data:
+          application/json:
             schema:
-              type: object
-              properties:
-                Name:
-                  '$ref': '#/components/schemas/String14'
-                Description:
-                  '$ref': '#/components/schemas/String14'
-                Clubtype:
-                  '$ref': '#/components/schemas/String15'
-                ClubImage:
-                  '$ref': '#/components/schemas/IFormFile'
-                Phone:
-                  '$ref': '#/components/schemas/String15'
-                Email:
-                  '$ref': '#/components/schemas/String15'
+              '$ref': '#/components/schemas/ClubCreateRequest'
+          text/json:
+            schema:
+              '$ref': '#/components/schemas/ClubCreateRequest'
+          'application/*+json':
+            schema:
+              '$ref': '#/components/schemas/ClubCreateRequest'
         required: true
       responses:
         201:
@@ -3034,22 +3100,15 @@ paths:
             '$ref': '#/components/schemas/Int32'
       requestBody:
         content:
-          multipart/form-data:
+          application/json:
             schema:
-              type: object
-              properties:
-                Name:
-                  '$ref': '#/components/schemas/String15'
-                Description:
-                  '$ref': '#/components/schemas/String15'
-                Clubtype:
-                  '$ref': '#/components/schemas/String15'
-                ClubImage:
-                  '$ref': '#/components/schemas/IFormFile'
-                Phone:
-                  '$ref': '#/components/schemas/String15'
-                Email:
-                  '$ref': '#/components/schemas/String15'
+              '$ref': '#/components/schemas/ClubUpdateRequest'
+          text/json:
+            schema:
+              '$ref': '#/components/schemas/ClubUpdateRequest'
+          'application/*+json':
+            schema:
+              '$ref': '#/components/schemas/ClubUpdateRequest'
         required: true
       responses:
         200:
@@ -4178,6 +4237,46 @@ paths:
               schema:
                 '$ref': '#/components/schemas/ApiResponseOfObject'
   '/api/clubs/{clubId}/posts/{id}':
+    get:
+      tags:
+        - clubs
+      operationId: ClubPost_GetPost
+      parameters:
+        - name: clubId
+          in: path
+          required: true
+          schema:
+            '$ref': '#/components/schemas/Int32'
+        - name: id
+          in: path
+          required: true
+          schema:
+            '$ref': '#/components/schemas/Int32'
+      responses:
+        200:
+          description: OK
+          content:
+            text/plain:
+              schema:
+                '$ref': '#/components/schemas/ApiResponseOfClubPostResponse'
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ApiResponseOfClubPostResponse'
+            text/json:
+              schema:
+                '$ref': '#/components/schemas/ApiResponseOfClubPostResponse'
+        400:
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ApiResponseOfObject'
+        500:
+          description: 'Unexpected server error.'
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ApiResponseOfObject'
     put:
       tags:
         - clubs
@@ -4511,6 +4610,37 @@ paths:
             text/json:
               schema:
                 '$ref': '#/components/schemas/ApiResponseOfPagedResponseOfPostCommentResponse'
+        400:
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ApiResponseOfObject'
+        500:
+          description: 'Unexpected server error.'
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ApiResponseOfObject'
+  '/api/clubs/{clubId}/posts/{postId}/comments/events':
+    get:
+      tags:
+        - clubs
+      operationId: PostComment_StreamComments
+      parameters:
+        - name: clubId
+          in: path
+          required: true
+          schema:
+            '$ref': '#/components/schemas/Int32'
+        - name: postId
+          in: path
+          required: true
+          schema:
+            '$ref': '#/components/schemas/Int32'
+      responses:
+        200:
+          description: OK
         400:
           description: 'Bad request, validation failure, or CSRF failure.'
           content:
@@ -5946,6 +6076,19 @@ components:
           '$ref': '#/components/schemas/ApiError'
         meta:
           '$ref': '#/components/schemas/Object'
+    ApiResponseOfEventRegistrationResponse:
+      type: object
+      properties:
+        success:
+          '$ref': '#/components/schemas/Boolean'
+        message:
+          '$ref': '#/components/schemas/String'
+        data:
+          '$ref': '#/components/schemas/EventRegistrationResponse'
+        error:
+          '$ref': '#/components/schemas/ApiError'
+        meta:
+          '$ref': '#/components/schemas/Object'
     ApiResponseOfEventResponse:
       type: object
       properties:
@@ -6308,9 +6451,21 @@ components:
         expiresAtUtc:
           '$ref': '#/components/schemas/DateTime2'
         refreshToken:
-          '$ref': '#/components/schemas/String20'
+          '$ref': '#/components/schemas/String24'
         sessionBindingToken:
-          '$ref': '#/components/schemas/String20'
+          '$ref': '#/components/schemas/String24'
+      nullable: true
+    AuthorInfo:
+      type: object
+      properties:
+        id:
+          '$ref': '#/components/schemas/Int32'
+        name:
+          '$ref': '#/components/schemas/String2'
+        username:
+          '$ref': '#/components/schemas/String2'
+        avatar:
+          '$ref': '#/components/schemas/String2'
       nullable: true
     BatchCreateEventItem:
       required:
@@ -6451,7 +6606,7 @@ components:
         password:
           '$ref': '#/components/schemas/String'
         code:
-          '$ref': '#/components/schemas/String22'
+          '$ref': '#/components/schemas/String26'
         challenge:
           '$ref': '#/components/schemas/String2'
     ClubAnalyticsResponse:
@@ -6498,6 +6653,26 @@ components:
         revenueTrend:
           '$ref': '#/components/schemas/ListOfDailyRevenueEntry'
       nullable: true
+    ClubCreateRequest:
+      required:
+        - name
+        - description
+        - clubtype
+        - clubImageUrl
+      type: object
+      properties:
+        name:
+          '$ref': '#/components/schemas/String17'
+        description:
+          '$ref': '#/components/schemas/String17'
+        clubtype:
+          '$ref': '#/components/schemas/String18'
+        clubImageUrl:
+          '$ref': '#/components/schemas/String19'
+        phone:
+          '$ref': '#/components/schemas/String2'
+        email:
+          '$ref': '#/components/schemas/String2'
     ClubOwnershipTransferRequest:
       type: object
       properties:
@@ -6510,9 +6685,9 @@ components:
       type: object
       properties:
         title:
-          '$ref': '#/components/schemas/String17'
+          '$ref': '#/components/schemas/String21'
         content:
-          '$ref': '#/components/schemas/String18'
+          '$ref': '#/components/schemas/String22'
         postType:
           '$ref': '#/components/schemas/PostType'
         isPinned:
@@ -6550,6 +6725,8 @@ components:
           '$ref': '#/components/schemas/Int32'
         isPinned:
           '$ref': '#/components/schemas/Boolean'
+        author:
+          '$ref': '#/components/schemas/AuthorInfo'
         createdAt:
           '$ref': '#/components/schemas/DateTime2'
         updatedAt:
@@ -6588,6 +6765,8 @@ components:
           '$ref': '#/components/schemas/Int32'
         isPinned:
           '$ref': '#/components/schemas/Boolean'
+        author:
+          '$ref': '#/components/schemas/AuthorInfo'
         createdAt:
           '$ref': '#/components/schemas/DateTime2'
         updatedAt:
@@ -6599,9 +6778,9 @@ components:
       type: object
       properties:
         title:
-          '$ref': '#/components/schemas/String17'
+          '$ref': '#/components/schemas/String21'
         content:
-          '$ref': '#/components/schemas/String18'
+          '$ref': '#/components/schemas/String22'
         postType:
           '$ref': '#/components/schemas/PostType'
         isPinned:
@@ -6730,9 +6909,9 @@ components:
         title:
           '$ref': '#/components/schemas/String12'
         rating:
-          '$ref': '#/components/schemas/Int3213'
+          '$ref': '#/components/schemas/Int3215'
         comment:
-          '$ref': '#/components/schemas/String16'
+          '$ref': '#/components/schemas/String20'
     ClubReviewResponse:
       required:
         - id
@@ -6793,9 +6972,9 @@ components:
         title:
           '$ref': '#/components/schemas/String12'
         rating:
-          '$ref': '#/components/schemas/Int3213'
+          '$ref': '#/components/schemas/Int3215'
         comment:
-          '$ref': '#/components/schemas/String16'
+          '$ref': '#/components/schemas/String20'
     ClubRollbackResponse:
       required:
         - club
@@ -6890,6 +7069,26 @@ components:
     ClubType:
       type: integer
       nullable: true
+    ClubUpdateRequest:
+      required:
+        - name
+        - description
+        - clubtype
+        - clubImageUrl
+      type: object
+      properties:
+        name:
+          '$ref': '#/components/schemas/String17'
+        description:
+          '$ref': '#/components/schemas/String17'
+        clubtype:
+          '$ref': '#/components/schemas/String18'
+        clubImageUrl:
+          '$ref': '#/components/schemas/String19'
+        phone:
+          '$ref': '#/components/schemas/String2'
+        email:
+          '$ref': '#/components/schemas/String2'
     ClubVersionDetailResponse:
       required:
         - versionNumber
@@ -7436,11 +7635,6 @@ components:
     EventLifecycleState:
       type: integer
     EventRegistrationResponse:
-      required:
-        - id
-        - userId
-        - eventId
-        - createdAt
       type: object
       properties:
         id:
@@ -7451,6 +7645,38 @@ components:
           '$ref': '#/components/schemas/Int32'
         createdAt:
           '$ref': '#/components/schemas/DateTime2'
+        status:
+          '$ref': '#/components/schemas/String'
+        cancelledAt:
+          '$ref': '#/components/schemas/DateTime'
+        notes:
+          '$ref': '#/components/schemas/String2'
+        phoneNumber:
+          '$ref': '#/components/schemas/String2'
+        dietaryNeeds:
+          '$ref': '#/components/schemas/String2'
+      nullable: true
+    EventRegistrationResponse2:
+      type: object
+      properties:
+        id:
+          '$ref': '#/components/schemas/Int32'
+        userId:
+          '$ref': '#/components/schemas/Int32'
+        eventId:
+          '$ref': '#/components/schemas/Int32'
+        createdAt:
+          '$ref': '#/components/schemas/DateTime2'
+        status:
+          '$ref': '#/components/schemas/String'
+        cancelledAt:
+          '$ref': '#/components/schemas/DateTime'
+        notes:
+          '$ref': '#/components/schemas/String2'
+        phoneNumber:
+          '$ref': '#/components/schemas/String2'
+        dietaryNeeds:
+          '$ref': '#/components/schemas/String2'
     EventResponse:
       type: object
       properties:
@@ -7868,7 +8094,7 @@ components:
     IEnumerableOfEventRegistrationResponse:
       type: array
       items:
-        '$ref': '#/components/schemas/EventRegistrationResponse'
+        '$ref': '#/components/schemas/EventRegistrationResponse2'
       nullable: true
     IEnumerableOfEventResponse:
       type: array
@@ -7901,9 +8127,6 @@ components:
       type: array
       items:
         '$ref': '#/components/schemas/PostCommentResponse2'
-    IFormFile:
-      type: string
-      format: binary
     Int32:
       type: integer
       format: int32
@@ -7925,6 +8148,18 @@ components:
       format: int32
       nullable: true
     Int3213:
+      maximum: 2147483647
+      minimum: 1
+      type: integer
+      format: int32
+      default: 1
+    Int3214:
+      maximum: 100
+      minimum: 1
+      type: integer
+      format: int32
+      default: 20
+    Int3215:
       maximum: 5
       minimum: 1
       type: integer
@@ -8208,7 +8443,7 @@ components:
       type: object
       properties:
         code:
-          '$ref': '#/components/schemas/String21'
+          '$ref': '#/components/schemas/String25'
         challenge:
           '$ref': '#/components/schemas/String'
         transport:
@@ -8391,7 +8626,7 @@ components:
       type: object
       properties:
         content:
-          '$ref': '#/components/schemas/String19'
+          '$ref': '#/components/schemas/String23'
     PostCommentResponse:
       required:
         - id
@@ -8410,6 +8645,8 @@ components:
           '$ref': '#/components/schemas/Int32'
         content:
           '$ref': '#/components/schemas/String'
+        author:
+          '$ref': '#/components/schemas/AuthorInfo'
         createdAt:
           '$ref': '#/components/schemas/DateTime2'
         updatedAt:
@@ -8433,6 +8670,8 @@ components:
           '$ref': '#/components/schemas/Int32'
         content:
           '$ref': '#/components/schemas/String'
+        author:
+          '$ref': '#/components/schemas/AuthorInfo'
         createdAt:
           '$ref': '#/components/schemas/DateTime2'
         updatedAt:
@@ -8443,7 +8682,7 @@ components:
       type: object
       properties:
         content:
-          '$ref': '#/components/schemas/String19'
+          '$ref': '#/components/schemas/String23'
     PostSortBy:
       type: integer
       default: 0
@@ -8480,6 +8719,17 @@ components:
           '$ref': '#/components/schemas/String2'
         sessionBindingToken:
           '$ref': '#/components/schemas/String2'
+      nullable: true
+    RegisterEventRequest:
+      type: object
+      properties:
+        notes:
+          '$ref': '#/components/schemas/String14'
+        phoneNumber:
+          '$ref': '#/components/schemas/String15'
+        dietaryNeeds:
+          '$ref': '#/components/schemas/String16'
+      default: null
       nullable: true
     ResolveEventInvitationRequest:
       required:
@@ -8526,43 +8776,56 @@ components:
       minLength: 0
       type: string
     String14:
-      maxLength: 30
-      minLength: 0
+      maxLength: 500
       type: string
+      nullable: true
     String15:
       maxLength: 30
-      minLength: 0
-      pattern: '^(sport|sports|academic|social|cultural|game|gaming|music|other)$'
       type: string
+      nullable: true
     String16:
-      maxLength: 500
-      minLength: 0
+      maxLength: 250
       type: string
       nullable: true
     String17:
-      maxLength: 150
+      maxLength: 30
       minLength: 0
       type: string
     String18:
-      maxLength: 2000
-      minLength: 0
+      pattern: '^(sport|sports|academic|social|cultural|game|gaming|music|other)$'
       type: string
     String19:
-      maxLength: 1000
-      minLength: 0
       type: string
+      format: uri
     String2:
       type: string
       nullable: true
     String20:
+      maxLength: 500
+      minLength: 0
+      type: string
+      nullable: true
+    String21:
+      maxLength: 150
+      minLength: 0
+      type: string
+    String22:
+      maxLength: 2000
+      minLength: 0
+      type: string
+    String23:
+      maxLength: 1000
+      minLength: 0
+      type: string
+    String24:
       type: string
       default: null
       nullable: true
-    String21:
+    String25:
       maxLength: 6
       minLength: 6
       type: string
-    String22:
+    String26:
       maxLength: 6
       minLength: 6
       type: string
@@ -8610,6 +8873,15 @@ components:
           '$ref': '#/components/schemas/Double5'
         revenue:
           '$ref': '#/components/schemas/Int64'
+    UpdateRegistrationRequest:
+      type: object
+      properties:
+        notes:
+          '$ref': '#/components/schemas/String14'
+        phoneNumber:
+          '$ref': '#/components/schemas/String15'
+        dietaryNeeds:
+          '$ref': '#/components/schemas/String16'
     UpdateUserStatusRequest:
       type: object
       properties:
