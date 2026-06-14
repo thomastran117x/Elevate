@@ -8,7 +8,7 @@ This document tracks the current backend unit coverage policy and the measuremen
 - Measurement command:
 
 ```powershell
-.\bin\backend-unit-coverage.ps1
+dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-unit-coverage
 ```
 
 - Latest pre-gate baseline measured during rollout: `89.85%` line coverage (`5714 / 6359`)

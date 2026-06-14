@@ -199,6 +199,9 @@ public class OpenApiConfigurationTests
         InvokeStatic<string>("NormalizeRelativePath", "api/auth/login").Should().Be("/api/auth/login");
         InvokeStatic<string>("SanitizeToken", "Auth-Controller!").Should().Be("AuthController");
         InvokeStatic<string>("SanitizeToken", "   ").Should().Be("operation");
+        InvokeStatic<bool>("IsSupportedDocumentName", "v1").Should().BeTrue();
+        InvokeStatic<bool>("IsSupportedDocumentName", "V1").Should().BeTrue();
+        InvokeStatic<bool>("IsSupportedDocumentName", "v2").Should().BeFalse();
     }
 
     [Fact]

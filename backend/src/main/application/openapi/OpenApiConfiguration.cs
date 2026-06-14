@@ -84,7 +84,45 @@ namespace backend.main.application.openapi
 
         public static IEndpointRouteBuilder MapAppOpenApi(this IEndpointRouteBuilder endpoints)
         {
-            endpoints.MapOpenApi(OpenApiDocumentMode.JsonRoutePattern).ExcludeFromDescription();
+            endpoints.MapGet(
+                OpenApiDocumentMode.DefaultJsonRoute,
+                async Task<IResult> (IServiceProvider services) =>
+                {
+                    var json = await GenerateOpenApiJsonAsync(
+                        services,
+                        OpenApiDocumentMode.DocumentName
+                    );
+                    return Results.Text(json, "application/json");
+                }
+            ).ExcludeFromDescription();
+            endpoints.MapGet(
+                OpenApiDocumentMode.JsonRoutePattern,
+                async Task<IResult> (
+                    string documentName,
+                    IServiceProvider services
+                ) =>
+                {
+                    if (!IsSupportedDocumentName(documentName))
+                    {
+                        return Results.NotFound();
+                    }
+
+                    var json = await GenerateOpenApiJsonAsync(services, documentName);
+                    return Results.Text(json, "application/json");
+                }
+            ).ExcludeFromDescription();
+            endpoints.MapGet(
+                OpenApiDocumentMode.DefaultYamlRoute,
+                async Task<IResult> (IServiceProvider services) =>
+                {
+                    var json = await GenerateOpenApiJsonAsync(
+                        services,
+                        OpenApiDocumentMode.DocumentName
+                    );
+                    var yaml = OpenApiYamlSerializer.ConvertJsonDocumentToYaml(json);
+                    return Results.Text(yaml, "application/yaml");
+                }
+            ).ExcludeFromDescription();
             endpoints.MapGet(
                 OpenApiDocumentMode.YamlRoutePattern,
                 async Task<IResult> (
@@ -92,6 +130,11 @@ namespace backend.main.application.openapi
                     IServiceProvider services
                 ) =>
                 {
+                    if (!IsSupportedDocumentName(documentName))
+                    {
+                        return Results.NotFound();
+                    }
+
                     var json = await GenerateOpenApiJsonAsync(services, documentName);
                     var yaml = OpenApiYamlSerializer.ConvertJsonDocumentToYaml(json);
                     return Results.Text(yaml, "application/yaml");
@@ -528,6 +571,13 @@ namespace backend.main.application.openapi
 
             return string.Concat(value.Where(char.IsLetterOrDigit));
         }
+
+        private static bool IsSupportedDocumentName(string documentName) =>
+            string.Equals(
+                documentName,
+                OpenApiDocumentMode.DocumentName,
+                StringComparison.OrdinalIgnoreCase
+            );
 
         private static async Task<string> GenerateOpenApiJsonAsync(
             IServiceProvider services,

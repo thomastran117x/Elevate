@@ -127,10 +127,7 @@ app.UseAuthorization();
 
 app.UseClientRequestInspection();
 
-if (OpenApiDocumentMode.ShouldExposeRuntimeDocuments(app.Environment))
-{
-    app.MapAppOpenApi();
-}
+app.MapAppOpenApi();
 
 app.MapControllers();
 

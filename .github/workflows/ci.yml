@@ -68,11 +68,8 @@ jobs:
         with:
           dotnet-version: 9.0.x
 
-      - name: Restore unit test project
-        run: dotnet restore backend.tests.Unit/backend.tests.Unit.csproj
-
       - name: Run unit tests with coverage gate
-        run: pwsh ./bin/backend-unit-coverage.ps1
+        run: dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-unit-coverage
 
   backend-integration-tests:
     name: Backend Integration Tests
@@ -87,8 +84,8 @@ jobs:
         with:
           dotnet-version: 9.0.x
 
-      - name: Restore integration test project
-        run: dotnet restore backend.tests.Integration/backend.tests.Integration.csproj
-
       - name: Run integration tests
-        run: dotnet test backend.tests.Integration/backend.tests.Integration.csproj --no-restore --configuration Release
+        run: dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-integration-tests
+
+      - name: Run integration endpoint coverage audit
+        run: dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-integration-endpoint-coverage --fail-on-missing

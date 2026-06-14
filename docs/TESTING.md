@@ -19,7 +19,7 @@ dotnet test backend.tests.Unit\backend.tests.Unit.csproj
 Run the unit suite with the enforced backend coverage gate:
 
 ```powershell
-.\bin\backend-unit-coverage.ps1
+dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-unit-coverage
 ```
 
 Run the integration suite:
@@ -31,8 +31,8 @@ dotnet test backend.tests.Integration\backend.tests.Integration.csproj
 Run the full backend test pass:
 
 ```powershell
-.\bin\backend-unit-coverage.ps1
-dotnet test backend.tests.Integration\backend.tests.Integration.csproj
+dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-unit-coverage
+dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-integration-tests
 ```
 
 Run only the auth integration flow coverage:
@@ -44,14 +44,19 @@ dotnet test backend.tests.Integration\backend.tests.Integration.csproj --filter 
 Run backend unit coverage with generated code and seed data excluded from the count:
 
 ```powershell
-.\bin\backend-unit-coverage.ps1
+dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-unit-coverage
 ```
 
 Run the integration endpoint audit:
 
 ```powershell
-.\bin\backend-integration-endpoint-coverage.ps1
+dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-integration-endpoint-coverage
 ```
+
+Compatibility shims still exist if you prefer the older PowerShell entrypoints:
+
+- `.\bin\backend-unit-coverage.ps1`
+- `.\bin\backend-integration-endpoint-coverage.ps1`
 
 The coverage script:
 
