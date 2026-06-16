@@ -384,7 +384,7 @@ internal static partial class DevTasksCli
                 ["ASPNETCORE_ENVIRONMENT"] = "Development",
                 ["OPENAPI_EXPORT"] = "true",
                 ["OPENAPI_INCLUDE_PREFIX"] = null,
-                ["OPENAPI_SERVER_URL"] = $"http://127.0.0.1:{port}"
+                ["OPENAPI_SERVER_URL"] = $"http://localhost:{port}"
             },
             captureOutput: true,
             outputBuffer: outputBuffer
@@ -393,13 +393,13 @@ internal static partial class DevTasksCli
         try
         {
             await DownloadFileWithRetryAsync(
-                $"http://127.0.0.1:{port}/openapi.json",
+                $"http://localhost:{port}/openapi.json",
                 jsonOutputPath,
                 backendProcess,
                 outputBuffer
             );
             await DownloadFileWithRetryAsync(
-                $"http://127.0.0.1:{port}/openapi.yaml",
+                $"http://localhost:{port}/openapi.yaml",
                 yamlOutputPath,
                 backendProcess,
                 outputBuffer

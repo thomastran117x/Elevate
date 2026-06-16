@@ -4,14 +4,15 @@ info:
   description: 'Generated API reference for the EventXperience backend. Responses use the shared ApiResponse envelope unless noted otherwise.'
   version: v1
 servers:
-  - url: 'http://127.0.0.1:8090'
+  - url: 'http://localhost:8090'
 paths:
   '/api/admin/users/{id}/status':
     patch:
       tags:
         - admin
-      summary: 'Update user status'
-      operationId: UserAdmin_UpdateUserStatus
+      summary: 'Update a user''s account status'
+      description: 'Enables or disables a user account. Disabling immediately revokes all active sessions.'
+      operationId: UserAdmin_UpdateUserStatus_patch
       parameters:
         - name: id
           in: path
@@ -74,8 +75,8 @@ paths:
     post:
       tags:
         - payments
-      summary: 'Create payment session'
-      operationId: Payment_CreatePaymentSession
+      summary: 'Create a Stripe checkout session'
+      operationId: Payment_CreatePaymentSession_post
       parameters:
         - name: eventId
           in: path
@@ -131,8 +132,8 @@ paths:
     get:
       tags:
         - payments
-      summary: 'Get payment'
-      operationId: Payment_GetPayment
+      summary: 'Get a payment'
+      operationId: Payment_GetPayment_get
       parameters:
         - name: paymentId
           in: path
@@ -183,8 +184,8 @@ paths:
     get:
       tags:
         - payments
-      summary: 'Get my payments'
-      operationId: Payment_GetMyPayments
+      summary: 'List the current user''s payments'
+      operationId: Payment_GetMyPayments_get
       parameters:
         - name: page
           in: query
@@ -238,9 +239,9 @@ paths:
     post:
       tags:
         - payments
-      summary: 'Handle webhook'
-      description: 'Consumes Stripe webhook events using the raw request payload and the `Stripe-Signature` header.'
-      operationId: Payment_HandleWebhook
+      summary: 'Handle a Stripe webhook event'
+      description: 'Validates and processes a Stripe webhook event using the raw request payload and `Stripe-Signature` header. The endpoint must receive the unmodified raw body.'
+      operationId: Payment_HandleWebhook_post
       parameters:
         - name: Stripe-Signature
           in: header
@@ -277,8 +278,8 @@ paths:
     post:
       tags:
         - payments
-      summary: 'Refund payment'
-      operationId: Payment_RefundPayment
+      summary: 'Refund a payment'
+      operationId: Payment_RefundPayment_post
       parameters:
         - name: paymentId
           in: path
@@ -329,8 +330,8 @@ paths:
     post:
       tags:
         - events
-      summary: 'Create event'
-      operationId: Events_CreateEvent
+      summary: 'Create an event'
+      operationId: Events_CreateEvent_post
       parameters:
         - name: clubId
           in: path
@@ -393,8 +394,8 @@ paths:
     put:
       tags:
         - events
-      summary: 'Update event'
-      operationId: Events_UpdateEvent
+      summary: 'Update an event'
+      operationId: Events_UpdateEvent_put
       parameters:
         - name: eventId
           in: path
@@ -456,8 +457,8 @@ paths:
     delete:
       tags:
         - events
-      summary: 'Delete event'
-      operationId: Events_DeleteEvent
+      summary: 'Delete an event'
+      operationId: Events_DeleteEvent_delete
       parameters:
         - name: eventId
           in: path
@@ -507,8 +508,8 @@ paths:
     get:
       tags:
         - events
-      summary: 'Get event'
-      operationId: Events_GetEvent
+      summary: 'Get an event'
+      operationId: Events_GetEvent_get
       parameters:
         - name: eventId
           in: path
@@ -544,8 +545,8 @@ paths:
     get:
       tags:
         - events
-      summary: 'Get event versions'
-      operationId: Events_GetEventVersions
+      summary: 'List event version history'
+      operationId: Events_GetEventVersions_get
       parameters:
         - name: eventId
           in: path
@@ -604,8 +605,8 @@ paths:
     get:
       tags:
         - events
-      summary: 'Get event version'
-      operationId: Events_GetEventVersion
+      summary: 'Get a specific event version'
+      operationId: Events_GetEventVersion_get
       parameters:
         - name: eventId
           in: path
@@ -661,8 +662,9 @@ paths:
     post:
       tags:
         - events
-      summary: 'Rollback event version'
-      operationId: Events_RollbackEventVersion
+      summary: 'Roll back an event to an earlier version'
+      description: 'Restores the event to the state captured at the given version. A new version entry is recorded to track the rollback.'
+      operationId: Events_RollbackEventVersion_post
       parameters:
         - name: eventId
           in: path
@@ -718,8 +720,8 @@ paths:
     get:
       tags:
         - events
-      summary: 'Get events by club'
-      operationId: Events_GetEventsByClub
+      summary: 'List published events for a club'
+      operationId: Events_GetEventsByClub_get
       parameters:
         - name: clubId
           in: path
@@ -767,8 +769,9 @@ paths:
     get:
       tags:
         - events
-      summary: 'Get manageable events by club'
-      operationId: Events_GetManageableEventsByClub
+      summary: 'List all events for a club (management view)'
+      description: 'Returns all events for a club including drafts, cancelled, and archived events. Requires club manager or owner access.'
+      operationId: Events_GetManageableEventsByClub_get
       parameters:
         - name: clubId
           in: path
@@ -831,8 +834,8 @@ paths:
     get:
       tags:
         - events
-      summary: 'Get manageable event'
-      operationId: Events_GetManageableEvent
+      summary: 'Get an event (management view)'
+      operationId: Events_GetManageableEvent_get
       parameters:
         - name: eventId
           in: path
@@ -883,8 +886,8 @@ paths:
     post:
       tags:
         - events
-      summary: 'Create draft event'
-      operationId: Events_CreateDraftEvent
+      summary: 'Create a draft event'
+      operationId: Events_CreateDraftEvent_post
       parameters:
         - name: clubId
           in: path
@@ -947,8 +950,8 @@ paths:
     patch:
       tags:
         - events
-      summary: 'Update draft event'
-      operationId: Events_UpdateDraftEvent
+      summary: 'Update a draft event'
+      operationId: Events_UpdateDraftEvent_patch
       parameters:
         - name: eventId
           in: path
@@ -1011,8 +1014,8 @@ paths:
     post:
       tags:
         - events
-      summary: 'Publish event'
-      operationId: Events_PublishEvent
+      summary: 'Publish an event'
+      operationId: Events_PublishEvent_post
       parameters:
         - name: eventId
           in: path
@@ -1063,8 +1066,8 @@ paths:
     post:
       tags:
         - events
-      summary: 'Cancel event'
-      operationId: Events_CancelEvent
+      summary: 'Cancel an event'
+      operationId: Events_CancelEvent_post
       parameters:
         - name: eventId
           in: path
@@ -1115,8 +1118,8 @@ paths:
     post:
       tags:
         - events
-      summary: 'Archive event'
-      operationId: Events_ArchiveEvent
+      summary: 'Archive an event'
+      operationId: Events_ArchiveEvent_post
       parameters:
         - name: eventId
           in: path
@@ -1167,8 +1170,8 @@ paths:
     get:
       tags:
         - events
-      summary: 'Get events'
-      operationId: Events_GetEvents
+      summary: 'List published events'
+      operationId: Events_GetEvents_get
       parameters:
         - name: search
           in: query
@@ -1248,7 +1251,7 @@ paths:
       tags:
         - events
       summary: 'Search events'
-      operationId: Events_SearchEvents
+      operationId: Events_SearchEvents_post
       requestBody:
         content:
           application/json:
@@ -1290,8 +1293,9 @@ paths:
     get:
       tags:
         - events
-      summary: 'Get events batch'
-      operationId: Events_GetEventsBatch
+      summary: 'Get multiple events by ID'
+      description: 'Fetches multiple events by their IDs in a single request. Pass `id` as a repeated or comma-separated query parameter.'
+      operationId: Events_GetEventsBatch_get
       parameters:
         - name: ids
           in: query
@@ -1325,8 +1329,8 @@ paths:
     put:
       tags:
         - events
-      summary: 'Batch update events'
-      operationId: Events_BatchUpdateEvents
+      summary: 'Bulk update events'
+      operationId: Events_BatchUpdateEvents_put
       requestBody:
         content:
           application/json:
@@ -1382,8 +1386,8 @@ paths:
     delete:
       tags:
         - events
-      summary: 'Batch delete events'
-      operationId: Events_BatchDeleteEvents
+      summary: 'Bulk delete events'
+      operationId: Events_BatchDeleteEvents_delete
       requestBody:
         content:
           application/json:
@@ -1440,8 +1444,9 @@ paths:
     post:
       tags:
         - events
-      summary: 'Batch create events'
-      operationId: Events_BatchCreateEvents
+      summary: 'Bulk create events for a club'
+      description: 'Creates multiple events in a single request. Returns a partial-success result — check the `failed` array for items that could not be created.'
+      operationId: Events_BatchCreateEvents_post
       parameters:
         - name: clubId
           in: path
@@ -1505,7 +1510,7 @@ paths:
       tags:
         - events
       summary: 'Get event analytics'
-      operationId: Events_GetEventAnalytics
+      operationId: Events_GetEventAnalytics_get
       parameters:
         - name: eventId
           in: path
@@ -1556,8 +1561,9 @@ paths:
     post:
       tags:
         - events
-      summary: 'Get presigned upload URL'
-      operationId: Events_GetPresignedUploadUrl
+      summary: 'Get a presigned URL for image upload'
+      description: 'Returns a short-lived presigned URL for direct S3 upload. After uploading, call `POST /api/events/{eventId}/images` with the resulting object key to attach the image to an event.'
+      operationId: Events_GetPresignedUploadUrl_post
       requestBody:
         content:
           application/json:
@@ -1614,8 +1620,8 @@ paths:
     post:
       tags:
         - events
-      summary: 'Add event image'
-      operationId: Events_AddEventImage
+      summary: 'Attach an uploaded image to an event'
+      operationId: Events_AddEventImage_post
       parameters:
         - name: eventId
           in: path
@@ -1678,8 +1684,8 @@ paths:
     delete:
       tags:
         - events
-      summary: 'Remove event image'
-      operationId: Events_RemoveEventImage
+      summary: 'Remove an image from an event'
+      operationId: Events_RemoveEventImage_delete
       parameters:
         - name: eventId
           in: path
@@ -1735,8 +1741,8 @@ paths:
     get:
       tags:
         - events
-      summary: 'Get club analytics'
-      operationId: Events_GetClubAnalytics
+      summary: 'Get analytics for all events in a club'
+      operationId: Events_GetClubAnalytics_get
       parameters:
         - name: clubId
           in: path
@@ -1787,8 +1793,8 @@ paths:
     post:
       tags:
         - admin
-      summary: 'Reindex events'
-      operationId: AdminEvents_ReindexEvents
+      summary: 'Rebuild the events search index'
+      operationId: AdminEvents_ReindexEvents_post
       responses:
         200:
           description: OK
@@ -1833,8 +1839,8 @@ paths:
     post:
       tags:
         - events
-      summary: Register
-      operationId: EventRegistration_Register
+      summary: 'Register for an event'
+      operationId: EventRegistration_Register_post
       parameters:
         - name: eventId
           in: path
@@ -1895,8 +1901,8 @@ paths:
     delete:
       tags:
         - events
-      summary: Unregister
-      operationId: EventRegistration_Unregister
+      summary: 'Cancel an event registration'
+      operationId: EventRegistration_Unregister_delete
       parameters:
         - name: eventId
           in: path
@@ -1946,8 +1952,8 @@ paths:
     patch:
       tags:
         - events
-      summary: 'Update registration'
-      operationId: EventRegistration_UpdateRegistration
+      summary: 'Update an event registration'
+      operationId: EventRegistration_UpdateRegistration_patch
       parameters:
         - name: eventId
           in: path
@@ -2010,8 +2016,8 @@ paths:
     get:
       tags:
         - events
-      summary: 'Get registrations'
-      operationId: EventRegistration_GetRegistrations
+      summary: 'List registrations for an event'
+      operationId: EventRegistration_GetRegistrations_get
       parameters:
         - name: eventId
           in: path
@@ -2055,8 +2061,8 @@ paths:
     get:
       tags:
         - events
-      summary: 'Check registration'
-      operationId: EventRegistration_CheckRegistration
+      summary: 'Check current user registration status'
+      operationId: EventRegistration_CheckRegistration_get
       parameters:
         - name: eventId
           in: path
@@ -2107,8 +2113,9 @@ paths:
     post:
       tags:
         - events
-      summary: 'Batch register'
-      operationId: EventRegistration_BatchRegister
+      summary: 'Register for multiple events'
+      description: 'Registers the current user for multiple events at once. Returns a partial-success result — check the `failed` array for events where registration did not succeed.'
+      operationId: EventRegistration_BatchRegister_post
       requestBody:
         content:
           application/json:
@@ -2164,8 +2171,9 @@ paths:
     delete:
       tags:
         - events
-      summary: 'Batch unregister'
-      operationId: EventRegistration_BatchUnregister
+      summary: 'Cancel multiple event registrations'
+      description: 'Cancels registrations for multiple events in a single request.'
+      operationId: EventRegistration_BatchUnregister_delete
       requestBody:
         content:
           application/json:
@@ -2222,8 +2230,8 @@ paths:
     get:
       tags:
         - users
-      summary: 'Get registered events'
-      operationId: UserEventRegistration_GetRegisteredEvents
+      summary: 'List events a user is registered for'
+      operationId: UserEventRegistration_GetRegisteredEvents_get
       parameters:
         - name: userId
           in: path
@@ -2282,8 +2290,8 @@ paths:
     post:
       tags:
         - events
-      summary: 'Create invitations'
-      operationId: EventInvitation_CreateInvitations
+      summary: 'Create invitations for an event'
+      operationId: EventInvitation_CreateInvitations_post
       parameters:
         - name: eventId
           in: path
@@ -2345,8 +2353,8 @@ paths:
     get:
       tags:
         - events
-      summary: 'Get invitations'
-      operationId: EventInvitation_GetInvitations
+      summary: 'List invitations for an event'
+      operationId: EventInvitation_GetInvitations_get
       parameters:
         - name: eventId
           in: path
@@ -2397,8 +2405,8 @@ paths:
     post:
       tags:
         - events
-      summary: 'Revoke invitation'
-      operationId: EventInvitation_RevokeInvitation
+      summary: 'Revoke an invitation'
+      operationId: EventInvitation_RevokeInvitation_post
       parameters:
         - name: eventId
           in: path
@@ -2454,8 +2462,8 @@ paths:
     post:
       tags:
         - events
-      summary: 'Create invitation link'
-      operationId: EventInvitation_CreateInvitationLink
+      summary: 'Create a shareable invitation link'
+      operationId: EventInvitation_CreateInvitationLink_post
       parameters:
         - name: eventId
           in: path
@@ -2517,8 +2525,8 @@ paths:
     get:
       tags:
         - events
-      summary: 'Get invitation links'
-      operationId: EventInvitation_GetInvitationLinks
+      summary: 'List invitation links for an event'
+      operationId: EventInvitation_GetInvitationLinks_get
       parameters:
         - name: eventId
           in: path
@@ -2569,8 +2577,8 @@ paths:
     post:
       tags:
         - events
-      summary: 'Revoke invitation link'
-      operationId: EventInvitation_RevokeInvitationLink
+      summary: 'Revoke an invitation link'
+      operationId: EventInvitation_RevokeInvitationLink_post
       parameters:
         - name: eventId
           in: path
@@ -2626,8 +2634,9 @@ paths:
     post:
       tags:
         - events
-      summary: 'Resolve invitation'
-      operationId: EventInvitation_ResolveInvitation
+      summary: 'Resolve an invitation token'
+      description: 'Validates an invitation token from an email link or shareable link and returns the associated event details. Use this to preview the invitation before prompting the user to accept or decline.'
+      operationId: EventInvitation_ResolveInvitation_post
       requestBody:
         content:
           application/json:
@@ -2669,8 +2678,8 @@ paths:
     post:
       tags:
         - events
-      summary: 'Accept invitation'
-      operationId: EventInvitation_AcceptInvitation
+      summary: 'Accept an invitation by token'
+      operationId: EventInvitation_AcceptInvitation_post
       requestBody:
         content:
           application/json:
@@ -2727,8 +2736,8 @@ paths:
     post:
       tags:
         - events
-      summary: 'Accept invitation by ID'
-      operationId: EventInvitation_AcceptInvitationById
+      summary: 'Accept an invitation by ID'
+      operationId: EventInvitation_AcceptInvitationById_post
       parameters:
         - name: invitationId
           in: path
@@ -2779,8 +2788,8 @@ paths:
     post:
       tags:
         - events
-      summary: 'Decline invitation'
-      operationId: EventInvitation_DeclineInvitation
+      summary: 'Decline an invitation by token'
+      operationId: EventInvitation_DeclineInvitation_post
       requestBody:
         content:
           application/json:
@@ -2837,8 +2846,8 @@ paths:
     post:
       tags:
         - events
-      summary: 'Decline invitation by ID'
-      operationId: EventInvitation_DeclineInvitationById
+      summary: 'Decline an invitation by ID'
+      operationId: EventInvitation_DeclineInvitationById_post
       parameters:
         - name: invitationId
           in: path
@@ -2889,8 +2898,8 @@ paths:
     get:
       tags:
         - events
-      summary: 'Get my invitations'
-      operationId: EventInvitation_GetMyInvitations
+      summary: 'List invitations for the current user'
+      operationId: EventInvitation_GetMyInvitations_get
       responses:
         200:
           description: OK
@@ -2935,8 +2944,8 @@ paths:
     post:
       tags:
         - clubs
-      summary: 'Join club'
-      operationId: Club_JoinClub
+      summary: 'Join a club'
+      operationId: Club_JoinClub_post
       parameters:
         - name: clubId
           in: path
@@ -2986,8 +2995,8 @@ paths:
     delete:
       tags:
         - clubs
-      summary: 'Leave club'
-      operationId: Club_LeaveClub
+      summary: 'Leave a club'
+      operationId: Club_LeaveClub_delete
       parameters:
         - name: clubId
           in: path
@@ -3038,8 +3047,8 @@ paths:
     post:
       tags:
         - clubs
-      summary: 'Create club'
-      operationId: Club_CreateClub
+      summary: 'Create a club'
+      operationId: Club_CreateClub_post
       requestBody:
         content:
           application/json:
@@ -3095,8 +3104,8 @@ paths:
     get:
       tags:
         - clubs
-      summary: 'Get clubs'
-      operationId: Club_GetClubs
+      summary: 'List clubs'
+      operationId: Club_GetClubs_get
       parameters:
         - name: search
           in: query
@@ -3147,8 +3156,8 @@ paths:
     put:
       tags:
         - clubs
-      summary: 'Update club'
-      operationId: Club_UpdateClub
+      summary: 'Update a club'
+      operationId: Club_UpdateClub_put
       parameters:
         - name: id
           in: path
@@ -3210,8 +3219,8 @@ paths:
     delete:
       tags:
         - clubs
-      summary: 'Delete club'
-      operationId: Club_DeleteClub
+      summary: 'Delete a club'
+      operationId: Club_DeleteClub_delete
       parameters:
         - name: id
           in: path
@@ -3261,8 +3270,8 @@ paths:
     get:
       tags:
         - clubs
-      summary: 'Get club'
-      operationId: Club_GetClub
+      summary: 'Get a club'
+      operationId: Club_GetClub_get
       parameters:
         - name: id
           in: path
@@ -3299,7 +3308,7 @@ paths:
       tags:
         - clubs
       summary: 'Search clubs'
-      operationId: Club_SearchClubs
+      operationId: Club_SearchClubs_post
       requestBody:
         content:
           application/json:
@@ -3341,8 +3350,8 @@ paths:
     get:
       tags:
         - clubs
-      summary: 'Get managed clubs'
-      operationId: Club_GetManagedClubs
+      summary: 'List clubs managed by the current user'
+      operationId: Club_GetManagedClubs_get
       responses:
         200:
           description: OK
@@ -3387,8 +3396,8 @@ paths:
     get:
       tags:
         - clubs
-      summary: 'Get club staff'
-      operationId: Club_GetClubStaff
+      summary: 'List club staff'
+      operationId: Club_GetClubStaff_get
       parameters:
         - name: id
           in: path
@@ -3439,8 +3448,8 @@ paths:
     post:
       tags:
         - clubs
-      summary: 'Add manager'
-      operationId: Club_AddManager
+      summary: 'Add a manager to a club'
+      operationId: Club_AddManager_post
       parameters:
         - name: id
           in: path
@@ -3503,8 +3512,8 @@ paths:
     post:
       tags:
         - clubs
-      summary: 'Add volunteer'
-      operationId: Club_AddVolunteer
+      summary: 'Add a volunteer to a club'
+      operationId: Club_AddVolunteer_post
       parameters:
         - name: id
           in: path
@@ -3567,8 +3576,8 @@ paths:
     delete:
       tags:
         - clubs
-      summary: 'Remove staff'
-      operationId: Club_RemoveStaff
+      summary: 'Remove a staff member from a club'
+      operationId: Club_RemoveStaff_delete
       parameters:
         - name: id
           in: path
@@ -3624,8 +3633,9 @@ paths:
     post:
       tags:
         - clubs
-      summary: 'Transfer ownership'
-      operationId: Club_TransferOwnership
+      summary: 'Transfer club ownership'
+      description: 'Transfers ownership to the specified user. The current owner is demoted to manager. This action cannot be reversed by club staff.'
+      operationId: Club_TransferOwnership_post
       parameters:
         - name: id
           in: path
@@ -3688,8 +3698,8 @@ paths:
     get:
       tags:
         - clubs
-      summary: 'Get club versions'
-      operationId: Club_GetClubVersions
+      summary: 'List club version history'
+      operationId: Club_GetClubVersions_get
       parameters:
         - name: id
           in: path
@@ -3748,8 +3758,8 @@ paths:
     get:
       tags:
         - clubs
-      summary: 'Get club version'
-      operationId: Club_GetClubVersion
+      summary: 'Get a specific club version'
+      operationId: Club_GetClubVersion_get
       parameters:
         - name: id
           in: path
@@ -3805,8 +3815,9 @@ paths:
     post:
       tags:
         - clubs
-      summary: 'Rollback club version'
-      operationId: Club_RollbackClubVersion
+      summary: 'Roll back a club to an earlier version'
+      description: 'Restores the club to the state captured at the given version. A new version entry is recorded to track the rollback.'
+      operationId: Club_RollbackClubVersion_post
       parameters:
         - name: id
           in: path
@@ -3862,8 +3873,8 @@ paths:
     post:
       tags:
         - admin
-      summary: 'Reindex clubs'
-      operationId: AdminClubs_ReindexClubs
+      summary: 'Rebuild the clubs search index'
+      operationId: AdminClubs_ReindexClubs_post
       responses:
         200:
           description: OK
@@ -3908,8 +3919,8 @@ paths:
     post:
       tags:
         - clubs
-      summary: 'Create review'
-      operationId: ClubReview_CreateReview
+      summary: 'Create a club review'
+      operationId: ClubReview_CreateReview_post
       parameters:
         - name: clubId
           in: path
@@ -3971,8 +3982,8 @@ paths:
     get:
       tags:
         - clubs
-      summary: 'Get reviews by club'
-      operationId: ClubReview_GetReviewsByClub
+      summary: 'List reviews for a club'
+      operationId: ClubReview_GetReviewsByClub_get
       parameters:
         - name: clubId
           in: path
@@ -4016,8 +4027,8 @@ paths:
     put:
       tags:
         - clubs
-      summary: 'Update review'
-      operationId: ClubReview_UpdateReview
+      summary: 'Update a club review'
+      operationId: ClubReview_UpdateReview_put
       parameters:
         - name: clubId
           in: path
@@ -4084,8 +4095,8 @@ paths:
     delete:
       tags:
         - clubs
-      summary: 'Delete review'
-      operationId: ClubReview_DeleteReview
+      summary: 'Delete a club review'
+      operationId: ClubReview_DeleteReview_delete
       parameters:
         - name: clubId
           in: path
@@ -4141,8 +4152,8 @@ paths:
     get:
       tags:
         - users
-      summary: 'Get reviews by user'
-      operationId: UserReview_GetReviewsByUser
+      summary: 'List reviews written by a user'
+      operationId: UserReview_GetReviewsByUser_get
       parameters:
         - name: userId
           in: path
@@ -4201,8 +4212,8 @@ paths:
     post:
       tags:
         - clubs
-      summary: 'Create post'
-      operationId: ClubPost_CreatePost
+      summary: 'Create a club post'
+      operationId: ClubPost_CreatePost_post
       parameters:
         - name: clubId
           in: path
@@ -4264,8 +4275,8 @@ paths:
     get:
       tags:
         - clubs
-      summary: 'Get posts'
-      operationId: ClubPost_GetPosts
+      summary: 'List posts for a club'
+      operationId: ClubPost_GetPosts_get
       parameters:
         - name: clubId
           in: path
@@ -4317,8 +4328,8 @@ paths:
     get:
       tags:
         - clubs
-      summary: 'Get post'
-      operationId: ClubPost_GetPost
+      summary: 'Get a club post'
+      operationId: ClubPost_GetPost_get
       parameters:
         - name: clubId
           in: path
@@ -4358,8 +4369,8 @@ paths:
     put:
       tags:
         - clubs
-      summary: 'Update post'
-      operationId: ClubPost_UpdatePost
+      summary: 'Update a club post'
+      operationId: ClubPost_UpdatePost_put
       parameters:
         - name: clubId
           in: path
@@ -4426,8 +4437,8 @@ paths:
     delete:
       tags:
         - clubs
-      summary: 'Delete post'
-      operationId: ClubPost_DeletePost
+      summary: 'Delete a club post'
+      operationId: ClubPost_DeletePost_delete
       parameters:
         - name: clubId
           in: path
@@ -4483,8 +4494,8 @@ paths:
     post:
       tags:
         - admin
-      summary: 'Reindex posts'
-      operationId: AdminClubPost_ReindexPosts
+      summary: 'Rebuild the club posts search index'
+      operationId: AdminClubPost_ReindexPosts_post
       responses:
         200:
           description: OK
@@ -4529,8 +4540,8 @@ paths:
     get:
       tags:
         - admin
-      summary: 'Get all posts'
-      operationId: AdminClubPost_GetAllPosts
+      summary: 'List all club posts'
+      operationId: AdminClubPost_GetAllPosts_get
       parameters:
         - name: search
           in: query
@@ -4592,8 +4603,8 @@ paths:
     post:
       tags:
         - clubs
-      summary: 'Create comment'
-      operationId: PostComment_CreateComment
+      summary: 'Add a comment to a post'
+      operationId: PostComment_CreateComment_post
       parameters:
         - name: clubId
           in: path
@@ -4660,8 +4671,8 @@ paths:
     get:
       tags:
         - clubs
-      summary: 'Get comments'
-      operationId: PostComment_GetComments
+      summary: 'List comments on a post'
+      operationId: PostComment_GetComments_get
       parameters:
         - name: clubId
           in: path
@@ -4710,8 +4721,9 @@ paths:
     get:
       tags:
         - clubs
-      summary: 'Stream comments'
-      operationId: PostComment_StreamComments
+      summary: 'Stream live comment events'
+      description: 'Opens a Server-Sent Events (SSE) stream that pushes new and updated comments on the post in real time.'
+      operationId: PostComment_StreamComments_get
       parameters:
         - name: clubId
           in: path
@@ -4742,8 +4754,8 @@ paths:
     put:
       tags:
         - clubs
-      summary: 'Update comment'
-      operationId: PostComment_UpdateComment
+      summary: 'Update a comment'
+      operationId: PostComment_UpdateComment_put
       parameters:
         - name: clubId
           in: path
@@ -4815,8 +4827,8 @@ paths:
     delete:
       tags:
         - clubs
-      summary: 'Delete comment'
-      operationId: PostComment_DeleteComment
+      summary: 'Delete a comment'
+      operationId: PostComment_DeleteComment_delete
       parameters:
         - name: clubId
           in: path
@@ -4877,8 +4889,8 @@ paths:
     get:
       tags:
         - clubs
-      summary: 'Get club members'
-      operationId: ClubFollow_GetClubMembers
+      summary: 'List club members'
+      operationId: ClubFollow_GetClubMembers_get
       parameters:
         - name: clubId
           in: path
@@ -4922,8 +4934,8 @@ paths:
     get:
       tags:
         - clubs
-      summary: 'Check membership'
-      operationId: ClubFollow_CheckMembership
+      summary: 'Check if the current user is a member'
+      operationId: ClubFollow_CheckMembership_get
       parameters:
         - name: clubId
           in: path
@@ -4974,8 +4986,8 @@ paths:
     get:
       tags:
         - users
-      summary: 'Get clubs followed by user'
-      operationId: UserFollow_GetClubsFollowedByUser
+      summary: 'List clubs followed by a user'
+      operationId: UserFollow_GetClubsFollowedByUser_get
       parameters:
         - name: userId
           in: path
@@ -5034,8 +5046,8 @@ paths:
     post:
       tags:
         - auth
-      summary: 'Local authenticate'
-      operationId: Auth_LocalAuthenticate
+      summary: 'Sign in with email and password'
+      operationId: Auth_LocalAuthenticate_post
       parameters:
         - name: X-CSRF-TOKEN
           in: header
@@ -5084,8 +5096,9 @@ paths:
     post:
       tags:
         - auth
-      summary: 'Local signup'
-      operationId: Auth_LocalSignup
+      summary: 'Create an account with email and password'
+      description: 'Registers a new account and sends a verification email. The account cannot be used until the email address is confirmed.'
+      operationId: Auth_LocalSignup_post
       parameters:
         - name: X-CSRF-TOKEN
           in: header
@@ -5134,8 +5147,8 @@ paths:
     post:
       tags:
         - auth
-      summary: 'Local verify OTP'
-      operationId: Auth_LocalVerifyOtp
+      summary: 'Verify email with a one-time code'
+      operationId: Auth_LocalVerifyOtp_post
       parameters:
         - name: X-CSRF-TOKEN
           in: header
@@ -5184,8 +5197,9 @@ paths:
     get:
       tags:
         - auth
-      summary: 'Local verify'
-      operationId: Auth_LocalVerify
+      summary: 'Complete email verification via link'
+      description: 'Processes the `token` query parameter from the verification email link. On success, redirects to the frontend with the verification result.'
+      operationId: Auth_LocalVerify_get
       parameters:
         - name: token
           in: query
@@ -5227,8 +5241,8 @@ paths:
     post:
       tags:
         - auth
-      summary: 'Local verify'
-      operationId: Auth_LocalVerify
+      summary: 'Resend the verification email'
+      operationId: Auth_LocalVerify_post
       parameters:
         - name: X-CSRF-TOKEN
           in: header
@@ -5279,8 +5293,8 @@ paths:
     post:
       tags:
         - auth
-      summary: 'Google authenticate'
-      operationId: Auth_GoogleAuthenticate
+      summary: 'Sign in or sign up with Google'
+      operationId: Auth_GoogleAuthenticate_post
       parameters:
         - name: X-CSRF-TOKEN
           in: header
@@ -5329,8 +5343,9 @@ paths:
     post:
       tags:
         - auth
-      summary: 'Google code authenticate'
-      operationId: Auth_GoogleCodeAuthenticate
+      summary: 'Exchange a Google authorization code for a session'
+      description: 'Completes the server-side OAuth 2.0 code flow by exchanging a Google authorization code for tokens and returning a session.'
+      operationId: Auth_GoogleCodeAuthenticate_post
       parameters:
         - name: X-CSRF-TOKEN
           in: header
@@ -5379,8 +5394,8 @@ paths:
     post:
       tags:
         - auth
-      summary: 'Microsoft authenticate'
-      operationId: Auth_MicrosoftAuthenticate
+      summary: 'Sign in or sign up with Microsoft'
+      operationId: Auth_MicrosoftAuthenticate_post
       parameters:
         - name: X-CSRF-TOKEN
           in: header
@@ -5429,8 +5444,8 @@ paths:
     get:
       tags:
         - auth
-      summary: Me
-      operationId: Auth_Me
+      summary: 'Get the current authenticated user'
+      operationId: Auth_Me_get
       responses:
         200:
           description: OK
@@ -5475,9 +5490,9 @@ paths:
     post:
       tags:
         - auth
-      summary: Refresh
-      description: 'Browser-cookie session refresh. Requires the CSRF header plus the refresh cookies issued during login.'
-      operationId: Auth_Refresh
+      summary: 'Refresh the browser session'
+      description: 'Rotates the browser-cookie session. Requires the CSRF header and the refresh cookies issued at sign-in.'
+      operationId: Auth_Refresh_post
       parameters:
         - name: X-CSRF-TOKEN
           in: header
@@ -5525,8 +5540,9 @@ paths:
     post:
       tags:
         - auth
-      summary: 'Complete o auth signup'
-      operationId: Auth_CompleteOAuthSignup
+      summary: 'Complete OAuth sign-up by selecting a role'
+      description: 'Finalizes the OAuth sign-up flow after the user selects a role. Requires the `signupToken` returned by the OAuth initiation endpoint.'
+      operationId: Auth_CompleteOAuthSignup_post
       parameters:
         - name: X-CSRF-TOKEN
           in: header
@@ -5575,9 +5591,9 @@ paths:
     post:
       tags:
         - auth
-      summary: 'API refresh'
-      description: 'API-token session refresh. Supply refresh and session-binding tokens through headers or the request body.'
-      operationId: Auth_ApiRefresh
+      summary: 'Refresh an API-token session'
+      description: 'Rotates an API-token session. Supply the refresh token and session-binding token via request headers or the request body.'
+      operationId: Auth_ApiRefresh_post
       parameters:
         - name: X-Refresh-Token
           in: header
@@ -5629,9 +5645,9 @@ paths:
     get:
       tags:
         - auth
-      summary: CSRF
-      description: 'Returns the CSRF token used by protected browser-oriented auth POST endpoints.'
-      operationId: Auth_Csrf
+      summary: 'Get the CSRF token'
+      description: 'Returns the CSRF token required by protected browser-oriented auth POST endpoints.'
+      operationId: Auth_Csrf_get
       responses:
         200:
           description: OK
@@ -5661,8 +5677,8 @@ paths:
     post:
       tags:
         - auth
-      summary: Logout
-      operationId: Auth_Logout
+      summary: 'Sign out of the browser session'
+      operationId: Auth_Logout_post
       parameters:
         - name: X-CSRF-TOKEN
           in: header
@@ -5710,8 +5726,8 @@ paths:
     post:
       tags:
         - auth
-      summary: 'API logout'
-      operationId: Auth_ApiLogout
+      summary: 'Sign out of an API-token session'
+      operationId: Auth_ApiLogout_post
       parameters:
         - name: X-Refresh-Token
           in: header
@@ -5763,8 +5779,9 @@ paths:
     get:
       tags:
         - auth
-      summary: 'Verify device'
-      operationId: Auth_VerifyDevice
+      summary: 'Verify a new device via email link'
+      description: 'Processes the one-click verification link emailed when a sign-in from an unrecognized device is detected. On success, redirects to the frontend.'
+      operationId: Auth_VerifyDevice_get
       parameters:
         - name: token
           in: query
@@ -5806,8 +5823,8 @@ paths:
     post:
       tags:
         - auth
-      summary: 'Verify device'
-      operationId: Auth_VerifyDevice
+      summary: 'Confirm a new device using a one-time code'
+      operationId: Auth_VerifyDevice_post
       parameters:
         - name: X-CSRF-TOKEN
           in: header
@@ -5858,8 +5875,8 @@ paths:
     post:
       tags:
         - auth
-      summary: 'Forgot password'
-      operationId: Auth_ForgotPassword
+      summary: 'Request a password reset email'
+      operationId: Auth_ForgotPassword_post
       parameters:
         - name: X-CSRF-TOKEN
           in: header
@@ -5908,8 +5925,8 @@ paths:
     post:
       tags:
         - auth
-      summary: 'Change password'
-      operationId: Auth_ChangePassword
+      summary: 'Reset the account password'
+      operationId: Auth_ChangePassword_post
       parameters:
         - name: token
           in: query
