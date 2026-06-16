@@ -327,7 +327,7 @@ internal static partial class DevTasksCli
     private static async Task<int> ExportOpenApiAsync(string[] args)
     {
         var outputPath = "backend/openapi.yaml";
-        var port = 8091;
+        var port = 8090;
 
         for (var index = 0; index < args.Length; index++)
         {
@@ -359,10 +359,10 @@ internal static partial class DevTasksCli
             );
         var extension = Path.GetExtension(resolvedOutputPath).ToLowerInvariant();
 
-        var documentUrl = extension switch
+        var (jsonOutputPath, yamlOutputPath) = extension switch
         {
-            ".json" => $"http://127.0.0.1:{port}/openapi.json",
-            ".yaml" or ".yml" => $"http://127.0.0.1:{port}/openapi.yaml",
+            ".json" => (resolvedOutputPath, Path.ChangeExtension(resolvedOutputPath, ".yaml")),
+            ".yaml" or ".yml" => (Path.ChangeExtension(resolvedOutputPath, ".json"), resolvedOutputPath),
             _ => throw new InvalidOperationException(
                 $"Unsupported OpenAPI output extension '{extension}'. Use .json, .yaml, or .yml."
             )
@@ -383,7 +383,8 @@ internal static partial class DevTasksCli
                 ["PORT"] = port.ToString(CultureInfo.InvariantCulture),
                 ["ASPNETCORE_ENVIRONMENT"] = "Development",
                 ["OPENAPI_EXPORT"] = "true",
-                ["OPENAPI_INCLUDE_PREFIX"] = null
+                ["OPENAPI_INCLUDE_PREFIX"] = null,
+                ["OPENAPI_SERVER_URL"] = $"http://127.0.0.1:{port}"
             },
             captureOutput: true,
             outputBuffer: outputBuffer
@@ -392,14 +393,19 @@ internal static partial class DevTasksCli
         try
         {
             await DownloadFileWithRetryAsync(
-                documentUrl,
-                resolvedOutputPath,
+                $"http://127.0.0.1:{port}/openapi.json",
+                jsonOutputPath,
                 backendProcess,
                 outputBuffer
             );
-            Console.WriteLine(
-                $"OpenAPI {(extension == ".json" ? "JSON" : "YAML")} exported to {resolvedOutputPath}"
+            await DownloadFileWithRetryAsync(
+                $"http://127.0.0.1:{port}/openapi.yaml",
+                yamlOutputPath,
+                backendProcess,
+                outputBuffer
             );
+            Console.WriteLine($"OpenAPI JSON exported to {jsonOutputPath}");
+            Console.WriteLine($"OpenAPI YAML exported to {yamlOutputPath}");
             return 0;
         }
         finally
@@ -945,7 +951,7 @@ internal static partial class DevTasksCli
         Console.WriteLine(
             "  --output, -o   Output path relative to the repo root. Default: backend/openapi.yaml"
         );
-        Console.WriteLine("  --port, -p     Temporary backend port used during export. Default: 8091");
+        Console.WriteLine("  --port, -p     Temporary backend port used during export. Default: 8090");
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  dotnet run --project tools/Event.DevTasks -- export-openapi");

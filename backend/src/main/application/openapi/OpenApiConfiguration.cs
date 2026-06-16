@@ -19,6 +19,17 @@ namespace backend.main.application.openapi
     public static class OpenApiConfiguration
     {
         private const string BearerSchemeName = "bearerAuth";
+        private static readonly Dictionary<string, string> AcronymDisplayNames =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["api"] = "API",
+                ["csrf"] = "CSRF",
+                ["id"] = "ID",
+                ["jwt"] = "JWT",
+                ["oauth"] = "OAuth",
+                ["otp"] = "OTP",
+                ["url"] = "URL",
+            };
         private static readonly HashSet<string> CsrfProtectedAuthPostPaths =
         [
             "/api/auth/login",
@@ -157,7 +168,10 @@ namespace backend.main.application.openapi
                 Description =
                     "Generated API reference for the EventXperience backend. Responses use the shared ApiResponse envelope unless noted otherwise."
             };
-            document.Servers = [];
+            var serverUrl = Environment.GetEnvironmentVariable("OPENAPI_SERVER_URL");
+            document.Servers = string.IsNullOrWhiteSpace(serverUrl)
+                ? []
+                : [new OpenApiServer { Url = serverUrl }];
 
             document.Components ??= new OpenApiComponents();
             document.Components.SecuritySchemes ??= new Dictionary<string, OpenApiSecurityScheme>();
@@ -247,6 +261,7 @@ namespace backend.main.application.openapi
                 : context.Description.HttpMethod ?? "operation";
 
             operation.OperationId = $"{SanitizeToken(controller)}_{SanitizeToken(action)}";
+            operation.Summary = DeriveOperationSummary(action);
         }
 
         private static void ApplyTags(
@@ -560,6 +575,29 @@ namespace backend.main.application.openapi
             }
 
             return "/" + relativePath.TrimStart('/');
+        }
+
+        private static string DeriveOperationSummary(string? actionName)
+        {
+            if (string.IsNullOrWhiteSpace(actionName))
+                return string.Empty;
+
+            var spaced = System.Text.RegularExpressions.Regex.Replace(
+                actionName,
+                @"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])",
+                " "
+            );
+
+            var words = spaced.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return string.Join(" ", words.Select((word, index) =>
+            {
+                var lower = word.ToLowerInvariant();
+                if (AcronymDisplayNames.TryGetValue(lower, out var display))
+                    return display;
+                return index == 0
+                    ? char.ToUpperInvariant(word[0]) + word[1..].ToLowerInvariant()
+                    : lower;
+            }));
         }
 
         private static string SanitizeToken(string? value)

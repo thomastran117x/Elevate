@@ -5,12 +5,18 @@
     "description": "Generated API reference for the EventXperience backend. Responses use the shared ApiResponse envelope unless noted otherwise.",
     "version": "v1"
   },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8090"
+    }
+  ],
   "paths": {
     "/api/admin/users/{id}/status": {
       "patch": {
         "tags": [
           "admin"
         ],
+        "summary": "Update user status",
         "operationId": "UserAdmin_UpdateUserStatus",
         "parameters": [
           {
@@ -116,6 +122,7 @@
         "tags": [
           "payments"
         ],
+        "summary": "Create payment session",
         "operationId": "Payment_CreatePaymentSession",
         "parameters": [
           {
@@ -209,6 +216,7 @@
         "tags": [
           "payments"
         ],
+        "summary": "Get payment",
         "operationId": "Payment_GetPayment",
         "parameters": [
           {
@@ -294,6 +302,7 @@
         "tags": [
           "payments"
         ],
+        "summary": "Get my payments",
         "operationId": "Payment_GetMyPayments",
         "parameters": [
           {
@@ -385,6 +394,7 @@
         "tags": [
           "payments"
         ],
+        "summary": "Handle webhook",
         "description": "Consumes Stripe webhook events using the raw request payload and the `Stripe-Signature` header.",
         "operationId": "Payment_HandleWebhook",
         "parameters": [
@@ -447,6 +457,7 @@
         "tags": [
           "payments"
         ],
+        "summary": "Refund payment",
         "operationId": "Payment_RefundPayment",
         "parameters": [
           {
@@ -532,6 +543,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Create event",
         "operationId": "Events_CreateEvent",
         "parameters": [
           {
@@ -637,6 +649,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Update event",
         "operationId": "Events_UpdateEvent",
         "parameters": [
           {
@@ -740,6 +753,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Delete event",
         "operationId": "Events_DeleteEvent",
         "parameters": [
           {
@@ -823,6 +837,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Get event",
         "operationId": "Events_GetEvent",
         "parameters": [
           {
@@ -883,6 +898,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Get event versions",
         "operationId": "Events_GetEventVersions",
         "parameters": [
           {
@@ -982,6 +998,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Get event version",
         "operationId": "Events_GetEventVersion",
         "parameters": [
           {
@@ -1075,6 +1092,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Rollback event version",
         "operationId": "Events_RollbackEventVersion",
         "parameters": [
           {
@@ -1168,6 +1186,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Get events by club",
         "operationId": "Events_GetEventsByClub",
         "parameters": [
           {
@@ -1249,6 +1268,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Get manageable events by club",
         "operationId": "Events_GetManageableEventsByClub",
         "parameters": [
           {
@@ -1355,6 +1375,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Get manageable event",
         "operationId": "Events_GetManageableEvent",
         "parameters": [
           {
@@ -1440,6 +1461,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Create draft event",
         "operationId": "Events_CreateDraftEvent",
         "parameters": [
           {
@@ -1545,6 +1567,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Update draft event",
         "operationId": "Events_UpdateDraftEvent",
         "parameters": [
           {
@@ -1650,6 +1673,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Publish event",
         "operationId": "Events_PublishEvent",
         "parameters": [
           {
@@ -1735,6 +1759,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Cancel event",
         "operationId": "Events_CancelEvent",
         "parameters": [
           {
@@ -1820,6 +1845,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Archive event",
         "operationId": "Events_ArchiveEvent",
         "parameters": [
           {
@@ -1905,6 +1931,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Get events",
         "operationId": "Events_GetEvents",
         "parameters": [
           {
@@ -2043,6 +2070,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Search events",
         "operationId": "Events_SearchEvents",
         "requestBody": {
           "content": {
@@ -2113,6 +2141,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Get events batch",
         "operationId": "Events_GetEventsBatch",
         "parameters": [
           {
@@ -2170,6 +2199,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Batch update events",
         "operationId": "Events_BatchUpdateEvents",
         "requestBody": {
           "content": {
@@ -2263,6 +2293,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Batch delete events",
         "operationId": "Events_BatchDeleteEvents",
         "requestBody": {
           "content": {
@@ -2358,6 +2389,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Batch create events",
         "operationId": "Events_BatchCreateEvents",
         "parameters": [
           {
@@ -2463,6 +2495,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Get event analytics",
         "operationId": "Events_GetEventAnalytics",
         "parameters": [
           {
@@ -2548,6 +2581,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Get presigned upload URL",
         "operationId": "Events_GetPresignedUploadUrl",
         "requestBody": {
           "content": {
@@ -2643,6 +2677,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Add event image",
         "operationId": "Events_AddEventImage",
         "parameters": [
           {
@@ -2748,6 +2783,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Remove event image",
         "operationId": "Events_RemoveEventImage",
         "parameters": [
           {
@@ -2841,6 +2877,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Get club analytics",
         "operationId": "Events_GetClubAnalytics",
         "parameters": [
           {
@@ -2926,6 +2963,7 @@
         "tags": [
           "admin"
         ],
+        "summary": "Reindex events",
         "operationId": "AdminEvents_ReindexEvents",
         "responses": {
           "200": {
@@ -3001,6 +3039,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Register",
         "operationId": "EventRegistration_Register",
         "parameters": [
           {
@@ -3103,6 +3142,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Unregister",
         "operationId": "EventRegistration_Unregister",
         "parameters": [
           {
@@ -3186,6 +3226,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Update registration",
         "operationId": "EventRegistration_UpdateRegistration",
         "parameters": [
           {
@@ -3291,6 +3332,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Get registrations",
         "operationId": "EventRegistration_GetRegistrations",
         "parameters": [
           {
@@ -3365,6 +3407,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Check registration",
         "operationId": "EventRegistration_CheckRegistration",
         "parameters": [
           {
@@ -3450,6 +3493,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Batch register",
         "operationId": "EventRegistration_BatchRegister",
         "requestBody": {
           "content": {
@@ -3543,6 +3587,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Batch unregister",
         "operationId": "EventRegistration_BatchUnregister",
         "requestBody": {
           "content": {
@@ -3638,6 +3683,7 @@
         "tags": [
           "users"
         ],
+        "summary": "Get registered events",
         "operationId": "UserEventRegistration_GetRegisteredEvents",
         "parameters": [
           {
@@ -3737,6 +3783,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Create invitations",
         "operationId": "EventInvitation_CreateInvitations",
         "parameters": [
           {
@@ -3840,6 +3887,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Get invitations",
         "operationId": "EventInvitation_GetInvitations",
         "parameters": [
           {
@@ -3925,6 +3973,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Revoke invitation",
         "operationId": "EventInvitation_RevokeInvitation",
         "parameters": [
           {
@@ -4018,6 +4067,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Create invitation link",
         "operationId": "EventInvitation_CreateInvitationLink",
         "parameters": [
           {
@@ -4121,6 +4171,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Get invitation links",
         "operationId": "EventInvitation_GetInvitationLinks",
         "parameters": [
           {
@@ -4206,6 +4257,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Revoke invitation link",
         "operationId": "EventInvitation_RevokeInvitationLink",
         "parameters": [
           {
@@ -4299,6 +4351,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Resolve invitation",
         "operationId": "EventInvitation_ResolveInvitation",
         "requestBody": {
           "content": {
@@ -4369,6 +4422,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Accept invitation",
         "operationId": "EventInvitation_AcceptInvitation",
         "requestBody": {
           "content": {
@@ -4464,6 +4518,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Accept invitation by ID",
         "operationId": "EventInvitation_AcceptInvitationById",
         "parameters": [
           {
@@ -4549,6 +4604,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Decline invitation",
         "operationId": "EventInvitation_DeclineInvitation",
         "requestBody": {
           "content": {
@@ -4644,6 +4700,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Decline invitation by ID",
         "operationId": "EventInvitation_DeclineInvitationById",
         "parameters": [
           {
@@ -4729,6 +4786,7 @@
         "tags": [
           "events"
         ],
+        "summary": "Get my invitations",
         "operationId": "EventInvitation_GetMyInvitations",
         "responses": {
           "200": {
@@ -4804,6 +4862,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Join club",
         "operationId": "Club_JoinClub",
         "parameters": [
           {
@@ -4887,6 +4946,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Leave club",
         "operationId": "Club_LeaveClub",
         "parameters": [
           {
@@ -4972,6 +5032,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Create club",
         "operationId": "Club_CreateClub",
         "requestBody": {
           "content": {
@@ -5065,6 +5126,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Get clubs",
         "operationId": "Club_GetClubs",
         "parameters": [
           {
@@ -5153,6 +5215,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Update club",
         "operationId": "Club_UpdateClub",
         "parameters": [
           {
@@ -5256,6 +5319,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Delete club",
         "operationId": "Club_DeleteClub",
         "parameters": [
           {
@@ -5339,6 +5403,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Get club",
         "operationId": "Club_GetClub",
         "parameters": [
           {
@@ -5399,6 +5464,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Search clubs",
         "operationId": "Club_SearchClubs",
         "requestBody": {
           "content": {
@@ -5469,6 +5535,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Get managed clubs",
         "operationId": "Club_GetManagedClubs",
         "responses": {
           "200": {
@@ -5544,6 +5611,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Get club staff",
         "operationId": "Club_GetClubStaff",
         "parameters": [
           {
@@ -5629,6 +5697,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Add manager",
         "operationId": "Club_AddManager",
         "parameters": [
           {
@@ -5734,6 +5803,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Add volunteer",
         "operationId": "Club_AddVolunteer",
         "parameters": [
           {
@@ -5839,6 +5909,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Remove staff",
         "operationId": "Club_RemoveStaff",
         "parameters": [
           {
@@ -5932,6 +6003,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Transfer ownership",
         "operationId": "Club_TransferOwnership",
         "parameters": [
           {
@@ -6037,6 +6109,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Get club versions",
         "operationId": "Club_GetClubVersions",
         "parameters": [
           {
@@ -6136,6 +6209,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Get club version",
         "operationId": "Club_GetClubVersion",
         "parameters": [
           {
@@ -6229,6 +6303,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Rollback club version",
         "operationId": "Club_RollbackClubVersion",
         "parameters": [
           {
@@ -6322,6 +6397,7 @@
         "tags": [
           "admin"
         ],
+        "summary": "Reindex clubs",
         "operationId": "AdminClubs_ReindexClubs",
         "responses": {
           "200": {
@@ -6397,6 +6473,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Create review",
         "operationId": "ClubReview_CreateReview",
         "parameters": [
           {
@@ -6500,6 +6577,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Get reviews by club",
         "operationId": "ClubReview_GetReviewsByClub",
         "parameters": [
           {
@@ -6574,6 +6652,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Update review",
         "operationId": "ClubReview_UpdateReview",
         "parameters": [
           {
@@ -6685,6 +6764,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Delete review",
         "operationId": "ClubReview_DeleteReview",
         "parameters": [
           {
@@ -6778,6 +6858,7 @@
         "tags": [
           "users"
         ],
+        "summary": "Get reviews by user",
         "operationId": "UserReview_GetReviewsByUser",
         "parameters": [
           {
@@ -6877,6 +6958,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Create post",
         "operationId": "ClubPost_CreatePost",
         "parameters": [
           {
@@ -6980,6 +7062,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Get posts",
         "operationId": "ClubPost_GetPosts",
         "parameters": [
           {
@@ -7068,6 +7151,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Get post",
         "operationId": "ClubPost_GetPost",
         "parameters": [
           {
@@ -7134,6 +7218,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Update post",
         "operationId": "ClubPost_UpdatePost",
         "parameters": [
           {
@@ -7245,6 +7330,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Delete post",
         "operationId": "ClubPost_DeletePost",
         "parameters": [
           {
@@ -7338,6 +7424,7 @@
         "tags": [
           "admin"
         ],
+        "summary": "Reindex posts",
         "operationId": "AdminClubPost_ReindexPosts",
         "responses": {
           "200": {
@@ -7413,6 +7500,7 @@
         "tags": [
           "admin"
         ],
+        "summary": "Get all posts",
         "operationId": "AdminClubPost_GetAllPosts",
         "parameters": [
           {
@@ -7518,6 +7606,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Create comment",
         "operationId": "PostComment_CreateComment",
         "parameters": [
           {
@@ -7629,6 +7718,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Get comments",
         "operationId": "PostComment_GetComments",
         "parameters": [
           {
@@ -7711,6 +7801,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Stream comments",
         "operationId": "PostComment_StreamComments",
         "parameters": [
           {
@@ -7762,6 +7853,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Update comment",
         "operationId": "PostComment_UpdateComment",
         "parameters": [
           {
@@ -7881,6 +7973,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Delete comment",
         "operationId": "PostComment_DeleteComment",
         "parameters": [
           {
@@ -7982,6 +8075,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Get club members",
         "operationId": "ClubFollow_GetClubMembers",
         "parameters": [
           {
@@ -8056,6 +8150,7 @@
         "tags": [
           "clubs"
         ],
+        "summary": "Check membership",
         "operationId": "ClubFollow_CheckMembership",
         "parameters": [
           {
@@ -8141,6 +8236,7 @@
         "tags": [
           "users"
         ],
+        "summary": "Get clubs followed by user",
         "operationId": "UserFollow_GetClubsFollowedByUser",
         "parameters": [
           {
@@ -8240,6 +8336,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Local authenticate",
         "operationId": "Auth_LocalAuthenticate",
         "parameters": [
           {
@@ -8321,6 +8418,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Local signup",
         "operationId": "Auth_LocalSignup",
         "parameters": [
           {
@@ -8402,6 +8500,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Local verify OTP",
         "operationId": "Auth_LocalVerifyOtp",
         "parameters": [
           {
@@ -8483,6 +8582,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Local verify",
         "operationId": "Auth_LocalVerify",
         "parameters": [
           {
@@ -8552,6 +8652,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Local verify",
         "operationId": "Auth_LocalVerify",
         "parameters": [
           {
@@ -8636,6 +8737,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Google authenticate",
         "operationId": "Auth_GoogleAuthenticate",
         "parameters": [
           {
@@ -8717,6 +8819,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Google code authenticate",
         "operationId": "Auth_GoogleCodeAuthenticate",
         "parameters": [
           {
@@ -8798,6 +8901,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Microsoft authenticate",
         "operationId": "Auth_MicrosoftAuthenticate",
         "parameters": [
           {
@@ -8879,6 +8983,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Me",
         "operationId": "Auth_Me",
         "responses": {
           "200": {
@@ -8954,6 +9059,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Refresh",
         "description": "Browser-cookie session refresh. Requires the CSRF header plus the refresh cookies issued during login.",
         "operationId": "Auth_Refresh",
         "parameters": [
@@ -9035,6 +9141,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Complete o auth signup",
         "operationId": "Auth_CompleteOAuthSignup",
         "parameters": [
           {
@@ -9116,6 +9223,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "API refresh",
         "description": "API-token session refresh. Supply refresh and session-binding tokens through headers or the request body.",
         "operationId": "Auth_ApiRefresh",
         "parameters": [
@@ -9204,6 +9312,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "CSRF",
         "description": "Returns the CSRF token used by protected browser-oriented auth POST endpoints.",
         "operationId": "Auth_Csrf",
         "responses": {
@@ -9255,6 +9364,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Logout",
         "operationId": "Auth_Logout",
         "parameters": [
           {
@@ -9335,6 +9445,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "API logout",
         "operationId": "Auth_ApiLogout",
         "parameters": [
           {
@@ -9422,6 +9533,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Verify device",
         "operationId": "Auth_VerifyDevice",
         "parameters": [
           {
@@ -9491,6 +9603,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Verify device",
         "operationId": "Auth_VerifyDevice",
         "parameters": [
           {
@@ -9575,6 +9688,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Forgot password",
         "operationId": "Auth_ForgotPassword",
         "parameters": [
           {
@@ -9656,6 +9770,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Change password",
         "operationId": "Auth_ChangePassword",
         "parameters": [
           {
