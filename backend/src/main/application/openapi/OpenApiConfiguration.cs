@@ -19,6 +19,32 @@ namespace backend.main.application.openapi
     public static class OpenApiConfiguration
     {
         private const string BearerSchemeName = "bearerAuth";
+        private static readonly Dictionary<string, string> AcronymDisplayNames =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["api"] = "API",
+                ["csrf"] = "CSRF",
+                ["id"] = "ID",
+                ["jwt"] = "JWT",
+                ["oauth"] = "OAuth",
+                ["otp"] = "OTP",
+                ["url"] = "URL",
+            };
+        private static readonly IReadOnlyDictionary<string, string> ApiResponsePropertyDescriptions =
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["success"] = "Indicates whether the request succeeded.",
+                ["message"] = "Human-readable message summarizing the outcome.",
+                ["data"] = "Endpoint-specific response payload. `null` on error responses.",
+                ["error"] = "Structured error details. Present only when `success` is `false`.",
+                ["meta"] = "Optional metadata such as pagination or response source details.",
+            };
+        private static readonly IReadOnlyDictionary<string, string> ApiErrorPropertyDescriptions =
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["code"] = "Machine-readable error code.",
+                ["details"] = "Additional endpoint-specific error details.",
+            };
         private static readonly HashSet<string> CsrfProtectedAuthPostPaths =
         [
             "/api/auth/login",
@@ -157,7 +183,10 @@ namespace backend.main.application.openapi
                 Description =
                     "Generated API reference for the EventXperience backend. Responses use the shared ApiResponse envelope unless noted otherwise."
             };
-            document.Servers = [];
+            var serverUrl = Environment.GetEnvironmentVariable("OPENAPI_SERVER_URL");
+            document.Servers = string.IsNullOrWhiteSpace(serverUrl)
+                ? []
+                : [new OpenApiServer { Url = serverUrl }];
 
             document.Components ??= new OpenApiComponents();
             document.Components.SecuritySchemes ??= new Dictionary<string, OpenApiSecurityScheme>();
@@ -204,7 +233,59 @@ namespace backend.main.application.openapi
                 }
             ];
 
+            ApplyEnvelopeSchemaDescriptions(document);
             return Task.CompletedTask;
+        }
+
+        private static void ApplyEnvelopeSchemaDescriptions(OpenApiDocument document)
+        {
+            if (document.Components?.Schemas is null)
+                return;
+
+            foreach (var (name, schema) in document.Components.Schemas)
+            {
+                if (name.StartsWith("ApiResponseOf", StringComparison.Ordinal))
+                {
+                    schema.Description = "Standard JSON envelope returned by all API endpoints.";
+                    ApplyPropertyDescriptions(schema, ApiResponsePropertyDescriptions);
+                }
+                else if (string.Equals(name, "ApiError", StringComparison.Ordinal))
+                {
+                    schema.Description =
+                        "Structured error payload present in the `error` field when `success` is `false`.";
+                    ApplyPropertyDescriptions(schema, ApiErrorPropertyDescriptions);
+                }
+            }
+        }
+
+        private static void ApplyPropertyDescriptions(
+            OpenApiSchema schema,
+            IReadOnlyDictionary<string, string> descriptions
+        )
+        {
+            if (schema.Properties is null)
+                return;
+
+            foreach (var (propName, description) in descriptions)
+            {
+                if (!schema.Properties.TryGetValue(propName, out var propSchema))
+                    continue;
+
+                // In OpenAPI 3.0, $ref objects may not carry sibling keywords.
+                // Wrap in allOf to attach a description alongside the reference.
+                if (propSchema.Reference is not null)
+                {
+                    schema.Properties[propName] = new OpenApiSchema
+                    {
+                        AllOf = [new OpenApiSchema { Reference = propSchema.Reference }],
+                        Description = description
+                    };
+                }
+                else
+                {
+                    propSchema.Description = description;
+                }
+            }
         }
 
         private static Task ApplyOperationTransformAsync(
@@ -223,7 +304,7 @@ namespace backend.main.application.openapi
             ApplyCsrfDocumentation(operation, relativePath);
             ApplySpecialHeaders(operation, relativePath);
             ApplySpecialResponses(operation, relativePath);
-            ApplyOperationDescriptions(operation, relativePath);
+            ApplyOperationMetadata(operation, context, relativePath);
 
             return Task.CompletedTask;
         }
@@ -246,7 +327,8 @@ namespace backend.main.application.openapi
                 ? actionName
                 : context.Description.HttpMethod ?? "operation";
 
-            operation.OperationId = $"{SanitizeToken(controller)}_{SanitizeToken(action)}";
+            var httpMethod = context.Description.HttpMethod?.ToLowerInvariant() ?? "get";
+            operation.OperationId = $"{SanitizeToken(controller)}_{SanitizeToken(action)}_{httpMethod}";
         }
 
         private static void ApplyTags(
@@ -431,27 +513,26 @@ namespace backend.main.application.openapi
             }
         }
 
-        private static void ApplyOperationDescriptions(OpenApiOperation operation, string relativePath)
+        private static void ApplyOperationMetadata(
+            OpenApiOperation operation,
+            OpenApiOperationTransformerContext context,
+            string relativePath
+        )
         {
-            if (string.Equals(relativePath, "/api/auth/csrf", StringComparison.OrdinalIgnoreCase))
+            var httpMethod = context.Description.HttpMethod?.ToUpperInvariant() ?? "GET";
+            var key = $"{httpMethod} {relativePath}";
+
+            if (OpenApiDescriptions.Operations.TryGetValue(key, out var meta))
             {
-                operation.Description =
-                    "Returns the CSRF token used by protected browser-oriented auth POST endpoints.";
+                operation.Summary = meta.Summary;
+                if (meta.Description is not null)
+                    operation.Description = meta.Description;
             }
-            else if (string.Equals(relativePath, "/api/auth/refresh", StringComparison.OrdinalIgnoreCase))
+            else
             {
-                operation.Description =
-                    "Browser-cookie session refresh. Requires the CSRF header plus the refresh cookies issued during login.";
-            }
-            else if (string.Equals(relativePath, "/api/auth/api/refresh", StringComparison.OrdinalIgnoreCase))
-            {
-                operation.Description =
-                    "API-token session refresh. Supply refresh and session-binding tokens through headers or the request body.";
-            }
-            else if (string.Equals(relativePath, "/api/payments/webhook", StringComparison.OrdinalIgnoreCase))
-            {
-                operation.Description =
-                    "Consumes Stripe webhook events using the raw request payload and the `Stripe-Signature` header.";
+                var action = context.Description.ActionDescriptor.RouteValues.TryGetValue(
+                    "action", out var actionName) ? actionName : null;
+                operation.Summary = DeriveOperationSummary(action);
             }
         }
 
@@ -560,6 +641,29 @@ namespace backend.main.application.openapi
             }
 
             return "/" + relativePath.TrimStart('/');
+        }
+
+        private static string DeriveOperationSummary(string? actionName)
+        {
+            if (string.IsNullOrWhiteSpace(actionName))
+                return string.Empty;
+
+            var spaced = System.Text.RegularExpressions.Regex.Replace(
+                actionName,
+                @"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])",
+                " "
+            );
+
+            var words = spaced.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return string.Join(" ", words.Select((word, index) =>
+            {
+                var lower = word.ToLowerInvariant();
+                if (AcronymDisplayNames.TryGetValue(lower, out var display))
+                    return display;
+                return index == 0
+                    ? char.ToUpperInvariant(word[0]) + word[1..].ToLowerInvariant()
+                    : lower;
+            }));
         }
 
         private static string SanitizeToken(string? value)

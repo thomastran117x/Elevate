@@ -1,6 +1,6 @@
 param(
     [string]$OutputPath = "backend/openapi.yaml",
-    [int]$Port = 8091
+    [int]$Port = 8090
 )
 
 $ErrorActionPreference = "Stop"
