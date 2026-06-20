@@ -6,6 +6,7 @@ import { finalize } from 'rxjs/operators';
 import { environment } from '@environments/environment';
 import { AuthService, SignupRole } from '../../services/auth.service';
 import { RecaptchaV3Service } from '../../services/recaptcha.service';
+import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 
 @Component({
@@ -72,7 +73,7 @@ export class SignupComponent {
               'Verification email sent. Check your inbox to finish creating your account.';
           },
           error: (err) => {
-            this.error = err?.error?.message || 'Signup failed.';
+            this.error = getApiClientMessage(err, 'Signup failed.');
           },
         });
     } catch (err: any) {

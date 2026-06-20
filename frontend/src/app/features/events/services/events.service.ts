@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpParams } from '@angular/common/http';
 import { map, Observable } from 'rxjs';
 import { environment } from '@environments/environment';
 import {
@@ -17,6 +17,7 @@ import {
   EventStatus,
 } from '../models/event.types';
 import { ApiEnvelope } from '../../../core/api/models/api-envelope.model';
+import { ApiClient } from '../../../core/api/services/api-client.service';
 
 type EventItemPayload = EventItem & {
   Id?: number;
@@ -83,7 +84,7 @@ type EventApiPayload = ApiEnvelope<EventItemPayload> & {
 export class EventsService {
   private readonly base = `${environment.backendUrl}/events`;
 
-  constructor(private http: HttpClient) {}
+  constructor(private api: ApiClient) {}
 
   getEvents(params: EventSearchParams): Observable<EventsApiResponse> {
     let httpParams = new HttpParams();
@@ -101,13 +102,13 @@ export class EventsService {
     if (params.page) httpParams = httpParams.set('page', String(params.page));
     if (params.pageSize) httpParams = httpParams.set('pageSize', String(params.pageSize));
 
-    return this.http
+    return this.api
       .get<EventsApiPayload>(this.base, { params: httpParams })
       .pipe(map((response) => this.normalizeResponse(response)));
   }
 
   getEvent(eventId: number): Observable<EventApiResponse> {
-    return this.http
+    return this.api
       .get<EventApiPayload>(`${this.base}/${eventId}`)
       .pipe(map((response) => this.normalizeEventResponse(response)));
   }
@@ -121,7 +122,7 @@ export class EventsService {
     if (params.page) httpParams = httpParams.set('page', String(params.page));
     if (params.pageSize) httpParams = httpParams.set('pageSize', String(params.pageSize));
 
-    return this.http
+    return this.api
       .get<EventsApiPayload>(`${this.base}/clubs/${clubId}`, { params: httpParams })
       .pipe(map((response) => this.normalizeResponse(response)));
   }

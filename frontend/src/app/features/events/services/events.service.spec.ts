@@ -3,6 +3,11 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideHttpClient } from '@angular/common/http';
 
 import { EventsService } from './events.service';
+import {
+  ApiClientClientError,
+  ApiClientServerError,
+  GENERIC_API_ERROR_MESSAGE,
+} from '../../../core/api/models/api-client-error.model';
 
 describe('EventsService', () => {
   let service: EventsService;
@@ -307,5 +312,51 @@ describe('EventsService', () => {
         location: 'Ottawa',
       },
     });
+  });
+  it('surfaces 4xx failures as typed client errors', () => {
+    let thrown: unknown;
+
+    service.getEvent(42).subscribe({
+      error: (error) => {
+        thrown = error;
+      },
+    });
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/events/42'));
+    request.flush(
+      {
+        success: false,
+        message: 'Event not found.',
+        error: { code: 'RESOURCE_NOT_FOUND' },
+      },
+      { status: 404, statusText: 'Not Found' },
+    );
+
+    expect(thrown).toEqual(jasmine.any(ApiClientClientError));
+    expect((thrown as ApiClientClientError).message).toBe('Event not found.');
+    expect((thrown as ApiClientClientError).code).toBe('RESOURCE_NOT_FOUND');
+  });
+
+  it('collapses 5xx failures to the generic adapter error', () => {
+    let thrown: unknown;
+
+    service.getEvent(42).subscribe({
+      error: (error) => {
+        thrown = error;
+      },
+    });
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/events/42'));
+    request.flush(
+      {
+        success: false,
+        message: 'Sensitive backend failure.',
+        error: { code: 'SERVER_FAILURE' },
+      },
+      { status: 500, statusText: 'Server Error' },
+    );
+
+    expect(thrown).toEqual(jasmine.any(ApiClientServerError));
+    expect((thrown as ApiClientServerError).message).toBe(GENERIC_API_ERROR_MESSAGE);
   });
 });

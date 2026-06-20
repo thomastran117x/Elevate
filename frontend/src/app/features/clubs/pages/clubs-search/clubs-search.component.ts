@@ -14,6 +14,10 @@ import {
   ClubType,
 } from '../../models/club.types';
 import { extractEnvelopeData } from '../../../../core/api/models/api-envelope.model';
+import {
+  getApiClientMessage,
+  isApiClientClientError,
+} from '../../../../core/api/models/api-client-error.model';
 
 type SearchPageState = {
   searchQuery: string;
@@ -237,10 +241,9 @@ export class ClubsSearchComponent implements OnInit, OnDestroy {
         error: (response) => {
           if (requestVersion !== this.requestVersion) return;
           this.resetResults();
-          this.error =
-            response?.error?.message ||
-            response?.error?.Message ||
-            'Failed to load clubs. Please try again.';
+          this.error = isApiClientClientError(response)
+            ? response.message
+            : getApiClientMessage(response, 'Failed to load clubs. Please try again.');
           this.loading = false;
         },
       });

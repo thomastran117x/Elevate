@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { map, Observable } from 'rxjs';
 import { environment } from '@environments/environment';
 import { ApiEnvelope } from '../../../core/api/models/api-envelope.model';
+import { ApiClient } from '../../../core/api/services/api-client.service';
 
 export interface RegistrationDetails {
   notes?: string;
@@ -30,10 +30,10 @@ type CheckPayload = {
 export class EventRegistrationService {
   private readonly base = `${environment.backendUrl}/events`;
 
-  constructor(private http: HttpClient) {}
+  constructor(private api: ApiClient) {}
 
   register(eventId: number, details?: RegistrationDetails): Observable<void> {
-    return this.http
+    return this.api
       .post<
         ApiEnvelope<unknown>
       >(`${this.base}/${eventId}/register`, details ?? {}, { withCredentials: true })
@@ -41,7 +41,7 @@ export class EventRegistrationService {
   }
 
   unregister(eventId: number): Observable<void> {
-    return this.http
+    return this.api
       .delete<ApiEnvelope<unknown>>(`${this.base}/${eventId}/register`, {
         withCredentials: true,
       })
@@ -49,7 +49,7 @@ export class EventRegistrationService {
   }
 
   updateRegistration(eventId: number, details: RegistrationDetails): Observable<void> {
-    return this.http
+    return this.api
       .patch<
         ApiEnvelope<unknown>
       >(`${this.base}/${eventId}/register`, details, { withCredentials: true })
@@ -57,7 +57,7 @@ export class EventRegistrationService {
   }
 
   checkRegistration(eventId: number): Observable<MyRegistrationStatus> {
-    return this.http
+    return this.api
       .get<ApiEnvelope<CheckPayload>>(`${this.base}/${eventId}/registrations/me`, {
         withCredentials: true,
       })

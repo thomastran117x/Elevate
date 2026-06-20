@@ -6,6 +6,7 @@ import { Store } from '@ngrx/store';
 import { Subject, take, takeUntil } from 'rxjs';
 
 import { extractEnvelopeData } from '../../../../core/api/models/api-envelope.model';
+import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { UserState } from '../../../../core/stores/user.reducer';
 import { selectUser } from '../../../../core/stores/user.selectors';
 import { EventItem, CATEGORY_STYLES } from '../../models/event.types';
@@ -201,8 +202,7 @@ export class EventDetailComponent implements OnInit, OnDestroy {
         },
         error: (response) => {
           this.registrationLoading = false;
-          this.registrationError =
-            response?.error?.message || response?.error?.Message || 'Registration failed.';
+          this.registrationError = getApiClientMessage(response, 'Registration failed.');
         },
       });
   }
@@ -229,10 +229,10 @@ export class EventDetailComponent implements OnInit, OnDestroy {
         },
         error: (response) => {
           this.registrationLoading = false;
-          this.registrationError =
-            response?.error?.message ||
-            response?.error?.Message ||
-            'Failed to update registration details.';
+          this.registrationError = getApiClientMessage(
+            response,
+            'Failed to update registration details.',
+          );
         },
       });
   }
@@ -259,8 +259,7 @@ export class EventDetailComponent implements OnInit, OnDestroy {
         },
         error: (response) => {
           this.registrationLoading = false;
-          this.registrationError =
-            response?.error?.message || response?.error?.Message || 'Unregistration failed.';
+          this.registrationError = getApiClientMessage(response, 'Unregistration failed.');
         },
       });
   }
@@ -337,8 +336,7 @@ export class EventDetailComponent implements OnInit, OnDestroy {
 
           this.event = null;
           this.loading = false;
-          this.error =
-            response?.error?.message || response?.error?.Message || 'Failed to load the event.';
+          this.error = getApiClientMessage(response, 'Failed to load the event.');
         },
       });
   }

@@ -1,10 +1,17 @@
 import { ActivatedRoute, convertToParamMap, ParamMap, Router } from '@angular/router';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BehaviorSubject, of, throwError } from 'rxjs';
+import { Store } from '@ngrx/store';
 
 import { EventDetailComponent } from './event-detail.component';
 import { EventsService } from '../../services/events.service';
 import { EventApiResponse } from '../../models/event.types';
+import { EventRegistrationService } from '../../services/event-registration.service';
+import {
+  ApiClientClientError,
+  ApiClientServerError,
+  GENERIC_API_ERROR_MESSAGE,
+} from '../../../../core/api/models/api-client-error.model';
 
 class ActivatedRouteStub {
   private readonly paramSubject = new BehaviorSubject<ParamMap>(
@@ -35,6 +42,7 @@ describe('EventDetailComponent', () => {
   let component: EventDetailComponent;
   let route: ActivatedRouteStub;
   let eventsService: jasmine.SpyObj<EventsService>;
+  let registrationService: jasmine.SpyObj<EventRegistrationService>;
   let router: jasmine.SpyObj<Router>;
 
   const response: EventApiResponse = {
@@ -49,8 +57,8 @@ describe('EventDetailComponent', () => {
       isPrivate: false,
       maxParticipants: 120,
       registerCost: 0,
-      startTime: '2026-05-20T18:00:00Z',
-      endTime: '2026-05-20T21:00:00Z',
+      startTime: '2026-12-20T18:00:00Z',
+      endTime: '2026-12-20T21:00:00Z',
       clubId: 7,
       createdAt: '2026-05-01T12:00:00Z',
       lifecycleState: 'Published',
@@ -87,16 +95,25 @@ describe('EventDetailComponent', () => {
   beforeEach(async () => {
     route = new ActivatedRouteStub();
     eventsService = jasmine.createSpyObj<EventsService>('EventsService', ['getEvent']);
+    registrationService = jasmine.createSpyObj<EventRegistrationService>(
+      'EventRegistrationService',
+      ['register', 'updateRegistration', 'unregister', 'checkRegistration'],
+    );
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
     router.navigate.and.resolveTo(true);
     eventsService.getEvent.and.returnValue(of(response));
+    registrationService.checkRegistration.and.returnValue(
+      of({ isRegistered: false, details: null }),
+    );
 
     await TestBed.configureTestingModule({
       imports: [EventDetailComponent],
       providers: [
         { provide: ActivatedRoute, useValue: route },
         { provide: EventsService, useValue: eventsService },
+        { provide: EventRegistrationService, useValue: registrationService },
         { provide: Router, useValue: router },
+        { provide: Store, useValue: { select: () => of(null) } },
       ],
     }).compileComponents();
   });
@@ -137,17 +154,27 @@ describe('EventDetailComponent', () => {
     expect(component.loading).toBeFalse();
   });
 
-  it('shows an error when the request fails', () => {
+  it('surfaces 4xx event fetch failures from the adapter', () => {
     eventsService.getEvent.and.returnValue(
-      throwError(() => ({
-        error: { message: 'Not found.' },
-      })),
+      throwError(() => new ApiClientClientError('Not found.', 404, 'RESOURCE_NOT_FOUND')),
     );
 
     createComponent();
 
     expect(component.event).toBeNull();
     expect(component.error).toBe('Not found.');
+    expect(component.loading).toBeFalse();
+  });
+
+  it('shows the generic adapter message for 5xx event fetch failures', () => {
+    eventsService.getEvent.and.returnValue(
+      throwError(() => new ApiClientServerError(GENERIC_API_ERROR_MESSAGE, 500)),
+    );
+
+    createComponent();
+
+    expect(component.event).toBeNull();
+    expect(component.error).toBe(GENERIC_API_ERROR_MESSAGE);
     expect(component.loading).toBeFalse();
   });
 });

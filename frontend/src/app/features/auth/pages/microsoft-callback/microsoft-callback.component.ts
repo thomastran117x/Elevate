@@ -7,6 +7,7 @@ import {
   OAuthAuthResponse,
 } from '../../services/auth.service';
 import { environment } from '../../../../../environments/environment';
+import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 
@@ -98,13 +99,13 @@ export class MicrosoftCallbackComponent implements OnInit {
           } catch (err: any) {
             console.error(err);
             this.status.set('error');
-            this.message.set(err?.error?.message || err?.message || 'Sign-in failed.');
+            this.message.set(getApiClientMessage(err, 'Sign-in failed.'));
           }
         },
         error: (err) => {
           console.error(err);
           this.status.set('error');
-          this.message.set(err?.error?.message || 'Sign-in failed.');
+          this.message.set(getApiClientMessage(err, 'Sign-in failed.'));
         },
       });
     } catch (err: any) {

@@ -1,9 +1,9 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { from, map, switchMap } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { ApiEnvelope, requireEnvelopeData } from '../../../core/api/models/api-envelope.model';
+import { ApiClient } from '../../../core/api/services/api-client.service';
 import { AuthTokenService } from '../../../core/api/services/auth-token.service';
 import {
   AuthenticatedSessionResponse,
@@ -64,7 +64,7 @@ export class AuthService {
   private readonly baseUrl = `${environment.backendUrl}/auth`;
 
   constructor(
-    private http: HttpClient,
+    private api: ApiClient,
     private authToken: AuthTokenService,
   ) {}
 
@@ -147,7 +147,7 @@ export class AuthService {
   me(): Observable<ApiEnvelope<CurrentUserResponse>> {
     return from(this.authToken.ensureCsrfToken()).pipe(
       switchMap(() =>
-        this.http.get<ApiEnvelope<CurrentUserResponse>>(`${this.baseUrl}/me`, {
+        this.api.get<ApiEnvelope<CurrentUserResponse>>(`${this.baseUrl}/me`, {
           withCredentials: true,
         }),
       ),
@@ -185,7 +185,7 @@ export class AuthService {
   private postWithCsrf<T>(url: string, body: unknown): Observable<T> {
     return from(this.authToken.ensureCsrfToken()).pipe(
       switchMap(() => {
-        return this.http.post<T>(url, body, {
+        return this.api.post<T>(url, body, {
           withCredentials: true,
         });
       }),

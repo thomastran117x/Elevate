@@ -8,6 +8,7 @@ import { Club, CLUB_TYPE_STYLES } from '../../models/club.types';
 import { ClubPostsService } from '../../services/club-posts.service';
 import { ClubPost, POST_TYPE_STYLES } from '../../models/club-post.types';
 import { EventsService } from '../../../events/services/events.service';
+import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { EventItem } from '../../../events/models/event.types';
 
 @Component({
@@ -128,7 +129,7 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
           if (!this.club) this.error = response.message || 'Club not found.';
         },
         error: (err) => {
-          this.error = err?.error?.message || err?.error?.Message || 'Failed to load club.';
+          this.error = getApiClientMessage(err, 'Failed to load club.');
           this.loading = false;
         },
       });
