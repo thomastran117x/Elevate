@@ -123,27 +123,42 @@ public class OpenApiConfigurationTests
     {
         var verifyOperation = new OpenApiOperation();
         var deviceVerifyOperation = new OpenApiOperation();
-        var csrfOperation = new OpenApiOperation();
-        var refreshOperation = new OpenApiOperation();
-        var apiRefreshOperation = new OpenApiOperation();
-        var webhookOperation = new OpenApiOperation();
-        var defaultOperation = new OpenApiOperation();
 
         InvokeStatic("ApplySpecialResponses", verifyOperation, "/api/auth/verify");
         InvokeStatic("ApplySpecialResponses", deviceVerifyOperation, "/api/auth/device/verify");
-        InvokeStatic("ApplyOperationDescriptions", csrfOperation, "/api/auth/csrf");
-        InvokeStatic("ApplyOperationDescriptions", refreshOperation, "/api/auth/refresh");
-        InvokeStatic("ApplyOperationDescriptions", apiRefreshOperation, "/api/auth/api/refresh");
-        InvokeStatic("ApplyOperationDescriptions", webhookOperation, "/api/payments/webhook");
-        InvokeStatic("ApplyOperationDescriptions", defaultOperation, "/api/events");
 
         verifyOperation.Responses.Should().ContainKey("302");
         deviceVerifyOperation.Responses.Should().ContainKey("302");
-        csrfOperation.Description.Should().Contain("CSRF token");
-        refreshOperation.Description.Should().Contain("Browser-cookie session refresh");
-        apiRefreshOperation.Description.Should().Contain("API-token session refresh");
-        webhookOperation.Description.Should().Contain("Stripe-Signature");
-        defaultOperation.Description.Should().BeNull();
+
+        GetRegisteredDescription("GET /api/auth/csrf").Should().Contain("CSRF token");
+        GetRegisteredDescription("POST /api/auth/refresh").Should().Contain("Browser-cookie session refresh");
+        GetRegisteredDescription("POST /api/auth/api/refresh").Should().Contain("API-token session refresh");
+        GetRegisteredDescription("POST /api/payments/webhook").Should().Contain("Stripe-Signature");
+        GetRegisteredDescription("GET /api/events").Should().BeNull();
+    }
+
+    private static string? GetRegisteredDescription(string operationKey)
+    {
+        var descriptionsType = typeof(OpenApiConfiguration).Assembly
+            .GetType("backend.main.application.openapi.OpenApiDescriptions")
+            ?? throw new InvalidOperationException("OpenApiDescriptions type not found.");
+
+        var field = descriptionsType.GetField(
+            "Operations",
+            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Operations field not found.");
+
+        var dictionary = field.GetValue(null)
+            ?? throw new InvalidOperationException("Operations dictionary is null.");
+
+        var tryGetValue = dictionary.GetType().GetMethod("TryGetValue")!;
+        var args = new object?[] { operationKey, null };
+        var found = (bool)tryGetValue.Invoke(dictionary, args)!;
+
+        if (!found)
+            return null;
+
+        return args[1]!.GetType().GetProperty("Description")!.GetValue(args[1]) as string;
     }
 
     [Fact]

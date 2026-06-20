@@ -50,11 +50,11 @@ namespace backend.main.application.openapi
                 ),
                 ["POST /api/auth/refresh"] = new(
                     "Refresh the browser session",
-                    "Rotates the browser-cookie session. Requires the CSRF header and the refresh cookies issued at sign-in."
+                    "Browser-cookie session refresh. Requires the CSRF header and the refresh cookies issued at sign-in."
                 ),
                 ["POST /api/auth/api/refresh"] = new(
                     "Refresh an API-token session",
-                    "Rotates an API-token session. Supply the refresh token and session-binding token via request headers or the request body."
+                    "API-token session refresh. Supply the refresh token and session-binding token via request headers or the request body."
                 ),
                 ["POST /api/auth/logout"] = new("Sign out of the browser session"),
                 ["POST /api/auth/api/logout"] = new("Sign out of an API-token session"),
