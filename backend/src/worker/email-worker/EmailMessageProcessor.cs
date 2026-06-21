@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using backend.main.shared.providers;
 using backend.main.shared.providers.messages;
+using backend.main.shared.providers.messaging;
 using backend.main.shared.utilities.logger;
 
 using Polly;
@@ -36,7 +37,7 @@ public sealed class EmailMessageProcessor
     }
 
     public async Task ProcessAsync(
-        EmailWorkerEnvelope envelope,
+        KafkaMessageEnvelope envelope,
         CancellationToken cancellationToken = default)
     {
         EmailMessage? message = null;

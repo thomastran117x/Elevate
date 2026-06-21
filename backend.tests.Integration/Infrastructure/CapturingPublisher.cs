@@ -32,6 +32,20 @@ public sealed class CapturingPublisher : IPublisher
         }
     }
 
+    public IReadOnlyList<SmsMfaMessage> SmsMessages
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _messages
+                    .Select(entry => entry.Message)
+                    .OfType<SmsMfaMessage>()
+                    .ToArray();
+            }
+        }
+    }
+
     public void Clear()
     {
         lock (_gate)

@@ -3,10 +3,9 @@ using System.Text.Json;
 
 using backend.main.features.auth;
 using backend.main.features.auth.device;
+using backend.main.features.auth.notifications;
 using backend.main.features.auth.token;
 using backend.main.shared.exceptions.app;
-using backend.main.shared.providers;
-using backend.main.shared.providers.messages;
 using backend.main.utilities;
 
 using backend.tests.Unit.Support;
@@ -36,7 +35,7 @@ public class DeviceServiceTests
         repository.Setup(repo => repo.GetDeviceAsync(4, existingDevice.DeviceTokenHash))
             .ReturnsAsync(existingDevice);
 
-        var publisher = new Mock<IPublisher>();
+        var notifications = new Mock<IAuthNotificationService>();
         var cache = new Mock<backend.main.features.cache.ICacheService>();
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers[HttpUtility.TrustedDeviceHeaderName] = trustedDeviceToken;
@@ -44,7 +43,7 @@ public class DeviceServiceTests
         var service = CreateService(
             deviceRepository: repository,
             cacheService: cache,
-            publisher: publisher,
+            authNotificationService: notifications,
             httpContext: httpContext);
 
         await service.EnsureDeviceKnownAsync(4, "known@example.com", TestRequestInfoFactory.Browser());
@@ -53,7 +52,7 @@ public class DeviceServiceTests
             It.Is<Device>(device => device.IpAddress == "127.0.0.1"
                 && device.DeviceType == "Desktop"
                 && device.ClientName == "Chrome")), Times.Once);
-        publisher.Verify(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<EmailMessage>()), Times.Never);
+        notifications.Verify(service => service.SendDeviceVerificationAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         cache.Verify(c => c.SetValueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan?>()), Times.Never);
     }
 
@@ -67,18 +66,15 @@ public class DeviceServiceTests
                 It.IsAny<TimeSpan?>()))
             .ReturnsAsync(true);
 
-        var publisher = new Mock<IPublisher>();
-        var service = CreateService(cacheService: cache, publisher: publisher);
+        var notifications = new Mock<IAuthNotificationService>();
+        var service = CreateService(cacheService: cache, authNotificationService: notifications);
 
         var act = () => service.EnsureDeviceKnownAsync(7, "unknown@example.com", TestRequestInfoFactory.Browser());
 
         await act.Should().ThrowAsync<DeviceVerificationRequiredException>();
-        publisher.Verify(p => p.PublishAsync(
-            "eventxperience-email",
-            It.Is<EmailMessage>(message => message.Type == EmailMessageType.NewDevice
-                && message.Email == "unknown@example.com"
-                && !string.IsNullOrWhiteSpace(message.Token))),
-            Times.Once);
+        notifications.Verify(service => service.SendDeviceVerificationAsync(
+            "unknown@example.com",
+            It.Is<string>(token => !string.IsNullOrWhiteSpace(token))), Times.Once);
     }
 
     [Fact]
@@ -146,14 +142,14 @@ public class DeviceServiceTests
         Mock<IAuthUserRepository>? userRepository = null,
         Mock<ITokenService>? tokenService = null,
         Mock<backend.main.features.cache.ICacheService>? cacheService = null,
-        Mock<IPublisher>? publisher = null,
+        Mock<IAuthNotificationService>? authNotificationService = null,
         HttpContext? httpContext = null)
     {
         deviceRepository ??= new Mock<IDeviceRepository>();
         userRepository ??= new Mock<IAuthUserRepository>();
         tokenService ??= new Mock<ITokenService>();
         cacheService ??= new Mock<backend.main.features.cache.ICacheService>();
-        publisher ??= new Mock<IPublisher>();
+        authNotificationService ??= new Mock<IAuthNotificationService>();
 
         var accessor = new HttpContextAccessor
         {
@@ -165,7 +161,7 @@ public class DeviceServiceTests
             userRepository.Object,
             tokenService.Object,
             cacheService.Object,
-            publisher.Object,
+            authNotificationService.Object,
             TestRequestInfoFactory.Browser(),
             accessor);
     }

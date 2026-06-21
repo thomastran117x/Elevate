@@ -21,9 +21,9 @@ public sealed record EmailWorkerOptions(
 
     public static EmailWorkerOptions FromEnvironment() => new(
         Require(EnvironmentSetting.KafkaBootstrapServers, nameof(EnvironmentSetting.KafkaBootstrapServers)),
-        "eventxperience-email",
-        "email-worker",
-        "eventxperience-email-dlq",
+        Require(EnvironmentSetting.EmailTopic, nameof(EnvironmentSetting.EmailTopic)),
+        Require(EnvironmentSetting.EmailGroupId, nameof(EnvironmentSetting.EmailGroupId)),
+        Require(EnvironmentSetting.EmailDlqTopic, nameof(EnvironmentSetting.EmailDlqTopic)),
         EnvironmentSetting.EmailStatusTopic,
         EnvironmentSetting.SmtpServer,
         EnvironmentSetting.SmtpPort,

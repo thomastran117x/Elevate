@@ -1,6 +1,7 @@
 using backend.main.features.auth;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.device;
+using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
@@ -103,6 +104,7 @@ namespace backend.main.application.bootstrap
             services.AddRepositoryWithProxy<IEventImageRepository, EventImageRepository>();
 
             services.AddSingleton<IPublisher, Publisher>();
+            services.AddScoped<IAuthNotificationService, AuthNotificationService>();
 
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IAuthService, AuthService>();

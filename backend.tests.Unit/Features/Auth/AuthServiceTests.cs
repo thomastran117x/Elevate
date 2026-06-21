@@ -2,13 +2,12 @@ using backend.main.application.security;
 using backend.main.features.auth;
 using backend.main.features.auth.contracts;
 using backend.main.features.auth.device;
+using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
-using backend.main.shared.providers;
-using backend.main.shared.providers.messages;
 using backend.main.shared.requests;
 
 using backend.tests.Unit.Support;
@@ -98,24 +97,21 @@ public class AuthServiceTests
                 }
             });
 
-        var publisher = new Mock<IPublisher>();
+        var notifications = new Mock<IAuthNotificationService>();
         var service = CreateService(
             userRepository: userRepository,
             tokenService: tokenService,
-            publisher: publisher);
+            authNotificationService: notifications);
 
         var result = await service.SignUpAsync("new@example.com", "Password123!", "organizer");
 
         result.Code.Should().Be("123456");
         capturedUser.Should().NotBeNull();
         capturedUser!.Usertype.Should().Be("Organizer");
-        publisher.Verify(p => p.PublishAsync(
-            "eventxperience-email",
-            It.Is<EmailMessage>(message => message.Type == EmailMessageType.VerifyEmail
-                && message.Email == "new@example.com"
-                && message.Token == "verify-link"
-                && message.Code == "123456")),
-            Times.Once);
+        notifications.Verify(service => service.SendSignupVerificationAsync(
+            "new@example.com",
+            "verify-link",
+            "123456"), Times.Once);
     }
 
     [Fact]
@@ -125,16 +121,16 @@ public class AuthServiceTests
         userRepository.Setup(repository => repository.GetAuthByEmailAsync("unknown@example.com"))
             .ReturnsAsync((UserAuthRecord?)null);
 
-        var publisher = new Mock<IPublisher>();
-        var service = CreateService(userRepository: userRepository, publisher: publisher);
+        var notifications = new Mock<IAuthNotificationService>();
+        var service = CreateService(userRepository: userRepository, authNotificationService: notifications);
 
         var challenge = await service.ForgotPasswordAsync("unknown@example.com");
 
         challenge.Challenge.Should().NotBeNullOrWhiteSpace();
         challenge.Code.Should().HaveLength(6);
         challenge.ExpiresAtUtc.Should().BeAfter(DateTime.UtcNow);
-        publisher.Verify(
-            p => p.PublishAsync(It.IsAny<string>(), It.IsAny<EmailMessage>()),
+        notifications.Verify(
+            service => service.SendPasswordResetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
             Times.Never);
     }
 
@@ -323,18 +319,16 @@ public class AuthServiceTests
                 }
             });
 
-        var publisher = new Mock<IPublisher>();
-        var service = CreateService(userRepository: userRepository, tokenService: tokenService, publisher: publisher);
+        var notifications = new Mock<IAuthNotificationService>();
+        var service = CreateService(userRepository: userRepository, tokenService: tokenService, authNotificationService: notifications);
 
         var result = await service.ForgotPasswordAsync("active@example.com");
 
         result.Code.Should().Be("654321");
-        publisher.Verify(p => p.PublishAsync(
-            "eventxperience-email",
-            It.Is<EmailMessage>(message => message.Type == EmailMessageType.ResetPassword
-                && message.Email == "active@example.com"
-                && message.Token == "reset-link")),
-            Times.Once);
+        notifications.Verify(service => service.SendPasswordResetAsync(
+            "active@example.com",
+            "reset-link",
+            "654321"), Times.Once);
     }
 
     [Fact]
@@ -854,14 +848,14 @@ public class AuthServiceTests
         Mock<IAuthUserRepository>? userRepository = null,
         Mock<IOAuthService>? oauthService = null,
         Mock<ITokenService>? tokenService = null,
-        Mock<IPublisher>? publisher = null,
+        Mock<IAuthNotificationService>? authNotificationService = null,
         Mock<IDeviceService>? deviceService = null,
         Mock<ICacheService>? cacheService = null)
     {
         userRepository ??= new Mock<IAuthUserRepository>();
         oauthService ??= new Mock<IOAuthService>();
         tokenService ??= new Mock<ITokenService>();
-        publisher ??= new Mock<IPublisher>();
+        authNotificationService ??= new Mock<IAuthNotificationService>();
         deviceService ??= new Mock<IDeviceService>();
         cacheService ??= new Mock<ICacheService>();
 
@@ -870,7 +864,7 @@ public class AuthServiceTests
             oauthService.Object,
             tokenService.Object,
             cacheService.Object,
-            publisher.Object,
+            authNotificationService.Object,
             deviceService.Object,
             TestRequestInfoFactory.Browser());
     }

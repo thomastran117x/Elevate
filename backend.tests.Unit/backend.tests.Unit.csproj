@@ -29,6 +29,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\backend\backend.csproj" />
+    <ProjectReference Include="..\backend\src\worker\email-worker\email-worker.csproj" />
+    <ProjectReference Include="..\backend\src\worker\sms-worker\sms-worker.csproj" />
   </ItemGroup>
 
   <ItemGroup>

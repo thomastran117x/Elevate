@@ -1,12 +1,11 @@
 using System.Security.Cryptography;
 
+using backend.main.features.auth.notifications;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.app;
 using backend.main.shared.exceptions.http;
-using backend.main.shared.providers;
-using backend.main.shared.providers.messages;
 using backend.main.shared.requests;
 using backend.main.shared.utilities.logger;
 using backend.main.utilities;
@@ -22,7 +21,7 @@ namespace backend.main.features.auth.device
         private readonly IAuthUserRepository _userRepository;
         private readonly ITokenService _tokenService;
         private readonly ICacheService _cacheService;
-        private readonly IPublisher _publisher;
+        private readonly IAuthNotificationService _authNotificationService;
         private readonly ClientRequestInfo _requestInfo;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly TimeSpan PENDING_TTL = TimeSpan.FromMinutes(15);
@@ -32,7 +31,7 @@ namespace backend.main.features.auth.device
             IAuthUserRepository userRepository,
             ITokenService tokenService,
             ICacheService cacheService,
-            IPublisher publisher,
+            IAuthNotificationService authNotificationService,
             ClientRequestInfo requestInfo,
             IHttpContextAccessor httpContextAccessor)
         {
@@ -40,7 +39,7 @@ namespace backend.main.features.auth.device
             _userRepository = userRepository;
             _tokenService = tokenService;
             _cacheService = cacheService;
-            _publisher = publisher;
+            _authNotificationService = authNotificationService;
             _requestInfo = requestInfo;
             _httpContextAccessor = httpContextAccessor;
         }
@@ -106,14 +105,7 @@ namespace backend.main.features.auth.device
                     expiry: PENDING_TTL
                 );
 
-                var message = new EmailMessage
-                {
-                    Type = EmailMessageType.NewDevice,
-                    Email = userEmail,
-                    Token = token
-                };
-
-                await _publisher.PublishAsync("eventxperience-email", message);
+                await _authNotificationService.SendDeviceVerificationAsync(userEmail, token);
 
                 throw new DeviceVerificationRequiredException();
             }

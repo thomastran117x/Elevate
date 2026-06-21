@@ -18,8 +18,6 @@ namespace backend.main.features.events.invitations;
 
 public sealed class EventInvitationService : IEventInvitationService
 {
-    private const string EmailTopic = "eventxperience-email";
-
     private readonly AppDatabaseContext _db;
     private readonly IClubService _clubService;
     private readonly IUserRepository _userRepository;
@@ -749,7 +747,7 @@ public sealed class EventInvitationService : IEventInvitationService
             EventName = eventName
         };
 
-        await _publisher.PublishAsync(EmailTopic, message);
+        await _publisher.PublishAsync(NotificationTopics.Email, message);
     }
 
     private async Task<Events> GetManageablePrivateEventAsync(int eventId, int actorUserId, string actorRole)
