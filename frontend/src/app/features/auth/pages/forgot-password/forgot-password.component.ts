@@ -4,6 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 import { environment } from '@environments/environment';
+import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { AuthService } from '../../services/auth.service';
 import { RecaptchaV3Service } from '../../services/recaptcha.service';
 
@@ -54,7 +55,7 @@ export class ForgotPasswordComponent {
             this.success = 'If that account exists, a reset email has been sent.';
           },
           error: (err) => {
-            this.error = err?.error?.message || 'Unable to start password reset.';
+            this.error = getApiClientMessage(err, 'Unable to start password reset.');
           },
         });
     } catch (err: any) {

@@ -11,6 +11,7 @@ import { MicrosoftButtonComponent } from '../../components/microsoft-button/micr
 import { environment } from '@environments/environment';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import { ActivatedRoute } from '@angular/router';
+import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 
 @Component({
@@ -75,10 +76,10 @@ export class LoginComponent {
               await this.sessionManager.bootstrapSession(res);
               await this.router.navigateByUrl(this.authReturnUrl.consume());
             } catch (err: any) {
-              this.error = err?.error?.message || err?.message || 'Login failed.';
+              this.error = getApiClientMessage(err, 'Login failed.');
             }
           },
-          error: (err) => (this.error = err?.error?.message || 'Login failed.'),
+          error: (err) => (this.error = getApiClientMessage(err, 'Login failed.')),
         });
     } catch (e: any) {
       this.loading = false;

@@ -5,6 +5,11 @@ import { BehaviorSubject, of, throwError } from 'rxjs';
 import { EventsSearchComponent } from './events-search.component';
 import { EventsService } from '../../services/events.service';
 import { EventsApiResponse } from '../../models/event.types';
+import {
+  ApiClientClientError,
+  ApiClientServerError,
+  GENERIC_API_ERROR_MESSAGE,
+} from '../../../../core/api/models/api-client-error.model';
 
 class ActivatedRouteStub {
   private readonly subject = new BehaviorSubject<ParamMap>(convertToParamMap({}));
@@ -159,16 +164,28 @@ describe('EventsSearchComponent', () => {
     expect(eventsService.getEvents).not.toHaveBeenCalled();
   });
 
-  it('shows an error and clears stale results when the request fails', () => {
+  it('surfaces 4xx request failures from the adapter', () => {
     eventsService.getEvents.and.returnValue(
-      throwError(() => ({
-        error: { message: 'Search failed.' },
-      })),
+      throwError(() => new ApiClientClientError('Search failed.', 422, 'VALIDATION_ERROR')),
     );
 
     createComponent();
 
     expect(component.error).toBe('Search failed.');
+    expect(component.events).toEqual([]);
+    expect(component.totalCount).toBe(0);
+    expect(component.totalPages).toBe(0);
+    expect(component.loading).toBeFalse();
+  });
+
+  it('shows the generic adapter message for 5xx failures', () => {
+    eventsService.getEvents.and.returnValue(
+      throwError(() => new ApiClientServerError(GENERIC_API_ERROR_MESSAGE, 500)),
+    );
+
+    createComponent();
+
+    expect(component.error).toBe(GENERIC_API_ERROR_MESSAGE);
     expect(component.events).toEqual([]);
     expect(component.totalCount).toBe(0);
     expect(component.totalPages).toBe(0);

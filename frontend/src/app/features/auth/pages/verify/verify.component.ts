@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { ApiEnvelope, requireEnvelopeData } from '../../../../core/api/models/api-envelope.model';
 import { AuthenticatedSessionResponse } from '../../../../core/models/auth-response.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
@@ -61,13 +62,13 @@ export class VerifyComponent {
         } catch (err: any) {
           this.status.set('error');
           this.message.set(
-            err?.error?.message || err?.message || 'Email verification failed. Please try again.',
+            getApiClientMessage(err, 'Email verification failed. Please try again.'),
           );
         }
       },
       error: (err) => {
         this.status.set('error');
-        this.message.set(err?.error?.message || 'Email verification failed. Please try again.');
+        this.message.set(getApiClientMessage(err, 'Email verification failed. Please try again.'));
       },
     });
   }

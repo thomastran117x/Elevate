@@ -7,6 +7,10 @@ import {
   OAuthAuthResponse,
 } from '../../services/auth.service';
 import { environment } from '../../../../../environments/environment';
+import {
+  getApiClientMessage,
+  getServerErrorMessage,
+} from '../../../../core/api/models/api-client-error.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 
@@ -21,6 +25,8 @@ export class MicrosoftCallbackComponent implements OnInit {
   private static readonly CodeVerifierStorageKey = 'ms_code_verifier';
   private static readonly StateStorageKey = 'ms_oauth_state';
   private static readonly NonceStorageKey = 'ms_oauth_nonce';
+  private static readonly FallbackMessage =
+    'Microsoft sign-in could not be completed. Please try again.';
   private platformId = inject(PLATFORM_ID);
 
   status = signal<'loading' | 'success' | 'error'>('loading');
@@ -54,26 +60,7 @@ export class MicrosoftCallbackComponent implements OnInit {
         throw new Error('Microsoft sign-in could not be validated. Please try again.');
       }
 
-      const tokenUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
-      const data = new URLSearchParams({
-        client_id: environment.msalClientId,
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: `${environment.frontendUrl}/auth/microsoft`,
-        code_verifier: verifier,
-        scope: 'openid profile email offline_access',
-      });
-
-      const tokenResp = await fetch(tokenUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: data.toString(),
-      });
-
-      const tokenData = await tokenResp.json();
-      if (!tokenResp.ok || !tokenData.id_token) {
-        throw new Error('No id_token returned from Microsoft.');
-      }
+      const tokenData = await this.exchangeCodeForIdToken(code, verifier);
 
       sessionStorage.removeItem(MicrosoftCallbackComponent.CodeVerifierStorageKey);
       sessionStorage.removeItem(MicrosoftCallbackComponent.StateStorageKey);
@@ -98,19 +85,19 @@ export class MicrosoftCallbackComponent implements OnInit {
           } catch (err: any) {
             console.error(err);
             this.status.set('error');
-            this.message.set(err?.error?.message || err?.message || 'Sign-in failed.');
+            this.message.set(getApiClientMessage(err, 'Sign-in failed.'));
           }
         },
         error: (err) => {
           console.error(err);
           this.status.set('error');
-          this.message.set(err?.error?.message || 'Sign-in failed.');
+          this.message.set(getApiClientMessage(err, 'Sign-in failed.'));
         },
       });
     } catch (err: any) {
       console.error(err);
       this.status.set('error');
-      this.message.set(err.message || 'Microsoft sign-in failed.');
+      this.message.set(err.message || MicrosoftCallbackComponent.FallbackMessage);
     }
   }
 
@@ -118,5 +105,59 @@ export class MicrosoftCallbackComponent implements OnInit {
     this.status.set('loading');
     this.message.set('Retrying sign-in...');
     this.handleMicrosoftCallback();
+  }
+
+  private async exchangeCodeForIdToken(
+    code: string,
+    verifier: string,
+  ): Promise<{ id_token: string }> {
+    const tokenUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
+    const data = new URLSearchParams({
+      client_id: environment.msalClientId,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: `${environment.frontendUrl}/auth/microsoft`,
+      code_verifier: verifier,
+      scope: 'openid profile email offline_access',
+    });
+
+    let tokenResp: Response;
+    try {
+      tokenResp = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: data.toString(),
+      });
+    } catch {
+      throw new Error(getServerErrorMessage(0));
+    }
+
+    const tokenData = (await this.readJsonPayload(tokenResp)) as { id_token?: string } | null;
+    if (!tokenResp.ok) {
+      throw new Error(
+        tokenResp.status >= 500
+          ? getServerErrorMessage(tokenResp.status)
+          : MicrosoftCallbackComponent.FallbackMessage,
+      );
+    }
+
+    if (!tokenData?.id_token) {
+      throw new Error(MicrosoftCallbackComponent.FallbackMessage);
+    }
+
+    return tokenData as { id_token: string };
+  }
+
+  private async readJsonPayload(response: Response): Promise<unknown> {
+    const text = await response.text();
+    if (!text) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
   }
 }

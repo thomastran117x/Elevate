@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpParams } from '@angular/common/http';
 import { map, Observable } from 'rxjs';
 import { environment } from '@environments/environment';
 import { ApiEnvelope } from '../../../core/api/models/api-envelope.model';
+import { ApiClient } from '../../../core/api/services/api-client.service';
 import {
   Club,
   ClubApiResponse,
@@ -23,7 +24,7 @@ export interface ClubsSearchParams {
 
 @Injectable({ providedIn: 'root' })
 export class ClubsService {
-  constructor(private http: HttpClient) {}
+  constructor(private api: ApiClient) {}
 
   getClubs(params: ClubsSearchParams = {}): Observable<ClubsApiResponse> {
     let httpParams = new HttpParams();
@@ -33,7 +34,7 @@ export class ClubsService {
     if (params.page) httpParams = httpParams.set('page', String(params.page));
     if (params.pageSize) httpParams = httpParams.set('pageSize', String(params.pageSize));
 
-    return this.http
+    return this.api
       .get<ApiEnvelope<unknown>>(`${environment.backendUrl}/clubs`, {
         params: httpParams,
         withCredentials: true,
@@ -55,7 +56,7 @@ export class ClubsService {
   }
 
   getClub(clubId: number): Observable<ClubApiResponse> {
-    return this.http
+    return this.api
       .get<ApiEnvelope<unknown>>(`${environment.backendUrl}/clubs/${clubId}`, {
         withCredentials: true,
       })

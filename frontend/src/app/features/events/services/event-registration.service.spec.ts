@@ -3,6 +3,11 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideHttpClient } from '@angular/common/http';
 
 import { EventRegistrationService, MyRegistrationStatus } from './event-registration.service';
+import {
+  ApiClientClientError,
+  ApiClientServerError,
+  GENERIC_API_ERROR_MESSAGE,
+} from '../../../core/api/models/api-client-error.model';
 
 describe('EventRegistrationService', () => {
   let service: EventRegistrationService;
@@ -119,5 +124,55 @@ describe('EventRegistrationService', () => {
     });
     expect(result?.isRegistered).toBeFalse();
     expect(result?.details).toBeNull();
+  });
+
+  it('surfaces 4xx registration failures as typed client errors', () => {
+    let thrown: unknown;
+
+    service.register(42).subscribe({
+      error: (error) => {
+        thrown = error;
+      },
+    });
+
+    const req = httpMock.expectOne((r) => r.url.includes('/events/42/register'));
+    req.flush(
+      {
+        success: false,
+        message: 'Validation failed.',
+        error: {
+          code: 'VALIDATION_ERROR',
+          details: { notes: ['is required'] },
+        },
+      },
+      { status: 422, statusText: 'Unprocessable Entity' },
+    );
+
+    expect(thrown).toEqual(jasmine.any(ApiClientClientError));
+    expect((thrown as ApiClientClientError).message).toBe('Validation failed.');
+    expect((thrown as ApiClientClientError).code).toBe('VALIDATION_ERROR');
+  });
+
+  it('collapses 5xx registration failures to the generic adapter error', () => {
+    let thrown: unknown;
+
+    service.unregister(42).subscribe({
+      error: (error) => {
+        thrown = error;
+      },
+    });
+
+    const req = httpMock.expectOne((r) => r.url.includes('/events/42/register'));
+    req.flush(
+      {
+        success: false,
+        message: 'Sensitive backend failure.',
+        error: { code: 'SERVER_FAILURE' },
+      },
+      { status: 500, statusText: 'Server Error' },
+    );
+
+    expect(thrown).toEqual(jasmine.any(ApiClientServerError));
+    expect((thrown as ApiClientServerError).message).toBe(GENERIC_API_ERROR_MESSAGE);
   });
 });

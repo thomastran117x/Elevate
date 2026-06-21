@@ -16,6 +16,10 @@ import {
   EventStatus,
 } from '../../models/event.types';
 import { extractEnvelopeData } from '../../../../core/api/models/api-envelope.model';
+import {
+  getApiClientMessage,
+  isApiClientClientError,
+} from '../../../../core/api/models/api-client-error.model';
 
 type SearchPageState = {
   searchQuery: string;
@@ -484,10 +488,9 @@ export class EventsSearchComponent implements OnInit, OnDestroy {
           }
 
           this.resetResults();
-          this.error =
-            response?.error?.message ||
-            response?.error?.Message ||
-            'Failed to load events. Please try again.';
+          this.error = isApiClientClientError(response)
+            ? response.message
+            : getApiClientMessage(response, 'Failed to load events. Please try again.');
           this.loading = false;
         },
       });

@@ -2,6 +2,7 @@ import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Component, inject, PLATFORM_ID, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import { AuthService, PendingOAuthSignupStorageKey, SignupRole } from '../../services/auth.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
@@ -111,16 +112,14 @@ export class OAuthRoleComponent {
         } catch (err: any) {
           this.status.set('error');
           this.message.set(
-            err?.error?.message ||
-              err?.message ||
-              'We could not complete your signup. Please try again.',
+            getApiClientMessage(err, 'We could not complete your signup. Please try again.'),
           );
         }
       },
       error: (err) => {
         this.status.set('error');
         this.message.set(
-          err?.error?.message || 'We could not complete your signup. Please try again.',
+          getApiClientMessage(err, 'We could not complete your signup. Please try again.'),
         );
       },
     });

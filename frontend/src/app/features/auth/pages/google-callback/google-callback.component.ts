@@ -7,6 +7,7 @@ import {
   OAuthAuthResponse,
 } from '../../services/auth.service';
 import { environment } from '../../../../../environments/environment';
+import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 
@@ -86,14 +87,14 @@ export class GoogleCallbackComponent implements OnInit {
               console.error('Google session bootstrap failed:', err);
               this.status.set('error');
               this.message.set(
-                err?.error?.message || err?.message || 'Google sign-in failed. Please try again.',
+                getApiClientMessage(err, 'Google sign-in failed. Please try again.'),
               );
             }
           },
           error: (err) => {
             console.error('Google callback failed:', err);
             this.status.set('error');
-            this.message.set(err?.error?.message || 'Google sign-in failed. Please try again.');
+            this.message.set(getApiClientMessage(err, 'Google sign-in failed. Please try again.'));
           },
         });
     } catch (err) {

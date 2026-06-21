@@ -3,6 +3,7 @@ import { Component } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs/operators';
+import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { AuthService } from '../../services/auth.service';
 
 @Component({
@@ -67,7 +68,7 @@ export class ChangePasswordComponent {
           setTimeout(() => this.router.navigate(['/auth/login']), 1000);
         },
         error: (err) => {
-          this.error = err?.error?.message || 'Unable to update password.';
+          this.error = getApiClientMessage(err, 'Unable to update password.');
         },
       });
   }

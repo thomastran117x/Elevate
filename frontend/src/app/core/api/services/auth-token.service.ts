@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import { ApiEnvelope, extractEnvelopeData } from '../models/api-envelope.model';
+import { ApiClient } from './api-client.service';
 import { environment } from '../../../../environments/environment';
 import { clearUser } from '../../stores/user.actions';
 import { clearSession, updateSession } from '../../stores/session.actions';
@@ -20,7 +20,7 @@ export class AuthTokenService {
   private csrfPromise: Promise<void> | null = null;
 
   constructor(
-    private http: HttpClient,
+    private api: ApiClient,
     private store: Store<{ session: SessionState }>,
   ) {
     this.store.select(selectAccessToken).subscribe((token) => {
@@ -34,7 +34,7 @@ export class AuthTokenService {
     if (!this.csrfPromise) {
       this.csrfPromise = (async () => {
         const res = await firstValueFrom(
-          this.http.get<ApiEnvelope<CsrfResponse> | CsrfResponse>(
+          this.api.get<ApiEnvelope<CsrfResponse> | CsrfResponse>(
             `${environment.backendUrl}/auth/csrf`,
             {
               withCredentials: true,
@@ -55,7 +55,7 @@ export class AuthTokenService {
     await this.ensureCsrfToken();
 
     const res = await firstValueFrom(
-      this.http.post<ApiEnvelope<AuthenticatedSessionResponse> | AuthenticatedSessionResponse>(
+      this.api.post<ApiEnvelope<AuthenticatedSessionResponse> | AuthenticatedSessionResponse>(
         `${environment.backendUrl}/auth/refresh`,
         {},
         {
