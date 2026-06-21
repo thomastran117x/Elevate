@@ -4,7 +4,11 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 
 import { AuthService } from './auth.service';
 import { AuthTokenService } from '../../../core/api/services/auth-token.service';
-import { ApiClientClientError } from '../../../core/api/models/api-client-error.model';
+import {
+  ApiClientClientError,
+  ApiClientServerError,
+  NETWORK_API_ERROR_MESSAGE,
+} from '../../../core/api/models/api-client-error.model';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -114,5 +118,32 @@ describe('AuthService', () => {
     expect(thrown).toEqual(jasmine.any(ApiClientClientError));
     expect((thrown as ApiClientClientError).message).toBe('Validation failed.');
     expect((thrown as ApiClientClientError).code).toBe('VALIDATION_ERROR');
+  }));
+
+  it('propagates normalized csrf bootstrap failures before the request is sent', fakeAsync(() => {
+    let thrown: unknown;
+    authToken.ensureCsrfToken.and.rejectWith(
+      new ApiClientServerError(NETWORK_API_ERROR_MESSAGE, 0),
+    );
+
+    service
+      .login({
+        email: 'user@example.com',
+        password: 'secret123',
+        rememberMe: false,
+        captcha: 'captcha-token',
+      })
+      .subscribe({
+        error: (error) => {
+          thrown = error;
+        },
+      });
+
+    tick();
+
+    httpMock.expectNone((req) => req.url.endsWith('/auth/login'));
+    expect(thrown).toEqual(jasmine.any(ApiClientServerError));
+    expect((thrown as ApiClientServerError).message).toBe(NETWORK_API_ERROR_MESSAGE);
+    expect((thrown as ApiClientServerError).status).toBe(0);
   }));
 });

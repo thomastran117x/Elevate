@@ -1,3 +1,5 @@
+import { HttpErrorResponse } from '@angular/common/http';
+
 export const NETWORK_API_ERROR_MESSAGE =
   "We couldn't reach EventXperience. Check your internet connection and try again.";
 export const TEMPORARY_SERVER_API_ERROR_MESSAGE =
@@ -8,6 +10,11 @@ export const GENERIC_API_ERROR_MESSAGE =
 const TEMPORARY_SERVER_STATUSES = new Set([502, 503, 504]);
 
 type ApiClientErrorKind = 'client' | 'server';
+
+type ApiErrorPayload = {
+  message?: unknown;
+  Message?: unknown;
+};
 
 class ApiClientRequestError extends Error {
   constructor(
@@ -77,9 +84,41 @@ export function getApiClientMessage(error: unknown, fallback: string): string {
     return error.message;
   }
 
+  const rawHttpMessage = getRawHttpErrorMessage(error);
+  if (rawHttpMessage) {
+    return rawHttpMessage;
+  }
+
   if (error instanceof Error && error.message.trim()) {
     return error.message;
   }
 
   return fallback;
+}
+
+function getRawHttpErrorMessage(error: unknown): string | null {
+  if (!(error instanceof HttpErrorResponse)) {
+    return null;
+  }
+
+  const payload = error.error;
+  if (typeof payload === 'string' && payload.trim()) {
+    return payload;
+  }
+
+  if (typeof payload !== 'object' || payload === null) {
+    return null;
+  }
+
+  const message = (payload as ApiErrorPayload).message;
+  if (typeof message === 'string' && message.trim()) {
+    return message;
+  }
+
+  const pascalMessage = (payload as ApiErrorPayload).Message;
+  if (typeof pascalMessage === 'string' && pascalMessage.trim()) {
+    return pascalMessage;
+  }
+
+  return null;
 }
