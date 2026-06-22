@@ -12,6 +12,7 @@ export const FEATURE_KEYS = {
   eventsRegistration: 'events.registration',
   eventsVersioning: 'events.versioning',
   payment: 'payment',
+  profile: 'profile',
   profileAdmin: 'profile.admin',
   search: 'search',
   searchReindex: 'search.reindex',

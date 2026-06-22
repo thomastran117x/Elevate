@@ -94,9 +94,9 @@ namespace backend.main.application.bootstrap
             return services;
         }
 
-        public static IServiceCollection AddSearchInfrastructure(this IServiceCollection services, IConfiguration config)
+        public static IServiceCollection AddSearchInfrastructure(this IServiceCollection services, IConfiguration config, IFeatureFlagEvaluator? featureFlags = null)
         {
-            var featureFlags = BuildFeatureFlagEvaluator(config);
+            featureFlags ??= BuildFeatureFlagEvaluator(config);
 
             if (featureFlags.IsEnabled(FeatureFlagKeys.Search))
             {
@@ -144,7 +144,7 @@ namespace backend.main.application.bootstrap
             services.Configure<ClubVersioningOptions>(config.GetSection("ClubVersioning"));
             services.Configure<EventVersioningOptions>(config.GetSection("EventVersioning"));
             services.AddSingleton(TimeProvider.System);
-            services.AddSearchInfrastructure(config);
+            services.AddSearchInfrastructure(config, featureFlags);
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
             services.AddSingleton<IRepositoryAttributeResolver, RepositoryAttributeResolver>();
             services.AddRepositoryWithProxy<IFollowRepository, FollowRepository>();

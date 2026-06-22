@@ -21,6 +21,7 @@ The supported keys are:
 - `events.registration`
 - `events.versioning`
 - `payment`
+- `profile`
 - `profile.admin`
 - `search`
 - `search.reindex`
@@ -58,6 +59,7 @@ Deployments should use the flat environment variables defined in `.env.example`:
 - `FEATURE_EVENTS_REGISTRATION`
 - `FEATURE_EVENTS_VERSIONING`
 - `FEATURE_PAYMENT`
+- `FEATURE_PROFILE`
 - `FEATURE_PROFILE_ADMIN`
 - `FEATURE_SEARCH`
 - `FEATURE_SEARCH_REINDEX`

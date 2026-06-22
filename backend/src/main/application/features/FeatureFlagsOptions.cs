@@ -13,12 +13,6 @@ public sealed class FeatureFlagsOptions
         var flags = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         var section = configuration.GetSection("FeatureFlags");
 
-        foreach (var child in section.GetChildren())
-        {
-            registry.EnsureKnown(child.Key);
-            flags[registry.Normalize(child.Key)] = ParseBoolean(child.Value, child.Path);
-        }
-
         foreach (var key in registry.Keys)
         {
             var envVarName = registry.ToEnvironmentVariableName(key);
@@ -27,6 +21,12 @@ public sealed class FeatureFlagsOptions
                 continue;
 
             flags[registry.Normalize(key)] = ParseBoolean(envValue, envVarName);
+        }
+
+        foreach (var child in section.GetChildren())
+        {
+            registry.EnsureKnown(child.Key);
+            flags[registry.Normalize(child.Key)] = ParseBoolean(child.Value, child.Path);
         }
 
         return new FeatureFlagsOptions

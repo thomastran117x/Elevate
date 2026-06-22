@@ -19,6 +19,7 @@ public sealed class FeatureFlagRegistry
             FeatureFlagKeys.EventsRegistration,
             FeatureFlagKeys.EventsVersioning,
             FeatureFlagKeys.Payment,
+            FeatureFlagKeys.Profile,
             FeatureFlagKeys.ProfileAdmin,
             FeatureFlagKeys.Search,
             FeatureFlagKeys.SearchReindex

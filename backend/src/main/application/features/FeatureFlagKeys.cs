@@ -15,6 +15,7 @@ public static class FeatureFlagKeys
     public const string EventsRegistration = "events.registration";
     public const string EventsVersioning = "events.versioning";
     public const string Payment = "payment";
+    public const string Profile = "profile";
     public const string ProfileAdmin = "profile.admin";
     public const string Search = "search";
     public const string SearchReindex = "search.reindex";

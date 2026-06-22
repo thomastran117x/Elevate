@@ -3,24 +3,29 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const featureFlagEnvMap = {
-  auth: 'FEATURE_AUTH',
-  clubs: 'FEATURE_CLUBS',
-  'clubs.follow': 'FEATURE_CLUBS_FOLLOW',
-  'clubs.posts': 'FEATURE_CLUBS_POSTS',
-  'clubs.reviews': 'FEATURE_CLUBS_REVIEWS',
-  'clubs.versioning': 'FEATURE_CLUBS_VERSIONING',
-  events: 'FEATURE_EVENTS',
-  'events.analytics': 'FEATURE_EVENTS_ANALYTICS',
-  'events.images': 'FEATURE_EVENTS_IMAGES',
-  'events.invitations': 'FEATURE_EVENTS_INVITATIONS',
-  'events.registration': 'FEATURE_EVENTS_REGISTRATION',
-  'events.versioning': 'FEATURE_EVENTS_VERSIONING',
-  payment: 'FEATURE_PAYMENT',
-  'profile.admin': 'FEATURE_PROFILE_ADMIN',
-  search: 'FEATURE_SEARCH',
-  'search.reindex': 'FEATURE_SEARCH_REINDEX',
-};
+const ALL_FEATURE_KEYS = [
+  'auth',
+  'clubs',
+  'clubs.follow',
+  'clubs.posts',
+  'clubs.reviews',
+  'clubs.versioning',
+  'events',
+  'events.analytics',
+  'events.images',
+  'events.invitations',
+  'events.registration',
+  'events.versioning',
+  'payment',
+  'profile',
+  'profile.admin',
+  'search',
+  'search.reindex',
+];
+
+function toEnvVarName(featureKey) {
+  return `FEATURE_${featureKey.replace(/\./g, '_').toUpperCase()}`;
+}
 
 function parseBoolean(value, envName) {
   if (value === undefined || value === null || value === '') {
@@ -39,8 +44,11 @@ function parseBoolean(value, envName) {
 }
 
 const featureFlags = Object.fromEntries(
-  Object.entries(featureFlagEnvMap)
-    .map(([key, envName]) => [key, parseBoolean(process.env[envName], envName)])
+  ALL_FEATURE_KEYS
+    .map((key) => {
+      const envName = toEnvVarName(key);
+      return [key, parseBoolean(process.env[envName], envName)];
+    })
     .filter(([, value]) => value !== undefined),
 );
 

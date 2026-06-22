@@ -29,10 +29,13 @@ var isOpenApiDocumentMode = OpenApiDocumentMode.ShouldSkipStartupSideEffects;
 var suppressStartupSideEffects = isTesting || isOpenApiDocumentMode;
 var featureFlagRegistry = FeatureFlagRegistry.Instance;
 var featureFlagOptions = FeatureFlagsOptions.FromConfiguration(builder.Configuration, featureFlagRegistry);
-var featureFlagEvaluator = new FeatureFlagEvaluator(Options.Create(featureFlagOptions), featureFlagRegistry);
+var featureFlagOptionsWrapper = Options.Create(featureFlagOptions);
+var featureFlagEvaluator = new FeatureFlagEvaluator(featureFlagOptionsWrapper, featureFlagRegistry);
 
 builder.Services.AddSingleton(Logger.GetOptions());
-builder.Services.AddFeatureFlags(builder.Configuration);
+builder.Services.AddSingleton(featureFlagRegistry);
+builder.Services.AddSingleton<IOptions<FeatureFlagsOptions>>(featureFlagOptionsWrapper);
+builder.Services.AddSingleton<IFeatureFlagEvaluator>(featureFlagEvaluator);
 
 builder.WebHost.ConfigureKestrel(options =>
 {
