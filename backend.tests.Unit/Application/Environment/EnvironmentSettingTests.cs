@@ -113,6 +113,31 @@ public class EnvironmentSettingTests
             .Should().Be("custom-sms-topic");
     }
 
+
+[Fact]
+public void AuthSmsMfaEnrollmentEnabled_ShouldDefaultToTrue_AndRespectConfiguredOverrides()
+{
+    using var defaultScope = new EnvironmentVariableScope(new Dictionary<string, string?>
+    {
+        ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
+        ["AUTH_SMS_MFA_ENROLLMENT_ENABLED"] = null
+    });
+
+    using (var defaultHarness = EnvironmentSettingHarness.Load())
+    {
+        defaultHarness.GetBool("AuthSmsMfaEnrollmentEnabled").Should().BeTrue();
+    }
+
+    using var disabledScope = new EnvironmentVariableScope(new Dictionary<string, string?>
+    {
+        ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
+        ["AUTH_SMS_MFA_ENROLLMENT_ENABLED"] = "false"
+    });
+
+    using var disabledHarness = EnvironmentSettingHarness.Load();
+    disabledHarness.GetBool("AuthSmsMfaEnrollmentEnabled").Should().BeFalse();
+}
+
     [Fact]
     public void Validate_ShouldSkipInTestEnvironment()
     {
@@ -217,6 +242,9 @@ public class EnvironmentSettingTests
 
         public string? GetNullableString(string propertyName) =>
             (string?)_type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Static)!.GetValue(null);
+
+        public bool GetBool(string propertyName) =>
+            (bool)_type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Static)!.GetValue(null)!;
 
         public string GetStringFromType(string typeName, string propertyName)
         {

@@ -2,6 +2,7 @@ using backend.main.application.features;
 using backend.main.features.auth;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.device;
+using backend.main.features.auth.mfa;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
@@ -150,6 +151,7 @@ namespace backend.main.application.bootstrap
             services.AddRepositoryWithProxy<IFollowRepository, FollowRepository>();
             services.AddRepositoryWithProxy<IAuthUserRepository, AuthUserRepository>();
             services.AddRepositoryWithProxy<IUserRepository, AuthUserRepository>();
+            services.AddRepositoryWithProxy<IMfaEnrollmentRepository, MfaEnrollmentRepository>();
             services.AddRepositoryWithProxy<IClubRepository, ClubRepository>();
             services.AddRepositoryWithProxy<IEventsRepository, EventsRepository>();
             services.AddRepositoryWithProxy<IPaymentRepository, PaymentRepository>();
@@ -166,6 +168,7 @@ namespace backend.main.application.bootstrap
 
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<IMfaEnrollmentService, MfaEnrollmentService>();
             services.AddScoped<IOAuthService, OAuthService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IClubService, ClubService>();
@@ -267,3 +270,4 @@ namespace backend.main.application.bootstrap
         }
     }
 }
+

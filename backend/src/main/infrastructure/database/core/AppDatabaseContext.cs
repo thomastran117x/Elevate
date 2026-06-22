@@ -1,6 +1,7 @@
 using System.Text.Json;
 
 using backend.main.features.auth.device;
+using backend.main.features.auth.mfa;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts;
@@ -36,6 +37,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<Payment> Payments { get; set; } = null!;
         public DbSet<ClubReview> ClubReviews { get; set; } = null!;
         public DbSet<Device> Devices { get; set; } = null!;
+        public DbSet<SmsMfaEnrollment> SmsMfaEnrollments { get; set; } = null!;
         public DbSet<ClubPost> ClubPosts { get; set; } = null!;
         public DbSet<PostComment> PostComments { get; set; } = null!;
         public DbSet<EventRegistration> EventRegistrations { get; set; } = null!;
@@ -389,6 +391,24 @@ namespace backend.main.infrastructure.database.core
             modelBuilder.Entity<Device>()
                 .HasIndex(d => new { d.UserId, d.DeviceType, d.ClientName });
 
+            modelBuilder.Entity<SmsMfaEnrollment>()
+                .HasKey(enrollment => enrollment.UserId);
+
+            modelBuilder.Entity<SmsMfaEnrollment>()
+                .HasOne<User>()
+                .WithOne()
+                .HasForeignKey<SmsMfaEnrollment>(enrollment => enrollment.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<SmsMfaEnrollment>()
+                .Property(enrollment => enrollment.PhoneNumber)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<SmsMfaEnrollment>()
+                .Property(enrollment => enrollment.IsSmsMfaEnabled)
+                .HasDefaultValue(false);
+
             modelBuilder.Entity<ClubPost>()
                 .HasOne<User>()
                 .WithMany()
@@ -557,3 +577,4 @@ namespace backend.main.infrastructure.database.core
         }
     }
 }
+

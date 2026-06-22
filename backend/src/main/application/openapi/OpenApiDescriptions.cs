@@ -63,6 +63,10 @@ namespace backend.main.application.openapi
                     "Processes the one-click verification link emailed when a sign-in from an unrecognized device is detected. On success, redirects to the frontend."
                 ),
                 ["POST /api/auth/device/verify"] = new("Confirm a new device using a one-time code"),
+                ["GET /api/auth/mfa"] = new("Get SMS MFA enrollment status"),
+                ["POST /api/auth/mfa/enroll/start"] = new("Start SMS MFA enrollment"),
+                ["POST /api/auth/mfa/enroll/verify"] = new("Verify an SMS MFA enrollment code"),
+                ["POST /api/auth/mfa/disable"] = new("Disable SMS MFA"),
                 ["POST /api/auth/forgot-password"] = new("Request a password reset email"),
                 ["POST /api/auth/change-password"] = new("Reset the account password"),
 
@@ -219,3 +223,4 @@ namespace backend.main.application.openapi
 
     internal readonly record struct OperationMeta(string Summary, string? Description = null);
 }
+

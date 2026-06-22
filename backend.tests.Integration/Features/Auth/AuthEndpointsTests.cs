@@ -506,6 +506,126 @@ public class AuthEndpointsTests
         microsoftBody.Data.Auth.RefreshToken.Should().NotBeNullOrWhiteSpace();
     }
 
+
+[Fact]
+public async Task MfaStatus_ShouldReturnEmptyState_ForAuthenticatedUser()
+{
+    await using var app = await AuthApiTestApp.CreateAsync();
+    var session = await app.SignUpAndVerifyByTokenAsync("mfa-status@example.com", transport: SessionTransportResolver.ApiValue);
+
+    var response = await app.GetWithBearerAsync("/api/auth/mfa", session.AccessToken);
+
+    response.StatusCode.Should().Be(HttpStatusCode.OK);
+    var body = await app.ReadApiResponseAsync<MfaStatusResponse>(response);
+    body.Data!.EnrollmentAvailable.Should().BeTrue();
+    body.Data.IsSmsMfaEnabled.Should().BeFalse();
+    body.Data.MaskedPhoneNumber.Should().BeNull();
+}
+
+[Fact]
+public async Task MfaEnrollmentStart_ShouldPublishSmsMessage()
+{
+    await using var app = await AuthApiTestApp.CreateAsync();
+    var session = await app.SignUpAndVerifyByTokenAsync("mfa-start@example.com", transport: SessionTransportResolver.ApiValue);
+
+    var response = await app.PostJsonWithBearerAndCsrfAsync(
+        "/api/auth/mfa/enroll/start",
+        new MfaEnrollmentStartRequest
+        {
+            PhoneNumber = "+14165550123"
+        },
+        session.AccessToken);
+
+    response.StatusCode.Should().Be(HttpStatusCode.OK);
+    var body = await app.ReadApiResponseAsync<MfaChallengeResponse>(response);
+    body.Data!.MaskedDestination.Should().Be("***-***-0123");
+    app.Publisher.SmsMessages.Should().ContainSingle(message =>
+        message.PhoneNumber == "+14165550123"
+        && message.Challenge == body.Data.Challenge
+        && message.Purpose == "mfa enrollment");
+}
+
+[Fact]
+public async Task MfaEnrollmentVerify_ShouldPersistEnabledEnrollment()
+{
+    await using var app = await AuthApiTestApp.CreateAsync();
+    var session = await app.SignUpAndVerifyByTokenAsync("mfa-verify@example.com", transport: SessionTransportResolver.ApiValue);
+
+    var start = await app.PostJsonWithBearerAndCsrfAsync(
+        "/api/auth/mfa/enroll/start",
+        new MfaEnrollmentStartRequest
+        {
+            PhoneNumber = "+14165550123"
+        },
+        session.AccessToken);
+    var startBody = await app.ReadApiResponseAsync<MfaChallengeResponse>(start);
+    var sms = app.Publisher.SmsMessages.Last(message => message.Challenge == startBody.Data!.Challenge);
+
+    var verify = await app.PostJsonWithBearerAndCsrfAsync(
+        "/api/auth/mfa/enroll/verify",
+        new MfaEnrollmentVerifyRequest
+        {
+            Challenge = startBody.Data!.Challenge,
+            Code = sms.Code
+        },
+        session.AccessToken);
+
+    verify.StatusCode.Should().Be(HttpStatusCode.OK);
+    var verifyBody = await app.ReadApiResponseAsync<MfaStatusResponse>(verify);
+    verifyBody.Data!.IsSmsMfaEnabled.Should().BeTrue();
+    verifyBody.Data.MaskedPhoneNumber.Should().Be("***-***-0123");
+
+    var user = await app.FindUserByEmailAsync("mfa-verify@example.com");
+    var enrollment = await app.FindSmsMfaEnrollmentAsync(user!.Id);
+    enrollment.Should().NotBeNull();
+    enrollment!.PhoneNumber.Should().Be("+14165550123");
+    enrollment.IsSmsMfaEnabled.Should().BeTrue();
+    enrollment.PhoneVerifiedAtUtc.Should().NotBeNull();
+}
+
+[Fact]
+public async Task MfaDisable_ShouldKeepPhoneButDisableEnrollment()
+{
+    await using var app = await AuthApiTestApp.CreateAsync();
+    var session = await app.SignUpAndVerifyByTokenAsync("mfa-disable@example.com", transport: SessionTransportResolver.ApiValue);
+
+    var start = await app.PostJsonWithBearerAndCsrfAsync(
+        "/api/auth/mfa/enroll/start",
+        new MfaEnrollmentStartRequest
+        {
+            PhoneNumber = "+14165550123"
+        },
+        session.AccessToken);
+    var startBody = await app.ReadApiResponseAsync<MfaChallengeResponse>(start);
+    var sms = app.Publisher.SmsMessages.Last(message => message.Challenge == startBody.Data!.Challenge);
+
+    await app.PostJsonWithBearerAndCsrfAsync(
+        "/api/auth/mfa/enroll/verify",
+        new MfaEnrollmentVerifyRequest
+        {
+            Challenge = startBody.Data!.Challenge,
+            Code = sms.Code
+        },
+        session.AccessToken);
+
+    var disable = await app.PostJsonWithBearerAndCsrfAsync(
+        "/api/auth/mfa/disable",
+        new MfaDisableRequest(),
+        session.AccessToken);
+
+    disable.StatusCode.Should().Be(HttpStatusCode.OK);
+    var disableBody = await app.ReadApiResponseAsync<MfaStatusResponse>(disable);
+    disableBody.Data!.IsSmsMfaEnabled.Should().BeFalse();
+    disableBody.Data.MaskedPhoneNumber.Should().Be("***-***-0123");
+
+    var user = await app.FindUserByEmailAsync("mfa-disable@example.com");
+    var enrollment = await app.FindSmsMfaEnrollmentAsync(user!.Id);
+    enrollment.Should().NotBeNull();
+    enrollment!.IsSmsMfaEnabled.Should().BeFalse();
+    enrollment.PhoneNumber.Should().Be("+14165550123");
+    enrollment.PhoneVerifiedAtUtc.Should().NotBeNull();
+}
+
     private static async Task<HttpRequestMessage> CreateCsrfRequestAsync(
         AuthApiTestApp app,
         string path,

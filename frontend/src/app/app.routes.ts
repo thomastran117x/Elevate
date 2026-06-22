@@ -3,6 +3,7 @@ import { Routes } from '@angular/router';
 import { featureCanMatch } from './core/features/feature-can-match.guard';
 import { FEATURE_KEYS } from './core/features/feature-flags.types';
 import { NotFoundComponent } from './shared/not-found/not-found.component';
+import { authenticatedUserGuard } from './features/auth/guards/authenticated-user.guard';
 
 export const routes: Routes = [
   {
@@ -44,6 +45,16 @@ export const routes: Routes = [
     canMatch: [featureCanMatch(FEATURE_KEYS.auth)],
     loadChildren: () => import('./features/auth/auth.module').then((m) => m.AuthModule),
   },
+
+{
+  path: 'settings/security',
+  canMatch: [featureCanMatch(FEATURE_KEYS.auth)],
+  canActivate: [authenticatedUserGuard],
+  loadComponent: () =>
+    import('./features/auth/pages/security-settings/security-settings.component').then(
+      (m) => m.SecuritySettingsComponent,
+    ),
+},
   {
     path: 'events',
     canMatch: [featureCanMatch(FEATURE_KEYS.events)],

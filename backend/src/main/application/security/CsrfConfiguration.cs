@@ -21,7 +21,10 @@ namespace backend.main.application.security
             $"{RoutePaths.ApiAuthPath}/refresh",
             $"{RoutePaths.ApiAuthPath}/logout",
             $"{RoutePaths.ApiAuthPath}/forgot-password",
-            $"{RoutePaths.ApiAuthPath}/change-password"
+            $"{RoutePaths.ApiAuthPath}/change-password",
+            $"{RoutePaths.ApiAuthPath}/mfa/enroll/start",
+            $"{RoutePaths.ApiAuthPath}/mfa/enroll/verify",
+            $"{RoutePaths.ApiAuthPath}/mfa/disable"
         ];
 
         public static IServiceCollection AddCustomCsrf(this IServiceCollection services)

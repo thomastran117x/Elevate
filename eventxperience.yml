@@ -234,6 +234,8 @@ spec:
               value: "eventxperience-email"
             - name: SMS_TOPIC
               value: "eventxperience-sms"
+            - name: AUTH_SMS_MFA_ENROLLMENT_ENABLED
+              value: "true"
             - name: ELASTICSEARCH_URL
               value: "http://elasticsearch:9200"
             - name: JWT_SECRET_KEY
@@ -376,6 +378,8 @@ spec:
               value: "kafka:9092"
             - name: SMS_TOPIC
               value: "eventxperience-sms"
+            - name: AUTH_SMS_MFA_ENROLLMENT_ENABLED
+              value: "true"
             - name: SMS_GROUP_ID
               value: "sms-worker"
             - name: SMS_DLQ_TOPIC

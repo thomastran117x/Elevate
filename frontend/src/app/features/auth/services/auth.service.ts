@@ -35,6 +35,20 @@ export interface VerificationChallengeResponse {
   ExpiresAtUtc: string;
 }
 
+export interface MfaStatusResponse {
+  EnrollmentAvailable: boolean;
+  IsSmsMfaEnabled: boolean;
+  MaskedPhoneNumber?: string | null;
+  PhoneVerifiedAtUtc?: string | null;
+}
+
+export interface MfaChallengeResponse {
+  Challenge: string;
+  ExpiresAtUtc: string;
+  Channel: string;
+  MaskedDestination: string;
+}
+
 export type SignupRole = 'participant' | 'organizer' | 'volunteer';
 
 export interface OAuthRoleSelectionResponse {
@@ -145,12 +159,31 @@ export class AuthService {
   }
 
   me(): Observable<ApiEnvelope<CurrentUserResponse>> {
-    return from(this.authToken.ensureCsrfToken()).pipe(
-      switchMap(() =>
-        this.api.get<ApiEnvelope<CurrentUserResponse>>(`${this.baseUrl}/me`, {
-          withCredentials: true,
-        }),
-      ),
+    return this.getWithCsrf<ApiEnvelope<CurrentUserResponse>>(`${this.baseUrl}/me`);
+  }
+
+  getMfaStatus(): Observable<MfaStatusResponse> {
+    return this.getWithCsrf<ApiEnvelope<MfaStatusResponse>>(`${this.baseUrl}/mfa`).pipe(
+      map((res) => this.requireData(res, 'SMS MFA status response was incomplete.')),
+    );
+  }
+
+  startMfaEnrollment(phoneNumber: string): Observable<MfaChallengeResponse> {
+    return this.postWithCsrf<ApiEnvelope<MfaChallengeResponse>>(`${this.baseUrl}/mfa/enroll/start`, {
+      phoneNumber,
+    }).pipe(map((res) => this.requireData(res, 'SMS MFA challenge response was incomplete.')));
+  }
+
+  verifyMfaEnrollment(code: string, challenge: string): Observable<MfaStatusResponse> {
+    return this.postWithCsrf<ApiEnvelope<MfaStatusResponse>>(`${this.baseUrl}/mfa/enroll/verify`, {
+      code,
+      challenge,
+    }).pipe(map((res) => this.requireData(res, 'SMS MFA verification response was incomplete.')));
+  }
+
+  disableMfa(): Observable<MfaStatusResponse> {
+    return this.postWithCsrf<ApiEnvelope<MfaStatusResponse>>(`${this.baseUrl}/mfa/disable`, {}).pipe(
+      map((res) => this.requireData(res, 'SMS MFA disable response was incomplete.')),
     );
   }
 
@@ -180,6 +213,16 @@ export class AuthService {
 
   get microsoftOAuthUrl(): string {
     return `${this.baseUrl}/login/microsoft`;
+  }
+
+  private getWithCsrf<T>(url: string): Observable<T> {
+    return from(this.authToken.ensureCsrfToken()).pipe(
+      switchMap(() =>
+        this.api.get<T>(url, {
+          withCredentials: true,
+        }),
+      ),
+    );
   }
 
   private postWithCsrf<T>(url: string, body: unknown): Observable<T> {
