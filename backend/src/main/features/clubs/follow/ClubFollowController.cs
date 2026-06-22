@@ -1,3 +1,4 @@
+using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.follow.contracts.responses;
@@ -12,6 +13,7 @@ namespace backend.main.features.clubs.follow
     /// Membership and follow-list endpoints for clubs and users.
     /// </summary>
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.ClubsFollow)]
     [Route("clubs")]
     public class ClubFollowController : ControllerBase
     {
@@ -70,6 +72,7 @@ namespace backend.main.features.clubs.follow
     }
 
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.ClubsFollow)]
     [Route("users")]
     public class UserFollowController : ControllerBase
     {
@@ -104,5 +107,10 @@ namespace backend.main.features.clubs.follow
         }
     }
 }
+
+
+
+
+
 
 

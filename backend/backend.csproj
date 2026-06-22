@@ -27,7 +27,7 @@
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="Confluent.Kafka" Version="2.5.3" />
     <PackageReference Include="DotNetEnv" Version="3.1.1" />
-    <PackageReference Include="Elastic.Clients.Elasticsearch" Version="8.16.7" />
+    <PackageReference Include="Elastic.Clients.Elasticsearch" Version="8.17.0" />
     <PackageReference Include="FluentAssertions" Version="8.8.0" />
     <PackageReference Include="Google.Apis.Auth" Version="1.73.0" />
     <PackageReference Include="MailKit" Version="4.14.1" />
@@ -54,3 +54,4 @@
   </ItemGroup>
 
 </Project>
+

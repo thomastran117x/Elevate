@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Threading.Channels;
 
+using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.comments.contracts.requests;
@@ -18,6 +19,7 @@ namespace backend.main.features.clubs.posts.comments
     /// Comment creation, moderation, and live-stream endpoints for club posts.
     /// </summary>
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.ClubsPosts)]
     [Route("clubs")]
     public class PostCommentController : ControllerBase
     {
@@ -173,3 +175,7 @@ namespace backend.main.features.clubs.posts.comments
             };
     }
 }
+
+
+
+

@@ -1,5 +1,6 @@
 using backend.main.application.bootstrap;
 using backend.main.application.environment;
+using backend.main.application.features;
 using backend.main.application.handlers;
 using backend.main.application.openapi;
 using backend.main.application.security;
@@ -8,6 +9,8 @@ using backend.main.infrastructure.database.core;
 using backend.main.infrastructure.redis;
 using backend.main.seeders;
 using backend.main.shared.utilities.logger;
+
+using Microsoft.Extensions.Options;
 
 using Serilog;
 
@@ -24,8 +27,12 @@ var builder = WebApplication.CreateBuilder(args);
 var isTesting = builder.Environment.IsEnvironment("Testing");
 var isOpenApiDocumentMode = OpenApiDocumentMode.ShouldSkipStartupSideEffects;
 var suppressStartupSideEffects = isTesting || isOpenApiDocumentMode;
+var featureFlagRegistry = FeatureFlagRegistry.Instance;
+var featureFlagOptions = FeatureFlagsOptions.FromConfiguration(builder.Configuration, featureFlagRegistry);
+var featureFlagEvaluator = new FeatureFlagEvaluator(Options.Create(featureFlagOptions), featureFlagRegistry);
 
 builder.Services.AddSingleton(Logger.GetOptions());
+builder.Services.AddFeatureFlags(builder.Configuration);
 
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -45,6 +52,7 @@ builder.Host.UseMinimalSerilog();
 builder.Services.AddControllersWithViews(options =>
 {
     options.Conventions.Insert(0, new RoutePrefixConvention(RoutePaths.ApiPrefix));
+    options.Conventions.Insert(1, new FeatureGateConvention(featureFlagEvaluator));
 });
 builder.Services.AddApiResponseConventions();
 builder.Services.AddAppOpenApi();

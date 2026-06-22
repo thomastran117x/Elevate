@@ -46,9 +46,11 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         Client = client;
     }
 
-    public static Task<AuthApiTestApp> CreateAsync(Action<IServiceCollection>? serviceOverrides = null)
+    public static Task<AuthApiTestApp> CreateAsync(
+        Action<IServiceCollection>? serviceOverrides = null,
+        IReadOnlyDictionary<string, string?>? configurationOverrides = null)
     {
-        var factory = new TestWebApplicationFactory(serviceOverrides);
+        var factory = new TestWebApplicationFactory(serviceOverrides, configurationOverrides);
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,

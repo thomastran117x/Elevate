@@ -1,7 +1,10 @@
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { Component } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
+
+import { FeatureFlagsService } from '../../../../core/features/feature-flags.service';
+import { FEATURE_KEYS } from '../../../../core/features/feature-flags.types';
 
 type Category = { name: string; icon: string; count: string };
 type Feature = { title: string; desc: string; icon: string };
@@ -21,7 +24,6 @@ type Testimonial = { quote: string; name: string; role: string };
   imports: [CommonModule, FormsModule, RouterModule],
   template: `
     <div class="min-h-screen bg-slate-950 text-white overflow-x-hidden overflow-y-visible relative">
-      <!-- Ambient background -->
       <div class="pointer-events-none absolute inset-0">
         <div
           class="absolute -top-24 left-1/2 -translate-x-1/2 h-[520px] w-[920px] rounded-full
@@ -35,8 +37,6 @@ type Testimonial = { quote: string; name: string; role: string };
           class="absolute top-[640px] -right-20 h-[420px] w-[420px] rounded-full
                  bg-gradient-to-br from-fuchsia-500/20 to-purple-500/10 blur-3xl"
         ></div>
-
-        <!-- subtle grid -->
         <div
           class="absolute inset-0 opacity-[0.10]"
           style="
@@ -47,7 +47,6 @@ type Testimonial = { quote: string; name: string; role: string };
         ></div>
       </div>
 
-      <!-- Top nav -->
       <header class="relative z-10">
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div class="flex h-16 items-center justify-between">
@@ -64,13 +63,13 @@ type Testimonial = { quote: string; name: string; role: string };
             </a>
 
             <nav class="hidden md:flex items-center gap-7 text-sm text-white/70">
-              <a class="hover:text-white transition" routerLink="/events">Explore</a>
+              <a *ngIf="eventsEnabled" class="hover:text-white transition" routerLink="/events">Explore</a>
               <a class="hover:text-white transition" routerLink="/venues">Venues</a>
               <a class="hover:text-white transition" routerLink="/pricing">Pricing</a>
               <a class="hover:text-white transition" routerLink="/contact">Contact</a>
             </nav>
 
-            <div class="flex items-center gap-3">
+            <div *ngIf="authEnabled" class="flex items-center gap-3">
               <a
                 routerLink="/auth/login"
                 class="hidden sm:inline-flex items-center rounded-xl px-3 py-2 text-sm
@@ -91,11 +90,9 @@ type Testimonial = { quote: string; name: string; role: string };
         </div>
       </header>
 
-      <!-- Hero -->
       <main class="relative z-10">
         <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-10 sm:pt-14 lg:pt-16">
           <div class="grid lg:grid-cols-12 gap-10 items-center">
-            <!-- left -->
             <div class="lg:col-span-7">
               <div
                 class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5
@@ -119,8 +116,8 @@ type Testimonial = { quote: string; name: string; role: string };
                 transparent fees, and one-tap checkout. Built for modern organizers and fans.
               </p>
 
-              <!-- Search bar -->
               <div
+                *ngIf="eventsEnabled"
                 class="mt-7 rounded-2xl border border-white/10 bg-white/5 backdrop-blur
                        shadow-2xl shadow-purple-500/10"
               >
@@ -203,7 +200,6 @@ type Testimonial = { quote: string; name: string; role: string };
                 </div>
               </div>
 
-              <!-- quick stats -->
               <div class="mt-8 grid grid-cols-3 gap-4 max-w-xl">
                 <div class="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
                   <div class="text-xl font-bold">4.9*</div>
@@ -220,7 +216,6 @@ type Testimonial = { quote: string; name: string; role: string };
               </div>
             </div>
 
-            <!-- right -->
             <div class="lg:col-span-5">
               <div
                 class="relative rounded-3xl border border-white/10 bg-white/5 backdrop-blur
@@ -268,6 +263,7 @@ type Testimonial = { quote: string; name: string; role: string };
                             <span class="text-white/80">&bull;</span> Verified inventory
                           </div>
                           <a
+                            *ngIf="eventsEnabled"
                             routerLink="/events"
                             class="text-xs font-semibold text-fuchsia-200 group-hover:text-white transition"
                           >
@@ -295,7 +291,7 @@ type Testimonial = { quote: string; name: string; role: string };
                     </div>
                   </div>
 
-                  <div class="mt-5">
+                  <div *ngIf="eventsEnabled" class="mt-5">
                     <a
                       routerLink="/events"
                       class="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2
@@ -308,7 +304,6 @@ type Testimonial = { quote: string; name: string; role: string };
                 </div>
               </div>
 
-              <!-- mini logos -->
               <div class="mt-5 flex flex-wrap gap-2 text-xs text-white/50">
                 <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1"
                   >Stripe-ready</span
@@ -327,8 +322,7 @@ type Testimonial = { quote: string; name: string; role: string };
           </div>
         </section>
 
-        <!-- Categories -->
-        <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-14">
+        <section *ngIf="eventsEnabled" class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-14">
           <div class="flex items-end justify-between gap-6">
             <div>
               <h2 class="text-xl sm:text-2xl font-bold">Browse by category</h2>
@@ -365,7 +359,6 @@ type Testimonial = { quote: string; name: string; role: string };
           </div>
         </section>
 
-        <!-- Features -->
         <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-14">
           <div class="grid lg:grid-cols-12 gap-8 items-start">
             <div class="lg:col-span-4">
@@ -407,8 +400,7 @@ type Testimonial = { quote: string; name: string; role: string };
           </div>
         </section>
 
-        <!-- Popular events -->
-        <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-14">
+        <section *ngIf="eventsEnabled" class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-14">
           <div class="flex items-end justify-between gap-6">
             <div>
               <h2 class="text-xl sm:text-2xl font-bold">Popular this week</h2>
@@ -486,7 +478,6 @@ type Testimonial = { quote: string; name: string; role: string };
           </div>
         </section>
 
-        <!-- Testimonials -->
         <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-16">
           <div class="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 sm:p-8">
             <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
@@ -521,7 +512,6 @@ type Testimonial = { quote: string; name: string; role: string };
           </div>
         </section>
 
-        <!-- CTA -->
         <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-16 pb-16">
           <div
             class="rounded-3xl border border-white/10 bg-gradient-to-r from-purple-500/20 via-fuchsia-500/10 to-indigo-500/20
@@ -546,6 +536,7 @@ type Testimonial = { quote: string; name: string; role: string };
 
               <div class="lg:col-span-4 flex flex-col sm:flex-row lg:flex-col gap-3">
                 <a
+                  *ngIf="authEnabled"
                   routerLink="/auth/signup"
                   class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2
                          bg-white text-slate-950 font-semibold text-sm hover:bg-white/90 transition"
@@ -554,6 +545,7 @@ type Testimonial = { quote: string; name: string; role: string };
                   <span>&rarr;</span>
                 </a>
                 <a
+                  *ngIf="eventsEnabled"
                   routerLink="/events"
                   class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2
                          border border-white/15 bg-white/5 text-white/90 text-sm font-semibold
@@ -566,7 +558,6 @@ type Testimonial = { quote: string; name: string; role: string };
             </div>
           </div>
 
-          <!-- footer -->
           <footer class="mt-10 text-xs text-white/50">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>&copy; {{ year }} EventXperience. All rights reserved.</div>
@@ -587,14 +578,36 @@ export class HomeComponent {
 
   heroSearch = '';
   heroCity = '';
+  readonly authEnabled: boolean;
+  readonly eventsEnabled: boolean;
 
-  constructor(private router: Router) {}
+  constructor(
+    private router: Router,
+    private featureFlags: FeatureFlagsService,
+  ) {
+    this.authEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.auth);
+    this.eventsEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.events);
+  }
 
   explore(category?: string): void {
+    if (!this.eventsEnabled) {
+      return;
+    }
+
     const queryParams: Record<string, string> = {};
-    if (this.heroSearch.trim()) queryParams['search'] = this.heroSearch.trim();
-    if (this.heroCity.trim()) queryParams['city'] = this.heroCity.trim();
-    if (category) queryParams['category'] = category;
+
+    if (this.heroSearch.trim()) {
+      queryParams['search'] = this.heroSearch.trim();
+    }
+
+    if (this.heroCity.trim()) {
+      queryParams['city'] = this.heroCity.trim();
+    }
+
+    if (category) {
+      queryParams['category'] = category;
+    }
+
     this.router.navigate(['/events'], { queryParams });
   }
 

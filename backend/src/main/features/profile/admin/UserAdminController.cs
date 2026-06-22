@@ -1,3 +1,4 @@
+using backend.main.application.features;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.profile;
@@ -12,6 +13,7 @@ namespace backend.main.features.profile.admin
     /// Administrative user-management endpoints.
     /// </summary>
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.ProfileAdmin)]
     [Route("admin/users")]
     [Authorize("AdminOnly")]
     public class UserAdminController : ControllerBase
@@ -48,3 +50,8 @@ namespace backend.main.features.profile.admin
         }
     }
 }
+
+
+
+
+

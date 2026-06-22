@@ -16,6 +16,8 @@ import { AuthenticatedSessionResponse, CurrentUserResponse } from '../models/aut
 import { AuthService } from '../../features/auth/services/auth.service';
 import { UserState } from '../stores/user.reducer';
 import { SessionState } from '../stores/session.reducer';
+import { FeatureFlagsService } from '../features/feature-flags.service';
+import { FEATURE_KEYS } from '../features/feature-flags.types';
 
 @Injectable({ providedIn: 'root' })
 export class SessionManagerService {
@@ -24,6 +26,7 @@ export class SessionManagerService {
   private auth = inject(AuthTokenService);
   private authService = inject(AuthService);
   private platformId = inject(PLATFORM_ID);
+  private featureFlags = inject(FeatureFlagsService);
 
   loading = signal(isPlatformBrowser(this.platformId));
 
@@ -53,6 +56,12 @@ export class SessionManagerService {
 
   async restoreSession(): Promise<void> {
     if (!isPlatformBrowser(this.platformId)) {
+      this.loading.set(false);
+      return;
+    }
+
+    if (!this.featureFlags.isEnabled(FEATURE_KEYS.auth)) {
+      this.clearSessionState();
       this.loading.set(false);
       return;
     }

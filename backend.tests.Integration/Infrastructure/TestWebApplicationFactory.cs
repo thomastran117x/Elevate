@@ -23,6 +23,7 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
     private readonly string _testConnectionString = $"Data Source=backend-tests-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
     private readonly SqliteConnection _connection;
     private readonly Action<IServiceCollection>? _serviceOverrides;
+    private readonly IReadOnlyDictionary<string, string?> _configurationOverrides;
 
     public InMemoryCacheService Cache { get; } = new();
     public CapturingPublisher Publisher { get; } = new();
@@ -30,10 +31,13 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
     public FakeOAuthService OAuth { get; } = new();
     public FakeAzureBlobService BlobStorage { get; } = new();
 
-    public TestWebApplicationFactory(Action<IServiceCollection>? serviceOverrides = null)
+    public TestWebApplicationFactory(
+        Action<IServiceCollection>? serviceOverrides = null,
+        IReadOnlyDictionary<string, string?>? configurationOverrides = null)
     {
         _connection = new SqliteConnection(_testConnectionString);
         _serviceOverrides = serviceOverrides;
+        _configurationOverrides = configurationOverrides ?? new Dictionary<string, string?>();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -41,11 +45,13 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
         builder.UseEnvironment("Testing");
         builder.ConfigureAppConfiguration((_, config) =>
         {
-            config.AddInMemoryCollection(new Dictionary<string, string?>
+            var settings = new Dictionary<string, string?>(_configurationOverrides)
             {
                 ["Database:Provider"] = "Sqlite",
                 ["Database:ConnectionString"] = _testConnectionString
-            });
+            };
+
+            config.AddInMemoryCollection(settings);
         });
 
         builder.ConfigureServices(services =>

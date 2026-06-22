@@ -1,3 +1,4 @@
+using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.events.invitations.contracts.requests;
 using backend.main.features.events.invitations.contracts.responses;
@@ -14,6 +15,7 @@ namespace backend.main.features.events.invitations;
 /// Invitation and invite-link flows for private or managed events.
 /// </summary>
 [ApiController]
+[FeatureGate(FeatureFlagKeys.EventsInvitations)]
 [Route("events")]
 public sealed class EventInvitationController : ControllerBase
 {
@@ -318,3 +320,7 @@ public sealed class EventInvitationController : ControllerBase
         return User.GetUserPayload();
     }
 }
+
+
+
+

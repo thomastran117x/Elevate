@@ -6,19 +6,15 @@
   }"
 >
   <div class="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
-    <!-- Logo -->
     <a routerLink="/" class="text-2xl font-extrabold tracking-tight">
       <span class="text-purple-400">Event</span>
       <span class="text-black dark:text-white">Xperience</span>
     </a>
 
-    <!-- Desktop Nav -->
     <div class="hidden md:flex items-center gap-10 text-sm text-black/70 dark:text-white/80">
-      <a href="#features" class="hover:text-black dark:hover:text-white transition"> Features </a>
+      <a href="#features" class="hover:text-black dark:hover:text-white transition">Features</a>
+      <a href="#pricing" class="hover:text-black dark:hover:text-white transition">Pricing</a>
 
-      <a href="#pricing" class="hover:text-black dark:hover:text-white transition"> Pricing </a>
-
-      <!-- Customers Dropdown -->
       <div class="relative">
         <button
           (click)="toggleCustomers()"
@@ -60,99 +56,97 @@
         </div>
       </div>
 
-      <!-- AUTH SECTION -->
-      <ng-container *ngIf="user$ | async as user; else loggedOut">
-        <div class="relative">
-          <button
-            (click)="toggleUserMenu()"
-            class="flex items-center gap-3 hover:text-black dark:hover:text-white transition"
-          >
-            <!-- Avatar -->
-            <ng-container *ngIf="user.Avatar; else initialsAvatar">
-              <img
-                [src]="user.Avatar"
-                alt="User avatar"
-                class="w-8 h-8 rounded-full object-cover border border-black/10 dark:border-white/10"
-              />
-            </ng-container>
-
-            <ng-template #initialsAvatar>
-              <div
-                class="w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center text-xs font-bold uppercase"
-              >
-                {{ user.Username[0] }}
-              </div>
-            </ng-template>
-
-            <svg
-              class="w-4 h-4 transition"
-              [class.rotate-180]="userMenuOpen"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
-          </button>
-
-          <!-- User Dropdown -->
-          <div
-            *ngIf="userMenuOpen"
-            class="absolute top-10 right-0 w-56 rounded-xl bg-white dark:bg-[#140d2a] border border-black/10 dark:border-white/10 shadow-xl overflow-hidden"
-          >
-            <div class="px-4 py-3 text-xs text-black/60 dark:text-white/60">
-              Signed in as
-              <div class="font-medium truncate text-black dark:text-white">
-                {{ user.Username }}
-              </div>
-              <div class="text-[11px] uppercase tracking-wide mt-1">
-                {{ user.Usertype }}
-              </div>
-            </div>
-
-            <div class="border-t border-black/5 dark:border-white/10"></div>
-
-            <a
-              routerLink="/dashboard"
-              class="block px-4 py-3 text-sm hover:bg-black/5 dark:hover:bg-white/10 transition"
-            >
-              Dashboard
-            </a>
-
-            <a
-              routerLink="/events/me/invited"
-              class="block px-4 py-3 text-sm hover:bg-black/5 dark:hover:bg-white/10 transition"
-            >
-              My Invites
-            </a>
-
+      <ng-container *ngIf="authEnabled">
+        <ng-container *ngIf="user$ | async as user; else loggedOut">
+          <div class="relative">
             <button
-              (click)="logout()"
-              class="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+              (click)="toggleUserMenu()"
+              class="flex items-center gap-3 hover:text-black dark:hover:text-white transition"
             >
-              Sign out
-            </button>
-          </div>
-        </div>
-      </ng-container>
+              <ng-container *ngIf="user.Avatar; else initialsAvatar">
+                <img
+                  [src]="user.Avatar"
+                  alt="User avatar"
+                  class="w-8 h-8 rounded-full object-cover border border-black/10 dark:border-white/10"
+                />
+              </ng-container>
 
-      <!-- Logged Out -->
-      <ng-template #loggedOut>
-        <a
-          routerLink="/auth/login"
-          class="px-5 py-2 rounded-xl bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 transition"
-        >
-          Sign In
-        </a>
-      </ng-template>
+              <ng-template #initialsAvatar>
+                <div
+                  class="w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center text-xs font-bold uppercase"
+                >
+                  {{ user.Username[0] }}
+                </div>
+              </ng-template>
+
+              <svg
+                class="w-4 h-4 transition"
+                [class.rotate-180]="userMenuOpen"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            </button>
+
+            <div
+              *ngIf="userMenuOpen"
+              class="absolute top-10 right-0 w-56 rounded-xl bg-white dark:bg-[#140d2a] border border-black/10 dark:border-white/10 shadow-xl overflow-hidden"
+            >
+              <div class="px-4 py-3 text-xs text-black/60 dark:text-white/60">
+                Signed in as
+                <div class="font-medium truncate text-black dark:text-white">
+                  {{ user.Username }}
+                </div>
+                <div class="text-[11px] uppercase tracking-wide mt-1">
+                  {{ user.Usertype }}
+                </div>
+              </div>
+
+              <div class="border-t border-black/5 dark:border-white/10"></div>
+
+              <a
+                routerLink="/dashboard"
+                class="block px-4 py-3 text-sm hover:bg-black/5 dark:hover:bg-white/10 transition"
+              >
+                Dashboard
+              </a>
+
+              <a
+                *ngIf="invitationsEnabled"
+                routerLink="/events/me/invited"
+                class="block px-4 py-3 text-sm hover:bg-black/5 dark:hover:bg-white/10 transition"
+              >
+                My Invites
+              </a>
+
+              <button
+                (click)="logout()"
+                class="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        </ng-container>
+
+        <ng-template #loggedOut>
+          <a
+            routerLink="/auth/login"
+            class="px-5 py-2 rounded-xl bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 transition"
+          >
+            Sign In
+          </a>
+        </ng-template>
+      </ng-container>
     </div>
 
-    <!-- Mobile Toggle -->
     <button (click)="toggleMobile()" class="md:hidden text-black dark:text-white">
       <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
@@ -165,7 +159,6 @@
     </button>
   </div>
 
-  <!-- Mobile Menu -->
   <div
     *ngIf="mobileOpen"
     class="md:hidden px-6 pb-6 space-y-4 bg-indigo-50/95 dark:bg-[#0f0a1c]/95 backdrop-blur-xl border-t border-black/5 dark:border-white/10"
@@ -178,39 +171,42 @@
       Pricing
     </a>
 
-    <ng-container *ngIf="user$ | async as user; else mobileLoggedOut">
-      <div class="pt-2 text-sm text-black/60 dark:text-white/60">
-        Signed in as
-        <div class="font-medium text-black dark:text-white">
-          {{ user.Username }}
+    <ng-container *ngIf="authEnabled">
+      <ng-container *ngIf="user$ | async as user; else mobileLoggedOut">
+        <div class="pt-2 text-sm text-black/60 dark:text-white/60">
+          Signed in as
+          <div class="font-medium text-black dark:text-white">
+            {{ user.Username }}
+          </div>
+          <div class="text-[11px] uppercase tracking-wide">
+            {{ user.Usertype }}
+          </div>
         </div>
-        <div class="text-[11px] uppercase tracking-wide">
-          {{ user.Usertype }}
-        </div>
-      </div>
 
-      <a
-        routerLink="/events/me/invited"
-        class="block text-black/70 dark:text-white/80 hover:text-black dark:hover:text-white"
-      >
-        My Invites
-      </a>
+        <a
+          *ngIf="invitationsEnabled"
+          routerLink="/events/me/invited"
+          class="block text-black/70 dark:text-white/80 hover:text-black dark:hover:text-white"
+        >
+          My Invites
+        </a>
 
-      <button
-        (click)="logout()"
-        class="w-full mt-4 px-5 py-3 rounded-xl bg-red-500/10 text-red-600 hover:bg-red-500/20 transition"
-      >
-        Sign out
-      </button>
+        <button
+          (click)="logout()"
+          class="w-full mt-4 px-5 py-3 rounded-xl bg-red-500/10 text-red-600 hover:bg-red-500/20 transition"
+        >
+          Sign out
+        </button>
+      </ng-container>
+
+      <ng-template #mobileLoggedOut>
+        <a
+          routerLink="/auth/login"
+          class="block w-full mt-4 px-5 py-3 text-center rounded-xl bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 transition"
+        >
+          Sign In
+        </a>
+      </ng-template>
     </ng-container>
-
-    <ng-template #mobileLoggedOut>
-      <a
-        routerLink="/auth/login"
-        class="block w-full mt-4 px-5 py-3 text-center rounded-xl bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 transition"
-      >
-        Sign In
-      </a>
-    </ng-template>
   </div>
 </nav>
