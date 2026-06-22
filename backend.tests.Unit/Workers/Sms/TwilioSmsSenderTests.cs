@@ -34,6 +34,106 @@ public class TwilioSmsSenderTests
     }
 
     [Fact]
+    public async Task SendAsync_ShouldUseFromPhoneNumberWhenMessagingServiceIsMissing()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.Created));
+        using var client = new HttpClient(handler);
+        var sender = new TwilioSmsSender(
+            client,
+            new SmsWorkerOptions("kafka", "sms", "group", "dlq", "sid", "token", null, "+14165550123")
+        );
+
+        await sender.SendAsync(CreateMessage(purpose: null));
+
+        handler.LastBody.Should().Contain("From=%2B14165550123");
+        handler.LastBody.Should().Contain("verification");
+    }
+
+    [Fact]
+    public async Task SendAsync_ShouldThrowWhenConfigurationIsMissing()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.Created));
+        using var client = new HttpClient(handler);
+        var sender = new TwilioSmsSender(
+            client,
+            new SmsWorkerOptions("kafka", "sms", "group", "dlq", null, "token", null, "+14165550123")
+        );
+
+        var act = () => sender.SendAsync(CreateMessage());
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*missing Twilio configuration*");
+        handler.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SendAsync_ShouldThrowWhenPhoneNumberIsMissing()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.Created));
+        using var client = new HttpClient(handler);
+        var sender = new TwilioSmsSender(
+            client,
+            new SmsWorkerOptions("kafka", "sms", "group", "dlq", "sid", "token", null, "+14165550123")
+        );
+
+        var act = () => sender.SendAsync(CreateMessage(phoneNumber: " "));
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*recipient phone number*");
+    }
+
+    [Fact]
+    public async Task SendAsync_ShouldThrowWhenCodeIsMissing()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.Created));
+        using var client = new HttpClient(handler);
+        var sender = new TwilioSmsSender(
+            client,
+            new SmsWorkerOptions("kafka", "sms", "group", "dlq", "sid", "token", null, "+14165550123")
+        );
+
+        var act = () => sender.SendAsync(CreateMessage(code: " "));
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*verification code*");
+    }
+
+    [Fact]
+    public async Task SendAsync_ShouldThrowWhenChallengeIsMissing()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.Created));
+        using var client = new HttpClient(handler);
+        var sender = new TwilioSmsSender(
+            client,
+            new SmsWorkerOptions("kafka", "sms", "group", "dlq", "sid", "token", null, "+14165550123")
+        );
+
+        var act = () => sender.SendAsync(CreateMessage(challenge: " "));
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*verification challenge*");
+    }
+
+    [Fact]
+    public async Task SendAsync_ShouldThrowTransientExceptionForServerResponses()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.BadGateway)
+        {
+            Content = new StringContent("upstream down")
+        });
+        using var client = new HttpClient(handler);
+        var sender = new TwilioSmsSender(
+            client,
+            new SmsWorkerOptions("kafka", "sms", "group", "dlq", "sid", "token", null, "+14165550123")
+        );
+
+        var act = () => sender.SendAsync(CreateMessage());
+
+        await act.Should().ThrowAsync<TransientSmsDeliveryException>()
+            .WithMessage("*502*");
+    }
+
+    [Fact]
     public async Task SendAsync_ShouldThrowTransientExceptionForRateLimitResponses()
     {
         var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.TooManyRequests)
@@ -71,14 +171,18 @@ public class TwilioSmsSenderTests
             .WithMessage("*400*");
     }
 
-    private static SmsMfaMessage CreateMessage()
+    private static SmsMfaMessage CreateMessage(
+        string phoneNumber = "+14165550123",
+        string code = "123456",
+        string challenge = "challenge-123",
+        string? purpose = "mfa")
     {
         return new SmsMfaMessage
         {
-            PhoneNumber = "+14165550123",
-            Code = "123456",
-            Challenge = "challenge-123",
-            Purpose = "mfa",
+            PhoneNumber = phoneNumber,
+            Code = code,
+            Challenge = challenge,
+            Purpose = purpose,
             ExpiresAtUtc = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc)
         };
     }

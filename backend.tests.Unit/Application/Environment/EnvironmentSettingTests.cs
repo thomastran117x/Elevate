@@ -74,6 +74,46 @@ public class EnvironmentSettingTests
     }
 
     [Fact]
+    public void NotificationTopics_ShouldFallBackToDefaults_WhenTopicEnvironmentVariablesAreMissing()
+    {
+        using var scope = new EnvironmentVariableScope(new Dictionary<string, string?>
+        {
+            ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
+            ["EMAIL_TOPIC"] = null,
+            ["SMS_TOPIC"] = null
+        });
+
+        using var harness = EnvironmentSettingHarness.Load();
+
+        harness.GetNullableString("EmailTopic").Should().BeNull();
+        harness.GetNullableString("SmsTopic").Should().BeNull();
+        harness.GetStringFromType("backend.main.shared.providers.messages.NotificationTopics", "Email")
+            .Should().Be("eventxperience-email");
+        harness.GetStringFromType("backend.main.shared.providers.messages.NotificationTopics", "Sms")
+            .Should().Be("eventxperience-sms");
+    }
+
+    [Fact]
+    public void NotificationTopics_ShouldUseConfiguredTopicNames_WhenEnvironmentVariablesArePresent()
+    {
+        using var scope = new EnvironmentVariableScope(new Dictionary<string, string?>
+        {
+            ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
+            ["EMAIL_TOPIC"] = "custom-email-topic",
+            ["SMS_TOPIC"] = "custom-sms-topic"
+        });
+
+        using var harness = EnvironmentSettingHarness.Load();
+
+        harness.GetNullableString("EmailTopic").Should().Be("custom-email-topic");
+        harness.GetNullableString("SmsTopic").Should().Be("custom-sms-topic");
+        harness.GetStringFromType("backend.main.shared.providers.messages.NotificationTopics", "Email")
+            .Should().Be("custom-email-topic");
+        harness.GetStringFromType("backend.main.shared.providers.messages.NotificationTopics", "Sms")
+            .Should().Be("custom-sms-topic");
+    }
+
+    [Fact]
     public void Validate_ShouldSkipInTestEnvironment()
     {
         using var scope = new EnvironmentVariableScope(new Dictionary<string, string?>
@@ -177,6 +217,12 @@ public class EnvironmentSettingTests
 
         public string? GetNullableString(string propertyName) =>
             (string?)_type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Static)!.GetValue(null);
+
+        public string GetStringFromType(string typeName, string propertyName)
+        {
+            var targetType = _assembly.GetType(typeName, throwOnError: true)!;
+            return (string)targetType.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Static)!.GetValue(null)!;
+        }
 
         public void Validate() =>
             _type.GetMethod("Validate", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null);
