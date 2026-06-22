@@ -106,21 +106,35 @@ public sealed class DisabledClubPostSearchService : IClubPostSearchService
 
 public sealed class DisabledEventSearchOutboxWriter : IEventSearchOutboxWriter
 {
-    public void StageUpsert(Events ev) { }
-    public void StageSync(Events ev) { }
-    public void StageDelete(int eventId) { }
+    public void StageUpsert(Events ev)
+    {
+    }
+    public void StageSync(Events ev)
+    {
+    }
+    public void StageDelete(int eventId)
+    {
+    }
 }
 
 public sealed class DisabledClubSearchOutboxWriter : IClubSearchOutboxWriter
 {
-    public void StageUpsert(Club club) { }
-    public void StageDelete(int clubId) { }
+    public void StageUpsert(Club club)
+    {
+    }
+    public void StageDelete(int clubId)
+    {
+    }
 }
 
 public sealed class DisabledClubPostSearchOutboxWriter : IClubPostSearchOutboxWriter
 {
-    public void StageUpsert(ClubPost post) { }
-    public void StageDelete(int postId) { }
+    public void StageUpsert(ClubPost post)
+    {
+    }
+    public void StageDelete(int postId)
+    {
+    }
 }
 
 public sealed class DisabledEventReindexService : IEventReindexService

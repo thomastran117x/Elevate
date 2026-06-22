@@ -4,7 +4,10 @@ public sealed class FeatureFlagRegistry
 {
     private readonly HashSet<string> _keys;
 
-    public static FeatureFlagRegistry Instance { get; } = new(
+    public static FeatureFlagRegistry Instance
+    {
+        get;
+    } = new(
         [
             FeatureFlagKeys.Auth,
             FeatureFlagKeys.Clubs,

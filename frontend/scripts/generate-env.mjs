@@ -44,12 +44,10 @@ function parseBoolean(value, envName) {
 }
 
 const featureFlags = Object.fromEntries(
-  ALL_FEATURE_KEYS
-    .map((key) => {
-      const envName = toEnvVarName(key);
-      return [key, parseBoolean(process.env[envName], envName)];
-    })
-    .filter(([, value]) => value !== undefined),
+  ALL_FEATURE_KEYS.map((key) => {
+    const envName = toEnvVarName(key);
+    return [key, parseBoolean(process.env[envName], envName)];
+  }).filter(([, value]) => value !== undefined),
 );
 
 const environment = {

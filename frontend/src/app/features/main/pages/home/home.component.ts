@@ -63,7 +63,9 @@ type Testimonial = { quote: string; name: string; role: string };
             </a>
 
             <nav class="hidden md:flex items-center gap-7 text-sm text-white/70">
-              <a *ngIf="eventsEnabled" class="hover:text-white transition" routerLink="/events">Explore</a>
+              <a *ngIf="eventsEnabled" class="hover:text-white transition" routerLink="/events"
+                >Explore</a
+              >
               <a class="hover:text-white transition" routerLink="/venues">Venues</a>
               <a class="hover:text-white transition" routerLink="/pricing">Pricing</a>
               <a class="hover:text-white transition" routerLink="/contact">Contact</a>

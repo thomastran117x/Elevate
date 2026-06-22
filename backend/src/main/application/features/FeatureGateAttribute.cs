@@ -8,5 +8,8 @@ public sealed class FeatureGateAttribute : Attribute
         FeatureKey = featureKey;
     }
 
-    public string FeatureKey { get; }
+    public string FeatureKey
+    {
+        get;
+    }
 }

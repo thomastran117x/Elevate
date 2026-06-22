@@ -8,7 +8,9 @@ import { RouterLink } from '@angular/router';
   imports: [CommonModule, RouterLink],
   template: `
     <section class="min-h-[60vh] bg-slate-950 px-6 py-24 text-white">
-      <div class="mx-auto max-w-2xl rounded-3xl border border-white/10 bg-white/5 p-10 text-center backdrop-blur">
+      <div
+        class="mx-auto max-w-2xl rounded-3xl border border-white/10 bg-white/5 p-10 text-center backdrop-blur"
+      >
         <p class="text-xs uppercase tracking-[0.28em] text-white/45">404</p>
         <h1 class="mt-4 text-4xl font-semibold">This page is not available.</h1>
         <p class="mt-3 text-sm text-white/65">

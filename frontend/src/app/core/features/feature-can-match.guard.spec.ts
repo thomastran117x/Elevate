@@ -22,7 +22,9 @@ describe('featureCanMatch', () => {
     };
     TestBed.configureTestingModule({ providers: [FeatureFlagsService] });
 
-    const result = TestBed.runInInjectionContext(() => featureCanMatch(FEATURE_KEYS.events)(route, []));
+    const result = TestBed.runInInjectionContext(() =>
+      featureCanMatch(FEATURE_KEYS.events)(route, []),
+    );
 
     expect(result).toBeFalse();
   });
@@ -33,7 +35,9 @@ describe('featureCanMatch', () => {
     };
     TestBed.configureTestingModule({ providers: [FeatureFlagsService] });
 
-    const result = TestBed.runInInjectionContext(() => featureCanMatch(FEATURE_KEYS.events)(route, []));
+    const result = TestBed.runInInjectionContext(() =>
+      featureCanMatch(FEATURE_KEYS.events)(route, []),
+    );
 
     expect(result).toBeTrue();
   });

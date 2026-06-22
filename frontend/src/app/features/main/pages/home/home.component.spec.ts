@@ -32,6 +32,8 @@ describe('HomeComponent', () => {
     expect(element.textContent).not.toContain('Get started');
     expect(element.textContent).not.toContain('Create an account');
     expect(element.textContent).not.toContain('Browse events');
-    expect(element.querySelector('input[placeholder="Search artists, teams, venues..."]')).toBeNull();
+    expect(
+      element.querySelector('input[placeholder="Search artists, teams, venues..."]'),
+    ).toBeNull();
   });
 });
