@@ -3,18 +3,18 @@ using backend.main.shared.utilities.logger;
 
 using Confluent.Kafka;
 
-namespace backend.worker.email_worker;
+namespace backend.worker.sms_worker;
 
-public sealed class KafkaEmailWorker : BackgroundService
+public sealed class KafkaSmsWorker : BackgroundService
 {
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
 
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly EmailWorkerOptions _options;
+    private readonly SmsWorkerOptions _options;
 
-    public KafkaEmailWorker(
+    public KafkaSmsWorker(
         IServiceScopeFactory scopeFactory,
-        EmailWorkerOptions options)
+        SmsWorkerOptions options)
     {
         _scopeFactory = scopeFactory;
         _options = options;
@@ -24,7 +24,7 @@ public sealed class KafkaEmailWorker : BackgroundService
     {
         if (!_options.IsConfigured)
         {
-            Logger.Warn("Email worker is disabled because SMTP_SERVER, EMAIL_USER, or EMAIL_PASSWORD is not configured.");
+            Logger.Warn("SMS worker is disabled because Twilio credentials or sender configuration is not configured.");
             return;
         }
 
@@ -35,7 +35,7 @@ public sealed class KafkaEmailWorker : BackgroundService
                 using var consumer = BuildConsumer();
                 consumer.Subscribe(_options.Topic);
 
-                Logger.Info($"Kafka email worker subscribed to '{_options.Topic}'.");
+                Logger.Info($"Kafka sms worker subscribed to '{_options.Topic}'.");
 
                 while (!stoppingToken.IsCancellationRequested)
                 {
@@ -44,7 +44,7 @@ public sealed class KafkaEmailWorker : BackgroundService
                         continue;
 
                     using var scope = _scopeFactory.CreateScope();
-                    var processor = scope.ServiceProvider.GetRequiredService<EmailMessageProcessor>();
+                    var processor = scope.ServiceProvider.GetRequiredService<SmsMfaMessageProcessor>();
 
                     await processor.ProcessAsync(KafkaMessageEnvelope.FromConsumeResult(result), stoppingToken);
                     consumer.Commit(result);
@@ -56,12 +56,12 @@ public sealed class KafkaEmailWorker : BackgroundService
             }
             catch (ConsumeException ex)
             {
-                Logger.Warn(ex, "Kafka email worker consumer error. Reconnecting soon...");
+                Logger.Warn(ex, "Kafka sms worker consumer error. Reconnecting soon...");
                 await Task.Delay(ReconnectDelay, stoppingToken);
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "Kafka email worker processing error. Retrying soon...");
+                Logger.Warn(ex, "Kafka sms worker processing error. Retrying soon...");
                 await Task.Delay(ReconnectDelay, stoppingToken);
             }
         }

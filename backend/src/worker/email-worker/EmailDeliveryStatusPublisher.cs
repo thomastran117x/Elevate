@@ -40,7 +40,6 @@ public sealed class KafkaEmailDeliveryStatusPublisher : IEmailDeliveryStatusPubl
 
     public ValueTask DisposeAsync()
     {
-        _producer.Flush(TimeSpan.FromSeconds(5));
         _producer.Dispose();
         return ValueTask.CompletedTask;
     }

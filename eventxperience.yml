@@ -230,6 +230,10 @@ spec:
               value: "redis:6379"
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: "kafka:9092"
+            - name: EMAIL_TOPIC
+              value: "eventxperience-email"
+            - name: SMS_TOPIC
+              value: "eventxperience-sms"
             - name: ELASTICSEARCH_URL
               value: "http://elasticsearch:9200"
             - name: JWT_SECRET_KEY
@@ -327,8 +331,63 @@ spec:
           env:
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: "kafka:9092"
+            - name: EMAIL_TOPIC
+              value: "eventxperience-email"
+            - name: EMAIL_GROUP_ID
+              value: "email-worker"
+            - name: EMAIL_DLQ_TOPIC
+              value: "eventxperience-email-dlq"
+            - name: EMAIL_STATUS_TOPIC
+              value: "eventxperience-email-status"
+            - name: SMTP_SERVER
+              value: ""
+            - name: SMTP_PORT
+              value: "587"
+            - name: EMAIL_USER
+              value: ""
+            - name: EMAIL_PASSWORD
+              value: ""
             - name: FRONTEND_URL
               value: "http://frontend:3090"
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sms-worker
+  namespace: eventxperience
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sms-worker
+  template:
+    metadata:
+      labels:
+        app: sms-worker
+    spec:
+      containers:
+        - name: sms-worker
+          image: myapp-sms-worker:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:9092"
+            - name: SMS_TOPIC
+              value: "eventxperience-sms"
+            - name: SMS_GROUP_ID
+              value: "sms-worker"
+            - name: SMS_DLQ_TOPIC
+              value: "eventxperience-sms-dlq"
+            - name: TWILIO_ACCOUNT_SID
+              value: ""
+            - name: TWILIO_AUTH_TOKEN
+              value: ""
+            - name: TWILIO_MESSAGING_SERVICE_SID
+              value: ""
+            - name: TWILIO_FROM_PHONE_NUMBER
+              value: ""
 
 ---
 apiVersion: apps/v1

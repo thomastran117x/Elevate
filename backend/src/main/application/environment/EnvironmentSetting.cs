@@ -40,8 +40,18 @@ namespace backend.main.application.environment
         private static readonly string _eventIndexTopic;
         private static readonly string _eventIndexGroupId;
         private static readonly string _eventIndexDlqTopic;
+        private static readonly string _emailTopic;
+        private static readonly string _emailGroupId;
+        private static readonly string _emailDlqTopic;
+        private static readonly string _smsTopic;
+        private static readonly string _smsGroupId;
+        private static readonly string _smsDlqTopic;
         private static readonly string _emailStatusTopic;
         private static readonly string _emailStatusGroupId;
+        private static readonly string? _twilioAccountSid;
+        private static readonly string? _twilioAuthToken;
+        private static readonly string? _twilioMessagingServiceSid;
+        private static readonly string? _twilioFromPhoneNumber;
         private static readonly string _appEnvironment;
         private static readonly string _logLevel;
         private const string DefaultJwtSecretAccess = "unit_test_secret_12345678901234567890";
@@ -137,6 +147,12 @@ namespace backend.main.application.environment
                 ["EVENT_INDEX_DLQ_TOPIC"],
                 "event-index-events-dlq"
             );
+            _emailTopic = GetOrDefault(["EMAIL_TOPIC"], "eventxperience-email");
+            _emailGroupId = GetOrDefault(["EMAIL_GROUP_ID"], "email-worker");
+            _emailDlqTopic = GetOrDefault(["EMAIL_DLQ_TOPIC"], "eventxperience-email-dlq");
+            _smsTopic = GetOrDefault(["SMS_TOPIC"], "eventxperience-sms");
+            _smsGroupId = GetOrDefault(["SMS_GROUP_ID"], "sms-worker");
+            _smsDlqTopic = GetOrDefault(["SMS_DLQ_TOPIC"], "eventxperience-sms-dlq");
             _emailStatusTopic = GetOrDefault(
                 ["EMAIL_STATUS_TOPIC"],
                 "eventxperience-email-status"
@@ -145,6 +161,10 @@ namespace backend.main.application.environment
                 ["EMAIL_STATUS_GROUP_ID"],
                 "event-invitation-status-updater"
             );
+            _twilioAccountSid = GetOptional(["TWILIO_ACCOUNT_SID"]);
+            _twilioAuthToken = GetOptional(["TWILIO_AUTH_TOKEN"]);
+            _twilioMessagingServiceSid = GetOptional(["TWILIO_MESSAGING_SERVICE_SID"]);
+            _twilioFromPhoneNumber = GetOptional(["TWILIO_FROM_PHONE_NUMBER"]);
 
             _appEnvironment = (
                 GetOptional(["ENVIRONMENT", "ASPNETCORE_ENVIRONMENT", "DOTNET_ENVIRONMENT"])
@@ -244,8 +264,18 @@ namespace backend.main.application.environment
         public static string EventIndexTopic => _eventIndexTopic;
         public static string EventIndexGroupId => _eventIndexGroupId;
         public static string EventIndexDlqTopic => _eventIndexDlqTopic;
+        public static string EmailTopic => _emailTopic;
+        public static string EmailGroupId => _emailGroupId;
+        public static string EmailDlqTopic => _emailDlqTopic;
+        public static string SmsTopic => _smsTopic;
+        public static string SmsGroupId => _smsGroupId;
+        public static string SmsDlqTopic => _smsDlqTopic;
         public static string EmailStatusTopic => _emailStatusTopic;
         public static string EmailStatusGroupId => _emailStatusGroupId;
+        public static string? TwilioAccountSid => _twilioAccountSid;
+        public static string? TwilioAuthToken => _twilioAuthToken;
+        public static string? TwilioMessagingServiceSid => _twilioMessagingServiceSid;
+        public static string? TwilioFromPhoneNumber => _twilioFromPhoneNumber;
         public static string AppEnvironment => _appEnvironment;
         public static string LogLevel => _logLevel;
 
@@ -291,3 +321,5 @@ namespace backend.main.application.environment
         }
     }
 }
+
+

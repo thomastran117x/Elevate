@@ -3,13 +3,12 @@ using System.Security.Cryptography;
 using backend.main.application.security;
 using backend.main.features.auth.contracts;
 using backend.main.features.auth.device;
+using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
-using backend.main.shared.providers;
-using backend.main.shared.providers.messages;
 using backend.main.shared.requests;
 using backend.main.shared.utilities.logger;
 
@@ -23,7 +22,7 @@ namespace backend.main.features.auth
         private readonly IOAuthService _oauthService;
         private readonly ITokenService _tokenService;
         private readonly ICacheService _cacheService;
-        private readonly IPublisher _publisher;
+        private readonly IAuthNotificationService _authNotificationService;
         private readonly IDeviceService _deviceService;
         private readonly ClientRequestInfo _requestInfo;
         private const string DummyHash = "$2a$11$9FJqO6j/4jP3E2fOQdWgMuKZXWWvPZ09f8Pj0L9VqB6TfqZ4fE5SO";
@@ -34,7 +33,7 @@ namespace backend.main.features.auth
             IOAuthService oauthService,
             ITokenService tokenService,
             ICacheService cacheService,
-            IPublisher publisher,
+            IAuthNotificationService authNotificationService,
             IDeviceService deviceService,
             ClientRequestInfo requestInfo
         )
@@ -43,7 +42,7 @@ namespace backend.main.features.auth
             _oauthService = oauthService;
             _tokenService = tokenService;
             _cacheService = cacheService;
-            _publisher = publisher;
+            _authNotificationService = authNotificationService;
             _deviceService = deviceService;
             _requestInfo = requestInfo;
         }
@@ -102,15 +101,11 @@ namespace backend.main.features.auth
                     user,
                     VerificationPurpose.SignUp
                 );
-                var message = new EmailMessage
-                {
-                    Type = EmailMessageType.VerifyEmail,
-                    Email = email,
-                    Token = artifacts.LinkToken,
-                    Code = artifacts.OtpChallenge.Code
-                };
-
-                await _publisher.PublishAsync("eventxperience-email", message);
+                await _authNotificationService.SendSignupVerificationAsync(
+                    email,
+                    artifacts.LinkToken,
+                    artifacts.OtpChallenge.Code
+                );
 
                 return artifacts.OtpChallenge;
             }
@@ -200,15 +195,11 @@ namespace backend.main.features.auth
                     user,
                     VerificationPurpose.ResetPassword
                 );
-                var message = new EmailMessage
-                {
-                    Type = EmailMessageType.ResetPassword,
-                    Email = email,
-                    Token = artifacts.LinkToken,
-                    Code = artifacts.OtpChallenge.Code
-                };
-
-                await _publisher.PublishAsync("eventxperience-email", message);
+                await _authNotificationService.SendPasswordResetAsync(
+                    email,
+                    artifacts.LinkToken,
+                    artifacts.OtpChallenge.Code
+                );
 
                 return artifacts.OtpChallenge;
             }

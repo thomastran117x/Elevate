@@ -5,9 +5,9 @@ using backend.main.shared.providers.messaging;
 
 using Confluent.Kafka;
 
-namespace backend.worker.email_worker;
+namespace backend.worker.sms_worker;
 
-public interface IEmailWorkerDlqPublisher
+public interface ISmsWorkerDlqPublisher
 {
     Task PublishAsync(
         KafkaMessageEnvelope envelope,
@@ -15,12 +15,12 @@ public interface IEmailWorkerDlqPublisher
         CancellationToken cancellationToken = default);
 }
 
-public sealed class KafkaEmailWorkerDlqPublisher : IEmailWorkerDlqPublisher, IAsyncDisposable
+public sealed class KafkaSmsWorkerDlqPublisher : ISmsWorkerDlqPublisher, IAsyncDisposable
 {
     private readonly IProducer<string, string> _producer;
-    private readonly EmailWorkerOptions _options;
+    private readonly SmsWorkerOptions _options;
 
-    public KafkaEmailWorkerDlqPublisher(EmailWorkerOptions options)
+    public KafkaSmsWorkerDlqPublisher(SmsWorkerOptions options)
     {
         _options = options;
         _producer = new ProducerBuilder<string, string>(new ProducerConfig
