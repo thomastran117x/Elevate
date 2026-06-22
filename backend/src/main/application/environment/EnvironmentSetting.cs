@@ -40,12 +40,12 @@ namespace backend.main.application.environment
         private static readonly string _eventIndexTopic;
         private static readonly string _eventIndexGroupId;
         private static readonly string _eventIndexDlqTopic;
-        private static readonly string? _emailTopic;
-        private static readonly string? _emailGroupId;
-        private static readonly string? _emailDlqTopic;
-        private static readonly string? _smsTopic;
-        private static readonly string? _smsGroupId;
-        private static readonly string? _smsDlqTopic;
+        private static readonly string _emailTopic;
+        private static readonly string _emailGroupId;
+        private static readonly string _emailDlqTopic;
+        private static readonly string _smsTopic;
+        private static readonly string _smsGroupId;
+        private static readonly string _smsDlqTopic;
         private static readonly string _emailStatusTopic;
         private static readonly string _emailStatusGroupId;
         private static readonly string? _twilioAccountSid;
@@ -147,12 +147,12 @@ namespace backend.main.application.environment
                 ["EVENT_INDEX_DLQ_TOPIC"],
                 "event-index-events-dlq"
             );
-            _emailTopic = GetOptional(["EMAIL_TOPIC"]);
-            _emailGroupId = GetOptional(["EMAIL_GROUP_ID"]);
-            _emailDlqTopic = GetOptional(["EMAIL_DLQ_TOPIC"]);
-            _smsTopic = GetOptional(["SMS_TOPIC"]);
-            _smsGroupId = GetOptional(["SMS_GROUP_ID"]);
-            _smsDlqTopic = GetOptional(["SMS_DLQ_TOPIC"]);
+            _emailTopic = GetOrDefault(["EMAIL_TOPIC"], "eventxperience-email");
+            _emailGroupId = GetOrDefault(["EMAIL_GROUP_ID"], "email-worker");
+            _emailDlqTopic = GetOrDefault(["EMAIL_DLQ_TOPIC"], "eventxperience-email-dlq");
+            _smsTopic = GetOrDefault(["SMS_TOPIC"], "eventxperience-sms");
+            _smsGroupId = GetOrDefault(["SMS_GROUP_ID"], "sms-worker");
+            _smsDlqTopic = GetOrDefault(["SMS_DLQ_TOPIC"], "eventxperience-sms-dlq");
             _emailStatusTopic = GetOrDefault(
                 ["EMAIL_STATUS_TOPIC"],
                 "eventxperience-email-status"
@@ -264,12 +264,12 @@ namespace backend.main.application.environment
         public static string EventIndexTopic => _eventIndexTopic;
         public static string EventIndexGroupId => _eventIndexGroupId;
         public static string EventIndexDlqTopic => _eventIndexDlqTopic;
-        public static string? EmailTopic => _emailTopic;
-        public static string? EmailGroupId => _emailGroupId;
-        public static string? EmailDlqTopic => _emailDlqTopic;
-        public static string? SmsTopic => _smsTopic;
-        public static string? SmsGroupId => _smsGroupId;
-        public static string? SmsDlqTopic => _smsDlqTopic;
+        public static string EmailTopic => _emailTopic;
+        public static string EmailGroupId => _emailGroupId;
+        public static string EmailDlqTopic => _emailDlqTopic;
+        public static string SmsTopic => _smsTopic;
+        public static string SmsGroupId => _smsGroupId;
+        public static string SmsDlqTopic => _smsDlqTopic;
         public static string EmailStatusTopic => _emailStatusTopic;
         public static string EmailStatusGroupId => _emailStatusGroupId;
         public static string? TwilioAccountSid => _twilioAccountSid;
@@ -321,4 +321,5 @@ namespace backend.main.application.environment
         }
     }
 }
+
 

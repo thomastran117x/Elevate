@@ -10,21 +10,23 @@ namespace backend.tests.Unit.Workers;
 public class WorkerOptionsFactoryTests
 {
     [Fact]
-    public void SmsWorkerOptions_FromEnvironment_ShouldThrowWhenSmsTopicIsMissing()
+    public void SmsWorkerOptions_FromEnvironment_ShouldUseDefaultTopicsWhenSmsSettingsAreMissing()
     {
-        var act = () => SmsWorkerOptions.FromEnvironment();
+        var options = SmsWorkerOptions.FromEnvironment();
 
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*SmsTopic must be configured*");
+        options.Topic.Should().Be("eventxperience-sms");
+        options.GroupId.Should().Be("sms-worker");
+        options.DlqTopic.Should().Be("eventxperience-sms-dlq");
     }
 
     [Fact]
-    public void EmailWorkerOptions_FromEnvironment_ShouldThrowWhenEmailTopicIsMissing()
+    public void EmailWorkerOptions_FromEnvironment_ShouldUseDefaultTopicsWhenEmailSettingsAreMissing()
     {
-        var act = () => EmailWorkerOptions.FromEnvironment();
+        var options = EmailWorkerOptions.FromEnvironment();
 
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*EmailTopic must be configured*");
+        options.Topic.Should().Be("eventxperience-email");
+        options.GroupId.Should().Be("email-worker");
+        options.DlqTopic.Should().Be("eventxperience-email-dlq");
     }
 
     [Fact]

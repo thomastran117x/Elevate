@@ -85,8 +85,8 @@ public class EnvironmentSettingTests
 
         using var harness = EnvironmentSettingHarness.Load();
 
-        harness.GetNullableString("EmailTopic").Should().BeNull();
-        harness.GetNullableString("SmsTopic").Should().BeNull();
+        harness.GetString("EmailTopic").Should().Be("eventxperience-email");
+        harness.GetString("SmsTopic").Should().Be("eventxperience-sms");
         harness.GetStringFromType("backend.main.shared.providers.messages.NotificationTopics", "Email")
             .Should().Be("eventxperience-email");
         harness.GetStringFromType("backend.main.shared.providers.messages.NotificationTopics", "Sms")
@@ -105,8 +105,8 @@ public class EnvironmentSettingTests
 
         using var harness = EnvironmentSettingHarness.Load();
 
-        harness.GetNullableString("EmailTopic").Should().Be("custom-email-topic");
-        harness.GetNullableString("SmsTopic").Should().Be("custom-sms-topic");
+        harness.GetString("EmailTopic").Should().Be("custom-email-topic");
+        harness.GetString("SmsTopic").Should().Be("custom-sms-topic");
         harness.GetStringFromType("backend.main.shared.providers.messages.NotificationTopics", "Email")
             .Should().Be("custom-email-topic");
         harness.GetStringFromType("backend.main.shared.providers.messages.NotificationTopics", "Sms")
@@ -275,3 +275,5 @@ public class EnvironmentSettingTests
         }
     }
 }
+
+

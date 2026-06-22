@@ -7,7 +7,7 @@ namespace backend.main.shared.providers.messages
         public const string DefaultEmail = "eventxperience-email";
         public const string DefaultSms = "eventxperience-sms";
 
-        public static string Email => EnvironmentSetting.EmailTopic ?? DefaultEmail;
-        public static string Sms => EnvironmentSetting.SmsTopic ?? DefaultSms;
+        public static string Email => EnvironmentSetting.EmailTopic;
+        public static string Sms => EnvironmentSetting.SmsTopic;
     }
 }

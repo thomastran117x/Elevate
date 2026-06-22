@@ -40,23 +40,23 @@ public class WorkerOptionsEnvironmentTests
     }
 
     [Fact]
-    public void SmsWorkerOptions_FromEnvironment_ShouldThrowWhenTopicIsMissing()
+    public void SmsWorkerOptions_FromEnvironment_ShouldUseDefaultsWhenTopicSettingsAreMissing()
     {
         using var scope = new EnvironmentVariableScope(new Dictionary<string, string?>
         {
             ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
             ["KAFKA_BOOTSTRAP_SERVERS"] = "kafka:9092",
             ["SMS_TOPIC"] = null,
-            ["SMS_GROUP_ID"] = "sms-group",
-            ["SMS_DLQ_TOPIC"] = "sms-dlq"
+            ["SMS_GROUP_ID"] = null,
+            ["SMS_DLQ_TOPIC"] = null
         });
 
         using var harness = AssemblyOptionsHarness.Load("sms-worker.dll", "backend.worker.sms_worker.SmsWorkerOptions");
+        var options = harness.InvokeFromEnvironment();
 
-        harness.Invoking(h => h.InvokeFromEnvironment())
-            .Should().Throw<TargetInvocationException>()
-            .WithInnerException<InvalidOperationException>()
-            .WithMessage("*SmsTopic must be configured*");
+        harness.GetString(options, "Topic").Should().Be("eventxperience-sms");
+        harness.GetString(options, "GroupId").Should().Be("sms-worker");
+        harness.GetString(options, "DlqTopic").Should().Be("eventxperience-sms-dlq");
     }
 
     [Fact]
@@ -93,23 +93,23 @@ public class WorkerOptionsEnvironmentTests
     }
 
     [Fact]
-    public void EmailWorkerOptions_FromEnvironment_ShouldThrowWhenTopicIsMissing()
+    public void EmailWorkerOptions_FromEnvironment_ShouldUseDefaultsWhenTopicSettingsAreMissing()
     {
         using var scope = new EnvironmentVariableScope(new Dictionary<string, string?>
         {
             ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
             ["KAFKA_BOOTSTRAP_SERVERS"] = "kafka:9092",
             ["EMAIL_TOPIC"] = null,
-            ["EMAIL_GROUP_ID"] = "email-group",
-            ["EMAIL_DLQ_TOPIC"] = "email-dlq"
+            ["EMAIL_GROUP_ID"] = null,
+            ["EMAIL_DLQ_TOPIC"] = null
         });
 
         using var harness = AssemblyOptionsHarness.Load("email-worker.dll", "backend.worker.email_worker.EmailWorkerOptions");
+        var options = harness.InvokeFromEnvironment();
 
-        harness.Invoking(h => h.InvokeFromEnvironment())
-            .Should().Throw<TargetInvocationException>()
-            .WithInnerException<InvalidOperationException>()
-            .WithMessage("*EmailTopic must be configured*");
+        harness.GetString(options, "Topic").Should().Be("eventxperience-email");
+        harness.GetString(options, "GroupId").Should().Be("email-worker");
+        harness.GetString(options, "DlqTopic").Should().Be("eventxperience-email-dlq");
     }
 
     private sealed class AssemblyOptionsHarness : IDisposable
