@@ -1,3 +1,4 @@
+using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.payment.contracts.responses;
 using backend.main.shared.exceptions.http;
@@ -14,6 +15,7 @@ namespace backend.main.features.payment
     /// Checkout, payment retrieval, refund, and Stripe webhook endpoints.
     /// </summary>
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.Payment)]
     [Route("payments")]
     public class PaymentController : ControllerBase
     {
@@ -157,3 +159,7 @@ namespace backend.main.features.payment
         }
     }
 }
+
+
+
+

@@ -1,3 +1,4 @@
+using backend.main.application.features;
 using backend.main.features.auth;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.device;
@@ -29,6 +30,8 @@ using backend.main.shared.providers;
 using backend.main.shared.storage;
 using backend.main.shared.utilities.logger;
 
+using Microsoft.Extensions.Options;
+
 namespace backend.main.application.bootstrap
 {
     public static class Container
@@ -45,34 +48,88 @@ namespace backend.main.application.bootstrap
 
         public static IServiceCollection AddEventSearchInfrastructure(this IServiceCollection services, IConfiguration config)
         {
-            services.AddElasticsearchInfrastructure(config);
-            services.AddScoped<IEventSearchService, EventSearchService>();
+            var featureFlags = BuildFeatureFlagEvaluator(config);
+            if (featureFlags.IsEnabled(FeatureFlagKeys.Search))
+            {
+                services.AddElasticsearchInfrastructure(config);
+                services.AddScoped<IEventSearchService, EventSearchService>();
+            }
+            else
+            {
+                services.AddScoped<IEventSearchService, DisabledEventSearchService>();
+            }
 
             return services;
         }
 
         public static IServiceCollection AddClubPostSearchInfrastructure(this IServiceCollection services, IConfiguration config)
         {
-            services.AddElasticsearchInfrastructure(config);
-            services.AddScoped<IClubPostSearchService, ClubPostSearchService>();
+            var featureFlags = BuildFeatureFlagEvaluator(config);
+            if (featureFlags.IsEnabled(FeatureFlagKeys.Search))
+            {
+                services.AddElasticsearchInfrastructure(config);
+                services.AddScoped<IClubPostSearchService, ClubPostSearchService>();
+            }
+            else
+            {
+                services.AddScoped<IClubPostSearchService, DisabledClubPostSearchService>();
+            }
 
             return services;
         }
 
         public static IServiceCollection AddClubSearchInfrastructure(this IServiceCollection services, IConfiguration config)
         {
-            services.AddElasticsearchInfrastructure(config);
-            services.AddScoped<IClubSearchService, ClubSearchService>();
+            var featureFlags = BuildFeatureFlagEvaluator(config);
+            if (featureFlags.IsEnabled(FeatureFlagKeys.Search))
+            {
+                services.AddElasticsearchInfrastructure(config);
+                services.AddScoped<IClubSearchService, ClubSearchService>();
+            }
+            else
+            {
+                services.AddScoped<IClubSearchService, DisabledClubSearchService>();
+            }
 
             return services;
         }
 
-        public static IServiceCollection AddSearchInfrastructure(this IServiceCollection services, IConfiguration config)
+        public static IServiceCollection AddSearchInfrastructure(this IServiceCollection services, IConfiguration config, IFeatureFlagEvaluator? featureFlags = null)
         {
-            services.AddElasticsearchInfrastructure(config);
-            services.AddScoped<IEventSearchService, EventSearchService>();
-            services.AddScoped<IClubSearchService, ClubSearchService>();
-            services.AddScoped<IClubPostSearchService, ClubPostSearchService>();
+            featureFlags ??= BuildFeatureFlagEvaluator(config);
+
+            if (featureFlags.IsEnabled(FeatureFlagKeys.Search))
+            {
+                services.AddElasticsearchInfrastructure(config);
+                services.AddScoped<IEventSearchService, EventSearchService>();
+                services.AddScoped<IClubSearchService, ClubSearchService>();
+                services.AddScoped<IClubPostSearchService, ClubPostSearchService>();
+                services.AddScoped<IEventSearchOutboxWriter, EventSearchOutboxWriter>();
+                services.AddScoped<IClubSearchOutboxWriter, ClubSearchOutboxWriter>();
+                services.AddScoped<IClubPostSearchOutboxWriter, ClubPostSearchOutboxWriter>();
+            }
+            else
+            {
+                services.AddScoped<IEventSearchService, DisabledEventSearchService>();
+                services.AddScoped<IClubSearchService, DisabledClubSearchService>();
+                services.AddScoped<IClubPostSearchService, DisabledClubPostSearchService>();
+                services.AddScoped<IEventSearchOutboxWriter, DisabledEventSearchOutboxWriter>();
+                services.AddScoped<IClubSearchOutboxWriter, DisabledClubSearchOutboxWriter>();
+                services.AddScoped<IClubPostSearchOutboxWriter, DisabledClubPostSearchOutboxWriter>();
+            }
+
+            if (featureFlags.IsEnabled(FeatureFlagKeys.SearchReindex))
+            {
+                services.AddScoped<IClubPostReindexService, ClubPostReindexService>();
+                services.AddScoped<IClubReindexService, ClubReindexService>();
+                services.AddScoped<IEventReindexService, EventReindexService>();
+            }
+            else
+            {
+                services.AddScoped<IClubPostReindexService, DisabledClubPostReindexService>();
+                services.AddScoped<IClubReindexService, DisabledClubReindexService>();
+                services.AddScoped<IEventReindexService, DisabledEventReindexService>();
+            }
 
             return services;
         }
@@ -82,11 +139,12 @@ namespace backend.main.application.bootstrap
             IConfiguration config,
             bool includeHostedServices = true)
         {
+            var featureFlags = BuildFeatureFlagEvaluator(config);
+
             services.Configure<ClubVersioningOptions>(config.GetSection("ClubVersioning"));
             services.Configure<EventVersioningOptions>(config.GetSection("EventVersioning"));
-            services.AddSingleton(EventInvitationStatusConsumerOptions.FromEnvironment());
             services.AddSingleton(TimeProvider.System);
-            services.AddSearchInfrastructure(config);
+            services.AddSearchInfrastructure(config, featureFlags);
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
             services.AddSingleton<IRepositoryAttributeResolver, RepositoryAttributeResolver>();
             services.AddRepositoryWithProxy<IFollowRepository, FollowRepository>();
@@ -112,30 +170,52 @@ namespace backend.main.application.bootstrap
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IClubService, ClubService>();
             services.AddScoped<ClubVersionCleanupRunner>();
-            services.AddScoped<IFollowService, FollowService>();
-            services.AddScoped<IEventsService, EventsService>();
-            services.AddScoped<IEventInvitationService, EventInvitationService>();
-            services.AddScoped<IPaymentService, StripePaymentService>();
             services.AddScoped<IClubReviewService, ClubReviewService>();
             services.AddScoped<IDeviceService, DeviceService>();
             services.AddScoped<IClubPostService, ClubPostService>();
-            services.AddScoped<IClubPostReindexService, ClubPostReindexService>();
-            services.AddScoped<IClubReindexService, ClubReindexService>();
-            services.AddScoped<IEventReindexService, EventReindexService>();
-            services.AddScoped<IClubSearchOutboxWriter, ClubSearchOutboxWriter>();
-            services.AddScoped<IClubPostSearchOutboxWriter, ClubPostSearchOutboxWriter>();
-            services.AddScoped<IEventSearchOutboxWriter, EventSearchOutboxWriter>();
-            services.AddScoped<IPostCommentService, PostCommentService>();
             services.AddSingleton<CommentEventBroker>();
             services.AddSingleton<IRefreshAheadCache, RefreshAheadCache>();
-            services.AddScoped<IEventRegistrationService, EventRegistrationService>();
             services.AddScoped<IAzureBlobService, AzureBlobService>();
+
+            if (featureFlags.IsEnabled(FeatureFlagKeys.ClubsFollow))
+                services.AddScoped<IFollowService, FollowService>();
+            else
+                services.AddScoped<IFollowService, DisabledFollowService>();
+
+            services.AddScoped<IEventsService, EventsService>();
+
+            if (featureFlags.IsEnabled(FeatureFlagKeys.EventsInvitations))
+            {
+                services.AddScoped<IEventInvitationService, EventInvitationService>();
+                services.AddSingleton(EventInvitationStatusConsumerOptions.FromEnvironment());
+            }
+            else
+            {
+                services.AddScoped<IEventInvitationService, DisabledEventInvitationService>();
+            }
+
+            if (featureFlags.IsEnabled(FeatureFlagKeys.Payment))
+                services.AddScoped<IPaymentService, StripePaymentService>();
+            else
+                services.AddScoped<IPaymentService, DisabledPaymentService>();
+
+            if (featureFlags.IsEnabled(FeatureFlagKeys.EventsRegistration))
+                services.AddScoped<IEventRegistrationService, EventRegistrationService>();
+            else
+                services.AddScoped<IEventRegistrationService, DisabledEventRegistrationService>();
+
+            services.AddScoped<IPostCommentService, PostCommentService>();
 
             if (includeHostedServices)
             {
-                services.AddHostedService<ElasticsearchIndexInitializationService>();
-                services.AddHostedService<ClubVersionCleanupService>();
-                services.AddHostedService<EventInvitationStatusConsumer>();
+                if (featureFlags.IsEnabled(FeatureFlagKeys.Search))
+                    services.AddHostedService<ElasticsearchIndexInitializationService>();
+
+                if (featureFlags.IsEnabled(FeatureFlagKeys.ClubsVersioning))
+                    services.AddHostedService<ClubVersionCleanupService>();
+
+                if (featureFlags.IsEnabled(FeatureFlagKeys.EventsInvitations))
+                    services.AddHostedService<EventInvitationStatusConsumer>();
             }
 
             services.AddSingleton<ICustomLogger, FileLogger>();
@@ -158,6 +238,14 @@ namespace backend.main.application.bootstrap
             services.AddAppSeeders();
 
             return services;
+        }
+
+        private static IFeatureFlagEvaluator BuildFeatureFlagEvaluator(IConfiguration config)
+        {
+            var registry = FeatureFlagRegistry.Instance;
+            return new FeatureFlagEvaluator(
+                Options.Create(FeatureFlagsOptions.FromConfiguration(config, registry)),
+                registry);
         }
 
         private static string ResolveCaptchaProvider(IConfiguration config)

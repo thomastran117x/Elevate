@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
+using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.events;
 using backend.main.features.events.registration;
@@ -19,6 +20,7 @@ namespace backend.main.features.events.registration
     /// Registration endpoints for event attendance and registration status lookups.
     /// </summary>
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.EventsRegistration)]
     [Route("events")]
     public class EventRegistrationController : ControllerBase
     {
@@ -253,6 +255,7 @@ namespace backend.main.features.events.registration
     }
 
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.EventsRegistration)]
     [Route("users")]
     public class UserEventRegistrationController : ControllerBase
     {
@@ -292,3 +295,8 @@ namespace backend.main.features.events.registration
         }
     }
 }
+
+
+
+
+

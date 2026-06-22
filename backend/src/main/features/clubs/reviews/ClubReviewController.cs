@@ -1,3 +1,4 @@
+using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.clubs.reviews;
 using backend.main.features.clubs.reviews.contracts.requests;
@@ -13,6 +14,7 @@ namespace backend.main.features.clubs.reviews
     /// Club review creation, editing, and administrative review lookup endpoints.
     /// </summary>
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.ClubsReviews)]
     [Route("clubs")]
     public class ClubReviewController : ControllerBase
     {
@@ -128,6 +130,7 @@ namespace backend.main.features.clubs.reviews
     }
 
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.ClubsReviews)]
     [Route("users")]
     public class UserReviewController : ControllerBase
     {
@@ -168,4 +171,9 @@ namespace backend.main.features.clubs.reviews
         }
     }
 }
+
+
+
+
+
 

@@ -1,4 +1,5 @@
 using backend.main.application.bootstrap;
+using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.auth;
 using backend.main.features.auth.captcha;
@@ -24,6 +25,7 @@ namespace backend.main.features.auth
     /// Authentication, session, verification, and password-recovery endpoints.
     /// </summary>
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.Auth)]
     [Route(RoutePaths.AuthPrefix)]
     public class AuthController : ControllerBase
     {
@@ -770,5 +772,10 @@ namespace backend.main.features.auth
         }
     }
 }
+
+
+
+
+
 
 

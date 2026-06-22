@@ -1,3 +1,4 @@
+using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.clubs.contracts.requests;
 using backend.main.features.clubs.contracts.responses;
@@ -15,6 +16,7 @@ namespace backend.main.features.clubs
     /// Club discovery, management, staff, ownership, and version-history endpoints.
     /// </summary>
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.Clubs)]
     [Route("clubs")]
     public class ClubController : ControllerBase
     {
@@ -26,6 +28,7 @@ namespace backend.main.features.clubs
         }
 
         [Authorize]
+        [FeatureGate(FeatureFlagKeys.ClubsFollow)]
         [HttpPost("{clubId}/join")]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> JoinClub(int clubId)
@@ -43,6 +46,7 @@ namespace backend.main.features.clubs
         }
 
         [Authorize]
+        [FeatureGate(FeatureFlagKeys.ClubsFollow)]
         [HttpDelete("{clubId}/join")]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> LeaveClub(int clubId)
@@ -308,6 +312,7 @@ namespace backend.main.features.clubs
         }
 
         [Authorize]
+        [FeatureGate(FeatureFlagKeys.ClubsVersioning)]
         [HttpGet("{id}/versions")]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubVersionListItemResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubVersions(
@@ -344,6 +349,7 @@ namespace backend.main.features.clubs
         }
 
         [Authorize]
+        [FeatureGate(FeatureFlagKeys.ClubsVersioning)]
         [HttpGet("{id}/versions/{versionNumber}")]
         [ProducesResponseType(typeof(ApiResponse<ClubVersionDetailResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubVersion(int id, int versionNumber)
@@ -362,6 +368,7 @@ namespace backend.main.features.clubs
         }
 
         [Authorize]
+        [FeatureGate(FeatureFlagKeys.ClubsVersioning)]
         [HttpPost("{id}/versions/{versionNumber}/rollback")]
         [ProducesResponseType(typeof(ApiResponse<ClubRollbackResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> RollbackClubVersion(int id, int versionNumber)
@@ -478,6 +485,8 @@ namespace backend.main.features.clubs
     }
 
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.Clubs)]
+    [FeatureGate(FeatureFlagKeys.SearchReindex)]
     [Route("admin/clubs")]
     [Authorize("AdminOnly")]
     public class AdminClubsController : ControllerBase
@@ -504,3 +513,13 @@ namespace backend.main.features.clubs
         }
     }
 }
+
+
+
+
+
+
+
+
+
+

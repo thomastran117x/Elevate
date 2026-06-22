@@ -1,3 +1,4 @@
+using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.contracts.requests;
@@ -15,6 +16,7 @@ namespace backend.main.features.clubs.posts
     /// Club post feeds, editing, and administrative post-management endpoints.
     /// </summary>
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.ClubsPosts)]
     [Route("clubs")]
     public class ClubPostController : ControllerBase
     {
@@ -152,6 +154,8 @@ namespace backend.main.features.clubs.posts
     }
 
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.ClubsPosts)]
+    [FeatureGate(FeatureFlagKeys.SearchReindex)]
     [Route("admin/clubs")]
     [Authorize("AdminOnly")]
     public class AdminClubPostController : ControllerBase
@@ -213,6 +217,11 @@ namespace backend.main.features.clubs.posts
             };
     }
 }
+
+
+
+
+
 
 
 

@@ -1,11 +1,15 @@
 using System.Reflection;
 
 using backend.main.application.bootstrap;
+using backend.main.application.features;
 using backend.main.features.auth.captcha;
+using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.search;
 using backend.main.features.events.invitations;
+using backend.main.features.events.registration;
 using backend.main.features.events.search;
+using backend.main.features.payment;
 using backend.main.infrastructure.elasticsearch;
 
 using FluentAssertions;
@@ -67,7 +71,7 @@ public class ContainerTests
     }
 
     [Fact]
-    public void AddSearchInfrastructure_ShouldRegisterSearchServices_AndCircuitBreaker()
+    public void AddSearchInfrastructure_ShouldRegisterSearchServices_AndCircuitBreaker_WhenSearchEnabled()
     {
         var services = new ServiceCollection();
         var config = new ConfigurationBuilder().Build();
@@ -88,6 +92,32 @@ public class ContainerTests
     }
 
     [Fact]
+    public void AddSearchInfrastructure_ShouldRegisterDisabledSearchServices_WhenSearchDisabled()
+    {
+        var services = new ServiceCollection();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["FeatureFlags:search"] = "false"
+            })
+            .Build();
+
+        services.AddSearchInfrastructure(config);
+
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IEventSearchService)
+            && descriptor.ImplementationType == typeof(DisabledEventSearchService));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IClubSearchService)
+            && descriptor.ImplementationType == typeof(DisabledClubSearchService));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IClubPostSearchService)
+            && descriptor.ImplementationType == typeof(DisabledClubPostSearchService));
+        services.Should().NotContain(descriptor =>
+            descriptor.ServiceType == typeof(ElasticsearchCircuitBreaker));
+    }
+
+    [Fact]
     public void AddApplicationServices_ShouldRegisterCoreServicesWithoutHostedServices_WhenDisabled()
     {
         var config = new ConfigurationBuilder().Build();
@@ -103,6 +133,47 @@ public class ContainerTests
             descriptor.ServiceType == typeof(EventInvitationStatusConsumerOptions));
         services.Should().NotContain(descriptor =>
             descriptor.ServiceType == typeof(IHostedService));
+    }
+
+    [Fact]
+    public void AddApplicationServices_ShouldRegisterDisabledFeatureServices_WhenFeatureFlagsAreOff()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["FeatureFlags:clubs.follow"] = "false",
+                ["FeatureFlags:events.invitations"] = "false",
+                ["FeatureFlags:events.registration"] = "false",
+                ["FeatureFlags:payment"] = "false",
+                ["FeatureFlags:search.reindex"] = "false"
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);
+
+        services.AddApplicationServices(config, includeHostedServices: true);
+
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IFollowService)
+            && descriptor.ImplementationType == typeof(DisabledFollowService));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IEventInvitationService)
+            && descriptor.ImplementationType == typeof(DisabledEventInvitationService));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IEventRegistrationService)
+            && descriptor.ImplementationType == typeof(DisabledEventRegistrationService));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IPaymentService)
+            && descriptor.ImplementationType == typeof(DisabledPaymentService));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IEventReindexService)
+            && descriptor.ImplementationType == typeof(DisabledEventReindexService));
+        services.Should().NotContain(descriptor =>
+            descriptor.ServiceType == typeof(EventInvitationStatusConsumerOptions));
+        services.Should().NotContain(descriptor =>
+            descriptor.ServiceType == typeof(IHostedService)
+            && descriptor.ImplementationType == typeof(EventInvitationStatusConsumer));
     }
 
     [Fact]

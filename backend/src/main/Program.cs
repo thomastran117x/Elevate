@@ -1,5 +1,6 @@
 using backend.main.application.bootstrap;
 using backend.main.application.environment;
+using backend.main.application.features;
 using backend.main.application.handlers;
 using backend.main.application.openapi;
 using backend.main.application.security;
@@ -24,8 +25,8 @@ var builder = WebApplication.CreateBuilder(args);
 var isTesting = builder.Environment.IsEnvironment("Testing");
 var isOpenApiDocumentMode = OpenApiDocumentMode.ShouldSkipStartupSideEffects;
 var suppressStartupSideEffects = isTesting || isOpenApiDocumentMode;
-
 builder.Services.AddSingleton(Logger.GetOptions());
+builder.Services.AddFeatureFlags();
 
 builder.WebHost.ConfigureKestrel(options =>
 {

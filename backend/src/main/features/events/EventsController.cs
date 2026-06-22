@@ -1,3 +1,4 @@
+using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.clubs;
 using backend.main.features.events;
@@ -20,6 +21,7 @@ namespace backend.main.features.events
     /// Event CRUD, drafts, discovery, analytics, images, and version-history endpoints.
     /// </summary>
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.Events)]
     [Route("events")]
     public class EventsController : ControllerBase
     {
@@ -151,6 +153,7 @@ namespace backend.main.features.events
         }
 
         [Authorize]
+        [FeatureGate(FeatureFlagKeys.EventsVersioning)]
         [HttpGet("{eventId}/versions")]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<EventVersionListItemResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEventVersions(
@@ -187,6 +190,7 @@ namespace backend.main.features.events
         }
 
         [Authorize]
+        [FeatureGate(FeatureFlagKeys.EventsVersioning)]
         [HttpGet("{eventId}/versions/{versionNumber}")]
         [ProducesResponseType(typeof(ApiResponse<EventVersionDetailResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEventVersion(int eventId, int versionNumber)
@@ -205,6 +209,7 @@ namespace backend.main.features.events
         }
 
         [Authorize]
+        [FeatureGate(FeatureFlagKeys.EventsVersioning)]
         [HttpPost("{eventId}/versions/{versionNumber}/rollback")]
         [ProducesResponseType(typeof(ApiResponse<EventRollbackResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> RollbackEventVersion(int eventId, int versionNumber)
@@ -714,6 +719,7 @@ namespace backend.main.features.events
         }
 
         [Authorize]
+        [FeatureGate(FeatureFlagKeys.EventsAnalytics)]
         [HttpGet("{eventId}/analytics")]
         [ProducesResponseType(typeof(ApiResponse<EventAnalyticsResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEventAnalytics(int eventId)
@@ -740,6 +746,7 @@ namespace backend.main.features.events
         }
 
         [Authorize]
+        [FeatureGate(FeatureFlagKeys.EventsImages)]
         [HttpPost("images/presigned-url")]
         [ProducesResponseType(typeof(ApiResponse<PresignedUploadResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetPresignedUploadUrl([FromBody] PresignedUrlRequest request)
@@ -772,6 +779,7 @@ namespace backend.main.features.events
         }
 
         [Authorize]
+        [FeatureGate(FeatureFlagKeys.EventsImages)]
         [HttpPost("{eventId}/images")]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status201Created)]
         public async Task<IActionResult> AddEventImage([FromBody] AddEventImageRequest request, int eventId)
@@ -803,6 +811,7 @@ namespace backend.main.features.events
         }
 
         [Authorize]
+        [FeatureGate(FeatureFlagKeys.EventsImages)]
         [HttpDelete("{eventId}/images/{imageId}")]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> RemoveEventImage(int eventId, int imageId)
@@ -907,6 +916,8 @@ namespace backend.main.features.events
     }
 
     [ApiController]
+    [FeatureGate(FeatureFlagKeys.Events)]
+    [FeatureGate(FeatureFlagKeys.SearchReindex)]
     [Route("admin/events")]
     [Authorize("AdminOnly")]
     public class AdminEventsController : ControllerBase
@@ -933,3 +944,15 @@ namespace backend.main.features.events
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
