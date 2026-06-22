@@ -46,15 +46,15 @@ export const routes: Routes = [
     loadChildren: () => import('./features/auth/auth.module').then((m) => m.AuthModule),
   },
 
-{
-  path: 'settings/security',
-  canMatch: [featureCanMatch(FEATURE_KEYS.auth)],
-  canActivate: [authenticatedUserGuard],
-  loadComponent: () =>
-    import('./features/auth/pages/security-settings/security-settings.component').then(
-      (m) => m.SecuritySettingsComponent,
-    ),
-},
+  {
+    path: 'settings/security',
+    canMatch: [featureCanMatch(FEATURE_KEYS.auth)],
+    canActivate: [authenticatedUserGuard],
+    loadComponent: () =>
+      import('./features/auth/pages/security-settings/security-settings.component').then(
+        (m) => m.SecuritySettingsComponent,
+      ),
+  },
   {
     path: 'events',
     canMatch: [featureCanMatch(FEATURE_KEYS.events)],

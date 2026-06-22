@@ -169,9 +169,12 @@ export class AuthService {
   }
 
   startMfaEnrollment(phoneNumber: string): Observable<MfaChallengeResponse> {
-    return this.postWithCsrf<ApiEnvelope<MfaChallengeResponse>>(`${this.baseUrl}/mfa/enroll/start`, {
-      phoneNumber,
-    }).pipe(map((res) => this.requireData(res, 'SMS MFA challenge response was incomplete.')));
+    return this.postWithCsrf<ApiEnvelope<MfaChallengeResponse>>(
+      `${this.baseUrl}/mfa/enroll/start`,
+      {
+        phoneNumber,
+      },
+    ).pipe(map((res) => this.requireData(res, 'SMS MFA challenge response was incomplete.')));
   }
 
   verifyMfaEnrollment(code: string, challenge: string): Observable<MfaStatusResponse> {
@@ -182,9 +185,10 @@ export class AuthService {
   }
 
   disableMfa(): Observable<MfaStatusResponse> {
-    return this.postWithCsrf<ApiEnvelope<MfaStatusResponse>>(`${this.baseUrl}/mfa/disable`, {}).pipe(
-      map((res) => this.requireData(res, 'SMS MFA disable response was incomplete.')),
-    );
+    return this.postWithCsrf<ApiEnvelope<MfaStatusResponse>>(
+      `${this.baseUrl}/mfa/disable`,
+      {},
+    ).pipe(map((res) => this.requireData(res, 'SMS MFA disable response was incomplete.')));
   }
 
   logout(): Observable<void> {

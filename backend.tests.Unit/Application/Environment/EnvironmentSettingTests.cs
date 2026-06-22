@@ -114,29 +114,29 @@ public class EnvironmentSettingTests
     }
 
 
-[Fact]
-public void AuthSmsMfaEnrollmentEnabled_ShouldDefaultToTrue_AndRespectConfiguredOverrides()
-{
-    using var defaultScope = new EnvironmentVariableScope(new Dictionary<string, string?>
+    [Fact]
+    public void AuthSmsMfaEnrollmentEnabled_ShouldDefaultToTrue_AndRespectConfiguredOverrides()
     {
-        ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
-        ["AUTH_SMS_MFA_ENROLLMENT_ENABLED"] = null
-    });
+        using var defaultScope = new EnvironmentVariableScope(new Dictionary<string, string?>
+        {
+            ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
+            ["AUTH_SMS_MFA_ENROLLMENT_ENABLED"] = null
+        });
 
-    using (var defaultHarness = EnvironmentSettingHarness.Load())
-    {
-        defaultHarness.GetBool("AuthSmsMfaEnrollmentEnabled").Should().BeTrue();
+        using (var defaultHarness = EnvironmentSettingHarness.Load())
+        {
+            defaultHarness.GetBool("AuthSmsMfaEnrollmentEnabled").Should().BeTrue();
+        }
+
+        using var disabledScope = new EnvironmentVariableScope(new Dictionary<string, string?>
+        {
+            ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
+            ["AUTH_SMS_MFA_ENROLLMENT_ENABLED"] = "false"
+        });
+
+        using var disabledHarness = EnvironmentSettingHarness.Load();
+        disabledHarness.GetBool("AuthSmsMfaEnrollmentEnabled").Should().BeFalse();
     }
-
-    using var disabledScope = new EnvironmentVariableScope(new Dictionary<string, string?>
-    {
-        ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
-        ["AUTH_SMS_MFA_ENROLLMENT_ENABLED"] = "false"
-    });
-
-    using var disabledHarness = EnvironmentSettingHarness.Load();
-    disabledHarness.GetBool("AuthSmsMfaEnrollmentEnabled").Should().BeFalse();
-}
 
     [Fact]
     public void Validate_ShouldSkipInTestEnvironment()

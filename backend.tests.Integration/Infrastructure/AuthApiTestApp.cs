@@ -116,33 +116,33 @@ public sealed class AuthApiTestApp : IAsyncDisposable
     }
 
 
-public async Task<SmsMfaEnrollment?> FindSmsMfaEnrollmentAsync(int userId)
-{
-    await using var scope = _factory.Services.CreateAsyncScope();
-    var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
-    return await db.SmsMfaEnrollments.SingleOrDefaultAsync(enrollment => enrollment.UserId == userId);
-}
-
-public async Task<HttpResponseMessage> GetWithBearerAsync(string path, string accessToken)
-{
-    var request = new HttpRequestMessage(HttpMethod.Get, path);
-    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
-    return await Client.SendAsync(request);
-}
-
-public async Task<HttpResponseMessage> PostJsonWithBearerAndCsrfAsync(
-    string path,
-    object payload,
-    string accessToken)
-{
-    var request = new HttpRequestMessage(HttpMethod.Post, path)
+    public async Task<SmsMfaEnrollment?> FindSmsMfaEnrollmentAsync(int userId)
     {
-        Content = JsonContent.Create(payload)
-    };
-    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
-    request.Headers.Add(CsrfConfiguration.CsrfHeaderName, await GetCsrfTokenAsync());
-    return await Client.SendAsync(request);
-}
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+        return await db.SmsMfaEnrollments.SingleOrDefaultAsync(enrollment => enrollment.UserId == userId);
+    }
+
+    public async Task<HttpResponseMessage> GetWithBearerAsync(string path, string accessToken)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        return await Client.SendAsync(request);
+    }
+
+    public async Task<HttpResponseMessage> PostJsonWithBearerAndCsrfAsync(
+        string path,
+        object payload,
+        string accessToken)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = JsonContent.Create(payload)
+        };
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        request.Headers.Add(CsrfConfiguration.CsrfHeaderName, await GetCsrfTokenAsync());
+        return await Client.SendAsync(request);
+    }
 
     public async Task AddClubStaffAsync(int clubId, int userId, int grantedByUserId, ClubStaffRole role = ClubStaffRole.Manager)
     {

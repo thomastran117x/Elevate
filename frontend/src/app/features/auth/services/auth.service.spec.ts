@@ -84,135 +84,133 @@ describe('AuthService', () => {
     });
   }));
 
+  it('fetches MFA status after ensuring csrf', fakeAsync(() => {
+    let responseBody: unknown;
 
+    service.getMfaStatus().subscribe((response) => {
+      responseBody = response;
+    });
 
-it('fetches MFA status after ensuring csrf', fakeAsync(() => {
-  let responseBody: unknown;
+    tick();
 
-  service.getMfaStatus().subscribe((response) => {
-    responseBody = response;
-  });
+    const request = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa'));
+    expect(request.request.method).toBe('GET');
+    expect(request.request.withCredentials).toBeTrue();
 
-  tick();
+    request.flush({
+      success: true,
+      message: 'ok',
+      data: {
+        EnrollmentAvailable: true,
+        IsSmsMfaEnabled: false,
+        MaskedPhoneNumber: null,
+        PhoneVerifiedAtUtc: null,
+      },
+      error: null,
+      meta: null,
+    });
 
-  const request = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa'));
-  expect(request.request.method).toBe('GET');
-  expect(request.request.withCredentials).toBeTrue();
-
-  request.flush({
-    success: true,
-    message: 'ok',
-    data: {
+    expect(responseBody).toEqual({
       EnrollmentAvailable: true,
       IsSmsMfaEnabled: false,
       MaskedPhoneNumber: null,
       PhoneVerifiedAtUtc: null,
-    },
-    error: null,
-    meta: null,
-  });
+    });
+  }));
 
-  expect(responseBody).toEqual({
-    EnrollmentAvailable: true,
-    IsSmsMfaEnabled: false,
-    MaskedPhoneNumber: null,
-    PhoneVerifiedAtUtc: null,
-  });
-}));
+  it('posts MFA enrollment start payload with the phone number', fakeAsync(() => {
+    let responseBody: unknown;
 
-it('posts MFA enrollment start payload with the phone number', fakeAsync(() => {
-  let responseBody: unknown;
+    service.startMfaEnrollment('+14165550123').subscribe((response) => {
+      responseBody = response;
+    });
 
-  service.startMfaEnrollment('+14165550123').subscribe((response) => {
-    responseBody = response;
-  });
+    tick();
 
-  tick();
+    const request = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/enroll/start'));
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ phoneNumber: '+14165550123' });
 
-  const request = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/enroll/start'));
-  expect(request.request.method).toBe('POST');
-  expect(request.request.body).toEqual({ phoneNumber: '+14165550123' });
+    request.flush({
+      success: true,
+      message: 'ok',
+      data: {
+        Challenge: 'challenge-1',
+        ExpiresAtUtc: '2026-06-22T15:30:00Z',
+        Channel: 'sms',
+        MaskedDestination: '***-***-0123',
+      },
+      error: null,
+      meta: null,
+    });
 
-  request.flush({
-    success: true,
-    message: 'ok',
-    data: {
+    expect(responseBody).toEqual({
       Challenge: 'challenge-1',
       ExpiresAtUtc: '2026-06-22T15:30:00Z',
       Channel: 'sms',
       MaskedDestination: '***-***-0123',
-    },
-    error: null,
-    meta: null,
-  });
+    });
+  }));
 
-  expect(responseBody).toEqual({
-    Challenge: 'challenge-1',
-    ExpiresAtUtc: '2026-06-22T15:30:00Z',
-    Channel: 'sms',
-    MaskedDestination: '***-***-0123',
-  });
-}));
+  it('posts MFA verification and disable payloads', fakeAsync(() => {
+    let verified: unknown;
+    let disabled: unknown;
 
-it('posts MFA verification and disable payloads', fakeAsync(() => {
-  let verified: unknown;
-  let disabled: unknown;
+    service.verifyMfaEnrollment('654321', 'challenge-1').subscribe((response) => {
+      verified = response;
+    });
+    tick();
 
-  service.verifyMfaEnrollment('654321', 'challenge-1').subscribe((response) => {
-    verified = response;
-  });
-  tick();
+    const verifyRequest = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/enroll/verify'));
+    expect(verifyRequest.request.method).toBe('POST');
+    expect(verifyRequest.request.body).toEqual({ code: '654321', challenge: 'challenge-1' });
+    verifyRequest.flush({
+      success: true,
+      message: 'ok',
+      data: {
+        EnrollmentAvailable: true,
+        IsSmsMfaEnabled: true,
+        MaskedPhoneNumber: '***-***-0123',
+        PhoneVerifiedAtUtc: '2026-06-22T15:31:00Z',
+      },
+      error: null,
+      meta: null,
+    });
 
-  const verifyRequest = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/enroll/verify'));
-  expect(verifyRequest.request.method).toBe('POST');
-  expect(verifyRequest.request.body).toEqual({ code: '654321', challenge: 'challenge-1' });
-  verifyRequest.flush({
-    success: true,
-    message: 'ok',
-    data: {
+    service.disableMfa().subscribe((response) => {
+      disabled = response;
+    });
+    tick();
+
+    const disableRequest = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/disable'));
+    expect(disableRequest.request.method).toBe('POST');
+    expect(disableRequest.request.body).toEqual({});
+    disableRequest.flush({
+      success: true,
+      message: 'ok',
+      data: {
+        EnrollmentAvailable: true,
+        IsSmsMfaEnabled: false,
+        MaskedPhoneNumber: '***-***-0123',
+        PhoneVerifiedAtUtc: '2026-06-22T15:31:00Z',
+      },
+      error: null,
+      meta: null,
+    });
+
+    expect(verified).toEqual({
       EnrollmentAvailable: true,
       IsSmsMfaEnabled: true,
       MaskedPhoneNumber: '***-***-0123',
       PhoneVerifiedAtUtc: '2026-06-22T15:31:00Z',
-    },
-    error: null,
-    meta: null,
-  });
-
-  service.disableMfa().subscribe((response) => {
-    disabled = response;
-  });
-  tick();
-
-  const disableRequest = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/disable'));
-  expect(disableRequest.request.method).toBe('POST');
-  expect(disableRequest.request.body).toEqual({});
-  disableRequest.flush({
-    success: true,
-    message: 'ok',
-    data: {
+    });
+    expect(disabled).toEqual({
       EnrollmentAvailable: true,
       IsSmsMfaEnabled: false,
       MaskedPhoneNumber: '***-***-0123',
       PhoneVerifiedAtUtc: '2026-06-22T15:31:00Z',
-    },
-    error: null,
-    meta: null,
-  });
-
-  expect(verified).toEqual({
-    EnrollmentAvailable: true,
-    IsSmsMfaEnabled: true,
-    MaskedPhoneNumber: '***-***-0123',
-    PhoneVerifiedAtUtc: '2026-06-22T15:31:00Z',
-  });
-  expect(disabled).toEqual({
-    EnrollmentAvailable: true,
-    IsSmsMfaEnabled: false,
-    MaskedPhoneNumber: '***-***-0123',
-    PhoneVerifiedAtUtc: '2026-06-22T15:31:00Z',
-  });
-}));
+    });
+  }));
 
   it('surfaces 4xx login failures as typed client errors', fakeAsync(() => {
     let thrown: unknown;

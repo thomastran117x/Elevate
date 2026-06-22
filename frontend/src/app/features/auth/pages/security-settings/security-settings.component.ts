@@ -4,11 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
-import {
-  AuthService,
-  MfaChallengeResponse,
-  MfaStatusResponse,
-} from '../../services/auth.service';
+import { AuthService, MfaChallengeResponse, MfaStatusResponse } from '../../services/auth.service';
 
 @Component({
   selector: 'app-security-settings',

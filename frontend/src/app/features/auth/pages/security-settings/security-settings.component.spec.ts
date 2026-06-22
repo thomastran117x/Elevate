@@ -2,11 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 
 import { ApiClientClientError } from '../../../../core/api/models/api-client-error.model';
-import {
-  AuthService,
-  MfaChallengeResponse,
-  MfaStatusResponse,
-} from '../../services/auth.service';
+import { AuthService, MfaChallengeResponse, MfaStatusResponse } from '../../services/auth.service';
 import { SecuritySettingsComponent } from './security-settings.component';
 
 describe('SecuritySettingsComponent', () => {
