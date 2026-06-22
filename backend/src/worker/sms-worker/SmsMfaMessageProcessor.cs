@@ -21,7 +21,9 @@ public sealed class SmsMfaMessageProcessor
             MaxRetryAttempts = 3,
             BackoffType = DelayBackoffType.Exponential,
             Delay = TimeSpan.FromMilliseconds(500),
-            ShouldHandle = new PredicateBuilder().Handle<Exception>()
+            ShouldHandle = new PredicateBuilder()
+                .Handle<TransientSmsDeliveryException>()
+                .Handle<HttpRequestException>()
         })
         .Build();
 
@@ -42,7 +44,7 @@ public sealed class SmsMfaMessageProcessor
         try
         {
             message = JsonSerializer.Deserialize<SmsMfaMessage>(envelope.Payload, JsonOptions.Default)
-                ?? throw new InvalidOperationException("SMS payload could not be deserialized.");
+                ?? throw new JsonException("SMS payload could not be deserialized.");
 
             await RetryPipeline.ExecuteAsync(
                 async (CancellationToken ct) => await _smsSender.SendAsync(message, ct),
@@ -56,13 +58,34 @@ public sealed class SmsMfaMessageProcessor
         catch (JsonException ex)
         {
             Logger.Warn(ex, "Malformed SMS payload. Publishing to Kafka DLQ.");
-            await _dlqPublisher.PublishAsync(envelope, ex.Message, cancellationToken);
+            await TryPublishToDlqAsync(envelope, ex.Message, cancellationToken);
         }
         catch (Exception ex)
         {
             var destination = message?.PhoneNumber ?? "unknown";
             Logger.Warn(ex, $"SMS delivery failed for '{destination}'. Publishing to Kafka DLQ.");
-            await _dlqPublisher.PublishAsync(envelope, ex.Message, cancellationToken);
+            await TryPublishToDlqAsync(envelope, ex.Message, cancellationToken);
+        }
+    }
+
+    private async Task TryPublishToDlqAsync(
+        KafkaMessageEnvelope envelope,
+        string error,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _dlqPublisher.PublishAsync(envelope, error, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, $"Failed to publish SMS message to DLQ topic '{envelope.Topic}'. Skipping rethrow so the consumer can advance.");
         }
     }
 }
+
+

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 
@@ -9,11 +10,13 @@ public sealed class TwilioSmsSender : ISmsSender
 {
     private readonly HttpClient _httpClient;
     private readonly SmsWorkerOptions _options;
+    private readonly AuthenticationHeaderValue _authorizationHeader;
 
     public TwilioSmsSender(HttpClient httpClient, SmsWorkerOptions options)
     {
         _httpClient = httpClient;
         _options = options;
+        _authorizationHeader = BuildAuthorizationHeader(options);
     }
 
     public async Task SendAsync(SmsMfaMessage message, CancellationToken cancellationToken = default)
@@ -31,19 +34,19 @@ public sealed class TwilioSmsSender : ISmsSender
             Content = BuildContent(message)
         };
 
-        var credentials = Convert.ToBase64String(
-            Encoding.ASCII.GetBytes($"{_options.AccountSid}:{_options.AuthToken}")
-        );
-        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+        request.Headers.Authorization = _authorizationHeader;
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         if (response.IsSuccessStatusCode)
             return;
 
         var detail = await response.Content.ReadAsStringAsync(cancellationToken);
-        throw new InvalidOperationException(
-            $"Twilio SMS delivery failed with status {(int)response.StatusCode}: {detail}"
-        );
+        var messageText = $"Twilio SMS delivery failed with status {(int)response.StatusCode}: {detail}";
+
+        if (IsTransient(response.StatusCode))
+            throw new TransientSmsDeliveryException(messageText);
+
+        throw new InvalidOperationException(messageText);
     }
 
     private HttpContent BuildContent(SmsMfaMessage message)
@@ -69,6 +72,21 @@ public sealed class TwilioSmsSender : ISmsSender
             : message.Purpose.Trim().ToLowerInvariant();
 
         return $"Your EventXperience {purpose} code is {message.Code}. It expires at {message.ExpiresAtUtc:O}.";
+    }
+
+    private static AuthenticationHeaderValue BuildAuthorizationHeader(SmsWorkerOptions options)
+    {
+        var credentials = Convert.ToBase64String(
+            Encoding.UTF8.GetBytes($"{options.AccountSid}:{options.AuthToken}")
+        );
+
+        return new AuthenticationHeaderValue("Basic", credentials);
+    }
+
+    private static bool IsTransient(HttpStatusCode statusCode)
+    {
+        var status = (int)statusCode;
+        return status == 429 || status >= 500;
     }
 
     private static void ValidateMessage(SmsMfaMessage message)

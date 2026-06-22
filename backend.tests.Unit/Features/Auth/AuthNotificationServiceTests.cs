@@ -2,8 +2,6 @@ using backend.main.features.auth.notifications;
 using backend.main.shared.providers;
 using backend.main.shared.providers.messages;
 
-using FluentAssertions;
-
 using Moq;
 
 namespace backend.tests.Unit.Features.Auth;
@@ -25,6 +23,40 @@ public class AuthNotificationServiceTests
                 && message.Email == "member@example.com"
                 && message.Token == "verify-token"
                 && message.Code == "123456")), Times.Once);
+    }
+
+    [Fact]
+    public async Task SendPasswordResetAsync_ShouldPublishResetPasswordMessage()
+    {
+        var publisher = new Mock<IPublisher>();
+        var service = new AuthNotificationService(publisher.Object);
+
+        await service.SendPasswordResetAsync("member@example.com", "reset-token", "654321");
+
+        publisher.Verify(p => p.PublishAsync(
+            NotificationTopics.Email,
+            It.Is<EmailMessage>(message =>
+                message.Type == EmailMessageType.ResetPassword
+                && message.Email == "member@example.com"
+                && message.Token == "reset-token"
+                && message.Code == "654321")), Times.Once);
+    }
+
+    [Fact]
+    public async Task SendDeviceVerificationAsync_ShouldPublishNewDeviceMessage()
+    {
+        var publisher = new Mock<IPublisher>();
+        var service = new AuthNotificationService(publisher.Object);
+
+        await service.SendDeviceVerificationAsync("member@example.com", "device-token");
+
+        publisher.Verify(p => p.PublishAsync(
+            NotificationTopics.Email,
+            It.Is<EmailMessage>(message =>
+                message.Type == EmailMessageType.NewDevice
+                && message.Email == "member@example.com"
+                && message.Token == "device-token"
+                && message.Code == null)), Times.Once);
     }
 
     [Fact]

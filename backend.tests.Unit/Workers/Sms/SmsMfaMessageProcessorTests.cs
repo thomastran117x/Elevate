@@ -51,11 +51,11 @@ public class SmsMfaMessageProcessorTests
     }
 
     [Fact]
-    public async Task ProcessAsync_ShouldPublishDlqAfterDeliveryFailure()
+    public async Task ProcessAsync_ShouldRetryTransientFailuresBeforePublishingDlq()
     {
         var sender = new Mock<ISmsSender>();
         sender.Setup(service => service.SendAsync(It.IsAny<SmsMfaMessage>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException("twilio down"));
+            .ThrowsAsync(new TransientSmsDeliveryException("twilio down"));
         var dlq = new Mock<ISmsWorkerDlqPublisher>();
         var processor = new SmsMfaMessageProcessor(sender.Object, dlq.Object);
         var envelope = CreateEnvelope(new SmsMfaMessage
@@ -71,6 +71,51 @@ public class SmsMfaMessageProcessorTests
 
         sender.Verify(service => service.SendAsync(It.IsAny<SmsMfaMessage>(), It.IsAny<CancellationToken>()), Times.Exactly(4));
         dlq.Verify(service => service.PublishAsync(envelope, It.Is<string>(error => error.Contains("twilio down")), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldNotRetryNonTransientFailures()
+    {
+        var sender = new Mock<ISmsSender>();
+        sender.Setup(service => service.SendAsync(It.IsAny<SmsMfaMessage>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("bad payload"));
+        var dlq = new Mock<ISmsWorkerDlqPublisher>();
+        var processor = new SmsMfaMessageProcessor(sender.Object, dlq.Object);
+
+        await processor.ProcessAsync(CreateEnvelope(new SmsMfaMessage
+        {
+            PhoneNumber = "+14165550123",
+            Code = "123456",
+            Challenge = "challenge",
+            Purpose = "mfa",
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5)
+        }));
+
+        sender.Verify(service => service.SendAsync(It.IsAny<SmsMfaMessage>(), It.IsAny<CancellationToken>()), Times.Once);
+        dlq.Verify(service => service.PublishAsync(It.IsAny<KafkaMessageEnvelope>(), It.Is<string>(error => error.Contains("bad payload")), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldSwallowDlqPublishFailures()
+    {
+        var sender = new Mock<ISmsSender>();
+        sender.Setup(service => service.SendAsync(It.IsAny<SmsMfaMessage>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("bad payload"));
+        var dlq = new Mock<ISmsWorkerDlqPublisher>();
+        dlq.Setup(service => service.PublishAsync(It.IsAny<KafkaMessageEnvelope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("dlq unavailable"));
+        var processor = new SmsMfaMessageProcessor(sender.Object, dlq.Object);
+
+        var act = () => processor.ProcessAsync(CreateEnvelope(new SmsMfaMessage
+        {
+            PhoneNumber = "+14165550123",
+            Code = "123456",
+            Challenge = "challenge",
+            Purpose = "mfa",
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5)
+        }));
+
+        await act.Should().NotThrowAsync();
     }
 
     [Fact]

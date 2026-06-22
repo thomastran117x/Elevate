@@ -59,7 +59,6 @@ public sealed class KafkaEmailWorkerDlqPublisher : IEmailWorkerDlqPublisher, IAs
 
     public ValueTask DisposeAsync()
     {
-        _producer.Flush(TimeSpan.FromSeconds(5));
         _producer.Dispose();
         return ValueTask.CompletedTask;
     }
