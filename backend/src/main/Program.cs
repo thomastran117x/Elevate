@@ -10,8 +10,6 @@ using backend.main.infrastructure.redis;
 using backend.main.seeders;
 using backend.main.shared.utilities.logger;
 
-using Microsoft.Extensions.Options;
-
 using Serilog;
 
 Logger.Configure(o =>
@@ -27,15 +25,8 @@ var builder = WebApplication.CreateBuilder(args);
 var isTesting = builder.Environment.IsEnvironment("Testing");
 var isOpenApiDocumentMode = OpenApiDocumentMode.ShouldSkipStartupSideEffects;
 var suppressStartupSideEffects = isTesting || isOpenApiDocumentMode;
-var featureFlagRegistry = FeatureFlagRegistry.Instance;
-var featureFlagOptions = FeatureFlagsOptions.FromConfiguration(builder.Configuration, featureFlagRegistry);
-var featureFlagOptionsWrapper = Options.Create(featureFlagOptions);
-var featureFlagEvaluator = new FeatureFlagEvaluator(featureFlagOptionsWrapper, featureFlagRegistry);
-
 builder.Services.AddSingleton(Logger.GetOptions());
-builder.Services.AddSingleton(featureFlagRegistry);
-builder.Services.AddSingleton<IOptions<FeatureFlagsOptions>>(featureFlagOptionsWrapper);
-builder.Services.AddSingleton<IFeatureFlagEvaluator>(featureFlagEvaluator);
+builder.Services.AddFeatureFlags();
 
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -55,7 +46,6 @@ builder.Host.UseMinimalSerilog();
 builder.Services.AddControllersWithViews(options =>
 {
     options.Conventions.Insert(0, new RoutePrefixConvention(RoutePaths.ApiPrefix));
-    options.Conventions.Insert(1, new FeatureGateConvention(featureFlagEvaluator));
 });
 builder.Services.AddApiResponseConventions();
 builder.Services.AddAppOpenApi();
