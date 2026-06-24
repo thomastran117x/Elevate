@@ -9,13 +9,15 @@ namespace backend.main.features.auth.contracts.responses
             string accessToken,
             DateTime expiresAtUtc,
             string? refreshToken = null,
-            string? sessionBindingToken = null
+            string? sessionBindingToken = null,
+            string? returnPath = null
         )
         {
             AccessToken = accessToken;
             ExpiresAtUtc = expiresAtUtc;
             RefreshToken = refreshToken;
             SessionBindingToken = sessionBindingToken;
+            ReturnPath = returnPath;
         }
 
         /// <summary>
@@ -43,6 +45,13 @@ namespace backend.main.features.auth.contracts.responses
         /// Session binding token paired with the refresh token for API-token clients.
         /// </summary>
         public string? SessionBindingToken
+        {
+            get; set;
+        }
+        /// <summary>
+        /// Optional safe internal path to resume after device or step-up verification.
+        /// </summary>
+        public string? ReturnPath
         {
             get; set;
         }

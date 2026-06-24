@@ -92,8 +92,10 @@ public class AuthEndpointsTests
         var login = await app.Client.SendAsync(loginRequest);
 
         login.StatusCode.Should().Be(HttpStatusCode.OK);
-        var loginBody = await app.ReadApiResponseAsync<AuthenticatedSessionResponse>(login);
-        loginBody.Data!.RefreshToken.Should().BeNull();
+        var loginBody = await app.ReadApiResponseAsync<LoginAuthenticationResponse>(login);
+        loginBody.Data!.Type.Should().Be("authenticated");
+        loginBody.Data.Auth.Should().NotBeNull();
+        loginBody.Data.Auth!.RefreshToken.Should().BeNull();
         AuthApiTestApp.ExtractCookie(login, HttpUtility.RefreshCookieName).Should().NotBeNullOrWhiteSpace();
     }
 
@@ -624,6 +626,97 @@ public class AuthEndpointsTests
         enrollment!.IsSmsMfaEnabled.Should().BeFalse();
         enrollment.PhoneNumber.Should().Be("+14165550123");
         enrollment.PhoneVerifiedAtUtc.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task LoginStepUpEndpoints_ShouldSendSms_AndCompleteLogin()
+    {
+        var originalEnforcement = Environment.GetEnvironmentVariable("AUTH_SMS_MFA_ENFORCEMENT_ENABLED");
+        var originalStepUpSms = Environment.GetEnvironmentVariable("AUTH_SMS_MFA_STEP_UP_SMS_ENABLED");
+        Environment.SetEnvironmentVariable("AUTH_SMS_MFA_ENFORCEMENT_ENABLED", "true");
+        Environment.SetEnvironmentVariable("AUTH_SMS_MFA_STEP_UP_SMS_ENABLED", "true");
+
+        try
+        {
+            await using var app = await AuthApiTestApp.CreateAsync();
+
+            var session = await app.SignUpAndVerifyByTokenAsync(
+                "stepup@example.com",
+                transport: SessionTransportResolver.ApiValue);
+
+            var enrollStart = await app.PostJsonWithBearerAndCsrfAsync(
+                "/api/auth/mfa/enroll/start",
+                new MfaEnrollmentStartRequest
+                {
+                    PhoneNumber = "+14165550123"
+                },
+                session.AccessToken);
+            var enrollStartBody = await app.ReadApiResponseAsync<MfaChallengeResponse>(enrollStart);
+            var enrollmentSms = app.Publisher.SmsMessages.Last(message =>
+                message.Challenge == enrollStartBody.Data!.Challenge);
+
+            var enrollVerify = await app.PostJsonWithBearerAndCsrfAsync(
+                "/api/auth/mfa/enroll/verify",
+                new MfaEnrollmentVerifyRequest
+                {
+                    Challenge = enrollStartBody.Data!.Challenge,
+                    Code = enrollmentSms.Code
+                },
+                session.AccessToken);
+            enrollVerify.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            app.Publisher.Clear();
+
+            var login = await app.PostJsonWithCsrfAsync("/api/auth/login", new LoginRequest
+            {
+                Email = "stepup@example.com",
+                Password = "Password123!",
+                Captcha = "captcha",
+                Transport = SessionTransportResolver.ApiValue,
+                ReturnUrl = "/bookings/123"
+            });
+
+            login.StatusCode.Should().Be(HttpStatusCode.OK);
+            var loginBody = await app.ReadApiResponseAsync<LoginAuthenticationResponse>(login);
+            loginBody.Data!.Type.Should().Be("requires_step_up");
+            loginBody.Data.StepUp.Should().NotBeNull();
+            loginBody.Data.StepUp!.AvailableMethods.Should().Contain(new[] { "sms", "email" });
+
+            var startStepUp = await app.PostJsonWithCsrfAsync("/api/auth/mfa/start", new StartLoginStepUpRequest
+            {
+                Challenge = loginBody.Data.StepUp.Challenge,
+                Method = "sms"
+            });
+
+            startStepUp.StatusCode.Should().Be(HttpStatusCode.OK);
+            var startStepUpBody = await app.ReadApiResponseAsync<StartLoginStepUpResponse>(startStepUp);
+            startStepUpBody.Data!.SelectedMethod.Should().Be("sms");
+            startStepUpBody.Data.Challenge.Should().NotBe(loginBody.Data.StepUp.Challenge);
+            app.Publisher.SmsMessages.Should().ContainSingle(message =>
+                message.Challenge == startStepUpBody.Data.Challenge
+                && message.Purpose == "sign-in verification");
+
+            var stepUpSms = app.Publisher.SmsMessages.Single(message =>
+                message.Challenge == startStepUpBody.Data.Challenge);
+
+            var verifyStepUp = await app.PostJsonWithCsrfAsync("/api/auth/mfa/verify", new VerifyLoginStepUpRequest
+            {
+                Challenge = startStepUpBody.Data.Challenge,
+                Code = stepUpSms.Code
+            });
+
+            verifyStepUp.StatusCode.Should().Be(HttpStatusCode.OK);
+            var verifyStepUpBody = await app.ReadApiResponseAsync<AuthenticatedSessionResponse>(verifyStepUp);
+            verifyStepUpBody.Data!.AccessToken.Should().NotBeNullOrWhiteSpace();
+            verifyStepUpBody.Data.RefreshToken.Should().NotBeNullOrWhiteSpace();
+            verifyStepUpBody.Data.SessionBindingToken.Should().NotBeNullOrWhiteSpace();
+            verifyStepUpBody.Data.ReturnPath.Should().Be("/bookings/123");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("AUTH_SMS_MFA_ENFORCEMENT_ENABLED", originalEnforcement);
+            Environment.SetEnvironmentVariable("AUTH_SMS_MFA_STEP_UP_SMS_ENABLED", originalStepUpSms);
+        }
     }
 
     private static async Task<HttpRequestMessage> CreateCsrfRequestAsync(

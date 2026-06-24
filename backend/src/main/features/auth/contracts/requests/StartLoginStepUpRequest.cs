@@ -2,20 +2,16 @@ using System.ComponentModel.DataAnnotations;
 
 namespace backend.main.features.auth.contracts.requests
 {
-    public abstract class OAuthRequest
+    public sealed class StartLoginStepUpRequest
     {
         [Required]
-        public required string Token
+        public required string Challenge
         {
             get; set;
         }
 
-        public string? Transport
-        {
-            get; set;
-        }
-
-        public string? ReturnUrl
+        [Required]
+        public required string Method
         {
             get; set;
         }

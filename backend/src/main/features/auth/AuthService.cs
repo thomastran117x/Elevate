@@ -1,10 +1,13 @@
 using System.Security.Cryptography;
 
+using backend.main.application.environment;
 using backend.main.application.security;
 using backend.main.features.auth.contracts;
+using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.device;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
+using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.profile;
@@ -24,6 +27,9 @@ namespace backend.main.features.auth
         private readonly ICacheService _cacheService;
         private readonly IAuthNotificationService _authNotificationService;
         private readonly IDeviceService _deviceService;
+        private readonly IDeviceTrustService _deviceTrustService;
+        private readonly ILoginStepUpChallengeService _loginStepUpChallengeService;
+        private readonly IAuthSessionService _authSessionService;
         private readonly ClientRequestInfo _requestInfo;
         private const string DummyHash = "$2a$11$9FJqO6j/4jP3E2fOQdWgMuKZXWWvPZ09f8Pj0L9VqB6TfqZ4fE5SO";
         private static readonly TimeSpan PendingOAuthSignupTtl = TimeSpan.FromMinutes(15);
@@ -35,6 +41,9 @@ namespace backend.main.features.auth
             ICacheService cacheService,
             IAuthNotificationService authNotificationService,
             IDeviceService deviceService,
+            IDeviceTrustService deviceTrustService,
+            ILoginStepUpChallengeService loginStepUpChallengeService,
+            IAuthSessionService authSessionService,
             ClientRequestInfo requestInfo
         )
         {
@@ -44,14 +53,18 @@ namespace backend.main.features.auth
             _cacheService = cacheService;
             _authNotificationService = authNotificationService;
             _deviceService = deviceService;
+            _deviceTrustService = deviceTrustService;
+            _loginStepUpChallengeService = loginStepUpChallengeService;
+            _authSessionService = authSessionService;
             _requestInfo = requestInfo;
         }
 
-        public async Task<UserToken> LoginAsync(
+        public async Task<LoginAuthenticationResult> LoginAsync(
             string email,
             string password,
             SessionTransport transport,
-            bool rememberMe = false
+            bool rememberMe = false,
+            string? returnUrl = null
         )
         {
             try
@@ -59,16 +72,47 @@ namespace backend.main.features.auth
                 UserAuthRecord? user = await _userRepository.GetAuthByEmailAsync(email);
 
                 var hashToCheck = user?.Password ?? DummyHash;
-
                 bool isValidPassword = VerifyPassword(password, hashToCheck);
 
                 if (user == null || user.Password == null || !isValidPassword)
                     throw new UnauthorizedException("Invalid email or password");
 
-                await EnsureUserEnabledAsync(ToUser(user));
-                await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
+                var resolvedUser = ToUser(user);
+                await EnsureUserEnabledAsync(resolvedUser);
 
-                return await GenerateTokenPair(ToUser(user), transport, rememberMe: rememberMe);
+                if (await _deviceTrustService.IsTrustedAsync(resolvedUser.Id, _requestInfo))
+                {
+                    return LoginAuthenticationResult.Authenticated(new AuthenticatedSessionResult
+                    {
+                        UserToken = await _authSessionService.IssueAsync(
+                            resolvedUser,
+                            transport,
+                            rememberMe: rememberMe
+                        )
+                    });
+                }
+
+                if (!EnvironmentSetting.AuthSmsMfaEnforcementEnabled)
+                {
+                    await _deviceService.EnsureDeviceKnownAsync(resolvedUser.Id, resolvedUser.Email, _requestInfo);
+                    return LoginAuthenticationResult.Authenticated(new AuthenticatedSessionResult
+                    {
+                        UserToken = await _authSessionService.IssueAsync(
+                            resolvedUser,
+                            transport,
+                            rememberMe: rememberMe
+                        )
+                    });
+                }
+
+                var stepUp = await _loginStepUpChallengeService.CreateChallengeAsync(
+                    resolvedUser,
+                    transport,
+                    rememberMe,
+                    returnUrl
+                );
+
+                return LoginAuthenticationResult.RequiresStepUp(stepUp);
             }
             catch (Exception e)
             {
@@ -133,7 +177,7 @@ namespace backend.main.features.auth
 
                 await _userRepository.CreateUserAsync(user);
 
-                return await GenerateTokenPair(user, transport);
+                return await _authSessionService.IssueAsync(user, transport);
             }
             catch (Exception e)
             {
@@ -164,7 +208,7 @@ namespace backend.main.features.auth
 
                 await _userRepository.CreateUserAsync(user);
 
-                return await GenerateTokenPair(user, transport);
+                return await _authSessionService.IssueAsync(user, transport);
             }
             catch (Exception e)
             {
@@ -222,7 +266,6 @@ namespace backend.main.features.auth
                     VerificationPurpose.ResetPassword
                 );
                 await ChangePasswordInternalAsync(user.Email, password);
-                return;
             }
             catch (Exception e)
             {
@@ -244,7 +287,6 @@ namespace backend.main.features.auth
                     VerificationPurpose.ResetPassword
                 );
                 await ChangePasswordInternalAsync(user.Email, password);
-                return;
             }
             catch (Exception e)
             {
@@ -259,7 +301,8 @@ namespace backend.main.features.auth
         public async Task<OAuthAuthenticationResult> GoogleAsync(
             string token,
             SessionTransport transport,
-            string? expectedNonce = null
+            string? expectedNonce = null,
+            string? returnUrl = null
         )
         {
             try
@@ -272,19 +315,40 @@ namespace backend.main.features.auth
                     throw new UnauthorizedException("Invalid Google Token");
 
                 var user = await ResolveGoogleUserAsync(oauthUser);
-
                 if (user == null)
+                {
                     return OAuthAuthenticationResult.RoleSelectionRequired(
                         await CreatePendingOAuthSignupAsync(oauthUser, transport)
                     );
+                }
 
                 await EnsureUserEnabledAsync(user);
                 user = await EnsureOAuthRoleAsync(user);
-                await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
 
-                return OAuthAuthenticationResult.Authenticated(
-                    await GenerateTokenPair(user, transport)
+                if (await _deviceTrustService.IsTrustedAsync(user.Id, _requestInfo))
+                {
+                    return OAuthAuthenticationResult.Authenticated(new AuthenticatedSessionResult
+                    {
+                        UserToken = await _authSessionService.IssueAsync(user, transport)
+                    });
+                }
+
+                if (!EnvironmentSetting.AuthSmsMfaEnforcementEnabled)
+                {
+                    await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
+                    return OAuthAuthenticationResult.Authenticated(new AuthenticatedSessionResult
+                    {
+                        UserToken = await _authSessionService.IssueAsync(user, transport)
+                    });
+                }
+
+                var stepUp = await _loginStepUpChallengeService.CreateChallengeAsync(
+                    user,
+                    transport,
+                    rememberMe: false,
+                    returnUrl
                 );
+                return OAuthAuthenticationResult.RequiresStepUp(stepUp);
             }
             catch (Exception e)
             {
@@ -301,13 +365,14 @@ namespace backend.main.features.auth
             string codeVerifier,
             string redirectUri,
             SessionTransport transport,
-            string? nonce = null
+            string? nonce = null,
+            string? returnUrl = null
         )
         {
             try
             {
                 var idToken = await _oauthService.ExchangeGoogleCodeAsync(code, codeVerifier, redirectUri);
-                return await GoogleAsync(idToken, transport, nonce);
+                return await GoogleAsync(idToken, transport, nonce, returnUrl);
             }
             catch (Exception e)
             {
@@ -322,7 +387,8 @@ namespace backend.main.features.auth
         public async Task<OAuthAuthenticationResult> MicrosoftAsync(
             string token,
             SessionTransport transport,
-            string? expectedNonce = null
+            string? expectedNonce = null,
+            string? returnUrl = null
         )
         {
             try
@@ -335,19 +401,40 @@ namespace backend.main.features.auth
                     throw new UnauthorizedException("Invalid Microsoft Token");
 
                 var user = await ResolveMicrosoftUserAsync(oauthUser);
-
                 if (user == null)
+                {
                     return OAuthAuthenticationResult.RoleSelectionRequired(
                         await CreatePendingOAuthSignupAsync(oauthUser, transport)
                     );
+                }
 
                 await EnsureUserEnabledAsync(user);
                 user = await EnsureOAuthRoleAsync(user);
-                await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
 
-                return OAuthAuthenticationResult.Authenticated(
-                    await GenerateTokenPair(user, transport)
+                if (await _deviceTrustService.IsTrustedAsync(user.Id, _requestInfo))
+                {
+                    return OAuthAuthenticationResult.Authenticated(new AuthenticatedSessionResult
+                    {
+                        UserToken = await _authSessionService.IssueAsync(user, transport)
+                    });
+                }
+
+                if (!EnvironmentSetting.AuthSmsMfaEnforcementEnabled)
+                {
+                    await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
+                    return OAuthAuthenticationResult.Authenticated(new AuthenticatedSessionResult
+                    {
+                        UserToken = await _authSessionService.IssueAsync(user, transport)
+                    });
+                }
+
+                var stepUp = await _loginStepUpChallengeService.CreateChallengeAsync(
+                    user,
+                    transport,
+                    rememberMe: false,
+                    returnUrl
                 );
+                return OAuthAuthenticationResult.RequiresStepUp(stepUp);
             }
             catch (Exception e)
             {
@@ -386,7 +473,7 @@ namespace backend.main.features.auth
                 {
                     "google" => await ResolveGoogleUserAsync(oauthUser),
                     "microsoft" => await ResolveMicrosoftUserAsync(oauthUser),
-                    _ => throw new BadRequestException("Unsupported OAuth provider."),
+                    _ => throw new BadRequestException("Unsupported OAuth provider.")
                 };
 
                 if (user == null)
@@ -408,8 +495,7 @@ namespace backend.main.features.auth
                 }
 
                 await _cacheService.DeleteKeyAsync(PendingOAuthSignupKey(signupToken));
-                await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
-                return await GenerateTokenPair(user, transport);
+                return await _authSessionService.IssueAsync(user, transport);
             }
             catch (Exception e)
             {
@@ -460,7 +546,7 @@ namespace backend.main.features.auth
                     throw new ResourceNotFoundException($"User with ID {validation.UserId} is not found");
                 await EnsureUserEnabledAsync(user, revokeSessions: true);
 
-                return await GenerateTokenPair(
+                return await _authSessionService.IssueAsync(
                     user,
                     validation.Transport,
                     validation.SessionId
@@ -476,7 +562,7 @@ namespace backend.main.features.auth
             }
         }
 
-        public async Task<UserToken> VerifyDeviceLoginAsync(
+        public async Task<AuthenticatedSessionResult> VerifyDeviceLoginAsync(
             string token,
             SessionTransport transport
         )
@@ -491,6 +577,38 @@ namespace backend.main.features.auth
                     throw;
 
                 Logger.Error($"[AuthService] VerifyDeviceLoginAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<StartLoginStepUpResponse> StartLoginStepUpAsync(string challenge, string method)
+        {
+            try
+            {
+                return await _loginStepUpChallengeService.StartAsync(challenge, method);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[AuthService] StartLoginStepUpAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<AuthenticatedSessionResult> VerifyLoginStepUpAsync(string challenge, string code)
+        {
+            try
+            {
+                return await _loginStepUpChallengeService.VerifySmsAsync(challenge, code);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[AuthService] VerifyLoginStepUpAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
         }
@@ -510,7 +628,6 @@ namespace backend.main.features.auth
                     _requestInfo
                 );
                 await _tokenService.RevokeRefreshSessionAsync(validation.SessionId);
-                return;
             }
             catch (Exception e)
             {
@@ -550,47 +667,6 @@ namespace backend.main.features.auth
                     throw;
 
                 Logger.Error($"[AuthService] VerifyPassword failed: {e}");
-                throw new InternalServerErrorException();
-            }
-        }
-
-        private async Task<UserToken> GenerateTokenPair(
-            User user,
-            SessionTransport transport,
-            string? sessionId = null,
-            bool? rememberMe = null
-        )
-        {
-            try
-            {
-                user.Usertype = AuthRoles.NormalizeStored(user.Usertype);
-                var accessToken = _tokenService.GenerateAccessToken(user);
-                var refreshToken = await _tokenService.GenerateRefreshToken(
-                    user.Id,
-                    _requestInfo,
-                    transport,
-                    sessionId,
-                    rememberMe
-                );
-                Token authToken = new Token(
-                    accessToken.Value,
-                    accessToken.ExpiresAtUtc,
-                    refreshToken.Value,
-                    refreshToken.SessionBindingToken,
-                    refreshToken.Lifetime,
-                    refreshToken.Transport
-                );
-
-                UserToken userToken = new(authToken, user);
-
-                return userToken;
-            }
-            catch (Exception e)
-            {
-                if (e is AppException)
-                    throw;
-
-                Logger.Error($"[AuthService] GenerateTokenPair failed: {e}");
                 throw new InternalServerErrorException();
             }
         }
@@ -803,6 +879,3 @@ namespace backend.main.features.auth
         }
     }
 }
-
-
-

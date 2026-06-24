@@ -30,5 +30,9 @@ namespace backend.main.features.auth.contracts.requests
         {
             get; set;
         }
+        public string? ReturnUrl
+        {
+            get; set;
+        }
     }
 }

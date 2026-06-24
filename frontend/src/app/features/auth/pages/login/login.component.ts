@@ -1,18 +1,20 @@
-import { Component } from '@angular/core';
-import { FormBuilder, Validators, FormGroup } from '@angular/forms';
-import { Router, RouterModule } from '@angular/router';
-import { AuthService } from '../../services/auth.service';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule } from '@angular/forms';
+import { Component } from '@angular/core';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
+import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
-import { RecaptchaV3Service } from '../../services/recaptcha.service';
+
+import { environment } from '@environments/environment';
+import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
+import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import { GoogleButtonComponent } from '../../components/google-button/google-button.component';
 import { MicrosoftButtonComponent } from '../../components/microsoft-button/microsoft-button.component';
-import { environment } from '@environments/environment';
-import { SessionManagerService } from '../../../../core/services/session-manager.service';
-import { ActivatedRoute } from '@angular/router';
-import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
+import {
+  AuthService,
+  PendingLoginStepUpStorageKey,
+} from '../../services/auth.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
+import { RecaptchaV3Service } from '../../services/recaptcha.service';
 
 @Component({
   selector: 'app-login',
@@ -65,7 +67,11 @@ export class LoginComponent {
     this.loading = true;
     try {
       const token = await this.recaptcha.execute(this.siteKey, 'login');
-      const payload = { ...this.form.value, captcha: token };
+      const payload = {
+        ...this.form.getRawValue(),
+        captcha: token,
+        returnUrl: this.authReturnUrl.peek() ?? undefined,
+      };
 
       this.auth
         .login(payload)
@@ -73,8 +79,16 @@ export class LoginComponent {
         .subscribe({
           next: async (res) => {
             try {
-              await this.sessionManager.bootstrapSession(res);
-              await this.router.navigateByUrl(this.authReturnUrl.consume());
+              if (res.Type === 'requires_step_up') {
+                sessionStorage.setItem(PendingLoginStepUpStorageKey, JSON.stringify(res.StepUp));
+                await this.router.navigate(['/auth/mfa']);
+                return;
+              }
+
+              await this.sessionManager.bootstrapSession(res.Auth);
+              await this.router.navigateByUrl(
+                this.authReturnUrl.consume(res.Auth.ReturnPath ?? '/dashboard'),
+              );
             } catch (err: any) {
               this.error = getApiClientMessage(err, 'Login failed.');
             }

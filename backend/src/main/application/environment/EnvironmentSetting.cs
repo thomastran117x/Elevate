@@ -53,6 +53,8 @@ namespace backend.main.application.environment
         private static readonly string? _twilioMessagingServiceSid;
         private static readonly string? _twilioFromPhoneNumber;
         private static readonly bool _authSmsMfaEnrollmentEnabled;
+        private static readonly bool _authSmsMfaEnforcementEnabled;
+        private static readonly bool _authSmsMfaStepUpSmsEnabled;
         private static readonly string _appEnvironment;
         private static readonly string _logLevel;
         private const string DefaultJwtSecretAccess = "unit_test_secret_12345678901234567890";
@@ -168,6 +170,14 @@ namespace backend.main.application.environment
             _twilioFromPhoneNumber = GetOptional(["TWILIO_FROM_PHONE_NUMBER"]);
             _authSmsMfaEnrollmentEnabled = GetBoolOrDefault(
                 ["AUTH_SMS_MFA_ENROLLMENT_ENABLED"],
+                true
+            );
+            _authSmsMfaEnforcementEnabled = GetBoolOrDefault(
+                ["AUTH_SMS_MFA_ENFORCEMENT_ENABLED"],
+                false
+            );
+            _authSmsMfaStepUpSmsEnabled = GetBoolOrDefault(
+                ["AUTH_SMS_MFA_STEP_UP_SMS_ENABLED"],
                 true
             );
 
@@ -296,6 +306,8 @@ namespace backend.main.application.environment
         public static string? TwilioMessagingServiceSid => _twilioMessagingServiceSid;
         public static string? TwilioFromPhoneNumber => _twilioFromPhoneNumber;
         public static bool AuthSmsMfaEnrollmentEnabled => _authSmsMfaEnrollmentEnabled;
+        public static bool AuthSmsMfaEnforcementEnabled => _authSmsMfaEnforcementEnabled;
+        public static bool AuthSmsMfaStepUpSmsEnabled => _authSmsMfaStepUpSmsEnabled;
         public static string AppEnvironment => _appEnvironment;
         public static string LogLevel => _logLevel;
 

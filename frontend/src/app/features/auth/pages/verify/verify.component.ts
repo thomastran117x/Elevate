@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { ApiEnvelope, requireEnvelopeData } from '../../../../core/api/models/api-envelope.model';
 import { AuthenticatedSessionResponse } from '../../../../core/models/auth-response.model';
@@ -57,7 +58,7 @@ export class VerifyComponent {
           await this.sessionManager.bootstrapSession(session);
           this.status.set('success');
           this.message.set('Your email is verified. Redirecting you back...');
-          const target = this.authReturnUrl.consume();
+          const target = this.authReturnUrl.consume(session.ReturnPath ?? '/dashboard');
           setTimeout(() => this.router.navigateByUrl(target), 1500);
         } catch (err: any) {
           this.status.set('error');

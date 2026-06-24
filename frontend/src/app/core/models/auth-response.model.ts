@@ -3,6 +3,7 @@ export interface AuthenticatedSessionResponse {
   ExpiresAtUtc: string;
   RefreshToken?: string;
   SessionBindingToken?: string;
+  ReturnPath?: string | null;
 }
 
 export interface CurrentUserResponse {

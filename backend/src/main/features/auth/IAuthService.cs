@@ -1,3 +1,4 @@
+using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
 using backend.main.features.profile;
@@ -6,32 +7,38 @@ namespace backend.main.features.auth
 {
     public interface IAuthService
     {
-        Task<UserToken> LoginAsync(
+        Task<LoginAuthenticationResult> LoginAsync(
             string email,
             string password,
             SessionTransport transport,
-            bool rememberMe = false
+            bool rememberMe = false,
+            string? returnUrl = null
         );
         Task<VerificationOtpChallenge> SignUpAsync(string email, string password, string usertype);
         Task<UserToken> VerifyAsync(string token, SessionTransport transport);
         Task<UserToken> VerifyOtpAsync(string code, string challenge, SessionTransport transport);
-        Task<UserToken> VerifyDeviceLoginAsync(string token, SessionTransport transport);
+        Task<AuthenticatedSessionResult> VerifyDeviceLoginAsync(string token, SessionTransport transport);
+        Task<StartLoginStepUpResponse> StartLoginStepUpAsync(string challenge, string method);
+        Task<AuthenticatedSessionResult> VerifyLoginStepUpAsync(string challenge, string code);
         Task<OAuthAuthenticationResult> GoogleAsync(
             string token,
             SessionTransport transport,
-            string? expectedNonce = null
+            string? expectedNonce = null,
+            string? returnUrl = null
         );
         Task<OAuthAuthenticationResult> GoogleCodeAsync(
             string code,
             string codeVerifier,
             string redirectUri,
             SessionTransport transport,
-            string? nonce = null
+            string? nonce = null,
+            string? returnUrl = null
         );
         Task<OAuthAuthenticationResult> MicrosoftAsync(
             string token,
             SessionTransport transport,
-            string? expectedNonce = null
+            string? expectedNonce = null,
+            string? returnUrl = null
         );
         Task<UserToken> CompleteOAuthSignupAsync(
             string signupToken,
@@ -54,4 +61,3 @@ namespace backend.main.features.auth
         Task ChangePasswordWithOtpAsync(string code, string challenge, string password);
     }
 }
-

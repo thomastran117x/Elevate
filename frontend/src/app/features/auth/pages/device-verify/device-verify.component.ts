@@ -1,9 +1,8 @@
 import { CommonModule } from '@angular/common';
 import { Component, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
-import { ApiEnvelope, requireEnvelopeData } from '../../../../core/api/models/api-envelope.model';
-import { AuthenticatedSessionResponse } from '../../../../core/models/auth-response.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import { AuthService } from '../../services/auth.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
@@ -48,16 +47,12 @@ export class DeviceVerifyComponent {
     this.message.set('Verifying this device and completing sign-in...');
 
     this.auth.verifyDevice(this.token).subscribe({
-      next: async (res: ApiEnvelope<AuthenticatedSessionResponse>) => {
+      next: async (session) => {
         try {
-          const session = requireEnvelopeData(
-            res,
-            'Device verification completed, but the login response was incomplete.',
-          );
           await this.sessionManager.bootstrapSession(session);
           this.status.set('success');
           this.message.set('This device is verified. Redirecting you back...');
-          const target = this.authReturnUrl.consume();
+          const target = this.authReturnUrl.consume(session.ReturnPath ?? '/dashboard');
           setTimeout(() => this.router.navigateByUrl(target), 1500);
         } catch (err: any) {
           this.status.set('error');

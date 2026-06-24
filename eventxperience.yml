@@ -236,6 +236,10 @@ spec:
               value: "eventxperience-sms"
             - name: AUTH_SMS_MFA_ENROLLMENT_ENABLED
               value: "true"
+            - name: AUTH_SMS_MFA_ENFORCEMENT_ENABLED
+              value: "false"
+            - name: AUTH_SMS_MFA_STEP_UP_SMS_ENABLED
+              value: "true"
             - name: ELASTICSEARCH_URL
               value: "http://elasticsearch:9200"
             - name: JWT_SECRET_KEY
@@ -379,6 +383,10 @@ spec:
             - name: SMS_TOPIC
               value: "eventxperience-sms"
             - name: AUTH_SMS_MFA_ENROLLMENT_ENABLED
+              value: "true"
+            - name: AUTH_SMS_MFA_ENFORCEMENT_ENABLED
+              value: "false"
+            - name: AUTH_SMS_MFA_STEP_UP_SMS_ENABLED
               value: "true"
             - name: SMS_GROUP_ID
               value: "sms-worker"

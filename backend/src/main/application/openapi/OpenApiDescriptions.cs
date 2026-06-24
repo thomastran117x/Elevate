@@ -22,7 +22,7 @@ namespace backend.main.application.openapi
 
                 // ── Auth ─────────────────────────────────────────────────────────────────
 
-                ["POST /api/auth/login"] = new("Sign in with email and password"),
+                ["POST /api/auth/login"] = new("Sign in with email and password", "Returns a session immediately for trusted devices, or a sign-in verification challenge when the device needs step-up verification."),
                 ["POST /api/auth/signup"] = new(
                     "Create an account with email and password",
                     "Registers a new account and sends a verification email. The account cannot be used until the email address is confirmed."
@@ -33,12 +33,12 @@ namespace backend.main.application.openapi
                     "Processes the `token` query parameter from the verification email link. On success, redirects to the frontend with the verification result."
                 ),
                 ["POST /api/auth/verify"] = new("Resend the verification email"),
-                ["POST /api/auth/google"] = new("Sign in or sign up with Google"),
+                ["POST /api/auth/google"] = new("Sign in or sign up with Google", "Returns a session for trusted existing users, a step-up challenge for untrusted existing users, or role-selection details for first-time sign-up."),
                 ["POST /api/auth/google/code"] = new(
-                    "Exchange a Google authorization code for a session",
-                    "Completes the server-side OAuth 2.0 code flow by exchanging a Google authorization code for tokens and returning a session."
+                    "Exchange a Google authorization code for sign-in",
+                    "Completes the server-side OAuth 2.0 code flow and returns either an authenticated session, a sign-in verification challenge, or role-selection details."
                 ),
-                ["POST /api/auth/microsoft"] = new("Sign in or sign up with Microsoft"),
+                ["POST /api/auth/microsoft"] = new("Sign in or sign up with Microsoft", "Returns a session for trusted existing users, a step-up challenge for untrusted existing users, or role-selection details for first-time sign-up."),
                 ["POST /api/auth/oauth/complete"] = new(
                     "Complete OAuth sign-up by selecting a role",
                     "Finalizes the OAuth sign-up flow after the user selects a role. Requires the `signupToken` returned by the OAuth initiation endpoint."
@@ -59,10 +59,12 @@ namespace backend.main.application.openapi
                 ["POST /api/auth/logout"] = new("Sign out of the browser session"),
                 ["POST /api/auth/api/logout"] = new("Sign out of an API-token session"),
                 ["GET /api/auth/device/verify"] = new(
-                    "Verify a new device via email link",
-                    "Processes the one-click verification link emailed when a sign-in from an unrecognized device is detected. On success, redirects to the frontend."
+                    "Complete email-based sign-in verification",
+                    "Processes the emailed verification link for a new-device sign-in challenge and redirects to the frontend on success."
                 ),
-                ["POST /api/auth/device/verify"] = new("Confirm a new device using a one-time code"),
+                ["POST /api/auth/device/verify"] = new("Complete email-based sign-in verification"),
+                ["POST /api/auth/mfa/start"] = new("Start sign-in verification delivery", "Chooses SMS or email for an active sign-in verification challenge, rotates the challenge token, and sends the delivery."),
+                ["POST /api/auth/mfa/verify"] = new("Verify an SMS sign-in code", "Validates an SMS code for an active sign-in verification challenge and completes login on success."),
                 ["GET /api/auth/mfa"] = new("Get SMS MFA enrollment status"),
                 ["POST /api/auth/mfa/enroll/start"] = new("Start SMS MFA enrollment"),
                 ["POST /api/auth/mfa/enroll/verify"] = new("Verify an SMS MFA enrollment code"),

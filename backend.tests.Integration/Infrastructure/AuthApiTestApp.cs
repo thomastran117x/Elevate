@@ -333,9 +333,11 @@ public sealed class AuthApiTestApp : IAsyncDisposable
 
         var response = await Client.SendAsync(request);
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
-        var apiResponse = await ReadApiResponseAsync<AuthenticatedSessionResponse>(response);
+        var apiResponse = await ReadApiResponseAsync<LoginAuthenticationResponse>(response);
         apiResponse.Data.Should().NotBeNull();
-        return apiResponse.Data!;
+        apiResponse.Data!.Type.Should().Be("authenticated");
+        apiResponse.Data.Auth.Should().NotBeNull();
+        return apiResponse.Data.Auth!;
     }
 
     public async ValueTask DisposeAsync()
