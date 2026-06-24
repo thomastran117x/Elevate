@@ -55,7 +55,7 @@ export class AuthReturnUrlService {
     }
 
     if (trimmed.startsWith('/')) {
-      return trimmed.startsWith('//') ? null : trimmed;
+      return trimmed.startsWith('//') || trimmed.startsWith('/\\') ? null : trimmed;
     }
 
     if (typeof window !== 'undefined') {

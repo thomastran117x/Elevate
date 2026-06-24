@@ -1,7 +1,5 @@
-using System.Security.Cryptography;
-using System.Text;
-
 using backend.main.shared.requests;
+using backend.main.shared.utilities;
 using backend.main.utilities;
 
 namespace backend.main.features.auth.device
@@ -101,10 +99,6 @@ namespace backend.main.features.auth.device
             }
         }
 
-        private static string ComputeDeviceTokenHash(string deviceToken)
-        {
-            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(deviceToken));
-            return Convert.ToHexString(bytes);
-        }
+        private static string ComputeDeviceTokenHash(string deviceToken) => CryptoHelper.HashToken(deviceToken);
     }
 }

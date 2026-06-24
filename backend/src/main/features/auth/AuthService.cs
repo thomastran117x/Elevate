@@ -80,39 +80,11 @@ namespace backend.main.features.auth
                 var resolvedUser = ToUser(user);
                 await EnsureUserEnabledAsync(resolvedUser);
 
-                if (await _deviceTrustService.IsTrustedAsync(resolvedUser.Id, _requestInfo))
-                {
-                    return LoginAuthenticationResult.Authenticated(new AuthenticatedSessionResult
-                    {
-                        UserToken = await _authSessionService.IssueAsync(
-                            resolvedUser,
-                            transport,
-                            rememberMe: rememberMe
-                        )
-                    });
-                }
-
-                if (!EnvironmentSetting.AuthSmsMfaEnforcementEnabled)
-                {
-                    await _deviceService.EnsureDeviceKnownAsync(resolvedUser.Id, resolvedUser.Email, _requestInfo);
-                    return LoginAuthenticationResult.Authenticated(new AuthenticatedSessionResult
-                    {
-                        UserToken = await _authSessionService.IssueAsync(
-                            resolvedUser,
-                            transport,
-                            rememberMe: rememberMe
-                        )
-                    });
-                }
-
-                var stepUp = await _loginStepUpChallengeService.CreateChallengeAsync(
-                    resolvedUser,
-                    transport,
-                    rememberMe,
-                    returnUrl
+                return await ResolvePostAuthOutcomeAsync(
+                    resolvedUser, transport, rememberMe, returnUrl,
+                    LoginAuthenticationResult.Authenticated,
+                    LoginAuthenticationResult.RequiresStepUp
                 );
-
-                return LoginAuthenticationResult.RequiresStepUp(stepUp);
             }
             catch (Exception e)
             {
@@ -325,30 +297,11 @@ namespace backend.main.features.auth
                 await EnsureUserEnabledAsync(user);
                 user = await EnsureOAuthRoleAsync(user);
 
-                if (await _deviceTrustService.IsTrustedAsync(user.Id, _requestInfo))
-                {
-                    return OAuthAuthenticationResult.Authenticated(new AuthenticatedSessionResult
-                    {
-                        UserToken = await _authSessionService.IssueAsync(user, transport)
-                    });
-                }
-
-                if (!EnvironmentSetting.AuthSmsMfaEnforcementEnabled)
-                {
-                    await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
-                    return OAuthAuthenticationResult.Authenticated(new AuthenticatedSessionResult
-                    {
-                        UserToken = await _authSessionService.IssueAsync(user, transport)
-                    });
-                }
-
-                var stepUp = await _loginStepUpChallengeService.CreateChallengeAsync(
-                    user,
-                    transport,
-                    rememberMe: false,
-                    returnUrl
+                return await ResolvePostAuthOutcomeAsync(
+                    user, transport, rememberMe: false, returnUrl,
+                    OAuthAuthenticationResult.Authenticated,
+                    OAuthAuthenticationResult.RequiresStepUp
                 );
-                return OAuthAuthenticationResult.RequiresStepUp(stepUp);
             }
             catch (Exception e)
             {
@@ -411,30 +364,11 @@ namespace backend.main.features.auth
                 await EnsureUserEnabledAsync(user);
                 user = await EnsureOAuthRoleAsync(user);
 
-                if (await _deviceTrustService.IsTrustedAsync(user.Id, _requestInfo))
-                {
-                    return OAuthAuthenticationResult.Authenticated(new AuthenticatedSessionResult
-                    {
-                        UserToken = await _authSessionService.IssueAsync(user, transport)
-                    });
-                }
-
-                if (!EnvironmentSetting.AuthSmsMfaEnforcementEnabled)
-                {
-                    await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
-                    return OAuthAuthenticationResult.Authenticated(new AuthenticatedSessionResult
-                    {
-                        UserToken = await _authSessionService.IssueAsync(user, transport)
-                    });
-                }
-
-                var stepUp = await _loginStepUpChallengeService.CreateChallengeAsync(
-                    user,
-                    transport,
-                    rememberMe: false,
-                    returnUrl
+                return await ResolvePostAuthOutcomeAsync(
+                    user, transport, rememberMe: false, returnUrl,
+                    OAuthAuthenticationResult.Authenticated,
+                    OAuthAuthenticationResult.RequiresStepUp
                 );
-                return OAuthAuthenticationResult.RequiresStepUp(stepUp);
             }
             catch (Exception e)
             {
@@ -805,6 +739,36 @@ namespace backend.main.features.auth
 
         private static string PendingOAuthSignupKey(string signupToken) =>
             $"oauth:pending:{signupToken}";
+
+        private async Task<T> ResolvePostAuthOutcomeAsync<T>(
+            User user,
+            SessionTransport transport,
+            bool rememberMe,
+            string? returnUrl,
+            Func<AuthenticatedSessionResult, T> onAuthenticated,
+            Func<LoginStepUpChallengeResponse, T> onStepUp
+        )
+        {
+            if (await _deviceTrustService.IsTrustedAsync(user.Id, _requestInfo))
+            {
+                return onAuthenticated(new AuthenticatedSessionResult
+                {
+                    UserToken = await _authSessionService.IssueAsync(user, transport, rememberMe: rememberMe)
+                });
+            }
+
+            if (!EnvironmentSetting.AuthSmsMfaEnforcementEnabled)
+            {
+                await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
+                return onAuthenticated(new AuthenticatedSessionResult
+                {
+                    UserToken = await _authSessionService.IssueAsync(user, transport, rememberMe: rememberMe)
+                });
+            }
+
+            var stepUp = await _loginStepUpChallengeService.CreateChallengeAsync(user, transport, rememberMe, returnUrl);
+            return onStepUp(stepUp);
+        }
 
         private async Task EnsureUserEnabledAsync(User user, bool revokeSessions = false)
         {

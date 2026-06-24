@@ -1,12 +1,13 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 
 using backend.main.application.environment;
+using backend.main.features.auth;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.notifications;
 using backend.main.features.cache;
 using backend.main.shared.exceptions.http;
+using backend.main.shared.utilities;
 using backend.main.shared.utilities.logger;
 
 using Microsoft.IdentityModel.Tokens;
@@ -132,7 +133,7 @@ namespace backend.main.features.auth.mfa
                     code
                 );
 
-                if (!FixedTimeEquals(state.Proof, expectedProof))
+                if (!CryptoHelper.FixedTimeEquals(state.Proof, expectedProof))
                 {
                     var attempts = await RecordFailedAttemptAsync(challenge);
                     if (attempts >= MaxOtpAttempts)
@@ -268,16 +269,6 @@ namespace backend.main.features.auth.mfa
             return Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(material)));
         }
 
-        private static bool FixedTimeEquals(string left, string right)
-        {
-            var leftBytes = Encoding.UTF8.GetBytes(left);
-            var rightBytes = Encoding.UTF8.GetBytes(right);
-            if (leftBytes.Length != rightBytes.Length)
-                return false;
-
-            return CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
-        }
-
         private static string UserKey(int userId) => $"mfa:enrollment:user:{userId}";
         private static string ChallengeKey(string challenge) => $"mfa:enrollment:challenge:{challenge}";
         private static string AttemptKey(string challenge) => $"mfa:enrollment:attempt:{challenge}";
@@ -316,49 +307,5 @@ namespace backend.main.features.auth.mfa
             }
         }
 
-        private static class PhoneNumberFormatter
-        {
-            private static readonly Regex NonDigits = new("[^0-9+]", RegexOptions.Compiled);
-
-            public static string Normalize(string rawPhoneNumber)
-            {
-                if (string.IsNullOrWhiteSpace(rawPhoneNumber))
-                    throw new BadRequestException("Phone number is required.");
-
-                var trimmed = rawPhoneNumber.Trim();
-                var cleaned = NonDigits.Replace(trimmed, string.Empty);
-
-                if (cleaned.StartsWith('+'))
-                {
-                    var digits = cleaned[1..];
-                    if (digits.Length is < 10 or > 15 || digits.Any(ch => !char.IsDigit(ch)))
-                        throw new BadRequestException("Phone number must be a valid international number.");
-
-                    return $"+{digits}";
-                }
-
-                var localDigits = new string(cleaned.Where(char.IsDigit).ToArray());
-                if (localDigits.Length == 10)
-                    return $"+1{localDigits}";
-
-                if (localDigits.Length == 11 && localDigits.StartsWith('1'))
-                    return $"+{localDigits}";
-
-                if (localDigits.Length is >= 10 and <= 15)
-                    return $"+{localDigits}";
-
-                throw new BadRequestException("Phone number must be a valid mobile number.");
-            }
-
-            public static string Mask(string phoneNumber)
-            {
-                var digits = new string(phoneNumber.Where(char.IsDigit).ToArray());
-                if (digits.Length <= 4)
-                    return phoneNumber;
-
-                var lastFour = digits[^4..];
-                return $"***-***-{lastFour}";
-            }
-        }
     }
 }

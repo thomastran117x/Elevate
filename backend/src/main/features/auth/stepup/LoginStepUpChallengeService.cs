@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 
 using backend.main.application.environment;
 using backend.main.features.auth.contracts.responses;
@@ -12,6 +11,7 @@ using backend.main.features.cache;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
+using backend.main.shared.utilities;
 using backend.main.shared.utilities.logger;
 
 using Microsoft.IdentityModel.Tokens;
@@ -73,7 +73,7 @@ namespace backend.main.features.auth.stepup
                 var state = new PendingStepUpState
                 {
                     PendingId = CreateRandomToken(),
-                    ChallengeHash = HashToken(rawChallenge),
+                    ChallengeHash = CryptoHelper.HashToken(rawChallenge),
                     UserId = user.Id,
                     Email = user.Email,
                     PhoneNumber = CanUseSms(enrollment) ? enrollment!.PhoneNumber : null,
@@ -109,7 +109,7 @@ namespace backend.main.features.auth.stepup
             try
             {
                 var normalizedMethod = NormalizeMethod(method);
-                var challengeHash = HashToken(challenge);
+                var challengeHash = CryptoHelper.HashToken(challenge);
                 var state = await GetStateByHashAsync(challengeHash)
                     ?? throw new UnauthorizedException("Invalid or expired sign-in verification challenge.");
 
@@ -121,7 +121,7 @@ namespace backend.main.features.auth.stepup
                 var previousChallengeHash = state.ChallengeHash;
                 var previousEmailTokenHash = state.EmailTokenHash;
                 var nextChallenge = CreateRandomToken();
-                state.ChallengeHash = HashToken(nextChallenge);
+                state.ChallengeHash = CryptoHelper.HashToken(nextChallenge);
                 state.SmsCodeHash = null;
                 state.EmailTokenHash = null;
                 state.SmsFailedAttempts = 0;
@@ -138,12 +138,12 @@ namespace backend.main.features.auth.stepup
                 {
                     smsCode = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
                     state.SmsCodeHash = HashCode(state.PendingId, state.ChallengeHash, smsCode);
-                    maskedDestination = MaskPhone(state.PhoneNumber!);
+                    maskedDestination = PhoneNumberFormatter.Mask(state.PhoneNumber!);
                 }
                 else
                 {
                     emailToken = CreateRandomToken();
-                    state.EmailTokenHash = HashToken(emailToken);
+                    state.EmailTokenHash = CryptoHelper.HashToken(emailToken);
                     maskedDestination = MaskEmail(state.Email);
                 }
 
@@ -169,7 +169,19 @@ namespace backend.main.features.auth.stepup
                 }
                 catch
                 {
-                    await DeleteStateAsync(state);
+                    // Restore previous challenge state so user can retry without a full re-login,
+                    // and refund the send-cap counters consumed for this failed attempt.
+                    var rotatedChallengeHash = state.ChallengeHash;
+                    var rotatedEmailTokenHash = state.EmailTokenHash;
+                    state.ChallengeHash = previousChallengeHash;
+                    state.SmsCodeHash = null;
+                    state.EmailTokenHash = previousEmailTokenHash;
+                    state.SmsFailedAttempts = 0;
+                    delivery.SendCount -= 1;
+                    delivery.CooldownEndsAtUtc = null;
+                    await _cacheService.DecrementAsync(UserSendKey(state.UserId));
+                    await _cacheService.DecrementAsync(IpSendKey(_requestInfo.IpAddress));
+                    await PersistStateAsync(state, rotatedChallengeHash, rotatedEmailTokenHash);
                     throw;
                 }
 
@@ -181,7 +193,7 @@ namespace backend.main.features.auth.stepup
                     MaskedDestination = maskedDestination,
                     CooldownEndsAtUtc = delivery.CooldownEndsAtUtc ?? now.Add(ResendCooldown),
                     AvailableMethods = GetAvailableMethods(state),
-                    MaskedPhone = CanUseSms(state) ? MaskPhone(state.PhoneNumber!) : null,
+                    MaskedPhone = CanUseSms(state) ? PhoneNumberFormatter.Mask(state.PhoneNumber!) : null,
                     MaskedEmail = MaskEmail(state.Email)
                 };
             }
@@ -199,7 +211,7 @@ namespace backend.main.features.auth.stepup
         {
             try
             {
-                var challengeHash = HashToken(challenge);
+                var challengeHash = CryptoHelper.HashToken(challenge);
                 var state = await GetStateByHashAsync(challengeHash)
                     ?? throw new UnauthorizedException("Invalid or expired sign-in verification challenge.");
 
@@ -207,7 +219,7 @@ namespace backend.main.features.auth.stepup
                     throw new UnauthorizedException("Invalid or expired sign-in verification code.");
 
                 var expectedHash = HashCode(state.PendingId, state.ChallengeHash, code);
-                if (!FixedTimeEquals(state.SmsCodeHash, expectedHash))
+                if (!CryptoHelper.FixedTimeEquals(state.SmsCodeHash, expectedHash))
                 {
                     state.SmsFailedAttempts += 1;
                     if (state.SmsFailedAttempts >= MaxSmsAttempts)
@@ -238,7 +250,7 @@ namespace backend.main.features.auth.stepup
         {
             try
             {
-                var tokenHash = HashToken(token);
+                var tokenHash = CryptoHelper.HashToken(token);
                 var json = await _cacheService.GetValueAsync(EmailTokenKey(tokenHash));
                 if (string.IsNullOrWhiteSpace(json))
                     return null;
@@ -270,34 +282,31 @@ namespace backend.main.features.auth.stepup
 
             try
             {
-                var current = await GetStateByHashAsync(state.ChallengeHash)
-                    ?? throw new UnauthorizedException("Invalid or expired sign-in verification challenge.");
-
-                var user = await _userRepository.GetUserAsync(current.UserId)
-                    ?? throw new ResourceNotFoundException($"User with ID {current.UserId} not found.");
+                var user = await _userRepository.GetUserAsync(state.UserId)
+                    ?? throw new ResourceNotFoundException($"User with ID {state.UserId} not found.");
                 if (user.IsDisabled)
                     throw new ForbiddenException("This account is disabled.");
 
                 await _deviceTrustService.TrustAsync(
-                    current.UserId,
-                    current.TrustedDeviceId,
-                    current.DeviceType,
-                    current.ClientName,
-                    current.IpAddress
+                    state.UserId,
+                    state.TrustedDeviceId,
+                    state.DeviceType,
+                    state.ClientName,
+                    state.IpAddress
                 );
 
                 var userToken = await _authSessionService.IssueAsync(
                     user,
-                    current.Transport,
-                    rememberMe: current.RememberMe
+                    state.Transport,
+                    rememberMe: state.RememberMe
                 );
 
-                await DeleteStateAsync(current);
+                await DeleteStateAsync(state);
 
                 return new AuthenticatedSessionResult
                 {
                     UserToken = userToken,
-                    ReturnPath = current.ReturnPath
+                    ReturnPath = state.ReturnPath
                 };
             }
             finally
@@ -408,7 +417,7 @@ namespace backend.main.features.auth.stepup
                 Challenge = rawChallenge,
                 ExpiresAtUtc = state.ExpiresAtUtc,
                 AvailableMethods = GetAvailableMethods(state),
-                MaskedPhone = CanUseSms(state) ? MaskPhone(state.PhoneNumber!) : null,
+                MaskedPhone = CanUseSms(state) ? PhoneNumberFormatter.Mask(state.PhoneNumber!) : null,
                 MaskedEmail = MaskEmail(state.Email)
             };
         }
@@ -445,7 +454,9 @@ namespace backend.main.features.auth.stepup
                 return "/dashboard";
 
             var trimmed = returnUrl.Trim();
-            if (!trimmed.StartsWith("/", StringComparison.Ordinal) || trimmed.StartsWith("//", StringComparison.Ordinal))
+            if (!trimmed.StartsWith("/", StringComparison.Ordinal)
+                || trimmed.StartsWith("//", StringComparison.Ordinal)
+                || trimmed.StartsWith("/\\", StringComparison.Ordinal))
                 return "/dashboard";
 
             return trimmed;
@@ -465,35 +476,12 @@ namespace backend.main.features.auth.stepup
             return $"{local[0]}***{domain}";
         }
 
-        private static string MaskPhone(string phoneNumber)
-        {
-            var digits = Regex.Replace(phoneNumber, "[^0-9]", string.Empty);
-            if (digits.Length < 4)
-                return "***-***-****";
-
-            return $"***-***-{digits[^4..]}";
-        }
-
         private static string CreateRandomToken() => Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
-
-        private static string HashToken(string rawToken)
-        {
-            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(rawToken));
-            return Convert.ToHexString(bytes);
-        }
 
         private static string HashCode(string pendingId, string challengeHash, string code)
         {
             var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{pendingId}|{challengeHash}|{code}"));
             return Convert.ToHexString(bytes);
-        }
-
-        private static bool FixedTimeEquals(string left, string right)
-        {
-            var leftBytes = Encoding.UTF8.GetBytes(left);
-            var rightBytes = Encoding.UTF8.GetBytes(right);
-            return leftBytes.Length == rightBytes.Length
-                && CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
         }
 
         private static string ChallengeKey(string challengeHash) => $"auth:stepup:challenge:{challengeHash}";
