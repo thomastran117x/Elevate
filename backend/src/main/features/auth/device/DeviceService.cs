@@ -139,11 +139,26 @@ namespace backend.main.features.auth.device
 
         private sealed class PendingDevice
         {
-            public int UserId { get; set; }
-            public required string Email { get; set; }
-            public required string DeviceType { get; set; }
-            public required string ClientName { get; set; }
-            public required string TrustedDeviceId { get; set; }
+            public int UserId
+            {
+                get; set;
+            }
+            public required string Email
+            {
+                get; set;
+            }
+            public required string DeviceType
+            {
+                get; set;
+            }
+            public required string ClientName
+            {
+                get; set;
+            }
+            public required string TrustedDeviceId
+            {
+                get; set;
+            }
             public string IpAddress { get; set; } = "Unknown";
         }
     }

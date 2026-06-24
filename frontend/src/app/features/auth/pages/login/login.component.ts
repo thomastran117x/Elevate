@@ -9,10 +9,7 @@ import { getApiClientMessage } from '../../../../core/api/models/api-client-erro
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import { GoogleButtonComponent } from '../../components/google-button/google-button.component';
 import { MicrosoftButtonComponent } from '../../components/microsoft-button/microsoft-button.component';
-import {
-  AuthService,
-  PendingLoginStepUpStorageKey,
-} from '../../services/auth.service';
+import { AuthService, PendingLoginStepUpStorageKey } from '../../services/auth.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 import { RecaptchaV3Service } from '../../services/recaptcha.service';
 

@@ -91,9 +91,7 @@ export interface LoginRequiresStepUpResponse {
   StepUp: LoginStepUpChallengeResponse;
 }
 
-export type LoginAuthenticationResponse =
-  | LoginAuthenticatedResponse
-  | LoginRequiresStepUpResponse;
+export type LoginAuthenticationResponse = LoginAuthenticatedResponse | LoginRequiresStepUpResponse;
 
 export interface OAuthAuthenticatedResponse {
   Type: 'authenticated';
@@ -206,14 +204,17 @@ export class AuthService {
     nonce: string,
     returnUrl?: string,
   ): Observable<OAuthAuthenticationResponse> {
-    return this.postWithCsrf<ApiEnvelope<OAuthAuthenticationResponse>>(`${this.baseUrl}/google/code`, {
-      code,
-      codeVerifier,
-      redirectUri,
-      nonce,
-      returnUrl,
-      transport: 'browser' as const,
-    }).pipe(map((res) => this.requireData(res, 'Google login response was incomplete.')));
+    return this.postWithCsrf<ApiEnvelope<OAuthAuthenticationResponse>>(
+      `${this.baseUrl}/google/code`,
+      {
+        code,
+        codeVerifier,
+        redirectUri,
+        nonce,
+        returnUrl,
+        transport: 'browser' as const,
+      },
+    ).pipe(map((res) => this.requireData(res, 'Google login response was incomplete.')));
   }
 
   microsoftVerify(
@@ -221,12 +222,15 @@ export class AuthService {
     nonce: string,
     returnUrl?: string,
   ): Observable<OAuthAuthenticationResponse> {
-    return this.postWithCsrf<ApiEnvelope<OAuthAuthenticationResponse>>(`${this.baseUrl}/microsoft`, {
-      token: idToken,
-      nonce,
-      returnUrl,
-      transport: 'browser' as const,
-    }).pipe(map((res) => this.requireData(res, 'Microsoft login response was incomplete.')));
+    return this.postWithCsrf<ApiEnvelope<OAuthAuthenticationResponse>>(
+      `${this.baseUrl}/microsoft`,
+      {
+        token: idToken,
+        nonce,
+        returnUrl,
+        transport: 'browser' as const,
+      },
+    ).pipe(map((res) => this.requireData(res, 'Microsoft login response was incomplete.')));
   }
 
   completeOAuthSignup(

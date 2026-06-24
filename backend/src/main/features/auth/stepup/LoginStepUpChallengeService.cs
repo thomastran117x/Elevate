@@ -504,30 +504,90 @@ namespace backend.main.features.auth.stepup
 
         private sealed class PendingStepUpState
         {
-            public required string PendingId { get; set; }
-            public required string ChallengeHash { get; set; }
-            public int UserId { get; set; }
-            public required string Email { get; set; }
-            public string? PhoneNumber { get; set; }
-            public SessionTransport Transport { get; set; }
-            public bool RememberMe { get; set; }
-            public required string TrustedDeviceId { get; set; }
-            public required string DeviceType { get; set; }
-            public required string ClientName { get; set; }
-            public required string IpAddress { get; set; }
-            public required string ReturnPath { get; set; }
-            public DateTime ExpiresAtUtc { get; set; }
-            public string? SmsCodeHash { get; set; }
-            public string? EmailTokenHash { get; set; }
-            public int SmsFailedAttempts { get; set; }
-            public required DeliveryState Sms { get; set; }
-            public required DeliveryState EmailDelivery { get; set; }
+            public required string PendingId
+            {
+                get; set;
+            }
+            public required string ChallengeHash
+            {
+                get; set;
+            }
+            public int UserId
+            {
+                get; set;
+            }
+            public required string Email
+            {
+                get; set;
+            }
+            public string? PhoneNumber
+            {
+                get; set;
+            }
+            public SessionTransport Transport
+            {
+                get; set;
+            }
+            public bool RememberMe
+            {
+                get; set;
+            }
+            public required string TrustedDeviceId
+            {
+                get; set;
+            }
+            public required string DeviceType
+            {
+                get; set;
+            }
+            public required string ClientName
+            {
+                get; set;
+            }
+            public required string IpAddress
+            {
+                get; set;
+            }
+            public required string ReturnPath
+            {
+                get; set;
+            }
+            public DateTime ExpiresAtUtc
+            {
+                get; set;
+            }
+            public string? SmsCodeHash
+            {
+                get; set;
+            }
+            public string? EmailTokenHash
+            {
+                get; set;
+            }
+            public int SmsFailedAttempts
+            {
+                get; set;
+            }
+            public required DeliveryState Sms
+            {
+                get; set;
+            }
+            public required DeliveryState EmailDelivery
+            {
+                get; set;
+            }
         }
 
         private sealed class DeliveryState
         {
-            public int SendCount { get; set; }
-            public DateTime? CooldownEndsAtUtc { get; set; }
+            public int SendCount
+            {
+                get; set;
+            }
+            public DateTime? CooldownEndsAtUtc
+            {
+                get; set;
+            }
         }
     }
 }
