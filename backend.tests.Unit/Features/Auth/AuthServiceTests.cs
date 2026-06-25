@@ -4,6 +4,7 @@ using backend.main.features.auth.contracts;
 using backend.main.features.auth.device;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
+using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.profile;
@@ -181,11 +182,19 @@ public class AuthServiceTests
                 SessionTransport.BrowserCookie));
 
         var deviceService = new Mock<IDeviceService>();
+        var authSessionService = CreateAuthSessionServiceForUser(new backend.main.features.profile.User
+        {
+            Id = 9,
+            Email = "existing@example.com",
+            Usertype = "Participant",
+            GoogleID = "google-1"
+        });
         var service = CreateService(
             userRepository: userRepository,
             oauthService: oauthService,
             tokenService: tokenService,
-            deviceService: deviceService);
+            deviceService: deviceService,
+            authSessionService: authSessionService);
 
         var result = await service.GoogleAsync("google-token", SessionTransport.BrowserCookie);
 
@@ -251,7 +260,8 @@ public class AuthServiceTests
         tokenService.Setup(service => service.VerifyVerificationToken("verify-token", VerificationPurpose.SignUp))
             .ReturnsAsync(user);
 
-        var service = CreateService(userRepository: userRepository, tokenService: tokenService);
+        var authSessionService = CreateAuthSessionServiceForUser(user);
+        var service = CreateService(userRepository: userRepository, tokenService: tokenService, authSessionService: authSessionService);
 
         var result = await service.VerifyAsync("verify-token", SessionTransport.BrowserCookie);
 
@@ -280,7 +290,8 @@ public class AuthServiceTests
         tokenService.Setup(service => service.VerifyVerificationOtpAsync("123456", "challenge", VerificationPurpose.SignUp))
             .ReturnsAsync(user);
 
-        var service = CreateService(userRepository: userRepository, tokenService: tokenService);
+        var authSessionService = CreateAuthSessionServiceForUser(user);
+        var service = CreateService(userRepository: userRepository, tokenService: tokenService, authSessionService: authSessionService);
 
         var result = await service.VerifyOtpAsync("123456", "challenge", SessionTransport.BrowserCookie);
 
@@ -489,11 +500,20 @@ public class AuthServiceTests
         });
 
         var deviceService = new Mock<IDeviceService>();
+        var authSessionService = CreateAuthSessionServiceForUser(new backend.main.features.profile.User
+        {
+            Id = 15,
+            Email = "member@example.com",
+            Usertype = AuthRoles.DefaultOAuthRole,
+            MicrosoftID = "ms-2",
+            AuthVersion = 1
+        });
         var service = CreateService(
             userRepository: userRepository,
             oauthService: oauthService,
             tokenService: tokenService,
-            deviceService: deviceService);
+            deviceService: deviceService,
+            authSessionService: authSessionService);
 
         var result = await service.MicrosoftAsync("ms-token", SessionTransport.BrowserCookie);
 
@@ -536,11 +556,20 @@ public class AuthServiceTests
             AuthVersion = 1
         });
 
+        var authSessionService = CreateAuthSessionServiceForUser(new backend.main.features.profile.User
+        {
+            Id = 55,
+            Email = "code@example.com",
+            Usertype = "Participant",
+            GoogleID = "google-55",
+            AuthVersion = 1
+        });
         var service = CreateService(
             userRepository: userRepository,
             oauthService: oauthService,
             tokenService: tokenService,
-            deviceService: new Mock<IDeviceService>());
+            deviceService: new Mock<IDeviceService>(),
+            authSessionService: authSessionService);
 
         var result = await service.GoogleCodeAsync(
             "auth-code",
@@ -597,12 +626,19 @@ public class AuthServiceTests
             AuthVersion = 1
         });
 
-        var deviceService = new Mock<IDeviceService>();
+        var authSessionService = CreateAuthSessionServiceForUser(new backend.main.features.profile.User
+        {
+            Id = 77,
+            Email = "pending@example.com",
+            Usertype = "Organizer",
+            GoogleID = "google-42",
+            AuthVersion = 1
+        });
         var service = CreateService(
             userRepository: userRepository,
             tokenService: tokenService,
             cacheService: cache,
-            deviceService: deviceService);
+            authSessionService: authSessionService);
 
         var result = await service.CompleteOAuthSignupAsync(signupToken, "organizer", SessionTransport.BrowserCookie);
 
@@ -610,7 +646,6 @@ public class AuthServiceTests
         userRepository.Verify(repository => repository.CreateUserAsync(It.Is<backend.main.features.profile.User>(u =>
             u.Email == "pending@example.com" && u.GoogleID == "google-42" && u.Usertype == "Organizer")), Times.Once);
         cache.Verify(service => service.DeleteKeyAsync("oauth:pending:signup-token"), Times.Once);
-        deviceService.Verify(service => service.EnsureDeviceKnownAsync(77, "pending@example.com", It.IsAny<ClientRequestInfo>()), Times.Once);
     }
 
     [Fact]
@@ -689,11 +724,19 @@ public class AuthServiceTests
             AuthVersion = 1
         });
 
+        var authSessionService = CreateAuthSessionServiceForUser(new backend.main.features.profile.User
+        {
+            Id = 84,
+            Email = "existing@example.com",
+            Usertype = AuthRoles.DefaultOAuthRole,
+            GoogleID = "google-84",
+            AuthVersion = 1
+        });
         var service = CreateService(
             userRepository: userRepository,
             tokenService: tokenService,
             cacheService: cache,
-            deviceService: new Mock<IDeviceService>());
+            authSessionService: authSessionService);
 
         var result = await service.CompleteOAuthSignupAsync(
             "signup-token",
@@ -784,7 +827,8 @@ public class AuthServiceTests
                 Transport = SessionTransport.BrowserCookie
             });
 
-        var service = CreateService(userRepository: userRepository, tokenService: tokenService);
+        var authSessionService = CreateAuthSessionServiceForUser(user);
+        var service = CreateService(userRepository: userRepository, tokenService: tokenService, authSessionService: authSessionService);
 
         var result = await service.HandleTokensAsync(
             "old-refresh-token",
@@ -798,7 +842,7 @@ public class AuthServiceTests
     [Fact]
     public async Task VerifyDeviceLoginAsync_ShouldReturnDeviceIssuedToken()
     {
-        var expected = new UserToken(
+        var expectedToken = new UserToken(
             new Token(
                 "access-token",
                 DateTime.UtcNow.AddMinutes(15),
@@ -807,6 +851,7 @@ public class AuthServiceTests
                 TimeSpan.FromDays(1),
                 SessionTransport.BrowserCookie),
             new TestUserBuilder().WithId(90).WithEmail("device@example.com").Build());
+        var expected = new AuthenticatedSessionResult { UserToken = expectedToken };
 
         var deviceService = new Mock<IDeviceService>();
         deviceService.Setup(service => service.VerifyDeviceAsync("device-token", SessionTransport.BrowserCookie))
@@ -850,7 +895,10 @@ public class AuthServiceTests
         Mock<ITokenService>? tokenService = null,
         Mock<IAuthNotificationService>? authNotificationService = null,
         Mock<IDeviceService>? deviceService = null,
-        Mock<ICacheService>? cacheService = null)
+        Mock<ICacheService>? cacheService = null,
+        Mock<IDeviceTrustService>? deviceTrustService = null,
+        Mock<ILoginStepUpChallengeService>? loginStepUpChallengeService = null,
+        Mock<IAuthSessionService>? authSessionService = null)
     {
         userRepository ??= new Mock<IAuthUserRepository>();
         oauthService ??= new Mock<IOAuthService>();
@@ -858,6 +906,9 @@ public class AuthServiceTests
         authNotificationService ??= new Mock<IAuthNotificationService>();
         deviceService ??= new Mock<IDeviceService>();
         cacheService ??= new Mock<ICacheService>();
+        deviceTrustService ??= new Mock<IDeviceTrustService>();
+        loginStepUpChallengeService ??= new Mock<ILoginStepUpChallengeService>();
+        authSessionService ??= new Mock<IAuthSessionService>();
 
         return new AuthService(
             userRepository.Object,
@@ -866,6 +917,9 @@ public class AuthServiceTests
             cacheService.Object,
             authNotificationService.Object,
             deviceService.Object,
+            deviceTrustService.Object,
+            loginStepUpChallengeService.Object,
+            authSessionService.Object,
             TestRequestInfoFactory.Browser());
     }
 
@@ -886,5 +940,25 @@ public class AuthServiceTests
                 TimeSpan.FromDays(1),
                 SessionTransport.BrowserCookie));
         return tokenService;
+    }
+
+    private static Mock<IAuthSessionService> CreateAuthSessionServiceForUser(backend.main.features.profile.User user)
+    {
+        var authSessionService = new Mock<IAuthSessionService>();
+        authSessionService.Setup(s => s.IssueAsync(
+                It.Is<backend.main.features.profile.User>(u => u.Id == user.Id),
+                It.IsAny<SessionTransport>(),
+                It.IsAny<string?>(),
+                It.IsAny<bool?>()))
+            .ReturnsAsync(new UserToken(
+                new Token(
+                    "access-token",
+                    DateTime.UtcNow.AddMinutes(15),
+                    "refresh-token",
+                    "binding-token",
+                    TimeSpan.FromDays(1),
+                    SessionTransport.BrowserCookie),
+                user));
+        return authSessionService;
     }
 }

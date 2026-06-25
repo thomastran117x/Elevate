@@ -5,6 +5,7 @@ using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
 using backend.main.features.profile;
+using backend.main.shared.requests;
 using backend.main.shared.responses;
 
 using backend.tests.Unit.Support;
@@ -42,12 +43,16 @@ public class AuthControllerTests
                 "browser@example.com",
                 "Password123!",
                 SessionTransport.BrowserCookie,
-                false))
-            .ReturnsAsync(CreateUserToken(
-                "browser@example.com",
-                SessionTransport.BrowserCookie,
-                refreshToken: "browser-refresh",
-                bindingToken: "browser-binding"));
+                false,
+                null))
+            .ReturnsAsync(LoginAuthenticationResult.Authenticated(new AuthenticatedSessionResult
+            {
+                UserToken = CreateUserToken(
+                    "browser@example.com",
+                    SessionTransport.BrowserCookie,
+                    refreshToken: "browser-refresh",
+                    bindingToken: "browser-binding")
+            }));
 
         var controller = CreateController(authService: authService);
 
@@ -59,11 +64,11 @@ public class AuthControllerTests
         });
 
         var ok = result.Should().BeOfType<ObjectResult>().Subject;
-        var response = ok.Value.Should().BeOfType<ApiResponse<AuthenticatedSessionResponse>>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<LoginAuthenticationResponse>>().Subject;
 
         response.Data.Should().NotBeNull();
-        response.Data!.RefreshToken.Should().BeNull();
-        response.Data.SessionBindingToken.Should().BeNull();
+        response.Data!.Auth!.RefreshToken.Should().BeNull();
+        response.Data.Auth.SessionBindingToken.Should().BeNull();
         controller.Response.Headers.SetCookie.Should().Contain(value => value.Contains("refreshToken="));
         controller.Response.Headers.SetCookie.Should().Contain(value => value.Contains("refreshBinding="));
     }
@@ -76,12 +81,16 @@ public class AuthControllerTests
                 "api@example.com",
                 "Password123!",
                 SessionTransport.ApiToken,
-                false))
-            .ReturnsAsync(CreateUserToken(
-                "api@example.com",
-                SessionTransport.ApiToken,
-                refreshToken: "api-refresh",
-                bindingToken: "api-binding"));
+                false,
+                null))
+            .ReturnsAsync(LoginAuthenticationResult.Authenticated(new AuthenticatedSessionResult
+            {
+                UserToken = CreateUserToken(
+                    "api@example.com",
+                    SessionTransport.ApiToken,
+                    refreshToken: "api-refresh",
+                    bindingToken: "api-binding")
+            }));
 
         var controller = CreateController(authService: authService);
 
@@ -94,11 +103,11 @@ public class AuthControllerTests
         });
 
         var ok = result.Should().BeOfType<ObjectResult>().Subject;
-        var response = ok.Value.Should().BeOfType<ApiResponse<AuthenticatedSessionResponse>>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<LoginAuthenticationResponse>>().Subject;
 
         response.Data.Should().NotBeNull();
-        response.Data!.RefreshToken.Should().Be("api-refresh");
-        response.Data.SessionBindingToken.Should().Be("api-binding");
+        response.Data!.Auth!.RefreshToken.Should().Be("api-refresh");
+        response.Data.Auth.SessionBindingToken.Should().Be("api-binding");
         controller.Response.Headers.SetCookie.Should().BeEmpty();
     }
 
@@ -177,7 +186,7 @@ public class AuthControllerTests
     public async Task GoogleAuthenticate_ShouldReturnRoleSelectionPayload_WhenSignupMustBeCompleted()
     {
         var authService = new Mock<IAuthService>();
-        authService.Setup(service => service.GoogleAsync("google-token", SessionTransport.BrowserCookie, "nonce"))
+        authService.Setup(service => service.GoogleAsync("google-token", SessionTransport.BrowserCookie, "nonce", null))
             .ReturnsAsync(OAuthAuthenticationResult.RoleSelectionRequired(new PendingOAuthSignupChallenge
             {
                 SignupToken = "signup-token",
@@ -210,12 +219,16 @@ public class AuthControllerTests
                 "verifier",
                 "https://frontend.example.com/callback",
                 SessionTransport.ApiToken,
-                "nonce"))
-            .ReturnsAsync(OAuthAuthenticationResult.Authenticated(CreateUserToken(
-                "code@example.com",
-                SessionTransport.ApiToken,
-                refreshToken: "code-refresh",
-                bindingToken: "code-binding")));
+                "nonce",
+                null))
+            .ReturnsAsync(OAuthAuthenticationResult.Authenticated(new AuthenticatedSessionResult
+            {
+                UserToken = CreateUserToken(
+                    "code@example.com",
+                    SessionTransport.ApiToken,
+                    refreshToken: "code-refresh",
+                    bindingToken: "code-binding")
+            }));
 
         var controller = CreateController(authService: authService);
 
@@ -241,12 +254,16 @@ public class AuthControllerTests
         authService.Setup(service => service.MicrosoftAsync(
                 "microsoft-token",
                 SessionTransport.ApiToken,
-                "nonce"))
-            .ReturnsAsync(OAuthAuthenticationResult.Authenticated(CreateUserToken(
-                "ms@example.com",
-                SessionTransport.ApiToken,
-                refreshToken: "ms-refresh",
-                bindingToken: "ms-binding")));
+                "nonce",
+                null))
+            .ReturnsAsync(OAuthAuthenticationResult.Authenticated(new AuthenticatedSessionResult
+            {
+                UserToken = CreateUserToken(
+                    "ms@example.com",
+                    SessionTransport.ApiToken,
+                    refreshToken: "ms-refresh",
+                    bindingToken: "ms-binding")
+            }));
 
         var controller = CreateController(authService: authService);
 
@@ -449,11 +466,14 @@ public class AuthControllerTests
     {
         var authService = new Mock<IAuthService>();
         authService.Setup(service => service.VerifyDeviceLoginAsync("device-token", SessionTransport.ApiToken))
-            .ReturnsAsync(CreateUserToken(
-                "device@example.com",
-                SessionTransport.ApiToken,
-                refreshToken: "device-refresh",
-                bindingToken: "device-binding"));
+            .ReturnsAsync(new AuthenticatedSessionResult
+            {
+                UserToken = CreateUserToken(
+                    "device@example.com",
+                    SessionTransport.ApiToken,
+                    refreshToken: "device-refresh",
+                    bindingToken: "device-binding")
+            });
         var controller = CreateController(authService: authService);
 
         var result = await controller.VerifyDevice(new VerificationTokenRequest

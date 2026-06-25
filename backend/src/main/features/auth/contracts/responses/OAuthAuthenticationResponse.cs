@@ -26,5 +26,8 @@ namespace backend.main.features.auth.contracts.responses
 
         [JsonIgnore]
         public string? SignupToken => RoleSelection?.SignupToken;
+
+        [JsonIgnore]
+        public string? Email => RoleSelection?.Email;
     }
 }
