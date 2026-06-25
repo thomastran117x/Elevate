@@ -558,6 +558,14 @@ internal static partial class DevTasksCli
                 RegexOptions.Compiled
             ),
             new Regex(
+                "(?<verb>Get)WithBearerAsync\\(\\s*\\$?\"(?<path>/api/[^\"\\r\\n]*)\"",
+                RegexOptions.Compiled
+            ),
+            new Regex(
+                "(?<verb>Post)JsonWithBearerAndCsrfAsync\\(\\s*\\$?\"(?<path>/api/[^\"\\r\\n]*)\"",
+                RegexOptions.Compiled
+            ),
+            new Regex(
                 "CreateCsrfRequestAsync\\(\\s*\\w+\\s*,\\s*\\$?\"(?<path>/api/[^\"\\r\\n]*)\"",
                 RegexOptions.Compiled
             )

@@ -1,10 +1,15 @@
+using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
 
 namespace backend.main.features.auth.oauth
 {
     public sealed class OAuthAuthenticationResult
     {
-        public UserToken? UserToken
+        public required string Type
+        {
+            get; init;
+        }
+        public AuthenticatedSessionResult? Session
         {
             get; init;
         }
@@ -12,13 +17,26 @@ namespace backend.main.features.auth.oauth
         {
             get; init;
         }
+        public LoginStepUpChallengeResponse? StepUp
+        {
+            get; init;
+        }
 
-        public bool RequiresRoleSelection => PendingSignup != null;
+        public bool RequiresRoleSelection => Type == AuthFlowResponseTypes.RequiresRoleSelection;
+        public UserToken? UserToken => Session?.UserToken;
 
-        public static OAuthAuthenticationResult Authenticated(UserToken userToken) =>
+        public static OAuthAuthenticationResult Authenticated(AuthenticatedSessionResult session) =>
             new()
             {
-                UserToken = userToken
+                Type = AuthFlowResponseTypes.Authenticated,
+                Session = session
+            };
+
+        public static OAuthAuthenticationResult RequiresStepUp(LoginStepUpChallengeResponse stepUp) =>
+            new()
+            {
+                Type = AuthFlowResponseTypes.RequiresStepUp,
+                StepUp = stepUp
             };
 
         public static OAuthAuthenticationResult RoleSelectionRequired(
@@ -26,6 +44,7 @@ namespace backend.main.features.auth.oauth
         ) =>
             new()
             {
+                Type = AuthFlowResponseTypes.RequiresRoleSelection,
                 PendingSignup = pendingSignup
             };
     }

@@ -21,6 +21,15 @@ export class AuthReturnUrlService {
     sessionStorage.setItem(ReturnUrlStorageKey, normalized);
   }
 
+  peek(): string | null {
+    if (typeof sessionStorage === 'undefined') {
+      return null;
+    }
+
+    const value = sessionStorage.getItem(ReturnUrlStorageKey);
+    return this.normalize(value);
+  }
+
   consume(fallback = '/dashboard'): string {
     if (typeof sessionStorage === 'undefined') {
       return fallback;
@@ -29,7 +38,7 @@ export class AuthReturnUrlService {
     const value = sessionStorage.getItem(ReturnUrlStorageKey);
     if (value) {
       sessionStorage.removeItem(ReturnUrlStorageKey);
-      return value;
+      return this.normalize(value) ?? fallback;
     }
 
     return fallback;
@@ -46,7 +55,7 @@ export class AuthReturnUrlService {
     }
 
     if (trimmed.startsWith('/')) {
-      return trimmed.startsWith('//') ? null : trimmed;
+      return trimmed.startsWith('//') || trimmed.startsWith('/\\') ? null : trimmed;
     }
 
     if (typeof window !== 'undefined') {

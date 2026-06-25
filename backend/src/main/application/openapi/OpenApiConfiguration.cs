@@ -56,6 +56,11 @@ namespace backend.main.application.openapi
             "/api/auth/microsoft",
             "/api/auth/oauth/complete",
             "/api/auth/device/verify",
+            "/api/auth/mfa/start",
+            "/api/auth/mfa/verify",
+            "/api/auth/mfa/enroll/start",
+            "/api/auth/mfa/enroll/verify",
+            "/api/auth/mfa/disable",
             "/api/auth/refresh",
             "/api/auth/logout",
             "/api/auth/forgot-password",
@@ -724,3 +729,4 @@ namespace backend.main.application.openapi
         }
     }
 }
+

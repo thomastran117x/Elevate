@@ -67,6 +67,35 @@ namespace backend.Migrations
                     b.ToTable("Devices");
                 });
 
+            modelBuilder.Entity("backend.main.features.auth.mfa.SmsMfaEnrollment", b =>
+                {
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("IsSmsMfaEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<DateTime?>("PhoneVerifiedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("SmsMfaEnrollments");
+                });
+
             modelBuilder.Entity("backend.main.features.clubs.Club", b =>
                 {
                     b.Property<int>("Id")
@@ -1008,6 +1037,15 @@ namespace backend.Migrations
                     b.HasOne("backend.main.features.profile.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("backend.main.features.auth.mfa.SmsMfaEnrollment", b =>
+                {
+                    b.HasOne("backend.main.features.profile.User", null)
+                        .WithOne()
+                        .HasForeignKey("backend.main.features.auth.mfa.SmsMfaEnrollment", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

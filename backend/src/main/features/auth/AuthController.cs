@@ -54,7 +54,7 @@ namespace backend.main.features.auth
         [HttpPost("login")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
-        [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<LoginAuthenticationResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> LocalAuthenticate([FromBody] LoginRequest request)
         {
             try
@@ -62,24 +62,18 @@ namespace backend.main.features.auth
                 if (!await _captchaService.VerifyCaptchaAsync(request.Captcha))
                     throw new BadRequestException("Invalid captcha.");
 
-                UserToken userToken = await _authService.LoginAsync(
+                var result = await _authService.LoginAsync(
                     request.Email,
                     request.Password,
                     SessionTransportResolver.ResolveOrDefault(request.Transport),
-                    request.RememberMe
+                    request.RememberMe,
+                    request.ReturnUrl
                 );
 
-                User user = userToken.user;
-                Token token = userToken.token;
-
-                AuthenticatedSessionResponse response = CreateSessionResponse(user, token);
-
+                var response = CreateLoginAuthenticationResponse(result);
                 return StatusCode(
                     200,
-                    new ApiResponse<AuthenticatedSessionResponse>(
-                        $"Login successful",
-                        response
-                    )
+                    new ApiResponse<LoginAuthenticationResponse>(ResolveLoginMessage(response.Type), response)
                 );
             }
             catch (Exception e)
@@ -139,21 +133,17 @@ namespace backend.main.features.auth
         {
             try
             {
-                UserToken userToken = await _authService.VerifyOtpAsync(
+                var userToken = await _authService.VerifyOtpAsync(
                     request.Code,
                     request.Challenge,
                     SessionTransportResolver.ResolveOrDefault(request.Transport)
                 );
-                User user = userToken.user;
-                Token authToken = userToken.token;
-
-                AuthenticatedSessionResponse response = CreateSessionResponse(user, authToken);
 
                 return StatusCode(
                     200,
                     new ApiResponse<AuthenticatedSessionResponse>(
                         "Verification successful",
-                        response
+                        CreateSessionResponse(userToken.user, userToken.token)
                     )
                 );
             }
@@ -192,20 +182,16 @@ namespace backend.main.features.auth
         {
             try
             {
-                UserToken userToken = await _authService.VerifyAsync(
+                var userToken = await _authService.VerifyAsync(
                     request.Token,
                     SessionTransportResolver.ResolveOrDefault(request.Transport)
                 );
-                User user = userToken.user;
-                Token authToken = userToken.token;
-
-                AuthenticatedSessionResponse response = CreateSessionResponse(user, authToken);
 
                 return StatusCode(
                     200,
                     new ApiResponse<AuthenticatedSessionResponse>(
-                        $"Verification successful",
-                        response
+                        "Verification successful",
+                        CreateSessionResponse(userToken.user, userToken.token)
                     )
                 );
             }
@@ -227,21 +213,17 @@ namespace backend.main.features.auth
         {
             try
             {
-                OAuthAuthenticationResult result = await _authService.GoogleAsync(
+                var result = await _authService.GoogleAsync(
                     request.Token,
                     SessionTransportResolver.ResolveOrDefault(request.Transport),
-                    request.Nonce
+                    request.Nonce,
+                    request.ReturnUrl
                 );
-                OAuthAuthenticationResponse response = CreateOAuthAuthenticationResponse(result);
+                var response = CreateOAuthAuthenticationResponse(result);
 
                 return StatusCode(
                     200,
-                    new ApiResponse<OAuthAuthenticationResponse>(
-                        response.RequiresRoleSelection
-                            ? "Role selection is required to complete signup."
-                            : "Login successful",
-                        response
-                    )
+                    new ApiResponse<OAuthAuthenticationResponse>(ResolveOAuthMessage(response.Type), response)
                 );
             }
             catch (Exception e)
@@ -262,23 +244,19 @@ namespace backend.main.features.auth
         {
             try
             {
-                OAuthAuthenticationResult result = await _authService.GoogleCodeAsync(
+                var result = await _authService.GoogleCodeAsync(
                     request.Code,
                     request.CodeVerifier,
                     request.RedirectUri,
                     SessionTransportResolver.ResolveOrDefault(request.Transport),
-                    request.Nonce
+                    request.Nonce,
+                    request.ReturnUrl
                 );
-                OAuthAuthenticationResponse response = CreateOAuthAuthenticationResponse(result);
+                var response = CreateOAuthAuthenticationResponse(result);
 
                 return StatusCode(
                     200,
-                    new ApiResponse<OAuthAuthenticationResponse>(
-                        response.RequiresRoleSelection
-                            ? "Role selection is required to complete signup."
-                            : "Login successful",
-                        response
-                    )
+                    new ApiResponse<OAuthAuthenticationResponse>(ResolveOAuthMessage(response.Type), response)
                 );
             }
             catch (Exception e)
@@ -299,21 +277,17 @@ namespace backend.main.features.auth
         {
             try
             {
-                OAuthAuthenticationResult result = await _authService.MicrosoftAsync(
+                var result = await _authService.MicrosoftAsync(
                     request.Token,
                     SessionTransportResolver.ResolveOrDefault(request.Transport),
-                    request.Nonce
+                    request.Nonce,
+                    request.ReturnUrl
                 );
-                OAuthAuthenticationResponse response = CreateOAuthAuthenticationResponse(result);
+                var response = CreateOAuthAuthenticationResponse(result);
 
                 return StatusCode(
                     200,
-                    new ApiResponse<OAuthAuthenticationResponse>(
-                        response.RequiresRoleSelection
-                            ? "Role selection is required to complete signup."
-                            : "Login successful",
-                        response
-                    )
+                    new ApiResponse<OAuthAuthenticationResponse>(ResolveOAuthMessage(response.Type), response)
                 );
             }
             catch (Exception e)
@@ -366,19 +340,16 @@ namespace backend.main.features.auth
                 if (string.IsNullOrEmpty(refreshToken))
                     throw new UnauthorizedException("Missing refresh token");
 
-                UserToken userToken = await _authService.HandleTokensAsync(
+                var userToken = await _authService.HandleTokensAsync(
                     refreshToken,
                     sessionBindingToken,
                     SessionTransport.BrowserCookie
                 );
 
-                User user = userToken.user;
-                Token token = userToken.token;
-
                 return Ok(
                     new ApiResponse<AuthenticatedSessionResponse>(
                         "Session refreshed successfully.",
-                        CreateSessionResponse(user, token)
+                        CreateSessionResponse(userToken.user, userToken.token)
                     )
                 );
             }
@@ -398,25 +369,21 @@ namespace backend.main.features.auth
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> CompleteOAuthSignup(
-            [FromBody] CompleteOAuthSignupRequest request
-        )
+        public async Task<IActionResult> CompleteOAuthSignup([FromBody] CompleteOAuthSignupRequest request)
         {
             try
             {
-                UserToken userToken = await _authService.CompleteOAuthSignupAsync(
+                var userToken = await _authService.CompleteOAuthSignupAsync(
                     request.SignupToken,
                     request.Usertype,
                     SessionTransportResolver.ResolveOrDefault(request.Transport)
                 );
 
-                AuthenticatedSessionResponse response = CreateSessionResponse(userToken.user, userToken.token);
-
                 return StatusCode(
                     200,
                     new ApiResponse<AuthenticatedSessionResponse>(
                         "Signup completed successfully.",
-                        response
+                        CreateSessionResponse(userToken.user, userToken.token)
                     )
                 );
             }
@@ -444,7 +411,7 @@ namespace backend.main.features.auth
                 if (string.IsNullOrEmpty(refreshToken))
                     throw new UnauthorizedException("Missing refresh token");
 
-                UserToken userToken = await _authService.HandleTokensAsync(
+                var userToken = await _authService.HandleTokensAsync(
                     refreshToken,
                     sessionBindingToken,
                     SessionTransport.ApiToken
@@ -495,10 +462,7 @@ namespace backend.main.features.auth
                 if (string.IsNullOrEmpty(refreshToken))
                 {
                     HttpUtility.ClearBrowserRefreshSession(Response);
-                    return StatusCode(
-                        200,
-                        new MessageResponse($"The user is already logged out.")
-                    );
+                    return StatusCode(200, new MessageResponse("The user is already logged out."));
                 }
 
                 await _authService.HandleLogoutAsync(
@@ -508,10 +472,7 @@ namespace backend.main.features.auth
                 );
                 HttpUtility.ClearBrowserRefreshSession(Response);
 
-                return StatusCode(
-                    200,
-                    new MessageResponse($"The user's logout is successful")
-                );
+                return StatusCode(200, new MessageResponse("The user's logout is successful"));
             }
             catch (Exception e)
             {
@@ -547,10 +508,7 @@ namespace backend.main.features.auth
                     SessionTransport.ApiToken
                 );
 
-                return StatusCode(
-                    200,
-                    new MessageResponse($"The user's logout is successful")
-                );
+                return StatusCode(200, new MessageResponse("The user's logout is successful"));
             }
             catch (Exception e)
             {
@@ -587,20 +545,16 @@ namespace backend.main.features.auth
         {
             try
             {
-                UserToken userToken = await _authService.VerifyDeviceLoginAsync(
+                var result = await _authService.VerifyDeviceLoginAsync(
                     request.Token,
                     SessionTransportResolver.ResolveOrDefault(request.Transport)
                 );
-                User user = userToken.user;
-                Token authToken = userToken.token;
-
-                AuthenticatedSessionResponse response = CreateSessionResponse(user, authToken);
 
                 return StatusCode(
                     200,
                     new ApiResponse<AuthenticatedSessionResponse>(
                         "Device verified. Login successful.",
-                        response
+                        CreateSessionResponse(result)
                     )
                 );
             }
@@ -610,6 +564,53 @@ namespace backend.main.features.auth
                     return HandleError.Resolve(e);
 
                 Logger.Error($"[AuthController] VerifyDevice POST failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [HttpPost("mfa/start")]
+        [ValidateAntiForgeryToken]
+        [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<StartLoginStepUpResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> StartStepUp([FromBody] StartLoginStepUpRequest request)
+        {
+            try
+            {
+                var response = await _authService.StartLoginStepUpAsync(request.Challenge, request.Method);
+                return Ok(new ApiResponse<StartLoginStepUpResponse>("Sign-in verification sent.", response));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[AuthController] StartStepUp failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [HttpPost("mfa/verify")]
+        [ValidateAntiForgeryToken]
+        [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> VerifyStepUp([FromBody] VerifyLoginStepUpRequest request)
+        {
+            try
+            {
+                var response = await _authService.VerifyLoginStepUpAsync(request.Challenge, request.Code);
+                return Ok(
+                    new ApiResponse<AuthenticatedSessionResponse>(
+                        "Sign-in verification successful.",
+                        CreateSessionResponse(response)
+                    )
+                );
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[AuthController] VerifyStepUp failed: {e}");
                 return HandleError.Resolve(e);
             }
         }
@@ -675,10 +676,7 @@ namespace backend.main.features.auth
                     throw new BadRequestException("Missing password reset token or OTP challenge.");
                 }
 
-                return StatusCode(
-                    200,
-                    new MessageResponse("Password reset successful. Please login")
-                );
+                return StatusCode(200, new MessageResponse("Password reset successful. Please login"));
             }
             catch (Exception e)
             {
@@ -690,7 +688,11 @@ namespace backend.main.features.auth
             }
         }
 
-        private AuthenticatedSessionResponse CreateSessionResponse(User user, Token token)
+        private AuthenticatedSessionResponse CreateSessionResponse(
+            User user,
+            Token token,
+            string? returnPath = null
+        )
         {
             string? refreshToken = null;
             string? sessionBindingToken = null;
@@ -714,9 +716,61 @@ namespace backend.main.features.auth
                 token.AccessToken,
                 token.AccessTokenExpiresAtUtc,
                 refreshToken,
-                sessionBindingToken
+                sessionBindingToken,
+                returnPath
             );
         }
+
+        private AuthenticatedSessionResponse CreateSessionResponse(AuthenticatedSessionResult result)
+        {
+            return CreateSessionResponse(
+                result.UserToken.user,
+                result.UserToken.token,
+                result.ReturnPath
+            );
+        }
+
+        private LoginAuthenticationResponse CreateLoginAuthenticationResponse(LoginAuthenticationResult result)
+        {
+            return new LoginAuthenticationResponse
+            {
+                Type = result.Type,
+                Auth = result.Session != null ? CreateSessionResponse(result.Session) : null,
+                StepUp = result.StepUp
+            };
+        }
+
+        private OAuthAuthenticationResponse CreateOAuthAuthenticationResponse(OAuthAuthenticationResult result)
+        {
+            return new OAuthAuthenticationResponse
+            {
+                Type = result.Type,
+                Auth = result.Session != null ? CreateSessionResponse(result.Session) : null,
+                StepUp = result.StepUp,
+                RoleSelection = result.PendingSignup == null
+                    ? null
+                    : new OAuthRoleSelectionResponse
+                    {
+                        SignupToken = result.PendingSignup.SignupToken,
+                        Email = result.PendingSignup.Email,
+                        Name = result.PendingSignup.Name,
+                        Provider = result.PendingSignup.Provider,
+                    }
+            };
+        }
+
+        private static string ResolveLoginMessage(string type) => type switch
+        {
+            AuthFlowResponseTypes.RequiresStepUp => "Additional sign-in verification is required.",
+            _ => "Login successful"
+        };
+
+        private static string ResolveOAuthMessage(string type) => type switch
+        {
+            AuthFlowResponseTypes.RequiresRoleSelection => "Role selection is required to complete signup.",
+            AuthFlowResponseTypes.RequiresStepUp => "Additional sign-in verification is required.",
+            _ => "Login successful"
+        };
 
         private static CurrentUserResponse CreateCurrentUserResponse(User user)
         {
@@ -728,32 +782,6 @@ namespace backend.main.features.auth
                 Name = user.Name,
                 Avatar = user.Avatar,
                 Usertype = AuthRoles.NormalizeStored(user.Usertype),
-            };
-        }
-
-        private OAuthAuthenticationResponse CreateOAuthAuthenticationResponse(
-            OAuthAuthenticationResult result
-        )
-        {
-            if (result.UserToken != null)
-            {
-                return new OAuthAuthenticationResponse
-                {
-                    RequiresRoleSelection = false,
-                    Auth = CreateSessionResponse(result.UserToken.user, result.UserToken.token)
-                };
-            }
-
-            var pending = result.PendingSignup
-                ?? throw new InvalidOperationException("OAuth result did not contain a payload.");
-
-            return new OAuthAuthenticationResponse
-            {
-                RequiresRoleSelection = true,
-                SignupToken = pending.SignupToken,
-                Email = pending.Email,
-                Name = pending.Name,
-                Provider = pending.Provider,
             };
         }
 
@@ -772,10 +800,3 @@ namespace backend.main.features.auth
         }
     }
 }
-
-
-
-
-
-
-

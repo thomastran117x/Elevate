@@ -2,8 +2,10 @@ using backend.main.application.features;
 using backend.main.features.auth;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.device;
+using backend.main.features.auth.mfa;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
+using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.clubs;
@@ -150,6 +152,7 @@ namespace backend.main.application.bootstrap
             services.AddRepositoryWithProxy<IFollowRepository, FollowRepository>();
             services.AddRepositoryWithProxy<IAuthUserRepository, AuthUserRepository>();
             services.AddRepositoryWithProxy<IUserRepository, AuthUserRepository>();
+            services.AddRepositoryWithProxy<IMfaEnrollmentRepository, MfaEnrollmentRepository>();
             services.AddRepositoryWithProxy<IClubRepository, ClubRepository>();
             services.AddRepositoryWithProxy<IEventsRepository, EventsRepository>();
             services.AddRepositoryWithProxy<IPaymentRepository, PaymentRepository>();
@@ -166,12 +169,16 @@ namespace backend.main.application.bootstrap
 
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<IAuthSessionService, AuthSessionService>();
+            services.AddScoped<IMfaEnrollmentService, MfaEnrollmentService>();
             services.AddScoped<IOAuthService, OAuthService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IClubService, ClubService>();
             services.AddScoped<ClubVersionCleanupRunner>();
             services.AddScoped<IClubReviewService, ClubReviewService>();
             services.AddScoped<IDeviceService, DeviceService>();
+            services.AddScoped<IDeviceTrustService, DeviceTrustService>();
+            services.AddScoped<ILoginStepUpChallengeService, LoginStepUpChallengeService>();
             services.AddScoped<IClubPostService, ClubPostService>();
             services.AddSingleton<CommentEventBroker>();
             services.AddSingleton<IRefreshAheadCache, RefreshAheadCache>();
@@ -267,3 +274,4 @@ namespace backend.main.application.bootstrap
         }
     }
 }
+

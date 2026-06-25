@@ -2,18 +2,16 @@ import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Component, inject, PLATFORM_ID, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
-import { AuthService, PendingOAuthSignupStorageKey, SignupRole } from '../../services/auth.service';
+import {
+  AuthService,
+  OAuthRoleSelectionPayload,
+  PendingOAuthSignupStorageKey,
+  SignupRole,
+} from '../../services/auth.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
-
-type PendingOAuthSignup = {
-  RequiresRoleSelection: true;
-  SignupToken: string;
-  Email: string;
-  Name: string;
-  Provider: string;
-};
 
 @Component({
   selector: 'app-oauth-role',
@@ -50,7 +48,7 @@ export class OAuthRoleComponent {
 
   readonly status = signal<'ready' | 'loading' | 'error'>('ready');
   readonly message = signal('Choose how you want to use EventXperience.');
-  readonly pending = signal<PendingOAuthSignup | null>(null);
+  readonly pending = signal<OAuthRoleSelectionPayload | null>(null);
 
   constructor(
     private auth: AuthService,
@@ -72,7 +70,7 @@ export class OAuthRoleComponent {
     }
 
     try {
-      const parsed = JSON.parse(raw) as PendingOAuthSignup;
+      const parsed = JSON.parse(raw) as OAuthRoleSelectionPayload;
       if (!parsed.SignupToken || !parsed.Email || !parsed.Provider) {
         throw new Error('Incomplete OAuth signup session.');
       }
@@ -107,7 +105,7 @@ export class OAuthRoleComponent {
           sessionStorage.removeItem(PendingOAuthSignupStorageKey);
           this.status.set('ready');
           this.message.set('Your account is ready. Redirecting you back...');
-          const target = this.authReturnUrl.consume();
+          const target = this.authReturnUrl.consume(session.ReturnPath ?? '/dashboard');
           setTimeout(() => this.router.navigateByUrl(target), 800);
         } catch (err: any) {
           this.status.set('error');

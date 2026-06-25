@@ -9,6 +9,7 @@ using backend.main.features.cache;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
+using backend.main.shared.utilities;
 using backend.main.shared.utilities.logger;
 
 using Microsoft.IdentityModel.Tokens;
@@ -476,7 +477,7 @@ namespace backend.main.features.auth.token
                 if (state.OtpChallenge != challenge)
                     throw new UnauthorizedException("Invalid or expired verification challenge.");
 
-                if (!FixedTimeEquals(state.OtpProof, expectedProof))
+                if (!CryptoHelper.FixedTimeEquals(state.OtpProof, expectedProof))
                 {
                     var attempts = await RecordFailedOtpAttemptAsync(challenge);
                     if (attempts >= MAX_OTP_ATTEMPTS)
@@ -636,11 +637,7 @@ namespace backend.main.features.auth.token
             };
         }
 
-        private static string ComputeTokenHash(string token)
-        {
-            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
-            return Convert.ToHexString(bytes);
-        }
+        private static string ComputeTokenHash(string token) => CryptoHelper.HashToken(token);
 
         private string ComputeOtpProof(
             VerificationPurpose purpose,
@@ -676,16 +673,6 @@ namespace backend.main.features.auth.token
             var attempts = await _cacheService.IncrementAsync(key);
             _ = await _cacheService.SetExpiryAsync(key, VERIFY_TTL);
             return attempts;
-        }
-
-        private static bool FixedTimeEquals(string left, string right)
-        {
-            var leftBytes = Encoding.UTF8.GetBytes(left);
-            var rightBytes = Encoding.UTF8.GetBytes(right);
-            if (leftBytes.Length != rightBytes.Length)
-                return false;
-
-            return CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
         }
 
         private static string TokenKey(string tokenHash) =>

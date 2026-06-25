@@ -15,13 +15,19 @@ namespace backend.main.application.security
             $"{RoutePaths.ApiAuthPath}/verify",
             $"{RoutePaths.ApiAuthPath}/verify/otp",
             $"{RoutePaths.ApiAuthPath}/google",
+            $"{RoutePaths.ApiAuthPath}/google/code",
             $"{RoutePaths.ApiAuthPath}/microsoft",
             $"{RoutePaths.ApiAuthPath}/oauth/complete",
             $"{RoutePaths.ApiAuthPath}/device/verify",
+            $"{RoutePaths.ApiAuthPath}/mfa/start",
+            $"{RoutePaths.ApiAuthPath}/mfa/verify",
             $"{RoutePaths.ApiAuthPath}/refresh",
             $"{RoutePaths.ApiAuthPath}/logout",
             $"{RoutePaths.ApiAuthPath}/forgot-password",
-            $"{RoutePaths.ApiAuthPath}/change-password"
+            $"{RoutePaths.ApiAuthPath}/change-password",
+            $"{RoutePaths.ApiAuthPath}/mfa/enroll/start",
+            $"{RoutePaths.ApiAuthPath}/mfa/enroll/verify",
+            $"{RoutePaths.ApiAuthPath}/mfa/disable"
         ];
 
         public static IServiceCollection AddCustomCsrf(this IServiceCollection services)

@@ -52,6 +52,7 @@ namespace backend.main.application.environment
         private static readonly string? _twilioAuthToken;
         private static readonly string? _twilioMessagingServiceSid;
         private static readonly string? _twilioFromPhoneNumber;
+        private static readonly bool _authSmsMfaEnrollmentEnabled;
         private static readonly string _appEnvironment;
         private static readonly string _logLevel;
         private const string DefaultJwtSecretAccess = "unit_test_secret_12345678901234567890";
@@ -165,6 +166,10 @@ namespace backend.main.application.environment
             _twilioAuthToken = GetOptional(["TWILIO_AUTH_TOKEN"]);
             _twilioMessagingServiceSid = GetOptional(["TWILIO_MESSAGING_SERVICE_SID"]);
             _twilioFromPhoneNumber = GetOptional(["TWILIO_FROM_PHONE_NUMBER"]);
+            _authSmsMfaEnrollmentEnabled = GetBoolOrDefault(
+                ["AUTH_SMS_MFA_ENROLLMENT_ENABLED"],
+                true
+            );
 
             _appEnvironment = (
                 GetOptional(["ENVIRONMENT", "ASPNETCORE_ENVIRONMENT", "DOTNET_ENVIRONMENT"])
@@ -229,6 +234,20 @@ namespace backend.main.application.environment
         private static string GetOrDefault(string[] keys, string fallback) =>
             GetOptional(keys) ?? fallback;
 
+        private static bool GetBoolOrDefault(string[] keys, bool fallback)
+        {
+            var rawValue = GetOptional(keys);
+            if (string.IsNullOrWhiteSpace(rawValue))
+                return fallback;
+
+            if (bool.TryParse(rawValue, out var parsed))
+                return parsed;
+
+            throw new InvalidOperationException(
+                $"Environment variable '{string.Join(", ", keys)}' must be 'true' or 'false'."
+            );
+        }
+
         private static bool IsRunningInContainer()
         {
             return bool.TryParse(
@@ -276,6 +295,11 @@ namespace backend.main.application.environment
         public static string? TwilioAuthToken => _twilioAuthToken;
         public static string? TwilioMessagingServiceSid => _twilioMessagingServiceSid;
         public static string? TwilioFromPhoneNumber => _twilioFromPhoneNumber;
+        public static bool AuthSmsMfaEnrollmentEnabled => _authSmsMfaEnrollmentEnabled;
+        public static bool AuthSmsMfaEnforcementEnabled =>
+            GetBoolOrDefault(["AUTH_SMS_MFA_ENFORCEMENT_ENABLED"], false);
+        public static bool AuthSmsMfaStepUpSmsEnabled =>
+            GetBoolOrDefault(["AUTH_SMS_MFA_STEP_UP_SMS_ENABLED"], true);
         public static string AppEnvironment => _appEnvironment;
         public static string LogLevel => _logLevel;
 
@@ -321,5 +345,6 @@ namespace backend.main.application.environment
         }
     }
 }
+
 
 

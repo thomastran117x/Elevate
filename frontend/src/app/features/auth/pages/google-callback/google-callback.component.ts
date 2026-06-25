@@ -1,14 +1,16 @@
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Component, inject, OnInit, PLATFORM_ID, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import {
-  AuthService,
-  PendingOAuthSignupStorageKey,
-  OAuthAuthResponse,
-} from '../../services/auth.service';
+
 import { environment } from '../../../../../environments/environment';
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
+import {
+  AuthService,
+  OAuthAuthenticationResponse,
+  PendingLoginStepUpStorageKey,
+  PendingOAuthSignupStorageKey,
+} from '../../services/auth.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 
 @Component({
@@ -66,14 +68,31 @@ export class GoogleCallbackComponent implements OnInit {
       sessionStorage.removeItem(GoogleCallbackComponent.NonceStorageKey);
 
       this.auth
-        .googleCodeVerify(code, codeVerifier, `${environment.frontendUrl}/auth/google`, nonce)
+        .googleCodeVerify(
+          code,
+          codeVerifier,
+          `${environment.frontendUrl}/auth/google`,
+          nonce,
+          this.authReturnUrl.peek() ?? undefined,
+        )
         .subscribe({
-          next: async (res: OAuthAuthResponse) => {
-            if (res.RequiresRoleSelection) {
-              sessionStorage.setItem(PendingOAuthSignupStorageKey, JSON.stringify(res));
+          next: async (res: OAuthAuthenticationResponse) => {
+            if (res.Type === 'requires_role_selection') {
+              sessionStorage.setItem(
+                PendingOAuthSignupStorageKey,
+                JSON.stringify(res.RoleSelection),
+              );
               this.status.set('success');
               this.message.set('Choose your role to finish creating your account...');
               setTimeout(() => this.router.navigate(['/auth/oauth/role']), 250);
+              return;
+            }
+
+            if (res.Type === 'requires_step_up') {
+              sessionStorage.setItem(PendingLoginStepUpStorageKey, JSON.stringify(res.StepUp));
+              this.status.set('success');
+              this.message.set('One more sign-in check is needed. Redirecting...');
+              setTimeout(() => this.router.navigate(['/auth/mfa']), 250);
               return;
             }
 
@@ -81,7 +100,7 @@ export class GoogleCallbackComponent implements OnInit {
               await this.sessionManager.bootstrapSession(res.Auth);
               this.status.set('success');
               this.message.set('Login successful! Redirecting...');
-              const target = this.authReturnUrl.consume();
+              const target = this.authReturnUrl.consume(res.Auth.ReturnPath ?? '/dashboard');
               setTimeout(() => this.router.navigateByUrl(target), 1500);
             } catch (err: any) {
               console.error('Google session bootstrap failed:', err);

@@ -1,17 +1,19 @@
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Component, inject, OnInit, PLATFORM_ID, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import {
-  AuthService,
-  PendingOAuthSignupStorageKey,
-  OAuthAuthResponse,
-} from '../../services/auth.service';
+
 import { environment } from '../../../../../environments/environment';
 import {
   getApiClientMessage,
   getServerErrorMessage,
 } from '../../../../core/api/models/api-client-error.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
+import {
+  AuthService,
+  OAuthAuthenticationResponse,
+  PendingLoginStepUpStorageKey,
+  PendingOAuthSignupStorageKey,
+} from '../../services/auth.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 
 @Component({
@@ -44,7 +46,7 @@ export class MicrosoftCallbackComponent implements OnInit {
       return;
     }
 
-    this.handleMicrosoftCallback();
+    void this.handleMicrosoftCallback();
   }
 
   async handleMicrosoftCallback(): Promise<void> {
@@ -66,34 +68,47 @@ export class MicrosoftCallbackComponent implements OnInit {
       sessionStorage.removeItem(MicrosoftCallbackComponent.StateStorageKey);
       sessionStorage.removeItem(MicrosoftCallbackComponent.NonceStorageKey);
 
-      this.auth.microsoftVerify(tokenData.id_token, nonce).subscribe({
-        next: async (res: OAuthAuthResponse) => {
-          if (res.RequiresRoleSelection) {
-            sessionStorage.setItem(PendingOAuthSignupStorageKey, JSON.stringify(res));
-            this.status.set('success');
-            this.message.set('Choose your role to finish creating your account...');
-            setTimeout(() => this.router.navigate(['/auth/oauth/role']), 250);
-            return;
-          }
+      this.auth
+        .microsoftVerify(tokenData.id_token, nonce, this.authReturnUrl.peek() ?? undefined)
+        .subscribe({
+          next: async (res: OAuthAuthenticationResponse) => {
+            if (res.Type === 'requires_role_selection') {
+              sessionStorage.setItem(
+                PendingOAuthSignupStorageKey,
+                JSON.stringify(res.RoleSelection),
+              );
+              this.status.set('success');
+              this.message.set('Choose your role to finish creating your account...');
+              setTimeout(() => this.router.navigate(['/auth/oauth/role']), 250);
+              return;
+            }
 
-          try {
-            await this.sessionManager.bootstrapSession(res.Auth);
-            this.status.set('success');
-            this.message.set('Login successful! Redirecting...');
-            const target = this.authReturnUrl.consume();
-            setTimeout(() => this.router.navigateByUrl(target), 1500);
-          } catch (err: any) {
+            if (res.Type === 'requires_step_up') {
+              sessionStorage.setItem(PendingLoginStepUpStorageKey, JSON.stringify(res.StepUp));
+              this.status.set('success');
+              this.message.set('One more sign-in check is needed. Redirecting...');
+              setTimeout(() => this.router.navigate(['/auth/mfa']), 250);
+              return;
+            }
+
+            try {
+              await this.sessionManager.bootstrapSession(res.Auth);
+              this.status.set('success');
+              this.message.set('Login successful! Redirecting...');
+              const target = this.authReturnUrl.consume(res.Auth.ReturnPath ?? '/dashboard');
+              setTimeout(() => this.router.navigateByUrl(target), 1500);
+            } catch (err: any) {
+              console.error(err);
+              this.status.set('error');
+              this.message.set(getApiClientMessage(err, 'Sign-in failed.'));
+            }
+          },
+          error: (err) => {
             console.error(err);
             this.status.set('error');
             this.message.set(getApiClientMessage(err, 'Sign-in failed.'));
-          }
-        },
-        error: (err) => {
-          console.error(err);
-          this.status.set('error');
-          this.message.set(getApiClientMessage(err, 'Sign-in failed.'));
-        },
-      });
+          },
+        });
     } catch (err: any) {
       console.error(err);
       this.status.set('error');
@@ -104,7 +119,7 @@ export class MicrosoftCallbackComponent implements OnInit {
   retry(): void {
     this.status.set('loading');
     this.message.set('Retrying sign-in...');
-    this.handleMicrosoftCallback();
+    void this.handleMicrosoftCallback();
   }
 
   private async exchangeCodeForIdToken(

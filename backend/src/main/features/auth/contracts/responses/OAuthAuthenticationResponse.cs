@@ -1,8 +1,10 @@
+using System.Text.Json.Serialization;
+
 namespace backend.main.features.auth.contracts.responses
 {
     public sealed class OAuthAuthenticationResponse
     {
-        public bool RequiresRoleSelection
+        public required string Type
         {
             get; set;
         }
@@ -10,21 +12,22 @@ namespace backend.main.features.auth.contracts.responses
         {
             get; set;
         }
-        public string? SignupToken
+        public LoginStepUpChallengeResponse? StepUp
         {
             get; set;
         }
-        public string? Email
+        public OAuthRoleSelectionResponse? RoleSelection
         {
             get; set;
         }
-        public string? Name
-        {
-            get; set;
-        }
-        public string? Provider
-        {
-            get; set;
-        }
+
+        [JsonIgnore]
+        public bool RequiresRoleSelection => Type == AuthFlowResponseTypes.RequiresRoleSelection;
+
+        [JsonIgnore]
+        public string? SignupToken => RoleSelection?.SignupToken;
+
+        [JsonIgnore]
+        public string? Email => RoleSelection?.Email;
     }
 }

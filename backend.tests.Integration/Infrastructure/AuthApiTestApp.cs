@@ -9,6 +9,7 @@ using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
 using backend.main.features.auth.device;
+using backend.main.features.auth.mfa;
 using backend.main.features.clubs.staff;
 using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
@@ -112,6 +113,35 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         await using var scope = _factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
         return await db.Users.SingleOrDefaultAsync(user => user.Email == email);
+    }
+
+
+    public async Task<SmsMfaEnrollment?> FindSmsMfaEnrollmentAsync(int userId)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+        return await db.SmsMfaEnrollments.SingleOrDefaultAsync(enrollment => enrollment.UserId == userId);
+    }
+
+    public async Task<HttpResponseMessage> GetWithBearerAsync(string path, string accessToken)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        return await Client.SendAsync(request);
+    }
+
+    public async Task<HttpResponseMessage> PostJsonWithBearerAndCsrfAsync(
+        string path,
+        object payload,
+        string accessToken)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = JsonContent.Create(payload)
+        };
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        request.Headers.Add(CsrfConfiguration.CsrfHeaderName, await GetCsrfTokenAsync());
+        return await Client.SendAsync(request);
     }
 
     public async Task AddClubStaffAsync(int clubId, int userId, int grantedByUserId, ClubStaffRole role = ClubStaffRole.Manager)
@@ -303,9 +333,11 @@ public sealed class AuthApiTestApp : IAsyncDisposable
 
         var response = await Client.SendAsync(request);
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
-        var apiResponse = await ReadApiResponseAsync<AuthenticatedSessionResponse>(response);
+        var apiResponse = await ReadApiResponseAsync<LoginAuthenticationResponse>(response);
         apiResponse.Data.Should().NotBeNull();
-        return apiResponse.Data!;
+        apiResponse.Data!.Type.Should().Be("authenticated");
+        apiResponse.Data.Auth.Should().NotBeNull();
+        return apiResponse.Data.Auth!;
     }
 
     public async ValueTask DisposeAsync()
