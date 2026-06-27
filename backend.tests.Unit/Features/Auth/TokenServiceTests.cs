@@ -579,7 +579,32 @@ internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheS
 
     public Task<object> EvalAsync(string script, StackExchange.Redis.RedisKey[] keys, StackExchange.Redis.RedisValue[] values)
     {
-        return Task.FromResult<object>(1L);
+        lock (_gate)
+        {
+            if (keys.Length == 1
+                && values.Length == 2
+                && script.Contains("redis.call('GET'", StringComparison.Ordinal)
+                && script.Contains("redis.call('SET'", StringComparison.Ordinal))
+            {
+                var key = keys[0].ToString();
+                var matchedWindow = long.Parse(values[0].ToString());
+                var ttlMs = long.Parse(values[1].ToString());
+
+                if (TryGetEntry(key, out var existing)
+                    && long.TryParse(existing.StringValue, out var lastWindow)
+                    && matchedWindow <= lastWindow)
+                {
+                    return Task.FromResult<object>(0L);
+                }
+
+                var entry = GetOrCreateEntry(key);
+                entry.StringValue = matchedWindow.ToString();
+                entry.ExpiresAt = DateTimeOffset.UtcNow.AddMilliseconds(ttlMs);
+                return Task.FromResult<object>(1L);
+            }
+
+            return Task.FromResult<object>(1L);
+        }
     }
 
     private CacheEntry GetOrCreateEntry(string key)
@@ -614,3 +639,5 @@ internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheS
     private static DateTimeOffset? ResolveExpiry(TimeSpan? expiry) =>
         expiry is null ? null : DateTimeOffset.UtcNow.Add(expiry.Value);
 }
+
+

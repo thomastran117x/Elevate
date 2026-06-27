@@ -1,6 +1,7 @@
 using backend.main.features.auth;
 using backend.main.features.auth.device;
 using backend.main.features.auth.mfa;
+using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
@@ -75,7 +76,7 @@ public class LoginStepUpChallengeServiceTests
             .Callback<string, string>((_, token) => capturedToken = token)
             .Returns(Task.CompletedTask);
 
-        var service = CreateService(cache, notifications, mfaRepo, deviceTrustService, userRepository, authSessionService);
+        var service = CreateService(cache, notifications, mfaRepo, deviceTrustService: deviceTrustService, userRepository: userRepository, authSessionService: authSessionService);
         var challenge = await service.CreateChallengeAsync(user, SessionTransport.ApiToken, false, "http://evil.com/redirect");
         await service.StartAsync(challenge.Challenge, "email");
 
@@ -204,7 +205,7 @@ public class LoginStepUpChallengeServiceTests
         authSessionService.Setup(s => s.IssueAsync(It.IsAny<User>(), It.IsAny<SessionTransport>(), It.IsAny<string?>(), It.IsAny<bool?>()))
             .ReturnsAsync(expectedToken);
 
-        var service = CreateService(cache, notifications, mfaRepo, deviceTrustService, userRepository, authSessionService);
+        var service = CreateService(cache, notifications, mfaRepo, deviceTrustService: deviceTrustService, userRepository: userRepository, authSessionService: authSessionService);
 
         var challenge = await service.CreateChallengeAsync(user, SessionTransport.ApiToken, false, "/bookings");
         var startResponse = await service.StartAsync(challenge.Challenge, "sms");
@@ -306,7 +307,7 @@ public class LoginStepUpChallengeServiceTests
         authSessionService.Setup(s => s.IssueAsync(It.IsAny<User>(), It.IsAny<SessionTransport>(), It.IsAny<string?>(), It.IsAny<bool?>()))
             .ReturnsAsync(expectedToken);
 
-        var service = CreateService(cache, notifications, mfaRepo, deviceTrustService, userRepository, authSessionService);
+        var service = CreateService(cache, notifications, mfaRepo, deviceTrustService: deviceTrustService, userRepository: userRepository, authSessionService: authSessionService);
 
         var challenge = await service.CreateChallengeAsync(user, SessionTransport.BrowserCookie, true, "/events");
         await service.StartAsync(challenge.Challenge, "email");
@@ -389,6 +390,7 @@ public class LoginStepUpChallengeServiceTests
         InMemoryCacheService? cache = null,
         Mock<IAuthNotificationService>? notifications = null,
         Mock<IMfaEnrollmentRepository>? mfaRepo = null,
+        Mock<ITotpMfaEnrollmentService>? totpService = null,
         Mock<IDeviceTrustService>? deviceTrustService = null,
         Mock<IAuthUserRepository>? userRepository = null,
         Mock<IAuthSessionService>? authSessionService = null)
@@ -396,6 +398,7 @@ public class LoginStepUpChallengeServiceTests
         cache ??= new InMemoryCacheService();
         notifications ??= new Mock<IAuthNotificationService>();
         mfaRepo ??= new Mock<IMfaEnrollmentRepository>();
+        totpService ??= new Mock<ITotpMfaEnrollmentService>();
         deviceTrustService ??= new Mock<IDeviceTrustService>();
         userRepository ??= new Mock<IAuthUserRepository>();
         authSessionService ??= new Mock<IAuthSessionService>();
@@ -404,6 +407,7 @@ public class LoginStepUpChallengeServiceTests
             cache,
             notifications.Object,
             mfaRepo.Object,
+            totpService.Object,
             deviceTrustService.Object,
             userRepository.Object,
             authSessionService.Object,

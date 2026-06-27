@@ -615,6 +615,32 @@ namespace backend.main.features.auth
             }
         }
 
+        [HttpPost("mfa/verify/totp")]
+        [ValidateAntiForgeryToken]
+        [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> VerifyTotpStepUp([FromBody] VerifyLoginStepUpRequest request)
+        {
+            try
+            {
+                var response = await _authService.VerifyTotpLoginStepUpAsync(request.Challenge, request.Code);
+                return Ok(
+                    new ApiResponse<AuthenticatedSessionResponse>(
+                        "Sign-in verification successful.",
+                        CreateSessionResponse(response)
+                    )
+                );
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[AuthController] VerifyTotpStepUp failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
         [HttpPost("forgot-password")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]

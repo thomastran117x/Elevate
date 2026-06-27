@@ -190,7 +190,7 @@ namespace backend.main.features.auth.mfa
         {
             return new MfaStatusResponse
             {
-                EnrollmentAvailable = enrollmentAvailable,
+                SmsEnrollmentAvailable = enrollmentAvailable,
                 IsSmsMfaEnabled = enrollment?.IsSmsMfaEnabled ?? false,
                 MaskedPhoneNumber = string.IsNullOrWhiteSpace(enrollment?.PhoneNumber)
                     ? null

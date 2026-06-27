@@ -207,7 +207,8 @@ public class EnvironmentSettingTests
             ["JWT_SECRET_ACCESS"] = "production-access-secret-1234567890",
             ["JWT_SECRET_VERIFICATION"] = "production-verification-secret-1234567890",
             ["AZURE_STORAGE_CONNECTION_STRING"] = "UseDevelopmentStorage=true",
-            ["AZURE_STORAGE_CONTAINER_NAME"] = "images"
+            ["AZURE_STORAGE_CONTAINER_NAME"] = "images",
+            ["AUTH_TOTP_ENCRYPTION_KEY"] = "cHJvZHVjdGlvbl90b3RwX2tleV8zMmJ5dGVzMTIzNDU="
         });
 
         using var harness = EnvironmentSettingHarness.Load();

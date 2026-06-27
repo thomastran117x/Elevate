@@ -5,6 +5,7 @@ using backend.main.application.environment;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.device;
 using backend.main.features.auth.mfa;
+using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
@@ -26,15 +27,18 @@ namespace backend.main.features.auth.stepup
         private static readonly TimeSpan ResendCooldown = TimeSpan.FromSeconds(60);
         private static readonly TimeSpan CompletionLockTtl = TimeSpan.FromSeconds(30);
         private const int MaxSmsAttempts = 5;
+        private const int MaxTotpAttempts = 5;
         private const int MaxMethodSends = 3;
         private const int MaxUserSends = 6;
         private const int MaxIpSends = 20;
         private const string EmailMethod = "email";
         private const string SmsMethod = "sms";
+        private const string TotpMethod = "totp";
 
         private readonly ICacheService _cacheService;
         private readonly IAuthNotificationService _notificationService;
         private readonly IMfaEnrollmentRepository _mfaEnrollmentRepository;
+        private readonly ITotpMfaEnrollmentService _totpMfaEnrollmentService;
         private readonly IDeviceTrustService _deviceTrustService;
         private readonly IAuthUserRepository _userRepository;
         private readonly IAuthSessionService _authSessionService;
@@ -44,6 +48,7 @@ namespace backend.main.features.auth.stepup
             ICacheService cacheService,
             IAuthNotificationService notificationService,
             IMfaEnrollmentRepository mfaEnrollmentRepository,
+            ITotpMfaEnrollmentService totpMfaEnrollmentService,
             IDeviceTrustService deviceTrustService,
             IAuthUserRepository userRepository,
             IAuthSessionService authSessionService,
@@ -53,6 +58,7 @@ namespace backend.main.features.auth.stepup
             _cacheService = cacheService;
             _notificationService = notificationService;
             _mfaEnrollmentRepository = mfaEnrollmentRepository;
+            _totpMfaEnrollmentService = totpMfaEnrollmentService;
             _deviceTrustService = deviceTrustService;
             _userRepository = userRepository;
             _authSessionService = authSessionService;
@@ -68,7 +74,8 @@ namespace backend.main.features.auth.stepup
         {
             try
             {
-                var enrollment = await _mfaEnrollmentRepository.GetByUserIdAsync(user.Id);
+                var smsEnrollment = await _mfaEnrollmentRepository.GetByUserIdAsync(user.Id);
+                var totpEnrollment = await _totpMfaEnrollmentService.GetEnrollmentAsync(user.Id);
                 var rawChallenge = CreateRandomToken();
                 var state = new PendingStepUpState
                 {
@@ -76,7 +83,8 @@ namespace backend.main.features.auth.stepup
                     ChallengeHash = CryptoHelper.HashToken(rawChallenge),
                     UserId = user.Id,
                     Email = user.Email,
-                    PhoneNumber = CanUseSms(enrollment) ? enrollment!.PhoneNumber : null,
+                    PhoneNumber = CanUseSms(smsEnrollment) ? smsEnrollment!.PhoneNumber : null,
+                    HasTotp = totpEnrollment?.IsTotpMfaEnabled == true && EnvironmentSetting.AuthTotpMfaStepUpEnabled,
                     Transport = transport,
                     RememberMe = rememberMe,
                     TrustedDeviceId = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)),
@@ -115,6 +123,23 @@ namespace backend.main.features.auth.stepup
 
                 EnsureMethodAllowed(state, normalizedMethod);
                 var now = DateTime.UtcNow;
+
+                // TOTP requires no delivery — return immediately with the existing challenge.
+                if (normalizedMethod == TotpMethod)
+                {
+                    return new StartLoginStepUpResponse
+                    {
+                        Challenge = challenge,
+                        ExpiresAtUtc = state.ExpiresAtUtc,
+                        SelectedMethod = TotpMethod,
+                        MaskedDestination = "authenticator app",
+                        CooldownEndsAtUtc = DateTime.MinValue,
+                        AvailableMethods = GetAvailableMethods(state),
+                        MaskedPhone = CanUseSms(state) ? PhoneNumberFormatter.Mask(state.PhoneNumber!) : null,
+                        MaskedEmail = MaskEmail(state.Email)
+                    };
+                }
+
                 EnforceCooldown(state, normalizedMethod, now);
                 await EnforceSendCapsAsync(state);
 
@@ -126,7 +151,7 @@ namespace backend.main.features.auth.stepup
                 state.EmailTokenHash = null;
                 state.SmsFailedAttempts = 0;
 
-                var delivery = GetDeliveryState(state, normalizedMethod);
+                var delivery = GetDeliveryState(state, normalizedMethod)!;
                 delivery.SendCount += 1;
                 delivery.CooldownEndsAtUtc = now.Add(ResendCooldown);
 
@@ -246,6 +271,48 @@ namespace backend.main.features.auth.stepup
             }
         }
 
+        public async Task<AuthenticatedSessionResult> VerifyTotpAsync(string challenge, string code)
+        {
+            try
+            {
+                var challengeHash = CryptoHelper.HashToken(challenge);
+                var state = await GetStateByHashAsync(challengeHash)
+                    ?? throw new UnauthorizedException("Invalid or expired sign-in verification challenge.");
+
+                if (!state.HasTotp)
+                    throw new UnauthorizedException("TOTP MFA is not available for this sign-in challenge.");
+
+                try
+                {
+                    await _totpMfaEnrollmentService.VerifyPersistedCodeAsync(state.UserId, code);
+                }
+                catch (UnauthorizedException)
+                {
+                    state.TotpFailedAttempts += 1;
+                    if (state.TotpFailedAttempts >= MaxTotpAttempts)
+                    {
+                        await DeleteStateAsync(state);
+                    }
+                    else if (!await PersistStateAsync(state, challengeHash, state.EmailTokenHash))
+                    {
+                        throw new NotAvailableException();
+                    }
+
+                    throw;
+                }
+
+                return await CompletePendingChallengeAsync(state);
+            }
+            catch (Exception ex)
+            {
+                if (ex is AppException)
+                    throw;
+
+                Logger.Error($"[LoginStepUpChallengeService] VerifyTotpAsync failed: {ex}");
+                throw new InternalServerErrorException();
+            }
+        }
+
         public async Task<AuthenticatedSessionResult?> TryVerifyEmailAsync(string token)
         {
             try
@@ -342,6 +409,9 @@ namespace backend.main.features.auth.stepup
         private static void EnforceCooldown(PendingStepUpState state, string method, DateTime now)
         {
             var delivery = GetDeliveryState(state, method);
+            if (delivery == null)
+                return;
+
             if (delivery.SendCount >= MaxMethodSends)
                 throw new TooManyRequestException($"Too many {method} verification deliveries have been requested for this sign-in.");
 
@@ -352,8 +422,13 @@ namespace backend.main.features.auth.stepup
             }
         }
 
-        private static DeliveryState GetDeliveryState(PendingStepUpState state, string method) =>
-            method == SmsMethod ? state.Sms : state.EmailDelivery;
+        private static DeliveryState? GetDeliveryState(PendingStepUpState state, string method) =>
+            method switch
+            {
+                SmsMethod => state.Sms,
+                EmailMethod => state.EmailDelivery,
+                _ => null,
+            };
 
         private static void EnsureMethodAllowed(PendingStepUpState state, string method)
         {
@@ -422,8 +497,16 @@ namespace backend.main.features.auth.stepup
             };
         }
 
-        private static string[] GetAvailableMethods(PendingStepUpState state) =>
-            CanUseSms(state) ? [SmsMethod, EmailMethod] : [EmailMethod];
+        private static string[] GetAvailableMethods(PendingStepUpState state)
+        {
+            var methods = new List<string>();
+            if (state.HasTotp)
+                methods.Add(TotpMethod);
+            if (CanUseSms(state))
+                methods.Add(SmsMethod);
+            methods.Add(EmailMethod);
+            return [.. methods];
+        }
 
         private static bool CanUseSms(SmsMfaEnrollment? enrollment)
         {
@@ -444,6 +527,7 @@ namespace backend.main.features.auth.stepup
             {
                 EmailMethod => EmailMethod,
                 SmsMethod => SmsMethod,
+                TotpMethod => TotpMethod,
                 _ => throw new BadRequestException("Unsupported sign-in verification method.")
             };
         }
@@ -512,6 +596,10 @@ namespace backend.main.features.auth.stepup
             {
                 get; set;
             }
+            public bool HasTotp
+            {
+                get; set;
+            }
             public SessionTransport Transport
             {
                 get; set;
@@ -553,6 +641,10 @@ namespace backend.main.features.auth.stepup
                 get; set;
             }
             public int SmsFailedAttempts
+            {
+                get; set;
+            }
+            public int TotpFailedAttempts
             {
                 get; set;
             }

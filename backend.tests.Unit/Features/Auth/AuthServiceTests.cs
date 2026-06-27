@@ -1,7 +1,9 @@
 using backend.main.application.security;
 using backend.main.features.auth;
 using backend.main.features.auth.contracts;
+using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.device;
+using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.stepup;
@@ -135,6 +137,69 @@ public class AuthServiceTests
             Times.Never);
     }
 
+    [Fact]
+    public async Task LoginAsync_ShouldRequireStepUp_WhenTotpEnrolledAndSmsEnforcementIsDisabled()
+    {
+        using var scope = new TemporaryEnvironmentVariableScope(new Dictionary<string, string?>
+        {
+            ["AUTH_SMS_MFA_ENFORCEMENT_ENABLED"] = "false",
+            ["AUTH_TOTP_MFA_STEP_UP_ENABLED"] = "true"
+        });
+
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetAuthByEmailAsync("totp@example.com"))
+            .ReturnsAsync(new UserAuthRecord
+            {
+                Id = 27,
+                Email = "totp@example.com",
+                Password = BCrypt.Net.BCrypt.HashPassword("Password123!", workFactor: 4),
+                Usertype = "Participant",
+                IsDisabled = false,
+                AuthVersion = 1
+            });
+
+        var totpService = new Mock<ITotpMfaEnrollmentService>();
+        totpService.Setup(service => service.GetEnrollmentAsync(27))
+            .ReturnsAsync(new TotpMfaEnrollment
+            {
+                UserId = 27,
+                EncryptedSecret = "v1:encrypted",
+                IsTotpMfaEnabled = true
+            });
+
+        var deviceService = new Mock<IDeviceService>();
+        var challengeService = new Mock<ILoginStepUpChallengeService>();
+        challengeService.Setup(service => service.CreateChallengeAsync(
+                It.Is<User>(user => user.Id == 27),
+                SessionTransport.BrowserCookie,
+                false,
+                "/security"))
+            .ReturnsAsync(new LoginStepUpChallengeResponse
+            {
+                Challenge = "stepup-challenge",
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(15),
+                AvailableMethods = ["totp", "email"],
+                MaskedEmail = "t***@example.com"
+            });
+
+        var service = CreateService(
+            userRepository: userRepository,
+            deviceService: deviceService,
+            loginStepUpChallengeService: challengeService,
+            totpMfaEnrollmentService: totpService);
+
+        var result = await service.LoginAsync(
+            "totp@example.com",
+            "Password123!",
+            SessionTransport.BrowserCookie,
+            returnUrl: "/security");
+
+        result.Type.Should().Be(AuthFlowResponseTypes.RequiresStepUp);
+        result.StepUp.Should().NotBeNull();
+        result.StepUp!.Challenge.Should().Be("stepup-challenge");
+        deviceService.Verify(service => service.EnsureDeviceKnownAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<ClientRequestInfo>()), Times.Never);
+        challengeService.VerifyAll();
+    }
     [Fact]
     public async Task GoogleAsync_ShouldAttachProviderIdForExistingEmailUser()
     {
@@ -895,6 +960,7 @@ public class AuthServiceTests
         Mock<ITokenService>? tokenService = null,
         Mock<IAuthNotificationService>? authNotificationService = null,
         Mock<IDeviceService>? deviceService = null,
+        Mock<ITotpMfaEnrollmentService>? totpMfaEnrollmentService = null,
         Mock<ICacheService>? cacheService = null,
         Mock<IDeviceTrustService>? deviceTrustService = null,
         Mock<ILoginStepUpChallengeService>? loginStepUpChallengeService = null,
@@ -905,6 +971,7 @@ public class AuthServiceTests
         tokenService ??= new Mock<ITokenService>();
         authNotificationService ??= new Mock<IAuthNotificationService>();
         deviceService ??= new Mock<IDeviceService>();
+        totpMfaEnrollmentService ??= new Mock<ITotpMfaEnrollmentService>();
         cacheService ??= new Mock<ICacheService>();
         deviceTrustService ??= new Mock<IDeviceTrustService>();
         loginStepUpChallengeService ??= new Mock<ILoginStepUpChallengeService>();
@@ -917,6 +984,7 @@ public class AuthServiceTests
             cacheService.Object,
             authNotificationService.Object,
             deviceService.Object,
+            totpMfaEnrollmentService.Object,
             deviceTrustService.Object,
             loginStepUpChallengeService.Object,
             authSessionService.Object,
@@ -961,4 +1029,27 @@ public class AuthServiceTests
                 user));
         return authSessionService;
     }
+
+    private sealed class TemporaryEnvironmentVariableScope : IDisposable
+    {
+        private readonly Dictionary<string, string?> _originals = [];
+
+        public TemporaryEnvironmentVariableScope(IReadOnlyDictionary<string, string?> values)
+        {
+            foreach (var pair in values)
+            {
+                _originals[pair.Key] = Environment.GetEnvironmentVariable(pair.Key);
+                Environment.SetEnvironmentVariable(pair.Key, pair.Value);
+            }
+        }
+
+        public void Dispose()
+        {
+            foreach (var pair in _originals)
+                Environment.SetEnvironmentVariable(pair.Key, pair.Value);
+        }
+    }
 }
+
+
+

@@ -2,10 +2,12 @@ namespace backend.main.features.auth.contracts.responses
 {
     public sealed class MfaStatusResponse
     {
-        public bool EnrollmentAvailable
+        public bool SmsEnrollmentAvailable
         {
             get; init;
         }
+
+        public bool EnrollmentAvailable => SmsEnrollmentAvailable;
 
         public bool IsSmsMfaEnabled
         {
@@ -18,6 +20,21 @@ namespace backend.main.features.auth.contracts.responses
         }
 
         public DateTime? PhoneVerifiedAtUtc
+        {
+            get; init;
+        }
+
+        public bool TotpEnrollmentAvailable
+        {
+            get; init;
+        }
+
+        public bool IsTotpMfaEnabled
+        {
+            get; init;
+        }
+
+        public DateTime? TotpEnrolledAtUtc
         {
             get; init;
         }

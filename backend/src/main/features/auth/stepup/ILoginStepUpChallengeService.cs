@@ -15,5 +15,6 @@ namespace backend.main.features.auth.stepup
         Task<StartLoginStepUpResponse> StartAsync(string challenge, string method);
         Task<AuthenticatedSessionResult> VerifySmsAsync(string challenge, string code);
         Task<AuthenticatedSessionResult?> TryVerifyEmailAsync(string token);
+        Task<AuthenticatedSessionResult> VerifyTotpAsync(string challenge, string code);
     }
 }

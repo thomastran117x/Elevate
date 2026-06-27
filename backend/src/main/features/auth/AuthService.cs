@@ -5,6 +5,7 @@ using backend.main.application.security;
 using backend.main.features.auth.contracts;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.device;
+using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.stepup;
@@ -27,6 +28,7 @@ namespace backend.main.features.auth
         private readonly ICacheService _cacheService;
         private readonly IAuthNotificationService _authNotificationService;
         private readonly IDeviceService _deviceService;
+        private readonly ITotpMfaEnrollmentService _totpMfaEnrollmentService;
         private readonly IDeviceTrustService _deviceTrustService;
         private readonly ILoginStepUpChallengeService _loginStepUpChallengeService;
         private readonly IAuthSessionService _authSessionService;
@@ -41,6 +43,7 @@ namespace backend.main.features.auth
             ICacheService cacheService,
             IAuthNotificationService authNotificationService,
             IDeviceService deviceService,
+            ITotpMfaEnrollmentService totpMfaEnrollmentService,
             IDeviceTrustService deviceTrustService,
             ILoginStepUpChallengeService loginStepUpChallengeService,
             IAuthSessionService authSessionService,
@@ -53,6 +56,7 @@ namespace backend.main.features.auth
             _cacheService = cacheService;
             _authNotificationService = authNotificationService;
             _deviceService = deviceService;
+            _totpMfaEnrollmentService = totpMfaEnrollmentService;
             _deviceTrustService = deviceTrustService;
             _loginStepUpChallengeService = loginStepUpChallengeService;
             _authSessionService = authSessionService;
@@ -547,6 +551,22 @@ namespace backend.main.features.auth
             }
         }
 
+        public async Task<AuthenticatedSessionResult> VerifyTotpLoginStepUpAsync(string challenge, string code)
+        {
+            try
+            {
+                return await _loginStepUpChallengeService.VerifyTotpAsync(challenge, code);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[AuthService] VerifyTotpLoginStepUpAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
         public async Task HandleLogoutAsync(
             string refreshToken,
             string? sessionBindingToken,
@@ -757,7 +777,13 @@ namespace backend.main.features.auth
                 });
             }
 
-            if (!EnvironmentSetting.AuthSmsMfaEnforcementEnabled)
+            var shouldRequireTotpStepUp = false;
+            if (EnvironmentSetting.AuthTotpMfaStepUpEnabled)
+            {
+                shouldRequireTotpStepUp = (await _totpMfaEnrollmentService.GetEnrollmentAsync(user.Id))?.IsTotpMfaEnabled == true;
+            }
+
+            if (!EnvironmentSetting.AuthSmsMfaEnforcementEnabled && !shouldRequireTotpStepUp)
             {
                 await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
                 return onAuthenticated(new AuthenticatedSessionResult
@@ -843,3 +869,5 @@ namespace backend.main.features.auth
         }
     }
 }
+
+
