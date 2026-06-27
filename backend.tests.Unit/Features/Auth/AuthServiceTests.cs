@@ -1,6 +1,7 @@
 using backend.main.application.security;
 using backend.main.features.auth;
 using backend.main.features.auth.contracts;
+using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.device;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
@@ -1049,5 +1050,6 @@ public class AuthServiceTests
         }
     }
 }
+
 
 
