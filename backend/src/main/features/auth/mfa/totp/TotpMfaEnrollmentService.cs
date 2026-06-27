@@ -11,11 +11,28 @@ using backend.main.shared.utilities.logger;
 using Newtonsoft.Json;
 
 using OtpNet;
+using StackExchange.Redis;
 
 namespace backend.main.features.auth.mfa.totp
 {
     public sealed class TotpMfaEnrollmentService : ITotpMfaEnrollmentService
     {
+        private const string ReplayGuardClaimLua = @"
+            local key = KEYS[1]
+            local matchedWindow = tonumber(ARGV[1])
+            local ttlMs = tonumber(ARGV[2])
+
+            local stored = redis.call('GET', key)
+            if stored then
+                local lastWindow = tonumber(stored)
+                if lastWindow and matchedWindow <= lastWindow then
+                    return 0
+                end
+            end
+
+            redis.call('SET', key, tostring(matchedWindow), 'PX', ttlMs)
+            return 1
+            ";
         private static readonly TimeSpan PendingTtl = TimeSpan.FromMinutes(10);
         private static readonly TimeSpan VerifyLockTtl = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan ReplayGuardTtl = TimeSpan.FromSeconds(90);
@@ -161,8 +178,6 @@ namespace backend.main.features.auth.mfa.totp
         {
             try
             {
-                EnsureEnrollmentAvailable();
-
                 var enrollment = await _repository.GetByUserIdAsync(userId);
                 if (enrollment == null || !enrollment.IsTotpMfaEnabled)
                     return enrollment;
@@ -209,12 +224,40 @@ namespace backend.main.features.auth.mfa.totp
         private async Task CheckAndUpdateReplayGuardAsync(int userId, long matchedWindow)
         {
             var guardKey = ReplayGuardKey(userId);
-            var stored = await _cacheService.GetValueAsync(guardKey);
-
-            if (stored != null && long.TryParse(stored, out var lastWindow) && matchedWindow <= lastWindow)
+            if (!await TryClaimReplayWindowAsync(guardKey, matchedWindow))
                 throw new UnauthorizedException("TOTP code has already been used. Please wait for a new code.");
+        }
 
-            await _cacheService.SetValueAsync(guardKey, matchedWindow.ToString(), ReplayGuardTtl);
+        private async Task<bool> TryClaimReplayWindowAsync(string guardKey, long matchedWindow)
+        {
+            var result = await _cacheService.EvalAsync(
+                ReplayGuardClaimLua,
+                [(RedisKey)guardKey],
+                [(RedisValue)matchedWindow, (RedisValue)(long)ReplayGuardTtl.TotalMilliseconds]
+            );
+
+            return result switch
+            {
+                int[] values => values.Length > 0 && values[0] != 0,
+                long value => value != 0,
+                int value => value != 0,
+                RedisResult redisResult => TryParseRedisResult(redisResult, out var parsed) && parsed != 0,
+                RedisResult[] values => values.Length > 0
+                    && TryParseRedisResult(values[0], out var parsed)
+                    && parsed != 0,
+                _ => long.TryParse(result?.ToString(), out var parsed) && parsed != 0,
+            };
+        }
+
+        private static bool TryParseRedisResult(RedisResult result, out long value)
+        {
+            if (result.IsNull)
+            {
+                value = 0;
+                return false;
+            }
+
+            return long.TryParse(result.ToString(), out value);
         }
 
         private static string Encrypt(byte[] secret)
@@ -295,3 +338,6 @@ namespace backend.main.features.auth.mfa.totp
         }
     }
 }
+
+
+

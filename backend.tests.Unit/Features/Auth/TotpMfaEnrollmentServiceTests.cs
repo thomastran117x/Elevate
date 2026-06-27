@@ -270,6 +270,56 @@ public class TotpMfaEnrollmentServiceTests
         result.DisabledAtUtc.Should().NotBeNull();
         repo.Verify(r => r.SetEnabledAsync(99, false, It.IsAny<DateTime?>()), Times.Once);
     }
+    [Fact]
+    public async Task DisableAsync_ShouldAllowExistingEnrollment_WhenEnrollmentIsPaused()
+    {
+        var repo = new Mock<ITotpMfaEnrollmentRepository>();
+        var cache = new InMemoryCacheService();
+        var service = CreateService(repo, cache);
+
+        var start = await service.StartEnrollmentAsync(99, "user@example.com");
+        var secretBytes = Base32Encoding.ToBytes(start.SecretKey);
+        var enrollCode = new Totp(secretBytes).ComputeTotp();
+
+        TotpMfaEnrollment? upsertedEnrollment = null;
+        repo.Setup(r => r.UpsertAsync(99, It.IsAny<string>(), 1, It.IsAny<DateTime>()))
+            .ReturnsAsync((int uid, string enc, int kv, DateTime dt) =>
+            {
+                upsertedEnrollment = new TotpMfaEnrollment
+                {
+                    UserId = uid,
+                    EncryptedSecret = enc,
+                    EncryptionKeyVersion = kv,
+                    IsTotpMfaEnabled = true,
+                    EnrolledAtUtc = dt,
+                };
+                return upsertedEnrollment;
+            });
+
+        await service.VerifyEnrollmentAsync(99, enrollCode);
+        repo.Setup(r => r.GetByUserIdAsync(99)).ReturnsAsync(upsertedEnrollment);
+
+        var disabledEnrollment = new TotpMfaEnrollment
+        {
+            UserId = 99,
+            EncryptedSecret = upsertedEnrollment!.EncryptedSecret,
+            IsTotpMfaEnabled = false,
+            DisabledAtUtc = DateTime.UtcNow,
+        };
+        repo.Setup(r => r.SetEnabledAsync(99, false, It.IsAny<DateTime?>()))
+            .ReturnsAsync(disabledEnrollment);
+
+        await cache.DeleteKeyAsync("totp:lastused:99");
+
+        using var scope = new TemporaryEnvironmentVariableScope("AUTH_TOTP_MFA_ENROLLMENT_ENABLED", "false");
+
+        var disableCode = new Totp(secretBytes).ComputeTotp();
+        var result = await service.DisableAsync(99, disableCode);
+
+        result.Should().NotBeNull();
+        result!.IsTotpMfaEnabled.Should().BeFalse();
+        repo.Verify(r => r.SetEnabledAsync(99, false, It.IsAny<DateTime?>()), Times.Once);
+    }
 
     [Fact]
     public async Task VerifyPersistedCodeAsync_ShouldThrow_WhenNotEnrolled()
@@ -353,5 +403,23 @@ public class TotpMfaEnrollmentServiceTests
 
         var decrypted = TotpMfaEnrollmentService.Decrypt(storedEncrypted!);
         decrypted.Should().BeEquivalentTo(secretBytes, "decryption must recover the original secret bytes");
+    }
+
+    private sealed class TemporaryEnvironmentVariableScope : IDisposable
+    {
+        private readonly string _key;
+        private readonly string? _originalValue;
+
+        public TemporaryEnvironmentVariableScope(string key, string? value)
+        {
+            _key = key;
+            _originalValue = Environment.GetEnvironmentVariable(key);
+            Environment.SetEnvironmentVariable(key, value);
+        }
+
+        public void Dispose()
+        {
+            Environment.SetEnvironmentVariable(_key, _originalValue);
+        }
     }
 }
