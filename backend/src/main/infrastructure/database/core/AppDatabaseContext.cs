@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using backend.main.features.auth.device;
 using backend.main.features.auth.mfa;
+using backend.main.features.auth.mfa.totp;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts;
@@ -38,6 +39,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<ClubReview> ClubReviews { get; set; } = null!;
         public DbSet<Device> Devices { get; set; } = null!;
         public DbSet<SmsMfaEnrollment> SmsMfaEnrollments { get; set; } = null!;
+        public DbSet<TotpMfaEnrollment> TotpMfaEnrollments { get; set; } = null!;
         public DbSet<ClubPost> ClubPosts { get; set; } = null!;
         public DbSet<PostComment> PostComments { get; set; } = null!;
         public DbSet<EventRegistration> EventRegistrations { get; set; } = null!;
@@ -408,6 +410,28 @@ namespace backend.main.infrastructure.database.core
             modelBuilder.Entity<SmsMfaEnrollment>()
                 .Property(enrollment => enrollment.IsSmsMfaEnabled)
                 .HasDefaultValue(false);
+
+            modelBuilder.Entity<TotpMfaEnrollment>()
+                .HasKey(e => e.UserId);
+
+            modelBuilder.Entity<TotpMfaEnrollment>()
+                .HasOne<User>()
+                .WithOne()
+                .HasForeignKey<TotpMfaEnrollment>(e => e.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<TotpMfaEnrollment>()
+                .Property(e => e.EncryptedSecret)
+                .HasMaxLength(512);
+
+            modelBuilder.Entity<TotpMfaEnrollment>()
+                .Property(e => e.IsTotpMfaEnabled)
+                .HasDefaultValue(false);
+
+            modelBuilder.Entity<TotpMfaEnrollment>()
+                .Property(e => e.EncryptionKeyVersion)
+                .HasDefaultValue(1);
 
             modelBuilder.Entity<ClubPost>()
                 .HasOne<User>()

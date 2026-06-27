@@ -20,6 +20,7 @@ namespace backend.main.features.auth
         Task<AuthenticatedSessionResult> VerifyDeviceLoginAsync(string token, SessionTransport transport);
         Task<StartLoginStepUpResponse> StartLoginStepUpAsync(string challenge, string method);
         Task<AuthenticatedSessionResult> VerifyLoginStepUpAsync(string challenge, string code);
+        Task<AuthenticatedSessionResult> VerifyTotpLoginStepUpAsync(string challenge, string code);
         Task<OAuthAuthenticationResult> GoogleAsync(
             string token,
             SessionTransport transport,

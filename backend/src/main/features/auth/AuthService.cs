@@ -547,6 +547,22 @@ namespace backend.main.features.auth
             }
         }
 
+        public async Task<AuthenticatedSessionResult> VerifyTotpLoginStepUpAsync(string challenge, string code)
+        {
+            try
+            {
+                return await _loginStepUpChallengeService.VerifyTotpAsync(challenge, code);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[AuthService] VerifyTotpLoginStepUpAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
         public async Task HandleLogoutAsync(
             string refreshToken,
             string? sessionBindingToken,

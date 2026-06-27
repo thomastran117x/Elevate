@@ -53,11 +53,13 @@ namespace backend.main.application.environment
         private static readonly string? _twilioMessagingServiceSid;
         private static readonly string? _twilioFromPhoneNumber;
         private static readonly bool _authSmsMfaEnrollmentEnabled;
+        private static readonly string _totpEncryptionKey;
         private static readonly string _appEnvironment;
         private static readonly string _logLevel;
         private const string DefaultJwtSecretAccess = "unit_test_secret_12345678901234567890";
         private const string DefaultJwtSecretVerification =
             "unit_test_verification_secret_12345678901234567890";
+        private const string DefaultTotpEncryptionKey = "dW5pdF90ZXN0X3RvdHBfZW5jcnlwdGlvbl9rZXkxMjM=";
 
         static EnvironmentSetting()
         {
@@ -169,6 +171,11 @@ namespace backend.main.application.environment
             _authSmsMfaEnrollmentEnabled = GetBoolOrDefault(
                 ["AUTH_SMS_MFA_ENROLLMENT_ENABLED"],
                 true
+            );
+
+            _totpEncryptionKey = GetOrDefault(
+                ["AUTH_TOTP_ENCRYPTION_KEY"],
+                DefaultTotpEncryptionKey
             );
 
             _appEnvironment = (
@@ -300,6 +307,11 @@ namespace backend.main.application.environment
             GetBoolOrDefault(["AUTH_SMS_MFA_ENFORCEMENT_ENABLED"], false);
         public static bool AuthSmsMfaStepUpSmsEnabled =>
             GetBoolOrDefault(["AUTH_SMS_MFA_STEP_UP_SMS_ENABLED"], true);
+        public static string TotpEncryptionKey => _totpEncryptionKey;
+        public static bool AuthTotpMfaEnrollmentEnabled =>
+            GetBoolOrDefault(["AUTH_TOTP_MFA_ENROLLMENT_ENABLED"], true);
+        public static bool AuthTotpMfaStepUpEnabled =>
+            GetBoolOrDefault(["AUTH_TOTP_MFA_STEP_UP_ENABLED"], true);
         public static string AppEnvironment => _appEnvironment;
         public static string LogLevel => _logLevel;
 
@@ -339,6 +351,24 @@ namespace backend.main.application.environment
                 throw new InvalidOperationException(
                     "Production JWT secrets must be configured and cannot use fallback values."
                 );
+            }
+
+            if (_totpEncryptionKey == DefaultTotpEncryptionKey)
+                throw new InvalidOperationException(
+                    "AUTH_TOTP_ENCRYPTION_KEY must be configured for production and cannot use the fallback value."
+                );
+
+            try
+            {
+                var totpKeyBytes = Convert.FromBase64String(_totpEncryptionKey);
+                if (totpKeyBytes.Length != 32)
+                    throw new InvalidOperationException(
+                        "AUTH_TOTP_ENCRYPTION_KEY must decode to exactly 32 bytes (256-bit AES key)."
+                    );
+            }
+            catch (FormatException)
+            {
+                throw new InvalidOperationException("AUTH_TOTP_ENCRYPTION_KEY is not valid base64.");
             }
 
             Logger.Info("Environment variables validated successfully.");

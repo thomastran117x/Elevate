@@ -1,7 +1,9 @@
+using backend.main.application.environment;
 using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.mfa.totp;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.responses;
 using backend.main.shared.utilities.logger;
@@ -19,10 +21,15 @@ namespace backend.main.features.auth.mfa
     public sealed class AuthMfaController : ControllerBase
     {
         private readonly IMfaEnrollmentService _mfaEnrollmentService;
+        private readonly ITotpMfaEnrollmentService _totpMfaEnrollmentService;
 
-        public AuthMfaController(IMfaEnrollmentService mfaEnrollmentService)
+        public AuthMfaController(
+            IMfaEnrollmentService mfaEnrollmentService,
+            ITotpMfaEnrollmentService totpMfaEnrollmentService
+        )
         {
             _mfaEnrollmentService = mfaEnrollmentService;
+            _totpMfaEnrollmentService = totpMfaEnrollmentService;
         }
 
         [HttpGet]
@@ -32,14 +39,21 @@ namespace backend.main.features.auth.mfa
             try
             {
                 var user = User.GetUserPayload();
-                var status = await _mfaEnrollmentService.GetStatusAsync(user.Id);
+                var smsStatus = await _mfaEnrollmentService.GetStatusAsync(user.Id);
+                var totpEnrollment = await _totpMfaEnrollmentService.GetEnrollmentAsync(user.Id);
 
-                return Ok(
-                    new ApiResponse<MfaStatusResponse>(
-                        "SMS MFA status fetched successfully.",
-                        status
-                    )
-                );
+                var combined = new MfaStatusResponse
+                {
+                    SmsEnrollmentAvailable = smsStatus.SmsEnrollmentAvailable,
+                    IsSmsMfaEnabled = smsStatus.IsSmsMfaEnabled,
+                    MaskedPhoneNumber = smsStatus.MaskedPhoneNumber,
+                    PhoneVerifiedAtUtc = smsStatus.PhoneVerifiedAtUtc,
+                    TotpEnrollmentAvailable = EnvironmentSetting.AuthTotpMfaEnrollmentEnabled,
+                    IsTotpMfaEnabled = totpEnrollment?.IsTotpMfaEnabled ?? false,
+                    TotpEnrolledAtUtc = totpEnrollment?.EnrolledAtUtc,
+                };
+
+                return Ok(new ApiResponse<MfaStatusResponse>("MFA status fetched successfully.", combined));
             }
             catch (Exception ex)
             {

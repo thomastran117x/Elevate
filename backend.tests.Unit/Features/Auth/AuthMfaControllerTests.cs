@@ -3,6 +3,7 @@ using System.Security.Claims;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.mfa;
+using backend.main.features.auth.mfa.totp;
 using backend.main.shared.responses;
 
 using FluentAssertions;
@@ -21,18 +22,21 @@ public class AuthMfaControllerTests
         var service = new Mock<IMfaEnrollmentService>();
         service.Setup(s => s.GetStatusAsync(42)).ReturnsAsync(new MfaStatusResponse
         {
-            EnrollmentAvailable = true,
+            SmsEnrollmentAvailable = true,
             IsSmsMfaEnabled = true,
             MaskedPhoneNumber = "***-***-0123",
         });
+        var totpService = new Mock<ITotpMfaEnrollmentService>();
+        totpService.Setup(s => s.GetEnrollmentAsync(42)).ReturnsAsync((TotpMfaEnrollment?)null);
 
-        var controller = CreateController(service.Object);
+        var controller = CreateController(service.Object, totpService.Object);
 
         var result = await controller.GetStatus();
 
         var response = ExtractApiResponse<MfaStatusResponse>(result, 200);
         response.Data!.IsSmsMfaEnabled.Should().BeTrue();
         response.Data.MaskedPhoneNumber.Should().Be("***-***-0123");
+        response.Data.IsTotpMfaEnabled.Should().BeFalse();
     }
 
     [Fact]
@@ -65,7 +69,7 @@ public class AuthMfaControllerTests
         var service = new Mock<IMfaEnrollmentService>();
         service.Setup(s => s.VerifyEnrollmentAsync(42, "654321", "challenge-1")).ReturnsAsync(new MfaStatusResponse
         {
-            EnrollmentAvailable = true,
+            SmsEnrollmentAvailable = true,
             IsSmsMfaEnabled = true,
             MaskedPhoneNumber = "***-***-0123",
         });
@@ -89,7 +93,7 @@ public class AuthMfaControllerTests
         var service = new Mock<IMfaEnrollmentService>();
         service.Setup(s => s.DisableAsync(42)).ReturnsAsync(new MfaStatusResponse
         {
-            EnrollmentAvailable = true,
+            SmsEnrollmentAvailable = true,
             IsSmsMfaEnabled = false,
             MaskedPhoneNumber = "***-***-0123",
         });
@@ -103,9 +107,15 @@ public class AuthMfaControllerTests
         response.Data!.IsSmsMfaEnabled.Should().BeFalse();
     }
 
-    private static AuthMfaController CreateController(IMfaEnrollmentService service)
+    private static AuthMfaController CreateController(
+        IMfaEnrollmentService? service = null,
+        ITotpMfaEnrollmentService? totpService = null
+    )
     {
-        return new AuthMfaController(service)
+        service ??= new Mock<IMfaEnrollmentService>().Object;
+        totpService ??= new Mock<ITotpMfaEnrollmentService>().Object;
+
+        return new AuthMfaController(service, totpService)
         {
             ControllerContext = new ControllerContext
             {
