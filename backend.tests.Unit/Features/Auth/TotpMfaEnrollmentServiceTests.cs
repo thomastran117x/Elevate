@@ -49,6 +49,20 @@ public class TotpMfaEnrollmentServiceTests
         stored.Should().NotBeNullOrWhiteSpace();
         stored.Should().Contain(second.SecretKey);
     }
+    [Fact]
+    public async Task StartEnrollmentAsync_ShouldThrowNotAvailable_WhenPendingStateCannotBeCached()
+    {
+        var repo = new Mock<ITotpMfaEnrollmentRepository>();
+        var cache = new Mock<backend.main.features.cache.ICacheService>();
+        cache.Setup(service => service.SetValueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan?>()))
+            .ReturnsAsync(false);
+
+        var service = new TotpMfaEnrollmentService(repo.Object, cache.Object);
+
+        var act = async () => await service.StartEnrollmentAsync(99, "user@example.com");
+
+        await act.Should().ThrowAsync<NotAvailableException>();
+    }
 
     [Fact]
     public async Task VerifyEnrollmentAsync_ShouldPersistEncryptedSecret_WhenCodeIsValid()
@@ -423,3 +437,4 @@ public class TotpMfaEnrollmentServiceTests
         }
     }
 }
+

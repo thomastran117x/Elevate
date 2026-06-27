@@ -102,7 +102,7 @@ public class TotpEndpointsTests
     {
         using var scope = new TemporaryEnvironmentVariableScope(new Dictionary<string, string?>
         {
-            ["AUTH_SMS_MFA_ENFORCEMENT_ENABLED"] = "true",
+            ["AUTH_SMS_MFA_ENFORCEMENT_ENABLED"] = "false",
             ["AUTH_TOTP_MFA_STEP_UP_ENABLED"] = "true"
         });
 
@@ -201,3 +201,4 @@ public class TotpEndpointsTests
         }
     }
 }
+

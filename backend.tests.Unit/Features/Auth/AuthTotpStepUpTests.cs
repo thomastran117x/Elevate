@@ -4,6 +4,7 @@ using backend.main.features.auth.captcha;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.device;
+using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.stepup;
@@ -145,6 +146,7 @@ public class AuthTotpStepUpServiceTests
         Mock<ICacheService>? cacheService = null,
         Mock<IAuthNotificationService>? authNotificationService = null,
         Mock<IDeviceService>? deviceService = null,
+        Mock<ITotpMfaEnrollmentService>? totpMfaEnrollmentService = null,
         Mock<IDeviceTrustService>? deviceTrustService = null,
         Mock<ILoginStepUpChallengeService>? loginStepUpChallengeService = null,
         Mock<IAuthSessionService>? authSessionService = null)
@@ -155,6 +157,7 @@ public class AuthTotpStepUpServiceTests
         cacheService ??= new Mock<ICacheService>();
         authNotificationService ??= new Mock<IAuthNotificationService>();
         deviceService ??= new Mock<IDeviceService>();
+        totpMfaEnrollmentService ??= new Mock<ITotpMfaEnrollmentService>();
         deviceTrustService ??= new Mock<IDeviceTrustService>();
         loginStepUpChallengeService ??= new Mock<ILoginStepUpChallengeService>();
         authSessionService ??= new Mock<IAuthSessionService>();
@@ -166,6 +169,7 @@ public class AuthTotpStepUpServiceTests
             cacheService.Object,
             authNotificationService.Object,
             deviceService.Object,
+            totpMfaEnrollmentService.Object,
             deviceTrustService.Object,
             loginStepUpChallengeService.Object,
             authSessionService.Object,

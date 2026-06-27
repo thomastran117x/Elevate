@@ -11,6 +11,7 @@ using backend.main.shared.utilities.logger;
 using Newtonsoft.Json;
 
 using OtpNet;
+
 using StackExchange.Redis;
 
 namespace backend.main.features.auth.mfa.totp
@@ -87,11 +88,13 @@ namespace backend.main.features.auth.mfa.totp
                     FailedAttempts = 0,
                 };
 
-                await _cacheService.SetValueAsync(
+                var pendingStored = await _cacheService.SetValueAsync(
                     PendingKey(userId),
                     JsonConvert.SerializeObject(state),
                     PendingTtl
                 );
+                if (!pendingStored)
+                    throw new NotAvailableException();
 
                 var qrCodeUri = BuildQrCodeUri(secretBase32, email);
 
@@ -338,6 +341,7 @@ namespace backend.main.features.auth.mfa.totp
         }
     }
 }
+
 
 
 
