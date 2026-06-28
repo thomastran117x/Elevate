@@ -69,6 +69,10 @@ export class StepUpVerifyComponent {
     return this.activeMethod() === 'email';
   }
 
+  get isTotpActive(): boolean {
+    return this.activeMethod() === 'totp';
+  }
+
   selectMethod(method: LoginStepUpMethod): void {
     const pending = this.pending();
     if (!pending || !pending.AvailableMethods.includes(method) || this.status() === 'starting') {
@@ -79,7 +83,11 @@ export class StepUpVerifyComponent {
     this.success = '';
     this.status.set('starting');
     this.message.set(
-      method === 'sms' ? 'Sending a security code...' : 'Sending a verification email...',
+      method === 'sms'
+        ? 'Sending a security code...'
+        : method === 'email'
+          ? 'Sending a verification email...'
+          : 'Preparing authenticator verification...',
     );
 
     this.auth
@@ -103,11 +111,15 @@ export class StepUpVerifyComponent {
           this.success =
             response.SelectedMethod === 'sms'
               ? `Security code sent to ${response.MaskedDestination}.`
-              : `Verification email sent to ${response.MaskedDestination}.`;
+              : response.SelectedMethod === 'email'
+                ? `Verification email sent to ${response.MaskedDestination}.`
+                : 'Open your authenticator app and enter the current 6-digit code.';
           this.message.set(
             response.SelectedMethod === 'sms'
               ? 'Enter the code from your text message.'
-              : 'Check your email and open the verification link to finish signing in.',
+              : response.SelectedMethod === 'email'
+                ? 'Check your email and open the verification link to finish signing in.'
+                : 'Enter the 6-digit code from your authenticator app to finish signing in.',
           );
         },
         error: (err) => {
@@ -117,9 +129,14 @@ export class StepUpVerifyComponent {
       });
   }
 
-  verifySms(): void {
+  verifyCode(): void {
     const pending = this.pending();
-    if (!pending || !this.isSmsActive || this.codeForm.invalid || this.status() === 'verifying') {
+    if (
+      !pending ||
+      (!this.isSmsActive && !this.isTotpActive) ||
+      this.codeForm.invalid ||
+      this.status() === 'verifying'
+    ) {
       this.codeForm.markAllAsTouched();
       return;
     }
@@ -129,28 +146,33 @@ export class StepUpVerifyComponent {
     this.status.set('verifying');
     this.message.set('Verifying your code and finishing sign-in...');
 
-    this.auth
-      .verifyLoginStepUp(pending.Challenge, this.codeForm.getRawValue().code)
-      .pipe(finalize(() => this.status.set('ready')))
-      .subscribe({
-        next: async (session) => {
-          try {
-            await this.sessionManager.bootstrapSession(session);
-            this.clearPendingState();
-            this.status.set('success');
-            this.message.set('Sign-in verified. Redirecting you back...');
-            const target = this.authReturnUrl.consume(session.ReturnPath ?? '/dashboard');
-            setTimeout(() => this.router.navigateByUrl(target), 800);
-          } catch (err: any) {
-            this.status.set('error');
-            this.message.set(getApiClientMessage(err, 'Unable to complete sign-in.'));
-          }
-        },
-        error: (err) => {
-          this.error = getApiClientMessage(err, 'That code could not be verified.');
-          this.message.set('Enter the code from your text message.');
-        },
-      });
+    const verificationRequest = this.isTotpActive
+      ? this.auth.verifyTotpLoginStepUp(pending.Challenge, this.codeForm.getRawValue().code)
+      : this.auth.verifyLoginStepUp(pending.Challenge, this.codeForm.getRawValue().code);
+
+    verificationRequest.pipe(finalize(() => this.status.set('ready'))).subscribe({
+      next: async (session) => {
+        try {
+          await this.sessionManager.bootstrapSession(session);
+          this.clearPendingState();
+          this.status.set('success');
+          this.message.set('Sign-in verified. Redirecting you back...');
+          const target = this.authReturnUrl.consume(session.ReturnPath ?? '/dashboard');
+          setTimeout(() => this.router.navigateByUrl(target), 800);
+        } catch (err: any) {
+          this.status.set('error');
+          this.message.set(getApiClientMessage(err, 'Unable to complete sign-in.'));
+        }
+      },
+      error: (err) => {
+        this.error = getApiClientMessage(err, 'That code could not be verified.');
+        this.message.set(
+          this.isTotpActive
+            ? 'Enter the 6-digit code from your authenticator app.'
+            : 'Enter the code from your text message.',
+        );
+      },
+    });
   }
 
   restart(): void {

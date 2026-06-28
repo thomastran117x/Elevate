@@ -58,9 +58,22 @@ namespace backend.main.application.openapi
             "/api/auth/device/verify",
             "/api/auth/mfa/start",
             "/api/auth/mfa/verify",
+            "/api/auth/mfa/verify/totp",
             "/api/auth/mfa/enroll/start",
             "/api/auth/mfa/enroll/verify",
+            "/api/auth/mfa/enable/start",
             "/api/auth/mfa/disable",
+            "/api/auth/mfa/remove",
+            "/api/auth/mfa/sms/enroll/start",
+            "/api/auth/mfa/sms/enroll/verify",
+            "/api/auth/mfa/sms/enable/start",
+            "/api/auth/mfa/sms/disable",
+            "/api/auth/mfa/sms/remove",
+            "/api/auth/mfa/totp/enroll/start",
+            "/api/auth/mfa/totp/enroll/verify",
+            "/api/auth/mfa/totp/enable",
+            "/api/auth/mfa/totp/disable",
+            "/api/auth/mfa/totp/remove",
             "/api/auth/refresh",
             "/api/auth/logout",
             "/api/auth/forgot-password",
@@ -729,4 +742,5 @@ namespace backend.main.application.openapi
         }
     }
 }
+
 

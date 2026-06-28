@@ -4,7 +4,15 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
-import { AuthService, MfaChallengeResponse, MfaStatusResponse } from '../../services/auth.service';
+import {
+  AuthService,
+  MfaChallengeResponse,
+  MfaSettingsResponse,
+  TotpEnrollmentStartResponse,
+} from '../../services/auth.service';
+
+type SmsFlow = 'enroll' | 'enable' | null;
+type TotpManageAction = 'enable' | 'disable' | 'remove' | null;
 
 @Component({
   selector: 'app-security-settings',
@@ -20,19 +28,33 @@ export class SecuritySettingsComponent implements OnInit {
     phoneNumber: this.fb.nonNullable.control('', [Validators.required]),
   });
 
-  readonly codeForm = this.fb.nonNullable.group({
+  readonly smsCodeForm = this.fb.nonNullable.group({
     code: this.fb.nonNullable.control('', [Validators.required, Validators.pattern(/^\d{6}$/)]),
   });
 
-  status: MfaStatusResponse | null = null;
-  challenge: MfaChallengeResponse | null = null;
+  readonly totpSetupForm = this.fb.nonNullable.group({
+    code: this.fb.nonNullable.control('', [Validators.required, Validators.pattern(/^\d{6}$/)]),
+  });
+
+  readonly totpManageForm = this.fb.nonNullable.group({
+    code: this.fb.nonNullable.control('', [Validators.required, Validators.pattern(/^\d{6}$/)]),
+  });
+
+  settings: MfaSettingsResponse | null = null;
+  smsChallenge: MfaChallengeResponse | null = null;
+  smsFlow: SmsFlow = null;
+  smsEditorOpen = false;
+  totpEnrollment: TotpEnrollmentStartResponse | null = null;
+  totpManageAction: TotpManageAction = null;
   loading = true;
-  submittingPhone = false;
-  verifying = false;
-  disabling = false;
+  smsSubmitting = false;
+  smsVerifying = false;
+  smsMutating = false;
+  totpStarting = false;
+  totpVerifying = false;
+  totpMutating = false;
   error = '';
   success = '';
-  private lastSubmittedPhoneNumber = '';
 
   constructor(private auth: AuthService) {}
 
@@ -40,29 +62,58 @@ export class SecuritySettingsComponent implements OnInit {
     this.refreshStatus();
   }
 
-  get isVerificationStep(): boolean {
-    return this.challenge !== null;
+  get emailSettings() {
+    return this.settings?.email ?? null;
   }
 
-  get isEnabled(): boolean {
-    return this.status?.IsSmsMfaEnabled ?? false;
+  get smsSettings() {
+    return this.settings?.sms ?? null;
   }
 
-  get maskedPhoneNumber(): string | null {
-    return this.status?.MaskedPhoneNumber ?? null;
+  get totpSettings() {
+    return this.settings?.totp ?? null;
   }
 
-  get verifiedAtLabel(): string | null {
-    if (!this.status?.PhoneVerifiedAtUtc) {
-      return null;
-    }
-
-    return new Date(this.status.PhoneVerifiedAtUtc).toLocaleString();
+  get smsVerifiedAtLabel(): string | null {
+    const value = this.smsSettings?.phoneVerifiedAtUtc;
+    return value ? new Date(value).toLocaleString() : null;
   }
 
-  startEnrollment(): void {
-    this.error = '';
-    this.success = '';
+  get totpEnrolledAtLabel(): string | null {
+    const value = this.totpSettings?.enrolledAtUtc;
+    return value ? new Date(value).toLocaleString() : null;
+  }
+
+  get totpDisabledAtLabel(): string | null {
+    const value = this.totpSettings?.disabledAtUtc;
+    return value ? new Date(value).toLocaleString() : null;
+  }
+
+  get isSmsVerificationStep(): boolean {
+    return this.smsChallenge !== null;
+  }
+
+  get isTotpSetupStep(): boolean {
+    return this.totpEnrollment !== null;
+  }
+
+  get isTotpManageStep(): boolean {
+    return this.totpManageAction !== null;
+  }
+
+  openSmsEditor(): void {
+    this.clearMessages();
+    this.smsEditorOpen = true;
+  }
+
+  cancelSmsEditor(): void {
+    this.smsEditorOpen = false;
+    this.phoneForm.reset();
+    this.clearMessages();
+  }
+
+  startSmsEnrollment(): void {
+    this.clearMessages();
 
     if (this.phoneForm.invalid) {
       this.phoneForm.markAllAsTouched();
@@ -70,16 +121,16 @@ export class SecuritySettingsComponent implements OnInit {
     }
 
     const { phoneNumber } = this.phoneForm.getRawValue();
-    this.submittingPhone = true;
-    this.lastSubmittedPhoneNumber = phoneNumber;
+    this.smsSubmitting = true;
 
     this.auth
       .startMfaEnrollment(phoneNumber)
-      .pipe(finalize(() => (this.submittingPhone = false)))
+      .pipe(finalize(() => (this.smsSubmitting = false)))
       .subscribe({
         next: (challenge) => {
-          this.challenge = challenge;
-          this.codeForm.reset();
+          this.smsChallenge = challenge;
+          this.smsFlow = 'enroll';
+          this.smsCodeForm.reset();
           this.success = `Verification code sent to ${challenge.MaskedDestination}.`;
         },
         error: (err) => {
@@ -88,85 +139,247 @@ export class SecuritySettingsComponent implements OnInit {
       });
   }
 
-  verifyEnrollment(): void {
-    this.error = '';
-    this.success = '';
-
-    if (!this.challenge) {
-      this.error = 'Start enrollment before verifying a code.';
-      return;
-    }
-
-    if (this.codeForm.invalid) {
-      this.codeForm.markAllAsTouched();
-      return;
-    }
-
-    const { code } = this.codeForm.getRawValue();
-    this.verifying = true;
+  startSmsEnable(): void {
+    this.clearMessages();
+    this.smsSubmitting = true;
 
     this.auth
-      .verifyMfaEnrollment(code, this.challenge.Challenge)
-      .pipe(finalize(() => (this.verifying = false)))
+      .startMfaEnable()
+      .pipe(finalize(() => (this.smsSubmitting = false)))
       .subscribe({
-        next: (status) => {
-          this.status = status;
-          this.challenge = null;
-          this.codeForm.reset();
-          this.phoneForm.reset();
-          this.success = 'SMS MFA is now enabled for your account.';
+        next: (challenge) => {
+          this.smsChallenge = challenge;
+          this.smsFlow = 'enable';
+          this.smsCodeForm.reset();
+          this.success = `Verification code sent to ${challenge.MaskedDestination}.`;
         },
         error: (err) => {
-          this.error = getApiClientMessage(err, 'Unable to verify the SMS MFA code.');
+          this.error = getApiClientMessage(err, 'Unable to send the SMS re-enable code.');
+          this.refreshStatus(true);
         },
       });
   }
 
-  returnToPhoneStep(): void {
-    this.challenge = null;
-    this.codeForm.reset();
-    this.error = '';
-    this.success = '';
+  verifySmsChallenge(): void {
+    this.clearMessages();
 
-    if (this.lastSubmittedPhoneNumber) {
-      this.phoneForm.patchValue({ phoneNumber: this.lastSubmittedPhoneNumber });
+    if (!this.smsChallenge) {
+      this.error = 'Start SMS setup before verifying a code.';
+      return;
     }
+
+    if (this.smsCodeForm.invalid) {
+      this.smsCodeForm.markAllAsTouched();
+      return;
+    }
+
+    const { code } = this.smsCodeForm.getRawValue();
+    this.smsVerifying = true;
+
+    this.auth
+      .verifyMfaEnrollment(code, this.smsChallenge.Challenge)
+      .pipe(finalize(() => (this.smsVerifying = false)))
+      .subscribe({
+        next: (settings) => {
+          this.settings = settings;
+          const flow = this.smsFlow;
+          this.resetSmsFlow();
+          this.success =
+            flow === 'enable' ? 'SMS MFA has been re-enabled.' : 'SMS MFA is now enabled.';
+        },
+        error: (err) => {
+          this.error = getApiClientMessage(err, 'Unable to verify the SMS MFA code.');
+          this.refreshStatus(true);
+        },
+      });
   }
 
-  disableMfa(): void {
-    this.error = '';
-    this.success = '';
-    this.disabling = true;
+  cancelSmsChallenge(): void {
+    this.resetSmsFlow();
+    this.clearMessages();
+  }
+
+  disableSms(): void {
+    this.clearMessages();
+    this.smsMutating = true;
 
     this.auth
       .disableMfa()
-      .pipe(finalize(() => (this.disabling = false)))
+      .pipe(finalize(() => (this.smsMutating = false)))
       .subscribe({
-        next: (status) => {
-          this.status = status;
-          this.challenge = null;
-          this.codeForm.reset();
+        next: (settings) => {
+          this.settings = settings;
           this.success = 'SMS MFA has been disabled.';
         },
         error: (err) => {
           this.error = getApiClientMessage(err, 'Unable to disable SMS MFA.');
+          this.refreshStatus(true);
         },
       });
   }
 
-  private refreshStatus(): void {
-    this.loading = true;
+  removeSms(): void {
+    this.clearMessages();
+    this.smsMutating = true;
+
+    this.auth
+      .removeMfa()
+      .pipe(finalize(() => (this.smsMutating = false)))
+      .subscribe({
+        next: (settings) => {
+          this.settings = settings;
+          this.resetSmsFlow();
+          this.success = 'SMS MFA has been removed.';
+        },
+        error: (err) => {
+          this.error = getApiClientMessage(err, 'Unable to remove SMS MFA.');
+          this.refreshStatus(true);
+        },
+      });
+  }
+
+  startTotpEnrollment(): void {
+    this.clearMessages();
+    this.totpStarting = true;
+
+    this.auth
+      .startTotpEnrollment()
+      .pipe(finalize(() => (this.totpStarting = false)))
+      .subscribe({
+        next: (response) => {
+          this.totpEnrollment = response;
+          this.totpSetupForm.reset();
+        },
+        error: (err) => {
+          this.error = getApiClientMessage(err, 'Unable to start TOTP enrollment.');
+          this.refreshStatus(true);
+        },
+      });
+  }
+
+  verifyTotpEnrollment(): void {
+    this.clearMessages();
+
+    if (!this.totpEnrollment) {
+      this.error = 'Start TOTP setup before verifying a code.';
+      return;
+    }
+
+    if (this.totpSetupForm.invalid) {
+      this.totpSetupForm.markAllAsTouched();
+      return;
+    }
+
+    const { code } = this.totpSetupForm.getRawValue();
+    this.totpVerifying = true;
+
+    this.auth
+      .verifyTotpEnrollment(code)
+      .pipe(finalize(() => (this.totpVerifying = false)))
+      .subscribe({
+        next: (settings) => {
+          this.settings = settings;
+          this.totpEnrollment = null;
+          this.totpSetupForm.reset();
+          this.success = 'TOTP MFA is now enabled.';
+        },
+        error: (err) => {
+          this.error = getApiClientMessage(err, 'Unable to verify the TOTP code.');
+          this.refreshStatus(true);
+        },
+      });
+  }
+
+  cancelTotpEnrollment(): void {
+    this.totpEnrollment = null;
+    this.totpSetupForm.reset();
+    this.clearMessages();
+  }
+
+  beginTotpAction(action: Exclude<TotpManageAction, null>): void {
+    this.clearMessages();
+    this.totpManageAction = action;
+    this.totpManageForm.reset();
+  }
+
+  submitTotpAction(): void {
+    this.clearMessages();
+
+    if (!this.totpManageAction) {
+      return;
+    }
+
+    if (this.totpManageForm.invalid) {
+      this.totpManageForm.markAllAsTouched();
+      return;
+    }
+
+    const { code } = this.totpManageForm.getRawValue();
+    this.totpMutating = true;
+
+    const request =
+      this.totpManageAction === 'enable'
+        ? this.auth.enableTotp(code)
+        : this.totpManageAction === 'disable'
+          ? this.auth.disableTotp(code)
+          : this.auth.removeTotp(code);
+
+    request.pipe(finalize(() => (this.totpMutating = false))).subscribe({
+      next: (settings) => {
+        const action = this.totpManageAction;
+        this.settings = settings;
+        this.totpManageAction = null;
+        this.totpManageForm.reset();
+        this.success =
+          action === 'enable'
+            ? 'TOTP MFA has been re-enabled.'
+            : action === 'disable'
+              ? 'TOTP MFA has been disabled.'
+              : 'TOTP MFA has been removed.';
+      },
+      error: (err) => {
+        this.error = getApiClientMessage(err, 'Unable to update TOTP MFA.');
+        this.refreshStatus(true);
+      },
+    });
+  }
+
+  cancelTotpAction(): void {
+    this.totpManageAction = null;
+    this.totpManageForm.reset();
+    this.clearMessages();
+  }
+
+  private resetSmsFlow(): void {
+    this.smsChallenge = null;
+    this.smsFlow = null;
+    this.smsEditorOpen = false;
+    this.phoneForm.reset();
+    this.smsCodeForm.reset();
+  }
+
+  private clearMessages(): void {
     this.error = '';
+    this.success = '';
+  }
+
+  private refreshStatus(silent = false): void {
+    this.loading = !silent;
+    if (!silent) {
+      this.error = '';
+    }
 
     this.auth
       .getMfaStatus()
       .pipe(finalize(() => (this.loading = false)))
       .subscribe({
-        next: (status) => {
-          this.status = status;
+        next: (settings) => {
+          this.settings = settings;
         },
         error: (err) => {
-          this.error = getApiClientMessage(err, 'Unable to load security settings.');
+          if (!silent) {
+            this.error = getApiClientMessage(err, 'Unable to load security settings.');
+          }
         },
       });
   }

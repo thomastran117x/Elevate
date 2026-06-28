@@ -173,6 +173,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IAuthSessionService, AuthSessionService>();
             services.AddScoped<IMfaEnrollmentService, MfaEnrollmentService>();
+            services.AddScoped<IMfaSettingsBuilder, MfaSettingsBuilder>();
             services.AddScoped<ITotpMfaEnrollmentService, TotpMfaEnrollmentService>();
             services.AddScoped<IOAuthService, OAuthService>();
             services.AddScoped<ITokenService, TokenService>();
@@ -277,4 +278,6 @@ namespace backend.main.application.bootstrap
         }
     }
 }
+
+
 

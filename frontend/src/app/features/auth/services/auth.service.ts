@@ -11,7 +11,7 @@ import {
 } from '../../../core/models/auth-response.model';
 
 export type SignupRole = 'participant' | 'organizer' | 'volunteer';
-export type LoginStepUpMethod = 'sms' | 'email';
+export type LoginStepUpMethod = 'sms' | 'email' | 'totp';
 
 export interface LoginRequest {
   email: string;
@@ -39,11 +39,39 @@ export interface VerificationChallengeResponse {
   ExpiresAtUtc: string;
 }
 
-export interface MfaStatusResponse {
-  EnrollmentAvailable: boolean;
-  IsSmsMfaEnabled: boolean;
-  MaskedPhoneNumber?: string | null;
-  PhoneVerifiedAtUtc?: string | null;
+export interface EmailMfaSettings {
+  maskedEmail: string;
+  isEnabled: true;
+}
+
+export interface SmsMfaSettings {
+  enrollmentAvailable: boolean;
+  isConfigured: boolean;
+  isEnabled: boolean;
+  maskedPhoneNumber?: string | null;
+  phoneVerifiedAtUtc?: string | null;
+  canEnroll: boolean;
+  canEnable: boolean;
+  canDisable: boolean;
+  canRemove: boolean;
+}
+
+export interface TotpMfaSettings {
+  enrollmentAvailable: boolean;
+  isConfigured: boolean;
+  isEnabled: boolean;
+  enrolledAtUtc?: string | null;
+  disabledAtUtc?: string | null;
+  canEnroll: boolean;
+  canEnable: boolean;
+  canDisable: boolean;
+  canRemove: boolean;
+}
+
+export interface MfaSettingsResponse {
+  email: EmailMfaSettings;
+  sms: SmsMfaSettings;
+  totp: TotpMfaSettings;
 }
 
 export interface MfaChallengeResponse {
@@ -51,6 +79,12 @@ export interface MfaChallengeResponse {
   ExpiresAtUtc: string;
   Channel: string;
   MaskedDestination: string;
+}
+
+export interface TotpEnrollmentStartResponse {
+  SecretKey: string;
+  QrCodeUri: string;
+  ExpiresAtUtc: string;
 }
 
 export interface LoginStepUpChallengeResponse {
@@ -184,6 +218,21 @@ export class AuthService {
     ).pipe(map((res) => this.requireData(res, 'Sign-in verification response was incomplete.')));
   }
 
+  verifyTotpLoginStepUp(
+    challenge: string,
+    code: string,
+  ): Observable<AuthenticatedSessionResponse> {
+    return this.postWithCsrf<ApiEnvelope<AuthenticatedSessionResponse>>(
+      `${this.baseUrl}/mfa/verify/totp`,
+      {
+        challenge,
+        code,
+      },
+    ).pipe(
+      map((res) => this.requireData(res, 'Authenticator verification response was incomplete.')),
+    );
+  }
+
   googleVerify(
     idToken: string,
     nonce: string,
@@ -251,33 +300,82 @@ export class AuthService {
     return this.getWithCsrf<ApiEnvelope<CurrentUserResponse>>(`${this.baseUrl}/me`);
   }
 
-  getMfaStatus(): Observable<MfaStatusResponse> {
-    return this.getWithCsrf<ApiEnvelope<MfaStatusResponse>>(`${this.baseUrl}/mfa`).pipe(
-      map((res) => this.requireData(res, 'SMS MFA status response was incomplete.')),
+  getMfaStatus(): Observable<MfaSettingsResponse> {
+    return this.getWithCsrf<ApiEnvelope<MfaSettingsResponse>>(`${this.baseUrl}/mfa`).pipe(
+      map((res) => this.requireData(res, 'MFA settings response was incomplete.')),
     );
   }
 
   startMfaEnrollment(phoneNumber: string): Observable<MfaChallengeResponse> {
     return this.postWithCsrf<ApiEnvelope<MfaChallengeResponse>>(
-      `${this.baseUrl}/mfa/enroll/start`,
+      `${this.baseUrl}/mfa/sms/enroll/start`,
       {
         phoneNumber,
       },
     ).pipe(map((res) => this.requireData(res, 'SMS MFA challenge response was incomplete.')));
   }
 
-  verifyMfaEnrollment(code: string, challenge: string): Observable<MfaStatusResponse> {
-    return this.postWithCsrf<ApiEnvelope<MfaStatusResponse>>(`${this.baseUrl}/mfa/enroll/verify`, {
-      code,
-      challenge,
-    }).pipe(map((res) => this.requireData(res, 'SMS MFA verification response was incomplete.')));
+  startMfaEnable(): Observable<MfaChallengeResponse> {
+    return this.postWithCsrf<ApiEnvelope<MfaChallengeResponse>>(
+      `${this.baseUrl}/mfa/sms/enable/start`,
+      {},
+    ).pipe(map((res) => this.requireData(res, 'SMS MFA enable response was incomplete.')));
   }
 
-  disableMfa(): Observable<MfaStatusResponse> {
-    return this.postWithCsrf<ApiEnvelope<MfaStatusResponse>>(
-      `${this.baseUrl}/mfa/disable`,
+  verifyMfaEnrollment(code: string, challenge: string): Observable<MfaSettingsResponse> {
+    return this.postWithCsrf<ApiEnvelope<MfaSettingsResponse>>(
+      `${this.baseUrl}/mfa/sms/enroll/verify`,
+      {
+        code,
+        challenge,
+      },
+    ).pipe(map((res) => this.requireData(res, 'SMS MFA verification response was incomplete.')));
+  }
+
+  disableMfa(): Observable<MfaSettingsResponse> {
+    return this.postWithCsrf<ApiEnvelope<MfaSettingsResponse>>(
+      `${this.baseUrl}/mfa/sms/disable`,
       {},
     ).pipe(map((res) => this.requireData(res, 'SMS MFA disable response was incomplete.')));
+  }
+
+  removeMfa(): Observable<MfaSettingsResponse> {
+    return this.postWithCsrf<ApiEnvelope<MfaSettingsResponse>>(
+      `${this.baseUrl}/mfa/sms/remove`,
+      {},
+    ).pipe(map((res) => this.requireData(res, 'SMS MFA remove response was incomplete.')));
+  }
+
+  startTotpEnrollment(): Observable<TotpEnrollmentStartResponse> {
+    return this.postWithCsrf<ApiEnvelope<TotpEnrollmentStartResponse>>(
+      `${this.baseUrl}/mfa/totp/enroll/start`,
+      {},
+    ).pipe(map((res) => this.requireData(res, 'TOTP enrollment response was incomplete.')));
+  }
+
+  verifyTotpEnrollment(code: string): Observable<MfaSettingsResponse> {
+    return this.postWithCsrf<ApiEnvelope<MfaSettingsResponse>>(
+      `${this.baseUrl}/mfa/totp/enroll/verify`,
+      { code },
+    ).pipe(map((res) => this.requireData(res, 'TOTP verification response was incomplete.')));
+  }
+
+  enableTotp(code: string): Observable<MfaSettingsResponse> {
+    return this.postWithCsrf<ApiEnvelope<MfaSettingsResponse>>(`${this.baseUrl}/mfa/totp/enable`, {
+      code,
+    }).pipe(map((res) => this.requireData(res, 'TOTP enable response was incomplete.')));
+  }
+
+  disableTotp(code: string): Observable<MfaSettingsResponse> {
+    return this.postWithCsrf<ApiEnvelope<MfaSettingsResponse>>(`${this.baseUrl}/mfa/totp/disable`, {
+      code,
+    }).pipe(map((res) => this.requireData(res, 'TOTP disable response was incomplete.')));
+  }
+
+  removeTotp(code: string): Observable<MfaSettingsResponse> {
+    return this.postWithCsrf<ApiEnvelope<MfaSettingsResponse>>(`${this.baseUrl}/mfa/totp/remove`, {
+      code,
+    }).pipe(map((res) => this.requireData(res, 'TOTP remove response was incomplete.')));
   }
 
   logout(): Observable<void> {

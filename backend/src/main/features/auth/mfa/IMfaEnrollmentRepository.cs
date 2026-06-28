@@ -9,5 +9,6 @@ namespace backend.main.features.auth.mfa
             DateTime verifiedAtUtc
         );
         Task<SmsMfaEnrollment?> SetEnabledAsync(int userId, bool isEnabled);
+        Task<bool> RemoveAsync(int userId);
     }
 }

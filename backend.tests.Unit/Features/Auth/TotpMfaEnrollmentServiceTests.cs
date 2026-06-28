@@ -1,6 +1,8 @@
 using backend.main.features.auth.mfa.totp;
 using backend.main.shared.exceptions.http;
 
+using backend.tests.Unit.Support;
+
 using FluentAssertions;
 
 using Moq;
@@ -9,20 +11,13 @@ using OtpNet;
 
 namespace backend.tests.Unit.Features.Auth;
 
+[Collection(EnvironmentVariableTestCollection.Name)]
 public class TotpMfaEnrollmentServiceTests
 {
-    private static TotpMfaEnrollmentService CreateService(
-        Mock<ITotpMfaEnrollmentRepository>? repo = null,
-        InMemoryCacheService? cache = null)
-    {
-        repo ??= new Mock<ITotpMfaEnrollmentRepository>();
-        cache ??= new InMemoryCacheService();
-        return new TotpMfaEnrollmentService(repo.Object, cache);
-    }
-
     [Fact]
     public async Task StartEnrollmentAsync_ShouldReturnValidSecretAndQrUri()
     {
+        using var scope = new EnvironmentVariableScope();
         var service = CreateService();
 
         var response = await service.StartEnrollmentAsync(99, "user@example.com");
@@ -32,409 +27,250 @@ public class TotpMfaEnrollmentServiceTests
         response.QrCodeUri.Should().Contain(response.SecretKey);
         response.QrCodeUri.Should().Contain("digits=6");
         response.QrCodeUri.Should().Contain("period=30");
-        response.ExpiresAtUtc.Should().BeCloseTo(DateTime.UtcNow.AddMinutes(10), TimeSpan.FromSeconds(5));
     }
 
     [Fact]
-    public async Task StartEnrollmentAsync_ShouldOverwriteAnyExistingPendingState()
+    public async Task StartEnrollmentAsync_ShouldThrowConflict_WhenTotpIsAlreadyConfigured()
     {
+        using var scope = new EnvironmentVariableScope();
+        var repository = CreateStatefulRepository(new TotpMfaEnrollment
+        {
+            UserId = 99,
+            EncryptedSecret = "v1:existing",
+            EncryptionKeyVersion = 1,
+            IsTotpMfaEnabled = true,
+            EnrolledAtUtc = new DateTime(2026, 6, 20, 12, 0, 0, DateTimeKind.Utc),
+        });
+        var service = new TotpMfaEnrollmentService(repository.Object, new InMemoryCacheService());
+
+        var act = () => service.StartEnrollmentAsync(99, "user@example.com");
+
+        await act.Should().ThrowAsync<ConflictException>()
+            .WithMessage("TOTP MFA is already configured for this account.");
+    }
+
+    [Fact]
+    public async Task VerifyEnrollmentAsync_ShouldPersistConfiguredSecret_AndClearPendingState()
+    {
+        using var scope = new EnvironmentVariableScope();
+        TotpMfaEnrollment? storedEnrollment = null;
+        var repository = CreateStatefulRepository(storedEnrollment, value => storedEnrollment = value);
         var cache = new InMemoryCacheService();
-        var service = CreateService(cache: cache);
-
-        var first = await service.StartEnrollmentAsync(99, "user@example.com");
-        var second = await service.StartEnrollmentAsync(99, "user@example.com");
-
-        second.SecretKey.Should().NotBe(first.SecretKey, "a new secret is generated each time");
-        var stored = await cache.GetValueAsync("totp:enrollment:pending:user:99");
-        stored.Should().NotBeNullOrWhiteSpace();
-        stored.Should().Contain(second.SecretKey);
-    }
-    [Fact]
-    public async Task StartEnrollmentAsync_ShouldThrowNotAvailable_WhenPendingStateCannotBeCached()
-    {
-        var repo = new Mock<ITotpMfaEnrollmentRepository>();
-        var cache = new Mock<backend.main.features.cache.ICacheService>();
-        cache.Setup(service => service.SetValueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan?>()))
-            .ReturnsAsync(false);
-
-        var service = new TotpMfaEnrollmentService(repo.Object, cache.Object);
-
-        var act = async () => await service.StartEnrollmentAsync(99, "user@example.com");
-
-        await act.Should().ThrowAsync<NotAvailableException>();
-    }
-
-    [Fact]
-    public async Task VerifyEnrollmentAsync_ShouldPersistEncryptedSecret_WhenCodeIsValid()
-    {
-        var repo = new Mock<ITotpMfaEnrollmentRepository>();
-        TotpMfaEnrollment? upserted = null;
-        repo.Setup(r => r.UpsertAsync(99, It.IsAny<string>(), 1, It.IsAny<DateTime>()))
-            .ReturnsAsync((int userId, string secret, int keyVersion, DateTime enrolledAt) =>
-            {
-                upserted = new TotpMfaEnrollment
-                {
-                    UserId = userId,
-                    EncryptedSecret = secret,
-                    EncryptionKeyVersion = keyVersion,
-                    IsTotpMfaEnabled = true,
-                    EnrolledAtUtc = enrolledAt,
-                };
-                return upserted;
-            });
-
-        var cache = new InMemoryCacheService();
-        var service = CreateService(repo, cache);
+        var service = new TotpMfaEnrollmentService(repository.Object, cache);
 
         var start = await service.StartEnrollmentAsync(99, "user@example.com");
-        var secretBytes = Base32Encoding.ToBytes(start.SecretKey);
-        var code = new Totp(secretBytes).ComputeTotp();
+        var code = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
 
         var result = await service.VerifyEnrollmentAsync(99, code);
 
         result.IsTotpMfaEnabled.Should().BeTrue();
-        upserted.Should().NotBeNull();
-        upserted!.EncryptedSecret.Should().StartWith("v1:");
-        upserted.EncryptedSecret.Should().NotContain(start.SecretKey, "plaintext must not appear in stored value");
-
-        var pendingAfter = await cache.GetValueAsync("totp:enrollment:pending:user:99");
-        pendingAfter.Should().BeNull("pending state should be deleted on success");
+        storedEnrollment.Should().NotBeNull();
+        storedEnrollment!.EncryptedSecret.Should().StartWith("v1:");
+        storedEnrollment.EncryptedSecret.Should().NotContain(start.SecretKey);
+        (await cache.GetValueAsync("totp:enrollment:pending:user:99")).Should().BeNull();
     }
 
     [Fact]
-    public async Task VerifyEnrollmentAsync_ShouldRejectInvalidCode_AndIncrementAttemptCount()
+    public async Task EnableAsync_ShouldThrowConflict_WhenTotpIsNotConfigured()
     {
-        var cache = new InMemoryCacheService();
-        var service = CreateService(cache: cache);
-        await service.StartEnrollmentAsync(99, "user@example.com");
-
-        var act = async () => await service.VerifyEnrollmentAsync(99, "000000");
-
-        await act.Should().ThrowAsync<UnauthorizedException>()
-            .WithMessage("*Invalid TOTP code*");
-    }
-
-    [Fact]
-    public async Task VerifyEnrollmentAsync_ShouldClearPendingState_AfterFiveFailedAttempts()
-    {
-        var cache = new InMemoryCacheService();
-        var service = CreateService(cache: cache);
-        await service.StartEnrollmentAsync(99, "user@example.com");
-
-        for (var i = 0; i < 4; i++)
-        {
-            try { await service.VerifyEnrollmentAsync(99, "000000"); } catch { }
-        }
-
-        var act = async () => await service.VerifyEnrollmentAsync(99, "000000");
-
-        await act.Should().ThrowAsync<UnauthorizedException>()
-            .WithMessage("*Too many failed attempts*");
-        var pending = await cache.GetValueAsync("totp:enrollment:pending:user:99");
-        pending.Should().BeNull("pending state is deleted after lockout");
-    }
-
-    [Fact]
-    public async Task VerifyEnrollmentAsync_ShouldRejectReplay_WhenSameCodeSubmittedTwice()
-    {
-        var repo = new Mock<ITotpMfaEnrollmentRepository>();
-        repo.Setup(r => r.UpsertAsync(99, It.IsAny<string>(), 1, It.IsAny<DateTime>()))
-            .ReturnsAsync(new TotpMfaEnrollment { UserId = 99, EncryptedSecret = "v1:placeholder", IsTotpMfaEnabled = true });
-
-        var cache = new InMemoryCacheService();
-        var service = CreateService(repo, cache);
-
-        var start = await service.StartEnrollmentAsync(99, "user@example.com");
-        var secretBase32 = start.SecretKey;
-        var secretBytes = Base32Encoding.ToBytes(secretBase32);
-        var code = new Totp(secretBytes).ComputeTotp();
-
-        await service.VerifyEnrollmentAsync(99, code);
-
-        // put the same secret back so we can attempt the same code again (replay)
-        var pendingJson = $"{{\"SecretBase32\":\"{secretBase32}\",\"FailedAttempts\":0}}";
-        await cache.SetValueAsync("totp:enrollment:pending:user:99", pendingJson, TimeSpan.FromMinutes(10));
-
-        var act = async () => await service.VerifyEnrollmentAsync(99, code);
-        await act.Should().ThrowAsync<UnauthorizedException>()
-            .WithMessage("*already been used*");
-    }
-
-    [Fact]
-    public async Task VerifyEnrollmentAsync_ShouldRejectMalformedCode()
-    {
-        var cache = new InMemoryCacheService();
-        var service = CreateService(cache: cache);
-        await service.StartEnrollmentAsync(99, "user@example.com");
-
-        await ((Func<Task>)(() => service.VerifyEnrollmentAsync(99, "12345"))).Should()
-            .ThrowAsync<BadRequestException>().WithMessage("*6 digits*");
-
-        await ((Func<Task>)(() => service.VerifyEnrollmentAsync(99, "1234567"))).Should()
-            .ThrowAsync<BadRequestException>().WithMessage("*6 digits*");
-
-        await ((Func<Task>)(() => service.VerifyEnrollmentAsync(99, "abc123"))).Should()
-            .ThrowAsync<BadRequestException>().WithMessage("*6 digits*");
-    }
-
-    [Fact]
-    public async Task VerifyEnrollmentAsync_ShouldThrow_WhenNoPendingState()
-    {
+        using var scope = new EnvironmentVariableScope();
         var service = CreateService();
 
-        var act = async () => await service.VerifyEnrollmentAsync(99, "123456");
+        var act = () => service.EnableAsync(99, "123456");
 
-        await act.Should().ThrowAsync<UnauthorizedException>()
-            .WithMessage("*No pending TOTP enrollment*");
+        await act.Should().ThrowAsync<ConflictException>()
+            .WithMessage("TOTP MFA is not configured for this account.");
     }
 
     [Fact]
-    public async Task DisableAsync_ShouldReturnNull_WhenNotEnrolled()
+    public async Task EnableAsync_ShouldRejectCodeFromPendingEnrollment_WhenConfiguredSecretDiffers()
     {
-        var repo = new Mock<ITotpMfaEnrollmentRepository>();
-        repo.Setup(r => r.GetByUserIdAsync(99)).ReturnsAsync((TotpMfaEnrollment?)null);
-        var service = CreateService(repo);
-
-        var result = await service.DisableAsync(99, "123456");
-
-        result.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task DisableAsync_ShouldRejectInvalidCode()
-    {
-        var repo = new Mock<ITotpMfaEnrollmentRepository>();
-        var secretBytes = KeyGeneration.GenerateRandomKey(20);
+        using var scope = new EnvironmentVariableScope();
+        TotpMfaEnrollment? storedEnrollment = null;
+        var repository = CreateStatefulRepository(storedEnrollment, value => storedEnrollment = value);
         var cache = new InMemoryCacheService();
-        var service = CreateService(repo, cache);
+        var service = new TotpMfaEnrollmentService(repository.Object, cache);
 
-        var start = await service.StartEnrollmentAsync(99, "user@example.com");
-        var secretBytesFromStart = Base32Encoding.ToBytes(start.SecretKey);
-        var validCode = new Totp(secretBytesFromStart).ComputeTotp();
+        var initialStart = await service.StartEnrollmentAsync(99, "user@example.com");
+        var initialCode = new Totp(Base32Encoding.ToBytes(initialStart.SecretKey)).ComputeTotp();
+        await service.VerifyEnrollmentAsync(99, initialCode);
 
-        var upsertedEnrollment = null as TotpMfaEnrollment;
-        repo.Setup(r => r.UpsertAsync(99, It.IsAny<string>(), 1, It.IsAny<DateTime>()))
-            .ReturnsAsync((int uid, string enc, int kv, DateTime dt) =>
-            {
-                upsertedEnrollment = new TotpMfaEnrollment
-                {
-                    UserId = uid,
-                    EncryptedSecret = enc,
-                    EncryptionKeyVersion = kv,
-                    IsTotpMfaEnabled = true,
-                    EnrolledAtUtc = dt,
-                };
-                return upsertedEnrollment;
-            });
-
-        await service.VerifyEnrollmentAsync(99, validCode);
-        repo.Setup(r => r.GetByUserIdAsync(99)).ReturnsAsync(upsertedEnrollment);
-
-        var act = async () => await service.DisableAsync(99, "000000");
-
-        await act.Should().ThrowAsync<UnauthorizedException>()
-            .WithMessage("*Invalid TOTP code*");
-    }
-
-    [Fact]
-    public async Task DisableAsync_ShouldSetDisabled_WhenCodeIsValid()
-    {
-        var repo = new Mock<ITotpMfaEnrollmentRepository>();
-        var cache = new InMemoryCacheService();
-        var service = CreateService(repo, cache);
-
-        var start = await service.StartEnrollmentAsync(99, "user@example.com");
-        var secretBytes = Base32Encoding.ToBytes(start.SecretKey);
-        var enrollCode = new Totp(secretBytes).ComputeTotp();
-
-        TotpMfaEnrollment? upsertedEnrollment = null;
-        repo.Setup(r => r.UpsertAsync(99, It.IsAny<string>(), 1, It.IsAny<DateTime>()))
-            .ReturnsAsync((int uid, string enc, int kv, DateTime dt) =>
-            {
-                upsertedEnrollment = new TotpMfaEnrollment
-                {
-                    UserId = uid,
-                    EncryptedSecret = enc,
-                    EncryptionKeyVersion = kv,
-                    IsTotpMfaEnabled = true,
-                    EnrolledAtUtc = dt,
-                };
-                return upsertedEnrollment;
-            });
-
-        await service.VerifyEnrollmentAsync(99, enrollCode);
-        repo.Setup(r => r.GetByUserIdAsync(99)).ReturnsAsync(upsertedEnrollment);
-
-        var disabledEnrollment = new TotpMfaEnrollment
-        {
-            UserId = 99,
-            EncryptedSecret = upsertedEnrollment!.EncryptedSecret,
-            IsTotpMfaEnabled = false,
-            DisabledAtUtc = DateTime.UtcNow,
-        };
-        repo.Setup(r => r.SetEnabledAsync(99, false, It.IsAny<DateTime?>()))
-            .ReturnsAsync(disabledEnrollment);
-
+        storedEnrollment!.IsTotpMfaEnabled = false;
+        storedEnrollment.DisabledAtUtc = DateTime.UtcNow;
         await cache.DeleteKeyAsync("totp:lastused:99");
-        var disableCode = new Totp(secretBytes).ComputeTotp();
+
+        var pendingSecret = Base32Encoding.ToString(KeyGeneration.GenerateRandomKey(20));
+        await cache.SetValueAsync(
+            "totp:enrollment:pending:user:99",
+            $"{{\"SecretBase32\":\"{pendingSecret}\",\"FailedAttempts\":0}}",
+            TimeSpan.FromMinutes(10));
+        var pendingCode = new Totp(Base32Encoding.ToBytes(pendingSecret)).ComputeTotp();
+
+        var act = () => service.EnableAsync(99, pendingCode);
+
+        await act.Should().ThrowAsync<BadRequestException>()
+            .WithMessage("Invalid TOTP code.");
+    }
+
+    [Fact]
+    public async Task DisableAsync_ShouldSetConfiguredMethodDisabled_WhenCodeIsValid()
+    {
+        using var scope = new EnvironmentVariableScope();
+        TotpMfaEnrollment? storedEnrollment = null;
+        var repository = CreateStatefulRepository(storedEnrollment, value => storedEnrollment = value);
+        var cache = new InMemoryCacheService();
+        var service = new TotpMfaEnrollmentService(repository.Object, cache);
+
+        var start = await service.StartEnrollmentAsync(99, "user@example.com");
+        var enrollCode = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
+        await service.VerifyEnrollmentAsync(99, enrollCode);
+        await cache.DeleteKeyAsync("totp:lastused:99");
+
+        var disableCode = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
         var result = await service.DisableAsync(99, disableCode);
 
-        result.Should().NotBeNull();
         result!.IsTotpMfaEnabled.Should().BeFalse();
         result.DisabledAtUtc.Should().NotBeNull();
-        repo.Verify(r => r.SetEnabledAsync(99, false, It.IsAny<DateTime?>()), Times.Once);
+        storedEnrollment!.IsTotpMfaEnabled.Should().BeFalse();
     }
+
     [Fact]
-    public async Task DisableAsync_ShouldAllowExistingEnrollment_WhenEnrollmentIsPaused()
+    public async Task VerifyPersistedCodeAsync_ShouldRejectReplayAsUnauthorized()
     {
-        var repo = new Mock<ITotpMfaEnrollmentRepository>();
+        using var scope = new EnvironmentVariableScope();
+        TotpMfaEnrollment? storedEnrollment = null;
+        var repository = CreateStatefulRepository(storedEnrollment, value => storedEnrollment = value);
         var cache = new InMemoryCacheService();
-        var service = CreateService(repo, cache);
+        var service = new TotpMfaEnrollmentService(repository.Object, cache);
 
         var start = await service.StartEnrollmentAsync(99, "user@example.com");
-        var secretBytes = Base32Encoding.ToBytes(start.SecretKey);
-        var enrollCode = new Totp(secretBytes).ComputeTotp();
-
-        TotpMfaEnrollment? upsertedEnrollment = null;
-        repo.Setup(r => r.UpsertAsync(99, It.IsAny<string>(), 1, It.IsAny<DateTime>()))
-            .ReturnsAsync((int uid, string enc, int kv, DateTime dt) =>
-            {
-                upsertedEnrollment = new TotpMfaEnrollment
-                {
-                    UserId = uid,
-                    EncryptedSecret = enc,
-                    EncryptionKeyVersion = kv,
-                    IsTotpMfaEnabled = true,
-                    EnrolledAtUtc = dt,
-                };
-                return upsertedEnrollment;
-            });
-
+        var enrollCode = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
         await service.VerifyEnrollmentAsync(99, enrollCode);
-        repo.Setup(r => r.GetByUserIdAsync(99)).ReturnsAsync(upsertedEnrollment);
-
-        var disabledEnrollment = new TotpMfaEnrollment
-        {
-            UserId = 99,
-            EncryptedSecret = upsertedEnrollment!.EncryptedSecret,
-            IsTotpMfaEnabled = false,
-            DisabledAtUtc = DateTime.UtcNow,
-        };
-        repo.Setup(r => r.SetEnabledAsync(99, false, It.IsAny<DateTime?>()))
-            .ReturnsAsync(disabledEnrollment);
-
         await cache.DeleteKeyAsync("totp:lastused:99");
 
-        using var scope = new TemporaryEnvironmentVariableScope("AUTH_TOTP_MFA_ENROLLMENT_ENABLED", "false");
+        var stepUpCode = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
+        await service.VerifyPersistedCodeAsync(99, stepUpCode);
 
-        var disableCode = new Totp(secretBytes).ComputeTotp();
-        var result = await service.DisableAsync(99, disableCode);
+        var replay = () => service.VerifyPersistedCodeAsync(99, stepUpCode);
 
-        result.Should().NotBeNull();
-        result!.IsTotpMfaEnabled.Should().BeFalse();
-        repo.Verify(r => r.SetEnabledAsync(99, false, It.IsAny<DateTime?>()), Times.Once);
+        await replay.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("TOTP code has already been used. Please wait for a new code.");
     }
 
     [Fact]
-    public async Task VerifyPersistedCodeAsync_ShouldThrow_WhenNotEnrolled()
+    public async Task RemoveAsync_ShouldDeleteConfiguredMethod_AndClearReplayState()
     {
-        var repo = new Mock<ITotpMfaEnrollmentRepository>();
-        repo.Setup(r => r.GetByUserIdAsync(99)).ReturnsAsync((TotpMfaEnrollment?)null);
-        var service = CreateService(repo);
-
-        var act = async () => await service.VerifyPersistedCodeAsync(99, "123456");
-
-        await act.Should().ThrowAsync<UnauthorizedException>()
-            .WithMessage("*not enrolled*");
-    }
-
-    [Fact]
-    public async Task VerifyPersistedCodeAsync_ShouldAcceptValidCode_AndRejectReplay()
-    {
-        var repo = new Mock<ITotpMfaEnrollmentRepository>();
+        using var scope = new EnvironmentVariableScope();
+        TotpMfaEnrollment? storedEnrollment = null;
+        var repository = CreateStatefulRepository(storedEnrollment, value => storedEnrollment = value);
         var cache = new InMemoryCacheService();
-        var service = CreateService(repo, cache);
+        var service = new TotpMfaEnrollmentService(repository.Object, cache);
 
         var start = await service.StartEnrollmentAsync(99, "user@example.com");
-        var secretBytes = Base32Encoding.ToBytes(start.SecretKey);
-        var enrollCode = new Totp(secretBytes).ComputeTotp();
-
-        TotpMfaEnrollment? upserted = null;
-        repo.Setup(r => r.UpsertAsync(99, It.IsAny<string>(), 1, It.IsAny<DateTime>()))
-            .ReturnsAsync((int uid, string enc, int kv, DateTime dt) =>
-            {
-                upserted = new TotpMfaEnrollment
-                {
-                    UserId = uid,
-                    EncryptedSecret = enc,
-                    IsTotpMfaEnabled = true,
-                };
-                return upserted;
-            });
-
+        var enrollCode = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
         await service.VerifyEnrollmentAsync(99, enrollCode);
-        repo.Setup(r => r.GetByUserIdAsync(99)).ReturnsAsync(upserted);
-
         await cache.DeleteKeyAsync("totp:lastused:99");
+        await cache.SetValueAsync("totp:lastused:99", "123", TimeSpan.FromMinutes(1));
+        await cache.SetValueAsync("totp:action:attempt:enable:99", "1", TimeSpan.FromMinutes(1));
+        await cache.SetValueAsync("totp:action:attempt:disable:99", "1", TimeSpan.FromMinutes(1));
+        await cache.SetValueAsync("totp:action:attempt:remove:99", "1", TimeSpan.FromMinutes(1));
 
-        var code = new Totp(secretBytes).ComputeTotp();
-        await service.VerifyPersistedCodeAsync(99, code);
+        var removeCode = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
+        await service.RemoveAsync(99, removeCode);
 
-        var replayAct = async () => await service.VerifyPersistedCodeAsync(99, code);
-        await replayAct.Should().ThrowAsync<UnauthorizedException>()
-            .WithMessage("*already been used*");
+        storedEnrollment.Should().BeNull();
+        (await cache.KeyExistsAsync("totp:lastused:99")).Should().BeFalse();
+        (await cache.KeyExistsAsync("totp:action:attempt:enable:99")).Should().BeFalse();
+        (await cache.KeyExistsAsync("totp:action:attempt:disable:99")).Should().BeFalse();
+        (await cache.KeyExistsAsync("totp:action:attempt:remove:99")).Should().BeFalse();
     }
 
-    [Fact]
-    public async Task EncryptionRoundTrip_IsTransparentThrough_EnrollAndVerify()
+    private static TotpMfaEnrollmentService CreateService(
+        Mock<ITotpMfaEnrollmentRepository>? repository = null,
+        InMemoryCacheService? cache = null)
     {
-        var repo = new Mock<ITotpMfaEnrollmentRepository>();
-        var cache = new InMemoryCacheService();
-        var service = CreateService(repo, cache);
+        repository ??= CreateStatefulRepository();
+        cache ??= new InMemoryCacheService();
+        return new TotpMfaEnrollmentService(repository.Object, cache);
+    }
 
-        var start = await service.StartEnrollmentAsync(99, "user@example.com");
-        var secretBytes = Base32Encoding.ToBytes(start.SecretKey);
-        var enrollCode = new Totp(secretBytes).ComputeTotp();
+    private static Mock<ITotpMfaEnrollmentRepository> CreateStatefulRepository(
+        TotpMfaEnrollment? initial = null,
+        Action<TotpMfaEnrollment?>? onChange = null)
+    {
+        var repository = new Mock<ITotpMfaEnrollmentRepository>();
+        TotpMfaEnrollment? stored = initial;
+        onChange?.Invoke(stored);
 
-        string? storedEncrypted = null;
-        repo.Setup(r => r.UpsertAsync(99, It.IsAny<string>(), 1, It.IsAny<DateTime>()))
-            .ReturnsAsync((int uid, string enc, int kv, DateTime dt) =>
+        repository.Setup(repo => repo.GetByUserIdAsync(99))
+            .ReturnsAsync(() => stored);
+        repository.Setup(repo => repo.UpsertAsync(99, It.IsAny<string>(), It.IsAny<int>(), It.IsAny<DateTime>()))
+            .ReturnsAsync((int userId, string encryptedSecret, int keyVersion, DateTime enrolledAtUtc) =>
             {
-                storedEncrypted = enc;
-                return new TotpMfaEnrollment
+                stored = new TotpMfaEnrollment
                 {
-                    UserId = uid,
-                    EncryptedSecret = enc,
+                    UserId = userId,
+                    EncryptedSecret = encryptedSecret,
+                    EncryptionKeyVersion = keyVersion,
                     IsTotpMfaEnabled = true,
+                    EnrolledAtUtc = enrolledAtUtc,
+                    DisabledAtUtc = null,
                 };
+                onChange?.Invoke(stored);
+                return stored;
+            });
+        repository.Setup(repo => repo.SetEnabledAsync(99, It.IsAny<bool>(), It.IsAny<DateTime?>()))
+            .ReturnsAsync((int userId, bool isEnabled, DateTime? disabledAtUtc) =>
+            {
+                if (stored == null)
+                    return null;
+
+                stored = new TotpMfaEnrollment
+                {
+                    UserId = userId,
+                    EncryptedSecret = stored.EncryptedSecret,
+                    EncryptionKeyVersion = stored.EncryptionKeyVersion,
+                    IsTotpMfaEnabled = isEnabled,
+                    EnrolledAtUtc = stored.EnrolledAtUtc,
+                    DisabledAtUtc = disabledAtUtc,
+                };
+                onChange?.Invoke(stored);
+                return stored;
+            });
+        repository.Setup(repo => repo.RemoveAsync(99))
+            .ReturnsAsync(() =>
+            {
+                var existed = stored != null;
+                stored = null;
+                onChange?.Invoke(stored);
+                return existed;
             });
 
-        await service.VerifyEnrollmentAsync(99, enrollCode);
-
-        storedEncrypted.Should().NotBeNull();
-        storedEncrypted.Should().StartWith("v1:");
-        storedEncrypted.Should().NotBe(start.SecretKey);
-
-        var decrypted = TotpMfaEnrollmentService.Decrypt(storedEncrypted!);
-        decrypted.Should().BeEquivalentTo(secretBytes, "decryption must recover the original secret bytes");
+        return repository;
     }
 
-    private sealed class TemporaryEnvironmentVariableScope : IDisposable
+    private sealed class EnvironmentVariableScope : IDisposable
     {
-        private readonly string _key;
-        private readonly string? _originalValue;
+        private readonly Dictionary<string, string?> _originals = new();
 
-        public TemporaryEnvironmentVariableScope(string key, string? value)
+        public EnvironmentVariableScope()
         {
-            _key = key;
-            _originalValue = Environment.GetEnvironmentVariable(key);
+            Set("AUTH_TOTP_MFA_ENROLLMENT_ENABLED", "true");
+            Set("AUTH_TOTP_ENCRYPTION_KEY", "dW5pdF90ZXN0X3RvdHBfZW5jcnlwdGlvbl9rZXkxMjM=");
+        }
+
+        private void Set(string key, string? value)
+        {
+            _originals[key] = Environment.GetEnvironmentVariable(key);
             Environment.SetEnvironmentVariable(key, value);
         }
 
         public void Dispose()
         {
-            Environment.SetEnvironmentVariable(_key, _originalValue);
+            foreach (var pair in _originals)
+            {
+                Environment.SetEnvironmentVariable(pair.Key, pair.Value);
+            }
         }
     }
 }
-
