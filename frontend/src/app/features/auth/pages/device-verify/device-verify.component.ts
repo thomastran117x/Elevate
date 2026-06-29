@@ -16,7 +16,7 @@ import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 })
 export class DeviceVerifyComponent {
   status = signal<'ready' | 'loading' | 'success' | 'error'>('ready');
-  message = signal('Confirm this device to finish signing in.');
+  message = signal('Open the verification link on the device you want to use, and we will finish signing you in here.');
   hasToken = false;
 
   private token: string | null = null;
@@ -37,14 +37,17 @@ export class DeviceVerifyComponent {
     if (!this.token) {
       this.status.set('error');
       this.message.set('This device verification link is missing a token.');
+      return;
     }
+
+    this.confirm();
   }
 
   confirm(): void {
     if (!this.token || this.status() === 'loading') return;
 
     this.status.set('loading');
-    this.message.set('Verifying this device and completing sign-in...');
+    this.message.set('Verifying this device and finishing sign-in...');
 
     this.auth.verifyDevice(this.token).subscribe({
       next: async (session) => {

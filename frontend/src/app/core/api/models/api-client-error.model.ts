@@ -6,6 +6,9 @@ export const TEMPORARY_SERVER_API_ERROR_MESSAGE =
   'EventXperience is temporarily unavailable. Please try again in a few minutes.';
 export const GENERIC_API_ERROR_MESSAGE =
   'Something went wrong on our side. Please try again in a moment.';
+export const DEVICE_VERIFICATION_REQUIRED_ERROR_CODE = 'DEVICE_VERIFICATION_REQUIRED';
+export const DEVICE_VERIFICATION_REQUIRED_MESSAGE =
+  "We sent a verification link to your email. Open it on this device and we'll finish signing you in automatically.";
 
 const TEMPORARY_SERVER_STATUSES = new Set([502, 503, 504]);
 
@@ -77,6 +80,10 @@ export function isApiClientError(error: unknown): error is ApiClientError {
 
 export function isApiClientClientError(error: unknown): error is ApiClientClientError {
   return isApiClientError(error) && error.kind === 'client';
+}
+
+export function isApiClientErrorCode(error: unknown, code: string): boolean {
+  return isApiClientClientError(error) && error.code === code;
 }
 
 export function getApiClientMessage(error: unknown, fallback: string): string {

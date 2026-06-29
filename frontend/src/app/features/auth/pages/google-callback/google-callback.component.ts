@@ -3,7 +3,12 @@ import { Component, inject, OnInit, PLATFORM_ID, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { environment } from '../../../../../environments/environment';
-import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
+import {
+  DEVICE_VERIFICATION_REQUIRED_ERROR_CODE,
+  DEVICE_VERIFICATION_REQUIRED_MESSAGE,
+  getApiClientMessage,
+  isApiClientErrorCode,
+} from '../../../../core/api/models/api-client-error.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import {
   AuthService,
@@ -27,7 +32,7 @@ export class GoogleCallbackComponent implements OnInit {
 
   private platformId = inject(PLATFORM_ID);
 
-  status = signal<'loading' | 'success' | 'error'>('loading');
+  status = signal<'loading' | 'success' | 'error' | 'device'>('loading');
   message = signal('Completing Google sign-in...');
 
   constructor(
@@ -112,6 +117,13 @@ export class GoogleCallbackComponent implements OnInit {
           },
           error: (err) => {
             console.error('Google callback failed:', err);
+
+            if (isApiClientErrorCode(err, DEVICE_VERIFICATION_REQUIRED_ERROR_CODE)) {
+              this.status.set('device');
+              this.message.set(DEVICE_VERIFICATION_REQUIRED_MESSAGE);
+              return;
+            }
+
             this.status.set('error');
             this.message.set(getApiClientMessage(err, 'Google sign-in failed. Please try again.'));
           },

@@ -425,7 +425,7 @@ public class AuthEndpointsTests
         verifyRedirect.Headers.Location!.ToString()
             .Should().Be($"http://localhost:3090/auth/device/verify?token={Uri.EscapeDataString(deviceEmail.Token)}");
 
-        var verify = await app.PostJsonWithCsrfAsync("/api/auth/device/verify", new VerificationTokenRequest
+        var verify = await app.Client.PostAsJsonAsync("/api/auth/device/verify", new VerificationTokenRequest
         {
             Token = deviceEmail.Token,
             Transport = SessionTransportResolver.ApiValue
@@ -879,6 +879,8 @@ public class AuthEndpointsTests
         return await app.ReadApiResponseAsync<MfaSettingsResponse>(verify);
     }
 }
+
+
 
 
 

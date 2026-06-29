@@ -188,6 +188,41 @@ describe('AuthService', () => {
     });
   }));
 
+  it('posts device verification without bootstrapping csrf', fakeAsync(() => {
+    let responseBody: unknown;
+
+    service.verifyDevice('device-token').subscribe((response) => {
+      responseBody = response;
+    });
+    tick();
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/auth/device/verify'));
+    expect(authToken.ensureCsrfToken).not.toHaveBeenCalled();
+    expect(request.request.method).toBe('POST');
+    expect(request.request.withCredentials).toBeTrue();
+    expect(request.request.body).toEqual({
+      token: 'device-token',
+      transport: 'browser',
+    });
+
+    request.flush({
+      success: true,
+      message: 'ok',
+      data: {
+        AccessToken: 'token',
+        ExpiresAtUtc: '2026-06-30T18:00:00Z',
+        ReturnPath: '/dashboard',
+      },
+      error: null,
+      meta: null,
+    });
+
+    expect(responseBody).toEqual({
+      AccessToken: 'token',
+      ExpiresAtUtc: '2026-06-30T18:00:00Z',
+      ReturnPath: '/dashboard',
+    });
+  }));
   it('fetches MFA settings after ensuring csrf', fakeAsync(() => {
     let responseBody: unknown;
 
@@ -605,3 +640,4 @@ describe('AuthService', () => {
     expect((thrown as ApiClientServerError).status).toBe(0);
   }));
 });
+

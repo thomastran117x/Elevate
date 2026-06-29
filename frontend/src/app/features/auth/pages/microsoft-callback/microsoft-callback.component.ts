@@ -4,8 +4,11 @@ import { Router, RouterLink } from '@angular/router';
 
 import { environment } from '../../../../../environments/environment';
 import {
+  DEVICE_VERIFICATION_REQUIRED_ERROR_CODE,
+  DEVICE_VERIFICATION_REQUIRED_MESSAGE,
   getApiClientMessage,
   getServerErrorMessage,
+  isApiClientErrorCode,
 } from '../../../../core/api/models/api-client-error.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import {
@@ -31,7 +34,7 @@ export class MicrosoftCallbackComponent implements OnInit {
     'Microsoft sign-in could not be completed. Please try again.';
   private platformId = inject(PLATFORM_ID);
 
-  status = signal<'loading' | 'success' | 'error'>('loading');
+  status = signal<'loading' | 'success' | 'error' | 'device'>('loading');
   message = signal('Signing you in with Microsoft...');
 
   constructor(
@@ -105,6 +108,13 @@ export class MicrosoftCallbackComponent implements OnInit {
           },
           error: (err) => {
             console.error(err);
+
+            if (isApiClientErrorCode(err, DEVICE_VERIFICATION_REQUIRED_ERROR_CODE)) {
+              this.status.set('device');
+              this.message.set(DEVICE_VERIFICATION_REQUIRED_MESSAGE);
+              return;
+            }
+
             this.status.set('error');
             this.message.set(getApiClientMessage(err, 'Sign-in failed.'));
           },

@@ -93,6 +93,23 @@ public class WorkerOptionsEnvironmentTests
     }
 
     [Fact]
+    public void EmailWorkerOptions_FromEnvironment_ShouldNormalizeProviderAliasHosts()
+    {
+        using var scope = new EnvironmentVariableScope(new Dictionary<string, string?>
+        {
+            ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
+            ["KAFKA_BOOTSTRAP_SERVERS"] = "kafka:9092",
+            ["SMTP_SERVER"] = "gmail",
+            ["EMAIL_USER"] = "mailer@example.com",
+            ["EMAIL_PASSWORD"] = "password123"
+        });
+
+        using var harness = AssemblyOptionsHarness.Load("email-worker.dll", "backend.worker.email_worker.EmailWorkerOptions");
+        var options = harness.InvokeFromEnvironment();
+
+        harness.GetNullableString(options, "SmtpServer").Should().Be("smtp.gmail.com");
+    }
+    [Fact]
     public void EmailWorkerOptions_FromEnvironment_ShouldUseDefaultsWhenTopicSettingsAreMissing()
     {
         using var scope = new EnvironmentVariableScope(new Dictionary<string, string?>
@@ -192,3 +209,5 @@ public class WorkerOptionsEnvironmentTests
         }
     }
 }
+
+

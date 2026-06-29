@@ -18,7 +18,6 @@ namespace backend.main.application.security
             $"{RoutePaths.ApiAuthPath}/google/code",
             $"{RoutePaths.ApiAuthPath}/microsoft",
             $"{RoutePaths.ApiAuthPath}/oauth/complete",
-            $"{RoutePaths.ApiAuthPath}/device/verify",
             $"{RoutePaths.ApiAuthPath}/mfa/start",
             $"{RoutePaths.ApiAuthPath}/mfa/verify",
             $"{RoutePaths.ApiAuthPath}/mfa/verify/totp",

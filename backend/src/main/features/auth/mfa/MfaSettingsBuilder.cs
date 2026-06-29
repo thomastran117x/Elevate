@@ -20,9 +20,9 @@ namespace backend.main.features.auth.mfa
 
         public async Task<MfaSettingsResponse> BuildAsync(int userId, string email)
         {
-            var smsEnrollmentTask = _smsRepository.GetByUserIdAsync(userId);
-            var totpEnrollmentTask = _totpRepository.GetByUserIdAsync(userId);
-            await Task.WhenAll(smsEnrollmentTask, totpEnrollmentTask);
+            // These repositories share the scoped AppDatabaseContext, so the reads must stay sequential.
+            var smsEnrollment = await _smsRepository.GetByUserIdAsync(userId);
+            var totpEnrollment = await _totpRepository.GetByUserIdAsync(userId);
 
             return new MfaSettingsResponse
             {
@@ -31,8 +31,8 @@ namespace backend.main.features.auth.mfa
                     MaskedEmail = PhoneNumberFormatter.MaskEmail(email),
                     IsEnabled = true,
                 },
-                Sms = BuildSms(await smsEnrollmentTask),
-                Totp = BuildTotp(await totpEnrollmentTask),
+                Sms = BuildSms(smsEnrollment),
+                Totp = BuildTotp(totpEnrollment),
             };
         }
 
@@ -75,7 +75,5 @@ namespace backend.main.features.auth.mfa
                 CanRemove = isConfigured,
             };
         }
-
-
     }
 }

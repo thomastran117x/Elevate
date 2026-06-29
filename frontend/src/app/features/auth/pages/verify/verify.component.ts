@@ -3,7 +3,6 @@ import { Component, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
-import { ApiEnvelope, requireEnvelopeData } from '../../../../core/api/models/api-envelope.model';
 import { AuthenticatedSessionResponse } from '../../../../core/models/auth-response.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import { AuthService } from '../../services/auth.service';
@@ -49,12 +48,8 @@ export class VerifyComponent {
     this.message.set('Verifying your email and completing sign-in...');
 
     this.auth.verifyEmail(this.token).subscribe({
-      next: async (res: ApiEnvelope<AuthenticatedSessionResponse>) => {
+      next: async (session: AuthenticatedSessionResponse) => {
         try {
-          const session = requireEnvelopeData(
-            res,
-            'Verification completed, but the login response was incomplete.',
-          );
           await this.sessionManager.bootstrapSession(session);
           this.status.set('success');
           this.message.set('Your email is verified. Redirecting you back...');

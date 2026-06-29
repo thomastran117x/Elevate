@@ -8,6 +8,8 @@ import { AuthTokenService } from '../../../core/api/services/auth-token.service'
 import {
   AuthenticatedSessionResponse,
   CurrentUserResponse,
+  normalizeAuthenticatedSessionResponse,
+  normalizeCurrentUserResponse,
 } from '../../../core/models/auth-response.model';
 
 export type SignupRole = 'participant' | 'organizer' | 'volunteer';
@@ -169,7 +171,14 @@ export class AuthService {
     return this.postWithCsrf<ApiEnvelope<LoginAuthenticationResponse>>(`${this.baseUrl}/login`, {
       ...payload,
       transport: 'browser' as const,
-    }).pipe(map((res) => this.requireData(res, 'Login response was incomplete.')));
+    }).pipe(
+      map((res) =>
+        this.normalizeLoginAuthenticationResponse(
+          this.requireData(res, 'Login response was incomplete.'),
+          'Login response was incomplete.',
+        ),
+      ),
+    );
   }
 
   signup(payload: SignupRequest): Observable<ApiEnvelope<VerificationChallengeResponse>> {
@@ -179,21 +188,40 @@ export class AuthService {
     );
   }
 
-  verifyEmail(token: string): Observable<ApiEnvelope<AuthenticatedSessionResponse>> {
+  verifyEmail(token: string): Observable<AuthenticatedSessionResponse> {
     return this.postWithCsrf<ApiEnvelope<AuthenticatedSessionResponse>>(`${this.baseUrl}/verify`, {
       token,
       transport: 'browser' as const,
-    });
+    }).pipe(
+      map((res) =>
+        this.requireNormalizedSession(
+          this.requireData(res, 'Verification response was incomplete.'),
+          'Verification response was incomplete.',
+        ),
+      ),
+    );
   }
 
   verifyDevice(token: string): Observable<AuthenticatedSessionResponse> {
-    return this.postWithCsrf<ApiEnvelope<AuthenticatedSessionResponse>>(
-      `${this.baseUrl}/device/verify`,
-      {
-        token,
-        transport: 'browser' as const,
-      },
-    ).pipe(map((res) => this.requireData(res, 'Device verification response was incomplete.')));
+    return this.api
+      .post<ApiEnvelope<AuthenticatedSessionResponse>>(
+        `${this.baseUrl}/device/verify`,
+        {
+          token,
+          transport: 'browser' as const,
+        },
+        {
+          withCredentials: true,
+        },
+      )
+      .pipe(
+        map((res) =>
+          this.requireNormalizedSession(
+            this.requireData(res, 'Device verification response was incomplete.'),
+            'Device verification response was incomplete.',
+          ),
+        ),
+      );
   }
 
   startLoginStepUp(
@@ -204,7 +232,12 @@ export class AuthService {
       challenge,
       method,
     }).pipe(
-      map((res) => this.requireData(res, 'Sign-in verification delivery response was incomplete.')),
+      map((res) =>
+        this.normalizeStartLoginStepUpResponse(
+          this.requireData(res, 'Sign-in verification delivery response was incomplete.'),
+          'Sign-in verification delivery response was incomplete.',
+        ),
+      ),
     );
   }
 
@@ -215,7 +248,14 @@ export class AuthService {
         challenge,
         code,
       },
-    ).pipe(map((res) => this.requireData(res, 'Sign-in verification response was incomplete.')));
+    ).pipe(
+      map((res) =>
+        this.requireNormalizedSession(
+          this.requireData(res, 'Sign-in verification response was incomplete.'),
+          'Sign-in verification response was incomplete.',
+        ),
+      ),
+    );
   }
 
   verifyTotpLoginStepUp(challenge: string, code: string): Observable<AuthenticatedSessionResponse> {
@@ -226,7 +266,12 @@ export class AuthService {
         code,
       },
     ).pipe(
-      map((res) => this.requireData(res, 'Authenticator verification response was incomplete.')),
+      map((res) =>
+        this.requireNormalizedSession(
+          this.requireData(res, 'Authenticator verification response was incomplete.'),
+          'Authenticator verification response was incomplete.',
+        ),
+      ),
     );
   }
 
@@ -240,7 +285,14 @@ export class AuthService {
       nonce,
       returnUrl,
       transport: 'browser' as const,
-    }).pipe(map((res) => this.requireData(res, 'Google login response was incomplete.')));
+    }).pipe(
+      map((res) =>
+        this.normalizeOAuthAuthenticationResponse(
+          this.requireData(res, 'Google login response was incomplete.'),
+          'Google login response was incomplete.',
+        ),
+      ),
+    );
   }
 
   googleCodeVerify(
@@ -260,7 +312,14 @@ export class AuthService {
         returnUrl,
         transport: 'browser' as const,
       },
-    ).pipe(map((res) => this.requireData(res, 'Google login response was incomplete.')));
+    ).pipe(
+      map((res) =>
+        this.normalizeOAuthAuthenticationResponse(
+          this.requireData(res, 'Google login response was incomplete.'),
+          'Google login response was incomplete.',
+        ),
+      ),
+    );
   }
 
   microsoftVerify(
@@ -276,7 +335,14 @@ export class AuthService {
         returnUrl,
         transport: 'browser' as const,
       },
-    ).pipe(map((res) => this.requireData(res, 'Microsoft login response was incomplete.')));
+    ).pipe(
+      map((res) =>
+        this.normalizeOAuthAuthenticationResponse(
+          this.requireData(res, 'Microsoft login response was incomplete.'),
+          'Microsoft login response was incomplete.',
+        ),
+      ),
+    );
   }
 
   completeOAuthSignup(
@@ -290,11 +356,25 @@ export class AuthService {
         usertype,
         transport: 'browser' as const,
       },
-    ).pipe(map((res) => this.requireData(res, 'OAuth signup completion response was incomplete.')));
+    ).pipe(
+      map((res) =>
+        this.requireNormalizedSession(
+          this.requireData(res, 'OAuth signup completion response was incomplete.'),
+          'OAuth signup completion response was incomplete.',
+        ),
+      ),
+    );
   }
 
-  me(): Observable<ApiEnvelope<CurrentUserResponse>> {
-    return this.getWithCsrf<ApiEnvelope<CurrentUserResponse>>(`${this.baseUrl}/me`);
+  me(): Observable<CurrentUserResponse> {
+    return this.getWithCsrf<ApiEnvelope<CurrentUserResponse>>(`${this.baseUrl}/me`).pipe(
+      map((res) =>
+        this.requireNormalizedCurrentUser(
+          this.requireData(res, 'Current user response was incomplete.'),
+          'Current user response was incomplete.',
+        ),
+      ),
+    );
   }
 
   getMfaStatus(): Observable<MfaSettingsResponse> {
@@ -426,4 +506,242 @@ export class AuthService {
   private requireData<T>(response: ApiEnvelope<T>, fallbackMessage: string): T {
     return requireEnvelopeData(response, fallbackMessage);
   }
+
+  private normalizeLoginAuthenticationResponse(
+    response: unknown,
+    fallbackMessage: string,
+  ): LoginAuthenticationResponse {
+    const source = this.asRecord(response);
+    const type = this.readString(source, 'Type', 'type');
+
+    if (!type) {
+      throw new Error(fallbackMessage);
+    }
+
+    if (type === 'requires_step_up') {
+      return {
+        Type: 'requires_step_up',
+        StepUp: this.normalizeLoginStepUpChallengeResponse(
+          source?.['StepUp'] ?? source?.['stepUp'],
+          fallbackMessage,
+        ),
+      };
+    }
+
+    return {
+      Type: 'authenticated',
+      Auth: this.requireNormalizedSession(source?.['Auth'] ?? source?.['auth'], fallbackMessage),
+    };
+  }
+
+  private normalizeOAuthAuthenticationResponse(
+    response: unknown,
+    fallbackMessage: string,
+  ): OAuthAuthenticationResponse {
+    const source = this.asRecord(response);
+    const type = this.readString(source, 'Type', 'type');
+
+    if (!type) {
+      throw new Error(fallbackMessage);
+    }
+
+    if (type === 'requires_role_selection') {
+      return {
+        Type: 'requires_role_selection',
+        RoleSelection: this.normalizeOAuthRoleSelectionPayload(
+          source?.['RoleSelection'] ?? source?.['roleSelection'],
+          fallbackMessage,
+        ),
+      };
+    }
+
+    if (type === 'requires_step_up') {
+      return {
+        Type: 'requires_step_up',
+        StepUp: this.normalizeLoginStepUpChallengeResponse(
+          source?.['StepUp'] ?? source?.['stepUp'],
+          fallbackMessage,
+        ),
+      };
+    }
+
+    return {
+      Type: 'authenticated',
+      Auth: this.requireNormalizedSession(source?.['Auth'] ?? source?.['auth'], fallbackMessage),
+    };
+  }
+
+  private normalizeLoginStepUpChallengeResponse(
+    value: unknown,
+    fallbackMessage: string,
+  ): LoginStepUpChallengeResponse {
+    const source = this.asRecord(value);
+    const challenge = this.readString(source, 'Challenge', 'challenge');
+    const expiresAtUtc = this.readString(source, 'ExpiresAtUtc', 'expiresAtUtc');
+    const availableMethods = this.readStringArray(source, 'AvailableMethods', 'availableMethods');
+    const maskedEmail = this.readString(source, 'MaskedEmail', 'maskedEmail');
+
+    if (!challenge || !expiresAtUtc || availableMethods.length === 0 || !maskedEmail) {
+      throw new Error(fallbackMessage);
+    }
+
+    return {
+      Challenge: challenge,
+      ExpiresAtUtc: expiresAtUtc,
+      AvailableMethods: availableMethods,
+      MaskedPhone: this.readNullableString(source, 'MaskedPhone', 'maskedPhone') ?? null,
+      MaskedEmail: maskedEmail,
+    };
+  }
+
+  private normalizeStartLoginStepUpResponse(
+    value: unknown,
+    fallbackMessage: string,
+  ): StartLoginStepUpResponse {
+    const source = this.asRecord(value);
+    const challenge = this.readString(source, 'Challenge', 'challenge');
+    const expiresAtUtc = this.readString(source, 'ExpiresAtUtc', 'expiresAtUtc');
+    const selectedMethod = this.readString(source, 'SelectedMethod', 'selectedMethod');
+    const maskedDestination = this.readString(source, 'MaskedDestination', 'maskedDestination');
+    const cooldownEndsAtUtc = this.readString(source, 'CooldownEndsAtUtc', 'cooldownEndsAtUtc');
+    const availableMethods = this.readStringArray(source, 'AvailableMethods', 'availableMethods');
+    const maskedEmail = this.readString(source, 'MaskedEmail', 'maskedEmail');
+
+    if (
+      !challenge ||
+      !expiresAtUtc ||
+      !selectedMethod ||
+      !maskedDestination ||
+      !cooldownEndsAtUtc ||
+      availableMethods.length === 0 ||
+      !maskedEmail
+    ) {
+      throw new Error(fallbackMessage);
+    }
+
+    return {
+      Challenge: challenge,
+      ExpiresAtUtc: expiresAtUtc,
+      SelectedMethod: selectedMethod as LoginStepUpMethod,
+      MaskedDestination: maskedDestination,
+      CooldownEndsAtUtc: cooldownEndsAtUtc,
+      AvailableMethods: availableMethods,
+      MaskedPhone: this.readNullableString(source, 'MaskedPhone', 'maskedPhone') ?? null,
+      MaskedEmail: maskedEmail,
+    };
+  }
+
+  private normalizeOAuthRoleSelectionPayload(
+    value: unknown,
+    fallbackMessage: string,
+  ): OAuthRoleSelectionPayload {
+    const source = this.asRecord(value);
+    const signupToken = this.readString(source, 'SignupToken', 'signupToken');
+    const email = this.readString(source, 'Email', 'email');
+    const provider = this.readString(source, 'Provider', 'provider');
+    const name = this.readString(source, 'Name', 'name');
+
+    if (!signupToken || !email || !provider) {
+      throw new Error(fallbackMessage);
+    }
+
+    return {
+      SignupToken: signupToken,
+      Email: email,
+      Name: name ?? '',
+      Provider: provider,
+    };
+  }
+
+  private requireNormalizedSession(
+    value: unknown,
+    fallbackMessage: string,
+  ): AuthenticatedSessionResponse {
+    const session = normalizeAuthenticatedSessionResponse(value);
+    if (!session) {
+      throw new Error(fallbackMessage);
+    }
+
+    return session;
+  }
+
+  private requireNormalizedCurrentUser(
+    value: unknown,
+    fallbackMessage: string,
+  ): CurrentUserResponse {
+    const user = normalizeCurrentUserResponse(value);
+    if (!user) {
+      throw new Error(fallbackMessage);
+    }
+
+    return user;
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> | null {
+    return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
+  }
+
+  private readString(
+    source: Record<string, unknown> | null,
+    ...keys: string[]
+  ): string | undefined {
+    if (!source) {
+      return undefined;
+    }
+
+    for (const key of keys) {
+      const value = source[key];
+      if (typeof value === 'string') {
+        return value;
+      }
+    }
+
+    return undefined;
+  }
+
+  private readNullableString(
+    source: Record<string, unknown> | null,
+    ...keys: string[]
+  ): string | null | undefined {
+    if (!source) {
+      return undefined;
+    }
+
+    for (const key of keys) {
+      const value = source[key];
+      if (typeof value === 'string' || value === null) {
+        return value;
+      }
+    }
+
+    return undefined;
+  }
+
+  private readStringArray(
+    source: Record<string, unknown> | null,
+    ...keys: string[]
+  ): LoginStepUpMethod[] {
+    if (!source) {
+      return [];
+    }
+
+    for (const key of keys) {
+      const value = source[key];
+      if (!Array.isArray(value)) {
+        continue;
+      }
+
+      const methods = value.filter((item): item is LoginStepUpMethod => {
+        return item === 'sms' || item === 'email' || item === 'totp';
+      });
+
+      if (methods.length > 0) {
+        return methods;
+      }
+    }
+
+    return [];
+  }
 }
+
+

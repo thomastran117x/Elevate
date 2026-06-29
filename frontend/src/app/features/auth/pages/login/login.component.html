@@ -189,6 +189,8 @@
           </a>
         </div>
 
+        <div *ngIf="notice" class="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{{ notice }}</div>
+
         <div *ngIf="error" class="text-red-500 text-sm mt-2">{{ error }}</div>
 
         <button
@@ -213,3 +215,4 @@
     </div>
   </div>
 </div>
+

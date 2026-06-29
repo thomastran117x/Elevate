@@ -7,7 +7,10 @@ import { environment } from '../../../../environments/environment';
 import { clearUser } from '../../stores/user.actions';
 import { clearSession, updateSession } from '../../stores/session.actions';
 import { SessionState } from '../../stores/session.reducer';
-import { AuthenticatedSessionResponse } from '../../models/auth-response.model';
+import {
+  AuthenticatedSessionResponse,
+  normalizeAuthenticatedSessionResponse,
+} from '../../models/auth-response.model';
 import { selectAccessToken } from '../../stores/session.selectors';
 
 type CsrfResponse = { token: string };
@@ -63,7 +66,7 @@ export class AuthTokenService {
         },
       ),
     );
-    const payload = extractEnvelopeData(res);
+    const payload = normalizeAuthenticatedSessionResponse(extractEnvelopeData(res));
 
     if (!payload?.AccessToken) {
       throw new Error('Refresh response did not include an access token.');
