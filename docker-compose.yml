@@ -9,7 +9,8 @@ services:
         required: false
     environment:
       NODE_ENV: "${NODE_ENV:-development}"
-      BACKEND_URL: "${BACKEND_URL:-http://localhost:8090/api}"
+      BACKEND_URL: "${FRONTEND_BACKEND_URL:-http://localhost:3090/api}"
+      API_PROXY_TARGET: "${FRONTEND_API_PROXY_TARGET:-http://backend:8090}"
       FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3090}"
     ports:
       - "3090:3090"

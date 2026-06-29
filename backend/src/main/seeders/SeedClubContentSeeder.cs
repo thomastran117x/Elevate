@@ -7,6 +7,7 @@ using backend.main.features.events;
 using backend.main.features.events.search;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
+using backend.main.shared.exceptions.http;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -18,6 +19,9 @@ public sealed class SeedClubContentSeeder : ISeeder
     private readonly IEventSearchOutboxWriter _eventOutboxWriter;
     private readonly IClubPostSearchOutboxWriter _clubPostOutboxWriter;
     private readonly IClubSearchOutboxWriter _clubOutboxWriter;
+    private readonly IEventReindexService _eventReindexService;
+    private readonly IClubReindexService _clubReindexService;
+    private readonly IClubPostReindexService _clubPostReindexService;
     private readonly IEnumerable<IClubSeedDefinitionSource> _clubSeedSources;
     private readonly ILogger<SeedClubContentSeeder> _logger;
 
@@ -26,6 +30,9 @@ public sealed class SeedClubContentSeeder : ISeeder
         IEventSearchOutboxWriter eventOutboxWriter,
         IClubPostSearchOutboxWriter clubPostOutboxWriter,
         IClubSearchOutboxWriter clubOutboxWriter,
+        IEventReindexService eventReindexService,
+        IClubReindexService clubReindexService,
+        IClubPostReindexService clubPostReindexService,
         IEnumerable<IClubSeedDefinitionSource> clubSeedSources,
         ILogger<SeedClubContentSeeder> logger)
     {
@@ -33,6 +40,9 @@ public sealed class SeedClubContentSeeder : ISeeder
         _eventOutboxWriter = eventOutboxWriter;
         _clubPostOutboxWriter = clubPostOutboxWriter;
         _clubOutboxWriter = clubOutboxWriter;
+        _eventReindexService = eventReindexService;
+        _clubReindexService = clubReindexService;
+        _clubPostReindexService = clubPostReindexService;
         _clubSeedSources = clubSeedSources;
         _logger = logger;
     }
@@ -155,6 +165,7 @@ public sealed class SeedClubContentSeeder : ISeeder
         await _dbContext.SaveChangesAsync(cancellationToken);
         await CleanupStaleSeedUsersAsync(managedSeedUserEmails, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await RebuildSearchIndicesAsync(cancellationToken);
 
         _logger.LogInformation(
             "[Seeders] Reconciled themed clubs. Clubs: {ClubCount}, events: {EventCount}, posts: {PostCount}, touched events: {TouchedEventCount}, removed events: {RemovedEventCount}, touched posts: {TouchedPostCount}, removed posts: {RemovedPostCount}.",
@@ -165,6 +176,28 @@ public sealed class SeedClubContentSeeder : ISeeder
             removedEventCount,
             touchedPostCount,
             removedPostCount);
+    }
+
+    private async Task RebuildSearchIndicesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var clubsIndexed = await _clubReindexService.ReindexAllAsync(cancellationToken);
+            var eventsIndexed = await _eventReindexService.ReindexAllAsync(cancellationToken);
+            var postsIndexed = await _clubPostReindexService.ReindexAllAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "[Seeders] Search indices rebuilt during club content seeding. Clubs: {ClubCount}, events: {EventCount}, posts: {PostCount}.",
+                clubsIndexed,
+                eventsIndexed,
+                postsIndexed);
+        }
+        catch (NotAvailableException ex)
+        {
+            _logger.LogInformation(
+                "[Seeders] Search index rebuild skipped during club content seeding because the feature is disabled: {Message}",
+                ex.Message);
+        }
     }
 
     private static IEnumerable<string> GetRequiredUserEmails(SeedClubDefinition definition)
@@ -520,6 +553,7 @@ public sealed class SeedClubContentSeeder : ISeeder
             StartTime = definition.StartTimeUtc,
             EndTime = definition.EndTimeUtc,
             ClubId = clubId,
+            LifecycleState = EventLifecycleState.Published,
             CurrentVersionNumber = 1,
             CreatedAt = definition.CreatedAtUtc,
             UpdatedAt = definition.UpdatedAtUtc,
@@ -590,6 +624,12 @@ public sealed class SeedClubContentSeeder : ISeeder
         if (existing.ClubId != clubId)
         {
             existing.ClubId = clubId;
+            changed = true;
+        }
+
+        if (existing.LifecycleState != EventLifecycleState.Published)
+        {
+            existing.LifecycleState = EventLifecycleState.Published;
             changed = true;
         }
 

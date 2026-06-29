@@ -95,7 +95,7 @@ namespace backend.main.features.events.search
                 Lat = input.Lat,
                 Lng = input.Lng,
                 RadiusKm = input.RadiusKm,
-                SortBy = input.SortBy,
+                SortBy = NormalizeSort(input.Query, input.SortBy),
                 Page = input.Page,
                 PageSize = input.PageSize
             };
@@ -151,6 +151,14 @@ namespace backend.main.features.events.search
             }
 
             return errors;
+        }
+
+        private static EventSortBy NormalizeSort(string? query, EventSortBy sortBy)
+        {
+            if (sortBy == EventSortBy.Relevance && string.IsNullOrWhiteSpace(query))
+                return EventSortBy.Date;
+
+            return sortBy;
         }
 
         private static string? NormalizeText(string? value)
@@ -227,3 +235,4 @@ namespace backend.main.features.events.search
         }
     }
 }
+

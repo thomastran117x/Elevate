@@ -10,31 +10,26 @@ export const routes: Routes = [
     path: 'login',
     redirectTo: 'auth/login',
     pathMatch: 'full',
-    canMatch: [featureCanMatch(FEATURE_KEYS.auth)],
   },
   {
     path: 'signup',
     redirectTo: 'auth/signup',
     pathMatch: 'full',
-    canMatch: [featureCanMatch(FEATURE_KEYS.auth)],
   },
   {
     path: 'register',
     redirectTo: 'auth/signup',
     pathMatch: 'full',
-    canMatch: [featureCanMatch(FEATURE_KEYS.auth)],
   },
   {
     path: 'forgot-password',
     redirectTo: 'auth/forgot-password',
     pathMatch: 'full',
-    canMatch: [featureCanMatch(FEATURE_KEYS.auth)],
   },
   {
     path: 'change-password',
     redirectTo: 'auth/change-password',
     pathMatch: 'full',
-    canMatch: [featureCanMatch(FEATURE_KEYS.auth)],
   },
   {
     path: '',
