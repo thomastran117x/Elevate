@@ -315,18 +315,18 @@ export class SecuritySettingsComponent implements OnInit {
     }
 
     const { code } = this.totpManageForm.getRawValue();
+    const action = this.totpManageAction;
     this.totpMutating = true;
 
     const request =
-      this.totpManageAction === 'enable'
+      action === 'enable'
         ? this.auth.enableTotp(code)
-        : this.totpManageAction === 'disable'
+        : action === 'disable'
           ? this.auth.disableTotp(code)
           : this.auth.removeTotp(code);
 
     request.pipe(finalize(() => (this.totpMutating = false))).subscribe({
       next: (settings) => {
-        const action = this.totpManageAction;
         this.settings = settings;
         this.totpManageAction = null;
         this.totpManageForm.reset();

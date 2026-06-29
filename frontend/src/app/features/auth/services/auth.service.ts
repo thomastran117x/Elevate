@@ -218,10 +218,7 @@ export class AuthService {
     ).pipe(map((res) => this.requireData(res, 'Sign-in verification response was incomplete.')));
   }
 
-  verifyTotpLoginStepUp(
-    challenge: string,
-    code: string,
-  ): Observable<AuthenticatedSessionResponse> {
+  verifyTotpLoginStepUp(challenge: string, code: string): Observable<AuthenticatedSessionResponse> {
     return this.postWithCsrf<ApiEnvelope<AuthenticatedSessionResponse>>(
       `${this.baseUrl}/mfa/verify/totp`,
       {

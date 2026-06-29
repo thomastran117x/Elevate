@@ -96,7 +96,9 @@
             [disabled]="status() === 'starting'"
             (click)="selectMethod('totp')"
           >
-            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Authenticator app</p>
+            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+              Authenticator app
+            </p>
             <h3 class="mt-2 text-xl font-bold text-slate-950">Use authenticator</h3>
             <p class="mt-2 text-sm leading-6 text-slate-600">
               Enter the current 6-digit code from your authenticator app.
@@ -113,21 +115,27 @@
           <div class="space-y-2">
             <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Enter code</p>
             <h3 class="text-2xl font-bold text-slate-950">
-              {{ isTotpActive ? 'Finish sign-in with your authenticator app' : 'Finish sign-in with SMS' }}
+              {{
+                isTotpActive
+                  ? 'Finish sign-in with your authenticator app'
+                  : 'Finish sign-in with SMS'
+              }}
             </h3>
             <p class="text-sm leading-6 text-slate-600">
-              
               {{
                 isTotpActive
                   ? 'Open your authenticator app and enter the current 6-digit code.'
-                  : 'Enter the 6-digit code sent to ' + (delivery()?.MaskedDestination || maskedPhone) + '.'
+                  : 'Enter the 6-digit code sent to ' +
+                    (delivery()?.MaskedDestination || maskedPhone) +
+                    '.'
               }}
-              
             </p>
           </div>
 
           <div class="space-y-2">
-            <label class="text-sm font-semibold text-slate-800" for="step-up-code">Security code</label>
+            <label class="text-sm font-semibold text-slate-800" for="step-up-code"
+              >Security code</label
+            >
             <input
               id="step-up-code"
               type="text"
@@ -204,5 +212,3 @@
     </div>
   </div>
 </section>
-
-

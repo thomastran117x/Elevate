@@ -71,6 +71,94 @@ public class TotpMfaEnrollmentServiceTests
     }
 
     [Fact]
+    public async Task VerifyEnrollmentAsync_ShouldRejectMalformedCodes_WithoutClearingPendingState()
+    {
+        using var scope = new EnvironmentVariableScope();
+        var cache = new InMemoryCacheService();
+        var service = new TotpMfaEnrollmentService(CreateStatefulRepository().Object, cache);
+
+        var start = await service.StartEnrollmentAsync(99, "user@example.com");
+
+        var act = () => service.VerifyEnrollmentAsync(99, "12A45");
+
+        await act.Should().ThrowAsync<BadRequestException>()
+            .WithMessage("TOTP code must be exactly 6 digits.");
+        (await cache.GetValueAsync("totp:enrollment:pending:user:99")).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task VerifyEnrollmentAsync_ShouldClearPendingState_AfterFiveFailedAttempts()
+    {
+        using var scope = new EnvironmentVariableScope();
+        var cache = new InMemoryCacheService();
+        var service = new TotpMfaEnrollmentService(CreateStatefulRepository().Object, cache);
+
+        var start = await service.StartEnrollmentAsync(99, "user@example.com");
+        var validCode = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
+        var invalidCode = InvalidCodeExcept(validCode);
+
+        for (var attempt = 1; attempt < 5; attempt++)
+        {
+            var act = () => service.VerifyEnrollmentAsync(99, invalidCode);
+            await act.Should().ThrowAsync<UnauthorizedException>()
+                .WithMessage("Invalid TOTP code. Please check your authenticator app and try again.");
+        }
+
+        var finalAttempt = () => service.VerifyEnrollmentAsync(99, invalidCode);
+        await finalAttempt.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Too many failed attempts. Please restart the enrollment process.");
+        (await cache.GetValueAsync("totp:enrollment:pending:user:99")).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task EnableAsync_ShouldNotConsumeCode_WhenPersistingEnabledStateFails()
+    {
+        using var scope = new EnvironmentVariableScope();
+        TotpMfaEnrollment? storedEnrollment = null;
+        var repository = CreateStatefulRepository(storedEnrollment, value => storedEnrollment = value);
+        var cache = new InMemoryCacheService();
+        var service = new TotpMfaEnrollmentService(repository.Object, cache);
+
+        var start = await service.StartEnrollmentAsync(99, "user@example.com");
+        var enrollCode = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
+        await service.VerifyEnrollmentAsync(99, enrollCode);
+        await cache.DeleteKeyAsync("totp:lastused:99");
+
+        storedEnrollment!.IsTotpMfaEnabled = false;
+        storedEnrollment.DisabledAtUtc = DateTime.UtcNow;
+
+        var shouldFail = true;
+        repository.Setup(repo => repo.SetEnabledAsync(99, true, null))
+            .ReturnsAsync(() =>
+            {
+                if (shouldFail)
+                {
+                    shouldFail = false;
+                    return null;
+                }
+
+                storedEnrollment = new TotpMfaEnrollment
+                {
+                    UserId = 99,
+                    EncryptedSecret = storedEnrollment!.EncryptedSecret,
+                    EncryptionKeyVersion = storedEnrollment.EncryptionKeyVersion,
+                    IsTotpMfaEnabled = true,
+                    EnrolledAtUtc = storedEnrollment.EnrolledAtUtc,
+                    DisabledAtUtc = null,
+                };
+                return storedEnrollment;
+            });
+
+        var code = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
+
+        var failedEnable = () => service.EnableAsync(99, code);
+        await failedEnable.Should().ThrowAsync<ConflictException>()
+            .WithMessage("TOTP MFA is not configured for this account.");
+
+        var retriedEnable = await service.EnableAsync(99, code);
+        retriedEnable.IsTotpMfaEnabled.Should().BeTrue();
+    }
+    [Fact]
     public async Task EnableAsync_ShouldThrowConflict_WhenTotpIsNotConfigured()
     {
         using var scope = new EnvironmentVariableScope();
@@ -185,6 +273,10 @@ public class TotpMfaEnrollmentServiceTests
         (await cache.KeyExistsAsync("totp:action:attempt:remove:99")).Should().BeFalse();
     }
 
+    private static string InvalidCodeExcept(string validCode)
+    {
+        return validCode == "000000" ? "111111" : "000000";
+    }
     private static TotpMfaEnrollmentService CreateService(
         Mock<ITotpMfaEnrollmentRepository>? repository = null,
         InMemoryCacheService? cache = null)

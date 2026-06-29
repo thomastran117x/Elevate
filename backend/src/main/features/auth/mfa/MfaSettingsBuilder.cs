@@ -20,18 +20,19 @@ namespace backend.main.features.auth.mfa
 
         public async Task<MfaSettingsResponse> BuildAsync(int userId, string email)
         {
-            var smsEnrollment = await _smsRepository.GetByUserIdAsync(userId);
-            var totpEnrollment = await _totpRepository.GetByUserIdAsync(userId);
+            var smsEnrollmentTask = _smsRepository.GetByUserIdAsync(userId);
+            var totpEnrollmentTask = _totpRepository.GetByUserIdAsync(userId);
+            await Task.WhenAll(smsEnrollmentTask, totpEnrollmentTask);
 
             return new MfaSettingsResponse
             {
                 Email = new EmailMfaSettingsDto
                 {
-                    MaskedEmail = MaskEmail(email),
+                    MaskedEmail = PhoneNumberFormatter.MaskEmail(email),
                     IsEnabled = true,
                 },
-                Sms = BuildSms(smsEnrollment),
-                Totp = BuildTotp(totpEnrollment),
+                Sms = BuildSms(await smsEnrollmentTask),
+                Totp = BuildTotp(await totpEnrollmentTask),
             };
         }
 
@@ -75,18 +76,6 @@ namespace backend.main.features.auth.mfa
             };
         }
 
-        internal static string MaskEmail(string email)
-        {
-            var atIndex = email.IndexOf('@');
-            if (atIndex <= 0)
-                return "***";
 
-            var local = email[..atIndex];
-            var domain = email[atIndex..];
-            if (local.Length == 1)
-                return $"*{domain}";
-
-            return $"{local[0]}***{domain}";
-        }
     }
 }

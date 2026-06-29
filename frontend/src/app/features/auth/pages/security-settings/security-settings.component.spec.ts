@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { ApiClientClientError } from '../../../../core/api/models/api-client-error.model';
 import { AuthService, MfaSettingsResponse } from '../../services/auth.service';
@@ -160,6 +160,21 @@ describe('SecuritySettingsComponent', () => {
     expect(component.settings?.totp.isEnabled).toBeTrue();
   });
 
+  it('keeps the original totp action message when the dialog is cancelled mid-flight', () => {
+    const response$ = new Subject<MfaSettingsResponse>();
+    auth.disableTotp.and.returnValue(response$);
+
+    component.beginTotpAction('disable');
+    component.totpManageForm.setValue({ code: '111111' });
+    component.submitTotpAction();
+    component.cancelTotpAction();
+
+    response$.next(baseSettings);
+    response$.complete();
+    fixture.detectChanges();
+
+    expect(component.success).toBe('TOTP MFA has been disabled.');
+  });
   it('keeps the current state visible when a totp action fails', () => {
     auth.disableTotp.and.returnValue(
       throwError(() => new ApiClientClientError('Invalid TOTP code.', 400, 'BAD_REQUEST')),

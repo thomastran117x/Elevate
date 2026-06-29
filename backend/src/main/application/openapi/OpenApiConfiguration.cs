@@ -45,41 +45,6 @@ namespace backend.main.application.openapi
                 ["code"] = "Machine-readable error code.",
                 ["details"] = "Additional endpoint-specific error details.",
             };
-        private static readonly HashSet<string> CsrfProtectedAuthPostPaths =
-        [
-            "/api/auth/login",
-            "/api/auth/signup",
-            "/api/auth/verify",
-            "/api/auth/verify/otp",
-            "/api/auth/google",
-            "/api/auth/google/code",
-            "/api/auth/microsoft",
-            "/api/auth/oauth/complete",
-            "/api/auth/device/verify",
-            "/api/auth/mfa/start",
-            "/api/auth/mfa/verify",
-            "/api/auth/mfa/verify/totp",
-            "/api/auth/mfa/enroll/start",
-            "/api/auth/mfa/enroll/verify",
-            "/api/auth/mfa/enable/start",
-            "/api/auth/mfa/disable",
-            "/api/auth/mfa/remove",
-            "/api/auth/mfa/sms/enroll/start",
-            "/api/auth/mfa/sms/enroll/verify",
-            "/api/auth/mfa/sms/enable/start",
-            "/api/auth/mfa/sms/disable",
-            "/api/auth/mfa/sms/remove",
-            "/api/auth/mfa/totp/enroll/start",
-            "/api/auth/mfa/totp/enroll/verify",
-            "/api/auth/mfa/totp/enable",
-            "/api/auth/mfa/totp/disable",
-            "/api/auth/mfa/totp/remove",
-            "/api/auth/refresh",
-            "/api/auth/logout",
-            "/api/auth/forgot-password",
-            "/api/auth/change-password"
-        ];
-
         public static IServiceCollection AddAppOpenApi(this IServiceCollection services)
         {
             services.AddOpenApi(OpenApiDocumentMode.DocumentName, options =>
@@ -450,7 +415,7 @@ namespace backend.main.application.openapi
 
         private static void ApplyCsrfDocumentation(OpenApiOperation operation, string relativePath)
         {
-            if (!CsrfProtectedAuthPostPaths.Contains(relativePath))
+            if (!CsrfConfiguration.ProtectedAuthPostPaths.Contains(relativePath))
             {
                 return;
             }
@@ -742,5 +707,3 @@ namespace backend.main.application.openapi
         }
     }
 }
-
-

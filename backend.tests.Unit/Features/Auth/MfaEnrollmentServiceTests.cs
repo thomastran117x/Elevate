@@ -151,6 +151,30 @@ public class MfaEnrollmentServiceTests
     }
 
     [Fact]
+    public async Task VerifyEnrollmentAsync_ShouldClearPendingState_AfterFiveFailedAttempts()
+    {
+        using var scope = new EnvironmentVariableScope();
+        var repository = new Mock<IMfaEnrollmentRepository>();
+        var notifications = new Mock<IAuthNotificationService>();
+        var cache = new InMemoryCacheService();
+        var service = new MfaEnrollmentService(repository.Object, cache, notifications.Object);
+
+        var challenge = await service.StartEnrollmentAsync(12, "+14165550123");
+        var sendInvocation = notifications.Invocations.Single();
+        var validCode = sendInvocation.Arguments[1].Should().BeOfType<string>().Subject;
+        var invalidCode = validCode == "000000" ? "111111" : "000000";
+
+        for (var attempt = 1; attempt <= 5; attempt++)
+        {
+            var act = () => service.VerifyEnrollmentAsync(12, invalidCode, challenge.Challenge);
+            await act.Should().ThrowAsync<UnauthorizedException>()
+                .WithMessage("Invalid or expired MFA enrollment code.");
+        }
+
+        (await cache.GetValueAsync($"mfa:enrollment:challenge:{challenge.Challenge}")).Should().BeNull();
+        (await cache.GetValueAsync("mfa:enrollment:user:12")).Should().BeNull();
+    }
+    [Fact]
     public async Task DisableAsync_ShouldThrowConflict_WhenSmsIsAlreadyDisabled()
     {
         using var scope = new EnvironmentVariableScope();

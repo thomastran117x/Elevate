@@ -8,7 +8,7 @@ namespace backend.main.application.security
     {
         public const string CsrfHeaderName = "X-CSRF-TOKEN";
         public const string CsrfCookieName = "XSRF-TOKEN";
-        private static readonly string[] ProtectedAuthPostPaths =
+        private static readonly HashSet<string> ProtectedAuthPostPathSet =
         [
             $"{RoutePaths.ApiAuthPath}/login",
             $"{RoutePaths.ApiAuthPath}/signup",
@@ -21,14 +21,28 @@ namespace backend.main.application.security
             $"{RoutePaths.ApiAuthPath}/device/verify",
             $"{RoutePaths.ApiAuthPath}/mfa/start",
             $"{RoutePaths.ApiAuthPath}/mfa/verify",
+            $"{RoutePaths.ApiAuthPath}/mfa/verify/totp",
             $"{RoutePaths.ApiAuthPath}/refresh",
             $"{RoutePaths.ApiAuthPath}/logout",
             $"{RoutePaths.ApiAuthPath}/forgot-password",
             $"{RoutePaths.ApiAuthPath}/change-password",
             $"{RoutePaths.ApiAuthPath}/mfa/enroll/start",
             $"{RoutePaths.ApiAuthPath}/mfa/enroll/verify",
-            $"{RoutePaths.ApiAuthPath}/mfa/disable"
+            $"{RoutePaths.ApiAuthPath}/mfa/enable/start",
+            $"{RoutePaths.ApiAuthPath}/mfa/disable",
+            $"{RoutePaths.ApiAuthPath}/mfa/remove",
+            $"{RoutePaths.ApiAuthPath}/mfa/sms/enroll/start",
+            $"{RoutePaths.ApiAuthPath}/mfa/sms/enroll/verify",
+            $"{RoutePaths.ApiAuthPath}/mfa/sms/enable/start",
+            $"{RoutePaths.ApiAuthPath}/mfa/sms/disable",
+            $"{RoutePaths.ApiAuthPath}/mfa/sms/remove",
+            $"{RoutePaths.ApiAuthPath}/mfa/totp/enroll/start",
+            $"{RoutePaths.ApiAuthPath}/mfa/totp/enroll/verify",
+            $"{RoutePaths.ApiAuthPath}/mfa/totp/enable",
+            $"{RoutePaths.ApiAuthPath}/mfa/totp/disable",
+            $"{RoutePaths.ApiAuthPath}/mfa/totp/remove"
         ];
+        public static IReadOnlySet<string> ProtectedAuthPostPaths => ProtectedAuthPostPathSet;
 
         public static IServiceCollection AddCustomCsrf(this IServiceCollection services)
         {
@@ -63,7 +77,7 @@ namespace backend.main.application.security
 
         private static bool IsCsrfProtectedEndpoint(HttpRequest request)
         {
-            return ProtectedAuthPostPaths.Any(path =>
+            return ProtectedAuthPostPathSet.Any(path =>
                 request.Path.StartsWithSegments(path, StringComparison.OrdinalIgnoreCase));
         }
     }

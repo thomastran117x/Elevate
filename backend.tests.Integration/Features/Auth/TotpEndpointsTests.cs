@@ -42,16 +42,16 @@ public class TotpEndpointsTests
             session.AccessToken);
 
         verify.StatusCode.Should().Be(HttpStatusCode.OK);
-        var verifyBody = await app.ReadApiResponseAsync<MfaStatusResponse>(verify);
-        verifyBody.Data!.IsTotpMfaEnabled.Should().BeTrue();
-        verifyBody.Data.TotpEnrolledAtUtc.Should().NotBeNull();
+        var verifyBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(verify);
+        verifyBody.Data!.Totp.IsEnabled.Should().BeTrue();
+        verifyBody.Data.Totp.EnrolledAtUtc.Should().NotBeNull();
 
         var status = await app.GetWithBearerAsync("/api/auth/mfa", session.AccessToken);
         status.StatusCode.Should().Be(HttpStatusCode.OK);
-        var statusBody = await app.ReadApiResponseAsync<MfaStatusResponse>(status);
-        statusBody.Data!.IsTotpMfaEnabled.Should().BeTrue();
-        statusBody.Data.TotpEnrollmentAvailable.Should().BeTrue();
-        statusBody.Data.TotpEnrolledAtUtc.Should().NotBeNull();
+        var statusBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(status);
+        statusBody.Data!.Totp.IsEnabled.Should().BeTrue();
+        statusBody.Data.Totp.EnrollmentAvailable.Should().BeTrue();
+        statusBody.Data.Totp.EnrolledAtUtc.Should().NotBeNull();
     }
 
     [Fact]
@@ -89,12 +89,14 @@ public class TotpEndpointsTests
             session.AccessToken);
 
         disable.StatusCode.Should().Be(HttpStatusCode.OK);
-        var disableBody = await app.ReadApiResponseAsync<MfaStatusResponse>(disable);
-        disableBody.Data!.IsTotpMfaEnabled.Should().BeFalse();
+        var disableBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(disable);
+        disableBody.Data!.Totp.IsEnabled.Should().BeFalse();
+        disableBody.Data.Totp.DisabledAtUtc.Should().NotBeNull();
 
         var status = await app.GetWithBearerAsync("/api/auth/mfa", session.AccessToken);
-        var statusBody = await app.ReadApiResponseAsync<MfaStatusResponse>(status);
-        statusBody.Data!.IsTotpMfaEnabled.Should().BeFalse();
+        var statusBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(status);
+        statusBody.Data!.Totp.IsEnabled.Should().BeFalse();
+        statusBody.Data.Totp.DisabledAtUtc.Should().NotBeNull();
     }
 
     [Fact]
@@ -201,4 +203,3 @@ public class TotpEndpointsTests
         }
     }
 }
-

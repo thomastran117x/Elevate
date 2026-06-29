@@ -2,9 +2,9 @@ using System.Security.Cryptography;
 using System.Text;
 
 using backend.main.application.environment;
-using backend.main.features.cache;
-using backend.main.features.auth.notifications;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.notifications;
+using backend.main.features.cache;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.utilities;
 using backend.main.shared.utilities.logger;

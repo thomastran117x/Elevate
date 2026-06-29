@@ -42,10 +42,14 @@
             <article class="rounded-3xl border border-slate-200 bg-slate-950 px-6 py-6 text-white">
               <div class="flex items-start justify-between gap-4">
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-200">Email</p>
+                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-200">
+                    Email
+                  </p>
                   <h2 class="mt-2 text-2xl font-bold">Always on</h2>
                 </div>
-                <span class="rounded-full bg-emerald-400/15 px-4 py-2 text-sm font-semibold text-emerald-200">
+                <span
+                  class="rounded-full bg-emerald-400/15 px-4 py-2 text-sm font-semibold text-emerald-200"
+                >
                   Fallback
                 </span>
               </div>
@@ -58,7 +62,9 @@
               </p>
             </article>
 
-            <article class="rounded-3xl border border-slate-200 bg-white px-6 py-6 shadow-sm lg:col-span-2">
+            <article
+              class="rounded-3xl border border-slate-200 bg-white px-6 py-6 shadow-sm lg:col-span-2"
+            >
               <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
                   <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">SMS</p>
@@ -84,7 +90,7 @@
                   class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold"
                   [ngClass]="{
                     'bg-emerald-100 text-emerald-700': smsSettings?.isEnabled,
-                    'bg-amber-100 text-amber-700': !smsSettings?.isEnabled
+                    'bg-amber-100 text-amber-700': !smsSettings?.isEnabled,
                   }"
                 >
                   {{ smsSettings?.isEnabled ? 'Protected' : 'Available' }}
@@ -112,7 +118,9 @@
                 (ngSubmit)="startSmsEnrollment()"
               >
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Phone setup</p>
+                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+                    Phone setup
+                  </p>
                   <h3 class="mt-2 text-xl font-bold text-slate-950">
                     {{ smsSettings?.isConfigured ? 'Change your phone number' : 'Set up SMS MFA' }}
                   </h3>
@@ -122,7 +130,9 @@
                 </div>
 
                 <div class="space-y-2">
-                  <label class="text-sm font-semibold text-slate-800" for="phone-number">Mobile phone number</label>
+                  <label class="text-sm font-semibold text-slate-800" for="phone-number"
+                    >Mobile phone number</label
+                  >
                   <input
                     id="phone-number"
                     type="tel"
@@ -132,7 +142,10 @@
                     class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
                   />
                   <p
-                    *ngIf="phoneForm.controls.phoneNumber.invalid && phoneForm.controls.phoneNumber.touched"
+                    *ngIf="
+                      phoneForm.controls.phoneNumber.invalid &&
+                      phoneForm.controls.phoneNumber.touched
+                    "
                     class="text-sm text-rose-600"
                   >
                     A phone number is required.
@@ -164,7 +177,9 @@
                 (ngSubmit)="verifySmsChallenge()"
               >
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Verify SMS</p>
+                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+                    Verify SMS
+                  </p>
                   <h3 class="mt-2 text-xl font-bold text-slate-950">
                     {{ smsFlow === 'enable' ? 'Re-enable SMS MFA' : 'Verify your phone number' }}
                   </h3>
@@ -175,7 +190,9 @@
                 </div>
 
                 <div class="space-y-2">
-                  <label class="text-sm font-semibold text-slate-800" for="sms-code">Verification code</label>
+                  <label class="text-sm font-semibold text-slate-800" for="sms-code"
+                    >Verification code</label
+                  >
                   <input
                     id="sms-code"
                     type="text"
@@ -211,7 +228,10 @@
                 </div>
               </form>
 
-              <div *ngIf="!smsEditorOpen && !isSmsVerificationStep" class="mt-5 flex flex-wrap gap-3">
+              <div
+                *ngIf="!smsEditorOpen && !isSmsVerificationStep"
+                class="mt-5 flex flex-wrap gap-3"
+              >
                 <button
                   *ngIf="smsSettings?.canEnroll"
                   type="button"
@@ -250,10 +270,14 @@
               </div>
             </article>
 
-            <article class="rounded-3xl border border-slate-200 bg-white px-6 py-6 shadow-sm lg:col-span-3">
+            <article
+              class="rounded-3xl border border-slate-200 bg-white px-6 py-6 shadow-sm lg:col-span-3"
+            >
               <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Authenticator app</p>
+                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+                    Authenticator app
+                  </p>
                   <h2 class="mt-2 text-2xl font-bold text-slate-950">
                     {{
                       totpSettings?.isEnabled
@@ -272,14 +296,17 @@
                   class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold"
                   [ngClass]="{
                     'bg-emerald-100 text-emerald-700': totpSettings?.isEnabled,
-                    'bg-amber-100 text-amber-700': !totpSettings?.isEnabled
+                    'bg-amber-100 text-amber-700': !totpSettings?.isEnabled,
                   }"
                 >
                   {{ totpSettings?.isEnabled ? 'App linked' : 'Optional' }}
                 </span>
               </div>
 
-              <div class="mt-4 grid gap-4 md:grid-cols-2" *ngIf="totpEnrolledAtLabel || totpDisabledAtLabel">
+              <div
+                class="mt-4 grid gap-4 md:grid-cols-2"
+                *ngIf="totpEnrolledAtLabel || totpDisabledAtLabel"
+              >
                 <div
                   *ngIf="totpEnrolledAtLabel"
                   class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600"
@@ -295,15 +322,22 @@
               </div>
 
               <div
-                *ngIf="totpSettings && !totpSettings.enrollmentAvailable && !totpSettings.isConfigured"
+                *ngIf="
+                  totpSettings && !totpSettings.enrollmentAvailable && !totpSettings.isConfigured
+                "
                 class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600"
               >
                 TOTP enrollment is unavailable in this environment.
               </div>
 
-              <div *ngIf="isTotpSetupStep" class="mt-5 rounded-3xl border border-sky-200 bg-sky-50 px-5 py-5">
+              <div
+                *ngIf="isTotpSetupStep"
+                class="mt-5 rounded-3xl border border-sky-200 bg-sky-50 px-5 py-5"
+              >
                 <div class="space-y-2">
-                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Set up app</p>
+                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+                    Set up app
+                  </p>
                   <h3 class="text-xl font-bold text-slate-950">Link your authenticator app</h3>
                   <p class="text-sm leading-6 text-slate-600">
                     Add a new TOTP account in your authenticator app, then scan or paste the setup
@@ -313,12 +347,20 @@
 
                 <div class="mt-4 grid gap-4 lg:grid-cols-2">
                   <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Secret key</p>
-                    <p class="mt-2 break-all font-mono text-sm text-slate-900">{{ totpEnrollment?.SecretKey }}</p>
+                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                      Secret key
+                    </p>
+                    <p class="mt-2 break-all font-mono text-sm text-slate-900">
+                      {{ totpEnrollment?.SecretKey }}
+                    </p>
                   </div>
                   <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Setup URI</p>
-                    <p class="mt-2 break-all font-mono text-xs text-slate-900">{{ totpEnrollment?.QrCodeUri }}</p>
+                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                      Setup URI
+                    </p>
+                    <p class="mt-2 break-all font-mono text-xs text-slate-900">
+                      {{ totpEnrollment?.QrCodeUri }}
+                    </p>
                   </div>
                 </div>
 
@@ -326,9 +368,15 @@
                   Setup expires at {{ totpEnrollment?.ExpiresAtUtc | date: 'medium' }}.
                 </p>
 
-                <form class="mt-5 space-y-4" [formGroup]="totpSetupForm" (ngSubmit)="verifyTotpEnrollment()">
+                <form
+                  class="mt-5 space-y-4"
+                  [formGroup]="totpSetupForm"
+                  (ngSubmit)="verifyTotpEnrollment()"
+                >
                   <div class="space-y-2">
-                    <label class="text-sm font-semibold text-slate-800" for="totp-setup-code">Authenticator code</label>
+                    <label class="text-sm font-semibold text-slate-800" for="totp-setup-code"
+                      >Authenticator code</label
+                    >
                     <input
                       id="totp-setup-code"
                       type="text"
@@ -339,7 +387,9 @@
                       class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base tracking-[0.35em] text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
                     />
                     <p
-                      *ngIf="totpSetupForm.controls.code.invalid && totpSetupForm.controls.code.touched"
+                      *ngIf="
+                        totpSetupForm.controls.code.invalid && totpSetupForm.controls.code.touched
+                      "
                       class="text-sm text-rose-600"
                     >
                       Enter the 6-digit code from your authenticator app.
@@ -372,7 +422,9 @@
                 (ngSubmit)="submitTotpAction()"
               >
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Confirm action</p>
+                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+                    Confirm action
+                  </p>
                   <h3 class="mt-2 text-xl font-bold text-slate-950">
                     {{
                       totpManageAction === 'enable'
@@ -388,7 +440,9 @@
                 </div>
 
                 <div class="space-y-2">
-                  <label class="text-sm font-semibold text-slate-800" for="totp-manage-code">Authenticator code</label>
+                  <label class="text-sm font-semibold text-slate-800" for="totp-manage-code"
+                    >Authenticator code</label
+                  >
                   <input
                     id="totp-manage-code"
                     type="text"
@@ -399,7 +453,9 @@
                     class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base tracking-[0.35em] text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
                   />
                   <p
-                    *ngIf="totpManageForm.controls.code.invalid && totpManageForm.controls.code.touched"
+                    *ngIf="
+                      totpManageForm.controls.code.invalid && totpManageForm.controls.code.touched
+                    "
                     class="text-sm text-rose-600"
                   >
                     Enter the 6-digit code from your authenticator app.

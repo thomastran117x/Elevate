@@ -518,10 +518,13 @@ public class AuthEndpointsTests
         var response = await app.GetWithBearerAsync("/api/auth/mfa", session.AccessToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await app.ReadApiResponseAsync<MfaStatusResponse>(response);
-        body.Data!.EnrollmentAvailable.Should().BeTrue();
-        body.Data.IsSmsMfaEnabled.Should().BeFalse();
-        body.Data.MaskedPhoneNumber.Should().BeNull();
+        var body = await app.ReadApiResponseAsync<MfaSettingsResponse>(response);
+        body.Data!.Email.IsEnabled.Should().BeTrue();
+        body.Data.Sms.EnrollmentAvailable.Should().BeTrue();
+        body.Data.Sms.IsConfigured.Should().BeFalse();
+        body.Data.Sms.IsEnabled.Should().BeFalse();
+        body.Data.Sms.MaskedPhoneNumber.Should().BeNull();
+        body.Data.Totp.IsConfigured.Should().BeFalse();
     }
 
     [Fact]
@@ -573,9 +576,10 @@ public class AuthEndpointsTests
             session.AccessToken);
 
         verify.StatusCode.Should().Be(HttpStatusCode.OK);
-        var verifyBody = await app.ReadApiResponseAsync<MfaStatusResponse>(verify);
-        verifyBody.Data!.IsSmsMfaEnabled.Should().BeTrue();
-        verifyBody.Data.MaskedPhoneNumber.Should().Be("***-***-0123");
+        var verifyBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(verify);
+        verifyBody.Data!.Sms.IsEnabled.Should().BeTrue();
+        verifyBody.Data.Sms.IsConfigured.Should().BeTrue();
+        verifyBody.Data.Sms.MaskedPhoneNumber.Should().Be("***-***-0123");
 
         var user = await app.FindUserByEmailAsync("mfa-verify@example.com");
         var enrollment = await app.FindSmsMfaEnrollmentAsync(user!.Id);
@@ -616,9 +620,10 @@ public class AuthEndpointsTests
             session.AccessToken);
 
         disable.StatusCode.Should().Be(HttpStatusCode.OK);
-        var disableBody = await app.ReadApiResponseAsync<MfaStatusResponse>(disable);
-        disableBody.Data!.IsSmsMfaEnabled.Should().BeFalse();
-        disableBody.Data.MaskedPhoneNumber.Should().Be("***-***-0123");
+        var disableBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(disable);
+        disableBody.Data!.Sms.IsEnabled.Should().BeFalse();
+        disableBody.Data.Sms.IsConfigured.Should().BeTrue();
+        disableBody.Data.Sms.MaskedPhoneNumber.Should().Be("***-***-0123");
 
         var user = await app.FindUserByEmailAsync("mfa-disable@example.com");
         var enrollment = await app.FindSmsMfaEnrollmentAsync(user!.Id);

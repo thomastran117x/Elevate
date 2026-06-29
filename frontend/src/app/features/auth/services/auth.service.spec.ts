@@ -260,7 +260,9 @@ describe('AuthService', () => {
 
     service.startMfaEnrollment('+14165550123').subscribe();
     tick();
-    const startRequest = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/sms/enroll/start'));
+    const startRequest = httpMock.expectOne((req) =>
+      req.url.endsWith('/auth/mfa/sms/enroll/start'),
+    );
     expect(startRequest.request.body).toEqual({ phoneNumber: '+14165550123' });
     startRequest.flush({
       success: true,
@@ -279,7 +281,9 @@ describe('AuthService', () => {
       enableStart = response;
     });
     tick();
-    const enableRequest = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/sms/enable/start'));
+    const enableRequest = httpMock.expectOne((req) =>
+      req.url.endsWith('/auth/mfa/sms/enable/start'),
+    );
     expect(enableRequest.request.body).toEqual({});
     enableRequest.flush({
       success: true,
@@ -298,7 +302,9 @@ describe('AuthService', () => {
       verified = response;
     });
     tick();
-    const verifyRequest = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/sms/enroll/verify'));
+    const verifyRequest = httpMock.expectOne((req) =>
+      req.url.endsWith('/auth/mfa/sms/enroll/verify'),
+    );
     expect(verifyRequest.request.body).toEqual({ code: '654321', challenge: 'challenge-1' });
     verifyRequest.flush({
       success: true,
@@ -406,9 +412,15 @@ describe('AuthService', () => {
       Channel: 'sms',
       MaskedDestination: '***-***-0123',
     });
-    expect(verified).toEqual(jasmine.objectContaining({ sms: jasmine.objectContaining({ isEnabled: true }) }));
-    expect(disabled).toEqual(jasmine.objectContaining({ sms: jasmine.objectContaining({ isEnabled: false }) }));
-    expect(removed).toEqual(jasmine.objectContaining({ sms: jasmine.objectContaining({ isConfigured: false }) }));
+    expect(verified).toEqual(
+      jasmine.objectContaining({ sms: jasmine.objectContaining({ isEnabled: true }) }),
+    );
+    expect(disabled).toEqual(
+      jasmine.objectContaining({ sms: jasmine.objectContaining({ isEnabled: false }) }),
+    );
+    expect(removed).toEqual(
+      jasmine.objectContaining({ sms: jasmine.objectContaining({ isConfigured: false }) }),
+    );
   }));
 
   it('posts totp management payloads', fakeAsync(() => {
@@ -445,7 +457,9 @@ describe('AuthService', () => {
       startResponse = response;
     });
     tick();
-    const startRequest = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/totp/enroll/start'));
+    const startRequest = httpMock.expectOne((req) =>
+      req.url.endsWith('/auth/mfa/totp/enroll/start'),
+    );
     expect(startRequest.request.body).toEqual({});
     startRequest.flush({
       success: true,
@@ -463,9 +477,17 @@ describe('AuthService', () => {
       verifiedResponse = response;
     });
     tick();
-    const verifyRequest = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/totp/enroll/verify'));
+    const verifyRequest = httpMock.expectOne((req) =>
+      req.url.endsWith('/auth/mfa/totp/enroll/verify'),
+    );
     expect(verifyRequest.request.body).toEqual({ code: '123456' });
-    verifyRequest.flush({ success: true, message: 'ok', data: settingsPayload, error: null, meta: null });
+    verifyRequest.flush({
+      success: true,
+      message: 'ok',
+      data: settingsPayload,
+      error: null,
+      meta: null,
+    });
 
     service.enableTotp('123456').subscribe((response) => {
       enabledResponse = response;
@@ -473,7 +495,13 @@ describe('AuthService', () => {
     tick();
     const enableRequest = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/totp/enable'));
     expect(enableRequest.request.body).toEqual({ code: '123456' });
-    enableRequest.flush({ success: true, message: 'ok', data: settingsPayload, error: null, meta: null });
+    enableRequest.flush({
+      success: true,
+      message: 'ok',
+      data: settingsPayload,
+      error: null,
+      meta: null,
+    });
 
     service.disableTotp('123456').subscribe((response) => {
       disabledResponse = response;
@@ -481,7 +509,13 @@ describe('AuthService', () => {
     tick();
     const disableRequest = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/totp/disable'));
     expect(disableRequest.request.body).toEqual({ code: '123456' });
-    disableRequest.flush({ success: true, message: 'ok', data: settingsPayload, error: null, meta: null });
+    disableRequest.flush({
+      success: true,
+      message: 'ok',
+      data: settingsPayload,
+      error: null,
+      meta: null,
+    });
 
     service.removeTotp('123456').subscribe((response) => {
       removedResponse = response;
@@ -489,7 +523,13 @@ describe('AuthService', () => {
     tick();
     const removeRequest = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/totp/remove'));
     expect(removeRequest.request.body).toEqual({ code: '123456' });
-    removeRequest.flush({ success: true, message: 'ok', data: settingsPayload, error: null, meta: null });
+    removeRequest.flush({
+      success: true,
+      message: 'ok',
+      data: settingsPayload,
+      error: null,
+      meta: null,
+    });
 
     expect(startResponse).toEqual({
       SecretKey: 'BASE32SECRET',
