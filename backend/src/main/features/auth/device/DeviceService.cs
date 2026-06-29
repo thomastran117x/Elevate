@@ -2,8 +2,6 @@ using System.Security.Cryptography;
 using System.Text;
 
 using backend.main.features.auth.notifications;
-
-using Microsoft.IdentityModel.Tokens;
 using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
@@ -13,6 +11,8 @@ using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
 using backend.main.shared.utilities.logger;
 using backend.main.utilities;
+
+using Microsoft.IdentityModel.Tokens;
 
 using Newtonsoft.Json;
 
@@ -146,13 +146,31 @@ namespace backend.main.features.auth.device
 
         private sealed class PendingDevice
         {
-            public int UserId { get; set; }
-            public required string Email { get; set; }
-            public required string DeviceType { get; set; }
-            public required string ClientName { get; set; }
-            public required string TrustedDeviceId { get; set; }
+            public int UserId
+            {
+                get; set;
+            }
+            public required string Email
+            {
+                get; set;
+            }
+            public required string DeviceType
+            {
+                get; set;
+            }
+            public required string ClientName
+            {
+                get; set;
+            }
+            public required string TrustedDeviceId
+            {
+                get; set;
+            }
             public string IpAddress { get; set; } = "Unknown";
-            public string? ReturnPath { get; set; }
+            public string? ReturnPath
+            {
+                get; set;
+            }
         }
     }
 }

@@ -197,7 +197,7 @@ public class AuthServiceTests
         result.Type.Should().Be(AuthFlowResponseTypes.RequiresStepUp);
         result.StepUp.Should().NotBeNull();
         result.StepUp!.Challenge.Should().Be("stepup-challenge");
-        deviceService.Verify(service => service.EnsureDeviceKnownAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<ClientRequestInfo>()), Times.Never);
+        deviceService.Verify(service => service.EnsureDeviceKnownAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<ClientRequestInfo>(), It.IsAny<string?>()), Times.Never);
         challengeService.VerifyAll();
     }
     [Fact]
@@ -267,7 +267,7 @@ public class AuthServiceTests
         result.UserToken.Should().NotBeNull();
         result.UserToken!.user.GoogleID.Should().Be("google-1");
         userRepository.Verify(repository => repository.UpdateProviderIdsAsync(9, "google-1", null), Times.Once);
-        deviceService.Verify(s => s.EnsureDeviceKnownAsync(9, "existing@example.com", It.IsAny<backend.main.shared.requests.ClientRequestInfo>()), Times.Once);
+        deviceService.Verify(s => s.EnsureDeviceKnownAsync(9, "existing@example.com", It.IsAny<backend.main.shared.requests.ClientRequestInfo>(), It.IsAny<string?>()), Times.Once);
     }
 
     [Fact]
@@ -587,7 +587,7 @@ public class AuthServiceTests
         result.UserToken!.user.Usertype.Should().Be(AuthRoles.DefaultOAuthRole);
         userRepository.Verify(repository => repository.UpdateUserAsync(15, It.Is<backend.main.features.profile.User>(u =>
             u.Usertype == AuthRoles.DefaultOAuthRole)), Times.Once);
-        deviceService.Verify(service => service.EnsureDeviceKnownAsync(15, "member@example.com", It.IsAny<ClientRequestInfo>()), Times.Once);
+        deviceService.Verify(service => service.EnsureDeviceKnownAsync(15, "member@example.com", It.IsAny<ClientRequestInfo>(), It.IsAny<string?>()), Times.Once);
     }
 
     [Fact]

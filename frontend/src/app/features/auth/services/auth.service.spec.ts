@@ -640,4 +640,3 @@ describe('AuthService', () => {
     expect((thrown as ApiClientServerError).status).toBe(0);
   }));
 });
-

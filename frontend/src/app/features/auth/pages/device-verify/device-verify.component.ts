@@ -18,7 +18,9 @@ export class DeviceVerifyComponent {
   private platformId = inject(PLATFORM_ID);
 
   status = signal<'ready' | 'loading' | 'success' | 'error'>('ready');
-  message = signal('Open the verification link on the device you want to use, and we will finish signing you in here.');
+  message = signal(
+    'Open the verification link on the device you want to use, and we will finish signing you in here.',
+  );
   hasToken = false;
 
   private token: string | null = null;
