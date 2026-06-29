@@ -99,6 +99,23 @@ public class OpenApiConfigurationTests
         unprotectedOperation.Parameters.Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData("/api/auth/mfa/enable/start")]
+    [InlineData("/api/auth/mfa/sms/enroll/start")]
+    [InlineData("/api/auth/mfa/sms/remove")]
+    [InlineData("/api/auth/mfa/totp/enable")]
+    [InlineData("/api/auth/mfa/totp/remove")]
+    public void ApplyCsrfDocumentation_ShouldTreatNewMfaRoutesAsProtected(string path)
+    {
+        var operation = new OpenApiOperation();
+
+        InvokeStatic("ApplyCsrfDocumentation", operation, path);
+
+        operation.Parameters.Should().ContainSingle(parameter =>
+            parameter.Name == CsrfConfiguration.CsrfHeaderName
+            && parameter.In == ParameterLocation.Header
+            && parameter.Required);
+    }
     [Fact]
     public void ApplySpecialHeaders_ShouldAddExpectedHeaders_ForPaymentAndApiAuthRoutes()
     {
@@ -285,3 +302,4 @@ public class OpenApiConfigurationTests
         await task;
     }
 }
+

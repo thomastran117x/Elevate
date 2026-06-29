@@ -100,6 +100,71 @@ public class TotpEndpointsTests
     }
 
     [Fact]
+    public async Task TotpEnableAndRemoveEndpoints_ShouldReenableAndDeleteConfiguredMethod()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var session = await app.SignUpAndVerifyByTokenAsync(
+            "totp-enable-remove@example.com",
+            transport: SessionTransportResolver.ApiValue);
+
+        var start = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/totp/enroll/start",
+            new { },
+            session.AccessToken);
+        var startBody = await app.ReadApiResponseAsync<TotpEnrollmentStartResponse>(start);
+
+        var verify = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/totp/enroll/verify",
+            new TotpEnrollmentVerifyRequest
+            {
+                Code = ComputeCode(startBody.Data!.SecretKey)
+            },
+            session.AccessToken);
+        verify.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var user = await app.FindUserByEmailAsync("totp-enable-remove@example.com");
+        await app.Cache.DeleteKeyAsync($"totp:lastused:{user!.Id}");
+
+        var disable = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/totp/disable",
+            new TotpDisableRequest
+            {
+                Code = ComputeCode(startBody.Data.SecretKey)
+            },
+            session.AccessToken);
+        disable.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        await app.Cache.DeleteKeyAsync($"totp:lastused:{user.Id}");
+        var enable = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/totp/enable",
+            new TotpDisableRequest
+            {
+                Code = ComputeCode(startBody.Data.SecretKey)
+            },
+            session.AccessToken);
+
+        enable.StatusCode.Should().Be(HttpStatusCode.OK);
+        var enableBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(enable);
+        enableBody.Data!.Totp.IsEnabled.Should().BeTrue();
+        enableBody.Data.Totp.DisabledAtUtc.Should().BeNull();
+
+        await app.Cache.DeleteKeyAsync($"totp:lastused:{user.Id}");
+        var remove = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/totp/remove",
+            new TotpDisableRequest
+            {
+                Code = ComputeCode(startBody.Data.SecretKey)
+            },
+            session.AccessToken);
+
+        remove.StatusCode.Should().Be(HttpStatusCode.OK);
+        var removeBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(remove);
+        removeBody.Data!.Totp.IsConfigured.Should().BeFalse();
+        removeBody.Data.Totp.IsEnabled.Should().BeFalse();
+        removeBody.Data.Totp.EnrolledAtUtc.Should().BeNull();
+        removeBody.Data.Totp.DisabledAtUtc.Should().BeNull();
+    }
+    [Fact]
     public async Task TotpStepUpEndpoints_ShouldOfferTotp_AndCompleteLogin()
     {
         using var scope = new TemporaryEnvironmentVariableScope(new Dictionary<string, string?>
@@ -203,3 +268,4 @@ public class TotpEndpointsTests
         }
     }
 }
+

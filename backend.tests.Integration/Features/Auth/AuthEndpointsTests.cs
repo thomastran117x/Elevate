@@ -634,6 +634,95 @@ public class AuthEndpointsTests
     }
 
     [Fact]
+    public async Task MfaSmsAliasRoutes_ShouldSupportEnableDisableAndRemoveFlows()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var session = await app.SignUpAndVerifyByTokenAsync("mfa-aliases@example.com", transport: SessionTransportResolver.ApiValue);
+
+        var aliasEnrollment = await EnrollSmsAsync(
+            app,
+            session.AccessToken,
+            "/api/auth/mfa/sms/enroll/start",
+            "/api/auth/mfa/sms/enroll/verify");
+        aliasEnrollment.Data!.Sms.IsEnabled.Should().BeTrue();
+
+        var aliasDisable = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/sms/disable",
+            new MfaDisableRequest(),
+            session.AccessToken);
+        aliasDisable.StatusCode.Should().Be(HttpStatusCode.OK);
+        var aliasDisableBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(aliasDisable);
+        aliasDisableBody.Data!.Sms.IsEnabled.Should().BeFalse();
+
+        var aliasEnableStart = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/sms/enable/start",
+            new { },
+            session.AccessToken);
+        aliasEnableStart.StatusCode.Should().Be(HttpStatusCode.OK);
+        var aliasEnableStartBody = await app.ReadApiResponseAsync<MfaChallengeResponse>(aliasEnableStart);
+        var aliasEnableSms = app.Publisher.SmsMessages.Last(message => message.Challenge == aliasEnableStartBody.Data!.Challenge);
+
+        var aliasEnableVerify = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/sms/enroll/verify",
+            new MfaEnrollmentVerifyRequest
+            {
+                Challenge = aliasEnableStartBody.Data!.Challenge,
+                Code = aliasEnableSms.Code
+            },
+            session.AccessToken);
+        aliasEnableVerify.StatusCode.Should().Be(HttpStatusCode.OK);
+        var aliasEnableBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(aliasEnableVerify);
+        aliasEnableBody.Data!.Sms.IsEnabled.Should().BeTrue();
+
+        var genericDisable = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/disable",
+            new MfaDisableRequest(),
+            session.AccessToken);
+        genericDisable.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var genericEnableStart = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/enable/start",
+            new { },
+            session.AccessToken);
+        genericEnableStart.StatusCode.Should().Be(HttpStatusCode.OK);
+        var genericEnableStartBody = await app.ReadApiResponseAsync<MfaChallengeResponse>(genericEnableStart);
+        var genericEnableSms = app.Publisher.SmsMessages.Last(message => message.Challenge == genericEnableStartBody.Data!.Challenge);
+
+        var genericEnableVerify = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/enroll/verify",
+            new MfaEnrollmentVerifyRequest
+            {
+                Challenge = genericEnableStartBody.Data!.Challenge,
+                Code = genericEnableSms.Code
+            },
+            session.AccessToken);
+        genericEnableVerify.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var genericRemove = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/remove",
+            new MfaDisableRequest(),
+            session.AccessToken);
+        genericRemove.StatusCode.Should().Be(HttpStatusCode.OK);
+        var genericRemoveBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(genericRemove);
+        genericRemoveBody.Data!.Sms.IsConfigured.Should().BeFalse();
+
+        await EnrollSmsAsync(
+            app,
+            session.AccessToken,
+            "/api/auth/mfa/enroll/start",
+            "/api/auth/mfa/enroll/verify");
+
+        var aliasRemove = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/sms/remove",
+            new MfaDisableRequest(),
+            session.AccessToken);
+        aliasRemove.StatusCode.Should().Be(HttpStatusCode.OK);
+        var aliasRemoveBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(aliasRemove);
+        aliasRemoveBody.Data!.Sms.IsConfigured.Should().BeFalse();
+        aliasRemoveBody.Data.Sms.IsEnabled.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task LoginStepUpEndpoints_ShouldSendSms_AndCompleteLogin()
     {
         var originalEnforcement = Environment.GetEnvironmentVariable("AUTH_SMS_MFA_ENFORCEMENT_ENABLED");
@@ -743,4 +832,37 @@ public class AuthEndpointsTests
 
         return request;
     }
+
+    private static async Task<AuthApiTestApp.ApiEnvelope<MfaSettingsResponse>> EnrollSmsAsync(
+        AuthApiTestApp app,
+        string accessToken,
+        string startPath,
+        string verifyPath,
+        string phoneNumber = "+14165550123")
+    {
+        var start = await app.PostJsonWithBearerAndCsrfAsync(
+            startPath,
+            new MfaEnrollmentStartRequest
+            {
+                PhoneNumber = phoneNumber
+            },
+            accessToken);
+        start.StatusCode.Should().Be(HttpStatusCode.OK);
+        var startBody = await app.ReadApiResponseAsync<MfaChallengeResponse>(start);
+        var sms = app.Publisher.SmsMessages.Last(message => message.Challenge == startBody.Data!.Challenge);
+
+        var verify = await app.PostJsonWithBearerAndCsrfAsync(
+            verifyPath,
+            new MfaEnrollmentVerifyRequest
+            {
+                Challenge = startBody.Data!.Challenge,
+                Code = sms.Code
+            },
+            accessToken);
+        verify.StatusCode.Should().Be(HttpStatusCode.OK);
+        return await app.ReadApiResponseAsync<MfaSettingsResponse>(verify);
+    }
 }
+
+
+
