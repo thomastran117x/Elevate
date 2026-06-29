@@ -65,5 +65,16 @@ namespace backend.main.features.auth.mfa
             await _context.SaveChangesAsync();
             return existing;
         }
+
+        public async Task<bool> RemoveAsync(int userId)
+        {
+            var existing = await _context.SmsMfaEnrollments.FindAsync(userId);
+            if (existing == null)
+                return false;
+
+            _context.SmsMfaEnrollments.Remove(existing);
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }

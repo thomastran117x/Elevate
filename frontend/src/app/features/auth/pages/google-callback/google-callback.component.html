@@ -56,6 +56,40 @@
         Go to Dashboard
       </a>
     </div>
+    <!-- Device Verification -->
+    <div *ngIf="status() === 'device'" class="space-y-6">
+      <div
+        class="mx-auto w-16 h-16 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="w-8 h-8"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M21.75 9v.906a2.25 2.25 0 01-1.068 1.916l-7.5 4.615a2.25 2.25 0 01-2.364 0l-7.5-4.615A2.25 2.25 0 012.25 9.906V9m19.5-3.75v-.75A2.25 2.25 0 0019.5 2.25h-15A2.25 2.25 0 002.25 4.5v.75m19.5 0l-8.69 5.347a2.25 2.25 0 01-2.36 0L2.25 5.25"
+          />
+        </svg>
+      </div>
+
+      <p class="text-lg font-semibold text-black dark:text-white">
+        {{ message() }}
+      </p>
+
+      <div class="flex justify-center gap-3 pt-2">
+        <a
+          routerLink="/auth/login"
+          class="px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-medium transition"
+        >
+          Back to Login
+        </a>
+      </div>
+    </div>
 
     <!-- Error -->
     <div *ngIf="status() === 'error'" class="space-y-6">

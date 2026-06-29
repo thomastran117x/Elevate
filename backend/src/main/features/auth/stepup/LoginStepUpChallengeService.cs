@@ -124,7 +124,7 @@ namespace backend.main.features.auth.stepup
                 EnsureMethodAllowed(state, normalizedMethod);
                 var now = DateTime.UtcNow;
 
-                // TOTP requires no delivery — return immediately with the existing challenge.
+                // TOTP requires no delivery â€” return immediately with the existing challenge.
                 if (normalizedMethod == TotpMethod)
                 {
                     return new StartLoginStepUpResponse
@@ -136,7 +136,7 @@ namespace backend.main.features.auth.stepup
                         CooldownEndsAtUtc = DateTime.MinValue,
                         AvailableMethods = GetAvailableMethods(state),
                         MaskedPhone = CanUseSms(state) ? PhoneNumberFormatter.Mask(state.PhoneNumber!) : null,
-                        MaskedEmail = MaskEmail(state.Email)
+                        MaskedEmail = PhoneNumberFormatter.MaskEmail(state.Email)
                     };
                 }
 
@@ -169,7 +169,7 @@ namespace backend.main.features.auth.stepup
                 {
                     emailToken = CreateRandomToken();
                     state.EmailTokenHash = CryptoHelper.HashToken(emailToken);
-                    maskedDestination = MaskEmail(state.Email);
+                    maskedDestination = PhoneNumberFormatter.MaskEmail(state.Email);
                 }
 
                 if (!await PersistStateAsync(state, previousChallengeHash, previousEmailTokenHash))
@@ -219,7 +219,7 @@ namespace backend.main.features.auth.stepup
                     CooldownEndsAtUtc = delivery.CooldownEndsAtUtc ?? now.Add(ResendCooldown),
                     AvailableMethods = GetAvailableMethods(state),
                     MaskedPhone = CanUseSms(state) ? PhoneNumberFormatter.Mask(state.PhoneNumber!) : null,
-                    MaskedEmail = MaskEmail(state.Email)
+                    MaskedEmail = PhoneNumberFormatter.MaskEmail(state.Email)
                 };
             }
             catch (Exception ex)
@@ -493,7 +493,7 @@ namespace backend.main.features.auth.stepup
                 ExpiresAtUtc = state.ExpiresAtUtc,
                 AvailableMethods = GetAvailableMethods(state),
                 MaskedPhone = CanUseSms(state) ? PhoneNumberFormatter.Mask(state.PhoneNumber!) : null,
-                MaskedEmail = MaskEmail(state.Email)
+                MaskedEmail = PhoneNumberFormatter.MaskEmail(state.Email)
             };
         }
 
@@ -544,20 +544,6 @@ namespace backend.main.features.auth.stepup
                 return "/dashboard";
 
             return trimmed;
-        }
-
-        private static string MaskEmail(string email)
-        {
-            var atIndex = email.IndexOf('@');
-            if (atIndex <= 0)
-                return "***";
-
-            var local = email[..atIndex];
-            var domain = email[atIndex..];
-            if (local.Length == 1)
-                return $"*{domain}";
-
-            return $"{local[0]}***{domain}";
         }
 
         private static string CreateRandomToken() => Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));

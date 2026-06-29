@@ -197,7 +197,7 @@ namespace backend.main.features.clubs.search
             try
             {
                 await _circuitBreaker.ExecuteAsync(
-                    () => client.DeleteAsync(IndexName, clubId),
+                    () => client.DeleteAsync<ClubDocument>(IndexName, clubId),
                     $"{IndexName} document deletion");
             }
             catch (Exception ex)

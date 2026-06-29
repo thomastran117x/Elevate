@@ -63,12 +63,25 @@ namespace backend.main.application.openapi
                     "Processes the emailed verification link for a new-device sign-in challenge and redirects to the frontend on success."
                 ),
                 ["POST /api/auth/device/verify"] = new("Complete email-based sign-in verification"),
-                ["POST /api/auth/mfa/start"] = new("Start sign-in verification delivery", "Chooses SMS or email for an active sign-in verification challenge, rotates the challenge token, and sends the delivery."),
+                ["POST /api/auth/mfa/start"] = new("Start sign-in verification delivery", "Chooses SMS, email, or authenticator verification for an active sign-in challenge, rotates the challenge token when needed, and starts the selected delivery flow."),
                 ["POST /api/auth/mfa/verify"] = new("Verify an SMS sign-in code", "Validates an SMS code for an active sign-in verification challenge and completes login on success."),
-                ["GET /api/auth/mfa"] = new("Get SMS MFA enrollment status"),
+                ["POST /api/auth/mfa/verify/totp"] = new("Verify an authenticator sign-in code", "Validates a TOTP code for an active sign-in verification challenge and completes login on success."),
+                ["GET /api/auth/mfa"] = new("Get MFA security settings"),
                 ["POST /api/auth/mfa/enroll/start"] = new("Start SMS MFA enrollment"),
-                ["POST /api/auth/mfa/enroll/verify"] = new("Verify an SMS MFA enrollment code"),
+                ["POST /api/auth/mfa/enroll/verify"] = new("Verify an SMS MFA enrollment or re-enable code"),
+                ["POST /api/auth/mfa/enable/start"] = new("Start SMS MFA re-enable"),
                 ["POST /api/auth/mfa/disable"] = new("Disable SMS MFA"),
+                ["POST /api/auth/mfa/remove"] = new("Remove SMS MFA"),
+                ["POST /api/auth/mfa/sms/enroll/start"] = new("Start SMS MFA enrollment"),
+                ["POST /api/auth/mfa/sms/enroll/verify"] = new("Verify an SMS MFA enrollment or re-enable code"),
+                ["POST /api/auth/mfa/sms/enable/start"] = new("Start SMS MFA re-enable"),
+                ["POST /api/auth/mfa/sms/disable"] = new("Disable SMS MFA"),
+                ["POST /api/auth/mfa/sms/remove"] = new("Remove SMS MFA"),
+                ["POST /api/auth/mfa/totp/enroll/start"] = new("Start authenticator app enrollment"),
+                ["POST /api/auth/mfa/totp/enroll/verify"] = new("Verify an authenticator enrollment code"),
+                ["POST /api/auth/mfa/totp/enable"] = new("Re-enable authenticator app MFA"),
+                ["POST /api/auth/mfa/totp/disable"] = new("Disable authenticator app MFA"),
+                ["POST /api/auth/mfa/totp/remove"] = new("Remove authenticator app MFA"),
                 ["POST /api/auth/forgot-password"] = new("Request a password reset email"),
                 ["POST /api/auth/change-password"] = new("Reset the account password"),
 
@@ -225,4 +238,5 @@ namespace backend.main.application.openapi
 
     internal readonly record struct OperationMeta(string Summary, string? Description = null);
 }
+
 

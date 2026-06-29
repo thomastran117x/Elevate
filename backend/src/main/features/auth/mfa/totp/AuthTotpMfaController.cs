@@ -1,9 +1,8 @@
-using backend.main.application.environment;
 using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
-using backend.main.features.auth.mfa.totp;
+using backend.main.features.auth.mfa;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.responses;
 using backend.main.shared.utilities.logger;
@@ -21,15 +20,15 @@ namespace backend.main.features.auth.mfa.totp
     public sealed class AuthTotpMfaController : ControllerBase
     {
         private readonly ITotpMfaEnrollmentService _totpService;
-        private readonly IMfaEnrollmentService _smsService;
+        private readonly IMfaSettingsBuilder _settingsBuilder;
 
         public AuthTotpMfaController(
             ITotpMfaEnrollmentService totpService,
-            IMfaEnrollmentService smsService
+            IMfaSettingsBuilder settingsBuilder
         )
         {
             _totpService = totpService;
-            _smsService = smsService;
+            _settingsBuilder = settingsBuilder;
         }
 
         [HttpPost("enroll/start")]
@@ -57,17 +56,16 @@ namespace backend.main.features.auth.mfa.totp
         }
 
         [HttpPost("enroll/verify")]
-        [ProducesResponseType(typeof(ApiResponse<MfaStatusResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> VerifyEnrollment([FromBody] TotpEnrollmentVerifyRequest request)
         {
             try
             {
                 var user = User.GetUserPayload();
-                var totpEnrollment = await _totpService.VerifyEnrollmentAsync(user.Id, request.Code);
-                var smsStatus = await _smsService.GetStatusAsync(user.Id);
-                var combined = BuildCombinedStatus(smsStatus, totpEnrollment);
+                await _totpService.VerifyEnrollmentAsync(user.Id, request.Code);
+                var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
 
-                return Ok(new ApiResponse<MfaStatusResponse>("TOTP MFA has been enabled.", combined));
+                return Ok(new ApiResponse<MfaSettingsResponse>("TOTP MFA has been enabled.", settings));
             }
             catch (Exception ex)
             {
@@ -79,18 +77,39 @@ namespace backend.main.features.auth.mfa.totp
             }
         }
 
+        [HttpPost("enable")]
+        [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> Enable([FromBody] TotpDisableRequest request)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+                await _totpService.EnableAsync(user.Id, request.Code);
+                var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
+
+                return Ok(new ApiResponse<MfaSettingsResponse>("TOTP MFA has been enabled.", settings));
+            }
+            catch (Exception ex)
+            {
+                if (ex is AppException)
+                    return HandleError.Resolve(ex);
+
+                Logger.Error($"[AuthTotpMfaController] Enable failed: {ex}");
+                return HandleError.Resolve(ex);
+            }
+        }
+
         [HttpPost("disable")]
-        [ProducesResponseType(typeof(ApiResponse<MfaStatusResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> Disable([FromBody] TotpDisableRequest request)
         {
             try
             {
                 var user = User.GetUserPayload();
-                var totpEnrollment = await _totpService.DisableAsync(user.Id, request.Code);
-                var smsStatus = await _smsService.GetStatusAsync(user.Id);
-                var combined = BuildCombinedStatus(smsStatus, totpEnrollment);
+                await _totpService.DisableAsync(user.Id, request.Code);
+                var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
 
-                return Ok(new ApiResponse<MfaStatusResponse>("TOTP MFA has been disabled.", combined));
+                return Ok(new ApiResponse<MfaSettingsResponse>("TOTP MFA has been disabled.", settings));
             }
             catch (Exception ex)
             {
@@ -102,21 +121,28 @@ namespace backend.main.features.auth.mfa.totp
             }
         }
 
-        private static MfaStatusResponse BuildCombinedStatus(
-            MfaStatusResponse smsStatus,
-            TotpMfaEnrollment? totpEnrollment
-        )
+        [HttpPost("remove")]
+        [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> Remove([FromBody] TotpDisableRequest request)
         {
-            return new MfaStatusResponse
+            try
             {
-                SmsEnrollmentAvailable = smsStatus.SmsEnrollmentAvailable,
-                IsSmsMfaEnabled = smsStatus.IsSmsMfaEnabled,
-                MaskedPhoneNumber = smsStatus.MaskedPhoneNumber,
-                PhoneVerifiedAtUtc = smsStatus.PhoneVerifiedAtUtc,
-                TotpEnrollmentAvailable = EnvironmentSetting.AuthTotpMfaEnrollmentEnabled,
-                IsTotpMfaEnabled = totpEnrollment?.IsTotpMfaEnabled ?? false,
-                TotpEnrolledAtUtc = totpEnrollment?.EnrolledAtUtc,
-            };
+                var user = User.GetUserPayload();
+                await _totpService.RemoveAsync(user.Id, request.Code);
+                var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
+
+                return Ok(new ApiResponse<MfaSettingsResponse>("TOTP MFA has been removed.", settings));
+            }
+            catch (Exception ex)
+            {
+                if (ex is AppException)
+                    return HandleError.Resolve(ex);
+
+                Logger.Error($"[AuthTotpMfaController] Remove failed: {ex}");
+                return HandleError.Resolve(ex);
+            }
         }
     }
 }
+
+

@@ -1,14 +1,14 @@
 <div class="device-shell">
   <div class="device-card">
-    <p class="device-eyebrow">New Device Confirmation</p>
-    <h1>Confirm this sign-in</h1>
+    <p class="device-eyebrow">Device Sign-In Approval</p>
+    <h1>Finish signing in</h1>
     <p class="device-copy">{{ message() }}</p>
 
     <div *ngIf="status() === 'loading'" class="device-spinner" aria-hidden="true"></div>
 
     <div *ngIf="status() === 'ready'" class="device-actions">
       <button type="button" class="device-primary" (click)="confirm()" [disabled]="!hasToken">
-        Verify Device
+        Continue Sign-In
       </button>
       <a routerLink="/auth/login" class="device-secondary">Back to login</a>
     </div>

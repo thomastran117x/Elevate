@@ -532,13 +532,12 @@ namespace backend.main.features.auth
 
             return Ok(
                 new MessageResponse(
-                    "Device verification requires confirmation from the frontend. Open the verification link in the app and confirm to complete device verification."
+                    "Open the verification link on the device you want to use and the frontend will finish signing you in automatically."
                 )
             );
         }
 
         [HttpPost("device/verify")]
-        [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> VerifyDevice([FromBody] VerificationTokenRequest request)
@@ -826,3 +825,6 @@ namespace backend.main.features.auth
         }
     }
 }
+
+
+

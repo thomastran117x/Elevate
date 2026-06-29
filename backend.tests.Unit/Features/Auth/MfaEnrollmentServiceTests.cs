@@ -36,6 +36,47 @@ public class MfaEnrollmentServiceTests
     }
 
     [Fact]
+    public async Task StartEnableAsync_ShouldThrowConflict_WhenSmsIsNotConfigured()
+    {
+        using var scope = new EnvironmentVariableScope();
+        var repository = new Mock<IMfaEnrollmentRepository>();
+        repository.Setup(repo => repo.GetByUserIdAsync(12)).ReturnsAsync((SmsMfaEnrollment?)null);
+        var service = new MfaEnrollmentService(repository.Object, new InMemoryCacheService(), Mock.Of<IAuthNotificationService>());
+
+        var act = () => service.StartEnableAsync(12);
+
+        await act.Should().ThrowAsync<ConflictException>()
+            .WithMessage("SMS MFA is not configured for this account.");
+    }
+
+    [Fact]
+    public async Task StartEnableAsync_ShouldReuseStoredPhone_WhenSmsIsDisabled()
+    {
+        using var scope = new EnvironmentVariableScope();
+        var repository = new Mock<IMfaEnrollmentRepository>();
+        var notifications = new Mock<IAuthNotificationService>();
+        repository.Setup(repo => repo.GetByUserIdAsync(12)).ReturnsAsync(new SmsMfaEnrollment
+        {
+            UserId = 12,
+            PhoneNumber = "+14165550123",
+            IsSmsMfaEnabled = false,
+            PhoneVerifiedAtUtc = new DateTime(2026, 6, 22, 15, 0, 0, DateTimeKind.Utc),
+        });
+
+        var service = new MfaEnrollmentService(repository.Object, new InMemoryCacheService(), notifications.Object);
+
+        var response = await service.StartEnableAsync(12);
+
+        response.MaskedDestination.Should().Be("***-***-0123");
+        notifications.Verify(notification => notification.SendSmsMfaAsync(
+            "+14165550123",
+            It.Is<string>(code => code.Length == 6),
+            response.Challenge,
+            response.ExpiresAtUtc,
+            "mfa re-enable"), Times.Once);
+    }
+
+    [Fact]
     public async Task VerifyEnrollmentAsync_ShouldEnableSmsMfa_WhenCodeMatchesPendingChallenge()
     {
         using var scope = new EnvironmentVariableScope();
@@ -64,78 +105,115 @@ public class MfaEnrollmentServiceTests
         var sendInvocation = notifications.Invocations.Single();
         var smsCode = sendInvocation.Arguments[1].Should().BeOfType<string>().Subject;
 
-        var status = await service.VerifyEnrollmentAsync(12, smsCode, challenge.Challenge);
+        var enrollment = await service.VerifyEnrollmentAsync(12, smsCode, challenge.Challenge);
 
-        status.IsSmsMfaEnabled.Should().BeTrue();
-        status.MaskedPhoneNumber.Should().Be("***-***-0123");
+        enrollment.IsSmsMfaEnabled.Should().BeTrue();
+        enrollment.PhoneNumber.Should().Be("+14165550123");
         savedEnrollment.Should().NotBeNull();
         savedEnrollment!.PhoneVerifiedAtUtc.Should().NotBeNull();
         (await cache.GetValueAsync($"mfa:enrollment:challenge:{challenge.Challenge}")).Should().BeNull();
     }
 
     [Fact]
-    public async Task VerifyEnrollmentAsync_ShouldRejectInvalidCodes()
+    public async Task VerifyEnrollmentAsync_ShouldPreserveVerifiedAt_WhenReEnablingExistingPhone()
     {
         using var scope = new EnvironmentVariableScope();
         var repository = new Mock<IMfaEnrollmentRepository>();
         var notifications = new Mock<IAuthNotificationService>();
         var cache = new InMemoryCacheService();
+        var verifiedAtUtc = new DateTime(2026, 6, 22, 15, 0, 0, DateTimeKind.Utc);
+
+        repository.Setup(repo => repo.GetByUserIdAsync(12)).ReturnsAsync(new SmsMfaEnrollment
+        {
+            UserId = 12,
+            PhoneNumber = "+14165550123",
+            IsSmsMfaEnabled = false,
+            PhoneVerifiedAtUtc = verifiedAtUtc,
+        });
+        repository.Setup(repo => repo.UpsertVerifiedPhoneAsync(12, "+14165550123", verifiedAtUtc))
+            .ReturnsAsync(new SmsMfaEnrollment
+            {
+                UserId = 12,
+                PhoneNumber = "+14165550123",
+                IsSmsMfaEnabled = true,
+                PhoneVerifiedAtUtc = verifiedAtUtc,
+            });
+
         var service = new MfaEnrollmentService(repository.Object, cache, notifications.Object);
-        var challenge = await service.StartEnrollmentAsync(12, "+14165550123");
+        var challenge = await service.StartEnableAsync(12);
+        var sendInvocation = notifications.Invocations.Single();
+        var smsCode = sendInvocation.Arguments[1].Should().BeOfType<string>().Subject;
 
-        var act = () => service.VerifyEnrollmentAsync(12, "000000", challenge.Challenge);
+        var enrollment = await service.VerifyEnrollmentAsync(12, smsCode, challenge.Challenge);
 
-        await act.Should().ThrowAsync<UnauthorizedException>()
-            .WithMessage("Invalid or expired MFA enrollment code.");
-        repository.Verify(repo => repo.UpsertVerifiedPhoneAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<DateTime>()), Times.Never);
+        enrollment.PhoneVerifiedAtUtc.Should().Be(verifiedAtUtc);
+        repository.Verify(repo => repo.UpsertVerifiedPhoneAsync(12, "+14165550123", verifiedAtUtc), Times.Once);
     }
 
     [Fact]
-    public async Task VerifyEnrollmentAsync_ShouldClearPendingChallenge_AfterFiveFailedAttempts()
+    public async Task VerifyEnrollmentAsync_ShouldClearPendingState_AfterFiveFailedAttempts()
     {
         using var scope = new EnvironmentVariableScope();
         var repository = new Mock<IMfaEnrollmentRepository>();
         var notifications = new Mock<IAuthNotificationService>();
         var cache = new InMemoryCacheService();
         var service = new MfaEnrollmentService(repository.Object, cache, notifications.Object);
-        var challenge = await service.StartEnrollmentAsync(12, "+14165550123");
 
-        for (var attempt = 0; attempt < 5; attempt++)
+        var challenge = await service.StartEnrollmentAsync(12, "+14165550123");
+        var sendInvocation = notifications.Invocations.Single();
+        var validCode = sendInvocation.Arguments[1].Should().BeOfType<string>().Subject;
+        var invalidCode = validCode == "000000" ? "111111" : "000000";
+
+        for (var attempt = 1; attempt <= 5; attempt++)
         {
-            var wrongCode = () => service.VerifyEnrollmentAsync(12, "000000", challenge.Challenge);
-            await wrongCode.Should().ThrowAsync<UnauthorizedException>();
+            var act = () => service.VerifyEnrollmentAsync(12, invalidCode, challenge.Challenge);
+            await act.Should().ThrowAsync<UnauthorizedException>()
+                .WithMessage("Invalid or expired MFA enrollment code.");
         }
 
-        var missingChallenge = () => service.VerifyEnrollmentAsync(12, "000000", challenge.Challenge);
-        await missingChallenge.Should().ThrowAsync<UnauthorizedException>()
-            .WithMessage("Invalid or expired MFA enrollment challenge.");
+        (await cache.GetValueAsync($"mfa:enrollment:challenge:{challenge.Challenge}")).Should().BeNull();
+        (await cache.GetValueAsync("mfa:enrollment:user:12")).Should().BeNull();
     }
-
     [Fact]
-    public async Task DisableAsync_ShouldKeepVerifiedPhone_WhileTurningMfaOff()
+    public async Task DisableAsync_ShouldThrowConflict_WhenSmsIsAlreadyDisabled()
     {
         using var scope = new EnvironmentVariableScope();
         var repository = new Mock<IMfaEnrollmentRepository>();
-        var notifications = new Mock<IAuthNotificationService>();
-        var cache = new InMemoryCacheService();
-        var disabledEnrollment = new SmsMfaEnrollment
+        repository.Setup(repo => repo.GetByUserIdAsync(12)).ReturnsAsync(new SmsMfaEnrollment
         {
             UserId = 12,
             PhoneNumber = "+14165550123",
             IsSmsMfaEnabled = false,
             PhoneVerifiedAtUtc = new DateTime(2026, 6, 22, 15, 0, 0, DateTimeKind.Utc),
-            CreatedAt = new DateTime(2026, 6, 22, 14, 0, 0, DateTimeKind.Utc),
-            UpdatedAt = new DateTime(2026, 6, 22, 15, 5, 0, DateTimeKind.Utc),
-        };
-        repository.Setup(repo => repo.SetEnabledAsync(12, false)).ReturnsAsync(disabledEnrollment);
+        });
 
-        var service = new MfaEnrollmentService(repository.Object, cache, notifications.Object);
+        var service = new MfaEnrollmentService(repository.Object, new InMemoryCacheService(), Mock.Of<IAuthNotificationService>());
 
-        var status = await service.DisableAsync(12);
+        var act = () => service.DisableAsync(12);
 
-        status.IsSmsMfaEnabled.Should().BeFalse();
-        status.MaskedPhoneNumber.Should().Be("***-***-0123");
-        status.PhoneVerifiedAtUtc.Should().Be(disabledEnrollment.PhoneVerifiedAtUtc);
+        await act.Should().ThrowAsync<ConflictException>()
+            .WithMessage("SMS MFA is already disabled for this account.");
+    }
+
+    [Fact]
+    public async Task RemoveAsync_ShouldDeleteStoredEnrollment_WhenSmsIsConfigured()
+    {
+        using var scope = new EnvironmentVariableScope();
+        var repository = new Mock<IMfaEnrollmentRepository>();
+        repository.Setup(repo => repo.GetByUserIdAsync(12)).ReturnsAsync(new SmsMfaEnrollment
+        {
+            UserId = 12,
+            PhoneNumber = "+14165550123",
+            IsSmsMfaEnabled = true,
+            PhoneVerifiedAtUtc = new DateTime(2026, 6, 22, 15, 0, 0, DateTimeKind.Utc),
+        });
+        repository.Setup(repo => repo.RemoveAsync(12)).ReturnsAsync(true);
+
+        var service = new MfaEnrollmentService(repository.Object, new InMemoryCacheService(), Mock.Of<IAuthNotificationService>());
+
+        await service.RemoveAsync(12);
+
+        repository.Verify(repo => repo.RemoveAsync(12), Times.Once);
     }
 
     private sealed class EnvironmentVariableScope : IDisposable

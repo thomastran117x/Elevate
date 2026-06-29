@@ -70,5 +70,16 @@ namespace backend.main.features.auth.mfa.totp
             await _context.SaveChangesAsync();
             return existing;
         }
+
+        public async Task<bool> RemoveAsync(int userId)
+        {
+            var existing = await _context.TotpMfaEnrollments.FindAsync(userId);
+            if (existing == null)
+                return false;
+
+            _context.TotpMfaEnrollments.Remove(existing);
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }

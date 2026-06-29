@@ -1,7 +1,6 @@
 using backend.main.shared.utilities.logger;
 using backend.main.utilities;
 
-using DotNetEnv;
 
 namespace backend.main.application.environment
 {
@@ -196,30 +195,8 @@ namespace backend.main.application.environment
             }
 
             var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            var dir = new DirectoryInfo(baseDir);
-
-            while (dir != null)
-            {
-                var envPath = Path.Combine(dir.FullName, ".env");
-
-                if (File.Exists(envPath))
-                {
-                    try
-                    {
-                        Env.Load(envPath);
-                        Logger.Info($".env file loaded from: {envPath}");
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Warn(ex, $"Failed to load .env file at {envPath}");
-                    }
-                    return;
-                }
-
-                dir = dir.Parent;
-            }
-
-            Logger.Debug("No .env file found in directory hierarchy; using system environment variables.");
+            if (!EnvFileLoader.LoadNearestAndParentEnvFiles(baseDir))
+                Logger.Debug("No .env file found in directory hierarchy; using system environment variables.");
         }
 
         private static string? GetOptional(params string[] keys)
@@ -375,6 +352,9 @@ namespace backend.main.application.environment
         }
     }
 }
+
+
+
 
 
 

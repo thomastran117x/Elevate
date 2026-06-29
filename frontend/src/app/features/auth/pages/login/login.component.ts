@@ -5,7 +5,12 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { finalize } from 'rxjs/operators';
 
 import { environment } from '@environments/environment';
-import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
+import {
+  DEVICE_VERIFICATION_REQUIRED_ERROR_CODE,
+  DEVICE_VERIFICATION_REQUIRED_MESSAGE,
+  getApiClientMessage,
+  isApiClientErrorCode,
+} from '../../../../core/api/models/api-client-error.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import { GoogleButtonComponent } from '../../components/google-button/google-button.component';
 import { MicrosoftButtonComponent } from '../../components/microsoft-button/microsoft-button.component';
@@ -30,6 +35,7 @@ export class LoginComponent {
   form!: FormGroup;
   loading = false;
   error = '';
+  notice = '';
   showPw = false;
   submitted = false;
   siteKey = environment.googleSiteKey;
@@ -62,6 +68,9 @@ export class LoginComponent {
     if (this.form.invalid) return;
 
     this.loading = true;
+    this.error = '';
+    this.notice = '';
+
     try {
       const token = await this.recaptcha.execute(this.siteKey, 'login');
       const payload = {
@@ -90,11 +99,21 @@ export class LoginComponent {
               this.error = getApiClientMessage(err, 'Login failed.');
             }
           },
-          error: (err) => (this.error = getApiClientMessage(err, 'Login failed.')),
+          error: (err) => {
+            if (isApiClientErrorCode(err, DEVICE_VERIFICATION_REQUIRED_ERROR_CODE)) {
+              this.notice = DEVICE_VERIFICATION_REQUIRED_MESSAGE;
+              this.error = '';
+              return;
+            }
+
+            this.notice = '';
+            this.error = getApiClientMessage(err, 'Login failed.');
+          },
         });
     } catch (e: any) {
       this.loading = false;
       this.error = e?.message || 'Captcha failed to initialize.';
+      this.notice = '';
     }
   }
 }

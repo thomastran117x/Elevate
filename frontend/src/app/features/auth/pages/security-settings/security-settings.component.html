@@ -1,211 +1,587 @@
-<section
-  class="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),_transparent_45%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_100%)] text-slate-900"
+<div
+  class="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#0b0822] via-[#160f3d] to-[#24135f] text-white"
 >
-  <div class="mx-auto flex max-w-4xl flex-col gap-8 px-6 py-14">
-    <div class="space-y-3">
-      <p class="text-sm font-semibold uppercase tracking-[0.28em] text-sky-700">Account Security</p>
-      <h1 class="text-4xl font-black tracking-tight text-slate-950">SMS MFA settings</h1>
-      <p class="max-w-2xl text-base leading-7 text-slate-600">
-        Enroll a phone number now so your account is ready for the MFA rollout before sign-in
-        enforcement begins.
+  <!-- Ambient blobs -->
+  <div class="pointer-events-none absolute inset-0">
+    <div
+      class="absolute -left-40 -top-40 h-[520px] w-[520px] animate-pulse rounded-full bg-purple-600/20 blur-3xl"
+    ></div>
+    <div
+      class="absolute -right-40 top-60 h-[420px] w-[420px] animate-pulse rounded-full bg-fuchsia-600/20 blur-3xl"
+    ></div>
+    <div
+      class="absolute bottom-0 left-1/2 h-[400px] w-[600px] -translate-x-1/2 rounded-full bg-indigo-600/15 blur-3xl"
+    ></div>
+  </div>
+
+  <div class="relative z-10 mx-auto max-w-5xl px-6 py-14">
+    <!-- Page header -->
+    <div class="mb-10 space-y-3">
+      <p class="text-sm font-semibold uppercase tracking-[0.28em] text-purple-300">
+        Account Security
+      </p>
+      <h1 class="text-4xl font-black tracking-tight">Multi-factor authentication</h1>
+      <p class="max-w-3xl text-base leading-7 text-white/60">
+        Manage the sign-in methods available on your account. Email always stays available as your
+        fallback verification method.
       </p>
     </div>
 
-    <div
-      class="rounded-[2rem] border border-slate-200 bg-white/90 p-8 shadow-[0_30px_80px_rgba(15,23,42,0.08)] backdrop-blur"
-    >
-      <ng-container *ngIf="loading; else loadedState">
+    <!-- Loading -->
+    <ng-container *ngIf="loading; else loadedState">
+      <div
+        class="rounded-2xl border border-white/10 bg-white/5 px-6 py-10 text-center text-sm text-white/40"
+      >
+        Loading your MFA settings...
+      </div>
+    </ng-container>
+
+    <ng-template #loadedState>
+      <div class="flex flex-col gap-6">
+        <!-- Flash messages -->
         <div
-          class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-sm text-slate-500"
+          *ngIf="success"
+          class="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-300"
         >
-          Loading your MFA settings...
+          {{ success }}
         </div>
-      </ng-container>
+        <div
+          *ngIf="error"
+          class="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-300"
+        >
+          {{ error }}
+        </div>
 
-      <ng-template #loadedState>
-        <div class="flex flex-col gap-6">
-          <div
-            class="flex flex-col gap-4 rounded-3xl bg-slate-950 px-6 py-6 text-white md:flex-row md:items-center md:justify-between"
-          >
-            <div class="space-y-2">
-              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-200">
-                SMS MFA status
-              </p>
-              <h2 class="text-2xl font-bold">{{ isEnabled ? 'Enabled' : 'Not enabled yet' }}</h2>
-              <p class="max-w-xl text-sm leading-6 text-slate-300">
-                {{
-                  maskedPhoneNumber
-                    ? 'Verified number on file: ' + maskedPhoneNumber
-                    : 'No MFA phone has been verified for this account yet.'
-                }}
-              </p>
-            </div>
-
-            <div
-              class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold"
-              [ngClass]="{
-                'bg-emerald-400/15 text-emerald-200': isEnabled,
-                'bg-amber-300/15 text-amber-100': !isEnabled,
-              }"
-            >
-              {{ isEnabled ? 'Protected' : 'Enrollment open' }}
-            </div>
-          </div>
-
-          <div
-            *ngIf="verifiedAtLabel"
-            class="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600"
-          >
-            Verified on {{ verifiedAtLabel }}
-          </div>
-
-          <div
-            *ngIf="success"
-            class="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-700"
-          >
-            {{ success }}
-          </div>
-
-          <div
-            *ngIf="error"
-            class="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700"
-          >
-            {{ error }}
-          </div>
-
-          <div
-            *ngIf="status && !status.EnrollmentAvailable"
-            class="rounded-3xl border border-slate-200 bg-slate-50 px-6 py-6 text-sm leading-6 text-slate-600"
-          >
-            SMS MFA enrollment is currently unavailable in this environment.
-          </div>
-
-          <ng-container *ngIf="status?.EnrollmentAvailable">
-            <div
-              *ngIf="!isVerificationStep"
-              class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end"
-            >
-              <form class="space-y-4" [formGroup]="phoneForm" (ngSubmit)="startEnrollment()">
-                <div class="space-y-2">
-                  <label class="text-sm font-semibold text-slate-800" for="phone-number"
-                    >Mobile phone number</label
+        <div class="grid gap-5 lg:grid-cols-3">
+          <!-- ── Email: always-on ───────────────────────────────────── -->
+          <article class="rounded-3xl border border-white/10 bg-white/5 px-6 py-6 backdrop-blur-xl">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <div
+                  class="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-500/20 text-purple-300"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    viewBox="0 0 24 24"
                   >
-                  <input
-                    id="phone-number"
-                    type="tel"
-                    formControlName="phoneNumber"
-                    autocomplete="tel"
-                    placeholder="+1 416 555 0123"
-                    class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
-                  />
-                  <p class="text-sm leading-6 text-slate-500">
-                    Enter the number you want to use for security codes. Starting enrollment again
-                    will replace any pending code.
-                  </p>
-                  <p
-                    *ngIf="
-                      phoneForm.controls.phoneNumber.invalid &&
-                      phoneForm.controls.phoneNumber.touched
-                    "
-                    class="text-sm text-rose-600"
-                  >
-                    A phone number is required.
-                  </p>
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M21.75 9v.906a2.25 2.25 0 01-1.068 1.916l-7.5 4.615a2.25 2.25 0 01-2.364 0l-7.5-4.615A2.25 2.25 0 012.25 9.906V9m19.5-3.75v-.75A2.25 2.25 0 0019.5 2.25h-15A2.25 2.25 0 002.25 4.5v.75m19.5 0l-8.69 5.347a2.25 2.25 0 01-2.36 0L2.25 5.25"
+                    />
+                  </svg>
                 </div>
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">
+                  Email
+                </p>
+                <h2 class="mt-2 text-2xl font-bold">Always on</h2>
+              </div>
+              <span
+                class="rounded-full bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-300"
+              >
+                Fallback
+              </span>
+            </div>
+            <p class="mt-4 text-sm leading-6 text-white/60">
+              Verification email: {{ emailSettings?.maskedEmail }}
+            </p>
+            <p class="mt-3 text-sm leading-6 text-white/40">
+              This method cannot be removed and stays available even if SMS and authenticator app
+              MFA are turned off.
+            </p>
+          </article>
 
+          <!-- ── SMS ───────────────────────────────────────────────── -->
+          <article
+            class="rounded-3xl border border-white/10 bg-white/5 px-6 py-6 backdrop-blur-xl lg:col-span-2"
+          >
+            <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <div
+                  class="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-500/20 text-purple-300"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3"
+                    />
+                  </svg>
+                </div>
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">SMS</p>
+                <h2 class="mt-2 text-2xl font-bold">
+                  {{
+                    smsSettings?.isEnabled
+                      ? 'Enabled'
+                      : smsSettings?.isConfigured
+                        ? 'Configured, but off'
+                        : 'Not configured'
+                  }}
+                </h2>
+                <p class="mt-3 text-sm leading-6 text-white/60">
+                  {{
+                    smsSettings?.maskedPhoneNumber
+                      ? 'Verified phone on file: ' + smsSettings!.maskedPhoneNumber
+                      : 'Add a verified mobile number to receive sign-in codes by text message.'
+                  }}
+                </p>
+              </div>
+              <span
+                class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold"
+                [ngClass]="{
+                  'bg-emerald-500/15 text-emerald-300': smsSettings?.isEnabled,
+                  'bg-amber-500/15 text-amber-300': !smsSettings?.isEnabled,
+                }"
+              >
+                {{ smsSettings?.isEnabled ? 'Protected' : 'Available' }}
+              </span>
+            </div>
+
+            <div
+              *ngIf="smsVerifiedAtLabel"
+              class="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/50"
+            >
+              Verified on {{ smsVerifiedAtLabel }}
+            </div>
+
+            <div
+              *ngIf="smsSettings && !smsSettings.enrollmentAvailable"
+              class="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/50"
+            >
+              SMS MFA enrollment is unavailable in this environment.
+            </div>
+
+            <!-- Phone setup form -->
+            <form
+              *ngIf="smsEditorOpen"
+              class="mt-5 space-y-4 rounded-3xl border border-purple-500/30 bg-purple-500/10 px-5 py-5"
+              [formGroup]="phoneForm"
+              (ngSubmit)="startSmsEnrollment()"
+            >
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">
+                  Phone setup
+                </p>
+                <h3 class="mt-2 text-xl font-bold">
+                  {{ smsSettings?.isConfigured ? 'Change your phone number' : 'Set up SMS MFA' }}
+                </h3>
+                <p class="mt-2 text-sm leading-6 text-white/60">
+                  Your stored phone number will only be replaced after the new number is verified.
+                </p>
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-semibold text-white/80" for="phone-number"
+                  >Mobile phone number</label
+                >
+                <input
+                  id="phone-number"
+                  type="tel"
+                  formControlName="phoneNumber"
+                  autocomplete="tel"
+                  placeholder="+1 416 555 0123"
+                  class="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-base text-white placeholder-white/30 outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
+                />
+                <p
+                  *ngIf="
+                    phoneForm.controls.phoneNumber.invalid && phoneForm.controls.phoneNumber.touched
+                  "
+                  class="text-sm text-rose-400"
+                >
+                  A phone number is required.
+                </p>
+              </div>
+              <div class="flex flex-col gap-3 sm:flex-row">
                 <button
                   type="submit"
-                  [disabled]="submittingPhone"
-                  class="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  [disabled]="smsSubmitting"
+                  class="inline-flex items-center justify-center rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {{
-                    submittingPhone
-                      ? 'Sending code...'
-                      : maskedPhoneNumber
-                        ? 'Verify a phone number'
-                        : 'Send verification code'
-                  }}
+                  {{ smsSubmitting ? 'Sending code...' : 'Send verification code' }}
                 </button>
-              </form>
-
-              <div
-                *ngIf="isEnabled"
-                class="rounded-3xl border border-rose-200 bg-rose-50 px-5 py-5 text-sm leading-6 text-rose-700 lg:max-w-xs"
-              >
-                <p class="font-semibold text-rose-800">Need to turn MFA off?</p>
-                <p class="mt-2">
-                  Disabling SMS MFA keeps your verified number on file, but sign-in enforcement is
-                  not active yet.
-                </p>
                 <button
                   type="button"
-                  (click)="disableMfa()"
-                  [disabled]="disabling"
-                  class="mt-4 inline-flex items-center justify-center rounded-2xl border border-rose-300 px-4 py-2 font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  (click)="cancelSmsEditor()"
+                  class="inline-flex items-center justify-center rounded-2xl border border-white/20 px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10"
                 >
-                  {{ disabling ? 'Disabling...' : 'Disable SMS MFA' }}
+                  Cancel
                 </button>
               </div>
-            </div>
+            </form>
 
+            <!-- SMS verification form -->
             <form
-              *ngIf="isVerificationStep"
-              class="space-y-5 rounded-3xl border border-sky-200 bg-sky-50 px-6 py-6"
-              [formGroup]="codeForm"
-              (ngSubmit)="verifyEnrollment()"
+              *ngIf="isSmsVerificationStep"
+              class="mt-5 space-y-4 rounded-3xl border border-purple-500/30 bg-purple-500/10 px-5 py-5"
+              [formGroup]="smsCodeForm"
+              (ngSubmit)="verifySmsChallenge()"
             >
-              <div class="space-y-2">
-                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
-                  Verify code
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">
+                  Verify SMS
                 </p>
-                <h3 class="text-2xl font-bold text-slate-950">Enter the 6-digit code</h3>
-                <p class="text-sm leading-6 text-slate-600">
-                  We sent a code to {{ challenge?.MaskedDestination }} by {{ challenge?.Channel }}.
-                  This challenge expires at {{ challenge?.ExpiresAtUtc | date: 'medium' }}.
+                <h3 class="mt-2 text-xl font-bold">
+                  {{ smsFlow === 'enable' ? 'Re-enable SMS MFA' : 'Verify your phone number' }}
+                </h3>
+                <p class="mt-2 text-sm leading-6 text-white/60">
+                  Enter the 6-digit code sent to {{ smsChallenge?.MaskedDestination }}. This
+                  challenge expires at {{ smsChallenge?.ExpiresAtUtc | date: 'medium' }}.
                 </p>
               </div>
-
               <div class="space-y-2">
-                <label class="text-sm font-semibold text-slate-800" for="mfa-code"
+                <label class="text-sm font-semibold text-white/80" for="sms-code"
                   >Verification code</label
                 >
                 <input
-                  id="mfa-code"
+                  id="sms-code"
                   type="text"
                   inputmode="numeric"
                   maxlength="6"
                   formControlName="code"
                   placeholder="123456"
-                  class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base tracking-[0.35em] text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                  class="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-base tracking-[0.35em] text-white placeholder-white/30 outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
                 />
                 <p
-                  *ngIf="codeForm.controls.code.invalid && codeForm.controls.code.touched"
-                  class="text-sm text-rose-600"
+                  *ngIf="smsCodeForm.controls.code.invalid && smsCodeForm.controls.code.touched"
+                  class="text-sm text-rose-400"
                 >
                   Enter the 6-digit code from your text message.
                 </p>
               </div>
-
               <div class="flex flex-col gap-3 sm:flex-row">
                 <button
                   type="submit"
-                  [disabled]="verifying"
-                  class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  [disabled]="smsVerifying"
+                  class="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {{ verifying ? 'Verifying...' : 'Verify and enable MFA' }}
+                  {{ smsVerifying ? 'Verifying...' : 'Verify code' }}
                 </button>
                 <button
                   type="button"
-                  (click)="returnToPhoneStep()"
-                  class="inline-flex items-center justify-center rounded-2xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-white"
+                  (click)="cancelSmsChallenge()"
+                  class="inline-flex items-center justify-center rounded-2xl border border-white/20 px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10"
                 >
-                  Change number or restart
+                  Cancel
                 </button>
               </div>
             </form>
-          </ng-container>
+
+            <!-- SMS action buttons -->
+            <div *ngIf="!smsEditorOpen && !isSmsVerificationStep" class="mt-5 flex flex-wrap gap-3">
+              <button
+                *ngIf="smsSettings?.canEnroll"
+                type="button"
+                (click)="openSmsEditor()"
+                class="inline-flex items-center justify-center rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-500"
+              >
+                {{ smsSettings?.isConfigured ? 'Change number' : 'Setup' }}
+              </button>
+              <button
+                *ngIf="smsSettings?.canEnable"
+                type="button"
+                (click)="startSmsEnable()"
+                [disabled]="smsSubmitting"
+                class="inline-flex items-center justify-center rounded-2xl border border-purple-400/40 px-5 py-3 text-sm font-semibold text-purple-300 transition hover:bg-purple-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {{ smsSubmitting ? 'Sending...' : 'Enable' }}
+              </button>
+              <button
+                *ngIf="smsSettings?.canDisable"
+                type="button"
+                (click)="disableSms()"
+                [disabled]="smsMutating"
+                class="inline-flex items-center justify-center rounded-2xl border border-amber-400/40 px-5 py-3 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {{ smsMutating ? 'Updating...' : 'Disable' }}
+              </button>
+              <button
+                *ngIf="smsSettings?.canRemove"
+                type="button"
+                (click)="removeSms()"
+                [disabled]="smsMutating"
+                class="inline-flex items-center justify-center rounded-2xl border border-rose-400/40 px-5 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {{ smsMutating ? 'Updating...' : 'Remove' }}
+              </button>
+            </div>
+          </article>
+
+          <!-- ── Authenticator app ──────────────────────────────────── -->
+          <article
+            class="rounded-3xl border border-white/10 bg-white/5 px-6 py-6 backdrop-blur-xl lg:col-span-3"
+          >
+            <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <div
+                  class="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-500/20 text-purple-300"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+                    />
+                  </svg>
+                </div>
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">
+                  Authenticator app
+                </p>
+                <h2 class="mt-2 text-2xl font-bold">
+                  {{
+                    totpSettings?.isEnabled
+                      ? 'Enabled'
+                      : totpSettings?.isConfigured
+                        ? 'Configured, but off'
+                        : 'Not configured'
+                  }}
+                </h2>
+                <p class="mt-3 text-sm leading-6 text-white/60">
+                  Use 6-digit time-based codes from an authenticator app on your phone or desktop.
+                </p>
+              </div>
+              <span
+                class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold"
+                [ngClass]="{
+                  'bg-emerald-500/15 text-emerald-300': totpSettings?.isEnabled,
+                  'bg-amber-500/15 text-amber-300': !totpSettings?.isEnabled,
+                }"
+              >
+                {{ totpSettings?.isEnabled ? 'App linked' : 'Optional' }}
+              </span>
+            </div>
+
+            <div
+              class="mt-4 grid gap-4 md:grid-cols-2"
+              *ngIf="totpEnrolledAtLabel || totpDisabledAtLabel"
+            >
+              <div
+                *ngIf="totpEnrolledAtLabel"
+                class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/50"
+              >
+                Enrolled on {{ totpEnrolledAtLabel }}
+              </div>
+              <div
+                *ngIf="totpDisabledAtLabel"
+                class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/50"
+              >
+                Disabled on {{ totpDisabledAtLabel }}
+              </div>
+            </div>
+
+            <div
+              *ngIf="
+                totpSettings && !totpSettings.enrollmentAvailable && !totpSettings.isConfigured
+              "
+              class="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/50"
+            >
+              TOTP enrollment is unavailable in this environment.
+            </div>
+
+            <!-- TOTP setup step -->
+            <div
+              *ngIf="isTotpSetupStep"
+              class="mt-5 rounded-3xl border border-purple-500/30 bg-purple-500/10 px-5 py-5"
+            >
+              <div class="space-y-2">
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">
+                  Set up app
+                </p>
+                <h3 class="text-xl font-bold">Link your authenticator app</h3>
+                <p class="text-sm leading-6 text-white/60">
+                  Add a new TOTP account in your authenticator app, then scan or paste the setup URI
+                  below. If scanning is unavailable, use the secret key instead.
+                </p>
+              </div>
+
+              <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-white/40">
+                    Secret key
+                  </p>
+                  <p class="mt-2 break-all font-mono text-sm text-white/80">
+                    {{ totpEnrollment?.SecretKey }}
+                  </p>
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-white/40">
+                    Setup URI
+                  </p>
+                  <p class="mt-2 break-all font-mono text-xs text-white/80">
+                    {{ totpEnrollment?.QrCodeUri }}
+                  </p>
+                </div>
+              </div>
+
+              <p class="mt-4 text-sm text-white/50">
+                Setup expires at {{ totpEnrollment!.ExpiresAtUtc | date: 'medium' }}.
+              </p>
+
+              <form
+                class="mt-5 space-y-4"
+                [formGroup]="totpSetupForm"
+                (ngSubmit)="verifyTotpEnrollment()"
+              >
+                <div class="space-y-2">
+                  <label class="text-sm font-semibold text-white/80" for="totp-setup-code"
+                    >Authenticator code</label
+                  >
+                  <input
+                    id="totp-setup-code"
+                    type="text"
+                    inputmode="numeric"
+                    maxlength="6"
+                    formControlName="code"
+                    placeholder="123456"
+                    class="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-base tracking-[0.35em] text-white placeholder-white/30 outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
+                  />
+                  <p
+                    *ngIf="
+                      totpSetupForm.controls.code.invalid && totpSetupForm.controls.code.touched
+                    "
+                    class="text-sm text-rose-400"
+                  >
+                    Enter the 6-digit code from your authenticator app.
+                  </p>
+                </div>
+                <div class="flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="submit"
+                    [disabled]="totpVerifying"
+                    class="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {{ totpVerifying ? 'Verifying...' : 'Verify and enable' }}
+                  </button>
+                  <button
+                    type="button"
+                    (click)="cancelTotpEnrollment()"
+                    class="inline-flex items-center justify-center rounded-2xl border border-white/20 px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- TOTP confirm action -->
+            <form
+              *ngIf="isTotpManageStep"
+              class="mt-5 space-y-4 rounded-3xl border border-purple-500/30 bg-purple-500/10 px-5 py-5"
+              [formGroup]="totpManageForm"
+              (ngSubmit)="submitTotpAction()"
+            >
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">
+                  Confirm action
+                </p>
+                <h3 class="mt-2 text-xl font-bold">
+                  {{
+                    totpManageAction === 'enable'
+                      ? 'Re-enable authenticator app MFA'
+                      : totpManageAction === 'disable'
+                        ? 'Disable authenticator app MFA'
+                        : 'Remove authenticator app MFA'
+                  }}
+                </h3>
+                <p class="mt-2 text-sm leading-6 text-white/60">
+                  Enter a current 6-digit code from your authenticator app to continue.
+                </p>
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-semibold text-white/80" for="totp-manage-code"
+                  >Authenticator code</label
+                >
+                <input
+                  id="totp-manage-code"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="6"
+                  formControlName="code"
+                  placeholder="123456"
+                  class="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-base tracking-[0.35em] text-white placeholder-white/30 outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
+                />
+                <p
+                  *ngIf="
+                    totpManageForm.controls.code.invalid && totpManageForm.controls.code.touched
+                  "
+                  class="text-sm text-rose-400"
+                >
+                  Enter the 6-digit code from your authenticator app.
+                </p>
+              </div>
+              <div class="flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="submit"
+                  [disabled]="totpMutating"
+                  class="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {{ totpMutating ? 'Updating...' : 'Confirm' }}
+                </button>
+                <button
+                  type="button"
+                  (click)="cancelTotpAction()"
+                  class="inline-flex items-center justify-center rounded-2xl border border-white/20 px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+
+            <!-- TOTP action buttons -->
+            <div *ngIf="!isTotpSetupStep && !isTotpManageStep" class="mt-5 flex flex-wrap gap-3">
+              <button
+                *ngIf="totpSettings?.canEnroll"
+                type="button"
+                (click)="startTotpEnrollment()"
+                [disabled]="totpStarting"
+                class="inline-flex items-center justify-center rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {{ totpStarting ? 'Preparing...' : 'Setup' }}
+              </button>
+              <button
+                *ngIf="totpSettings?.canEnable"
+                type="button"
+                (click)="beginTotpAction('enable')"
+                class="inline-flex items-center justify-center rounded-2xl border border-purple-400/40 px-5 py-3 text-sm font-semibold text-purple-300 transition hover:bg-purple-500/10"
+              >
+                Enable
+              </button>
+              <button
+                *ngIf="totpSettings?.canDisable"
+                type="button"
+                (click)="beginTotpAction('disable')"
+                class="inline-flex items-center justify-center rounded-2xl border border-amber-400/40 px-5 py-3 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/10"
+              >
+                Disable
+              </button>
+              <button
+                *ngIf="totpSettings?.canRemove"
+                type="button"
+                (click)="beginTotpAction('remove')"
+                class="inline-flex items-center justify-center rounded-2xl border border-rose-400/40 px-5 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10"
+              >
+                Remove
+              </button>
+            </div>
+          </article>
         </div>
-      </ng-template>
-    </div>
+      </div>
+    </ng-template>
   </div>
-</section>
+</div>

@@ -25,7 +25,7 @@ public sealed record EmailWorkerOptions(
         Require(EnvironmentSetting.EmailGroupId, nameof(EnvironmentSetting.EmailGroupId)),
         Require(EnvironmentSetting.EmailDlqTopic, nameof(EnvironmentSetting.EmailDlqTopic)),
         EnvironmentSetting.EmailStatusTopic,
-        EnvironmentSetting.SmtpServer,
+        NormalizeSmtpServer(EnvironmentSetting.SmtpServer),
         EnvironmentSetting.SmtpPort,
         EnvironmentSetting.Email,
         EnvironmentSetting.Password,
@@ -38,5 +38,20 @@ public sealed record EmailWorkerOptions(
             return value.Trim();
 
         throw new InvalidOperationException($"{settingName} must be configured for the email worker.");
+    }
+
+    private static string? NormalizeSmtpServer(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var normalized = value.Trim();
+        return normalized.ToLowerInvariant() switch
+        {
+            "gmail" or "google" => "smtp.gmail.com",
+            "outlook" or "hotmail" or "live" or "office365" => "smtp.office365.com",
+            "yahoo" => "smtp.mail.yahoo.com",
+            _ => normalized
+        };
     }
 }

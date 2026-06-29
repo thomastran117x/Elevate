@@ -18,6 +18,8 @@ using backend.main.infrastructure.database.core;
 using backend.main.seeders;
 using backend.main.seeders.clubs;
 
+using Moq;
+
 using FluentAssertions;
 
 using Microsoft.EntityFrameworkCore;
@@ -445,6 +447,9 @@ public class ThematicSeedersTests
             new EventSearchOutboxWriter(db),
             new ClubPostSearchOutboxWriter(db),
             new ClubSearchOutboxWriter(db),
+            new Mock<IEventReindexService>().Object,
+            new Mock<IClubReindexService>().Object,
+            new Mock<IClubPostReindexService>().Object,
             ClubSources,
             NullLogger<SeedClubContentSeeder>.Instance);
     }

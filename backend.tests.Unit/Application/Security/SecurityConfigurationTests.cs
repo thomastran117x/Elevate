@@ -6,9 +6,9 @@ using FluentAssertions;
 
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Http.Timeouts;
 using Microsoft.AspNetCore.Cors.Infrastructure;
+using Microsoft.AspNetCore.Http.Timeouts;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -83,8 +83,25 @@ public class SecurityConfigurationTests
         options.Cookie.SecurePolicy.Should().Be(CookieSecurePolicy.SameAsRequest);
     }
 
-    [Fact]
-    public async Task UseRefreshCsrfValidation_ShouldValidateProtectedPostRequests()
+    [Theory]
+    [InlineData("/api/auth/login")]
+    [InlineData("/api/auth/mfa/enroll/start")]
+    [InlineData("/api/auth/mfa/enroll/verify")]
+    [InlineData("/api/auth/mfa/enable/start")]
+    [InlineData("/api/auth/mfa/disable")]
+    [InlineData("/api/auth/mfa/remove")]
+    [InlineData("/api/auth/mfa/sms/enroll/start")]
+    [InlineData("/api/auth/mfa/sms/enroll/verify")]
+    [InlineData("/api/auth/mfa/sms/enable/start")]
+    [InlineData("/api/auth/mfa/sms/disable")]
+    [InlineData("/api/auth/mfa/sms/remove")]
+    [InlineData("/api/auth/mfa/totp/enroll/start")]
+    [InlineData("/api/auth/mfa/totp/enroll/verify")]
+    [InlineData("/api/auth/mfa/totp/enable")]
+    [InlineData("/api/auth/mfa/totp/disable")]
+    [InlineData("/api/auth/mfa/totp/remove")]
+    [InlineData("/api/auth/mfa/verify/totp")]
+    public async Task UseRefreshCsrfValidation_ShouldValidateProtectedPostRequests(string path)
     {
         var antiforgery = new Mock<IAntiforgery>();
         var services = new ServiceCollection()
@@ -100,15 +117,18 @@ public class SecurityConfigurationTests
             RequestServices = services
         };
         context.Request.Method = HttpMethods.Post;
-        context.Request.Path = "/api/auth/login";
+        context.Request.Path = path;
 
         await pipeline(context);
 
         antiforgery.Verify(service => service.ValidateRequestAsync(context), Times.Once);
     }
 
-    [Fact]
-    public async Task UseRefreshCsrfValidation_ShouldSkipValidation_ForUnprotectedRequests()
+    [Theory]
+    [InlineData("GET", "/api/auth/login")]
+    [InlineData("GET", "/api/auth/mfa/sms/disable")]
+    [InlineData("POST", "/api/auth/mfa")]
+    public async Task UseRefreshCsrfValidation_ShouldSkipValidation_ForUnprotectedRequests(string method, string path)
     {
         var antiforgery = new Mock<IAntiforgery>();
         var services = new ServiceCollection()
@@ -123,8 +143,8 @@ public class SecurityConfigurationTests
         {
             RequestServices = services
         };
-        context.Request.Method = HttpMethods.Get;
-        context.Request.Path = "/api/auth/login";
+        context.Request.Method = method;
+        context.Request.Path = path;
 
         await pipeline(context);
 

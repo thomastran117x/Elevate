@@ -99,6 +99,23 @@ public class OpenApiConfigurationTests
         unprotectedOperation.Parameters.Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData("/api/auth/mfa/enable/start")]
+    [InlineData("/api/auth/mfa/sms/enroll/start")]
+    [InlineData("/api/auth/mfa/sms/remove")]
+    [InlineData("/api/auth/mfa/totp/enable")]
+    [InlineData("/api/auth/mfa/totp/remove")]
+    public void ApplyCsrfDocumentation_ShouldTreatNewMfaRoutesAsProtected(string path)
+    {
+        var operation = new OpenApiOperation();
+
+        InvokeStatic("ApplyCsrfDocumentation", operation, path);
+
+        operation.Parameters.Should().ContainSingle(parameter =>
+            parameter.Name == CsrfConfiguration.CsrfHeaderName
+            && parameter.In == ParameterLocation.Header
+            && parameter.Required);
+    }
     [Fact]
     public void ApplySpecialHeaders_ShouldAddExpectedHeaders_ForPaymentAndApiAuthRoutes()
     {
@@ -266,6 +283,62 @@ public class OpenApiConfigurationTests
         operation.Responses["302"].Content.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task ApplyDocumentTransformAsync_ShouldDescribeEnvelopeSchemas_WhenSchemasArePresent()
+    {
+        var document = new OpenApiDocument
+        {
+            Components = new OpenApiComponents
+            {
+                Schemas = new Dictionary<string, OpenApiSchema>
+                {
+                    ["ApiResponseOfObject"] = new()
+                    {
+                        Properties = new Dictionary<string, OpenApiSchema>
+                        {
+                            ["success"] = new(),
+                            ["message"] = new(),
+                            ["data"] = new()
+                            {
+                                Reference = new OpenApiReference
+                                {
+                                    Id = "Object",
+                                    Type = ReferenceType.Schema
+                                }
+                            }
+                        }
+                    },
+                    ["ApiError"] = new()
+                    {
+                        Properties = new Dictionary<string, OpenApiSchema>
+                        {
+                            ["code"] = new(),
+                            ["details"] = new()
+                        }
+                    }
+                }
+            }
+        };
+
+        await InvokeStaticAsync("ApplyDocumentTransformAsync", document, null, CancellationToken.None);
+
+        document.Components!.Schemas["ApiResponseOfObject"].Description.Should().Contain("Standard JSON envelope");
+        document.Components.Schemas["ApiResponseOfObject"].Properties["success"].Description.Should().Contain("request succeeded");
+        document.Components.Schemas["ApiResponseOfObject"].Properties["data"].AllOf.Should().ContainSingle();
+        document.Components.Schemas["ApiResponseOfObject"].Properties["data"].Description.Should().Contain("Endpoint-specific response payload");
+        document.Components.Schemas["ApiError"].Description.Should().Contain("Structured error payload");
+        document.Components.Schemas["ApiError"].Properties["code"].Description.Should().Contain("Machine-readable error code");
+    }
+
+    [Theory]
+    [InlineData("verifyCsrfOtp", "Verify CSRF OTP")]
+    [InlineData("verifyTotpOtp", "Verify totp OTP")]
+    [InlineData("getApiUrl", "Get API URL")]
+    [InlineData("login", "Login")]
+    public void DeriveOperationSummary_ShouldSplitWords_AndPreserveAcronyms(string actionName, string expected)
+    {
+        InvokeStatic<string>("DeriveOperationSummary", actionName).Should().Be(expected);
+    }
     private static object? InvokeStatic(string methodName, params object?[] arguments)
     {
         var method = typeof(OpenApiConfiguration).GetMethod(
@@ -285,3 +358,6 @@ public class OpenApiConfigurationTests
         await task;
     }
 }
+
+
+

@@ -3,9 +3,13 @@ import { Component, inject, OnInit, PLATFORM_ID, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { environment } from '../../../../../environments/environment';
+import { AuthTokenService } from '../../../../core/api/services/auth-token.service';
 import {
+  DEVICE_VERIFICATION_REQUIRED_ERROR_CODE,
+  DEVICE_VERIFICATION_REQUIRED_MESSAGE,
   getApiClientMessage,
   getServerErrorMessage,
+  isApiClientErrorCode,
 } from '../../../../core/api/models/api-client-error.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import {
@@ -31,8 +35,10 @@ export class MicrosoftCallbackComponent implements OnInit {
     'Microsoft sign-in could not be completed. Please try again.';
   private platformId = inject(PLATFORM_ID);
 
-  status = signal<'loading' | 'success' | 'error'>('loading');
+  status = signal<'loading' | 'success' | 'error' | 'device'>('loading');
   message = signal('Signing you in with Microsoft...');
+
+  private authToken = inject(AuthTokenService);
 
   constructor(
     private auth: AuthService,
@@ -43,6 +49,11 @@ export class MicrosoftCallbackComponent implements OnInit {
 
   ngOnInit(): void {
     if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
+    if (this.authToken.accessToken) {
+      this.router.navigateByUrl(this.authReturnUrl.consume('/dashboard'));
       return;
     }
 
@@ -105,6 +116,13 @@ export class MicrosoftCallbackComponent implements OnInit {
           },
           error: (err) => {
             console.error(err);
+
+            if (isApiClientErrorCode(err, DEVICE_VERIFICATION_REQUIRED_ERROR_CODE)) {
+              this.status.set('device');
+              this.message.set(DEVICE_VERIFICATION_REQUIRED_MESSAGE);
+              return;
+            }
+
             this.status.set('error');
             this.message.set(getApiClientMessage(err, 'Sign-in failed.'));
           },

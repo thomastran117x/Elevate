@@ -1,5 +1,5 @@
-import { CommonModule } from '@angular/common';
-import { Component, signal } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { Component, inject, PLATFORM_ID, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
@@ -15,8 +15,12 @@ import { AuthReturnUrlService } from '../../services/auth-return-url.service';
   styleUrls: ['./device-verify.component.css'],
 })
 export class DeviceVerifyComponent {
+  private platformId = inject(PLATFORM_ID);
+
   status = signal<'ready' | 'loading' | 'success' | 'error'>('ready');
-  message = signal('Confirm this device to finish signing in.');
+  message = signal(
+    'Open the verification link on the device you want to use, and we will finish signing you in here.',
+  );
   hasToken = false;
 
   private token: string | null = null;
@@ -30,6 +34,10 @@ export class DeviceVerifyComponent {
   ) {}
 
   ngOnInit(): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
     this.authReturnUrl.captureFromRoute(this.route);
     this.token = this.route.snapshot.queryParamMap.get('token');
     this.hasToken = !!this.token;
@@ -37,14 +45,17 @@ export class DeviceVerifyComponent {
     if (!this.token) {
       this.status.set('error');
       this.message.set('This device verification link is missing a token.');
+      return;
     }
+
+    this.confirm();
   }
 
   confirm(): void {
     if (!this.token || this.status() === 'loading') return;
 
     this.status.set('loading');
-    this.message.set('Verifying this device and completing sign-in...');
+    this.message.set('Verifying this device and finishing sign-in...');
 
     this.auth.verifyDevice(this.token).subscribe({
       next: async (session) => {

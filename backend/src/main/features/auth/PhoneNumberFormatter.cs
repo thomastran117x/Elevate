@@ -46,5 +46,19 @@ namespace backend.main.features.auth
 
             return $"***-***-{digits[^4..]}";
         }
+
+        internal static string MaskEmail(string email)
+        {
+            var atIndex = email.IndexOf('@');
+            if (atIndex <= 0)
+                return "***";
+
+            var local = email[..atIndex];
+            var domain = email[atIndex..];
+            if (local.Length == 1)
+                return $"*{domain}";
+
+            return $"{local[0]}***{domain}";
+        }
     }
 }

@@ -220,7 +220,7 @@ namespace backend.main.features.events.search
             try
             {
                 await _circuitBreaker.ExecuteAsync(
-                    () => client.DeleteAsync(IndexName, eventId),
+                    () => client.DeleteAsync<EventDocument>(IndexName, eventId),
                     $"{IndexName} document deletion");
             }
             catch (Exception ex)

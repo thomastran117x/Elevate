@@ -1,9 +1,7 @@
-using backend.main.application.environment;
 using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
-using backend.main.features.auth.mfa.totp;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.responses;
 using backend.main.shared.utilities.logger;
@@ -21,39 +19,26 @@ namespace backend.main.features.auth.mfa
     public sealed class AuthMfaController : ControllerBase
     {
         private readonly IMfaEnrollmentService _mfaEnrollmentService;
-        private readonly ITotpMfaEnrollmentService _totpMfaEnrollmentService;
+        private readonly IMfaSettingsBuilder _settingsBuilder;
 
         public AuthMfaController(
             IMfaEnrollmentService mfaEnrollmentService,
-            ITotpMfaEnrollmentService totpMfaEnrollmentService
+            IMfaSettingsBuilder settingsBuilder
         )
         {
             _mfaEnrollmentService = mfaEnrollmentService;
-            _totpMfaEnrollmentService = totpMfaEnrollmentService;
+            _settingsBuilder = settingsBuilder;
         }
 
         [HttpGet]
-        [ProducesResponseType(typeof(ApiResponse<MfaStatusResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetStatus()
         {
             try
             {
                 var user = User.GetUserPayload();
-                var smsStatus = await _mfaEnrollmentService.GetStatusAsync(user.Id);
-                var totpEnrollment = await _totpMfaEnrollmentService.GetEnrollmentAsync(user.Id);
-
-                var combined = new MfaStatusResponse
-                {
-                    SmsEnrollmentAvailable = smsStatus.SmsEnrollmentAvailable,
-                    IsSmsMfaEnabled = smsStatus.IsSmsMfaEnabled,
-                    MaskedPhoneNumber = smsStatus.MaskedPhoneNumber,
-                    PhoneVerifiedAtUtc = smsStatus.PhoneVerifiedAtUtc,
-                    TotpEnrollmentAvailable = EnvironmentSetting.AuthTotpMfaEnrollmentEnabled,
-                    IsTotpMfaEnabled = totpEnrollment?.IsTotpMfaEnabled ?? false,
-                    TotpEnrolledAtUtc = totpEnrollment?.EnrolledAtUtc,
-                };
-
-                return Ok(new ApiResponse<MfaStatusResponse>("MFA status fetched successfully.", combined));
+                var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
+                return Ok(new ApiResponse<MfaSettingsResponse>("MFA status fetched successfully.", settings));
             }
             catch (Exception ex)
             {
@@ -66,6 +51,7 @@ namespace backend.main.features.auth.mfa
         }
 
         [HttpPost("enroll/start")]
+        [HttpPost("sms/enroll/start")]
         [ProducesResponseType(typeof(ApiResponse<MfaChallengeResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> StartEnrollment([FromBody] MfaEnrollmentStartRequest request)
         {
@@ -94,23 +80,47 @@ namespace backend.main.features.auth.mfa
             }
         }
 
+        [HttpPost("enable/start")]
+        [HttpPost("sms/enable/start")]
+        [ProducesResponseType(typeof(ApiResponse<MfaChallengeResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> StartEnable()
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+                var challenge = await _mfaEnrollmentService.StartEnableAsync(user.Id);
+
+                return Ok(new ApiResponse<MfaChallengeResponse>("SMS MFA re-enable code sent.", challenge));
+            }
+            catch (Exception ex)
+            {
+                if (ex is AppException)
+                    return HandleError.Resolve(ex);
+
+                Logger.Error($"[AuthMfaController] StartEnable failed: {ex}");
+                return HandleError.Resolve(ex);
+            }
+        }
+
         [HttpPost("enroll/verify")]
-        [ProducesResponseType(typeof(ApiResponse<MfaStatusResponse>), StatusCodes.Status200OK)]
+        [HttpPost("sms/enroll/verify")]
+        [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> VerifyEnrollment([FromBody] MfaEnrollmentVerifyRequest request)
         {
             try
             {
                 var user = User.GetUserPayload();
-                var status = await _mfaEnrollmentService.VerifyEnrollmentAsync(
+                await _mfaEnrollmentService.VerifyEnrollmentAsync(
                     user.Id,
                     request.Code,
                     request.Challenge
                 );
+                var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
 
                 return Ok(
-                    new ApiResponse<MfaStatusResponse>(
+                    new ApiResponse<MfaSettingsResponse>(
                         "SMS MFA has been enabled.",
-                        status
+                        settings
                     )
                 );
             }
@@ -125,18 +135,20 @@ namespace backend.main.features.auth.mfa
         }
 
         [HttpPost("disable")]
-        [ProducesResponseType(typeof(ApiResponse<MfaStatusResponse>), StatusCodes.Status200OK)]
+        [HttpPost("sms/disable")]
+        [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> Disable([FromBody] MfaDisableRequest _)
         {
             try
             {
                 var user = User.GetUserPayload();
-                var status = await _mfaEnrollmentService.DisableAsync(user.Id);
+                await _mfaEnrollmentService.DisableAsync(user.Id);
+                var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
 
                 return Ok(
-                    new ApiResponse<MfaStatusResponse>(
+                    new ApiResponse<MfaSettingsResponse>(
                         "SMS MFA has been disabled.",
-                        status
+                        settings
                     )
                 );
             }
@@ -146,6 +158,34 @@ namespace backend.main.features.auth.mfa
                     return HandleError.Resolve(ex);
 
                 Logger.Error($"[AuthMfaController] Disable failed: {ex}");
+                return HandleError.Resolve(ex);
+            }
+        }
+
+        [HttpPost("remove")]
+        [HttpPost("sms/remove")]
+        [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> Remove([FromBody] MfaDisableRequest _)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+                await _mfaEnrollmentService.RemoveAsync(user.Id);
+                var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
+
+                return Ok(
+                    new ApiResponse<MfaSettingsResponse>(
+                        "SMS MFA has been removed.",
+                        settings
+                    )
+                );
+            }
+            catch (Exception ex)
+            {
+                if (ex is AppException)
+                    return HandleError.Resolve(ex);
+
+                Logger.Error($"[AuthMfaController] Remove failed: {ex}");
                 return HandleError.Resolve(ex);
             }
         }

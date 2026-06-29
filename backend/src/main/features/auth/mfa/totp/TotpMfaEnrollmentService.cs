@@ -1,10 +1,8 @@
 using System.Security.Cryptography;
-using System.Text;
 
 using backend.main.application.environment;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.cache;
-using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.utilities.logger;
 
@@ -37,7 +35,9 @@ namespace backend.main.features.auth.mfa.totp
         private static readonly TimeSpan PendingTtl = TimeSpan.FromMinutes(10);
         private static readonly TimeSpan VerifyLockTtl = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan ReplayGuardTtl = TimeSpan.FromSeconds(90);
+        private static readonly TimeSpan ActionAttemptTtl = TimeSpan.FromMinutes(10);
         private const int MaxFailedAttempts = 5;
+        private const int MaxActionAttempts = 5;
         private const int SecretSizeBytes = 20;
         private const int TagSizeBytes = 16;
         private const int NonceSizeBytes = 12;
@@ -77,6 +77,10 @@ namespace backend.main.features.auth.mfa.totp
             try
             {
                 EnsureEnrollmentAvailable();
+
+                var existing = await _repository.GetByUserIdAsync(userId);
+                if (existing != null && !string.IsNullOrWhiteSpace(existing.EncryptedSecret))
+                    throw new ConflictException("TOTP MFA is already configured for this account.");
 
                 var secretBytes = KeyGeneration.GenerateRandomKey(SecretSizeBytes);
                 var secretBase32 = Base32Encoding.ToString(secretBytes);
@@ -152,14 +156,14 @@ namespace backend.main.features.auth.mfa.totp
                         throw new UnauthorizedException("Invalid TOTP code. Please check your authenticator app and try again.");
                     }
 
-                    await CheckAndUpdateReplayGuardAsync(userId, matchedWindow);
+                    await CheckAndUpdateReplayGuardAsync(userId, matchedWindow, false);
 
                     var encryptedSecret = Encrypt(secretBytes);
                     var enrolledAtUtc = DateTime.UtcNow;
                     var enrollment = await _repository.UpsertAsync(userId, encryptedSecret, EncryptionKeyVersion, enrolledAtUtc);
 
                     await _cacheService.DeleteKeyAsync(PendingKey(userId));
-
+                    LogAudit(userId, "enroll", true, "totp configuration verified");
                     return enrollment;
                 }
                 finally
@@ -170,9 +174,53 @@ namespace backend.main.features.auth.mfa.totp
             catch (Exception ex)
             {
                 if (ex is AppException)
+                {
+                    LogAudit(userId, "enroll", false, ex.Message);
                     throw;
+                }
 
                 Logger.Error($"[TotpMfaEnrollmentService] VerifyEnrollmentAsync failed: {ex}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<TotpMfaEnrollment> EnableAsync(int userId, string code)
+        {
+            try
+            {
+                var enrollment = await RequireConfiguredEnrollmentAsync(userId);
+                if (enrollment.IsTotpMfaEnabled)
+                    throw new ConflictException("TOTP MFA is already enabled for this account.");
+
+                var matchedWindow = await VerifyConfiguredCodeForManagementAsync(userId, enrollment, code, "enable");
+                var replayState = await CaptureReplayGuardStateAsync(userId);
+                await CheckAndUpdateReplayGuardAsync(userId, matchedWindow, true);
+
+                TotpMfaEnrollment updated;
+                try
+                {
+                    updated = await _repository.SetEnabledAsync(userId, true, null)
+                        ?? throw new ConflictException("TOTP MFA is not configured for this account.");
+                }
+                catch
+                {
+                    await RestoreReplayGuardOnFailureAsync(userId, matchedWindow, replayState);
+                    throw;
+                }
+
+                await _cacheService.DeleteKeyAsync(ActionAttemptKey(userId, "enable"));
+                LogAudit(userId, "re-enable", true, "totp configuration re-enabled");
+                return updated;
+            }
+            catch (Exception ex)
+            {
+                if (ex is AppException)
+                {
+                    LogAudit(userId, "re-enable", false, ex.Message);
+                    throw;
+                }
+
+                Logger.Error($"[TotpMfaEnrollmentService] EnableAsync failed: {ex}");
                 throw new InternalServerErrorException();
             }
         }
@@ -181,27 +229,75 @@ namespace backend.main.features.auth.mfa.totp
         {
             try
             {
-                var enrollment = await _repository.GetByUserIdAsync(userId);
-                if (enrollment == null || !enrollment.IsTotpMfaEnabled)
-                    return enrollment;
+                var enrollment = await RequireConfiguredEnrollmentAsync(userId);
+                if (!enrollment.IsTotpMfaEnabled)
+                    throw new ConflictException("TOTP MFA is already disabled for this account.");
 
-                ValidateCodeFormat(code);
-                var secretBytes = Decrypt(enrollment.EncryptedSecret);
-                var totp = new Totp(secretBytes);
+                var matchedWindow = await VerifyConfiguredCodeForManagementAsync(userId, enrollment, code, "disable");
+                var replayState = await CaptureReplayGuardStateAsync(userId);
+                await CheckAndUpdateReplayGuardAsync(userId, matchedWindow, true);
 
-                if (!totp.VerifyTotp(DateTime.UtcNow, code, out var matchedWindow, VerificationWindow.RfcSpecifiedNetworkDelay))
-                    throw new UnauthorizedException("Invalid TOTP code. Cannot disable TOTP MFA.");
+                TotpMfaEnrollment? updated;
+                try
+                {
+                    updated = await _repository.SetEnabledAsync(userId, false, DateTime.UtcNow)
+                        ?? throw new ConflictException("TOTP MFA is not configured for this account.");
+                }
+                catch
+                {
+                    await RestoreReplayGuardOnFailureAsync(userId, matchedWindow, replayState);
+                    throw;
+                }
 
-                await CheckAndUpdateReplayGuardAsync(userId, matchedWindow);
-
-                return await _repository.SetEnabledAsync(userId, false, DateTime.UtcNow);
+                await _cacheService.DeleteKeyAsync(ActionAttemptKey(userId, "disable"));
+                LogAudit(userId, "disable", true, "totp configuration disabled");
+                return updated;
             }
             catch (Exception ex)
             {
                 if (ex is AppException)
+                {
+                    LogAudit(userId, "disable", false, ex.Message);
                     throw;
+                }
 
                 Logger.Error($"[TotpMfaEnrollmentService] DisableAsync failed: {ex}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task RemoveAsync(int userId, string code)
+        {
+            try
+            {
+                var enrollment = await RequireConfiguredEnrollmentAsync(userId);
+                var matchedWindow = await VerifyConfiguredCodeForManagementAsync(userId, enrollment, code, "remove");
+                var replayState = await CaptureReplayGuardStateAsync(userId);
+                await CheckAndUpdateReplayGuardAsync(userId, matchedWindow, true);
+
+                try
+                {
+                    if (!await _repository.RemoveAsync(userId))
+                        throw new ConflictException("TOTP MFA is not configured for this account.");
+                }
+                catch
+                {
+                    await RestoreReplayGuardOnFailureAsync(userId, matchedWindow, replayState);
+                    throw;
+                }
+
+                await ClearManagementStateAsync(userId);
+                LogAudit(userId, "remove", true, "totp configuration removed");
+            }
+            catch (Exception ex)
+            {
+                if (ex is AppException)
+                {
+                    LogAudit(userId, "remove", false, ex.Message);
+                    throw;
+                }
+
+                Logger.Error($"[TotpMfaEnrollmentService] RemoveAsync failed: {ex}");
                 throw new InternalServerErrorException();
             }
         }
@@ -221,14 +317,88 @@ namespace backend.main.features.auth.mfa.totp
             if (!totp.VerifyTotp(DateTime.UtcNow, code, out var matchedWindow, VerificationWindow.RfcSpecifiedNetworkDelay))
                 throw new UnauthorizedException("Invalid or expired TOTP code.");
 
-            await CheckAndUpdateReplayGuardAsync(userId, matchedWindow);
+            await CheckAndUpdateReplayGuardAsync(userId, matchedWindow, false);
         }
 
-        private async Task CheckAndUpdateReplayGuardAsync(int userId, long matchedWindow)
+        private async Task<TotpMfaEnrollment> RequireConfiguredEnrollmentAsync(int userId)
+        {
+            var enrollment = await _repository.GetByUserIdAsync(userId);
+            if (enrollment == null || string.IsNullOrWhiteSpace(enrollment.EncryptedSecret))
+                throw new ConflictException("TOTP MFA is not configured for this account.");
+
+            return enrollment;
+        }
+
+        private async Task<long> VerifyConfiguredCodeForManagementAsync(int userId, TotpMfaEnrollment enrollment, string code, string action)
+        {
+            ValidateCodeFormat(code);
+            var secretBytes = Decrypt(enrollment.EncryptedSecret);
+            var totp = new Totp(secretBytes);
+
+            if (!totp.VerifyTotp(DateTime.UtcNow, code, out var matchedWindow, VerificationWindow.RfcSpecifiedNetworkDelay))
+            {
+                var attempts = await RecordActionFailureAsync(userId, action);
+                if (attempts >= MaxActionAttempts)
+                    throw new TooManyRequestException($"Too many failed TOTP {action} attempts. Please try again later.");
+
+                throw new BadRequestException("Invalid TOTP code.");
+            }
+
+            return matchedWindow;
+        }
+
+        private async Task<long> RecordActionFailureAsync(int userId, string action)
+        {
+            var key = ActionAttemptKey(userId, action);
+            var attempts = await _cacheService.IncrementAsync(key);
+            await _cacheService.SetExpiryAsync(key, ActionAttemptTtl);
+            return attempts;
+        }
+
+        private async Task ClearManagementStateAsync(int userId)
+        {
+            await _cacheService.DeleteKeyAsync(ReplayGuardKey(userId));
+            await _cacheService.DeleteKeyAsync(ActionAttemptKey(userId, "enable"));
+            await _cacheService.DeleteKeyAsync(ActionAttemptKey(userId, "disable"));
+            await _cacheService.DeleteKeyAsync(ActionAttemptKey(userId, "remove"));
+        }
+
+        private async Task<ReplayGuardState> CaptureReplayGuardStateAsync(int userId)
+        {
+            var key = ReplayGuardKey(userId);
+            return new ReplayGuardState
+            {
+                Value = await _cacheService.GetValueAsync(key),
+                Ttl = await _cacheService.GetTTLAsync(key),
+            };
+        }
+
+        private async Task RestoreReplayGuardOnFailureAsync(int userId, long claimedWindow, ReplayGuardState previousState)
+        {
+            var key = ReplayGuardKey(userId);
+            var currentValue = await _cacheService.GetValueAsync(key);
+            if (!string.Equals(currentValue, claimedWindow.ToString(), StringComparison.Ordinal))
+                return;
+
+            if (!string.IsNullOrWhiteSpace(previousState.Value) && previousState.Ttl is TimeSpan ttl && ttl > TimeSpan.Zero)
+            {
+                await _cacheService.SetValueAsync(key, previousState.Value, ttl);
+                return;
+            }
+
+            await _cacheService.DeleteKeyAsync(key);
+        }
+
+        private async Task CheckAndUpdateReplayGuardAsync(int userId, long matchedWindow, bool invalidAsBadRequest)
         {
             var guardKey = ReplayGuardKey(userId);
             if (!await TryClaimReplayWindowAsync(guardKey, matchedWindow))
+            {
+                if (invalidAsBadRequest)
+                    throw new BadRequestException("TOTP code has already been used. Please wait for a new code.");
+
                 throw new UnauthorizedException("TOTP code has already been used. Please wait for a new code.");
+            }
         }
 
         private async Task<bool> TryClaimReplayWindowAsync(string guardKey, long matchedWindow)
@@ -323,9 +493,15 @@ namespace backend.main.features.auth.mfa.totp
                 throw new NotAvailableException("TOTP MFA enrollment is currently unavailable.");
         }
 
+        private static void LogAudit(int userId, string action, bool success, string reason)
+        {
+            Logger.Info($"[AuthMfaAudit] userId={userId} method=totp action={action} success={success} reason={reason}");
+        }
+
         private static string PendingKey(int userId) => $"totp:enrollment:pending:user:{userId}";
         private static string VerifyLockKey(int userId) => $"totp:enrollment:verify-lock:user:{userId}";
         private static string ReplayGuardKey(int userId) => $"totp:lastused:{userId}";
+        private static string ActionAttemptKey(int userId, string action) => $"totp:action:attempt:{action}:{userId}";
 
         private sealed class PendingEnrollmentState
         {
@@ -339,9 +515,18 @@ namespace backend.main.features.auth.mfa.totp
                 get; set;
             }
         }
+
+        private sealed class ReplayGuardState
+        {
+            public string? Value
+            {
+                get; set;
+            }
+
+            public TimeSpan? Ttl
+            {
+                get; set;
+            }
+        }
     }
 }
-
-
-
-

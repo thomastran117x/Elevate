@@ -5,14 +5,13 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Store } from '@ngrx/store';
 import { setUser, clearUser } from '../stores/user.actions';
 import { firstValueFrom } from 'rxjs';
-import {
-  ApiEnvelope,
-  extractEnvelopeData,
-  requireEnvelopeData,
-} from '../api/models/api-envelope.model';
+import { ApiEnvelope, extractEnvelopeData } from '../api/models/api-envelope.model';
 import { AuthTokenService } from '../api/services/auth-token.service';
 import { setSession, clearSession } from '../stores/session.actions';
-import { AuthenticatedSessionResponse, CurrentUserResponse } from '../models/auth-response.model';
+import {
+  AuthenticatedSessionResponse,
+  normalizeAuthenticatedSessionResponse,
+} from '../models/auth-response.model';
 import { AuthService } from '../../features/auth/services/auth.service';
 import { UserState } from '../stores/user.reducer';
 import { SessionState } from '../stores/session.reducer';
@@ -30,23 +29,23 @@ export class SessionManagerService {
 
   loading = signal(isPlatformBrowser(this.platformId));
 
-  async bootstrapSession(session: AuthenticatedSessionResponse): Promise<void> {
-    if (!session?.AccessToken) {
+  async bootstrapSession(session: AuthenticatedSessionResponse | unknown): Promise<void> {
+    const normalizedSession = normalizeAuthenticatedSessionResponse(session);
+    if (!normalizedSession?.AccessToken) {
       throw new Error('Authentication response did not include an access token.');
     }
 
     this.store.dispatch(
       setSession({
         session: {
-          AccessToken: session.AccessToken,
-          ExpiresAtUtc: session.ExpiresAtUtc,
+          AccessToken: normalizedSession.AccessToken,
+          ExpiresAtUtc: normalizedSession.ExpiresAtUtc,
         },
       }),
     );
 
     try {
-      const response = await firstValueFrom(this.authService.me());
-      const user = this.requireCurrentUser(response);
+      const user = await firstValueFrom(this.authService.me());
       this.store.dispatch(setUser({ user }));
     } catch (error) {
       this.clearSessionState();
@@ -83,7 +82,7 @@ export class SessionManagerService {
           },
         ),
       );
-      const session = extractEnvelopeData(res);
+      const session = normalizeAuthenticatedSessionResponse(extractEnvelopeData(res));
 
       if (session?.AccessToken) {
         await this.bootstrapSession(session);
@@ -96,10 +95,6 @@ export class SessionManagerService {
     } finally {
       this.loading.set(false);
     }
-  }
-
-  private requireCurrentUser(response: ApiEnvelope<CurrentUserResponse>): CurrentUserResponse {
-    return requireEnvelopeData(response, 'Current user response was incomplete.');
   }
 
   private clearSessionState(): void {
