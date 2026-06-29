@@ -296,6 +296,7 @@ services:
         kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic clubpost-index-events-dlq --partitions 1 --replication-factor 1
         kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-email --partitions 1 --replication-factor 1
         kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-email-dlq --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-email-status --partitions 1 --replication-factor 1
         kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-sms --partitions 1 --replication-factor 1
         kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-sms-dlq --partitions 1 --replication-factor 1
         echo "All Kafka topics created."
