@@ -639,12 +639,28 @@ public class AuthEndpointsTests
         await using var app = await AuthApiTestApp.CreateAsync();
         var session = await app.SignUpAndVerifyByTokenAsync("mfa-aliases@example.com", transport: SessionTransportResolver.ApiValue);
 
-        var aliasEnrollment = await EnrollSmsAsync(
-            app,
-            session.AccessToken,
+        var aliasEnrollStart = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/sms/enroll/start",
-            "/api/auth/mfa/sms/enroll/verify");
-        aliasEnrollment.Data!.Sms.IsEnabled.Should().BeTrue();
+            new MfaEnrollmentStartRequest
+            {
+                PhoneNumber = "+14165550123"
+            },
+            session.AccessToken);
+        aliasEnrollStart.StatusCode.Should().Be(HttpStatusCode.OK);
+        var aliasEnrollStartBody = await app.ReadApiResponseAsync<MfaChallengeResponse>(aliasEnrollStart);
+        var aliasEnrollmentSms = app.Publisher.SmsMessages.Last(message => message.Challenge == aliasEnrollStartBody.Data!.Challenge);
+
+        var aliasEnrollmentVerify = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/sms/enroll/verify",
+            new MfaEnrollmentVerifyRequest
+            {
+                Challenge = aliasEnrollStartBody.Data!.Challenge,
+                Code = aliasEnrollmentSms.Code
+            },
+            session.AccessToken);
+        aliasEnrollmentVerify.StatusCode.Should().Be(HttpStatusCode.OK);
+        var aliasEnrollmentBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(aliasEnrollmentVerify);
+        aliasEnrollmentBody.Data!.Sms.IsEnabled.Should().BeTrue();
 
         var aliasDisable = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/sms/disable",
@@ -863,6 +879,7 @@ public class AuthEndpointsTests
         return await app.ReadApiResponseAsync<MfaSettingsResponse>(verify);
     }
 }
+
 
 
 

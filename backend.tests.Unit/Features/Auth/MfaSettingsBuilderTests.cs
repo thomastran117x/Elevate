@@ -118,6 +118,36 @@ public class MfaSettingsBuilderTests
         PhoneNumberFormatter.MaskEmail(email).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("  (416) 555-0123  ", "+14165550123")]
+    [InlineData("1-416-555-0123", "+14165550123")]
+    [InlineData("+44 20 7946 0958", "+442079460958")]
+    [InlineData("41655501234", "+41655501234")]
+    public void Normalize_ShouldAcceptSupportedFormats(string rawPhoneNumber, string expected)
+    {
+        PhoneNumberFormatter.Normalize(rawPhoneNumber).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(null, "Phone number is required.")]
+    [InlineData("   ", "Phone number is required.")]
+    [InlineData("+1-23", "Phone number must be a valid international number.")]
+    [InlineData("12345", "Phone number must be a valid mobile number.")]
+    public void Normalize_ShouldRejectInvalidFormats(string? rawPhoneNumber, string expectedMessage)
+    {
+        var act = () => PhoneNumberFormatter.Normalize(rawPhoneNumber!);
+
+        act.Should().Throw<backend.main.shared.exceptions.http.BadRequestException>()
+            .WithMessage(expectedMessage);
+    }
+
+    [Theory]
+    [InlineData("1234", "1234")]
+    [InlineData("+14165550123", "***-***-0123")]
+    public void Mask_ShouldPreserveShortValues_AndHideLongPhoneNumbers(string phoneNumber, string expected)
+    {
+        PhoneNumberFormatter.Mask(phoneNumber).Should().Be(expected);
+    }
     private sealed class EnvironmentVariableScope : IDisposable
     {
         private readonly Dictionary<string, string?> _originals = new();
@@ -142,3 +172,4 @@ public class MfaSettingsBuilderTests
         }
     }
 }
+
