@@ -101,8 +101,6 @@ app.UseRouting();
 
 app.UseRequestTimeouts();
 
-app.UseRateLimiter();
-
 app.UseSecurityHeaders();
 app.UseHttpsEnforcement();
 

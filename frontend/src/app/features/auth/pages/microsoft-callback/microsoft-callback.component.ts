@@ -3,6 +3,7 @@ import { Component, inject, OnInit, PLATFORM_ID, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { environment } from '../../../../../environments/environment';
+import { AuthTokenService } from '../../../../core/api/services/auth-token.service';
 import {
   DEVICE_VERIFICATION_REQUIRED_ERROR_CODE,
   DEVICE_VERIFICATION_REQUIRED_MESSAGE,
@@ -37,6 +38,8 @@ export class MicrosoftCallbackComponent implements OnInit {
   status = signal<'loading' | 'success' | 'error' | 'device'>('loading');
   message = signal('Signing you in with Microsoft...');
 
+  private authToken = inject(AuthTokenService);
+
   constructor(
     private auth: AuthService,
     private sessionManager: SessionManagerService,
@@ -46,6 +49,11 @@ export class MicrosoftCallbackComponent implements OnInit {
 
   ngOnInit(): void {
     if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
+    if (this.authToken.accessToken) {
+      this.router.navigateByUrl(this.authReturnUrl.consume('/dashboard'));
       return;
     }
 

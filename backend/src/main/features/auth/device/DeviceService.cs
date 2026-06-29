@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 
 using backend.main.features.auth.notifications;
+
+using Microsoft.IdentityModel.Tokens;
 using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
@@ -48,14 +50,14 @@ namespace backend.main.features.auth.device
             _loginStepUpChallengeService = loginStepUpChallengeService;
         }
 
-        public async Task EnsureDeviceKnownAsync(int userId, string userEmail, ClientRequestInfo requestInfo)
+        public async Task EnsureDeviceKnownAsync(int userId, string userEmail, ClientRequestInfo requestInfo, string? returnUrl = null)
         {
             try
             {
                 if (await _deviceTrustService.IsTrustedAsync(userId, requestInfo))
                     return;
 
-                var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+                var token = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
                 var trustedDeviceId = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 
                 var pendingDevice = new PendingDevice
@@ -65,16 +67,20 @@ namespace backend.main.features.auth.device
                     DeviceType = requestInfo.DeviceType,
                     ClientName = requestInfo.ClientName,
                     IpAddress = requestInfo.IpAddress,
-                    TrustedDeviceId = trustedDeviceId
+                    TrustedDeviceId = trustedDeviceId,
+                    ReturnPath = returnUrl
                 };
 
                 var serialized = JsonConvert.SerializeObject(pendingDevice);
 
-                await _cacheService.SetValueAsync(
+                var stored = await _cacheService.SetValueAsync(
                     key: $"device:pending:{token}",
                     value: serialized,
                     expiry: _pendingTtl
                 );
+
+                if (!stored)
+                    throw new InternalServerErrorException("Device verification could not be initiated. Please try again.");
 
                 await _authNotificationService.SendDeviceVerificationAsync(userEmail, token);
 
@@ -124,7 +130,8 @@ namespace backend.main.features.auth.device
 
                 return new AuthenticatedSessionResult
                 {
-                    UserToken = await _authSessionService.IssueAsync(user, transport, rememberMe: false)
+                    UserToken = await _authSessionService.IssueAsync(user, transport, rememberMe: false),
+                    ReturnPath = pending.ReturnPath
                 };
             }
             catch (Exception e)
@@ -139,27 +146,13 @@ namespace backend.main.features.auth.device
 
         private sealed class PendingDevice
         {
-            public int UserId
-            {
-                get; set;
-            }
-            public required string Email
-            {
-                get; set;
-            }
-            public required string DeviceType
-            {
-                get; set;
-            }
-            public required string ClientName
-            {
-                get; set;
-            }
-            public required string TrustedDeviceId
-            {
-                get; set;
-            }
+            public int UserId { get; set; }
+            public required string Email { get; set; }
+            public required string DeviceType { get; set; }
+            public required string ClientName { get; set; }
+            public required string TrustedDeviceId { get; set; }
             public string IpAddress { get; set; } = "Unknown";
+            public string? ReturnPath { get; set; }
         }
     }
 }

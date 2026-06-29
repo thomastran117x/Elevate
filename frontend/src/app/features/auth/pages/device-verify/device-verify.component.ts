@@ -1,5 +1,5 @@
-import { CommonModule } from '@angular/common';
-import { Component, signal } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { Component, inject, PLATFORM_ID, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
@@ -15,6 +15,8 @@ import { AuthReturnUrlService } from '../../services/auth-return-url.service';
   styleUrls: ['./device-verify.component.css'],
 })
 export class DeviceVerifyComponent {
+  private platformId = inject(PLATFORM_ID);
+
   status = signal<'ready' | 'loading' | 'success' | 'error'>('ready');
   message = signal('Open the verification link on the device you want to use, and we will finish signing you in here.');
   hasToken = false;
@@ -30,6 +32,10 @@ export class DeviceVerifyComponent {
   ) {}
 
   ngOnInit(): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
     this.authReturnUrl.captureFromRoute(this.route);
     this.token = this.route.snapshot.queryParamMap.get('token');
     this.hasToken = !!this.token;

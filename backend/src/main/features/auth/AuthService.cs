@@ -785,7 +785,7 @@ namespace backend.main.features.auth
 
             if (!EnvironmentSetting.AuthSmsMfaEnforcementEnabled && !shouldRequireTotpStepUp)
             {
-                await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo);
+                await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, _requestInfo, returnUrl);
                 return onAuthenticated(new AuthenticatedSessionResult
                 {
                     UserToken = await _authSessionService.IssueAsync(user, transport, rememberMe: rememberMe)

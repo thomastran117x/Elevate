@@ -2,6 +2,8 @@ import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Component, inject, OnInit, PLATFORM_ID, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
+import { AuthTokenService } from '../../../../core/api/services/auth-token.service';
+
 import { environment } from '../../../../../environments/environment';
 import {
   DEVICE_VERIFICATION_REQUIRED_ERROR_CODE,
@@ -35,6 +37,8 @@ export class GoogleCallbackComponent implements OnInit {
   status = signal<'loading' | 'success' | 'error' | 'device'>('loading');
   message = signal('Completing Google sign-in...');
 
+  private authToken = inject(AuthTokenService);
+
   constructor(
     private auth: AuthService,
     private sessionManager: SessionManagerService,
@@ -44,6 +48,11 @@ export class GoogleCallbackComponent implements OnInit {
 
   ngOnInit(): void {
     if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
+    if (this.authToken.accessToken) {
+      this.router.navigateByUrl(this.authReturnUrl.consume('/dashboard'));
       return;
     }
 
