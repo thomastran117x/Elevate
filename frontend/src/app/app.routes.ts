@@ -43,12 +43,19 @@ export const routes: Routes = [
 
   {
     path: 'settings/security',
-    canMatch: [featureCanMatch(FEATURE_KEYS.auth)],
+    redirectTo: '/account/security',
+    pathMatch: 'full',
+  },
+  {
+    path: 'account',
+    canMatch: [featureCanMatch(FEATURE_KEYS.profile)],
     canActivate: [authenticatedUserGuard],
     loadComponent: () =>
-      import('./features/auth/pages/security-settings/security-settings.component').then(
-        (m) => m.SecuritySettingsComponent,
+      import('./features/profile/pages/account/account-page.component').then(
+        (m) => m.AccountPageComponent,
       ),
+    loadChildren: () =>
+      import('./features/profile/pages/account/account.routes').then((m) => m.ACCOUNT_ROUTES),
   },
   {
     path: 'events',
