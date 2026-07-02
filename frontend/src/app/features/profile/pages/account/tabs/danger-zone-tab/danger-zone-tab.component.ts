@@ -44,7 +44,8 @@ export class DangerZoneTabComponent implements OnInit {
   }
 
   get confirmationMatches(): boolean {
-    return this.confirmationInput === this.currentUser?.Username;
+    const username = this.currentUser?.Username;
+    return !!username && this.confirmationInput === username;
   }
 
   showDeleteConfirm(): void {

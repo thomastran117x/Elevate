@@ -7,7 +7,7 @@ namespace backend.main.features.profile.contracts.requests
         [StringLength(100)]
         public string? Name { get; set; }
 
-        [StringLength(50)]
+        [StringLength(50, MinimumLength = 1)]
         public string? Username { get; set; }
 
         [Url]

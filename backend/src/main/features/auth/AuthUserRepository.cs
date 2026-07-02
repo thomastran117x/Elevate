@@ -48,12 +48,9 @@ namespace backend.main.features.auth
             if (existing == null)
                 return null;
 
-            if (updated.Email != null)
-                existing.Email = updated.Email;
-            if (updated.Password != null)
-                existing.Password = updated.Password;
-            if (updated.Usertype != null)
-                existing.Usertype = AuthRoles.NormalizeStored(updated.Usertype);
+            // Identity and role are intentionally NOT mutable through a partial update.
+            // Email changes require re-verification and role changes go through dedicated
+            // admin/status flows; otherwise a stale JWT claim could silently overwrite them.
             if (updated.Name != null)
                 existing.Name = updated.Name;
             if (updated.Username != null)

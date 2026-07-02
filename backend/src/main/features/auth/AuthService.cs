@@ -283,9 +283,19 @@ namespace backend.main.features.auth
 
                 await EnsureUserEnabledAsync(ToUser(existingUser));
 
+                if (existingUser.Password == null)
+                    throw new BadRequestException(
+                        "This account uses social login and has no password set."
+                    );
+
                 bool isValid = VerifyPassword(currentPassword, existingUser.Password);
                 if (!isValid)
                     throw new UnauthorizedException("Current password is incorrect.");
+
+                if (currentPassword == newPassword)
+                    throw new BadRequestException(
+                        "New password must be different from your current password."
+                    );
 
                 await ChangePasswordInternalAsync(email, newPassword);
             }
