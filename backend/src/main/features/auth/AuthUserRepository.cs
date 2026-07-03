@@ -240,6 +240,7 @@ namespace backend.main.features.auth
                     Name = u.Name,
                     Avatar = u.Avatar,
                     Usertype = AuthRoles.NormalizeStored(u.Usertype),
+                    CreatedAtUtc = u.CreatedAt,
                 })
                 .FirstOrDefaultAsync();
         }

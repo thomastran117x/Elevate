@@ -58,6 +58,14 @@ export const routes: Routes = [
       import('./features/profile/pages/account/account.routes').then((m) => m.ACCOUNT_ROUTES),
   },
   {
+    path: 'profile/:username',
+    canMatch: [featureCanMatch(FEATURE_KEYS.profile)],
+    loadComponent: () =>
+      import('./features/profile/pages/public-profile/public-profile.component').then(
+        (m) => m.PublicProfileComponent,
+      ),
+  },
+  {
     path: 'events',
     canMatch: [featureCanMatch(FEATURE_KEYS.events)],
     loadChildren: () => import('./features/events/events.routes').then((m) => m.EVENTS_ROUTES),

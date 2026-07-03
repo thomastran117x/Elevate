@@ -64,6 +64,15 @@ namespace backend.main.features.profile
             return user;
         }
 
+        public async Task<UserProfileRecord> GetPublicProfileByUsernameAsync(string username)
+        {
+            var profile = await _userRepository.GetProfileByUsernameAsync(username);
+            if (profile == null)
+                throw new ResourceNotFoundException($"No user found with the username {username}");
+
+            return profile;
+        }
+
         public async Task<User?> UpdateUserAsync(int id, User updatedUser)
         {
             var existingUser = await _userRepository.UpdatePartialAsync(updatedUser);

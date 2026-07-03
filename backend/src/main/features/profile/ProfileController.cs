@@ -35,9 +35,65 @@ namespace backend.main.features.profile
             _tokenService = tokenService;
         }
 
+        [HttpGet]
+        [ProducesResponseType(typeof(ApiResponse<MyProfileResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetMyProfile()
+        {
+            try
+            {
+                var userPayload = User.GetUserPayload();
+                var user = await _userService.GetUserByIdAsync(userPayload.Id);
+
+                return Ok(new ApiResponse<MyProfileResponse>(
+                    "Profile fetched successfully.",
+                    MapToMyProfile(user)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[ProfileController] GetMyProfile failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [HttpGet("{username}")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(ApiResponse<PublicProfileResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetPublicProfile(string username)
+        {
+            try
+            {
+                var profile = await _userService.GetPublicProfileByUsernameAsync(username);
+
+                return Ok(new ApiResponse<PublicProfileResponse>(
+                    "Profile fetched successfully.",
+                    new PublicProfileResponse
+                    {
+                        Id = profile.Id,
+                        Username = profile.Username,
+                        Name = profile.Name,
+                        Avatar = profile.Avatar,
+                        Usertype = profile.Usertype,
+                        CreatedAtUtc = profile.CreatedAtUtc,
+                    }
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[ProfileController] GetPublicProfile failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
         [HttpPatch]
         [ValidateAntiForgeryToken]
-        [ProducesResponseType(typeof(ApiResponse<ProfileResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<MyProfileResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
         {
             try
@@ -54,23 +110,17 @@ namespace backend.main.features.profile
                         Name = request.Name,
                         Username = request.Username,
                         Avatar = request.Avatar,
+                        Phone = request.Phone,
+                        Address = request.Address,
                     }
                 );
 
                 if (updatedUser == null)
                     throw new ResourceNotFoundException("User not found.");
 
-                return Ok(new ApiResponse<ProfileResponse>(
+                return Ok(new ApiResponse<MyProfileResponse>(
                     "Profile updated successfully.",
-                    new ProfileResponse
-                    {
-                        Id = updatedUser.Id,
-                        Email = updatedUser.Email,
-                        Username = updatedUser.Username,
-                        Name = updatedUser.Name,
-                        Avatar = updatedUser.Avatar,
-                        Usertype = updatedUser.Usertype,
-                    }
+                    MapToMyProfile(updatedUser)
                 ));
             }
             catch (Exception e)
@@ -79,6 +129,34 @@ namespace backend.main.features.profile
                     return HandleError.Resolve(e);
 
                 Logger.Error($"[ProfileController] UpdateProfile failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [HttpPost("avatar")]
+        [ValidateAntiForgeryToken]
+        [ProducesResponseType(typeof(ApiResponse<MyProfileResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> UploadAvatar([FromForm] AvatarUploadRequest request)
+        {
+            try
+            {
+                var userPayload = User.GetUserPayload();
+                var updatedUser = await _userService.UpdateAvatarAsync(userPayload.Id, request.Image);
+
+                if (updatedUser == null)
+                    throw new ResourceNotFoundException("User not found.");
+
+                return Ok(new ApiResponse<MyProfileResponse>(
+                    "Avatar updated successfully.",
+                    MapToMyProfile(updatedUser)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[ProfileController] UploadAvatar failed: {e}");
                 return HandleError.Resolve(e);
             }
         }
@@ -133,6 +211,25 @@ namespace backend.main.features.profile
                 Logger.Error($"[ProfileController] DeleteAccount failed: {e}");
                 return HandleError.Resolve(e);
             }
+        }
+
+        private static MyProfileResponse MapToMyProfile(User user)
+        {
+            return new MyProfileResponse
+            {
+                Id = user.Id,
+                Email = user.Email,
+                Username = user.Username ?? string.Empty,
+                Name = user.Name,
+                Avatar = user.Avatar,
+                Usertype = user.Usertype,
+                Phone = user.Phone,
+                Address = user.Address,
+                GoogleLinked = !string.IsNullOrEmpty(user.GoogleID),
+                MicrosoftLinked = !string.IsNullOrEmpty(user.MicrosoftID),
+                CreatedAtUtc = user.CreatedAt,
+                UpdatedAtUtc = user.UpdatedAt,
+            };
         }
     }
 }
