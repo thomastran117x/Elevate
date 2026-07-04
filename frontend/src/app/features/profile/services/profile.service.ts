@@ -9,7 +9,6 @@ import { environment } from '../../../../environments/environment';
 export interface UpdateProfilePayload {
   name?: string;
   username?: string;
-  avatar?: string;
   phone?: string;
   address?: string;
 }
@@ -30,7 +29,6 @@ export interface MyProfile {
 }
 
 export interface PublicProfile {
-  Id: number;
   Username: string;
   Name?: string | null;
   Avatar?: string | null;

@@ -103,15 +103,21 @@ namespace backend.main.features.profile
 
         public async Task<User?> UpdateAvatarAsync(int id, IFormFile image)
         {
-            string filePath = await _blobService.UploadImageAsync(image, "users");
-
+            // Verify the user exists before writing anything to blob storage, so a
+            // deleted/missing account can't leave an orphaned upload behind.
             User user = await _userRepository.GetUserAsync(id)
                 ?? throw new ResourceNotFoundException($"User with the id {id} is not found");
 
+            string? previousAvatar = user.Avatar;
+            string filePath = await _blobService.UploadImageAsync(image, "users");
             user.Avatar = filePath;
 
             User updatedUser = await _userRepository.UpdatePartialAsync(user)
                 ?? throw new ResourceNotFoundException($"User with the id {id} is not found");
+
+            // Best-effort cleanup of the replaced image (no-op for external/legacy URLs).
+            if (!string.IsNullOrEmpty(previousAvatar) && previousAvatar != filePath)
+                await _blobService.DeleteBlobAsync(previousAvatar);
 
             await _refreshCache.RemoveAsync(GetUserCacheKey(id));
             return updatedUser;

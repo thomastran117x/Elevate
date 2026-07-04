@@ -72,7 +72,6 @@ namespace backend.main.features.profile
                     "Profile fetched successfully.",
                     new PublicProfileResponse
                     {
-                        Id = profile.Id,
                         Username = profile.Username,
                         Name = profile.Name,
                         Avatar = profile.Avatar,
@@ -104,12 +103,13 @@ namespace backend.main.features.profile
                     userPayload.Id,
                     new User
                     {
+                        // Email/Usertype are required by the User type but are intentionally
+                        // ignored by UpdatePartialAsync — they are never persisted from here.
                         Id = userPayload.Id,
                         Email = userPayload.Email,
                         Usertype = userPayload.Role,
                         Name = request.Name,
                         Username = request.Username,
-                        Avatar = request.Avatar,
                         Phone = request.Phone,
                         Address = request.Address,
                     }

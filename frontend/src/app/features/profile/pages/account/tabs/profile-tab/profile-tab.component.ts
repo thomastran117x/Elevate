@@ -116,7 +116,10 @@ export class ProfileTabComponent implements OnInit {
         phone: phone || undefined,
         address: address || undefined,
       })
-      .pipe(finalize(() => (this.saving = false)))
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => (this.saving = false)),
+      )
       .subscribe({
         next: (updated) => {
           this.profile = updated;
@@ -151,7 +154,10 @@ export class ProfileTabComponent implements OnInit {
     this.avatarUploading = true;
     this.profileService
       .uploadAvatar(file)
-      .pipe(finalize(() => (this.avatarUploading = false)))
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => (this.avatarUploading = false)),
+      )
       .subscribe({
         next: (updated) => {
           this.profile = updated;

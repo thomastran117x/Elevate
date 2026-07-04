@@ -1,6 +1,8 @@
+import { inject } from '@angular/core';
 import { Routes } from '@angular/router';
 
 import { featureCanMatch } from './core/features/feature-can-match.guard';
+import { FeatureFlagsService } from './core/features/feature-flags.service';
 import { FEATURE_KEYS } from './core/features/feature-flags.types';
 import { NotFoundComponent } from './shared/not-found/not-found.component';
 import { authenticatedUserGuard } from './features/auth/guards/authenticated-user.guard';
@@ -42,9 +44,12 @@ export const routes: Routes = [
   },
 
   {
+    // Legacy alias. Only forward to the security tab when the auth feature is enabled;
+    // otherwise fall back to home so the MFA tab is never reached with auth turned off.
     path: 'settings/security',
-    redirectTo: '/account/security',
     pathMatch: 'full',
+    redirectTo: () =>
+      inject(FeatureFlagsService).isEnabled(FEATURE_KEYS.auth) ? '/account/security' : '/',
   },
   {
     path: 'account',

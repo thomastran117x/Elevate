@@ -2,7 +2,8 @@ import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
-import { finalize, switchMap } from 'rxjs/operators';
+import { EMPTY } from 'rxjs';
+import { catchError, finalize, switchMap } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { PublicProfile, ProfileService } from '../../services/profile.service';
@@ -34,17 +35,20 @@ export class PublicProfileComponent implements OnInit {
           this.error = '';
           this.profile = null;
           const username = params.get('username') ?? '';
-          return this.profileService
-            .getPublicProfile(username)
-            .pipe(finalize(() => (this.loading = false)));
+          return this.profileService.getPublicProfile(username).pipe(
+            finalize(() => (this.loading = false)),
+            // Handle the error here so a 404 doesn't tear down the paramMap stream
+            // and leave the component unresponsive to later route changes.
+            catchError((err) => {
+              this.error = getApiClientMessage(err, 'This profile could not be found.');
+              return EMPTY;
+            }),
+          );
         }),
       )
       .subscribe({
         next: (profile) => {
           this.profile = profile;
-        },
-        error: (err) => {
-          this.error = getApiClientMessage(err, 'This profile could not be found.');
         },
       });
   }

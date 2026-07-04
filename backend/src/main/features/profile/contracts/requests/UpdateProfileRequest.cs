@@ -16,12 +16,8 @@ namespace backend.main.features.profile.contracts.requests
             get; set;
         }
 
-        [Url]
-        [StringLength(500)]
-        public string? Avatar
-        {
-            get; set;
-        }
+        // Avatar is intentionally NOT settable here — it is managed exclusively through the
+        // POST /profile/avatar upload pipeline (extension/size validation + blob storage).
 
         [Phone]
         [StringLength(30)]
