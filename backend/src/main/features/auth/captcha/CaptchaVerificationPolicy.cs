@@ -1,3 +1,5 @@
+using backend.main.application.environment;
+
 namespace backend.main.features.auth.captcha
 {
     internal sealed class CaptchaVerificationPolicy
@@ -9,24 +11,14 @@ namespace backend.main.features.auth.captcha
         {
             _allowBypass =
                 config.GetValue<bool?>("Captcha:AllowBypass")
-                ?? ParseBool(config["CAPTCHA_ALLOW_BYPASS"]);
-            _environmentName = (
-                config["ENVIRONMENT"]
-                ?? config["ASPNETCORE_ENVIRONMENT"]
-                ?? config["DOTNET_ENVIRONMENT"]
-                ?? "development"
-            ).Trim().ToLowerInvariant();
+                ?? BypassEnvironment.ParseBool(config["CAPTCHA_ALLOW_BYPASS"]);
+            _environmentName = BypassEnvironment.ResolveName(config);
         }
 
         public bool IsBypassEnabled => _allowBypass && IsNonProduction;
 
-        public bool IsNonProduction => _environmentName is "development" or "dev" or "test";
+        public bool IsNonProduction => BypassEnvironment.IsNonProduction(_environmentName);
 
         public string EnvironmentName => _environmentName;
-
-        private static bool ParseBool(string? value)
-        {
-            return bool.TryParse(value, out var parsed) && parsed;
-        }
     }
 }

@@ -246,6 +246,8 @@ namespace backend.main.application.bootstrap
                 };
             });
 
+            services.AddSingleton<SeedAccountBypassPolicy>();
+
             services.AddAppSeeders();
 
             return services;

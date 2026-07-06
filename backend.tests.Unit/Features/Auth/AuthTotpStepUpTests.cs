@@ -77,6 +77,7 @@ public class AuthTotpStepUpControllerTests
             authService.Object,
             antiforgery.Object,
             captchaService.Object,
+            new SeedAccountBypassPolicy(configuration),
             TestRequestInfoFactory.Browser(),
             configuration)
         {
@@ -173,6 +174,7 @@ public class AuthTotpStepUpServiceTests
             deviceTrustService.Object,
             loginStepUpChallengeService.Object,
             authSessionService.Object,
+            new SeedAccountBypassPolicy(new ConfigurationBuilder().Build()),
             TestRequestInfoFactory.Browser());
     }
 }
