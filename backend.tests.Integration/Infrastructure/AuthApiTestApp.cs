@@ -115,6 +115,20 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         return await db.Users.SingleOrDefaultAsync(user => user.Email == email);
     }
 
+    /// <summary>
+    /// Runs an arbitrary EF query against a fresh scoped <see cref="AppDatabaseContext"/> so a test can
+    /// assert on the state that was actually persisted, rather than trusting the HTTP response alone.
+    /// Each call opens its own scope/context, so it reads committed state from the shared in-memory DB.
+    /// Materialize (or project) the result inside the lambda — entities are detached once the scope
+    /// disposes, so navigation properties will not lazy-load afterwards.
+    /// </summary>
+    public async Task<T> QueryDbAsync<T>(Func<AppDatabaseContext, Task<T>> query)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+        return await query(db);
+    }
+
 
     public async Task<SmsMfaEnrollment?> FindSmsMfaEnrollmentAsync(int userId)
     {

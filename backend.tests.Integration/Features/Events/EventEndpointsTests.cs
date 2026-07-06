@@ -9,16 +9,21 @@ using backend.main.features.auth.token;
 using backend.main.features.clubs.staff;
 using backend.main.features.events;
 using backend.main.features.events.contracts.responses;
+using backend.main.features.events.images;
+using backend.main.features.events.registration;
 using backend.main.features.events.search;
+using backend.main.features.events.versions;
 using backend.main.features.events.versions.contracts.responses;
 using backend.main.features.payment;
 using backend.main.features.events.registration.contracts.responses;
+using backend.main.infrastructure.database.core;
 using backend.main.shared.responses;
 
 using backend.tests.Integration.Infrastructure;
 
 using FluentAssertions;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -64,6 +69,12 @@ public class EventEndpointsTests
         var ev = await PublishEventAsync(app, organizerSession.AccessToken, createdBody.Data!.Id);
         ev.Name.Should().Be("Board Game Night");
         ev.ImageUrls.Should().ContainSingle(url => url == image.PublicUrl);
+
+        var persistedEvent = await app.QueryDbAsync(db => db.Events.SingleOrDefaultAsync(e => e.Id == ev.Id));
+        persistedEvent.Should().NotBeNull();
+        persistedEvent!.Name.Should().Be("Board Game Night");
+        persistedEvent.ClubId.Should().Be(club.Id);
+        persistedEvent.LifecycleState.Should().Be(EventLifecycleState.Published);
 
         var detail = await app.Client.GetAsync($"/api/events/{ev.Id}");
         detail.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -118,11 +129,18 @@ public class EventEndpointsTests
         updatedBody.Data!.Name.Should().Be("Advanced Board Game Night");
         updatedBody.Data.Location.Should().Be("Innovation Hub");
 
+        var persistedAfterUpdate = await app.QueryDbAsync(db => db.Events.SingleAsync(e => e.Id == ev.Id));
+        persistedAfterUpdate.Name.Should().Be("Advanced Board Game Night");
+        persistedAfterUpdate.Location.Should().Be("Innovation Hub");
+        persistedAfterUpdate.maxParticipants.Should().Be(50);
+
         var deleted = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete,
             $"/api/events/{ev.Id}",
             organizerSession.AccessToken));
         deleted.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        (await app.QueryDbAsync(db => db.Events.AnyAsync(e => e.Id == ev.Id))).Should().BeFalse();
 
         var missing = await app.Client.GetAsync($"/api/events/{ev.Id}");
         missing.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -151,6 +169,13 @@ public class EventEndpointsTests
         var detailAfterAddBody = await app.ReadApiResponseAsync<EventResponse>(detailAfterAdd);
         detailAfterAddBody.Data!.ImageUrls.Should().HaveCount(2);
 
+        var persistedImage = await app.QueryDbAsync(db =>
+            db.EventImages.SingleOrDefaultAsync(i => i.Id == addedBody.Data!.Id));
+        persistedImage.Should().NotBeNull();
+        persistedImage!.EventId.Should().Be(ev.Id);
+        persistedImage.ImageUrl.Should().Be(secondImage.PublicUrl);
+        (await app.QueryDbAsync(db => db.EventImages.CountAsync(i => i.EventId == ev.Id))).Should().Be(2);
+
         var removed = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete,
             $"/api/events/{ev.Id}/images/{addedBody.Data!.Id}",
@@ -160,6 +185,8 @@ public class EventEndpointsTests
         var detailAfterRemove = await app.Client.GetAsync($"/api/events/{ev.Id}");
         var detailAfterRemoveBody = await app.ReadApiResponseAsync<EventResponse>(detailAfterRemove);
         detailAfterRemoveBody.Data!.ImageUrls.Should().ContainSingle(url => url == firstImage.PublicUrl);
+
+        (await app.QueryDbAsync(db => db.EventImages.AnyAsync(i => i.Id == addedBody.Data!.Id))).Should().BeFalse();
     }
 
     [Fact]
@@ -234,6 +261,9 @@ public class EventEndpointsTests
         var created = (await app.ReadApiResponseAsync<EventResponse>(createResponse)).Data!;
         created.LifecycleState.Should().Be(EventLifecycleState.Draft);
 
+        (await app.QueryDbAsync(db => db.Events.Where(e => e.Id == created.Id).Select(e => e.LifecycleState).SingleAsync()))
+            .Should().Be(EventLifecycleState.Draft);
+
         var publicDetailBeforePublish = await app.Client.GetAsync($"/api/events/{created.Id}");
         publicDetailBeforePublish.StatusCode.Should().Be(HttpStatusCode.NotFound);
 
@@ -252,6 +282,9 @@ public class EventEndpointsTests
         managerListBody.Data!.Items.Should().ContainSingle(item => item.Id == created.Id);
 
         await PublishEventAsync(app, organizerSession.AccessToken, created.Id);
+
+        (await app.QueryDbAsync(db => db.Events.Where(e => e.Id == created.Id).Select(e => e.LifecycleState).SingleAsync()))
+            .Should().Be(EventLifecycleState.Published);
 
         var publicDetailAfterPublish = await app.Client.GetAsync($"/api/events/{created.Id}");
         publicDetailAfterPublish.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -275,6 +308,9 @@ public class EventEndpointsTests
 
         var archived = (await app.ReadApiResponseAsync<ManagedEventResponse>(archiveResponse)).Data!;
         archived.LifecycleState.Should().Be(EventLifecycleState.Archived);
+
+        (await app.QueryDbAsync(db => db.Events.Where(e => e.Id == ev.Id).Select(e => e.LifecycleState).SingleAsync()))
+            .Should().Be(EventLifecycleState.Archived);
 
         var publicDetail = await app.Client.GetAsync($"/api/events/{ev.Id}");
         publicDetail.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -320,6 +356,13 @@ public class EventEndpointsTests
             participantSession.AccessToken));
         registered.StatusCode.Should().Be(HttpStatusCode.Created);
 
+        var persistedRegistration = await app.QueryDbAsync(db =>
+            db.EventRegistrations.SingleOrDefaultAsync(r => r.EventId == firstEvent.Id && r.UserId == participant!.Id));
+        persistedRegistration.Should().NotBeNull();
+        persistedRegistration!.Status.Should().Be(RegistrationStatus.Active);
+        (await app.QueryDbAsync(db => db.Events.Where(e => e.Id == firstEvent.Id).Select(e => e.RegistrationCount).SingleAsync()))
+            .Should().Be(1);
+
         var check = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Get,
             $"/api/events/{firstEvent.Id}/registrations/me",
@@ -358,6 +401,14 @@ public class EventEndpointsTests
         batchUnregister.StatusCode.Should().Be((HttpStatusCode)207);
         var batchUnregisterBody = await app.ReadApiResponseAsync<BatchRegistrationResultResponse>(batchUnregister);
         batchUnregisterBody.Data!.Succeeded.Should().Contain([firstEvent.Id, secondEvent.Id]);
+
+        (await app.QueryDbAsync(db => db.EventRegistrations
+            .Where(r => r.EventId == firstEvent.Id && r.UserId == participant!.Id)
+            .Select(r => r.Status)
+            .SingleAsync()))
+            .Should().Be(RegistrationStatus.Cancelled);
+        (await app.QueryDbAsync(db => db.Events.Where(e => e.Id == firstEvent.Id).Select(e => e.RegistrationCount).SingleAsync()))
+            .Should().Be(0);
     }
 
     [Fact]
@@ -1410,6 +1461,13 @@ public class EventEndpointsTests
         await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete, $"/api/events/{ev.Id}/register", participantSession.AccessToken));
 
+        // Soft delete: the row persists with a Cancelled status rather than being removed.
+        var persistedCancelled = await app.QueryDbAsync(db =>
+            db.EventRegistrations.SingleOrDefaultAsync(r => r.EventId == ev.Id && r.UserId == participant!.Id));
+        persistedCancelled.Should().NotBeNull();
+        persistedCancelled!.Status.Should().Be(RegistrationStatus.Cancelled);
+        persistedCancelled.CancelledAt.Should().NotBeNull();
+
         var registrations = await app.Client.GetAsync($"/api/events/{ev.Id}/registrations");
         registrations.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await app.ReadApiResponseAsync<IEnumerable<EventRegistrationResponse>>(registrations);
@@ -1437,6 +1495,14 @@ public class EventEndpointsTests
                 dietaryNeeds = "Vegetarian, no nuts"
             })));
         reg.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var persistedRegistration = await app.QueryDbAsync(db =>
+            db.EventRegistrations.SingleOrDefaultAsync(r => r.EventId == ev.Id && r.UserId == participant!.Id));
+        persistedRegistration.Should().NotBeNull();
+        persistedRegistration!.Notes.Should().Be("Please seat me near the front.");
+        persistedRegistration.PhoneNumber.Should().Be("416-555-0123");
+        persistedRegistration.DietaryNeeds.Should().Be("Vegetarian, no nuts");
+        persistedRegistration.Status.Should().Be(RegistrationStatus.Active);
 
         // Organizer sees full PII
         var registrations = await app.Client.SendAsync(CreateAuthorizedRequest(
@@ -1484,6 +1550,12 @@ public class EventEndpointsTests
                 dietaryNeeds = "Gluten free"
             })));
         patch.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var persistedPatched = await app.QueryDbAsync(db =>
+            db.EventRegistrations.SingleAsync(r => r.EventId == ev.Id && r.UserId == participant!.Id));
+        persistedPatched.Notes.Should().Be("Updated note");
+        persistedPatched.PhoneNumber.Should().Be("647-555-9999");
+        persistedPatched.DietaryNeeds.Should().Be("Gluten free");
 
         // Use organizer auth so PII fields are included in the response
         var registrations = await app.Client.SendAsync(CreateAuthorizedRequest(
@@ -1609,6 +1681,12 @@ public class EventEndpointsTests
         updatedDraft.MaxParticipants.Should().Be(40);
         updatedDraft.Tags.Should().Contain(new[] { "draft", "updated" });
 
+        var persistedDraft = await app.QueryDbAsync(db => db.Events.SingleAsync(e => e.Id == createdDraft.Id));
+        persistedDraft.Name.Should().Be("Draft Summit Updated");
+        persistedDraft.Location.Should().Be("Studio 2");
+        persistedDraft.maxParticipants.Should().Be(40);
+        persistedDraft.LifecycleState.Should().Be(EventLifecycleState.Draft);
+
         var publish = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Post,
             $"/api/events/{createdDraft.Id}/publish",
@@ -1618,6 +1696,9 @@ public class EventEndpointsTests
         publish.StatusCode.Should().Be(HttpStatusCode.OK);
         var published = (await app.ReadApiResponseAsync<ManagedEventResponse>(publish)).Data!;
         published.LifecycleState.Should().Be(EventLifecycleState.Published);
+
+        (await app.QueryDbAsync(db => db.Events.Where(e => e.Id == createdDraft.Id).Select(e => e.LifecycleState).SingleAsync()))
+            .Should().Be(EventLifecycleState.Published);
 
         var publicDetail = await app.Client.GetAsync($"/api/events/{createdDraft.Id}");
         publicDetail.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -1658,6 +1739,11 @@ public class EventEndpointsTests
             })));
         update.StatusCode.Should().Be(HttpStatusCode.OK);
 
+        var persistedActionTypes = await app.QueryDbAsync(db =>
+            db.EventVersions.Where(v => v.EventId == ev.Id).Select(v => v.ActionType).ToListAsync());
+        persistedActionTypes.Should().Contain("create");
+        persistedActionTypes.Should().Contain("update");
+
         await app.AddRegistrationAsync(ev.Id, attendeeOne!.Id);
         await app.AddRegistrationAsync(ev.Id, attendeeTwo!.Id);
         await app.AddPaymentAsync(ev.Id, attendeeOne.Id, PaymentStatus.Succeeded);
@@ -1694,6 +1780,9 @@ public class EventEndpointsTests
         rollbackBody.Data!.Event.Name.Should().Be("Versioned Event");
         rollbackBody.Data.RestoredFromVersionNumber.Should().Be(1);
 
+        (await app.QueryDbAsync(db => db.Events.Where(e => e.Id == ev.Id).Select(e => e.Name).SingleAsync()))
+            .Should().Be("Versioned Event");
+
         var eventAnalytics = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Get,
             $"/api/events/{ev.Id}/analytics",
@@ -1728,6 +1817,9 @@ public class EventEndpointsTests
         cancel.StatusCode.Should().Be(HttpStatusCode.OK);
         var cancelled = (await app.ReadApiResponseAsync<ManagedEventResponse>(cancel)).Data!;
         cancelled.LifecycleState.Should().Be(EventLifecycleState.Cancelled);
+
+        (await app.QueryDbAsync(db => db.Events.Where(e => e.Id == ev.Id).Select(e => e.LifecycleState).SingleAsync()))
+            .Should().Be(EventLifecycleState.Cancelled);
 
         organizer.Should().NotBeNull();
     }
@@ -1812,6 +1904,8 @@ public class EventEndpointsTests
         batchCreateBody.Data!.Created.Should().HaveCount(2);
         var createdIds = batchCreateBody.Data.Created.Select(item => item.Id).ToArray();
 
+        (await app.QueryDbAsync(db => db.Events.CountAsync(e => createdIds.Contains(e.Id)))).Should().Be(2);
+
         var list = await app.Client.GetAsync("/api/events?search=Batch%20Event&page=1&pageSize=20");
         list.StatusCode.Should().Be(HttpStatusCode.OK);
         var listBody = await app.ReadApiResponseAsync<PagedResponse<EventResponse>>(list);
@@ -1849,6 +1943,12 @@ public class EventEndpointsTests
         updatedDetailBody.Data!.Name.Should().Be("Batch Event One Updated");
         updatedDetailBody.Data.City.Should().Be("Ottawa");
 
+        var persistedBatchUpdated = await app.QueryDbAsync(db => db.Events.SingleAsync(e => e.Id == createdIds[0]));
+        persistedBatchUpdated.Name.Should().Be("Batch Event One Updated");
+        persistedBatchUpdated.City.Should().Be("Ottawa");
+        (await app.QueryDbAsync(db => db.Events.Where(e => e.Id == createdIds[1]).Select(e => e.maxParticipants).SingleAsync()))
+            .Should().Be(45);
+
         var batchDelete = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete,
             "/api/events/batch",
@@ -1857,6 +1957,8 @@ public class EventEndpointsTests
         batchDelete.StatusCode.Should().Be(HttpStatusCode.OK);
         var batchDeleteBody = await app.ReadApiResponseAsync<BatchDeleteCountResponse>(batchDelete);
         batchDeleteBody.Data!.DeletedCount.Should().Be(2);
+
+        (await app.QueryDbAsync(db => db.Events.AnyAsync(e => createdIds.Contains(e.Id)))).Should().BeFalse();
 
         var missing = await app.Client.GetAsync($"/api/events/{createdIds[0]}");
         missing.StatusCode.Should().Be(HttpStatusCode.NotFound);
