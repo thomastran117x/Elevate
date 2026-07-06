@@ -603,6 +603,7 @@ public class AuthControllerTests
             authService.Object,
             antiforgery.Object,
             captchaService.Object,
+            new SeedAccountBypassPolicy(configuration),
             TestRequestInfoFactory.Browser(),
             configuration);
 

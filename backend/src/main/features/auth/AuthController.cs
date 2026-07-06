@@ -33,6 +33,7 @@ namespace backend.main.features.auth
         private readonly IAuthService _authService;
         private readonly IAntiforgery _antiforgery;
         private readonly ICaptchaService _captchaService;
+        private readonly SeedAccountBypassPolicy _seedBypass;
         private readonly ClientRequestInfo _requestInfo;
         private readonly IConfiguration _configuration;
 
@@ -40,6 +41,7 @@ namespace backend.main.features.auth
             IAuthService authService,
             IAntiforgery antiforgery,
             ICaptchaService captchaService,
+            SeedAccountBypassPolicy seedBypass,
             ClientRequestInfo requestInfo,
             IConfiguration configuration
         )
@@ -47,6 +49,7 @@ namespace backend.main.features.auth
             _authService = authService;
             _antiforgery = antiforgery;
             _captchaService = captchaService;
+            _seedBypass = seedBypass;
             _requestInfo = requestInfo;
             _configuration = configuration;
         }
@@ -59,7 +62,8 @@ namespace backend.main.features.auth
         {
             try
             {
-                if (!await _captchaService.VerifyCaptchaAsync(request.Captcha))
+                if (!_seedBypass.IsBypassEnabledFor(request.Email)
+                    && !await _captchaService.VerifyCaptchaAsync(request.Captcha))
                     throw new BadRequestException("Invalid captcha.");
 
                 var result = await _authService.LoginAsync(
@@ -94,7 +98,8 @@ namespace backend.main.features.auth
         {
             try
             {
-                if (!await _captchaService.VerifyCaptchaAsync(request.Captcha))
+                if (!_seedBypass.IsBypassEnabledFor(request.Email)
+                    && !await _captchaService.VerifyCaptchaAsync(request.Captcha))
                     throw new BadRequestException("Invalid captcha.");
 
                 var challenge = await _authService.SignUpAsync(
@@ -648,7 +653,8 @@ namespace backend.main.features.auth
         {
             try
             {
-                if (!await _captchaService.VerifyCaptchaAsync(request.Captcha))
+                if (!_seedBypass.IsBypassEnabledFor(request.Email)
+                    && !await _captchaService.VerifyCaptchaAsync(request.Captcha))
                     throw new BadRequestException("Invalid captcha.");
 
                 var challenge = await _authService.ForgotPasswordAsync(request.Email);

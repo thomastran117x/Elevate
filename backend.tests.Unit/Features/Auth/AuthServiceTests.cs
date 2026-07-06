@@ -17,6 +17,8 @@ using backend.tests.Unit.Support;
 
 using FluentAssertions;
 
+using Microsoft.Extensions.Configuration;
+
 using Moq;
 using Newtonsoft.Json;
 
@@ -964,7 +966,8 @@ public class AuthServiceTests
         Mock<ICacheService>? cacheService = null,
         Mock<IDeviceTrustService>? deviceTrustService = null,
         Mock<ILoginStepUpChallengeService>? loginStepUpChallengeService = null,
-        Mock<IAuthSessionService>? authSessionService = null)
+        Mock<IAuthSessionService>? authSessionService = null,
+        SeedAccountBypassPolicy? seedBypass = null)
     {
         userRepository ??= new Mock<IAuthUserRepository>();
         oauthService ??= new Mock<IOAuthService>();
@@ -976,6 +979,7 @@ public class AuthServiceTests
         deviceTrustService ??= new Mock<IDeviceTrustService>();
         loginStepUpChallengeService ??= new Mock<ILoginStepUpChallengeService>();
         authSessionService ??= new Mock<IAuthSessionService>();
+        seedBypass ??= new SeedAccountBypassPolicy(new ConfigurationBuilder().Build());
 
         return new AuthService(
             userRepository.Object,
@@ -988,6 +992,7 @@ public class AuthServiceTests
             deviceTrustService.Object,
             loginStepUpChallengeService.Object,
             authSessionService.Object,
+            seedBypass,
             TestRequestInfoFactory.Browser());
     }
 
