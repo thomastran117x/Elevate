@@ -19,7 +19,7 @@ namespace backend.main.application.environment
             ).Trim().ToLowerInvariant();
 
         public static bool IsNonProduction(string environmentName) =>
-            environmentName is "development" or "dev" or "test";
+            environmentName is "development" or "dev" or "test" or "testing";
 
         public static bool ParseBool(string? value) =>
             bool.TryParse(value, out var parsed) && parsed;

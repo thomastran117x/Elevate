@@ -75,6 +75,8 @@ public class SeedAccountBypassPolicyTests
     [InlineData("development")]
     [InlineData("dev")]
     [InlineData("test")]
+    [InlineData("testing")]
+    [InlineData("Testing")]
     public void IsBypassEnabledFor_ShouldBeTrue_WhenFlagEnabled_NonProduction_AndSeedEmail(string environment)
     {
         var policy = CreatePolicy(allowBypass: "true", environment: environment);
