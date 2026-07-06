@@ -27,7 +27,18 @@ export class AuthTokenService {
     private store: Store<{ session: SessionState }>,
   ) {
     this.store.select(selectAccessToken).subscribe((token) => {
-      this.accessToken = token || null;
+      const next = token || null;
+
+      // ASP.NET antiforgery tokens are bound to the current user's identity. When we cross
+      // the anonymous <-> authenticated boundary (login/logout), a CSRF token fetched under
+      // the previous identity is no longer valid — invalidate it so the next state-changing
+      // request fetches a fresh, identity-matched token instead of failing validation.
+      const identityChanged = (next === null) !== (this.accessToken === null);
+      if (identityChanged) {
+        this.csrfToken = null;
+      }
+
+      this.accessToken = next;
     });
   }
 
