@@ -4,22 +4,30 @@ using System.Net.Http.Json;
 
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
+using backend.main.features.clubs;
 using backend.main.features.clubs.contracts.responses;
+using backend.main.features.clubs.follow;
 using backend.main.features.clubs.follow.contracts.responses;
 using backend.main.features.clubs.posts;
+using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.comments.contracts.responses;
 using backend.main.features.clubs.posts.contracts.responses;
 using backend.main.features.clubs.posts.search;
+using backend.main.features.clubs.reviews;
 using backend.main.features.clubs.reviews.contracts.responses;
 using backend.main.features.clubs.search;
+using backend.main.features.clubs.staff;
+using backend.main.features.clubs.versions;
 using backend.main.features.clubs.versions.contracts.responses;
 using backend.main.features.events.search;
+using backend.main.infrastructure.database.core;
 using backend.main.shared.responses;
 
 using backend.tests.Integration.Infrastructure;
 
 using FluentAssertions;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace backend.tests.Integration.Features.Clubs;
@@ -51,6 +59,12 @@ public class ClubEndpointsTests
         club.CanManage.Should().BeTrue();
         club.ClubImage.Should().StartWith("https://storage.test/event-assets/clubs/");
 
+        var persistedClub = await app.QueryDbAsync(db => db.Clubs.SingleOrDefaultAsync(c => c.Id == club.Id));
+        persistedClub.Should().NotBeNull();
+        persistedClub!.Name.Should().Be("Chess Club");
+        persistedClub.Email.Should().Be("chess@example.com");
+        persistedClub.UserId.Should().Be(club.OwnerId);
+
         var fetched = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Get,
             $"/api/clubs/{club.Id}",
@@ -74,6 +88,11 @@ public class ClubEndpointsTests
         updatedBody.Data!.Name.Should().Be("Campus Chess Club");
         updatedBody.Data.Email.Should().Be("campus-chess@example.com");
 
+        var persistedAfterUpdate = await app.QueryDbAsync(db => db.Clubs.SingleAsync(c => c.Id == club.Id));
+        persistedAfterUpdate.Name.Should().Be("Campus Chess Club");
+        persistedAfterUpdate.Email.Should().Be("campus-chess@example.com");
+        persistedAfterUpdate.CurrentVersionNumber.Should().BeGreaterThan(persistedClub.CurrentVersionNumber);
+
         var managed = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Get,
             "/api/clubs/managed",
@@ -88,6 +107,8 @@ public class ClubEndpointsTests
             ownerSession.AccessToken));
         deleted.StatusCode.Should().Be(HttpStatusCode.OK);
 
+        (await app.QueryDbAsync(db => db.Clubs.AnyAsync(c => c.Id == club.Id))).Should().BeFalse();
+
         var missing = await app.Client.GetAsync($"/api/clubs/{club.Id}");
         missing.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -97,7 +118,7 @@ public class ClubEndpointsTests
     {
         await using var app = await AuthApiTestApp.CreateAsync();
         var (ownerSession, _) = await CreateUserSessionAsync(app, "member-owner@example.com", "Organizer");
-        var (memberSession, _) = await CreateUserSessionAsync(app, "member-user@example.com");
+        var (memberSession, member) = await CreateUserSessionAsync(app, "member-user@example.com");
 
         var club = await CreateClubAsync(app, ownerSession.AccessToken, "Robotics Club");
 
@@ -121,6 +142,12 @@ public class ClubEndpointsTests
         membership.StatusCode.Should().Be(HttpStatusCode.OK);
         (await membership.Content.ReadAsStringAsync()).Should().Contain("\"isMember\":true");
 
+        (await app.QueryDbAsync(db =>
+            db.FollowClubs.AnyAsync(f => f.ClubId == club.Id && f.UserId == member!.Id)))
+            .Should().BeTrue();
+        (await app.QueryDbAsync(db => db.Clubs.Where(c => c.Id == club.Id).Select(c => c.MemberCount).SingleAsync()))
+            .Should().Be(1);
+
         var members = await app.Client.GetAsync($"/api/clubs/{club.Id}/members");
         members.StatusCode.Should().Be(HttpStatusCode.OK);
         var membersBody = await app.ReadApiResponseAsync<IEnumerable<FollowResponse>>(members);
@@ -138,6 +165,12 @@ public class ClubEndpointsTests
             memberSession.AccessToken));
         afterLeave.StatusCode.Should().Be(HttpStatusCode.OK);
         (await afterLeave.Content.ReadAsStringAsync()).Should().Contain("\"isMember\":false");
+
+        (await app.QueryDbAsync(db =>
+            db.FollowClubs.AnyAsync(f => f.ClubId == club.Id && f.UserId == member!.Id)))
+            .Should().BeFalse();
+        (await app.QueryDbAsync(db => db.Clubs.Where(c => c.Id == club.Id).Select(c => c.MemberCount).SingleAsync()))
+            .Should().Be(0);
     }
 
     [Fact]
@@ -157,6 +190,11 @@ public class ClubEndpointsTests
             JsonContent.Create(new { userId = manager!.Id })));
         addManager.StatusCode.Should().Be(HttpStatusCode.Created);
 
+        var persistedManager = await app.QueryDbAsync(db =>
+            db.ClubStaff.SingleOrDefaultAsync(s => s.ClubId == club.Id && s.UserId == manager!.Id));
+        persistedManager.Should().NotBeNull();
+        persistedManager!.Role.Should().Be(ClubStaffRole.Manager);
+
         var staff = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Get,
             $"/api/clubs/{club.Id}/staff",
@@ -169,6 +207,10 @@ public class ClubEndpointsTests
             $"/api/clubs/{club.Id}/staff/{manager.Id}",
             ownerSession.AccessToken));
         removed.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        (await app.QueryDbAsync(db =>
+            db.ClubStaff.AnyAsync(s => s.ClubId == club.Id && s.UserId == manager.Id)))
+            .Should().BeFalse();
 
         var managedByFormerManager = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Get,
@@ -188,6 +230,9 @@ public class ClubEndpointsTests
         var transferredBody = await app.ReadApiResponseAsync<ClubApiModel>(transferred);
         transferredBody.Data!.OwnerId.Should().Be(newOwner.Id);
         transferredBody.Data.IsOwner.Should().BeFalse();
+
+        (await app.QueryDbAsync(db => db.Clubs.Where(c => c.Id == club.Id).Select(c => c.UserId).SingleAsync()))
+            .Should().Be(newOwner.Id);
 
         var managedByNewOwner = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Get,
@@ -231,6 +276,14 @@ public class ClubEndpointsTests
         var postBody = await app.ReadApiResponseAsync<ClubPostResponse>(createdPost);
         var post = postBody.Data!;
 
+        var persistedPost = await app.QueryDbAsync(db => db.ClubPosts.SingleOrDefaultAsync(p => p.Id == post.Id));
+        persistedPost.Should().NotBeNull();
+        persistedPost!.ClubId.Should().Be(club.Id);
+        persistedPost.Title.Should().Be("Launch Night");
+        persistedPost.Content.Should().Be("Bring your favorite game.");
+        persistedPost.PostType.Should().Be(PostType.Announcement);
+        persistedPost.IsPinned.Should().BeTrue();
+
         var posts = await app.Client.GetAsync($"/api/clubs/{club.Id}/posts");
         posts.StatusCode.Should().Be(HttpStatusCode.OK);
         var postsBody = await app.ReadApiResponseAsync<PagedResponse<ClubPostResponse>>(posts);
@@ -245,12 +298,20 @@ public class ClubEndpointsTests
         var commentBody = await app.ReadApiResponseAsync<PostCommentResponse>(createdComment);
         var comment = commentBody.Data!;
 
+        var persistedComment = await app.QueryDbAsync(db => db.PostComments.SingleOrDefaultAsync(c => c.Id == comment.Id));
+        persistedComment.Should().NotBeNull();
+        persistedComment!.PostId.Should().Be(post.Id);
+        persistedComment.Content.Should().Be("I am in.");
+
         var updatedComment = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Put,
             $"/api/clubs/{club.Id}/posts/{post.Id}/comments/{comment.Id}",
             commenterSession.AccessToken,
             JsonContent.Create(new { content = "Count me in." })));
         updatedComment.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        (await app.QueryDbAsync(db => db.PostComments.Where(c => c.Id == comment.Id).Select(c => c.Content).SingleAsync()))
+            .Should().Be("Count me in.");
 
         var comments = await app.Client.GetAsync($"/api/clubs/{club.Id}/posts/{post.Id}/comments");
         comments.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -270,17 +331,27 @@ public class ClubEndpointsTests
             })));
         updatedPost.StatusCode.Should().Be(HttpStatusCode.OK);
 
+        var persistedUpdatedPost = await app.QueryDbAsync(db => db.ClubPosts.SingleAsync(p => p.Id == post.Id));
+        persistedUpdatedPost.Title.Should().Be("Launch Night Updated");
+        persistedUpdatedPost.Content.Should().Be("Bring two games.");
+        persistedUpdatedPost.PostType.Should().Be(PostType.General);
+        persistedUpdatedPost.IsPinned.Should().BeFalse();
+
         var deletedComment = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete,
             $"/api/clubs/{club.Id}/posts/{post.Id}/comments/{comment.Id}",
             commenterSession.AccessToken));
         deletedComment.StatusCode.Should().Be(HttpStatusCode.OK);
 
+        (await app.QueryDbAsync(db => db.PostComments.AnyAsync(c => c.Id == comment.Id))).Should().BeFalse();
+
         var deletedPost = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete,
             $"/api/clubs/{club.Id}/posts/{post.Id}",
             ownerSession.AccessToken));
         deletedPost.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        (await app.QueryDbAsync(db => db.ClubPosts.AnyAsync(p => p.Id == post.Id))).Should().BeFalse();
     }
 
     [Fact]
@@ -362,6 +433,13 @@ public class ClubEndpointsTests
         var clubAfterCreateBody = await app.ReadApiResponseAsync<ClubApiModel>(clubAfterCreate);
         clubAfterCreateBody.Data!.Rating.Should().Be(5.0);
 
+        var persistedReview = await app.QueryDbAsync(db => db.ClubReviews.SingleOrDefaultAsync(r => r.Id == review.Id));
+        persistedReview.Should().NotBeNull();
+        persistedReview!.ClubId.Should().Be(club.Id);
+        persistedReview.Rating.Should().Be(5);
+        (await app.QueryDbAsync(db => db.Clubs.Where(c => c.Id == club.Id).Select(c => c.Rating).SingleAsync()))
+            .Should().Be(5.0);
+
         var updatedReview = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Put,
             $"/api/clubs/{club.Id}/reviews/{review.Id}",
@@ -378,6 +456,11 @@ public class ClubEndpointsTests
         var clubAfterUpdateBody = await app.ReadApiResponseAsync<ClubApiModel>(clubAfterUpdate);
         clubAfterUpdateBody.Data!.Rating.Should().Be(3.0);
 
+        (await app.QueryDbAsync(db => db.ClubReviews.Where(r => r.Id == review.Id).Select(r => r.Rating).SingleAsync()))
+            .Should().Be(3);
+        (await app.QueryDbAsync(db => db.Clubs.Where(c => c.Id == club.Id).Select(c => c.Rating).SingleAsync()))
+            .Should().Be(3.0);
+
         var deletedReview = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete,
             $"/api/clubs/{club.Id}/reviews/{review.Id}",
@@ -387,6 +470,10 @@ public class ClubEndpointsTests
         var clubAfterDelete = await app.Client.GetAsync($"/api/clubs/{club.Id}");
         var clubAfterDeleteBody = await app.ReadApiResponseAsync<ClubApiModel>(clubAfterDelete);
         clubAfterDeleteBody.Data!.Rating.Should().BeNull();
+
+        (await app.QueryDbAsync(db => db.ClubReviews.AnyAsync(r => r.Id == review.Id))).Should().BeFalse();
+        (await app.QueryDbAsync(db => db.Clubs.Where(c => c.Id == club.Id).Select(c => c.Rating).SingleAsync()))
+            .Should().BeNull();
     }
 
     [Fact]
@@ -660,6 +747,11 @@ public class ClubEndpointsTests
         addVolunteerBody.Data!.UserId.Should().Be(volunteer.Id);
         addVolunteerBody.Data.Role.Should().Be("Volunteer");
 
+        var persistedVolunteer = await app.QueryDbAsync(db =>
+            db.ClubStaff.SingleOrDefaultAsync(s => s.ClubId == club.Id && s.UserId == volunteer.Id));
+        persistedVolunteer.Should().NotBeNull();
+        persistedVolunteer!.Role.Should().Be(ClubStaffRole.Volunteer);
+
         var volunteerManaged = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Get,
             "/api/clubs/managed",
@@ -679,6 +771,11 @@ public class ClubEndpointsTests
                 clubtype: "social",
                 email: "service-updated@example.com"))));
         updated.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var persistedActionTypes = await app.QueryDbAsync(db =>
+            db.ClubVersions.Where(v => v.ClubId == club.Id).Select(v => v.ActionType).ToListAsync());
+        persistedActionTypes.Should().Contain("create");
+        persistedActionTypes.Should().Contain("update");
 
         var versions = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Get,
@@ -713,6 +810,11 @@ public class ClubEndpointsTests
         rollbackBody.Data.Club.Email.Should().Be("service-club@example.com");
         rollbackBody.Data.RestoredFromVersionNumber.Should().Be(1);
 
+        var persistedAfterRollback = await app.QueryDbAsync(db => db.Clubs.SingleAsync(c => c.Id == club.Id));
+        persistedAfterRollback.Name.Should().Be("Service Club");
+        persistedAfterRollback.Email.Should().Be("service-club@example.com");
+        persistedAfterRollback.CurrentVersionNumber.Should().Be(rollbackBody.Data.NewVersionNumber);
+
         var fetched = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Get,
             $"/api/clubs/{club.Id}",
@@ -746,6 +848,9 @@ public class ClubEndpointsTests
             memberSession.AccessToken));
         duplicateJoin.StatusCode.Should().Be(HttpStatusCode.Conflict);
 
+        (await app.QueryDbAsync(db => db.FollowClubs.CountAsync(f => f.ClubId == club.Id && f.UserId == member!.Id)))
+            .Should().Be(1);
+
         var firstLeave = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete,
             $"/api/clubs/{club.Id}/join",
@@ -771,6 +876,9 @@ public class ClubEndpointsTests
             ownerSession.AccessToken,
             JsonContent.Create(new { userId = manager.Id })));
         duplicateManager.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        (await app.QueryDbAsync(db => db.ClubStaff.CountAsync(s => s.ClubId == club.Id && s.UserId == manager.Id)))
+            .Should().Be(1);
 
         var ownerAsManager = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Post,
