@@ -3,6 +3,8 @@ using System.Text.Json;
 using backend.main.features.events.search;
 using backend.main.infrastructure.database.core;
 
+using backend.tests.Integration.Infrastructure;
+
 using FluentAssertions;
 
 using Microsoft.EntityFrameworkCore;
@@ -16,15 +18,8 @@ public class EventSearchOutboxWriterTests
     [Fact]
     public async Task StageUpsert_ShouldPersistEventDocumentPayload()
     {
-        await using var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-
-        var options = new DbContextOptionsBuilder<AppDatabaseContext>()
-            .UseSqlite(connection)
-            .Options;
-
-        await using var context = new AppDatabaseContext(options);
-        await context.Database.EnsureCreatedAsync();
+        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var context = database.CreateDbContext();
 
         var writer = new EventSearchOutboxWriter(context);
         var ev = new EventEntity
@@ -61,15 +56,8 @@ public class EventSearchOutboxWriterTests
     [Fact]
     public async Task StageDelete_ShouldPersistDeletePayload()
     {
-        await using var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-
-        var options = new DbContextOptionsBuilder<AppDatabaseContext>()
-            .UseSqlite(connection)
-            .Options;
-
-        await using var context = new AppDatabaseContext(options);
-        await context.Database.EnsureCreatedAsync();
+        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var context = database.CreateDbContext();
 
         var writer = new EventSearchOutboxWriter(context);
 

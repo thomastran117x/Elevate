@@ -84,6 +84,9 @@ jobs:
         with:
           dotnet-version: 9.0.x
 
+      - name: Verify Docker availability
+        run: docker version
+
       - name: Run integration tests
         run: dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-integration-tests
 

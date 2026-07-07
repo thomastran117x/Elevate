@@ -15,6 +15,7 @@ using backend.main.features.events.versions;
 using backend.main.features.payment;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
+using backend.tests.Integration.Infrastructure;
 using backend.main.seeders;
 using backend.main.seeders.clubs;
 
@@ -35,7 +36,8 @@ public class ThematicSeedersTests
     [Fact]
     public async Task SeedUsersSeeder_ShouldCreateFortyTwoUsers_AndRemainIdempotent()
     {
-        await using var db = await CreateDbContextAsync();
+        await using var scope = await CreateDbContextAsync();
+        var db = scope.Db;
         var seeder = CreateUsersSeeder(db);
 
         await seeder.SeedAsync();
@@ -55,7 +57,8 @@ public class ThematicSeedersTests
     [Fact]
     public async Task ThematicSeeders_ShouldCreateTenClubs_WithExactStaffAssignments()
     {
-        await using var db = await CreateDbContextAsync();
+        await using var scope = await CreateDbContextAsync();
+        var db = scope.Db;
 
         await RunSeedersAsync(db);
 
@@ -87,7 +90,8 @@ public class ThematicSeedersTests
     [Fact]
     public async Task ThematicSeeders_ShouldCreateFiveHundredFiftyEvents_WithExpectedPerClubCounts()
     {
-        await using var db = await CreateDbContextAsync();
+        await using var scope = await CreateDbContextAsync();
+        var db = scope.Db;
 
         await RunSeedersAsync(db);
 
@@ -119,7 +123,8 @@ public class ThematicSeedersTests
     [Fact]
     public async Task ThematicSeeders_ShouldCreateOneHundredClubPosts_WithExpectedPerClubCounts()
     {
-        await using var db = await CreateDbContextAsync();
+        await using var scope = await CreateDbContextAsync();
+        var db = scope.Db;
 
         await RunSeedersAsync(db);
 
@@ -148,7 +153,8 @@ public class ThematicSeedersTests
     [Fact]
     public async Task ThematicSeeders_ShouldPopulateFeatureActivityAcrossSeededEntities()
     {
-        await using var db = await CreateDbContextAsync();
+        await using var scope = await CreateDbContextAsync();
+        var db = scope.Db;
 
         await RunSeedersAsync(db);
 
@@ -198,7 +204,8 @@ public class ThematicSeedersTests
     [Fact]
     public async Task ThematicSeeders_ShouldPruneStaleSeedContent_AndRestoreDriftOnRerun()
     {
-        await using var db = await CreateDbContextAsync();
+        await using var scope = await CreateDbContextAsync();
+        var db = scope.Db;
 
         await RunSeedersAsync(db);
 
@@ -474,16 +481,30 @@ public class ThematicSeedersTests
             .Build();
     }
 
-    private static async Task<AppDatabaseContext> CreateDbContextAsync()
+    private static async Task<SeedTestDatabase> CreateDbContextAsync()
     {
-        var options = new DbContextOptionsBuilder<AppDatabaseContext>()
-            .UseSqlite("Data Source=:memory:")
-            .Options;
+        var database = await MySqlTestDatabase.CreateAsync();
+        var context = database.CreateDbContext();
+        return new SeedTestDatabase(database, context);
+    }
 
-        var context = new AppDatabaseContext(options);
-        await context.Database.OpenConnectionAsync();
-        await context.Database.EnsureCreatedAsync();
-        return context;
+    private sealed class SeedTestDatabase : IAsyncDisposable
+    {
+        private readonly MySqlTestDatabase _database;
+
+        public AppDatabaseContext Db { get; }
+
+        public SeedTestDatabase(MySqlTestDatabase database, AppDatabaseContext db)
+        {
+            _database = database;
+            Db = db;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await Db.DisposeAsync();
+            await _database.DisposeAsync();
+        }
     }
 
     private static readonly IReadOnlyList<IClubSeedDefinitionSource> ClubSources =
@@ -500,3 +521,5 @@ public class ThematicSeedersTests
         new NeighbourhoodKitchenTableClubSeed()
     ];
 }
+
+

@@ -709,6 +709,7 @@ public class ClubEndpointsTests
                 email: "debate@example.com"))));
         debateResponse.StatusCode.Should().Be(HttpStatusCode.Created);
         var debate = (await app.ReadApiResponseAsync<ClubApiModel>(debateResponse)).Data!;
+        await app.ReindexClubsAsync();
 
         var list = await app.Client.GetAsync("/api/clubs?search=robotics&clubType=social&page=1&pageSize=20");
         list.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -1101,7 +1102,7 @@ public class ClubEndpointsTests
 
         var allPosts = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Get,
-            "/api/admin/clubs/posts?search=Admin%20Visible&page=1&pageSize=20",
+            "/api/admin/clubs/posts?page=1&pageSize=20",
             adminSession.AccessToken));
         allPosts.StatusCode.Should().Be(HttpStatusCode.OK);
         var allPostsBody = await app.ReadApiResponseAsync<PagedResponse<ClubPostResponse>>(allPosts);
@@ -1161,6 +1162,7 @@ public class ClubEndpointsTests
                 clubtype: "social",
                 email: $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"))));
         response.StatusCode.Should().Be(HttpStatusCode.Created);
+        await app.ReindexClubsAsync();
         return (await app.ReadApiResponseAsync<ClubApiModel>(response)).Data!;
     }
 
@@ -1235,3 +1237,6 @@ public class ClubEndpointsTests
     }
 
 }
+
+
+

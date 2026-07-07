@@ -1184,6 +1184,7 @@ public class EventEndpointsTests
                 Email = $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"
             })));
         response.StatusCode.Should().Be(HttpStatusCode.Created);
+        await app.ReindexClubsAsync();
 
         return (await app.ReadApiResponseAsync<ClubApiModel>(response)).Data!;
     }
@@ -1262,6 +1263,7 @@ public class EventEndpointsTests
             accessToken,
             JsonContent.Create(new { })));
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+        await app.ReindexEventsAsync();
 
         return (await app.ReadApiResponseAsync<ManagedEventResponse>(response)).Data switch
         {
@@ -2574,3 +2576,5 @@ public class EventEndpointsTests
         }
     }
 }
+
+
