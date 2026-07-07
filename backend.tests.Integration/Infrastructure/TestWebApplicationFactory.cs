@@ -54,6 +54,13 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
 
         builder.ConfigureServices(services =>
         {
+            services.RemoveAll<AppDatabaseContext>();
+            services.RemoveAll<DbContextOptions<AppDatabaseContext>>();
+            services.AddDbContext<AppDatabaseContext>(options =>
+                options.UseMySql(
+                    _testConnectionString,
+                    ServerVersion.AutoDetect(_testConnectionString)));
+
             services.RemoveAll<RedisHealth>();
             services.RemoveAll<ICacheService>();
             services.RemoveAll<StackExchange.Redis.IConnectionMultiplexer>();
@@ -85,3 +92,4 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
         return host;
     }
 }
+
