@@ -225,7 +225,8 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
                 $"Password={MySqlRootPassword}",
                 $"Database={databaseName}",
                 "SslMode=None",
-                "AllowPublicKeyRetrieval=True"
+                "AllowPublicKeyRetrieval=True",
+                "Pooling=False"
             ]);
 
     private void SetEnvironmentVariables()
@@ -290,9 +291,6 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
             ReplicationFactor = 1
         };
 }
-
-
-
 
 
 

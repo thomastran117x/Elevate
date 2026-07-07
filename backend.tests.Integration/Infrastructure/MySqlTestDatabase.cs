@@ -68,10 +68,10 @@ public sealed class MySqlTestDatabase : IAsyncDisposable
         var options = new DbContextOptionsBuilder<AppDatabaseContext>()
             .UseMySql(
                 connectionString,
-                ServerVersion.AutoDetect(connectionString),
-                mySqlOptions => mySqlOptions.EnableRetryOnFailure())
+                ServerVersion.AutoDetect(connectionString))
             .Options;
 
         return new AppDatabaseContext(options);
     }
 }
+
