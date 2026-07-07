@@ -175,7 +175,7 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
         await _elasticsearchContainer.StartAsync();
 
         MySqlServerConnectionString = BuildMySqlConnectionString(DefaultDatabase);
-        RedisConnectionString = _redisContainer.GetConnectionString();
+        RedisConnectionString = BuildRedisConnectionString();
         KafkaBootstrapServers = _kafkaContainer.GetBootstrapAddress();
         ElasticsearchUrl =
             $"http://{_elasticsearchContainer.Hostname}:{_elasticsearchContainer.GetMappedPublicPort(9200)}";
@@ -228,6 +228,13 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
                 "AllowPublicKeyRetrieval=True",
                 "Pooling=False"
             ]);
+
+    private string BuildRedisConnectionString()
+    {
+        var options = ConfigurationOptions.Parse(_redisContainer.GetConnectionString());
+        options.AllowAdmin = true;
+        return options.ToString();
+    }
 
     private void SetEnvironmentVariables()
     {
@@ -291,6 +298,7 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
             ReplicationFactor = 1
         };
 }
+
 
 
 
