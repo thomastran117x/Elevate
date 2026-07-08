@@ -17,6 +17,7 @@ using backend.main.features.events.versions.contracts.responses;
 using backend.main.features.payment;
 using backend.main.features.events.registration.contracts.responses;
 using backend.main.infrastructure.database.core;
+using backend.main.infrastructure.elasticsearch;
 using backend.main.shared.responses;
 
 using backend.tests.Integration.Infrastructure;
@@ -916,7 +917,11 @@ public class EventEndpointsTests
     [Fact]
     public async Task EventSearchEndpoints_ShouldReturnServiceUnavailable_ForUnsupportedFallbackQueries()
     {
-        await using var app = await AuthApiTestApp.CreateAsync();
+        await using var app = await AuthApiTestApp.CreateAsync(services =>
+        {
+            services.RemoveAll<IEventSearchService>();
+            services.AddSingleton<IEventSearchService>(new UnavailableEventSearchService());
+        });
 
         var tagSearch = await app.Client.GetAsync("/api/events?tags=testing&page=1&pageSize=20");
         tagSearch.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
@@ -2559,21 +2564,26 @@ public class EventEndpointsTests
         public int DeletedCount { get; init; }
     }
 
+    private sealed class UnavailableEventSearchService : IEventSearchService
+    {
+        public Task EnsureIndexAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeleteIndexAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task IndexAsync(EventDocument document, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeleteAsync(int eventId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task BulkIndexAsync(IEnumerable<EventDocument> documents, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<EventSearchResult> SearchAsync(EventSearchCriteria criteria) =>
+            throw new ElasticsearchUnavailableException("Search is unavailable for this test.");
+    }
+
     private sealed class StubEventSearchService : IEventSearchService
     {
         public EventSearchCriteria? LastCriteria { get; private set; }
         public EventSearchResult Result { get; set; } = new([], 0);
-
         public Task EnsureIndexAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-
         public Task DeleteIndexAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-
         public Task IndexAsync(EventDocument document, CancellationToken cancellationToken = default) => Task.CompletedTask;
-
         public Task DeleteAsync(int eventId, CancellationToken cancellationToken = default) => Task.CompletedTask;
-
         public Task BulkIndexAsync(IEnumerable<EventDocument> documents, CancellationToken cancellationToken = default) => Task.CompletedTask;
-
         public Task<EventSearchResult> SearchAsync(EventSearchCriteria criteria)
         {
             LastCriteria = criteria;
@@ -2581,6 +2591,3 @@ public class EventEndpointsTests
         }
     }
 }
-
-
-
