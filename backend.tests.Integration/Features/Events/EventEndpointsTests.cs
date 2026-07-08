@@ -1183,7 +1183,8 @@ public class EventEndpointsTests
                 ClubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club.png"),
                 Email = $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"
             })));
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var diagnostics = await app.DescribeFailureAsync(response);
+        response.StatusCode.Should().Be(HttpStatusCode.Created, diagnostics);
         await app.ReindexClubsAsync();
 
         return (await app.ReadApiResponseAsync<ClubApiModel>(response)).Data!;
@@ -1247,7 +1248,8 @@ public class EventEndpointsTests
                 longitude,
                 tags = tags ?? ["testing"]
             })));
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var diagnostics = await app.DescribeFailureAsync(response);
+        response.StatusCode.Should().Be(HttpStatusCode.Created, diagnostics);
         var created = (await app.ReadApiResponseAsync<EventResponse>(response)).Data!;
         return await PublishEventAsync(app, accessToken, created.Id);
     }
@@ -2576,5 +2578,6 @@ public class EventEndpointsTests
         }
     }
 }
+
 
 

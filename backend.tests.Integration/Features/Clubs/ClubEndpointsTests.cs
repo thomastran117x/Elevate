@@ -1161,7 +1161,8 @@ public class ClubEndpointsTests
                 description: "Campus group",
                 clubtype: "social",
                 email: $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"))));
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var diagnostics = await app.DescribeFailureAsync(response);
+        response.StatusCode.Should().Be(HttpStatusCode.Created, diagnostics);
         await app.ReindexClubsAsync();
         return (await app.ReadApiResponseAsync<ClubApiModel>(response)).Data!;
     }
@@ -1237,6 +1238,7 @@ public class ClubEndpointsTests
     }
 
 }
+
 
 
 

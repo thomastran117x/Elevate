@@ -152,6 +152,34 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         return await query(db);
     }
 
+    public async Task<string> DescribeFailureAsync(HttpResponseMessage response, int maxLogLines = 80)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        var logsDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
+        if (!Directory.Exists(logsDirectory))
+            return $"response body:{Environment.NewLine}{body}";
+
+        var latestLogPath = Directory
+            .GetFiles(logsDirectory, "*", SearchOption.AllDirectories)
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault();
+        if (latestLogPath is null)
+            return $"response body:{Environment.NewLine}{body}";
+
+        var logTail = File
+            .ReadLines(latestLogPath)
+            .TakeLast(maxLogLines);
+
+        return string.Join(
+            Environment.NewLine,
+            [
+                $"response body:{Environment.NewLine}{body}",
+                $"latest log: {latestLogPath}",
+                "log tail:",
+                string.Join(Environment.NewLine, logTail)
+            ]);
+    }
+
     public async Task<SmsMfaEnrollment?> FindSmsMfaEnrollmentAsync(int userId)
     {
         await using var scope = _factory.Services.CreateAsyncScope();
@@ -465,6 +493,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         public T? Data { get; init; }
     }
 }
+
 
 
 
