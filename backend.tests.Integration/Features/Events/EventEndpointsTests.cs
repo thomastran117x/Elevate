@@ -1918,6 +1918,8 @@ public class EventEndpointsTests
 
         (await app.QueryDbAsync(db => db.Events.CountAsync(e => createdIds.Contains(e.Id)))).Should().Be(2);
 
+        await app.ReindexEventsAsync();
+
         var list = await app.Client.GetAsync("/api/events?search=Batch%20Event&page=1&pageSize=20");
         list.StatusCode.Should().Be(HttpStatusCode.OK);
         var listBody = await app.ReadApiResponseAsync<PagedResponse<EventResponse>>(list);
