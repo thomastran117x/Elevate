@@ -402,7 +402,11 @@ public class EventInvitationEndpointsTests
                 ClubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club.png"),
                 Email = $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"
             })));
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var diagnostics = await app.DescribeFailureAsync(response);
+        if (response.StatusCode != HttpStatusCode.Created)
+        {
+            throw new Xunit.Sdk.XunitException(diagnostics);
+        }
 
         return (await app.ReadApiResponseAsync<ClubApiModel>(response)).Data!;
     }

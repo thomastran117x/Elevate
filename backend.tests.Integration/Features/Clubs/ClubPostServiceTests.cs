@@ -10,12 +10,12 @@ using backend.main.shared.exceptions.http;
 
 using FluentAssertions;
 
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 using Moq;
 
 using Xunit;
+using backend.tests.Integration.Infrastructure;
 
 namespace backend.tests.Clubs;
 
@@ -79,32 +79,26 @@ public class ClubPostServiceTests
 
     private sealed class ClubPostServiceHarness : IAsyncDisposable
     {
-        private readonly SqliteConnection _connection;
+        private readonly MySqlTestDatabase _database;
 
         public AppDatabaseContext Db { get; }
         public ClubPostService Service { get; }
 
         private ClubPostServiceHarness(
-            SqliteConnection connection,
+            MySqlTestDatabase database,
             AppDatabaseContext db,
             ClubPostService service)
         {
-            _connection = connection;
+            _database = database;
             Db = db;
             Service = service;
         }
 
         public static async Task<ClubPostServiceHarness> CreateAsync(bool isPrivate)
         {
-            var connection = new SqliteConnection("DataSource=:memory:");
-            await connection.OpenAsync();
+            var database = await MySqlTestDatabase.CreateAsync();
 
-            var dbOptions = new DbContextOptionsBuilder<AppDatabaseContext>()
-                .UseSqlite(connection)
-                .Options;
-
-            var db = new AppDatabaseContext(dbOptions);
-            await db.Database.EnsureCreatedAsync();
+            var db = database.CreateDbContext();
 
             db.Users.AddRange(
                 new User { Id = 7, Email = "owner@test.local", Usertype = "Organizer" },
@@ -185,7 +179,7 @@ public class ClubPostServiceTests
                 userRepository.Object,
                 refreshCache.Object);
 
-            return new ClubPostServiceHarness(connection, db, service);
+            return new ClubPostServiceHarness(database, db, service);
         }
 
         public async Task<ClubPost> SeedPostAsync(int userId, string title)
@@ -208,7 +202,8 @@ public class ClubPostServiceTests
         public async ValueTask DisposeAsync()
         {
             await Db.DisposeAsync();
-            await _connection.DisposeAsync();
+            await _database.DisposeAsync();
         }
     }
 }
+

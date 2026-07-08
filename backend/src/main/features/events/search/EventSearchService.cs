@@ -234,13 +234,10 @@ namespace backend.main.features.events.search
         public async Task BulkIndexAsync(IEnumerable<EventDocument> documents, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
             var client = GetWritableClientOrNull();
             if (client == null)
                 return;
-
             await EnsureIndexAsync(cancellationToken);
-
             try
             {
                 var response = await _circuitBreaker.ExecuteAsync(
@@ -249,9 +246,11 @@ namespace backend.main.features.events.search
                         .IndexMany(documents)
                     ),
                     $"{IndexName} bulk indexing");
-
                 if (response.Errors)
                     Logger.Warn($"Bulk index had errors: {response.ItemsWithErrors.Count()} items failed.");
+                await _circuitBreaker.ExecuteAsync(
+                    () => client.Indices.RefreshAsync(IndexName, cancellationToken),
+                    $"{IndexName} refresh");
             }
             catch (Exception ex)
             {
@@ -260,7 +259,6 @@ namespace backend.main.features.events.search
                     ex);
             }
         }
-
         public async Task<EventSearchResult> SearchAsync(EventSearchCriteria criteria)
         {
             var client = GetRequiredClient();

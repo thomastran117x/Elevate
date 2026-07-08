@@ -152,15 +152,12 @@ namespace backend.main.features.clubs.posts
                 }
             }
 
-            var itemsTask = _postRepository.GetByClubIdAsync(clubId, search, sortBy, page, pageSize);
-            var countTask = _postRepository.CountByClubIdAsync(clubId, search);
-            await Task.WhenAll(itemsTask, countTask);
-
-            var resultPosts = itemsTask.Result;
+            var resultPosts = await _postRepository.GetByClubIdAsync(clubId, search, sortBy, page, pageSize);
+            var totalCount = await _postRepository.CountByClubIdAsync(clubId, search);
             if (resultPosts.Count > 0)
                 await _postRepository.IncrementViewCountAsync(resultPosts.Select(p => p.Id));
 
-            return (resultPosts, countTask.Result, ResponseSource.Database, await FetchAuthorLookupAsync(resultPosts));
+            return (resultPosts, totalCount, ResponseSource.Database, await FetchAuthorLookupAsync(resultPosts));
         }
 
         public async Task<ClubPost> UpdateAsync(int clubId, int postId, int userId, string userRole, string title, string content, PostType postType, bool isPinned)
@@ -242,11 +239,10 @@ namespace backend.main.features.clubs.posts
                 }
             }
 
-            var itemsTask = _postRepository.GetAllAsync(search, sortBy, page, pageSize);
-            var countTask = _postRepository.CountAllAsync(search);
-            await Task.WhenAll(itemsTask, countTask);
+            var items = await _postRepository.GetAllAsync(search, sortBy, page, pageSize);
+            var totalCount = await _postRepository.CountAllAsync(search);
 
-            return (itemsTask.Result, countTask.Result, ResponseSource.Database);
+            return (items, totalCount, ResponseSource.Database);
         }
 
         private async Task<Dictionary<int, UserListRecord>> FetchAuthorLookupAsync(List<ClubPost> posts)

@@ -238,45 +238,46 @@ namespace backend.main.features.events
                     Query = normalized
                 };
 
-                // Prefer ES for full-text, tag, and geo search. If ES is unavailable, fall back to MySQL
-                // for the subset of filters/sorts we can honor safely.
-                try
+                if (!EventSearchFallbackSupport.RequiresDatabaseFallback(effective))
                 {
-                    var result = await _searchService.SearchAsync(effective);
-                    if (result.Hits.Count == 0)
-                        return (new List<Events>(), result.TotalCount, new Dictionary<int, double>(), ResponseSource.Elasticsearch);
-
-                    var ids = result.Hits.Select(h => h.Id).ToList();
-                    var esEvents = await _eventsRepository.GetByIdsAsync(ids);
-
-                    var ordered = ids
-                        .Select(id => esEvents.FirstOrDefault(e => e.Id == id))
-                        .Where(e => e != null)
-                        .Cast<Events>()
-                        .ToList();
-
-                    var distanceMap = result.Hits
-                        .Where(h => h.DistanceKm.HasValue)
-                        .ToDictionary(h => h.Id, h => h.DistanceKm!.Value);
-
-                    return (ordered, result.TotalCount, distanceMap, ResponseSource.Elasticsearch);
+                    // Prefer ES for full-text, tag, and geo search. If ES is unavailable, fall back to MySQL
+                    // for the subset of filters/sorts we can honor safely.
+                    try
+                    {
+                        var result = await _searchService.SearchAsync(effective);
+                        if (result.Hits.Count == 0)
+                            return (new List<Events>(), result.TotalCount, new Dictionary<int, double>(), ResponseSource.Elasticsearch);
+                        var ids = result.Hits.Select(h => h.Id).ToList();
+                        var esEvents = await _eventsRepository.GetByIdsAsync(ids);
+                        var ordered = ids
+                            .Select(id => esEvents.FirstOrDefault(e => e.Id == id))
+                            .Where(e => e != null)
+                            .Cast<Events>()
+                            .ToList();
+                        var distanceMap = result.Hits
+                            .Where(h => h.DistanceKm.HasValue)
+                            .ToDictionary(h => h.Id, h => h.DistanceKm!.Value);
+                        return (ordered, result.TotalCount, distanceMap, ResponseSource.Elasticsearch);
+                    }
+                    catch (ElasticsearchDisabledException ex)
+                    {
+                        Logger.Info($"[EventsService] Elasticsearch disabled. Falling back to MySQL search. {ex.Message}");
+                    }
+                    catch (ElasticsearchUnavailableException ex)
+                    {
+                        Logger.Warn(ex, "[EventsService] Elasticsearch temporarily unavailable. Falling back to MySQL search.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error($"[EventsService] Elasticsearch search failed with a non-fallback error: {ex}");
+                        throw;
+                    }
                 }
-                catch (ElasticsearchDisabledException ex)
+                else
                 {
-                    Logger.Info($"[EventsService] Elasticsearch disabled. Falling back to MySQL search. {ex.Message}");
+                    Logger.Info("[EventsService] Falling back to MySQL search for a query that requires literal wildcard matching.");
                 }
-                catch (ElasticsearchUnavailableException ex)
-                {
-                    Logger.Warn(ex, "[EventsService] Elasticsearch temporarily unavailable. Falling back to MySQL search.");
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error($"[EventsService] Elasticsearch search failed with a non-fallback error: {ex}");
-                    throw;
-                }
-
                 EventSearchFallbackSupport.EnsureSupported(effective);
-
                 var (events, totalCount) = await _eventsRepository.SearchAsync(effective);
                 var fallbackDistanceMap = BuildDistanceMap(events, effective);
                 return (events, totalCount, fallbackDistanceMap, ResponseSource.Database);
@@ -1129,7 +1130,7 @@ namespace backend.main.features.events
                 var currentSnapshot = BuildSnapshot(ev);
                 var targetSnapshot = DeserializeSnapshot(targetVersion.SnapshotJson);
 
-                // Preserve the current lifecycle state — rollback restores field values
+                // Preserve the current lifecycle state Ã¢â‚¬â€ rollback restores field values
                 // only, not the event's published/cancelled state. Changing lifecycle
                 // state must go through the explicit transition endpoints.
                 var preservedLifecycleState = ev.LifecycleState;

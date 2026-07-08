@@ -4,11 +4,11 @@ using backend.main.features.clubs;
 using backend.main.features.clubs.search;
 using backend.main.infrastructure.database.core;
 
+using backend.tests.Integration.Infrastructure;
+
 using FluentAssertions;
 
 using Microsoft.EntityFrameworkCore;
-
-using Xunit;
 
 namespace backend.tests.Clubs;
 
@@ -17,15 +17,8 @@ public class ClubSearchOutboxWriterTests
     [Fact]
     public async Task StageUpsert_ShouldPersistClubDocumentPayload()
     {
-        await using var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-
-        var options = new DbContextOptionsBuilder<AppDatabaseContext>()
-            .UseSqlite(connection)
-            .Options;
-
-        await using var context = new AppDatabaseContext(options);
-        await context.Database.EnsureCreatedAsync();
+        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var context = database.CreateDbContext();
 
         var writer = new ClubSearchOutboxWriter(context);
         var club = new Club
@@ -59,15 +52,8 @@ public class ClubSearchOutboxWriterTests
     [Fact]
     public async Task StageDelete_ShouldPersistDeletePayload()
     {
-        await using var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-
-        var options = new DbContextOptionsBuilder<AppDatabaseContext>()
-            .UseSqlite(connection)
-            .Options;
-
-        await using var context = new AppDatabaseContext(options);
-        await context.Database.EnsureCreatedAsync();
+        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var context = database.CreateDbContext();
 
         var writer = new ClubSearchOutboxWriter(context);
 

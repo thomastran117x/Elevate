@@ -13,13 +13,13 @@ using backend.main.shared.storage;
 
 using FluentAssertions;
 
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 using Moq;
 
 using Xunit;
+using backend.tests.Integration.Infrastructure;
 
 namespace backend.tests.Clubs;
 
@@ -383,14 +383,8 @@ public class ClubVersioningServiceTests
     [Fact]
     public async Task CleanupRunner_ShouldDeleteOnlyImagesThatAreNoLongerRollbackableOrCurrent()
     {
-        var connection = new SqliteConnection("DataSource=:memory:");
-        await connection.OpenAsync();
-        var dbOptions = new DbContextOptionsBuilder<AppDatabaseContext>()
-            .UseSqlite(connection)
-            .Options;
-
-        await using var db = new AppDatabaseContext(dbOptions);
-        await db.Database.EnsureCreatedAsync();
+        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
 
         var now = new DateTimeOffset(2026, 5, 13, 12, 0, 0, TimeSpan.Zero);
         var timeProvider = new TestTimeProvider(now);
@@ -492,27 +486,25 @@ public class ClubVersioningServiceTests
 
         deletedUrls.Should().ContainSingle()
             .Which.Should().Be("https://cdn.test/clubs/delete-me.png");
-
-        await connection.DisposeAsync();
     }
 
     private static string CreateClubImageUrl(string fileName) => $"https://cdn.test/clubs/{fileName}";
 
     private sealed class ClubServiceHarness : IAsyncDisposable
     {
-        private readonly SqliteConnection _connection;
+        private readonly MySqlTestDatabase _database;
 
         public AppDatabaseContext Db { get; }
         public ClubService Service { get; }
         public TestTimeProvider TimeProvider { get; }
 
         private ClubServiceHarness(
-            SqliteConnection connection,
+            MySqlTestDatabase database,
             AppDatabaseContext db,
             ClubService service,
             TestTimeProvider timeProvider)
         {
-            _connection = connection;
+            _database = database;
             Db = db;
             Service = service;
             TimeProvider = timeProvider;
@@ -520,15 +512,9 @@ public class ClubVersioningServiceTests
 
         public static async Task<ClubServiceHarness> CreateAsync()
         {
-            var connection = new SqliteConnection("DataSource=:memory:");
-            await connection.OpenAsync();
+            var database = await MySqlTestDatabase.CreateAsync();
 
-            var dbOptions = new DbContextOptionsBuilder<AppDatabaseContext>()
-                .UseSqlite(connection)
-                .Options;
-
-            var db = new AppDatabaseContext(dbOptions);
-            await db.Database.EnsureCreatedAsync();
+            var db = database.CreateDbContext();
             db.Users.AddRange(
                 new User
                 {
@@ -623,13 +609,13 @@ public class ClubVersioningServiceTests
                 }),
                 timeProvider);
 
-            return new ClubServiceHarness(connection, db, service, timeProvider);
+            return new ClubServiceHarness(database, db, service, timeProvider);
         }
 
         public async ValueTask DisposeAsync()
         {
             await Db.DisposeAsync();
-            await _connection.DisposeAsync();
+            await _database.DisposeAsync();
         }
     }
 
@@ -650,3 +636,6 @@ public class ClubVersioningServiceTests
         }
     }
 }
+
+
+

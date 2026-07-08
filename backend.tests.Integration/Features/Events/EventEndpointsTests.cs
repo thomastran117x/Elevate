@@ -17,6 +17,7 @@ using backend.main.features.events.versions.contracts.responses;
 using backend.main.features.payment;
 using backend.main.features.events.registration.contracts.responses;
 using backend.main.infrastructure.database.core;
+using backend.main.infrastructure.elasticsearch;
 using backend.main.shared.responses;
 
 using backend.tests.Integration.Infrastructure;
@@ -916,7 +917,11 @@ public class EventEndpointsTests
     [Fact]
     public async Task EventSearchEndpoints_ShouldReturnServiceUnavailable_ForUnsupportedFallbackQueries()
     {
-        await using var app = await AuthApiTestApp.CreateAsync();
+        await using var app = await AuthApiTestApp.CreateAsync(services =>
+        {
+            services.RemoveAll<IEventSearchService>();
+            services.AddSingleton<IEventSearchService>(new UnavailableEventSearchService());
+        });
 
         var tagSearch = await app.Client.GetAsync("/api/events?tags=testing&page=1&pageSize=20");
         tagSearch.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
@@ -1183,7 +1188,12 @@ public class EventEndpointsTests
                 ClubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club.png"),
                 Email = $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"
             })));
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var diagnostics = await app.DescribeFailureAsync(response);
+        if (response.StatusCode != HttpStatusCode.Created)
+        {
+            throw new Xunit.Sdk.XunitException(diagnostics);
+        }
+        await app.ReindexClubsAsync();
 
         return (await app.ReadApiResponseAsync<ClubApiModel>(response)).Data!;
     }
@@ -1246,7 +1256,8 @@ public class EventEndpointsTests
                 longitude,
                 tags = tags ?? ["testing"]
             })));
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var diagnostics = await app.DescribeFailureAsync(response);
+        response.StatusCode.Should().Be(HttpStatusCode.Created, diagnostics);
         var created = (await app.ReadApiResponseAsync<EventResponse>(response)).Data!;
         return await PublishEventAsync(app, accessToken, created.Id);
     }
@@ -1262,6 +1273,7 @@ public class EventEndpointsTests
             accessToken,
             JsonContent.Create(new { })));
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+        await app.ReindexEventsAsync();
 
         return (await app.ReadApiResponseAsync<ManagedEventResponse>(response)).Data switch
         {
@@ -1905,6 +1917,8 @@ public class EventEndpointsTests
         var createdIds = batchCreateBody.Data.Created.Select(item => item.Id).ToArray();
 
         (await app.QueryDbAsync(db => db.Events.CountAsync(e => createdIds.Contains(e.Id)))).Should().Be(2);
+
+        await app.ReindexEventsAsync();
 
         var list = await app.Client.GetAsync("/api/events?search=Batch%20Event&page=1&pageSize=20");
         list.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -2552,21 +2566,26 @@ public class EventEndpointsTests
         public int DeletedCount { get; init; }
     }
 
+    private sealed class UnavailableEventSearchService : IEventSearchService
+    {
+        public Task EnsureIndexAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeleteIndexAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task IndexAsync(EventDocument document, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeleteAsync(int eventId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task BulkIndexAsync(IEnumerable<EventDocument> documents, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<EventSearchResult> SearchAsync(EventSearchCriteria criteria) =>
+            throw new ElasticsearchUnavailableException("Search is unavailable for this test.");
+    }
+
     private sealed class StubEventSearchService : IEventSearchService
     {
         public EventSearchCriteria? LastCriteria { get; private set; }
         public EventSearchResult Result { get; set; } = new([], 0);
-
         public Task EnsureIndexAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-
         public Task DeleteIndexAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-
         public Task IndexAsync(EventDocument document, CancellationToken cancellationToken = default) => Task.CompletedTask;
-
         public Task DeleteAsync(int eventId, CancellationToken cancellationToken = default) => Task.CompletedTask;
-
         public Task BulkIndexAsync(IEnumerable<EventDocument> documents, CancellationToken cancellationToken = default) => Task.CompletedTask;
-
         public Task<EventSearchResult> SearchAsync(EventSearchCriteria criteria)
         {
             LastCriteria = criteria;

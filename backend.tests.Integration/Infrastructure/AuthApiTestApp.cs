@@ -6,16 +6,21 @@ using System.Text.Json;
 using backend.main.application.security;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
-using backend.main.features.auth.oauth;
-using backend.main.features.auth.token;
 using backend.main.features.auth.device;
 using backend.main.features.auth.mfa;
+using backend.main.features.auth.oauth;
+using backend.main.features.auth.token;
+using backend.main.features.cache;
+using backend.main.features.clubs.posts.search;
+using backend.main.features.clubs.search;
 using backend.main.features.clubs.staff;
 using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
+using backend.main.features.events.search;
 using backend.main.features.payment;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
+using backend.main.shared.providers.messages;
 using backend.main.utilities;
 
 using FluentAssertions;
@@ -34,24 +39,42 @@ public sealed class AuthApiTestApp : IAsyncDisposable
     };
 
     private readonly TestWebApplicationFactory _factory;
+    private readonly MySqlTestDatabase _database;
+    private readonly KafkaTopicProbe _kafkaProbe;
+    private readonly IntegrationTestEnvironment _environment;
 
     public HttpClient Client { get; }
-    public InMemoryCacheService Cache => _factory.Cache;
-    public CapturingPublisher Publisher => _factory.Publisher;
+    public ICacheService Cache => _factory.Services.GetRequiredService<ICacheService>();
+    public KafkaBackedPublisher Publisher { get; }
     public FakeOAuthService OAuth => _factory.OAuth;
     public FakeAzureBlobService BlobStorage => _factory.BlobStorage;
 
-    private AuthApiTestApp(TestWebApplicationFactory factory, HttpClient client)
+    private AuthApiTestApp(
+        TestWebApplicationFactory factory,
+        HttpClient client,
+        MySqlTestDatabase database,
+        KafkaTopicProbe kafkaProbe,
+        IntegrationTestEnvironment environment)
     {
         _factory = factory;
         Client = client;
+        _database = database;
+        _kafkaProbe = kafkaProbe;
+        _environment = environment;
+        Publisher = new KafkaBackedPublisher(this);
     }
 
-    public static Task<AuthApiTestApp> CreateAsync(
+    public static async Task<AuthApiTestApp> CreateAsync(
         Action<IServiceCollection>? serviceOverrides = null,
         IReadOnlyDictionary<string, string?>? configurationOverrides = null)
     {
-        var factory = new TestWebApplicationFactory(serviceOverrides, configurationOverrides);
+        var environment = await IntegrationTestFixture.GetEnvironmentAsync();
+        var database = await MySqlTestDatabase.CreateAsync();
+        var factory = new TestWebApplicationFactory(
+            environment,
+            database.ConnectionString,
+            serviceOverrides,
+            configurationOverrides);
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
@@ -60,7 +83,14 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         client.DefaultRequestHeaders.UserAgent.ParseAdd(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36");
 
-        return Task.FromResult(new AuthApiTestApp(factory, client));
+        var app = new AuthApiTestApp(
+            factory,
+            client,
+            database,
+            environment.CreateKafkaProbe(),
+            environment);
+        await app.MarkNotificationBoundaryAsync();
+        return app;
     }
 
     public async Task<User> SeedUserAsync(
@@ -115,13 +145,6 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         return await db.Users.SingleOrDefaultAsync(user => user.Email == email);
     }
 
-    /// <summary>
-    /// Runs an arbitrary EF query against a fresh scoped <see cref="AppDatabaseContext"/> so a test can
-    /// assert on the state that was actually persisted, rather than trusting the HTTP response alone.
-    /// Each call opens its own scope/context, so it reads committed state from the shared in-memory DB.
-    /// Materialize (or project) the result inside the lambda — entities are detached once the scope
-    /// disposes, so navigation properties will not lazy-load afterwards.
-    /// </summary>
     public async Task<T> QueryDbAsync<T>(Func<AppDatabaseContext, Task<T>> query)
     {
         await using var scope = _factory.Services.CreateAsyncScope();
@@ -129,6 +152,33 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         return await query(db);
     }
 
+    public async Task<string> DescribeFailureAsync(HttpResponseMessage response, int maxLogLines = 80)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        var logsDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
+        if (!Directory.Exists(logsDirectory))
+            return $"response body:{Environment.NewLine}{body}";
+
+        var latestLogPath = Directory
+            .GetFiles(logsDirectory, "*", SearchOption.AllDirectories)
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault();
+        if (latestLogPath is null)
+            return $"response body:{Environment.NewLine}{body}";
+
+        var logTail = File
+            .ReadLines(latestLogPath)
+            .TakeLast(maxLogLines);
+
+        return string.Join(
+            Environment.NewLine,
+            [
+                $"response body:{Environment.NewLine}{body}",
+                $"latest log: {latestLogPath}",
+                "log tail:",
+                string.Join(Environment.NewLine, logTail)
+            ]);
+    }
 
     public async Task<SmsMfaEnrollment?> FindSmsMfaEnrollmentAsync(int userId)
     {
@@ -212,6 +262,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         ev.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
+        await ReindexEventsAsync();
     }
 
     public async Task SetEventStartTimeToPast(int eventId, int minutesAgo = 10)
@@ -222,6 +273,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         ev.StartTime = DateTime.UtcNow.AddMinutes(-minutesAgo);
         ev.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
+        await ReindexEventsAsync();
     }
 
     public async Task SetEventEndTimeToPast(int eventId, int minutesAgo = 5)
@@ -233,6 +285,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         ev.EndTime = DateTime.UtcNow.AddMinutes(-minutesAgo);
         ev.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
+        await ReindexEventsAsync();
     }
 
     public async Task SetMaxParticipants(int eventId, int max)
@@ -243,6 +296,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         ev.maxParticipants = max;
         ev.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
+        await ReindexEventsAsync();
     }
 
     public async Task AddPaymentAsync(int eventId, int userId, PaymentStatus status)
@@ -267,6 +321,49 @@ public sealed class AuthApiTestApp : IAsyncDisposable
     public async Task DeletePendingOAuthSignupAsync(string signupToken)
     {
         await Cache.DeleteKeyAsync($"oauth:pending:{signupToken}");
+    }
+
+    public Task MarkNotificationBoundaryAsync() =>
+        _kafkaProbe.MarkBoundaryAsync(
+            _environment.EmailTopic,
+            _environment.SmsTopic,
+            _environment.EmailStatusTopic);
+
+    public Task<EmailMessage> WaitForEmailAsync(
+        Func<EmailMessage, bool> predicate,
+        TimeSpan? timeout = null) =>
+        _kafkaProbe.WaitForAsync(_environment.EmailTopic, predicate, timeout);
+
+    public Task<SmsMfaMessage> WaitForSmsAsync(
+        Func<SmsMfaMessage, bool> predicate,
+        TimeSpan? timeout = null) =>
+        _kafkaProbe.WaitForAsync(_environment.SmsTopic, predicate, timeout);
+
+    public Task<IReadOnlyList<EmailMessage>> ReadNewEmailMessagesAsync(TimeSpan? timeout = null) =>
+        _kafkaProbe.ReadNewAsync<EmailMessage>(_environment.EmailTopic, timeout);
+
+    public Task<IReadOnlyList<SmsMfaMessage>> ReadNewSmsMessagesAsync(TimeSpan? timeout = null) =>
+        _kafkaProbe.ReadNewAsync<SmsMfaMessage>(_environment.SmsTopic, timeout);
+
+    public async Task ReindexEventsAsync(CancellationToken cancellationToken = default)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var reindexService = scope.ServiceProvider.GetRequiredService<IEventReindexService>();
+        await reindexService.ReindexAllAsync(cancellationToken);
+    }
+
+    public async Task ReindexClubsAsync(CancellationToken cancellationToken = default)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var reindexService = scope.ServiceProvider.GetRequiredService<IClubReindexService>();
+        await reindexService.ReindexAllAsync(cancellationToken);
+    }
+
+    public async Task ReindexClubPostsAsync(CancellationToken cancellationToken = default)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var reindexService = scope.ServiceProvider.GetRequiredService<IClubPostReindexService>();
+        await reindexService.ReindexAllAsync(cancellationToken);
     }
 
     public async Task<HttpResponseMessage> PostJsonWithCsrfAsync(string path, object payload)
@@ -311,9 +408,8 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         });
         signupResponse.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
 
-        var verifyEmail = Publisher.EmailMessages
-            .Last(message => message.Type == backend.main.shared.providers.messages.EmailMessageType.VerifyEmail
-                && message.Email == email);
+        var verifyEmail = await WaitForEmailAsync(
+            message => message.Type == EmailMessageType.VerifyEmail && message.Email == email);
 
         var verifyResponse = await PostJsonWithCsrfAsync("/api/auth/verify", new VerificationTokenRequest
         {
@@ -358,7 +454,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
     {
         Client.Dispose();
         _factory.Dispose();
-        await Task.CompletedTask;
+        await _database.DisposeAsync();
     }
 
     public static string? ExtractCookie(HttpResponseMessage response, string cookieName)
@@ -397,3 +493,8 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         public T? Data { get; init; }
     }
 }
+
+
+
+
+
