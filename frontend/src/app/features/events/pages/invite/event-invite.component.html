@@ -1,19 +1,20 @@
 <div class="min-h-screen bg-slate-950 text-white">
   <main class="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
     <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-      <div *ngIf="loading" class="space-y-4">
-        <div class="h-8 w-48 animate-pulse rounded-xl bg-white/10"></div>
-        <div class="h-64 animate-pulse rounded-3xl bg-white/10"></div>
-      </div>
+      @if (loading) {
+        <div class="space-y-4">
+          <div class="h-8 w-48 animate-pulse rounded-xl bg-white/10"></div>
+          <div class="h-64 animate-pulse rounded-3xl bg-white/10"></div>
+        </div>
+      }
 
-      <div
-        *ngIf="!loading && error"
-        class="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-rose-100"
-      >
-        {{ error }}
-      </div>
+      @if (!loading && error) {
+        <div class="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-rose-100">
+          {{ error }}
+        </div>
+      }
 
-      <ng-container *ngIf="!loading && invite">
+      @if (!loading && invite) {
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p class="text-xs uppercase tracking-[0.18em] text-white/45">
@@ -27,7 +28,6 @@
             {{ invite.state }}
           </span>
         </div>
-
         <div class="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-slate-900/60">
           <div
             class="h-52 bg-cover bg-center"
@@ -46,7 +46,6 @@
                   'Use this invitation to unlock access to a private event.'
               }}
             </p>
-
             <div class="grid gap-3 text-sm text-white/70 sm:grid-cols-2">
               <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <div class="text-xs uppercase tracking-[0.16em] text-white/45">When</div>
@@ -57,58 +56,62 @@
                 <div class="mt-2">{{ invite.event?.location || 'Location to be announced' }}</div>
               </div>
             </div>
-
-            <p *ngIf="invite.expiresAt" class="text-sm text-amber-200/90">
-              Expires {{ invite.expiresAt | date: 'medium' }}
-            </p>
-
-            <div *ngIf="invite.state === 'LoginRequired'" class="flex flex-wrap gap-3">
-              <button
-                type="button"
-                class="rounded-xl bg-white px-4 py-2 font-medium text-slate-950"
-                (click)="goToAuth('login')"
-              >
-                Sign in to continue
-              </button>
-              <button
-                type="button"
-                class="rounded-xl border border-white/15 bg-white/5 px-4 py-2 font-medium text-white"
-                (click)="goToAuth('signup')"
-              >
-                Create account
-              </button>
-            </div>
-
-            <div *ngIf="invite.state === 'AcceptAvailable'" class="flex flex-wrap gap-3">
-              <button
-                type="button"
-                class="rounded-xl bg-emerald-400 px-4 py-2 font-medium text-slate-950 disabled:opacity-60"
-                [disabled]="actionLoading"
-                (click)="accept()"
-              >
-                {{ actionLoading ? 'Accepting...' : 'Accept invitation' }}
-              </button>
-              <button
-                type="button"
-                class="rounded-xl border border-white/15 bg-white/5 px-4 py-2 font-medium text-white disabled:opacity-60"
-                [disabled]="actionLoading"
-                (click)="decline()"
-              >
-                Decline
-              </button>
-            </div>
-
-            <div *ngIf="invite.state === 'AlreadyAccepted' && invite.event" class="flex gap-3">
-              <a
-                [routerLink]="['/events', invite.event.id]"
-                class="rounded-xl bg-white px-4 py-2 font-medium text-slate-950"
-              >
-                Open event
-              </a>
-            </div>
+            @if (invite.expiresAt) {
+              <p class="text-sm text-amber-200/90">
+                Expires {{ invite.expiresAt | date: 'medium' }}
+              </p>
+            }
+            @if (invite.state === 'LoginRequired') {
+              <div class="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  class="rounded-xl bg-white px-4 py-2 font-medium text-slate-950"
+                  (click)="goToAuth('login')"
+                >
+                  Sign in to continue
+                </button>
+                <button
+                  type="button"
+                  class="rounded-xl border border-white/15 bg-white/5 px-4 py-2 font-medium text-white"
+                  (click)="goToAuth('signup')"
+                >
+                  Create account
+                </button>
+              </div>
+            }
+            @if (invite.state === 'AcceptAvailable') {
+              <div class="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  class="rounded-xl bg-emerald-400 px-4 py-2 font-medium text-slate-950 disabled:opacity-60"
+                  [disabled]="actionLoading"
+                  (click)="accept()"
+                >
+                  {{ actionLoading ? 'Accepting...' : 'Accept invitation' }}
+                </button>
+                <button
+                  type="button"
+                  class="rounded-xl border border-white/15 bg-white/5 px-4 py-2 font-medium text-white disabled:opacity-60"
+                  [disabled]="actionLoading"
+                  (click)="decline()"
+                >
+                  Decline
+                </button>
+              </div>
+            }
+            @if (invite.state === 'AlreadyAccepted' && invite.event) {
+              <div class="flex gap-3">
+                <a
+                  [routerLink]="['/events', invite.event.id]"
+                  class="rounded-xl bg-white px-4 py-2 font-medium text-slate-950"
+                >
+                  Open event
+                </a>
+              </div>
+            }
           </div>
         </div>
-      </ng-container>
+      }
     </div>
   </main>
 </div>

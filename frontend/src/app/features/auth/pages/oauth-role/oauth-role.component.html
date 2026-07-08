@@ -6,30 +6,34 @@
     <h1>Choose your role</h1>
     <p class="oauth-role-copy">{{ message() }}</p>
 
-    <div class="oauth-role-summary" *ngIf="pending() as pendingInfo">
-      <div>
-        <strong>{{ pendingInfo.Name || pendingInfo.Email }}</strong>
+    @if (pending(); as pendingInfo) {
+      <div class="oauth-role-summary">
+        <div>
+          <strong>{{ pendingInfo.Name || pendingInfo.Email }}</strong>
+        </div>
+        <div>{{ pendingInfo.Email }}</div>
+        <div class="oauth-role-provider">Signing up with {{ pendingInfo.Provider }}</div>
       </div>
-      <div>{{ pendingInfo.Email }}</div>
-      <div class="oauth-role-provider">Signing up with {{ pendingInfo.Provider }}</div>
-    </div>
+    }
 
-    <form [formGroup]="form" (ngSubmit)="submit()" class="oauth-role-form" *ngIf="pending()">
-      <label
-        class="oauth-role-option"
-        *ngFor="let option of roleOptions"
-        [class.oauth-role-option-selected]="form.value.usertype === option.value"
-      >
-        <input type="radio" formControlName="usertype" [value]="option.value" />
-        <span class="oauth-role-option-body">
-          <span class="oauth-role-option-title">{{ option.label }}</span>
-          <span class="oauth-role-option-description">{{ option.description }}</span>
-        </span>
-      </label>
-
-      <button type="submit" [disabled]="status() === 'loading'">
-        {{ status() === 'loading' ? 'Finishing signup...' : 'Continue' }}
-      </button>
-    </form>
+    @if (pending()) {
+      <form [formGroup]="form" (ngSubmit)="submit()" class="oauth-role-form">
+        @for (option of roleOptions; track option) {
+          <label
+            class="oauth-role-option"
+            [class.oauth-role-option-selected]="form.value.usertype === option.value"
+          >
+            <input type="radio" formControlName="usertype" [value]="option.value" />
+            <span class="oauth-role-option-body">
+              <span class="oauth-role-option-title">{{ option.label }}</span>
+              <span class="oauth-role-option-description">{{ option.description }}</span>
+            </span>
+          </label>
+        }
+        <button type="submit" [disabled]="status() === 'loading'">
+          {{ status() === 'loading' ? 'Finishing signup...' : 'Continue' }}
+        </button>
+      </form>
+    }
   </div>
 </section>

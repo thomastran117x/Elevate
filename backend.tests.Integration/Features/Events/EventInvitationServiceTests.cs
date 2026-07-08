@@ -17,13 +17,13 @@ using backend.main.shared.providers;
 
 using FluentAssertions;
 
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 using Moq;
 
 using Xunit;
+using backend.tests.Integration.Infrastructure;
 
 namespace backend.tests.Events;
 
@@ -133,7 +133,7 @@ public sealed class EventInvitationServiceTests
 
     private sealed class InvitationHarness : IAsyncDisposable
     {
-        private readonly SqliteConnection _connection;
+        private readonly MySqlTestDatabase _database;
 
         public AppDatabaseContext Db { get; }
         public EventInvitationService InvitationService { get; }
@@ -143,7 +143,7 @@ public sealed class EventInvitationServiceTests
         public string UserEmail { get; }
 
         private InvitationHarness(
-            SqliteConnection connection,
+            MySqlTestDatabase database,
             AppDatabaseContext db,
             EventInvitationService invitationService,
             EventsService eventsService,
@@ -151,7 +151,7 @@ public sealed class EventInvitationServiceTests
             int userId,
             string userEmail)
         {
-            _connection = connection;
+            _database = database;
             Db = db;
             InvitationService = invitationService;
             EventsService = eventsService;
@@ -162,15 +162,9 @@ public sealed class EventInvitationServiceTests
 
         public static async Task<InvitationHarness> CreateAsync()
         {
-            var connection = new SqliteConnection("Data Source=:memory:");
-            await connection.OpenAsync();
+            var database = await MySqlTestDatabase.CreateAsync();
 
-            var options = new DbContextOptionsBuilder<AppDatabaseContext>()
-                .UseSqlite(connection)
-                .Options;
-
-            var db = new AppDatabaseContext(options);
-            await db.Database.EnsureCreatedAsync();
+            var db = database.CreateDbContext();
 
             var user = new User
             {
@@ -242,13 +236,14 @@ public sealed class EventInvitationServiceTests
                 Options.Create(new EventVersioningOptions()),
                 TimeProvider.System);
 
-            return new InvitationHarness(connection, db, invitationService, eventsService, ev.Id, user.Id, user.Email);
+            return new InvitationHarness(database, db, invitationService, eventsService, ev.Id, user.Id, user.Email);
         }
 
         public async ValueTask DisposeAsync()
         {
             await Db.DisposeAsync();
-            await _connection.DisposeAsync();
+            await _database.DisposeAsync();
         }
     }
 }
+

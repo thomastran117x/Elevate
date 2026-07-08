@@ -5,11 +5,15 @@ using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
 using backend.main.features.events;
 using backend.main.features.events.contracts.responses;
+using backend.main.features.events.invitations;
 using backend.main.features.events.invitations.contracts.responses;
+using backend.main.infrastructure.database.core;
 
 using backend.tests.Integration.Infrastructure;
 
 using FluentAssertions;
+
+using Microsoft.EntityFrameworkCore;
 
 namespace backend.tests.Integration.Features.Events;
 
@@ -49,6 +53,12 @@ public class EventInvitationEndpointsTests
         createdBody.Data.Should().Contain(item => item.RecipientUserId == invitee.Id);
         createdBody.Data.Should().Contain(item => item.RecipientEmail == "guest-invite@example.com");
 
+        (await app.QueryDbAsync(db => db.EventInvitations.CountAsync(i => i.EventId == ev.Id))).Should().Be(2);
+        (await app.QueryDbAsync(db => db.EventInvitations.AnyAsync(i =>
+            i.EventId == ev.Id &&
+            i.RecipientUserId == invitee.Id &&
+            i.LifecycleStatus == EventInvitationLifecycleStatus.Pending))).Should().BeTrue();
+
         app.Publisher.EmailMessages.Should().HaveCount(2);
         app.Publisher.EmailMessages.Should().OnlyContain(message =>
             message.Type == backend.main.shared.providers.messages.EmailMessageType.EventInvite);
@@ -81,6 +91,11 @@ public class EventInvitationEndpointsTests
         var revokedBody = await app.ReadApiResponseAsync<EventInvitationResponse>(revoked);
         revokedBody.Data!.LifecycleStatus.Should().Be("Revoked");
         revokedBody.Data.EffectiveStatus.Should().Be("Revoked");
+
+        var persistedRevoked = await app.QueryDbAsync(db =>
+            db.EventInvitations.SingleAsync(i => i.Id == emailInvitation.Id));
+        persistedRevoked.LifecycleStatus.Should().Be(EventInvitationLifecycleStatus.Revoked);
+        persistedRevoked.RevokedAtUtc.Should().NotBeNull();
     }
 
     [Fact]
@@ -112,6 +127,10 @@ public class EventInvitationEndpointsTests
         var createdBody = await app.ReadApiResponseAsync<EventInvitationLinkResponse>(created);
         createdBody.Data.Should().NotBeNull();
         createdBody.Data!.ShareUrl.Should().NotBeNullOrWhiteSpace();
+
+        (await app.QueryDbAsync(db =>
+            db.EventInvitationLinks.AnyAsync(l => l.Id == createdBody.Data.Id && l.EventId == ev.Id)))
+            .Should().BeTrue();
 
         var token = ExtractToken(createdBody.Data.ShareUrl!);
 
@@ -152,6 +171,11 @@ public class EventInvitationEndpointsTests
         acceptedBody.Data!.Invitation.SourceType.Should().Be("LinkClaim");
         acceptedBody.Data.Invitation.EffectiveStatus.Should().Be("Accepted");
 
+        (await app.QueryDbAsync(db => db.EventInvitations.AnyAsync(i =>
+            i.Id == acceptedBody.Data.Invitation.Id &&
+            i.EventId == ev.Id &&
+            i.LifecycleStatus == EventInvitationLifecycleStatus.Accepted))).Should().BeTrue();
+
         var myInvitations = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Get,
             "/api/events/me/invited",
@@ -170,6 +194,10 @@ public class EventInvitationEndpointsTests
         revoked.StatusCode.Should().Be(HttpStatusCode.OK);
         var revokedBody = await app.ReadApiResponseAsync<EventInvitationLinkResponse>(revoked);
         revokedBody.Data!.IsRevoked.Should().BeTrue();
+
+        (await app.QueryDbAsync(db =>
+            db.EventInvitationLinks.Where(l => l.Id == createdBody.Data.Id).Select(l => l.RevokedAtUtc).SingleAsync()))
+            .Should().NotBeNull();
 
         var revokedResolve = await app.Client.PostAsJsonAsync(
             "/api/events/invitations/resolve",
@@ -266,6 +294,14 @@ public class EventInvitationEndpointsTests
         declinedById.StatusCode.Should().Be(HttpStatusCode.OK);
         var declinedByIdBody = await app.ReadApiResponseAsync<EventInvitationDecisionResponse>(declinedById);
         declinedByIdBody.Data!.Invitation.EffectiveStatus.Should().Be("Declined");
+
+        var persistedStatuses = await app.QueryDbAsync(db => db.EventInvitations
+            .Where(i => i.EventId == ev.Id)
+            .ToDictionaryAsync(i => i.RecipientUserId!.Value, i => i.LifecycleStatus));
+        persistedStatuses[acceptByTokenUser.Id].Should().Be(EventInvitationLifecycleStatus.Accepted);
+        persistedStatuses[acceptByIdUser.Id].Should().Be(EventInvitationLifecycleStatus.Accepted);
+        persistedStatuses[declineByTokenUser.Id].Should().Be(EventInvitationLifecycleStatus.Declined);
+        persistedStatuses[declineByIdUser.Id].Should().Be(EventInvitationLifecycleStatus.Declined);
     }
 
     [Fact]
@@ -366,7 +402,11 @@ public class EventInvitationEndpointsTests
                 ClubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club.png"),
                 Email = $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"
             })));
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var diagnostics = await app.DescribeFailureAsync(response);
+        if (response.StatusCode != HttpStatusCode.Created)
+        {
+            throw new Xunit.Sdk.XunitException(diagnostics);
+        }
 
         return (await app.ReadApiResponseAsync<ClubApiModel>(response)).Data!;
     }

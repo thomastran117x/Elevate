@@ -1,11 +1,10 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 import { RouterModule } from '@angular/router';
 
 @Component({
   selector: 'section-link',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [RouterModule],
   templateUrl: './section-link.component.html',
   styleUrl: './section-link.component.css',
 })

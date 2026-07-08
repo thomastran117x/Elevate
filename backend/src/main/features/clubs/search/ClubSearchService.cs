@@ -211,13 +211,10 @@ namespace backend.main.features.clubs.search
         public async Task BulkIndexAsync(IEnumerable<ClubDocument> documents, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
             var client = GetWritableClientOrNull();
             if (client == null)
                 return;
-
             await EnsureIndexAsync(cancellationToken);
-
             try
             {
                 var response = await _circuitBreaker.ExecuteAsync(
@@ -226,9 +223,11 @@ namespace backend.main.features.clubs.search
                         .IndexMany(documents)
                     ),
                     $"{IndexName} bulk indexing");
-
                 if (response.Errors)
                     Logger.Warn($"Bulk index had errors: {response.ItemsWithErrors.Count()} items failed.");
+                await _circuitBreaker.ExecuteAsync(
+                    () => client.Indices.RefreshAsync(IndexName, cancellationToken),
+                    $"{IndexName} refresh");
             }
             catch (Exception ex)
             {
@@ -237,7 +236,6 @@ namespace backend.main.features.clubs.search
                     ex);
             }
         }
-
         public async Task<ClubSearchResult> SearchAsync(ClubSearchCriteria criteria)
         {
             var client = GetRequiredClient();

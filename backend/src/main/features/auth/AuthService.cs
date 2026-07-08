@@ -32,6 +32,7 @@ namespace backend.main.features.auth
         private readonly IDeviceTrustService _deviceTrustService;
         private readonly ILoginStepUpChallengeService _loginStepUpChallengeService;
         private readonly IAuthSessionService _authSessionService;
+        private readonly SeedAccountBypassPolicy _seedBypass;
         private readonly ClientRequestInfo _requestInfo;
         private const string DummyHash = "$2a$11$9FJqO6j/4jP3E2fOQdWgMuKZXWWvPZ09f8Pj0L9VqB6TfqZ4fE5SO";
         private static readonly TimeSpan PendingOAuthSignupTtl = TimeSpan.FromMinutes(15);
@@ -47,6 +48,7 @@ namespace backend.main.features.auth
             IDeviceTrustService deviceTrustService,
             ILoginStepUpChallengeService loginStepUpChallengeService,
             IAuthSessionService authSessionService,
+            SeedAccountBypassPolicy seedBypass,
             ClientRequestInfo requestInfo
         )
         {
@@ -60,6 +62,7 @@ namespace backend.main.features.auth
             _deviceTrustService = deviceTrustService;
             _loginStepUpChallengeService = loginStepUpChallengeService;
             _authSessionService = authSessionService;
+            _seedBypass = seedBypass;
             _requestInfo = requestInfo;
         }
 
@@ -804,6 +807,15 @@ namespace backend.main.features.auth
             Func<LoginStepUpChallengeResponse, T> onStepUp
         )
         {
+            // Dev/test-only: seed accounts skip the MFA step-up challenge entirely.
+            if (_seedBypass.IsBypassEnabledFor(user.Email))
+            {
+                return onAuthenticated(new AuthenticatedSessionResult
+                {
+                    UserToken = await _authSessionService.IssueAsync(user, transport, rememberMe: rememberMe)
+                });
+            }
+
             if (await _deviceTrustService.IsTrustedAsync(user.Id, _requestInfo))
             {
                 return onAuthenticated(new AuthenticatedSessionResult

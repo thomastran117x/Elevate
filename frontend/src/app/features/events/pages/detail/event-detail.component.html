@@ -33,414 +33,430 @@
           Back to events
         </button>
 
-        <div *ngIf="event" class="flex flex-wrap gap-2">
-          <span
-            class="rounded-full border px-2.5 py-1 text-xs font-medium backdrop-blur"
-            [ngClass]="categoryStyles[event.category].badge"
-          >
-            {{ event.category }}
-          </span>
-          <span
-            class="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-white/75"
-          >
-            {{ event.status }}
-          </span>
-          <span
-            *ngIf="event.isPrivate"
-            class="rounded-full border border-amber-300/20 bg-amber-400/10 px-2.5 py-1 text-xs text-amber-200"
-          >
-            Private event
-          </span>
-        </div>
-      </div>
-
-      <div *ngIf="loading" class="mt-8 grid gap-6 lg:grid-cols-12">
-        <div
-          class="lg:col-span-7 h-[420px] rounded-3xl border border-white/10 bg-white/5 animate-pulse"
-        ></div>
-        <div class="lg:col-span-5 space-y-4">
-          <div class="h-32 rounded-3xl border border-white/10 bg-white/5 animate-pulse"></div>
-          <div class="h-64 rounded-3xl border border-white/10 bg-white/5 animate-pulse"></div>
-        </div>
-      </div>
-
-      <div
-        *ngIf="error && !loading"
-        class="mt-8 rounded-3xl border border-rose-500/20 bg-rose-500/10 p-6 text-rose-200"
-      >
-        <h1 class="text-xl font-semibold">We couldn't load this event</h1>
-        <p class="mt-2 text-sm text-rose-100/85">{{ error }}</p>
-      </div>
-
-      <div *ngIf="event && !loading" class="mt-8 grid gap-6 lg:grid-cols-12">
-        <div class="lg:col-span-7 space-y-4">
-          <div
-            *ngIf="event.lifecycleState === 'Cancelled'"
-            class="rounded-3xl border border-rose-400/30 bg-rose-500/10 p-5 text-sm text-rose-100"
-          >
-            This event has been cancelled. The details remain available here for attendees and
-            organizers, but it is no longer an active listing.
-          </div>
-
-          <div
-            class="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl shadow-fuchsia-500/10"
-          >
-            <div
-              *ngIf="heroImage; else heroFallback"
-              class="h-[320px] sm:h-[420px] bg-cover bg-center"
-              [style.background-image]="
-                'linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.55)), url(' +
-                heroImage +
-                ')'
-              "
-            ></div>
-            <ng-template #heroFallback>
-              <div
-                class="h-[320px] sm:h-[420px] bg-gradient-to-br from-purple-500/35 via-fuchsia-500/15 to-indigo-500/25"
-              ></div>
-            </ng-template>
-
-            <div class="absolute inset-x-0 bottom-0 p-5 sm:p-6">
-              <div class="rounded-2xl border border-white/10 bg-slate-950/50 p-4 backdrop-blur">
-                <p class="text-xs uppercase tracking-[0.18em] text-white/45">Event details</p>
-                <h1 class="mt-2 text-2xl font-extrabold tracking-tight sm:text-4xl">
-                  {{ event.name }}
-                </h1>
-                <p class="mt-3 max-w-2xl text-sm leading-relaxed text-white/70">
-                  {{ event.description || 'No description provided yet.' }}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div *ngIf="event.imageUrls.length > 1" class="grid grid-cols-4 gap-3 sm:grid-cols-5">
-            <button
-              *ngFor="let image of event.imageUrls; let index = index"
-              type="button"
-              class="cursor-pointer overflow-hidden rounded-2xl border transition"
-              [ngClass]="
-                index === selectedImageIndex
-                  ? 'border-white/30 bg-white/10'
-                  : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
-              "
-              (click)="selectImage(index)"
+        @if (event) {
+          <div class="flex flex-wrap gap-2">
+            <span
+              class="rounded-full border px-2.5 py-1 text-xs font-medium backdrop-blur"
+              [ngClass]="categoryStyles[event.category].badge"
             >
+              {{ event.category }}
+            </span>
+            <span
+              class="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-white/75"
+            >
+              {{ event.status }}
+            </span>
+            @if (event.isPrivate) {
               <span
-                class="block h-20 bg-cover bg-center"
-                [style.background-image]="
-                  'linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.35)), url(' +
-                  image +
-                  ')'
-                "
-              ></span>
-            </button>
-          </div>
-
-          <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-            <h2 class="text-lg font-semibold">About this event</h2>
-            <p class="mt-3 text-sm leading-7 text-white/70">
-              {{ event.description || 'No description provided yet.' }}
-            </p>
-
-            <div *ngIf="event.tags.length > 0" class="mt-5 flex flex-wrap gap-2">
-              <span
-                *ngFor="let tag of event.tags"
-                class="rounded-full border border-white/10 bg-slate-950/35 px-3 py-1 text-xs text-white/65"
+                class="rounded-full border border-amber-300/20 bg-amber-400/10 px-2.5 py-1 text-xs text-amber-200"
               >
-                #{{ tag }}
+                Private event
               </span>
-            </div>
+            }
+          </div>
+        }
+      </div>
+
+      @if (loading) {
+        <div class="mt-8 grid gap-6 lg:grid-cols-12">
+          <div
+            class="lg:col-span-7 h-[420px] rounded-3xl border border-white/10 bg-white/5 animate-pulse"
+          ></div>
+          <div class="lg:col-span-5 space-y-4">
+            <div class="h-32 rounded-3xl border border-white/10 bg-white/5 animate-pulse"></div>
+            <div class="h-64 rounded-3xl border border-white/10 bg-white/5 animate-pulse"></div>
           </div>
         </div>
+      }
 
-        <div class="lg:col-span-5 space-y-4">
-          <div
-            class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur shadow-2xl shadow-purple-500/10"
-          >
-            <div class="grid grid-cols-2 gap-3">
-              <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
-                <div class="text-xs text-white/55">Price</div>
-                <div class="mt-1 text-xl font-bold">{{ formatCost(event.registerCost) }}</div>
+      @if (error && !loading) {
+        <div class="mt-8 rounded-3xl border border-rose-500/20 bg-rose-500/10 p-6 text-rose-200">
+          <h1 class="text-xl font-semibold">We couldn't load this event</h1>
+          <p class="mt-2 text-sm text-rose-100/85">{{ error }}</p>
+        </div>
+      }
+
+      @if (event && !loading) {
+        <div class="mt-8 grid gap-6 lg:grid-cols-12">
+          <div class="lg:col-span-7 space-y-4">
+            @if (event.lifecycleState === 'Cancelled') {
+              <div
+                class="rounded-3xl border border-rose-400/30 bg-rose-500/10 p-5 text-sm text-rose-100"
+              >
+                This event has been cancelled. The details remain available here for attendees and
+                organizers, but it is no longer an active listing.
               </div>
-              <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
-                <div class="text-xs text-white/55">Hosted by</div>
-                <div class="mt-1 text-base font-bold">
-                  {{ event.club?.name || 'Club #' + event.clubId }}
-                </div>
-                <div *ngIf="event.club?.clubType" class="mt-1 text-xs text-white/55">
-                  {{ event.club?.clubType }} club
+            }
+            <div
+              class="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl shadow-fuchsia-500/10"
+            >
+              @if (heroImage) {
+                <div
+                  class="h-[320px] sm:h-[420px] bg-cover bg-center"
+                  [style.background-image]="
+                    'linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.55)), url(' +
+                    heroImage +
+                    ')'
+                  "
+                ></div>
+              } @else {
+                <div
+                  class="h-[320px] sm:h-[420px] bg-gradient-to-br from-purple-500/35 via-fuchsia-500/15 to-indigo-500/25"
+                ></div>
+              }
+              <div class="absolute inset-x-0 bottom-0 p-5 sm:p-6">
+                <div class="rounded-2xl border border-white/10 bg-slate-950/50 p-4 backdrop-blur">
+                  <p class="text-xs uppercase tracking-[0.18em] text-white/45">Event details</p>
+                  <h1 class="mt-2 text-2xl font-extrabold tracking-tight sm:text-4xl">
+                    {{ event.name }}
+                  </h1>
+                  <p class="mt-3 max-w-2xl text-sm leading-relaxed text-white/70">
+                    {{ event.description || 'No description provided yet.' }}
+                  </p>
                 </div>
               </div>
             </div>
-
-            <div class="mt-5 space-y-4">
-              <div>
-                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Schedule</div>
-                <div class="mt-2 text-sm leading-6 text-white/80">{{ formatSchedule(event) }}</div>
+            @if (event.imageUrls.length > 1) {
+              <div class="grid grid-cols-4 gap-3 sm:grid-cols-5">
+                @for (image of event.imageUrls; track image; let index = $index) {
+                  <button
+                    type="button"
+                    class="cursor-pointer overflow-hidden rounded-2xl border transition"
+                    [ngClass]="
+                      index === selectedImageIndex
+                        ? 'border-white/30 bg-white/10'
+                        : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
+                    "
+                    (click)="selectImage(index)"
+                  >
+                    <span
+                      class="block h-20 bg-cover bg-center"
+                      [style.background-image]="
+                        'linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.35)), url(' +
+                        image +
+                        ')'
+                      "
+                    ></span>
+                  </button>
+                }
               </div>
-
-              <div>
-                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Location</div>
-                <div class="mt-2 text-sm leading-6 text-white/80">
-                  <div>{{ event.venueName || event.location || 'Venue TBD' }}</div>
-                  <div class="text-white/60">
-                    {{ event.city || event.location || 'Location details coming soon' }}
-                  </div>
+            }
+            <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+              <h2 class="text-lg font-semibold">About this event</h2>
+              <p class="mt-3 text-sm leading-7 text-white/70">
+                {{ event.description || 'No description provided yet.' }}
+              </p>
+              @if (event.tags.length > 0) {
+                <div class="mt-5 flex flex-wrap gap-2">
+                  @for (tag of event.tags; track tag) {
+                    <span
+                      class="rounded-full border border-white/10 bg-slate-950/35 px-3 py-1 text-xs text-white/65"
+                    >
+                      #{{ tag }}
+                    </span>
+                  }
                 </div>
-              </div>
-
-              <div *ngIf="event.latitude != null && event.longitude != null">
-                <div class="text-xs uppercase tracking-[0.18em] text-white/45">Coordinates</div>
-                <div class="mt-2 text-sm text-white/70">
-                  {{ event.latitude | number: '1.3-3' }}, {{ event.longitude | number: '1.3-3' }}
-                </div>
-              </div>
+              }
             </div>
           </div>
-
-          <div
-            *ngIf="event.club"
-            class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur"
-          >
-            <div class="flex items-start gap-4">
-              <div
-                class="h-16 w-16 flex-shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/35"
-              >
-                <img
-                  *ngIf="event.club.clubImage; else clubImageFallback"
-                  [src]="event.club.clubImage"
-                  [alt]="event.club.name"
-                  class="h-full w-full object-cover"
-                />
-                <ng-template #clubImageFallback>
-                  <div
-                    class="flex h-full w-full items-center justify-center bg-gradient-to-br from-purple-500/25 to-fuchsia-500/20 text-lg font-bold text-white/70"
-                  >
-                    {{ event.club.name.charAt(0) }}
-                  </div>
-                </ng-template>
-              </div>
-
-              <div class="min-w-0 flex-1">
-                <div class="flex flex-wrap items-center gap-2">
-                  <h2 class="text-lg font-semibold">{{ event.club.name }}</h2>
-                  <span
-                    class="rounded-full border border-white/10 bg-slate-950/35 px-2 py-0.5 text-[11px] text-white/60"
-                  >
-                    {{ event.club.clubType }}
-                  </span>
-                  <span
-                    *ngIf="event.club.rating != null"
-                    class="rounded-full border border-white/10 bg-slate-950/35 px-2 py-0.5 text-[11px] text-white/60"
-                  >
-                    {{ event.club.rating | number: '1.1-1' }} rating
-                  </span>
+          <div class="lg:col-span-5 space-y-4">
+            <div
+              class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur shadow-2xl shadow-purple-500/10"
+            >
+              <div class="grid grid-cols-2 gap-3">
+                <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                  <div class="text-xs text-white/55">Price</div>
+                  <div class="mt-1 text-xl font-bold">{{ formatCost(event.registerCost) }}</div>
                 </div>
-
-                <p class="mt-2 text-sm leading-7 text-white/70">
-                  {{ event.club.description || 'Host club details are not available yet.' }}
-                </p>
-
-                <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
-                    <div class="text-xs text-white/55">Members</div>
-                    <div class="mt-1 text-lg font-semibold">{{ event.club.memberCount }}</div>
+                <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                  <div class="text-xs text-white/55">Hosted by</div>
+                  <div class="mt-1 text-base font-bold">
+                    {{ event.club?.name || 'Club #' + event.clubId }}
                   </div>
-                  <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
-                    <div class="text-xs text-white/55">Active events</div>
-                    <div class="mt-1 text-lg font-semibold">
-                      {{ event.club.availableEventCount }}
+                  @if (event.club?.clubType) {
+                    <div class="mt-1 text-xs text-white/55">{{ event.club?.clubType }} club</div>
+                  }
+                </div>
+              </div>
+              <div class="mt-5 space-y-4">
+                <div>
+                  <div class="text-xs uppercase tracking-[0.18em] text-white/45">Schedule</div>
+                  <div class="mt-2 text-sm leading-6 text-white/80">
+                    {{ formatSchedule(event) }}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-xs uppercase tracking-[0.18em] text-white/45">Location</div>
+                  <div class="mt-2 text-sm leading-6 text-white/80">
+                    <div>{{ event.venueName || event.location || 'Venue TBD' }}</div>
+                    <div class="text-white/60">
+                      {{ event.city || event.location || 'Location details coming soon' }}
                     </div>
                   </div>
                 </div>
-
-                <div class="mt-4 space-y-1 text-sm text-white/65">
-                  <div *ngIf="event.club.location">Location: {{ event.club.location }}</div>
-                  <div *ngIf="event.club.email">Email: {{ event.club.email }}</div>
-                  <div *ngIf="event.club.phone">Phone: {{ event.club.phone }}</div>
-                  <div *ngIf="event.club.websiteUrl">Website: {{ event.club.websiteUrl }}</div>
-                </div>
+                @if (event.latitude != null && event.longitude != null) {
+                  <div>
+                    <div class="text-xs uppercase tracking-[0.18em] text-white/45">Coordinates</div>
+                    <div class="mt-2 text-sm text-white/70">
+                      {{ event.latitude | number: '1.3-3' }},
+                      {{ event.longitude | number: '1.3-3' }}
+                    </div>
+                  </div>
+                }
               </div>
             </div>
-          </div>
-
-          <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-            <!-- Progress bar — only when there's a cap -->
-            <ng-container *ngIf="event.maxParticipants > 0">
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <div class="text-sm font-semibold">Registration progress</div>
-                  <div class="mt-1 text-xs text-white/55">
-                    {{ event.registrationCount }} of {{ event.maxParticipants }} spots filled
+            @if (event.club) {
+              <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+                <div class="flex items-start gap-4">
+                  <div
+                    class="h-16 w-16 flex-shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/35"
+                  >
+                    @if (event.club.clubImage) {
+                      <img
+                        [src]="event.club.clubImage"
+                        [alt]="event.club.name"
+                        class="h-full w-full object-cover"
+                      />
+                    } @else {
+                      <div
+                        class="flex h-full w-full items-center justify-center bg-gradient-to-br from-purple-500/25 to-fuchsia-500/20 text-lg font-bold text-white/70"
+                      >
+                        {{ event.club.name.charAt(0) }}
+                      </div>
+                    }
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h2 class="text-lg font-semibold">{{ event.club.name }}</h2>
+                      <span
+                        class="rounded-full border border-white/10 bg-slate-950/35 px-2 py-0.5 text-[11px] text-white/60"
+                      >
+                        {{ event.club.clubType }}
+                      </span>
+                      @if (event.club.rating != null) {
+                        <span
+                          class="rounded-full border border-white/10 bg-slate-950/35 px-2 py-0.5 text-[11px] text-white/60"
+                        >
+                          {{ event.club.rating | number: '1.1-1' }} rating
+                        </span>
+                      }
+                    </div>
+                    <p class="mt-2 text-sm leading-7 text-white/70">
+                      {{ event.club.description || 'Host club details are not available yet.' }}
+                    </p>
+                    <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                        <div class="text-xs text-white/55">Members</div>
+                        <div class="mt-1 text-lg font-semibold">{{ event.club.memberCount }}</div>
+                      </div>
+                      <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                        <div class="text-xs text-white/55">Active events</div>
+                        <div class="mt-1 text-lg font-semibold">
+                          {{ event.club.availableEventCount }}
+                        </div>
+                      </div>
+                    </div>
+                    <div class="mt-4 space-y-1 text-sm text-white/65">
+                      @if (event.club.location) {
+                        <div>Location: {{ event.club.location }}</div>
+                      }
+                      @if (event.club.email) {
+                        <div>Email: {{ event.club.email }}</div>
+                      }
+                      @if (event.club.phone) {
+                        <div>Phone: {{ event.club.phone }}</div>
+                      }
+                      @if (event.club.websiteUrl) {
+                        <div>Website: {{ event.club.websiteUrl }}</div>
+                      }
+                    </div>
                   </div>
                 </div>
-                <div class="text-lg font-bold">
-                  {{ registrationPercent(event) | number: '1.0-0' }}%
-                </div>
               </div>
-              <div class="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+            }
+            <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+              <!-- Progress bar — only when there's a cap -->
+              @if (event.maxParticipants > 0) {
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <div class="text-sm font-semibold">Registration progress</div>
+                    <div class="mt-1 text-xs text-white/55">
+                      {{ event.registrationCount }} of {{ event.maxParticipants }} spots filled
+                    </div>
+                  </div>
+                  <div class="text-lg font-bold">
+                    {{ registrationPercent(event) | number: '1.0-0' }}%
+                  </div>
+                </div>
+                <div class="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    class="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500"
+                    [style.width.%]="registrationPercent(event)"
+                  ></div>
+                </div>
+                <div class="mt-4 mb-2 border-t border-white/10"></div>
+              }
+              <!-- Unlimited capacity indicator -->
+              @if (event.maxParticipants <= 0) {
+                <div class="text-sm text-white/55 mb-4">
+                  {{ event.registrationCount }} registered &bull; Unlimited spots
+                </div>
+              }
+              <!-- Registration error -->
+              @if (registrationError) {
                 <div
-                  class="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500"
-                  [style.width.%]="registrationPercent(event)"
-                ></div>
-              </div>
-              <div class="mt-4 mb-2 border-t border-white/10"></div>
-            </ng-container>
-
-            <!-- Unlimited capacity indicator -->
-            <ng-container *ngIf="event.maxParticipants <= 0">
-              <div class="text-sm text-white/55 mb-4">
-                {{ event.registrationCount }} registered &bull; Unlimited spots
-              </div>
-            </ng-container>
-
-            <!-- Registration error -->
-            <div
-              *ngIf="registrationError"
-              class="mb-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-200"
-            >
-              {{ registrationError }}
-            </div>
-
-            <!-- Not logged in -->
-            <div
-              *ngIf="currentUserId === null && canRegister"
-              class="rounded-2xl border border-white/10 bg-slate-950/35 p-4 text-sm text-white/70 text-center"
-            >
-              Sign in to register for this event.
-            </div>
-
-            <!-- Logged in -->
-            <ng-container *ngIf="currentUserId !== null">
-              <!-- Registration form (register or edit) -->
-              <div *ngIf="showRegistrationForm" class="space-y-3">
-                <div class="text-sm font-semibold text-white/80">
-                  {{
-                    isEditing ? 'Update your registration details' : 'Complete your registration'
-                  }}
+                  class="mb-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-200"
+                >
+                  {{ registrationError }}
                 </div>
-
-                <div [formGroup]="registrationForm" class="space-y-3">
-                  <div>
-                    <label class="block text-xs text-white/55 mb-1"
-                      >Notes for organizer (optional)</label
-                    >
-                    <input
-                      formControlName="notes"
-                      type="text"
-                      placeholder="e.g. dietary requirements, questions..."
-                      class="w-full rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50"
-                    />
-                  </div>
-                  <div>
-                    <label class="block text-xs text-white/55 mb-1">Phone number (optional)</label>
-                    <input
-                      formControlName="phoneNumber"
-                      type="tel"
-                      placeholder="e.g. 416-555-0123"
-                      class="w-full rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50"
-                    />
-                  </div>
-                  <div>
-                    <label class="block text-xs text-white/55 mb-1"
-                      >Dietary / accessibility needs (optional)</label
-                    >
-                    <input
-                      formControlName="dietaryNeeds"
-                      type="text"
-                      placeholder="e.g. vegetarian, wheelchair access..."
-                      class="w-full rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50"
-                    />
-                  </div>
+              }
+              <!-- Not logged in -->
+              @if (currentUserId === null && canRegister) {
+                <div
+                  class="rounded-2xl border border-white/10 bg-slate-950/35 p-4 text-sm text-white/70 text-center"
+                >
+                  Sign in to register for this event.
                 </div>
-
-                <div class="flex gap-2 pt-1">
+              }
+              <!-- Logged in -->
+              @if (currentUserId !== null) {
+                <!-- Registration form (register or edit) -->
+                @if (showRegistrationForm) {
+                  <div class="space-y-3">
+                    <div class="text-sm font-semibold text-white/80">
+                      {{
+                        isEditing
+                          ? 'Update your registration details'
+                          : 'Complete your registration'
+                      }}
+                    </div>
+                    <div [formGroup]="registrationForm" class="space-y-3">
+                      <div>
+                        <label class="block text-xs text-white/55 mb-1"
+                          >Notes for organizer (optional)</label
+                        >
+                        <input
+                          formControlName="notes"
+                          type="text"
+                          placeholder="e.g. dietary requirements, questions..."
+                          class="w-full rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50"
+                        />
+                      </div>
+                      <div>
+                        <label class="block text-xs text-white/55 mb-1"
+                          >Phone number (optional)</label
+                        >
+                        <input
+                          formControlName="phoneNumber"
+                          type="tel"
+                          placeholder="e.g. 416-555-0123"
+                          class="w-full rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50"
+                        />
+                      </div>
+                      <div>
+                        <label class="block text-xs text-white/55 mb-1"
+                          >Dietary / accessibility needs (optional)</label
+                        >
+                        <input
+                          formControlName="dietaryNeeds"
+                          type="text"
+                          placeholder="e.g. vegetarian, wheelchair access..."
+                          class="w-full rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50"
+                        />
+                      </div>
+                    </div>
+                    <div class="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        [disabled]="registrationLoading"
+                        (click)="isEditing ? submitUpdate() : submitRegistration()"
+                        class="flex-1 rounded-2xl bg-gradient-to-r from-purple-500/30 to-fuchsia-500/30 border border-purple-500/30 px-4 py-2.5 text-sm font-semibold text-white transition hover:from-purple-500/40 hover:to-fuchsia-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        @if (!registrationLoading) {
+                          <span>{{ isEditing ? 'Save changes' : 'Confirm registration' }}</span>
+                        }
+                        @if (registrationLoading) {
+                          <span>Please wait...</span>
+                        }
+                      </button>
+                      <button
+                        type="button"
+                        (click)="closeRegistrationForm()"
+                        class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white/70 transition hover:bg-white/10"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                }
+                <!-- Registered state -->
+                @if (isRegistered && !showRegistrationForm) {
+                  <div class="space-y-2">
+                    <div
+                      class="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200 text-center"
+                    >
+                      You're registered for this event
+                    </div>
+                    <button
+                      type="button"
+                      (click)="openEditForm()"
+                      class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white/70 transition hover:bg-white/10"
+                    >
+                      Edit my registration details
+                    </button>
+                    <button
+                      type="button"
+                      [disabled]="registrationLoading"
+                      (click)="unregister()"
+                      class="w-full rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      @if (!registrationLoading) {
+                        <span>Unregister from event</span>
+                      }
+                      @if (registrationLoading) {
+                        <span>Please wait...</span>
+                      }
+                    </button>
+                  </div>
+                }
+                <!-- Can register (not yet registered, form not open) -->
+                @if (!isRegistered && canRegister && !showRegistrationForm) {
                   <button
                     type="button"
-                    [disabled]="registrationLoading"
-                    (click)="isEditing ? submitUpdate() : submitRegistration()"
-                    class="flex-1 rounded-2xl bg-gradient-to-r from-purple-500/30 to-fuchsia-500/30 border border-purple-500/30 px-4 py-2.5 text-sm font-semibold text-white transition hover:from-purple-500/40 hover:to-fuchsia-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+                    (click)="openRegistrationForm()"
+                    class="w-full rounded-2xl border border-purple-500/30 bg-gradient-to-r from-purple-500/20 to-fuchsia-500/20 px-4 py-3 text-sm font-semibold text-white transition hover:from-purple-500/30 hover:to-fuchsia-500/30"
                   >
-                    <span *ngIf="!registrationLoading">{{
-                      isEditing ? 'Save changes' : 'Confirm registration'
-                    }}</span>
-                    <span *ngIf="registrationLoading">Please wait...</span>
+                    Register for this event
                   </button>
-                  <button
-                    type="button"
-                    (click)="closeRegistrationForm()"
-                    class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white/70 transition hover:bg-white/10"
+                }
+                <!-- Cannot register -->
+                @if (!isRegistered && !canRegister && !showRegistrationForm) {
+                  <div
+                    class="rounded-2xl border border-white/10 bg-slate-950/35 p-4 text-sm text-white/50 text-center"
                   >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-
-              <!-- Registered state -->
-              <div *ngIf="isRegistered && !showRegistrationForm" class="space-y-2">
-                <div
-                  class="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200 text-center"
-                >
-                  You're registered for this event
-                </div>
-                <button
-                  type="button"
-                  (click)="openEditForm()"
-                  class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white/70 transition hover:bg-white/10"
-                >
-                  Edit my registration details
-                </button>
-                <button
-                  type="button"
-                  [disabled]="registrationLoading"
-                  (click)="unregister()"
-                  class="w-full rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <span *ngIf="!registrationLoading">Unregister from event</span>
-                  <span *ngIf="registrationLoading">Please wait...</span>
-                </button>
-              </div>
-
-              <!-- Can register (not yet registered, form not open) -->
-              <button
-                *ngIf="!isRegistered && canRegister && !showRegistrationForm"
-                type="button"
-                (click)="openRegistrationForm()"
-                class="w-full rounded-2xl border border-purple-500/30 bg-gradient-to-r from-purple-500/20 to-fuchsia-500/20 px-4 py-3 text-sm font-semibold text-white transition hover:from-purple-500/30 hover:to-fuchsia-500/30"
-              >
-                Register for this event
-              </button>
-
-              <!-- Cannot register -->
-              <div
-                *ngIf="!isRegistered && !canRegister && !showRegistrationForm"
-                class="rounded-2xl border border-white/10 bg-slate-950/35 p-4 text-sm text-white/50 text-center"
-              >
-                <ng-container *ngIf="event.lifecycleState === 'Cancelled'">
-                  This event has been cancelled.
-                </ng-container>
-                <ng-container
-                  *ngIf="
-                    event.lifecycleState === 'Published' &&
-                    event.maxParticipants > 0 &&
-                    event.registrationCount >= event.maxParticipants
-                  "
-                >
-                  This event is full.
-                </ng-container>
-                <ng-container
-                  *ngIf="event.lifecycleState === 'Published' && event.registerCost > 0"
-                >
-                  Paid registration is required.
-                </ng-container>
-                <ng-container *ngIf="event.lifecycleState === 'Published' && isEventStarted(event)">
-                  Registration is closed — this event has started.
-                </ng-container>
-              </div>
-            </ng-container>
+                    @if (event.lifecycleState === 'Cancelled') {
+                      This event has been cancelled.
+                    }
+                    @if (
+                      event.lifecycleState === 'Published' &&
+                      event.maxParticipants > 0 &&
+                      event.registrationCount >= event.maxParticipants
+                    ) {
+                      This event is full.
+                    }
+                    @if (event.lifecycleState === 'Published' && event.registerCost > 0) {
+                      Paid registration is required.
+                    }
+                    @if (event.lifecycleState === 'Published' && isEventStarted(event)) {
+                      Registration is closed — this event has started.
+                    }
+                  </div>
+                }
+              }
+            </div>
           </div>
         </div>
-      </div>
+      }
     </section>
   </main>
 </div>

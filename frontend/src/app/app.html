@@ -1,10 +1,8 @@
-<ng-container *ngIf="!loading; else loadingScreen">
+@if (!loading) {
   <app-navbar></app-navbar>
   <router-outlet></router-outlet>
   <app-footer></app-footer>
-</ng-container>
-
-<ng-template #loadingScreen>
+} @else {
   <div
     class="min-h-screen flex flex-col items-center justify-center bg-indigo-50 dark:bg-[#0f0a1c] px-4"
   >
@@ -20,11 +18,8 @@
           class="absolute inset-0 rounded-full border-4 border-indigo-600 border-t-transparent dark:border-indigo-400 dark:border-t-transparent animate-spin"
         ></div>
       </div>
-
       <h3 class="text-2xl font-bold text-indigo-700 dark:text-indigo-300 mb-2">EventXperience</h3>
-
       <p class="text-gray-600 dark:text-gray-300 mb-6">Restoring your session...</p>
-
       <div class="flex justify-center gap-5">
         <i class="bi bi-cup-hot text-indigo-500 dark:text-indigo-300 text-3xl animate-pulse"></i>
         <i class="bi bi-egg-fried text-pink-400 text-3xl animate-pulse [animation-delay:0.15s]"></i>
@@ -34,5 +29,5 @@
       </div>
     </div>
   </div>
-  <ng-template
-/></ng-template>
+  <ng-template />
+}

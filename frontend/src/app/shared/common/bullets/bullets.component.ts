@@ -1,10 +1,9 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 
 @Component({
   selector: 'bullets',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './bullets.component.html',
   styleUrl: './bullets.component.css',
 })

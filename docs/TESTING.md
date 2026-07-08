@@ -6,7 +6,7 @@ Backend tests are split into two projects:
 - `backend.tests.Integration`
 
 The unit suite covers controller logic, pure helpers, token/auth logic, and worker parsers.
-The integration suite covers SQLite-backed services/repositories/outbox writers, seeders, and HTTP auth flows through the real ASP.NET app running in the `Testing` environment.
+The integration suite now runs the real ASP.NET app in the `Testing` environment against Docker-backed Testcontainers for MySQL, Redis, Elasticsearch, and Kafka, covering repository/service flows, seeders, search, and HTTP auth/event/club endpoints.
 
 ## Commands
 
@@ -23,6 +23,9 @@ dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-unit-
 ```
 
 Run the integration suite:
+
+Docker must be running locally before you start the integration suite.
+On Windows ARM64, Kafka-backed integration tests also require an x64 .NET installation because `Confluent.Kafka` currently restores Windows native assets for x64/x86, not ARM64.
 
 ```powershell
 dotnet test backend.tests.Integration\backend.tests.Integration.csproj
@@ -87,10 +90,10 @@ The current backend coverage improvement plan lives in:
 Auth integration tests use:
 
 - ASP.NET `WebApplicationFactory<Program>`
-- SQLite in-memory database
-- in-memory fake cache
+- Testcontainers-backed MySQL, Redis, Elasticsearch, and Kafka
 - fake captcha provider
 - fake OAuth provider
-- captured publisher for email/token assertions
+- fake blob storage
+- Kafka-backed test probes for email and SMS assertions
 
-The backend app exposes a `Testing` startup path so integration tests can boot without running production-only startup side effects such as live Redis wiring, database migration checks, or hosted background workers.
+The backend app exposes a `Testing` startup path so integration tests can boot with real infra wiring while still avoiding production-only side effects such as background email/SMS workers. A running Docker daemon is now a hard requirement for `backend.tests.Integration` locally and in CI.

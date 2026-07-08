@@ -14,7 +14,8 @@ namespace backend.main.utilities
 
             var response = ApiResponse<object?>.Failure(
                 "An unexpected error occurred.",
-                "INTERNAL_SERVER_ERROR"
+                "INTERNAL_SERVER_ERROR",
+                IsTestingEnvironment() ? ex.ToString() : null
             );
 
             return new ObjectResult(response)
@@ -22,6 +23,10 @@ namespace backend.main.utilities
                 StatusCode = StatusCodes.Status500InternalServerError
             };
         }
+
+        private static bool IsTestingEnvironment() =>
+            string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Testing", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"), "Testing", StringComparison.OrdinalIgnoreCase);
 
         private static IActionResult HandleAppException(AppException ex)
         {

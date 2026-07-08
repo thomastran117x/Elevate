@@ -1,10 +1,9 @@
-import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 
 @Component({
   selector: 'microsoft-icon',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './microsoft-icon.component.html',
   styleUrl: './microsoft-icon.component.css',
 })

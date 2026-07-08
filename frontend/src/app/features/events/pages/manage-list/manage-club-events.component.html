@@ -35,134 +35,125 @@
         All
       </button>
 
-      <button
-        *ngFor="let lifecycle of lifecycles"
-        type="button"
-        (click)="setLifecycle(lifecycle)"
-        class="rounded-full px-4 py-2 text-sm transition"
-        [class.bg-stone-100]="selectedLifecycle === lifecycle"
-        [class.text-stone-950]="selectedLifecycle === lifecycle"
-        [class.bg-stone-900]="selectedLifecycle !== lifecycle"
-        [class.text-stone-300]="selectedLifecycle !== lifecycle"
+      @for (lifecycle of lifecycles; track lifecycle) {
+        <button
+          type="button"
+          (click)="setLifecycle(lifecycle)"
+          class="rounded-full px-4 py-2 text-sm transition"
+          [class.bg-stone-100]="selectedLifecycle === lifecycle"
+          [class.text-stone-950]="selectedLifecycle === lifecycle"
+          [class.bg-stone-900]="selectedLifecycle !== lifecycle"
+          [class.text-stone-300]="selectedLifecycle !== lifecycle"
+        >
+          {{ lifecycle }}
+        </button>
+      }
+    </div>
+
+    @if (loading) {
+      <div class="rounded-3xl border border-stone-800 bg-stone-900/70 p-6 text-sm text-stone-300">
+        Loading events...
+      </div>
+    }
+
+    @if (!loading && error) {
+      <div class="rounded-3xl border border-rose-500/40 bg-rose-950/50 p-6 text-sm text-rose-100">
+        {{ error }}
+      </div>
+    }
+
+    @if (!loading && !error && events.length === 0) {
+      <div
+        class="rounded-3xl border border-dashed border-stone-700 bg-stone-900/40 p-8 text-center text-sm text-stone-400"
       >
-        {{ lifecycle }}
-      </button>
-    </div>
+        No events match this lifecycle yet.
+      </div>
+    }
 
-    <div
-      *ngIf="loading"
-      class="rounded-3xl border border-stone-800 bg-stone-900/70 p-6 text-sm text-stone-300"
-    >
-      Loading events...
-    </div>
-
-    <div
-      *ngIf="!loading && error"
-      class="rounded-3xl border border-rose-500/40 bg-rose-950/50 p-6 text-sm text-rose-100"
-    >
-      {{ error }}
-    </div>
-
-    <div
-      *ngIf="!loading && !error && events.length === 0"
-      class="rounded-3xl border border-dashed border-stone-700 bg-stone-900/40 p-8 text-center text-sm text-stone-400"
-    >
-      No events match this lifecycle yet.
-    </div>
-
-    <div
-      *ngIf="!loading && !error && events.length > 0"
-      class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
-    >
-      <article
-        *ngFor="let event of events; trackBy: trackByEventId"
-        class="rounded-[1.75rem] border border-stone-800 bg-stone-900/75 p-5 shadow-lg shadow-black/20"
-      >
-        <div class="flex items-start justify-between gap-3">
-          <div>
-            <span
-              class="inline-flex rounded-full px-3 py-1 text-xs font-semibold"
-              [ngClass]="lifecycleBadge(event.lifecycleState)"
-            >
-              {{ event.lifecycleState }}
-            </span>
-            <h2 class="mt-3 text-xl font-semibold text-stone-50">
-              {{ event.name || 'Untitled draft' }}
-            </h2>
-          </div>
-          <span
-            *ngIf="event.isPrivate"
-            class="rounded-full bg-stone-800 px-3 py-1 text-xs text-stone-300"
+    @if (!loading && !error && events.length > 0) {
+      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        @for (event of events; track trackByEventId($index, event)) {
+          <article
+            class="rounded-[1.75rem] border border-stone-800 bg-stone-900/75 p-5 shadow-lg shadow-black/20"
           >
-            Private
-          </span>
-        </div>
-
-        <p class="mt-3 min-h-12 text-sm text-stone-300">
-          {{ event.description || 'This draft still needs a public-facing description.' }}
-        </p>
-
-        <dl class="mt-4 space-y-2 text-sm text-stone-400">
-          <div class="flex items-center justify-between gap-3">
-            <dt>Schedule</dt>
-            <dd>
-              {{ event.startTime ? (event.startTime | date: 'MMM d, y, h:mm a') : 'Not set' }}
-            </dd>
-          </div>
-          <div class="flex items-center justify-between gap-3">
-            <dt>Registrations</dt>
-            <dd>{{ event.registrationCount }}</dd>
-          </div>
-          <div class="flex items-center justify-between gap-3">
-            <dt>Publish ready</dt>
-            <dd
-              [class.text-emerald-300]="event.publishReady"
-              [class.text-amber-300]="!event.publishReady"
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <span
+                  class="inline-flex rounded-full px-3 py-1 text-xs font-semibold"
+                  [ngClass]="lifecycleBadge(event.lifecycleState)"
+                >
+                  {{ event.lifecycleState }}
+                </span>
+                <h2 class="mt-3 text-xl font-semibold text-stone-50">
+                  {{ event.name || 'Untitled draft' }}
+                </h2>
+              </div>
+              @if (event.isPrivate) {
+                <span class="rounded-full bg-stone-800 px-3 py-1 text-xs text-stone-300">
+                  Private
+                </span>
+              }
+            </div>
+            <p class="mt-3 min-h-12 text-sm text-stone-300">
+              {{ event.description || 'This draft still needs a public-facing description.' }}
+            </p>
+            <dl class="mt-4 space-y-2 text-sm text-stone-400">
+              <div class="flex items-center justify-between gap-3">
+                <dt>Schedule</dt>
+                <dd>
+                  {{ event.startTime ? (event.startTime | date: 'MMM d, y, h:mm a') : 'Not set' }}
+                </dd>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <dt>Registrations</dt>
+                <dd>{{ event.registrationCount }}</dd>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <dt>Publish ready</dt>
+                <dd
+                  [class.text-emerald-300]="event.publishReady"
+                  [class.text-amber-300]="!event.publishReady"
+                >
+                  {{ event.publishReady ? 'Yes' : 'Needs work' }}
+                </dd>
+              </div>
+            </dl>
+            @if (!event.publishReady && event.publishIssues.length > 0) {
+              <p class="mt-4 text-xs text-amber-200">
+                {{ event.publishIssues[0] }}
+              </p>
+            }
+            <a
+              [routerLink]="['/events', event.id, 'manage']"
+              class="mt-5 inline-flex items-center rounded-full border border-stone-700 px-4 py-2 text-sm font-medium text-stone-100 transition hover:border-stone-500 hover:bg-stone-800"
             >
-              {{ event.publishReady ? 'Yes' : 'Needs work' }}
-            </dd>
-          </div>
-        </dl>
+              Open editor
+            </a>
+          </article>
+        }
+      </div>
+    }
 
-        <p
-          *ngIf="!event.publishReady && event.publishIssues.length > 0"
-          class="mt-4 text-xs text-amber-200"
+    @if (!loading && !error && totalPages > 1) {
+      <div class="flex items-center justify-center gap-2">
+        <button
+          type="button"
+          (click)="goToPage(currentPage - 1)"
+          [disabled]="currentPage === 1"
+          class="rounded-full border border-stone-700 px-4 py-2 text-sm text-stone-200 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {{ event.publishIssues[0] }}
-        </p>
-
-        <a
-          [routerLink]="['/events', event.id, 'manage']"
-          class="mt-5 inline-flex items-center rounded-full border border-stone-700 px-4 py-2 text-sm font-medium text-stone-100 transition hover:border-stone-500 hover:bg-stone-800"
+          Previous
+        </button>
+        <span class="text-sm text-stone-400">Page {{ currentPage }} of {{ totalPages }}</span>
+        <button
+          type="button"
+          (click)="goToPage(currentPage + 1)"
+          [disabled]="currentPage === totalPages"
+          class="rounded-full border border-stone-700 px-4 py-2 text-sm text-stone-200 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Open editor
-        </a>
-      </article>
-    </div>
-
-    <div
-      *ngIf="!loading && !error && totalPages > 1"
-      class="flex items-center justify-center gap-2"
-    >
-      <button
-        type="button"
-        (click)="goToPage(currentPage - 1)"
-        [disabled]="currentPage === 1"
-        class="rounded-full border border-stone-700 px-4 py-2 text-sm text-stone-200 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        Previous
-      </button>
-
-      <span class="text-sm text-stone-400">Page {{ currentPage }} of {{ totalPages }}</span>
-
-      <button
-        type="button"
-        (click)="goToPage(currentPage + 1)"
-        [disabled]="currentPage === totalPages"
-        class="rounded-full border border-stone-700 px-4 py-2 text-sm text-stone-200 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        Next
-      </button>
-    </div>
+          Next
+        </button>
+      </div>
+    }
   </div>
 </section>

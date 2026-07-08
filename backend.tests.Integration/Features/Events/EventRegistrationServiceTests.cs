@@ -10,10 +10,10 @@ using backend.main.shared.exceptions.http;
 
 using FluentAssertions;
 
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 using Moq;
+using backend.tests.Integration.Infrastructure;
 
 namespace backend.tests.Integration.Features.Events;
 
@@ -321,7 +321,7 @@ public class EventRegistrationServiceTests
 
     private sealed class EventRegistrationHarness : IAsyncDisposable
     {
-        private readonly SqliteConnection _connection;
+        private readonly MySqlTestDatabase _database;
 
         public AppDatabaseContext Db { get; }
         public EventRegistrationService Service { get; }
@@ -337,7 +337,7 @@ public class EventRegistrationServiceTests
         public string[] UserIndexMembers { get; set; } = [];
 
         private EventRegistrationHarness(
-            SqliteConnection connection,
+            MySqlTestDatabase database,
             AppDatabaseContext db,
             EventRegistrationService service,
             Mock<IEventsService> eventsServiceMock,
@@ -346,7 +346,7 @@ public class EventRegistrationServiceTests
             Mock<IEventSearchOutboxWriter> outboxWriterMock,
             int eventId)
         {
-            _connection = connection;
+            _database = database;
             Db = db;
             Service = service;
             EventsServiceMock = eventsServiceMock;
@@ -358,15 +358,9 @@ public class EventRegistrationServiceTests
 
         public static async Task<EventRegistrationHarness> CreateAsync()
         {
-            var connection = new SqliteConnection("Data Source=:memory:");
-            await connection.OpenAsync();
+            var database = await MySqlTestDatabase.CreateAsync();
 
-            var options = new DbContextOptionsBuilder<AppDatabaseContext>()
-                .UseSqlite(connection)
-                .Options;
-
-            var db = new AppDatabaseContext(options);
-            await db.Database.EnsureCreatedAsync();
+            var db = database.CreateDbContext();
 
             db.Users.AddRange(
                 new User { Id = 1, Email = "organizer@test.local", Usertype = "Organizer" },
@@ -452,7 +446,7 @@ public class EventRegistrationServiceTests
                 outboxWriterMock.Object);
 
             harness = new EventRegistrationHarness(
-                connection,
+                database,
                 db,
                 service,
                 eventsServiceMock,
@@ -491,7 +485,8 @@ public class EventRegistrationServiceTests
         public async ValueTask DisposeAsync()
         {
             await Db.DisposeAsync();
-            await _connection.DisposeAsync();
+            await _database.DisposeAsync();
         }
     }
 }
+

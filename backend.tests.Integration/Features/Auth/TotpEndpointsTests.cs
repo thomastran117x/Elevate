@@ -2,11 +2,15 @@ using System.Net;
 
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.token;
+using backend.main.infrastructure.database.core;
 
 using backend.tests.Integration.Infrastructure;
 
 using FluentAssertions;
+
+using Microsoft.EntityFrameworkCore;
 
 using OtpNet;
 
@@ -45,6 +49,11 @@ public class TotpEndpointsTests
         var verifyBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(verify);
         verifyBody.Data!.Totp.IsEnabled.Should().BeTrue();
         verifyBody.Data.Totp.EnrolledAtUtc.Should().NotBeNull();
+
+        var persistedEnrollment = await app.QueryDbAsync(db => db.TotpMfaEnrollments.SingleOrDefaultAsync());
+        persistedEnrollment.Should().NotBeNull();
+        persistedEnrollment!.IsTotpMfaEnabled.Should().BeTrue();
+        persistedEnrollment.EnrolledAtUtc.Should().NotBeNull();
 
         var status = await app.GetWithBearerAsync("/api/auth/mfa", session.AccessToken);
         status.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -92,6 +101,11 @@ public class TotpEndpointsTests
         var disableBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(disable);
         disableBody.Data!.Totp.IsEnabled.Should().BeFalse();
         disableBody.Data.Totp.DisabledAtUtc.Should().NotBeNull();
+
+        var persistedDisabled = await app.QueryDbAsync(db =>
+            db.TotpMfaEnrollments.SingleAsync(e => e.UserId == user.Id));
+        persistedDisabled.IsTotpMfaEnabled.Should().BeFalse();
+        persistedDisabled.DisabledAtUtc.Should().NotBeNull();
 
         var status = await app.GetWithBearerAsync("/api/auth/mfa", session.AccessToken);
         var statusBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(status);
@@ -148,6 +162,11 @@ public class TotpEndpointsTests
         enableBody.Data!.Totp.IsEnabled.Should().BeTrue();
         enableBody.Data.Totp.DisabledAtUtc.Should().BeNull();
 
+        var persistedReenabled = await app.QueryDbAsync(db =>
+            db.TotpMfaEnrollments.SingleAsync(e => e.UserId == user.Id));
+        persistedReenabled.IsTotpMfaEnabled.Should().BeTrue();
+        persistedReenabled.DisabledAtUtc.Should().BeNull();
+
         await app.Cache.DeleteKeyAsync($"totp:lastused:{user.Id}");
         var remove = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/totp/remove",
@@ -163,6 +182,8 @@ public class TotpEndpointsTests
         removeBody.Data.Totp.IsEnabled.Should().BeFalse();
         removeBody.Data.Totp.EnrolledAtUtc.Should().BeNull();
         removeBody.Data.Totp.DisabledAtUtc.Should().BeNull();
+
+        (await app.QueryDbAsync(db => db.TotpMfaEnrollments.AnyAsync(e => e.UserId == user.Id))).Should().BeFalse();
     }
     [Fact]
     public async Task TotpStepUpEndpoints_ShouldOfferTotp_AndCompleteLogin()

@@ -21,7 +21,7 @@ Verify Docker is working with:
 
 ### Locally (not recommended)
 
-- [Node.js v22.x](https://nodejs.org/en/download)
+- [Node.js v24.x](https://nodejs.org/en/download)
 - [.NET Core 9.x](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
 - [MySQL](https://www.mysql.com/downloads/)
 - [Redis](https://redis.io/downloads/)

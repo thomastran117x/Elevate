@@ -5,6 +5,7 @@ using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
+using backend.main.infrastructure.database.core;
 using backend.main.shared.responses;
 using backend.main.shared.providers.messages;
 using backend.main.utilities;
@@ -12,6 +13,8 @@ using backend.main.utilities;
 using backend.tests.Integration.Infrastructure;
 
 using FluentAssertions;
+
+using Microsoft.EntityFrameworkCore;
 
 namespace backend.tests.Integration.Features.Auth;
 
@@ -133,6 +136,7 @@ public class AuthEndpointsTests
         await using var app = await AuthApiTestApp.CreateAsync();
         var user = await app.SeedUserAsync("reset@example.com", "Password123!");
         await app.SeedKnownDeviceAsync(user.Id, "trusted-reset-device");
+        var originalHash = user.Password;
 
         var forgotByToken = await app.PostJsonWithCsrfAsync("/api/auth/forgot-password", new ForgotPasswordRequest
         {
@@ -151,6 +155,10 @@ public class AuthEndpointsTests
                 Password = "NewPassword123!"
             });
         resetByToken.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var hashAfterTokenReset = await app.QueryDbAsync(db =>
+            db.Users.Where(u => u.Id == user.Id).Select(u => u.Password).SingleAsync());
+        hashAfterTokenReset.Should().NotBe(originalHash);
 
         var loginAfterTokenReset = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")
         {
@@ -186,6 +194,10 @@ public class AuthEndpointsTests
         });
         var otpResetBody = await resetByOtp.Content.ReadAsStringAsync();
         resetByOtp.StatusCode.Should().Be(HttpStatusCode.OK, otpResetBody);
+
+        var hashAfterOtpReset = await app.QueryDbAsync(db =>
+            db.Users.Where(u => u.Id == user.Id).Select(u => u.Password).SingleAsync());
+        hashAfterOtpReset.Should().NotBe(hashAfterTokenReset);
 
         var loginAfterOtpReset = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")
         {

@@ -3,11 +3,9 @@ using backend.main.features.clubs.search;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
 
+using backend.tests.Integration.Infrastructure;
+
 using FluentAssertions;
-
-using Microsoft.EntityFrameworkCore;
-
-using Xunit;
 
 namespace backend.tests.Clubs;
 
@@ -16,15 +14,8 @@ public class ClubRepositorySearchTests
     [Fact]
     public async Task SearchAsync_ShouldExcludePrivateClubs_AndSortByMembers()
     {
-        await using var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-
-        var options = new DbContextOptionsBuilder<AppDatabaseContext>()
-            .UseSqlite(connection)
-            .Options;
-
-        await using var context = new AppDatabaseContext(options);
-        await context.Database.EnsureCreatedAsync();
+        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var context = database.CreateDbContext();
 
         context.Users.AddRange(
             new User { Id = 1, Email = "owner1@test.local", Usertype = "Organizer" },

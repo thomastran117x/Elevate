@@ -1,4 +1,4 @@
-import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { isPlatformBrowser } from '@angular/common';
 import { Component, inject, PLATFORM_ID, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -16,7 +16,7 @@ import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 @Component({
   selector: 'app-oauth-role',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink],
   templateUrl: './oauth-role.component.html',
   styleUrls: ['./oauth-role.component.css'],
 })

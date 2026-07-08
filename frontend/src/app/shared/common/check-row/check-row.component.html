@@ -6,7 +6,9 @@
     <span class="text-xs">✓</span>
   </span>
   <div class="min-w-0">
-    <div class="text-sm font-semibold text-white/85" *ngIf="title">{{ title }}</div>
+    @if (title) {
+      <div class="text-sm font-semibold text-white/85">{{ title }}</div>
+    }
     <div class="text-sm text-white/65 leading-relaxed">
       <ng-content></ng-content>
     </div>
