@@ -1,10 +1,9 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 
 @Component({
   selector: 'section',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './section.component.html',
   styleUrl: './section.component.css',
 })

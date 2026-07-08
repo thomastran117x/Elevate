@@ -1,10 +1,9 @@
-import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 
 @Component({
   selector: 'google-icon',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './google-icon.component.html',
   styleUrl: './google-icon.component.css',
 })

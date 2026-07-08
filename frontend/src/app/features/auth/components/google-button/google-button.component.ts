@@ -1,11 +1,11 @@
 import { Component } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { environment } from '../../../../../environments/environment';
 
 @Component({
   selector: 'app-google-button',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './google-button.component.html',
   styleUrls: ['./google-button.component.css'],
 })

@@ -1,11 +1,11 @@
 import { Component } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { environment } from '../../../../../environments/environment';
 
 @Component({
   selector: 'app-microsoft-button',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './microsoft-button.component.html',
   styleUrls: ['./microsoft-button.component.css'],
 })

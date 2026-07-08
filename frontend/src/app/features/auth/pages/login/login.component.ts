@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -21,13 +20,7 @@ import { RecaptchaV3Service } from '../../services/recaptcha.service';
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [
-    CommonModule,
-    ReactiveFormsModule,
-    RouterModule,
-    GoogleButtonComponent,
-    MicrosoftButtonComponent,
-  ],
+  imports: [ReactiveFormsModule, RouterModule, GoogleButtonComponent, MicrosoftButtonComponent],
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.css'],
 })

@@ -11,10 +11,12 @@
   <div class="mt-4 text-lg font-bold text-white/90">{{ title }}</div>
   <div class="mt-1 text-sm text-white/60 max-w-md mx-auto">{{ subtitle }}</div>
 
-  <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center" *ngIf="primaryLabel">
-    <app-button variant="primary" [href]="primaryHref">{{ primaryLabel }} →</app-button>
-    <app-button *ngIf="secondaryLabel" variant="ghost" [href]="secondaryHref">{{
-      secondaryLabel
-    }}</app-button>
-  </div>
+  @if (primaryLabel) {
+    <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+      <app-button variant="primary" [href]="primaryHref">{{ primaryLabel }} →</app-button>
+      @if (secondaryLabel) {
+        <app-button variant="ghost" [href]="secondaryHref">{{ secondaryLabel }}</app-button>
+      }
+    </div>
+  }
 </div>

@@ -1,10 +1,9 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 
 @Component({
   selector: 'inline-code',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './inline-code.component.html',
   styleUrl: './inline-code.component.css',
 })

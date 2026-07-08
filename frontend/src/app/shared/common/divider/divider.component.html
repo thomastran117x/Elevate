@@ -1,10 +1,12 @@
 <div class="relative" [class]="className" aria-hidden="true">
   <div [class]="lineClass"></div>
-  <div *ngIf="label" class="absolute inset-0 flex items-center justify-center">
-    <span
-      class="px-3 text-xs text-white/60 bg-slate-950/60 backdrop-blur rounded-full border border-white/10"
-    >
-      {{ label }}
-    </span>
-  </div>
+  @if (label) {
+    <div class="absolute inset-0 flex items-center justify-center">
+      <span
+        class="px-3 text-xs text-white/60 bg-slate-950/60 backdrop-blur rounded-full border border-white/10"
+      >
+        {{ label }}
+      </span>
+    </div>
+  }
 </div>

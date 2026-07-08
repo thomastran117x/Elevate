@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 
 type Tone = 'accent' | 'neutral';
@@ -6,7 +5,7 @@ type Tone = 'accent' | 'neutral';
 @Component({
   selector: 'icon-shell',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './icon-shell.component.html',
   styleUrl: './icon-shell.component.css',
 })

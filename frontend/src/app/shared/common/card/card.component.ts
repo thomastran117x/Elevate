@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 
 export type CardTone = 'glass' | 'solid';
@@ -6,7 +5,7 @@ export type CardTone = 'glass' | 'solid';
 @Component({
   selector: 'card',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './card.component.html',
   styleUrl: './card.component.css',
 })

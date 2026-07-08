@@ -1,10 +1,9 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 
 @Component({
   selector: 'icon',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './icon.component.html',
   styleUrl: './icon.component.css',
 })

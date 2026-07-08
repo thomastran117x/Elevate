@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { AppButtonComponent } from '@common/button/button.component';
@@ -7,7 +6,7 @@ import { IconShellComponent } from '@common/icon-shell/icon-shell.component';
 @Component({
   selector: 'empty-state',
   standalone: true,
-  imports: [CommonModule, RouterModule, AppButtonComponent, IconShellComponent],
+  imports: [RouterModule, AppButtonComponent, IconShellComponent],
   templateUrl: './empty-state.component.html',
   styleUrl: './empty-state.component.css',
 })

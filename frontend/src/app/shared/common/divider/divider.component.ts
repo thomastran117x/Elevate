@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 
 export type DividerTone = 'subtle' | 'strong';
@@ -6,7 +5,7 @@ export type DividerTone = 'subtle' | 'strong';
 @Component({
   selector: 'divider',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './divider.component.html',
   styleUrl: './divider.component.css',
 })

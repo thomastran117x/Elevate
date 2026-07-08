@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { RouterModule } from '@angular/router';
 
@@ -8,7 +7,7 @@ export type AppButtonSize = 'sm' | 'md' | 'lg';
 @Component({
   selector: 'app-button',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [RouterModule],
   templateUrl: './button.component.html',
   styleUrl: './button.component.css',
 })

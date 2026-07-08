@@ -1,10 +1,9 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 
 @Component({
   selector: 'check-row',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './check-row.component.html',
   styleUrl: './check-row.component.css',
 })

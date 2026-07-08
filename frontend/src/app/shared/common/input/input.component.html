@@ -1,10 +1,14 @@
 <div [class]="wrapperClass">
-  <label *ngIf="label" class="text-xs font-semibold text-white/80">
-    {{ label }}
-  </label>
+  @if (label) {
+    <label class="text-xs font-semibold text-white/80">
+      {{ label }}
+    </label>
+  }
 
   <div [class]="fieldWrapClass">
-    <span *ngIf="prefix" class="text-white/50 text-sm">{{ prefix }}</span>
+    @if (prefix) {
+      <span class="text-white/50 text-sm">{{ prefix }}</span>
+    }
 
     <input
       [attr.type]="type"
@@ -15,9 +19,15 @@
       [class]="inputClass"
     />
 
-    <span *ngIf="suffix" class="text-white/50 text-sm">{{ suffix }}</span>
+    @if (suffix) {
+      <span class="text-white/50 text-sm">{{ suffix }}</span>
+    }
   </div>
 
-  <p *ngIf="error" class="text-xs text-red-200/90">{{ error }}</p>
-  <p *ngIf="!error && hint" class="text-xs text-white/55">{{ hint }}</p>
+  @if (error) {
+    <p class="text-xs text-red-200/90">{{ error }}</p>
+  }
+  @if (!error && hint) {
+    <p class="text-xs text-white/55">{{ hint }}</p>
+  }
 </div>

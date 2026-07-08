@@ -91,12 +91,9 @@
             />
           </div>
 
-          <div
-            *ngIf="submitted && form.controls['email'].invalid"
-            class="text-red-500 text-sm mt-1"
-          >
-            A valid email is required.
-          </div>
+          @if (submitted && form.controls['email'].invalid) {
+            <div class="text-red-500 text-sm mt-1">A valid email is required.</div>
+          }
         </div>
 
         <div>
@@ -131,51 +128,50 @@
               (click)="togglePassword()"
               class="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-300"
             >
-              <svg
-                *ngIf="!showPw"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke-width="1.5"
-                stroke="currentColor"
-                class="w-6 h-6"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M1.5 12s3.75-7.5 10.5-7.5S22.5 12 22.5 12s-3.75 7.5-10.5 7.5S1.5 12 1.5 12z"
-                />
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M12 15a3 3 0 100-6 3 3 0 000 6z"
-                />
-              </svg>
+              @if (!showPw) {
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="1.5"
+                  stroke="currentColor"
+                  class="w-6 h-6"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M1.5 12s3.75-7.5 10.5-7.5S22.5 12 22.5 12s-3.75 7.5-10.5 7.5S1.5 12 1.5 12z"
+                  />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M12 15a3 3 0 100-6 3 3 0 000 6z"
+                  />
+                </svg>
+              }
 
-              <svg
-                *ngIf="showPw"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke-width="1.5"
-                stroke="currentColor"
-                class="w-6 h-6"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M3.98 8.223A10.477 10.477 0 001.5 12s3.75 7.5 10.5 7.5a10.47 10.47 0 004.74-1.223M6.223 6.223A10.47 10.47 0 0112 4.5c6.75 0 10.5 7.5 10.5 7.5a10.48 10.48 0 01-4.5 5.59M6.223 6.223L3 3m0 0l3.223 3.223M3 3l18 18"
-                />
-              </svg>
+              @if (showPw) {
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="1.5"
+                  stroke="currentColor"
+                  class="w-6 h-6"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M3.98 8.223A10.477 10.477 0 001.5 12s3.75 7.5 10.5 7.5a10.47 10.47 0 004.74-1.223M6.223 6.223A10.47 10.47 0 0112 4.5c6.75 0 10.5 7.5 10.5 7.5a10.48 10.48 0 01-4.5 5.59M6.223 6.223L3 3m0 0l3.223 3.223M3 3l18 18"
+                  />
+                </svg>
+              }
             </button>
           </div>
 
-          <div
-            *ngIf="submitted && form.controls['password'].invalid"
-            class="text-red-500 text-sm mt-1"
-          >
-            Password must be at least 6 characters.
-          </div>
+          @if (submitted && form.controls['password'].invalid) {
+            <div class="text-red-500 text-sm mt-1">Password must be at least 6 characters.</div>
+          }
         </div>
 
         <div class="flex items-center justify-between text-sm">
@@ -189,25 +185,30 @@
           </a>
         </div>
 
-        <div
-          *ngIf="notice"
-          class="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
-        >
-          {{ notice }}
-        </div>
+        @if (notice) {
+          <div
+            class="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+          >
+            {{ notice }}
+          </div>
+        }
 
-        <div *ngIf="error" class="text-red-500 text-sm mt-2">{{ error }}</div>
+        @if (error) {
+          <div class="text-red-500 text-sm mt-2">{{ error }}</div>
+        }
 
         <button
           type="submit"
           [disabled]="loading"
           class="relative w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white py-2.5 rounded-lg font-semibold transition-all"
         >
-          <div *ngIf="loading" class="absolute inset-0 flex items-center justify-center">
-            <div
-              class="w-6 h-6 border-4 border-white/50 border-t-transparent rounded-full animate-spin"
-            ></div>
-          </div>
+          @if (loading) {
+            <div class="absolute inset-0 flex items-center justify-center">
+              <div
+                class="w-6 h-6 border-4 border-white/50 border-t-transparent rounded-full animate-spin"
+              ></div>
+            </div>
+          }
 
           <span [class.opacity-0]="loading">Sign In</span>
         </button>
