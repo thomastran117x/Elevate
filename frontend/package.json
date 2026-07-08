@@ -27,6 +27,9 @@
     ]
   },
   "private": true,
+  "engines": {
+    "node": ">=24"
+  },
   "dependencies": {
     "@angular/common": "20.3.6",
     "@angular/compiler": "20.3.6",
