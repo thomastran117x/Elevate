@@ -1184,7 +1184,10 @@ public class EventEndpointsTests
                 Email = $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"
             })));
         var diagnostics = await app.DescribeFailureAsync(response);
-        response.StatusCode.Should().Be(HttpStatusCode.Created, diagnostics);
+        if (response.StatusCode != HttpStatusCode.Created)
+        {
+            throw new Xunit.Sdk.XunitException(diagnostics);
+        }
         await app.ReindexClubsAsync();
 
         return (await app.ReadApiResponseAsync<ClubApiModel>(response)).Data!;
