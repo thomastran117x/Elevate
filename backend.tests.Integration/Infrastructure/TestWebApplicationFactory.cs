@@ -58,10 +58,16 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<AppDatabaseContext>();
             services.RemoveAll<DbContextOptions<AppDatabaseContext>>();
-            services.AddDbContext<AppDatabaseContext>(options =>
-                options.UseMySql(
-                    _testConnectionString,
-                    ServerVersion.AutoDetect(_testConnectionString)));
+            services.RemoveAll<DbContextOptions>();
+            services.RemoveAll<Microsoft.EntityFrameworkCore.Infrastructure.IDbContextOptionsConfiguration<AppDatabaseContext>>();
+
+            var serverVersion = ServerVersion.AutoDetect(_testConnectionString);
+            var dbContextOptions = new DbContextOptionsBuilder<AppDatabaseContext>()
+                .UseMySql(_testConnectionString, serverVersion)
+                .Options;
+
+            services.AddSingleton(dbContextOptions);
+            services.AddScoped(_ => new AppDatabaseContext(dbContextOptions));
 
             services.RemoveAll<RedisHealth>();
             services.RemoveAll<ICacheService>();
