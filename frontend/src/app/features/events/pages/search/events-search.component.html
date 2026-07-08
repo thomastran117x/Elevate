@@ -63,14 +63,15 @@
                     (ngModelChange)="onTextChange()"
                     autocomplete="off"
                   />
-                  <button
-                    *ngIf="searchQuery"
-                    type="button"
-                    class="cursor-pointer text-xs text-white/40 transition hover:text-white/80"
-                    (click)="searchQuery = ''; onTextChange()"
-                  >
-                    Clear
-                  </button>
+                  @if (searchQuery) {
+                    <button
+                      type="button"
+                      class="cursor-pointer text-xs text-white/40 transition hover:text-white/80"
+                      (click)="searchQuery = ''; onTextChange()"
+                    >
+                      Clear
+                    </button>
+                  }
                 </div>
               </div>
 
@@ -87,14 +88,15 @@
                     (ngModelChange)="onTextChange()"
                     autocomplete="off"
                   />
-                  <button
-                    *ngIf="cityQuery"
-                    type="button"
-                    class="cursor-pointer text-xs text-white/40 transition hover:text-white/80"
-                    (click)="cityQuery = ''; onTextChange()"
-                  >
-                    Clear
-                  </button>
+                  @if (cityQuery) {
+                    <button
+                      type="button"
+                      class="cursor-pointer text-xs text-white/40 transition hover:text-white/80"
+                      (click)="cityQuery = ''; onTextChange()"
+                    >
+                      Clear
+                    </button>
+                  }
                 </div>
               </div>
 
@@ -117,43 +119,49 @@
             </div>
 
             <div class="flex flex-wrap gap-2 px-4 pb-4 text-xs text-white/60">
-              <button
-                *ngFor="let suggestion of suggestedTags"
-                type="button"
-                class="cursor-pointer rounded-full border px-2 py-1 transition"
-                [ngClass]="
-                  tags.includes(suggestion)
-                    ? 'border-white/15 bg-white/10 text-white'
-                    : 'border-white/10 bg-white/5 hover:bg-white/10'
-                "
-                (click)="addSuggestedTag(suggestion)"
-              >
-                #{{ suggestion }}
-              </button>
+              @for (suggestion of suggestedTags; track suggestion) {
+                <button
+                  type="button"
+                  class="cursor-pointer rounded-full border px-2 py-1 transition"
+                  [ngClass]="
+                    tags.includes(suggestion)
+                      ? 'border-white/15 bg-white/10 text-white'
+                      : 'border-white/10 bg-white/5 hover:bg-white/10'
+                  "
+                  (click)="addSuggestedTag(suggestion)"
+                >
+                  #{{ suggestion }}
+                </button>
+              }
             </div>
           </div>
 
-          <div *ngIf="hasActiveFilters" class="mt-5 flex flex-wrap gap-2">
-            <button
-              *ngFor="let chip of activeFilters"
-              type="button"
-              class="cursor-pointer rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/10"
-              (click)="clearChip(chip)"
-            >
-              {{ chip.label }} <span class="text-white/50">&times;</span>
-            </button>
-            <button
-              type="button"
-              class="cursor-pointer rounded-full border border-white/10 bg-slate-950/40 px-3 py-1.5 text-xs font-medium text-white/60 transition hover:bg-white/10 hover:text-white"
-              (click)="clearFilters()"
-            >
-              Clear all
-            </button>
-          </div>
+          @if (hasActiveFilters) {
+            <div class="mt-5 flex flex-wrap gap-2">
+              @for (chip of activeFilters; track chip.label) {
+                <button
+                  type="button"
+                  class="cursor-pointer rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/10"
+                  (click)="clearChip(chip)"
+                >
+                  {{ chip.label }} <span class="text-white/50">&times;</span>
+                </button>
+              }
+              <button
+                type="button"
+                class="cursor-pointer rounded-full border border-white/10 bg-slate-950/40 px-3 py-1.5 text-xs font-medium text-white/60 transition hover:bg-white/10 hover:text-white"
+                (click)="clearFilters()"
+              >
+                Clear all
+              </button>
+            </div>
+          }
 
-          <p *ngIf="geolocationError" class="mt-4 text-sm text-rose-300">
-            {{ geolocationError }}
-          </p>
+          @if (geolocationError) {
+            <p class="mt-4 text-sm text-rose-300">
+              {{ geolocationError }}
+            </p>
+          }
         </div>
 
         <div class="lg:col-span-5">
@@ -167,15 +175,21 @@
             <div class="relative p-5 sm:p-6">
               <div class="flex items-center justify-between">
                 <div class="text-sm font-semibold text-white/90">Search snapshot</div>
-                <div *ngIf="resultSource" class="text-xs text-white/60">{{ sourceLabel }}</div>
+                @if (resultSource) {
+                  <div class="text-xs text-white/60">{{ sourceLabel }}</div>
+                }
               </div>
 
               <div class="mt-5 grid grid-cols-2 gap-3">
                 <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
                   <div class="text-xs text-white/60">Results</div>
                   <div class="mt-1 text-2xl font-bold">
-                    <span *ngIf="!loading">{{ totalCount | number }}</span>
-                    <span *ngIf="loading" class="animate-pulse">...</span>
+                    @if (!loading) {
+                      <span>{{ totalCount | number }}</span>
+                    }
+                    @if (loading) {
+                      <span class="animate-pulse">...</span>
+                    }
                   </div>
                 </div>
                 <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
@@ -189,20 +203,23 @@
                   <div>
                     <div class="text-sm font-semibold text-white">Nearby search</div>
                     <div class="mt-1 text-xs text-white/60">
-                      <span *ngIf="hasCoordinates"> Active around {{ coordinateLabel }} </span>
-                      <span *ngIf="!hasCoordinates">
-                        Enable location to unlock distance sort and radius filtering.
-                      </span>
+                      @if (hasCoordinates) {
+                        <span> Active around {{ coordinateLabel }} </span>
+                      }
+                      @if (!hasCoordinates) {
+                        <span> Enable location to unlock distance sort and radius filtering. </span>
+                      }
                     </div>
                   </div>
-                  <button
-                    *ngIf="hasCoordinates"
-                    type="button"
-                    class="cursor-pointer rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10"
-                    (click)="clearLocation()"
-                  >
-                    Clear
-                  </button>
+                  @if (hasCoordinates) {
+                    <button
+                      type="button"
+                      class="cursor-pointer rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10"
+                      (click)="clearLocation()"
+                    >
+                      Clear
+                    </button>
+                  }
                 </div>
 
                 <div class="mt-4">
@@ -222,13 +239,11 @@
                       (ngModelChange)="onFilterChange()"
                     >
                       <option class="bg-slate-950 text-white" [ngValue]="null">Any distance</option>
-                      <option
-                        *ngFor="let option of availableRadiusOptions"
-                        class="bg-slate-950 text-white"
-                        [ngValue]="option"
-                      >
-                        Within {{ option }} km
-                      </option>
+                      @for (option of availableRadiusOptions; track option) {
+                        <option class="bg-slate-950 text-white" [ngValue]="option">
+                          Within {{ option }} km
+                        </option>
+                      }
                     </select>
                     <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center">
                       <span
@@ -253,14 +268,15 @@
                       [(ngModel)]="selectedSort"
                       (ngModelChange)="onFilterChange()"
                     >
-                      <option
-                        *ngFor="let option of sortOptions"
-                        class="bg-slate-950 text-white"
-                        [ngValue]="option.value"
-                        [disabled]="option.requiresCoordinates && !hasCoordinates"
-                      >
-                        {{ option.label }}
-                      </option>
+                      @for (option of sortOptions; track option) {
+                        <option
+                          class="bg-slate-950 text-white"
+                          [ngValue]="option.value"
+                          [disabled]="option.requiresCoordinates && !hasCoordinates"
+                        >
+                          {{ option.label }}
+                        </option>
+                      }
                     </select>
                     <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center">
                       <span
@@ -283,13 +299,11 @@
                       [(ngModel)]="selectedStatus"
                       (ngModelChange)="onFilterChange()"
                     >
-                      <option
-                        *ngFor="let option of statusOptions"
-                        class="bg-slate-950 text-white"
-                        [ngValue]="option.value"
-                      >
-                        {{ option.label }}
-                      </option>
+                      @for (option of statusOptions; track option) {
+                        <option class="bg-slate-950 text-white" [ngValue]="option.value">
+                          {{ option.label }}
+                        </option>
+                      }
                     </select>
                     <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center">
                       <span
@@ -308,16 +322,19 @@
                   <div class="text-xs text-white/50">{{ tags.length }}/5</div>
                 </div>
 
-                <div *ngIf="tags.length > 0" class="mt-3 flex flex-wrap gap-2">
-                  <button
-                    *ngFor="let tag of tags"
-                    type="button"
-                    class="cursor-pointer rounded-full border border-white/10 bg-slate-950/40 px-2.5 py-1 text-xs text-white/80 transition hover:bg-white/10"
-                    (click)="removeTag(tag)"
-                  >
-                    #{{ tag }} <span class="text-white/45">&times;</span>
-                  </button>
-                </div>
+                @if (tags.length > 0) {
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    @for (tag of tags; track tag) {
+                      <button
+                        type="button"
+                        class="cursor-pointer rounded-full border border-white/10 bg-slate-950/40 px-2.5 py-1 text-xs text-white/80 transition hover:bg-white/10"
+                        (click)="removeTag(tag)"
+                      >
+                        #{{ tag }} <span class="text-white/45">&times;</span>
+                      </button>
+                    }
+                  </div>
+                }
 
                 <input
                   class="mt-3 w-full rounded-xl border border-white/10 bg-slate-950/50 px-3 py-3 text-sm text-white outline-none placeholder:text-white/35 transition focus:border-white/20"
@@ -356,193 +373,206 @@
           All
         </button>
 
-        <button
-          *ngFor="let cat of allCategories"
-          type="button"
-          class="flex-shrink-0 cursor-pointer rounded-full border px-3 py-1.5 text-xs font-medium transition"
-          [ngClass]="
-            selectedCategory === cat
-              ? categoryStyles[cat].badge + ' border-current'
-              : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/10'
-          "
-          (click)="selectCategory(cat)"
-        >
-          {{ cat }}
-        </button>
-      </div>
-
-      <div
-        *ngIf="error"
-        class="mt-6 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
-      >
-        {{ error }}
-      </div>
-
-      <div
-        *ngIf="loading && events.length === 0"
-        class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-      >
-        <div
-          *ngFor="let _ of [1, 2, 3, 4, 5, 6]"
-          class="h-72 rounded-3xl border border-white/10 bg-white/5 animate-pulse"
-        ></div>
-      </div>
-
-      <div
-        *ngIf="!loading && events.length === 0 && !error"
-        class="mt-10 rounded-3xl border border-white/10 bg-white/5 p-10 text-center backdrop-blur"
-      >
-        <div class="text-4xl">&#128269;</div>
-        <h3 class="mt-4 text-xl font-semibold">No events match this view yet</h3>
-        <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-white/60">
-          Try a broader city, fewer tags, or turn off nearby search to widen the results.
-        </p>
-      </div>
-
-      <div *ngIf="events.length > 0" class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <article
-          *ngFor="let event of events"
-          class="group cursor-pointer rounded-3xl border border-white/10 bg-white/5 overflow-hidden hover:bg-white/8 hover:border-white/15 transition"
-          tabindex="0"
-          (click)="viewEvent(event.id)"
-          (keyup.enter)="viewEvent(event.id)"
-        >
-          <div class="relative h-36">
-            <div
-              *ngIf="event.imageUrls?.length; else fallbackImage"
-              class="absolute inset-0 bg-cover bg-center"
-              [style.background-image]="
-                'linear-gradient(180deg, rgba(15,23,42,0.10), rgba(15,23,42,0.65)), url(' +
-                event.imageUrls[0] +
-                ')'
-              "
-            ></div>
-            <ng-template #fallbackImage>
-              <div
-                class="absolute inset-0 bg-gradient-to-br from-purple-500/35 via-fuchsia-500/15 to-indigo-500/25"
-              ></div>
-              <div
-                class="absolute inset-0 opacity-30"
-                style="
-                  background-image:
-                    radial-gradient(
-                      circle at 20% 10%,
-                      rgba(255, 255, 255, 0.45) 0,
-                      transparent 45%
-                    ),
-                    radial-gradient(circle at 80% 60%, rgba(255, 255, 255, 0.25) 0, transparent 50%);
-                "
-              ></div>
-            </ng-template>
-
-            <div class="absolute top-4 left-4 flex flex-wrap gap-2">
-              <span
-                class="rounded-full border px-2 py-1 text-[10px] backdrop-blur"
-                [ngClass]="categoryStyles[event.category].badge"
-              >
-                {{ event.category }}
-              </span>
-              <span
-                class="rounded-full border border-white/10 bg-slate-950/40 px-2 py-1 text-[10px] text-white/75 backdrop-blur"
-              >
-                {{ event.status }}
-              </span>
-            </div>
-
-            <div class="absolute right-4 bottom-4 text-right">
-              <div class="text-sm font-semibold text-white">
-                {{ formatCost(event.registerCost) }}
-              </div>
-              <div *ngIf="event.distanceKm != null" class="text-[11px] text-white/70">
-                {{ event.distanceKm | number: '1.1-1' }} km away
-              </div>
-            </div>
-          </div>
-
-          <div class="p-5">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <div class="text-base font-semibold leading-tight">{{ event.name }}</div>
-                <div class="mt-1 text-xs text-white/60">
-                  {{ formatDate(event.startTime) }} &bull; {{ formatTime(event.startTime) }}
-                </div>
-                <div class="mt-1 text-xs text-white/60">
-                  {{ event.venueName || event.location || 'Venue TBD' }}
-                  <span *ngIf="event.city"> &bull; {{ event.city }}</span>
-                </div>
-              </div>
-            </div>
-
-            <p class="mt-4 line-clamp-3 text-sm leading-relaxed text-white/70">
-              {{ event.description || 'No description provided yet.' }}
-            </p>
-
-            <div class="mt-4 flex items-center justify-between gap-3">
-              <div class="text-xs text-white/60">
-                {{ event.registrationCount }} / {{ event.maxParticipants }} registered
-              </div>
-              <div class="h-2 w-24 overflow-hidden rounded-full bg-white/10">
-                <div
-                  class="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500 transition-all"
-                  [style.width.%]="registrationPercent(event)"
-                ></div>
-              </div>
-            </div>
-
-            <div *ngIf="event.tags?.length" class="mt-4 flex flex-wrap gap-2">
-              <span
-                *ngFor="let tag of event.tags.slice(0, 3)"
-                class="rounded-full border border-white/10 bg-slate-950/35 px-2 py-1 text-[11px] text-white/60"
-              >
-                #{{ tag }}
-              </span>
-              <span
-                *ngIf="event.tags.length > 3"
-                class="rounded-full border border-white/10 bg-slate-950/35 px-2 py-1 text-[11px] text-white/45"
-              >
-                +{{ event.tags.length - 3 }}
-              </span>
-            </div>
-          </div>
-        </article>
-      </div>
-
-      <div *ngIf="totalPages > 1" class="mt-8 flex items-center justify-center gap-2">
-        <button
-          type="button"
-          class="cursor-pointer rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
-          [disabled]="currentPage <= 1"
-          (click)="goToPage(currentPage - 1)"
-        >
-          Previous
-        </button>
-
-        <ng-container *ngFor="let page of pageNumbers">
-          <span *ngIf="page === -1" class="px-1 text-sm text-white/35">&hellip;</span>
+        @for (cat of allCategories; track cat) {
           <button
-            *ngIf="page !== -1"
             type="button"
-            class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border text-sm font-medium transition"
+            class="flex-shrink-0 cursor-pointer rounded-full border px-3 py-1.5 text-xs font-medium transition"
             [ngClass]="
-              page === currentPage
-                ? 'border-transparent bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white'
+              selectedCategory === cat
+                ? categoryStyles[cat].badge + ' border-current'
                 : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/10'
             "
-            (click)="goToPage(page)"
+            (click)="selectCategory(cat)"
           >
-            {{ page }}
+            {{ cat }}
           </button>
-        </ng-container>
-
-        <button
-          type="button"
-          class="cursor-pointer rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
-          [disabled]="currentPage >= totalPages"
-          (click)="goToPage(currentPage + 1)"
-        >
-          Next
-        </button>
+        }
       </div>
+
+      @if (error) {
+        <div
+          class="mt-6 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
+        >
+          {{ error }}
+        </div>
+      }
+
+      @if (loading && events.length === 0) {
+        <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          @for (_ of [1, 2, 3, 4, 5, 6]; track _) {
+            <div class="h-72 rounded-3xl border border-white/10 bg-white/5 animate-pulse"></div>
+          }
+        </div>
+      }
+
+      @if (!loading && events.length === 0 && !error) {
+        <div
+          class="mt-10 rounded-3xl border border-white/10 bg-white/5 p-10 text-center backdrop-blur"
+        >
+          <div class="text-4xl">&#128269;</div>
+          <h3 class="mt-4 text-xl font-semibold">No events match this view yet</h3>
+          <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-white/60">
+            Try a broader city, fewer tags, or turn off nearby search to widen the results.
+          </p>
+        </div>
+      }
+
+      @if (events.length > 0) {
+        <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          @for (event of events; track event) {
+            <article
+              class="group cursor-pointer rounded-3xl border border-white/10 bg-white/5 overflow-hidden hover:bg-white/8 hover:border-white/15 transition"
+              tabindex="0"
+              (click)="viewEvent(event.id)"
+              (keyup.enter)="viewEvent(event.id)"
+            >
+              <div class="relative h-36">
+                @if (event.imageUrls?.length) {
+                  <div
+                    class="absolute inset-0 bg-cover bg-center"
+                    [style.background-image]="
+                      'linear-gradient(180deg, rgba(15,23,42,0.10), rgba(15,23,42,0.65)), url(' +
+                      event.imageUrls[0] +
+                      ')'
+                    "
+                  ></div>
+                } @else {
+                  <div
+                    class="absolute inset-0 bg-gradient-to-br from-purple-500/35 via-fuchsia-500/15 to-indigo-500/25"
+                  ></div>
+                  <div
+                    class="absolute inset-0 opacity-30"
+                    style="
+                      background-image:
+                        radial-gradient(
+                          circle at 20% 10%,
+                          rgba(255, 255, 255, 0.45) 0,
+                          transparent 45%
+                        ),
+                        radial-gradient(
+                          circle at 80% 60%,
+                          rgba(255, 255, 255, 0.25) 0,
+                          transparent 50%
+                        );
+                    "
+                  ></div>
+                }
+                <div class="absolute top-4 left-4 flex flex-wrap gap-2">
+                  <span
+                    class="rounded-full border px-2 py-1 text-[10px] backdrop-blur"
+                    [ngClass]="categoryStyles[event.category].badge"
+                  >
+                    {{ event.category }}
+                  </span>
+                  <span
+                    class="rounded-full border border-white/10 bg-slate-950/40 px-2 py-1 text-[10px] text-white/75 backdrop-blur"
+                  >
+                    {{ event.status }}
+                  </span>
+                </div>
+                <div class="absolute right-4 bottom-4 text-right">
+                  <div class="text-sm font-semibold text-white">
+                    {{ formatCost(event.registerCost) }}
+                  </div>
+                  @if (event.distanceKm != null) {
+                    <div class="text-[11px] text-white/70">
+                      {{ event.distanceKm | number: '1.1-1' }} km away
+                    </div>
+                  }
+                </div>
+              </div>
+              <div class="p-5">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <div class="text-base font-semibold leading-tight">{{ event.name }}</div>
+                    <div class="mt-1 text-xs text-white/60">
+                      {{ formatDate(event.startTime) }} &bull; {{ formatTime(event.startTime) }}
+                    </div>
+                    <div class="mt-1 text-xs text-white/60">
+                      {{ event.venueName || event.location || 'Venue TBD' }}
+                      @if (event.city) {
+                        <span> &bull; {{ event.city }}</span>
+                      }
+                    </div>
+                  </div>
+                </div>
+                <p class="mt-4 line-clamp-3 text-sm leading-relaxed text-white/70">
+                  {{ event.description || 'No description provided yet.' }}
+                </p>
+                <div class="mt-4 flex items-center justify-between gap-3">
+                  <div class="text-xs text-white/60">
+                    {{ event.registrationCount }} / {{ event.maxParticipants }} registered
+                  </div>
+                  <div class="h-2 w-24 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      class="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500 transition-all"
+                      [style.width.%]="registrationPercent(event)"
+                    ></div>
+                  </div>
+                </div>
+                @if (event.tags?.length) {
+                  <div class="mt-4 flex flex-wrap gap-2">
+                    @for (tag of event.tags.slice(0, 3); track tag) {
+                      <span
+                        class="rounded-full border border-white/10 bg-slate-950/35 px-2 py-1 text-[11px] text-white/60"
+                      >
+                        #{{ tag }}
+                      </span>
+                    }
+                    @if (event.tags.length > 3) {
+                      <span
+                        class="rounded-full border border-white/10 bg-slate-950/35 px-2 py-1 text-[11px] text-white/45"
+                      >
+                        +{{ event.tags.length - 3 }}
+                      </span>
+                    }
+                  </div>
+                }
+              </div>
+            </article>
+          }
+        </div>
+      }
+
+      @if (totalPages > 1) {
+        <div class="mt-8 flex items-center justify-center gap-2">
+          <button
+            type="button"
+            class="cursor-pointer rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
+            [disabled]="currentPage <= 1"
+            (click)="goToPage(currentPage - 1)"
+          >
+            Previous
+          </button>
+          @for (page of pageNumbers; track page) {
+            @if (page === -1) {
+              <span class="px-1 text-sm text-white/35">&hellip;</span>
+            }
+            @if (page !== -1) {
+              <button
+                type="button"
+                class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border text-sm font-medium transition"
+                [ngClass]="
+                  page === currentPage
+                    ? 'border-transparent bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white'
+                    : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/10'
+                "
+                (click)="goToPage(page)"
+              >
+                {{ page }}
+              </button>
+            }
+          }
+          <button
+            type="button"
+            class="cursor-pointer rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
+            [disabled]="currentPage >= totalPages"
+            (click)="goToPage(currentPage + 1)"
+          >
+            Next
+          </button>
+        </div>
+      }
     </section>
   </main>
 </div>

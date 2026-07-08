@@ -1,14 +1,16 @@
 <nav aria-label="Breadcrumb" class="text-sm" [class]="className">
   <ol class="flex flex-wrap items-center gap-2 text-white/60">
-    <li *ngFor="let c of items; let last = last" class="flex items-center gap-2">
-      <ng-container *ngIf="!last && c.href; else plain">
-        <a [routerLink]="c.href" class="hover:text-white/90 transition">{{ c.label }}</a>
-      </ng-container>
-      <ng-template #plain>
-        <span [class]="last ? 'text-white/85 font-semibold' : ''">{{ c.label }}</span>
-      </ng-template>
-
-      <span *ngIf="!last" class="text-white/30">/</span>
-    </li>
+    @for (c of items; track c; let last = $last) {
+      <li class="flex items-center gap-2">
+        @if (!last && c.href) {
+          <a [routerLink]="c.href" class="hover:text-white/90 transition">{{ c.label }}</a>
+        } @else {
+          <span [class]="last ? 'text-white/85 font-semibold' : ''">{{ c.label }}</span>
+        }
+        @if (!last) {
+          <span class="text-white/30">/</span>
+        }
+      </li>
+    }
   </ol>
 </nav>

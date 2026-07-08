@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
@@ -11,7 +10,7 @@ import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 @Component({
   selector: 'app-verify',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [RouterLink],
   templateUrl: './verify.component.html',
   styleUrls: ['./verify.component.css'],
 })

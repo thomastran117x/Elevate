@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 
 type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'accent';
@@ -6,7 +5,7 @@ type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'accent';
 @Component({
   selector: 'badge-dot',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './badge-dot.component.html',
   styleUrl: './badge-dot.component.css',
 })

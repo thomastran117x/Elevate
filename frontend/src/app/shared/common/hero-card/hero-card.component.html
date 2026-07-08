@@ -7,7 +7,9 @@
   ></div>
 
   <div class="relative">
-    <pill *ngIf="pill" tone="accent">{{ pill }}</pill>
+    @if (pill) {
+      <pill tone="accent">{{ pill }}</pill>
+    }
 
     <h3 class="mt-4 text-2xl sm:text-3xl font-extrabold tracking-tight">
       {{ title }}

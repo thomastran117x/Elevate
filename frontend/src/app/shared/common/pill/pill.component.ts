@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 
 type Tone = 'neutral' | 'accent' | 'soft' | 'outline';
@@ -6,7 +5,7 @@ type Tone = 'neutral' | 'accent' | 'soft' | 'outline';
 @Component({
   selector: 'pill',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './pill.component.html',
   styleUrl: './pill.component.css',
 })

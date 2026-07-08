@@ -1,4 +1,4 @@
-import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { isPlatformBrowser } from '@angular/common';
 import { Component, inject, PLATFORM_ID, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
@@ -10,7 +10,7 @@ import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 @Component({
   selector: 'app-device-verify',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [RouterLink],
   templateUrl: './device-verify.component.html',
   styleUrls: ['./device-verify.component.css'],
 })

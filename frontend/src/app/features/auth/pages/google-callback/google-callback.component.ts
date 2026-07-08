@@ -1,4 +1,4 @@
-import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { isPlatformBrowser } from '@angular/common';
 import { Component, inject, OnInit, PLATFORM_ID, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
@@ -23,7 +23,7 @@ import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 @Component({
   selector: 'app-google-callback',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [RouterLink],
   templateUrl: './google-callback.component.html',
   styleUrls: ['./google-callback.component.css'],
 })

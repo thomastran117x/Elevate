@@ -1,4 +1,4 @@
-<ng-container *ngIf="href; else nativeBtn">
+@if (href) {
   <a
     [routerLink]="href"
     [class]="classes"
@@ -7,10 +7,8 @@
   >
     <ng-content></ng-content>
   </a>
-</ng-container>
-
-<ng-template #nativeBtn>
+} @else {
   <button type="button" [disabled]="disabled" [class]="classes" (click)="clicked.emit()">
     <ng-content></ng-content>
   </button>
-</ng-template>
+}

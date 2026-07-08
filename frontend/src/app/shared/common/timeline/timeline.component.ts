@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 
 export type TimelineItem = {
@@ -10,7 +9,7 @@ export type TimelineItem = {
 @Component({
   selector: 'timeline',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './timeline.component.html',
   styleUrl: './timeline.component.css',
 })

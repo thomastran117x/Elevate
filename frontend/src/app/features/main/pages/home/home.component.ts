@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
@@ -21,7 +20,7 @@ type Testimonial = { quote: string; name: string; role: string };
 @Component({
   selector: 'app-home-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [FormsModule, RouterModule],
   template: `
     <div class="min-h-screen bg-slate-950 text-white overflow-x-hidden overflow-y-visible relative">
       <div class="pointer-events-none absolute inset-0">
@@ -63,31 +62,33 @@ type Testimonial = { quote: string; name: string; role: string };
             </a>
 
             <nav class="hidden md:flex items-center gap-7 text-sm text-white/70">
-              <a *ngIf="eventsEnabled" class="hover:text-white transition" routerLink="/events"
-                >Explore</a
-              >
+              @if (eventsEnabled) {
+                <a class="hover:text-white transition" routerLink="/events">Explore</a>
+              }
               <a class="hover:text-white transition" routerLink="/venues">Venues</a>
               <a class="hover:text-white transition" routerLink="/pricing">Pricing</a>
               <a class="hover:text-white transition" routerLink="/contact">Contact</a>
             </nav>
 
-            <div *ngIf="authEnabled" class="flex items-center gap-3">
-              <a
-                routerLink="/auth/login"
-                class="hidden sm:inline-flex items-center rounded-xl px-3 py-2 text-sm
+            @if (authEnabled) {
+              <div class="flex items-center gap-3">
+                <a
+                  routerLink="/auth/login"
+                  class="hidden sm:inline-flex items-center rounded-xl px-3 py-2 text-sm
                        text-white/80 hover:text-white transition"
-              >
-                Sign in
-              </a>
-              <a
-                routerLink="/auth/signup"
-                class="inline-flex items-center rounded-xl px-4 py-2 text-sm font-semibold
+                >
+                  Sign in
+                </a>
+                <a
+                  routerLink="/auth/signup"
+                  class="inline-flex items-center rounded-xl px-4 py-2 text-sm font-semibold
                        bg-white text-slate-950 hover:bg-white/90 transition
                        shadow-lg shadow-white/10"
-              >
-                Get started
-              </a>
-            </div>
+                >
+                  Get started
+                </a>
+              </div>
+            }
           </div>
         </div>
       </header>
@@ -118,89 +119,87 @@ type Testimonial = { quote: string; name: string; role: string };
                 transparent fees, and one-tap checkout. Built for modern organizers and fans.
               </p>
 
-              <div
-                *ngIf="eventsEnabled"
-                class="mt-7 rounded-2xl border border-white/10 bg-white/5 backdrop-blur
+              @if (eventsEnabled) {
+                <div
+                  class="mt-7 rounded-2xl border border-white/10 bg-white/5 backdrop-blur
                        shadow-2xl shadow-purple-500/10"
-              >
-                <div class="p-3 sm:p-4 grid gap-3 sm:grid-cols-12 items-center">
-                  <div class="sm:col-span-5">
-                    <label class="sr-only">Search events</label>
-                    <div
-                      class="flex items-center gap-2 rounded-xl bg-slate-950/50 border border-white/10 px-3 py-2"
-                    >
-                      <span class="text-white/50">&#128269;</span>
-                      <input
-                        class="w-full bg-transparent outline-none text-sm placeholder:text-white/40"
-                        placeholder="Search artists, teams, venues..."
-                        [(ngModel)]="heroSearch"
-                        (keyup.enter)="explore()"
-                      />
+                >
+                  <div class="p-3 sm:p-4 grid gap-3 sm:grid-cols-12 items-center">
+                    <div class="sm:col-span-5">
+                      <label class="sr-only">Search events</label>
+                      <div
+                        class="flex items-center gap-2 rounded-xl bg-slate-950/50 border border-white/10 px-3 py-2"
+                      >
+                        <span class="text-white/50">&#128269;</span>
+                        <input
+                          class="w-full bg-transparent outline-none text-sm placeholder:text-white/40"
+                          placeholder="Search artists, teams, venues..."
+                          [(ngModel)]="heroSearch"
+                          (keyup.enter)="explore()"
+                        />
+                      </div>
                     </div>
-                  </div>
-
-                  <div class="sm:col-span-4">
-                    <label class="sr-only">Location</label>
-                    <div
-                      class="flex items-center gap-2 rounded-xl bg-slate-950/50 border border-white/10 px-3 py-2"
-                    >
-                      <span class="text-white/50">&#128205;</span>
-                      <input
-                        class="w-full bg-transparent outline-none text-sm placeholder:text-white/40"
-                        placeholder="Ottawa, Toronto..."
-                        [(ngModel)]="heroCity"
-                        (keyup.enter)="explore()"
-                      />
+                    <div class="sm:col-span-4">
+                      <label class="sr-only">Location</label>
+                      <div
+                        class="flex items-center gap-2 rounded-xl bg-slate-950/50 border border-white/10 px-3 py-2"
+                      >
+                        <span class="text-white/50">&#128205;</span>
+                        <input
+                          class="w-full bg-transparent outline-none text-sm placeholder:text-white/40"
+                          placeholder="Ottawa, Toronto..."
+                          [(ngModel)]="heroCity"
+                          (keyup.enter)="explore()"
+                        />
+                      </div>
                     </div>
-                  </div>
-
-                  <div class="sm:col-span-3">
-                    <button
-                      (click)="explore()"
-                      class="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2
+                    <div class="sm:col-span-3">
+                      <button
+                        (click)="explore()"
+                        class="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2
                              bg-gradient-to-r from-purple-500 to-fuchsia-500
                              font-semibold text-sm shadow-lg shadow-purple-500/25
                              hover:opacity-95 transition"
+                      >
+                        Explore events
+                        <span class="text-white/90">&rarr;</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="px-4 pb-4 flex flex-wrap gap-2 text-xs text-white/60">
+                    <button
+                      class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                      (click)="explore('Music')"
                     >
-                      Explore events
-                      <span class="text-white/90">&rarr;</span>
+                      Concerts
+                    </button>
+                    <button
+                      class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                      (click)="explore('Sports')"
+                    >
+                      Sports
+                    </button>
+                    <button
+                      class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                      (click)="explore('Arts')"
+                    >
+                      Theatre
+                    </button>
+                    <button
+                      class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                      (click)="explore('Academic')"
+                    >
+                      Campus
+                    </button>
+                    <button
+                      class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                      (click)="explore('Party')"
+                    >
+                      Nightlife
                     </button>
                   </div>
                 </div>
-
-                <div class="px-4 pb-4 flex flex-wrap gap-2 text-xs text-white/60">
-                  <button
-                    class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
-                    (click)="explore('Music')"
-                  >
-                    Concerts
-                  </button>
-                  <button
-                    class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
-                    (click)="explore('Sports')"
-                  >
-                    Sports
-                  </button>
-                  <button
-                    class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
-                    (click)="explore('Arts')"
-                  >
-                    Theatre
-                  </button>
-                  <button
-                    class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
-                    (click)="explore('Academic')"
-                  >
-                    Campus
-                  </button>
-                  <button
-                    class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
-                    (click)="explore('Party')"
-                  >
-                    Nightlife
-                  </button>
-                </div>
-              </div>
+              }
 
               <div class="mt-8 grid grid-cols-3 gap-4 max-w-xl">
                 <div class="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
@@ -234,7 +233,7 @@ type Testimonial = { quote: string; name: string; role: string };
                   </div>
 
                   <div class="mt-4 grid gap-3">
-                    <ng-container *ngFor="let ev of trending; trackBy: trackByTitle">
+                    @for (ev of trending; track trackByTitle($index, ev)) {
                       <div
                         class="group rounded-2xl border border-white/10 bg-slate-950/40 p-4
                                hover:bg-slate-950/55 transition"
@@ -243,12 +242,13 @@ type Testimonial = { quote: string; name: string; role: string };
                           <div>
                             <div class="flex items-center gap-2">
                               <div class="text-sm font-semibold">{{ ev.title }}</div>
-                              <span
-                                *ngIf="ev.badge"
-                                class="text-[10px] rounded-full px-2 py-0.5 border border-white/10 bg-white/5 text-white/70"
-                              >
-                                {{ ev.badge }}
-                              </span>
+                              @if (ev.badge) {
+                                <span
+                                  class="text-[10px] rounded-full px-2 py-0.5 border border-white/10 bg-white/5 text-white/70"
+                                >
+                                  {{ ev.badge }}
+                                </span>
+                              }
                             </div>
                             <div class="mt-1 text-xs text-white/60">
                               {{ ev.date }} &bull; {{ ev.venue }} &bull; {{ ev.city }}
@@ -259,21 +259,21 @@ type Testimonial = { quote: string; name: string; role: string };
                             <div class="text-[11px] text-white/50">from</div>
                           </div>
                         </div>
-
                         <div class="mt-3 flex items-center justify-between">
                           <div class="text-xs text-white/60">
                             <span class="text-white/80">&bull;</span> Verified inventory
                           </div>
-                          <a
-                            *ngIf="eventsEnabled"
-                            routerLink="/events"
-                            class="text-xs font-semibold text-fuchsia-200 group-hover:text-white transition"
-                          >
-                            View seats &rarr;
-                          </a>
+                          @if (eventsEnabled) {
+                            <a
+                              routerLink="/events"
+                              class="text-xs font-semibold text-fuchsia-200 group-hover:text-white transition"
+                            >
+                              View seats &rarr;
+                            </a>
+                          }
                         </div>
                       </div>
-                    </ng-container>
+                    }
                   </div>
 
                   <div class="mt-5 grid grid-cols-2 gap-3">
@@ -293,16 +293,18 @@ type Testimonial = { quote: string; name: string; role: string };
                     </div>
                   </div>
 
-                  <div *ngIf="eventsEnabled" class="mt-5">
-                    <a
-                      routerLink="/events"
-                      class="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2
+                  @if (eventsEnabled) {
+                    <div class="mt-5">
+                      <a
+                        routerLink="/events"
+                        class="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2
                              bg-white text-slate-950 font-semibold text-sm hover:bg-white/90 transition"
-                    >
-                      Browse all events
-                      <span>&rarr;</span>
-                    </a>
-                  </div>
+                      >
+                        Browse all events
+                        <span>&rarr;</span>
+                      </a>
+                    </div>
+                  }
                 </div>
               </div>
 
@@ -324,42 +326,43 @@ type Testimonial = { quote: string; name: string; role: string };
           </div>
         </section>
 
-        <section *ngIf="eventsEnabled" class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-14">
-          <div class="flex items-end justify-between gap-6">
-            <div>
-              <h2 class="text-xl sm:text-2xl font-bold">Browse by category</h2>
-              <p class="mt-1 text-sm text-white/60">Pick a vibe. We'll handle the rest.</p>
-            </div>
-            <a
-              routerLink="/events"
-              class="text-sm font-semibold text-fuchsia-200 hover:text-white transition"
-            >
-              See all &rarr;
-            </a>
-          </div>
-
-          <div class="mt-6 grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <ng-container *ngFor="let c of categories; trackBy: trackByName">
+        @if (eventsEnabled) {
+          <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-14">
+            <div class="flex items-end justify-between gap-6">
+              <div>
+                <h2 class="text-xl sm:text-2xl font-bold">Browse by category</h2>
+                <p class="mt-1 text-sm text-white/60">Pick a vibe. We'll handle the rest.</p>
+              </div>
               <a
                 routerLink="/events"
-                class="group rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur
-                       hover:bg-white/8 hover:border-white/15 transition"
+                class="text-sm font-semibold text-fuchsia-200 hover:text-white transition"
               >
-                <div class="flex items-center justify-between">
-                  <div class="text-xs font-semibold uppercase tracking-[0.2em]">{{ c.icon }}</div>
-                  <div
-                    class="h-9 w-9 rounded-xl bg-gradient-to-br from-purple-500/20 to-fuchsia-500/20
-                              border border-white/10 flex items-center justify-center text-white/70 group-hover:text-white transition"
-                  >
-                    &rarr;
-                  </div>
-                </div>
-                <div class="mt-4 text-sm font-semibold">{{ c.name }}</div>
-                <div class="mt-1 text-xs text-white/60">{{ c.count }}</div>
+                See all &rarr;
               </a>
-            </ng-container>
-          </div>
-        </section>
+            </div>
+            <div class="mt-6 grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              @for (c of categories; track trackByName($index, c)) {
+                <a
+                  routerLink="/events"
+                  class="group rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur
+                       hover:bg-white/8 hover:border-white/15 transition"
+                >
+                  <div class="flex items-center justify-between">
+                    <div class="text-xs font-semibold uppercase tracking-[0.2em]">{{ c.icon }}</div>
+                    <div
+                      class="h-9 w-9 rounded-xl bg-gradient-to-br from-purple-500/20 to-fuchsia-500/20
+                              border border-white/10 flex items-center justify-center text-white/70 group-hover:text-white transition"
+                    >
+                      &rarr;
+                    </div>
+                  </div>
+                  <div class="mt-4 text-sm font-semibold">{{ c.name }}</div>
+                  <div class="mt-1 text-xs text-white/60">{{ c.count }}</div>
+                </a>
+              }
+            </div>
+          </section>
+        }
 
         <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-14">
           <div class="grid lg:grid-cols-12 gap-8 items-start">
@@ -382,7 +385,7 @@ type Testimonial = { quote: string; name: string; role: string };
             </div>
 
             <div class="lg:col-span-8 grid sm:grid-cols-2 gap-4">
-              <ng-container *ngFor="let f of features; trackBy: trackByTitle">
+              @for (f of features; track trackByTitle($index, f)) {
                 <div class="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
                   <div class="flex items-center gap-3">
                     <div
@@ -397,88 +400,88 @@ type Testimonial = { quote: string; name: string; role: string };
                     {{ f.desc }}
                   </p>
                 </div>
-              </ng-container>
+              }
             </div>
           </div>
         </section>
 
-        <section *ngIf="eventsEnabled" class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-14">
-          <div class="flex items-end justify-between gap-6">
-            <div>
-              <h2 class="text-xl sm:text-2xl font-bold">Popular this week</h2>
-              <p class="mt-1 text-sm text-white/60">Curated picks near you.</p>
-            </div>
-            <a
-              routerLink="/events"
-              class="text-sm font-semibold text-fuchsia-200 hover:text-white transition"
-            >
-              Explore &rarr;
-            </a>
-          </div>
-
-          <div class="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <ng-container *ngFor="let e of popular; trackBy: trackByTitle">
+        @if (eventsEnabled) {
+          <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-14">
+            <div class="flex items-end justify-between gap-6">
+              <div>
+                <h2 class="text-xl sm:text-2xl font-bold">Popular this week</h2>
+                <p class="mt-1 text-sm text-white/60">Curated picks near you.</p>
+              </div>
               <a
                 routerLink="/events"
-                class="group rounded-3xl border border-white/10 bg-white/5 overflow-hidden
-                       hover:bg-white/8 hover:border-white/15 transition"
+                class="text-sm font-semibold text-fuchsia-200 hover:text-white transition"
               >
-                <div class="relative h-36">
-                  <div
-                    class="absolute inset-0 bg-gradient-to-br from-purple-500/35 via-fuchsia-500/15 to-indigo-500/25"
-                  ></div>
-                  <div
-                    class="absolute inset-0 opacity-30"
-                    style="
+                Explore &rarr;
+              </a>
+            </div>
+            <div class="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              @for (e of popular; track trackByTitle($index, e)) {
+                <a
+                  routerLink="/events"
+                  class="group rounded-3xl border border-white/10 bg-white/5 overflow-hidden
+                       hover:bg-white/8 hover:border-white/15 transition"
+                >
+                  <div class="relative h-36">
+                    <div
+                      class="absolute inset-0 bg-gradient-to-br from-purple-500/35 via-fuchsia-500/15 to-indigo-500/25"
+                    ></div>
+                    <div
+                      class="absolute inset-0 opacity-30"
+                      style="
                       background-image: radial-gradient(circle at 20% 10%, rgba(255,255,255,0.45) 0, transparent 45%),
                                         radial-gradient(circle at 80% 60%, rgba(255,255,255,0.25) 0, transparent 50%);
                     "
-                  ></div>
-                  <div class="absolute top-4 left-4 flex gap-2">
-                    <span
-                      class="text-[10px] rounded-full px-2 py-1 border border-white/10 bg-slate-950/40 text-white/70 backdrop-blur"
-                    >
-                      Verified
-                    </span>
-                    <span
-                      *ngIf="e.badge"
-                      class="text-[10px] rounded-full px-2 py-1 border border-white/10 bg-slate-950/40 text-white/70 backdrop-blur"
-                    >
-                      {{ e.badge }}
-                    </span>
+                    ></div>
+                    <div class="absolute top-4 left-4 flex gap-2">
+                      <span
+                        class="text-[10px] rounded-full px-2 py-1 border border-white/10 bg-slate-950/40 text-white/70 backdrop-blur"
+                      >
+                        Verified
+                      </span>
+                      @if (e.badge) {
+                        <span
+                          class="text-[10px] rounded-full px-2 py-1 border border-white/10 bg-slate-950/40 text-white/70 backdrop-blur"
+                        >
+                          {{ e.badge }}
+                        </span>
+                      }
+                    </div>
                   </div>
-                </div>
-
-                <div class="p-5">
-                  <div class="flex items-start justify-between gap-3">
-                    <div>
-                      <div class="text-sm font-semibold">{{ e.title }}</div>
-                      <div class="mt-1 text-xs text-white/60">{{ e.date }}</div>
-                      <div class="mt-1 text-xs text-white/60">
-                        {{ e.venue }} &bull; {{ e.city }}
+                  <div class="p-5">
+                    <div class="flex items-start justify-between gap-3">
+                      <div>
+                        <div class="text-sm font-semibold">{{ e.title }}</div>
+                        <div class="mt-1 text-xs text-white/60">{{ e.date }}</div>
+                        <div class="mt-1 text-xs text-white/60">
+                          {{ e.venue }} &bull; {{ e.city }}
+                        </div>
+                      </div>
+                      <div class="text-right">
+                        <div class="text-sm font-semibold">{{ e.price }}</div>
+                        <div class="text-[11px] text-white/50">from</div>
                       </div>
                     </div>
-                    <div class="text-right">
-                      <div class="text-sm font-semibold">{{ e.price }}</div>
-                      <div class="text-[11px] text-white/50">from</div>
+                    <div class="mt-4 flex items-center justify-between">
+                      <div class="text-xs text-white/60">
+                        <span class="text-white/80">&bull;</span> Instant mobile tickets
+                      </div>
+                      <div
+                        class="text-xs font-semibold text-fuchsia-200 group-hover:text-white transition"
+                      >
+                        View &rarr;
+                      </div>
                     </div>
                   </div>
-
-                  <div class="mt-4 flex items-center justify-between">
-                    <div class="text-xs text-white/60">
-                      <span class="text-white/80">&bull;</span> Instant mobile tickets
-                    </div>
-                    <div
-                      class="text-xs font-semibold text-fuchsia-200 group-hover:text-white transition"
-                    >
-                      View &rarr;
-                    </div>
-                  </div>
-                </div>
-              </a>
-            </ng-container>
-          </div>
-        </section>
+                </a>
+              }
+            </div>
+          </section>
+        }
 
         <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-16">
           <div class="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 sm:p-8">
@@ -501,7 +504,7 @@ type Testimonial = { quote: string; name: string; role: string };
             </div>
 
             <div class="mt-6 grid md:grid-cols-3 gap-4">
-              <ng-container *ngFor="let t of testimonials; trackBy: trackByName">
+              @for (t of testimonials; track trackByName($index, t)) {
                 <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-6">
                   <p class="text-sm text-white/70 italic leading-relaxed">
                     &ldquo;{{ t.quote }}&rdquo;
@@ -509,7 +512,7 @@ type Testimonial = { quote: string; name: string; role: string };
                   <div class="mt-4 text-sm font-semibold">{{ t.name }}</div>
                   <div class="text-xs text-white/60">{{ t.role }}</div>
                 </div>
-              </ng-container>
+              }
             </div>
           </div>
         </section>
@@ -537,25 +540,27 @@ type Testimonial = { quote: string; name: string; role: string };
               </div>
 
               <div class="lg:col-span-4 flex flex-col sm:flex-row lg:flex-col gap-3">
-                <a
-                  *ngIf="authEnabled"
-                  routerLink="/auth/signup"
-                  class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2
+                @if (authEnabled) {
+                  <a
+                    routerLink="/auth/signup"
+                    class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2
                          bg-white text-slate-950 font-semibold text-sm hover:bg-white/90 transition"
-                >
-                  Create an account
-                  <span>&rarr;</span>
-                </a>
-                <a
-                  *ngIf="eventsEnabled"
-                  routerLink="/events"
-                  class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2
+                  >
+                    Create an account
+                    <span>&rarr;</span>
+                  </a>
+                }
+                @if (eventsEnabled) {
+                  <a
+                    routerLink="/events"
+                    class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2
                          border border-white/15 bg-white/5 text-white/90 text-sm font-semibold
                          hover:bg-white/10 transition"
-                >
-                  Browse events
-                  <span>&rarr;</span>
-                </a>
+                  >
+                    Browse events
+                    <span>&rarr;</span>
+                  </a>
+                }
               </div>
             </div>
           </div>

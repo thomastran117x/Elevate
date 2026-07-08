@@ -27,18 +27,23 @@
       <div>
         <label class="block text-sm font-medium text-white/80 mb-2">Role</label>
         <div class="grid gap-2">
-          <label
-            *ngFor="let role of roleOptions"
-            class="flex items-center gap-3 rounded-xl border border-white/10 bg-slate-900/50 px-4 py-3"
-          >
-            <input type="radio" formControlName="usertype" [value]="role.value" />
-            <span>{{ role.label }}</span>
-          </label>
+          @for (role of roleOptions; track role) {
+            <label
+              class="flex items-center gap-3 rounded-xl border border-white/10 bg-slate-900/50 px-4 py-3"
+            >
+              <input type="radio" formControlName="usertype" [value]="role.value" />
+              <span>{{ role.label }}</span>
+            </label>
+          }
         </div>
       </div>
 
-      <div *ngIf="error" class="text-sm text-red-300">{{ error }}</div>
-      <div *ngIf="success" class="text-sm text-emerald-300">{{ success }}</div>
+      @if (error) {
+        <div class="text-sm text-red-300">{{ error }}</div>
+      }
+      @if (success) {
+        <div class="text-sm text-emerald-300">{{ success }}</div>
+      }
 
       <button
         type="submit"

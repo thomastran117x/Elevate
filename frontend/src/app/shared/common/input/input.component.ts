@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 
 export type InputTone = 'default' | 'glass';
@@ -6,7 +5,7 @@ export type InputTone = 'default' | 'glass';
 @Component({
   selector: 'app-input',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './input.component.html',
   styleUrl: './input.component.css',
 })

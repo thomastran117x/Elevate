@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { AppButtonComponent } from '@common/button/button.component';
@@ -7,7 +6,7 @@ import { PillComponent } from '@common/pill/pill.component';
 @Component({
   selector: 'hero-card',
   standalone: true,
-  imports: [CommonModule, RouterModule, AppButtonComponent, PillComponent],
+  imports: [RouterModule, AppButtonComponent, PillComponent],
   templateUrl: './hero-card.component.html',
   styleUrl: './hero-card.component.css',
 })

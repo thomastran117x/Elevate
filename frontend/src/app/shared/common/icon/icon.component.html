@@ -1,8 +1,7 @@
 <span class="inline-flex" [class]="className" aria-hidden="true">
-  <ng-container *ngIf="emoji; else custom">
+  @if (emoji) {
     <span class="leading-none">{{ emoji }}</span>
-  </ng-container>
-  <ng-template #custom>
+  } @else {
     <ng-content></ng-content>
-  </ng-template>
+  }
 </span>
