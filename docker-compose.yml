@@ -12,6 +12,8 @@ services:
       BACKEND_URL: "${FRONTEND_BACKEND_URL:-http://localhost:3090/api}"
       API_PROXY_TARGET: "${FRONTEND_API_PROXY_TARGET:-http://backend:8090}"
       FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3090}"
+      # Angular 21 SSR Host allowlist (SSRF protection). Hostnames only, no ports.
+      NG_ALLOWED_HOSTS: "${NG_ALLOWED_HOSTS:-localhost,127.0.0.1}"
     ports:
       - "3090:3090"
     depends_on:
