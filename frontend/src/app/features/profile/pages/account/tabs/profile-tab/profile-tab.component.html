@@ -120,7 +120,9 @@
 
           <!-- Name -->
           <div class="space-y-2">
-            <label class="text-sm font-semibold text-white/80" for="profile-name">Display name</label>
+            <label class="text-sm font-semibold text-white/80" for="profile-name"
+              >Display name</label
+            >
             <input
               id="profile-name"
               type="text"
@@ -139,7 +141,9 @@
 
           <!-- Username -->
           <div class="space-y-2">
-            <label class="text-sm font-semibold text-white/80" for="profile-username">Username</label>
+            <label class="text-sm font-semibold text-white/80" for="profile-username"
+              >Username</label
+            >
             <input
               id="profile-username"
               type="text"
@@ -229,11 +233,15 @@
         <h2 class="mt-2 text-xl font-bold">Account information</h2>
         <div class="mt-5 grid gap-4 sm:grid-cols-2">
           <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-white/40">Member since</p>
+            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-white/40">
+              Member since
+            </p>
             <p class="mt-2 text-sm text-white/80">{{ p.CreatedAtUtc | date: 'longDate' }}</p>
           </div>
           <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-white/40">Last updated</p>
+            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-white/40">
+              Last updated
+            </p>
             <p class="mt-2 text-sm text-white/80">{{ p.UpdatedAtUtc | date: 'medium' }}</p>
           </div>
           <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 sm:col-span-2">

@@ -1,6 +1,13 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
-import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
+import {
+  AbstractControl,
+  FormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  ValidatorFn,
+  Validators,
+} from '@angular/forms';
 import { Router } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 
@@ -28,10 +35,7 @@ export class PasswordTabComponent {
   readonly passwordForm = this.fb.nonNullable.group(
     {
       currentPassword: this.fb.nonNullable.control('', [Validators.required]),
-      newPassword: this.fb.nonNullable.control('', [
-        Validators.required,
-        Validators.minLength(8),
-      ]),
+      newPassword: this.fb.nonNullable.control('', [Validators.required, Validators.minLength(8)]),
       confirmPassword: this.fb.nonNullable.control('', [Validators.required]),
     },
     { validators: passwordsMatchValidator },
