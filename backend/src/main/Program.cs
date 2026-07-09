@@ -119,15 +119,10 @@ app.UseSerilogRequestLogging(opts =>
     };
 });
 
+app.UseRefreshCsrfValidation();
+
 app.UseAuthentication();
 app.UseAuthorization();
-
-// Must run AFTER authentication: antiforgery tokens are bound to the current user's
-// identity, and the [ValidateAntiForgeryToken] action filters validate post-auth. If this
-// middleware ran first (anonymous context) it would demand an anonymous-bound token while
-// the filters demand a user-bound one — contradictory, so authenticated POSTs (e.g. logout)
-// could never satisfy both.
-app.UseRefreshCsrfValidation();
 
 app.UseClientRequestInspection();
 

@@ -90,9 +90,7 @@ namespace backend.main.features.profile
             }
         }
 
-        [HttpPatch]
-        [ValidateAntiForgeryToken]
-        [ProducesResponseType(typeof(ApiResponse<MyProfileResponse>), StatusCodes.Status200OK)]
+        [HttpPatch]        [ProducesResponseType(typeof(ApiResponse<MyProfileResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
         {
             try
@@ -133,9 +131,7 @@ namespace backend.main.features.profile
             }
         }
 
-        [HttpPost("avatar")]
-        [ValidateAntiForgeryToken]
-        [ProducesResponseType(typeof(ApiResponse<MyProfileResponse>), StatusCodes.Status200OK)]
+        [HttpPost("avatar")]        [ProducesResponseType(typeof(ApiResponse<MyProfileResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UploadAvatar([FromForm] AvatarUploadRequest request)
         {
             try
@@ -161,9 +157,7 @@ namespace backend.main.features.profile
             }
         }
 
-        [HttpPost("change-password")]
-        [ValidateAntiForgeryToken]
-        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
+        [HttpPost("change-password")]        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordAuthenticatedRequest request)
         {
             try
@@ -187,9 +181,7 @@ namespace backend.main.features.profile
             }
         }
 
-        [HttpDelete]
-        [ValidateAntiForgeryToken]
-        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
+        [HttpDelete]        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> DeleteAccount()
         {
             try

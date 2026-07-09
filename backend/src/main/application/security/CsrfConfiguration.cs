@@ -60,11 +60,18 @@ namespace backend.main.application.security
 
             return services;
         }
+        // Paths whose state-changing requests (POST/PUT/PATCH/DELETE) are CSRF-validated.
+        // Unlike the auth endpoints (POST only), these controllers mutate via several verbs.
+        private static readonly string[] ProtectedPathPrefixes =
+        [
+            $"/{RoutePaths.ApiPrefix}/profile"
+        ];
+
         public static IApplicationBuilder UseRefreshCsrfValidation(this IApplicationBuilder app)
         {
             return app.Use(async (ctx, next) =>
             {
-                if (IsCsrfProtectedEndpoint(ctx.Request) && HttpMethods.IsPost(ctx.Request.Method))
+                if (RequiresCsrfValidation(ctx.Request))
                 {
                     var antiforgery = ctx.RequestServices.GetRequiredService<IAntiforgery>();
                     await antiforgery.ValidateRequestAsync(ctx);
@@ -74,10 +81,25 @@ namespace backend.main.application.security
             });
         }
 
-        private static bool IsCsrfProtectedEndpoint(HttpRequest request)
+        private static bool RequiresCsrfValidation(HttpRequest request)
         {
-            return ProtectedAuthPostPathSet.Any(path =>
-                request.Path.StartsWithSegments(path, StringComparison.OrdinalIgnoreCase));
+            var path = request.Path;
+
+            if (HttpMethods.IsPost(request.Method)
+                && ProtectedAuthPostPathSet.Any(p => path.StartsWithSegments(p, StringComparison.OrdinalIgnoreCase)))
+                return true;
+
+            if (IsStateChangingMethod(request.Method)
+                && ProtectedPathPrefixes.Any(p => path.StartsWithSegments(p, StringComparison.OrdinalIgnoreCase)))
+                return true;
+
+            return false;
         }
+
+        private static bool IsStateChangingMethod(string method) =>
+            HttpMethods.IsPost(method)
+            || HttpMethods.IsPut(method)
+            || HttpMethods.IsPatch(method)
+            || HttpMethods.IsDelete(method);
     }
 }
