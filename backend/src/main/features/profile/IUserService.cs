@@ -12,6 +12,7 @@ namespace backend.main.features.profile
             UserReadDetailLevel detail = UserReadDetailLevel.Slim
         );
         Task<User> GetUserByIdAsync(int id);
+        Task<UserProfileRecord> GetPublicProfileByUsernameAsync(string username);
         Task<User?> UpdateUserAsync(int id, User updatedUser);
         Task<User?> UpdateAvatarAsync(int id, IFormFile image);
         Task<bool> DeleteUserAsync(int id);

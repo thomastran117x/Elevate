@@ -63,7 +63,7 @@ public class AuthUserRepositoryTests
     }
 
     [Fact]
-    public async Task UpdatePartialAsync_ShouldOnlyChangeProvidedFields()
+    public async Task UpdatePartialAsync_ShouldChangeMutableFields_ButPreserveIdentityAndRole()
     {
         await using var harness = await AuthUserRepositoryHarness.CreateAsync();
         var userId = await harness.SeedUserAsync();
@@ -77,8 +77,13 @@ public class AuthUserRepositoryTests
         });
 
         updated.Should().NotBeNull();
-        updated!.Email.Should().Be("partial@example.com");
-        updated.Usertype.Should().Be("Organizer");
+        // Identity and role are intentionally NOT mutable via UpdatePartialAsync: even when
+        // Email/Usertype are supplied they must be ignored, so a stale JWT claim can never
+        // silently overwrite them. Email changes require re-verification and role changes go
+        // through dedicated admin/status flows.
+        updated!.Email.Should().Be("seed@example.com");
+        updated.Usertype.Should().Be("participant");
+        // Mutable profile fields are still applied.
         updated.Name.Should().Be("Partial Name");
         updated.Username.Should().Be("seed-user");
         updated.Password.Should().Be("seed-password");

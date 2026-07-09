@@ -64,8 +64,23 @@ namespace backend.main.features.profile
             return user;
         }
 
+        public async Task<UserProfileRecord> GetPublicProfileByUsernameAsync(string username)
+        {
+            var profile = await _userRepository.GetProfileByUsernameAsync(username);
+            if (profile == null)
+                throw new ResourceNotFoundException($"No user found with the username {username}");
+
+            return profile;
+        }
+
         public async Task<User?> UpdateUserAsync(int id, User updatedUser)
         {
+            if (!string.IsNullOrWhiteSpace(updatedUser.Username)
+                && await _userRepository.UsernameExistsAsync(updatedUser.Username, id))
+            {
+                throw new ConflictException($"The username '{updatedUser.Username}' is already taken.");
+            }
+
             var existingUser = await _userRepository.UpdatePartialAsync(updatedUser);
             if (existingUser == null)
                 throw new ResourceNotFoundException($"User with the id {id} is not found");
@@ -94,15 +109,21 @@ namespace backend.main.features.profile
 
         public async Task<User?> UpdateAvatarAsync(int id, IFormFile image)
         {
-            string filePath = await _blobService.UploadImageAsync(image, "users");
-
+            // Verify the user exists before writing anything to blob storage, so a
+            // deleted/missing account can't leave an orphaned upload behind.
             User user = await _userRepository.GetUserAsync(id)
                 ?? throw new ResourceNotFoundException($"User with the id {id} is not found");
 
+            string? previousAvatar = user.Avatar;
+            string filePath = await _blobService.UploadImageAsync(image, "users");
             user.Avatar = filePath;
 
             User updatedUser = await _userRepository.UpdatePartialAsync(user)
                 ?? throw new ResourceNotFoundException($"User with the id {id} is not found");
+
+            // Best-effort cleanup of the replaced image (no-op for external/legacy URLs).
+            if (!string.IsNullOrEmpty(previousAvatar) && previousAvatar != filePath)
+                await _blobService.DeleteBlobAsync(previousAvatar);
 
             await _refreshCache.RemoveAsync(GetUserCacheKey(id));
             return updatedUser;

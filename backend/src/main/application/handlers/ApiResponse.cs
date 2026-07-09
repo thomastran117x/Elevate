@@ -1,6 +1,8 @@
 using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace backend.main.application.handlers
 {
@@ -8,6 +10,12 @@ namespace backend.main.application.handlers
     {
         public static IServiceCollection AddApiResponseConventions(this IServiceCollection services)
         {
+            // Framework-generated client errors (antiforgery/CSRF failures, bodyless 4xx that never
+            // reach a controller) should use the app envelope instead of a bare ProblemDetails.
+            services.Replace(
+                ServiceDescriptor.Singleton<IClientErrorFactory, ApiClientErrorFactory>()
+            );
+
             services.Configure<ApiBehaviorOptions>(options =>
             {
                 options.InvalidModelStateResponseFactory = context =>

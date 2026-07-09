@@ -17,5 +17,9 @@ namespace backend.main.features.profile.contracts
             get; init;
         }
         public string Usertype { get; init; } = null!;
+        public DateTime CreatedAtUtc
+        {
+            get; init;
+        }
     }
 }

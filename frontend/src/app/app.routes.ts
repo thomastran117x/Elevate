@@ -1,6 +1,8 @@
+import { inject } from '@angular/core';
 import { Routes } from '@angular/router';
 
 import { featureCanMatch } from './core/features/feature-can-match.guard';
+import { FeatureFlagsService } from './core/features/feature-flags.service';
 import { FEATURE_KEYS } from './core/features/feature-flags.types';
 import { NotFoundComponent } from './shared/not-found/not-found.component';
 import { authenticatedUserGuard } from './features/auth/guards/authenticated-user.guard';
@@ -42,12 +44,30 @@ export const routes: Routes = [
   },
 
   {
+    // Legacy alias. Only forward to the security tab when the auth feature is enabled;
+    // otherwise fall back to home so the MFA tab is never reached with auth turned off.
     path: 'settings/security',
-    canMatch: [featureCanMatch(FEATURE_KEYS.auth)],
+    pathMatch: 'full',
+    redirectTo: () =>
+      inject(FeatureFlagsService).isEnabled(FEATURE_KEYS.auth) ? '/account/security' : '/',
+  },
+  {
+    path: 'account',
+    canMatch: [featureCanMatch(FEATURE_KEYS.profile)],
     canActivate: [authenticatedUserGuard],
     loadComponent: () =>
-      import('./features/auth/pages/security-settings/security-settings.component').then(
-        (m) => m.SecuritySettingsComponent,
+      import('./features/profile/pages/account/account-page.component').then(
+        (m) => m.AccountPageComponent,
+      ),
+    loadChildren: () =>
+      import('./features/profile/pages/account/account.routes').then((m) => m.ACCOUNT_ROUTES),
+  },
+  {
+    path: 'profile/:username',
+    canMatch: [featureCanMatch(FEATURE_KEYS.profile)],
+    loadComponent: () =>
+      import('./features/profile/pages/public-profile/public-profile.component').then(
+        (m) => m.PublicProfileComponent,
       ),
   },
   {

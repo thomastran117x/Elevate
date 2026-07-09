@@ -455,8 +455,12 @@ namespace backend.main.features.auth
             );
         }
 
+        // CSRF is enforced by UseRefreshCsrfValidation (pre-auth) for this path. The MVC
+        // [ValidateAntiForgeryToken] filter runs post-auth and would validate the antiforgery
+        // token against the now-authenticated user, while the token/cookie the SPA holds are
+        // bound to the anonymous session — an unsatisfiable contradiction that made authenticated
+        // logout always fail. The middleware alone is the correct (and sufficient) guard here.
         [HttpPost("logout")]
-        [ValidateAntiForgeryToken]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> Logout([FromBody] RefreshTokenRequest? request)
         {

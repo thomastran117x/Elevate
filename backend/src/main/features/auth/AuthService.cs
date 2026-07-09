@@ -277,6 +277,41 @@ namespace backend.main.features.auth
             }
         }
 
+        public async Task ChangePasswordForAuthenticatedUserAsync(string email, string currentPassword, string newPassword)
+        {
+            try
+            {
+                var existingUser = await _userRepository.GetAuthByEmailAsync(email)
+                    ?? throw new UnauthorizedException("User not found.");
+
+                await EnsureUserEnabledAsync(ToUser(existingUser));
+
+                if (existingUser.Password == null)
+                    throw new BadRequestException(
+                        "This account uses social login and has no password set."
+                    );
+
+                bool isValid = VerifyPassword(currentPassword, existingUser.Password);
+                if (!isValid)
+                    throw new UnauthorizedException("Current password is incorrect.");
+
+                if (currentPassword == newPassword)
+                    throw new BadRequestException(
+                        "New password must be different from your current password."
+                    );
+
+                await ChangePasswordInternalAsync(email, newPassword);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[AuthService] ChangePasswordForAuthenticatedUserAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
         public async Task<OAuthAuthenticationResult> GoogleAsync(
             string token,
             SessionTransport transport,

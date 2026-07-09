@@ -60,5 +60,6 @@ namespace backend.main.features.auth
         Task<VerificationOtpChallenge> ForgotPasswordAsync(string email);
         Task ChangePasswordAsync(string token, string password);
         Task ChangePasswordWithOtpAsync(string code, string challenge, string password);
+        Task ChangePasswordForAuthenticatedUserAsync(string email, string currentPassword, string newPassword);
     }
 }

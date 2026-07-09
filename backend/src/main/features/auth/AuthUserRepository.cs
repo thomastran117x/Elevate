@@ -48,12 +48,9 @@ namespace backend.main.features.auth
             if (existing == null)
                 return null;
 
-            if (updated.Email != null)
-                existing.Email = updated.Email;
-            if (updated.Password != null)
-                existing.Password = updated.Password;
-            if (updated.Usertype != null)
-                existing.Usertype = AuthRoles.NormalizeStored(updated.Usertype);
+            // Identity and role are intentionally NOT mutable through a partial update.
+            // Email changes require re-verification and role changes go through dedicated
+            // admin/status flows; otherwise a stale JWT claim could silently overwrite them.
             if (updated.Name != null)
                 existing.Name = updated.Name;
             if (updated.Username != null)
@@ -126,8 +123,37 @@ namespace backend.main.features.auth
             if (user == null)
                 return false;
 
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+
+            // ClubStaff.GrantedByUserId is a Restrict FK, so staff roles this user granted to
+            // others would block the delete. Reassign those grants to the club's owner (falling
+            // back to the affected member) so the role survives and the account can be removed.
+            var grantsByUser = await _context.ClubStaff
+                .Where(staff => staff.GrantedByUserId == id)
+                .ToListAsync();
+
+            if (grantsByUser.Count > 0)
+            {
+                var clubIds = grantsByUser.Select(staff => staff.ClubId).Distinct().ToList();
+                var clubOwners = await _context.Clubs
+                    .Where(club => clubIds.Contains(club.Id))
+                    .ToDictionaryAsync(club => club.Id, club => club.UserId);
+
+                foreach (var grant in grantsByUser)
+                {
+                    var ownerId = clubOwners.TryGetValue(grant.ClubId, out var owner)
+                        ? owner
+                        : grant.UserId;
+                    grant.GrantedByUserId = ownerId != id ? ownerId : grant.UserId;
+                }
+
+                await _context.SaveChangesAsync();
+            }
+
             _context.Users.Remove(user);
             await _context.SaveChangesAsync();
+
+            await transaction.CommitAsync();
             return true;
         }
 
@@ -243,6 +269,7 @@ namespace backend.main.features.auth
                     Name = u.Name,
                     Avatar = u.Avatar,
                     Usertype = AuthRoles.NormalizeStored(u.Usertype),
+                    CreatedAtUtc = u.CreatedAt,
                 })
                 .FirstOrDefaultAsync();
         }
@@ -270,6 +297,13 @@ namespace backend.main.features.auth
             return await _context.Users
                 .AsNoTracking()
                 .AnyAsync(u => u.Email == email);
+        }
+
+        public async Task<bool> UsernameExistsAsync(string username, int excludeUserId)
+        {
+            return await _context.Users
+                .AsNoTracking()
+                .AnyAsync(u => u.Username == username && u.Id != excludeUserId);
         }
 
         public async Task<IReadOnlyList<UserListRecord>> GetByIdsAsync(

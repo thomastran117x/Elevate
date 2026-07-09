@@ -1,0 +1,63 @@
+<div
+  class="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#0b0822] via-[#160f3d] to-[#24135f] text-white"
+>
+  <!-- Ambient blobs -->
+  <div class="pointer-events-none absolute inset-0">
+    <div
+      class="absolute -left-40 -top-40 h-[520px] w-[520px] animate-pulse rounded-full bg-purple-600/20 blur-3xl"
+    ></div>
+    <div
+      class="absolute -right-40 top-60 h-[420px] w-[420px] animate-pulse rounded-full bg-fuchsia-600/20 blur-3xl"
+    ></div>
+    <div
+      class="absolute bottom-0 left-1/2 h-[400px] w-[600px] -translate-x-1/2 rounded-full bg-indigo-600/15 blur-3xl"
+    ></div>
+  </div>
+
+  <div class="relative z-10 mx-auto max-w-5xl px-6 py-14">
+    <!-- Page header -->
+    <div class="mb-8 space-y-3">
+      <p class="text-sm font-semibold uppercase tracking-[0.28em] text-purple-300">Settings</p>
+      <h1 class="text-4xl font-black tracking-tight">Your Account</h1>
+    </div>
+
+    <!-- Tab navigation -->
+    <nav class="mb-8 flex gap-1 border-b border-white/10 pb-0">
+      <a
+        routerLink="profile"
+        routerLinkActive="border-b-2 border-purple-400 text-white font-semibold"
+        [routerLinkActiveOptions]="{ exact: false }"
+        class="px-4 pb-3 pt-2 text-sm font-medium text-white/50 transition hover:text-white/80"
+      >
+        Profile
+      </a>
+      <a
+        routerLink="security"
+        routerLinkActive="border-b-2 border-purple-400 text-white font-semibold"
+        [routerLinkActiveOptions]="{ exact: false }"
+        class="px-4 pb-3 pt-2 text-sm font-medium text-white/50 transition hover:text-white/80"
+      >
+        Security
+      </a>
+      <a
+        routerLink="password"
+        routerLinkActive="border-b-2 border-purple-400 text-white font-semibold"
+        [routerLinkActiveOptions]="{ exact: false }"
+        class="px-4 pb-3 pt-2 text-sm font-medium text-white/50 transition hover:text-white/80"
+      >
+        Password
+      </a>
+      <a
+        routerLink="danger"
+        routerLinkActive="border-b-2 border-rose-400 text-rose-300 font-semibold"
+        [routerLinkActiveOptions]="{ exact: false }"
+        class="px-4 pb-3 pt-2 text-sm font-medium text-white/50 transition hover:text-rose-300/80"
+      >
+        Danger Zone
+      </a>
+    </nav>
+
+    <!-- Tab content -->
+    <router-outlet></router-outlet>
+  </div>
+</div>

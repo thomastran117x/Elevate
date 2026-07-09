@@ -17,7 +17,30 @@ type ApiClientErrorKind = 'client' | 'server';
 type ApiErrorPayload = {
   message?: unknown;
   Message?: unknown;
+  error?: { details?: unknown; Details?: unknown } | null;
 };
+
+/**
+ * Flattens a backend `error.details` payload into a list of human-readable strings.
+ * Handles the validation shape `{ field: string[] }`, plain arrays, and bare strings.
+ */
+function collectDetailStrings(details: unknown): string[] {
+  if (typeof details === 'string') {
+    return details.trim() ? [details.trim()] : [];
+  }
+  if (Array.isArray(details)) {
+    return details.flatMap(collectDetailStrings);
+  }
+  if (details && typeof details === 'object') {
+    return Object.values(details as Record<string, unknown>).flatMap(collectDetailStrings);
+  }
+  return [];
+}
+
+function formatDetailMessages(details: unknown): string | null {
+  const messages = [...new Set(collectDetailStrings(details))];
+  return messages.length ? messages.join(' ') : null;
+}
 
 class ApiClientRequestError extends Error {
   constructor(
@@ -88,7 +111,13 @@ export function isApiClientErrorCode(error: unknown, code: string): boolean {
 
 export function getApiClientMessage(error: unknown, fallback: string): string {
   if (isApiClientError(error)) {
-    return error.message;
+    // Prefer field-level details (e.g. validation messages) over the generic
+    // top-level message like "Validation failed."
+    const detailMessage = formatDetailMessages(error.details);
+    if (detailMessage) {
+      return detailMessage;
+    }
+    return error.message.trim() ? error.message : fallback;
   }
 
   const rawHttpMessage = getRawHttpErrorMessage(error);
@@ -117,12 +146,19 @@ function getRawHttpErrorMessage(error: unknown): string | null {
     return null;
   }
 
-  const message = (payload as ApiErrorPayload).message;
+  const typed = payload as ApiErrorPayload;
+
+  const detailMessage = formatDetailMessages(typed.error?.details ?? typed.error?.Details);
+  if (detailMessage) {
+    return detailMessage;
+  }
+
+  const message = typed.message;
   if (typeof message === 'string' && message.trim()) {
     return message;
   }
 
-  const pascalMessage = (payload as ApiErrorPayload).Message;
+  const pascalMessage = typed.Message;
   if (typeof pascalMessage === 'string' && pascalMessage.trim()) {
     return pascalMessage;
   }
