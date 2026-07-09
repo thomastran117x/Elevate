@@ -12,7 +12,7 @@
   margin: 0 auto;
   font-size: 1.05rem;
   line-height: 1.7;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--subtle);
 }
 
 /* ================= CTA ================= */
@@ -54,6 +54,7 @@
 .cta-section h2 {
   font-size: 2.6rem;
   font-weight: 800;
+  color: #fff;
 }
 
 .cta-section p {
@@ -124,9 +125,9 @@
 .metric-card-modern {
   padding: 2.75rem;
   border-radius: 28px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+  background: linear-gradient(180deg, var(--glass-strong), var(--glass));
   backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--line-strong);
 }
 
 .metric-chip {
@@ -148,12 +149,12 @@
 }
 
 .metric-label {
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--subtle);
 }
 
 .metric-bar {
   height: 12px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--glass-strong);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -221,8 +222,8 @@
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--glass);
+  border: 1px solid var(--line);
   border-radius: 18px;
 }
 
@@ -231,8 +232,8 @@
 .feature-card {
   padding: 2rem;
   border-radius: 1.5rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--glass);
+  border: 1px solid var(--line);
 }
 
 /* ================= PRODUCT SECTION ================= */
@@ -254,7 +255,7 @@
 .product-text {
   font-size: 1.05rem;
   line-height: 1.75;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--muted);
   max-width: 520px;
 }
 
@@ -265,9 +266,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--subtle);
   font-weight: 600;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--line-strong);
   backdrop-filter: blur(20px);
 }
 
@@ -276,12 +277,12 @@
 .review-image-placeholder {
   height: 320px;
   border-radius: 28px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--glass);
+  border: 1px solid var(--line-strong);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--subtle);
   font-weight: 600;
   backdrop-filter: blur(18px);
 }
@@ -289,7 +290,7 @@
 .review-quote {
   font-size: 1.25rem;
   line-height: 1.8;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--content);
 }
 
 .review-author {
@@ -301,5 +302,5 @@
 
 .review-author span {
   font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--subtle);
 }
