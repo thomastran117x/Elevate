@@ -152,24 +152,20 @@ public class ProfileEndpointsTests
     {
         await using var app = await AuthApiTestApp.CreateAsync();
 
-        // First user claims the username.
-        var owner = await app.SeedUserAsync("username-owner@example.com");
-        await app.SeedKnownDeviceAsync(owner.Id, "owner-device");
-        var ownerSession = await app.LoginApiAsync(
-            "username-owner@example.com",
-            trustedDeviceToken: "owner-device");
-
-        var claim = new HttpRequestMessage(HttpMethod.Patch, "/api/profile")
+        // An existing account already owns the username.
+        var existing = await app.SeedUserAsync("username-owner@example.com");
+        await app.QueryDbAsync(async db =>
         {
-            Content = JsonContent.Create(new UpdateProfileRequest { Username = "takenname" })
-        };
-        await AddAuthAndCsrfAsync(app, claim, ownerSession.AccessToken);
-        (await app.Client.SendAsync(claim)).StatusCode.Should().Be(HttpStatusCode.OK);
+            var user = await db.Users.FindAsync(existing.Id);
+            user!.Username = "takenname";
+            await db.SaveChangesAsync();
+            return true;
+        });
 
-        // Second user tries to take the same username.
-        var other = await app.SeedUserAsync("username-other@example.com");
-        await app.SeedKnownDeviceAsync(other.Id, "other-device");
-        var otherSession = await app.LoginApiAsync(
+        // A different user, signed in, tries to claim the same username.
+        var actor = await app.SeedUserAsync("username-other@example.com");
+        await app.SeedKnownDeviceAsync(actor.Id, "other-device");
+        var session = await app.LoginApiAsync(
             "username-other@example.com",
             trustedDeviceToken: "other-device");
 
@@ -177,7 +173,7 @@ public class ProfileEndpointsTests
         {
             Content = JsonContent.Create(new UpdateProfileRequest { Username = "takenname" })
         };
-        await AddAuthAndCsrfAsync(app, conflict, otherSession.AccessToken);
+        await AddAuthAndCsrfAsync(app, conflict, session.AccessToken);
         var response = await app.Client.SendAsync(conflict);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
