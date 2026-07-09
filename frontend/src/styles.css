@@ -1,2 +1,109 @@
 @import 'tailwindcss';
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* ---- Semantic theme tokens: light (default) ---- */
+:root {
+  /* Surfaces */
+  --surface: #eef2ff; /* page bg (indigo-50) */
+  --surface-raised: #ffffff; /* dropdowns, modals, solid cards */
+  --surface-sunken: #f3f1fb; /* inputs, code, wells */
+
+  /* Glass (translucent) */
+  --glass: rgba(20, 13, 42, 0.04);
+  --glass-strong: rgba(20, 13, 42, 0.07);
+  --glass-border: rgba(20, 13, 42, 0.1);
+
+  /* Lines / borders */
+  --line: rgba(20, 13, 42, 0.08);
+  --line-strong: rgba(20, 13, 42, 0.14);
+
+  /* Content (text / icons) */
+  --content: #140d2a;
+  --muted: rgba(20, 13, 42, 0.7);
+  --subtle: rgba(20, 13, 42, 0.55);
+  --faint: rgba(20, 13, 42, 0.4);
+
+  /* Accent (brand) */
+  --accent: #7c3aed; /* violet-600, readable on light */
+  --accent-contrast: #ffffff;
+
+  /* Inverse (high-contrast neutral chip / button) */
+  --inverse: #140d2a;
+  --inverse-content: #ffffff;
+
+  /* Semantic states */
+  --danger: #dc2626;
+  --danger-content: #b91c1c;
+  --success: #059669;
+  --warning: #d97706;
+
+  /* Feature-page gradient */
+  --gradient-page: linear-gradient(to bottom right, #eef2ff, #f3f1fb 45%, #faf5ff);
+}
+
+/* ---- Semantic theme tokens: dark overrides ---- */
+.dark {
+  --surface: #0f0a1c;
+  --surface-raised: #140d2a;
+  --surface-sunken: #0b0713;
+
+  --glass: rgba(255, 255, 255, 0.05);
+  --glass-strong: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.1);
+
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.16);
+
+  --content: #f8fafc;
+  --muted: rgba(255, 255, 255, 0.72);
+  --subtle: rgba(255, 255, 255, 0.55);
+  --faint: rgba(255, 255, 255, 0.4);
+
+  --accent: #c084fc; /* purple-400 */
+  --accent-contrast: #ffffff;
+
+  --inverse: #ffffff;
+  --inverse-content: #020617; /* slate-950 */
+
+  --danger: #f87171;
+  --danger-content: #fecaca;
+  --success: #34d399;
+  --warning: #fbbf24;
+
+  --gradient-page: linear-gradient(to bottom right, #0b0822, #160f3d 50%, #24135f);
+}
+
+/* ---- Map raw tokens -> Tailwind color utilities ---- */
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+
+  --color-glass: var(--glass);
+  --color-glass-strong: var(--glass-strong);
+  --color-glass-border: var(--glass-border);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-content: var(--content);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-faint: var(--faint);
+
+  --color-accent: var(--accent);
+  --color-accent-contrast: var(--accent-contrast);
+
+  --color-inverse: var(--inverse);
+  --color-inverse-content: var(--inverse-content);
+
+  --color-danger: var(--danger);
+  --color-danger-content: var(--danger-content);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+}
+
+/* Page-surface helper for gradient feature pages */
+.bg-page {
+  background-image: var(--gradient-page);
+}
