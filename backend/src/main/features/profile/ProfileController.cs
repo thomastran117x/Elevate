@@ -133,6 +133,10 @@ namespace backend.main.features.profile
         }
 
         [HttpPost("avatar")]
+        // Raise the per-request cap above Kestrel's 1 MB global default to match the 5 MB
+        // avatar limit enforced by AvatarUploadRequest; otherwise larger uploads are rejected
+        // by the server before model validation runs.
+        [RequestSizeLimit(5 * 1024 * 1024)]
         [ProducesResponseType(typeof(ApiResponse<MyProfileResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UploadAvatar([FromForm] AvatarUploadRequest request)
         {

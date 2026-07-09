@@ -7,6 +7,7 @@ namespace backend.main.features.profile
     {
         Task<User?> UpdateUserAsync(int id, User updated);
         Task<User?> UpdatePartialAsync(User user);
+        Task<bool> UsernameExistsAsync(string username, int excludeUserId);
         Task<bool> DeleteUserAsync(int id);
         /// <summary>
         /// Returns a sanitized User aggregate for non-auth workflows. Password is always null.

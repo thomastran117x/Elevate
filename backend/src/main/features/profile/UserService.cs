@@ -75,6 +75,12 @@ namespace backend.main.features.profile
 
         public async Task<User?> UpdateUserAsync(int id, User updatedUser)
         {
+            if (!string.IsNullOrWhiteSpace(updatedUser.Username)
+                && await _userRepository.UsernameExistsAsync(updatedUser.Username, id))
+            {
+                throw new ConflictException($"The username '{updatedUser.Username}' is already taken.");
+            }
+
             var existingUser = await _userRepository.UpdatePartialAsync(updatedUser);
             if (existingUser == null)
                 throw new ResourceNotFoundException($"User with the id {id} is not found");

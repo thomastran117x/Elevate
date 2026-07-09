@@ -147,6 +147,43 @@ public class ProfileEndpointsTests
         (await app.FindUserByEmailAsync("delete-user@example.com")).Should().BeNull();
     }
 
+    [Fact]
+    public async Task UpdateProfile_WithUsernameTakenByAnother_ShouldReturnConflict()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+
+        // First user claims the username.
+        var owner = await app.SeedUserAsync("username-owner@example.com");
+        await app.SeedKnownDeviceAsync(owner.Id, "owner-device");
+        var ownerSession = await app.LoginApiAsync(
+            "username-owner@example.com",
+            trustedDeviceToken: "owner-device");
+
+        var claim = new HttpRequestMessage(HttpMethod.Patch, "/api/profile")
+        {
+            Content = JsonContent.Create(new UpdateProfileRequest { Username = "takenname" })
+        };
+        await AddAuthAndCsrfAsync(app, claim, ownerSession.AccessToken);
+        (await app.Client.SendAsync(claim)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Second user tries to take the same username.
+        var other = await app.SeedUserAsync("username-other@example.com");
+        await app.SeedKnownDeviceAsync(other.Id, "other-device");
+        var otherSession = await app.LoginApiAsync(
+            "username-other@example.com",
+            trustedDeviceToken: "other-device");
+
+        var conflict = new HttpRequestMessage(HttpMethod.Patch, "/api/profile")
+        {
+            Content = JsonContent.Create(new UpdateProfileRequest { Username = "takenname" })
+        };
+        await AddAuthAndCsrfAsync(app, conflict, otherSession.AccessToken);
+        var response = await app.Client.SendAsync(conflict);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("already taken");
+    }
+
     private static async Task AddAuthAndCsrfAsync(
         AuthApiTestApp app,
         HttpRequestMessage request,
