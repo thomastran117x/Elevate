@@ -10,6 +10,7 @@ import { AuthService } from '../../features/auth/services/auth.service';
 import { AuthTokenService } from '../../core/api/services/auth-token.service';
 import { FeatureFlagsService } from '../../core/features/feature-flags.service';
 import { FEATURE_KEYS } from '../../core/features/feature-flags.types';
+import { ThemeService } from '../../core/services/theme.service';
 
 @Component({
   selector: 'app-navbar',
@@ -32,6 +33,7 @@ export class NavbarComponent {
     private auth: AuthService,
     private authToken: AuthTokenService,
     private featureFlags: FeatureFlagsService,
+    protected theme: ThemeService,
   ) {
     this.user$ = this.store.select(selectUser);
     this.authEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.auth);
@@ -45,6 +47,10 @@ export class NavbarComponent {
 
   toggleMobile() {
     this.mobileOpen = !this.mobileOpen;
+  }
+
+  toggleTheme() {
+    this.theme.toggle();
   }
 
   toggleCustomers() {
