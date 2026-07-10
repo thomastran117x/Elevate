@@ -1,13 +1,13 @@
 <section class="min-h-screen bg-surface px-4 py-8 text-content">
   <div class="mx-auto max-w-6xl space-y-6">
     <div
-      class="rounded-[2rem] border border-line bg-[radial-gradient(circle_at_top_right,_rgba(14,165,233,0.18),_transparent_32%),linear-gradient(135deg,_#111827,_#0a0a0a)] p-6 shadow-2xl shadow-black/30"
+      class="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_right,_rgba(14,165,233,0.18),_transparent_32%),linear-gradient(135deg,_#111827,_#0a0a0a)] p-6 shadow-2xl shadow-black/30"
     >
       <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p class="text-xs uppercase tracking-[0.35em] text-subtle">Lifecycle Editor</p>
+          <p class="text-xs uppercase tracking-[0.35em] text-white/60">Lifecycle Editor</p>
           <div class="mt-3 flex flex-wrap items-center gap-3">
-            <h1 class="text-3xl font-semibold text-content">
+            <h1 class="text-3xl font-semibold text-white">
               {{ event?.name || 'New event draft' }}
             </h1>
             <span
@@ -17,7 +17,7 @@
               {{ lifecycleState }}
             </span>
           </div>
-          <p class="mt-3 max-w-2xl text-sm text-muted">
+          <p class="mt-3 max-w-2xl text-sm text-white/70">
             Save partial details privately, then publish only when the event is complete enough for
             attendees to see.
           </p>
@@ -27,7 +27,7 @@
           @if (clubId) {
             <a
               [routerLink]="['/events/clubs', clubId, 'manage']"
-              class="rounded-full border border-line px-4 py-2 text-sm text-muted transition hover:border-line-strong hover:bg-surface-raised"
+              class="rounded-full border border-white/15 px-4 py-2 text-sm text-white/70 transition hover:border-white/25 hover:bg-white/10"
             >
               Back to club events
             </a>
@@ -210,7 +210,7 @@
               type="button"
               (click)="saveDraft()"
               [disabled]="saving || uploading"
-              class="rounded-full bg-sky-300 px-5 py-3 text-sm font-semibold text-content transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+              class="rounded-full bg-sky-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {{ saving ? 'Saving...' : eventId ? 'Save draft' : 'Create draft' }}
             </button>

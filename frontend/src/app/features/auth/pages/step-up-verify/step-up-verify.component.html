@@ -1,9 +1,9 @@
 <section
-  class="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),_transparent_45%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_100%)] text-content"
+  class="min-h-screen bg-page text-content"
 >
   <div class="mx-auto flex max-w-4xl flex-col gap-8 px-6 py-14">
     <div class="space-y-3">
-      <p class="text-sm font-semibold uppercase tracking-[0.28em] text-sky-700">
+      <p class="text-sm font-semibold uppercase tracking-[0.28em] text-accent">
         Verify this sign-in
       </p>
       <h1 class="text-4xl font-black tracking-tight text-content">New device check</h1>
@@ -18,7 +18,7 @@
     >
       <div class="flex flex-col gap-6">
         <div class="rounded-3xl bg-surface px-6 py-6 text-content">
-          <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-200">
+          <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
             Available methods
           </p>
           <h2 class="mt-2 text-2xl font-bold">Choose how to verify</h2>
@@ -60,15 +60,15 @@
               type="button"
               class="rounded-3xl border px-6 py-5 text-left transition"
               [ngClass]="{
-                'border-sky-400 bg-sky-50 shadow-[0_15px_40px_rgba(14,165,233,0.12)]':
+                'border-accent/60 bg-accent/10 shadow-lg shadow-accent/10':
                   isEmailActive,
-                'border-line bg-surface-raised hover:border-sky-300 hover:bg-sky-50/50':
+                'border-line bg-surface-raised hover:border-accent/40 hover:bg-accent/5':
                   !isEmailActive,
               }"
               [disabled]="status() === 'starting'"
               (click)="selectMethod('email')"
             >
-              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
                 Email link
               </p>
               <h3 class="mt-2 text-xl font-bold text-content">Use email</h3>
@@ -81,15 +81,15 @@
                 type="button"
                 class="rounded-3xl border px-6 py-5 text-left transition"
                 [ngClass]="{
-                  'border-sky-400 bg-sky-50 shadow-[0_15px_40px_rgba(14,165,233,0.12)]':
+                  'border-accent/60 bg-accent/10 shadow-lg shadow-accent/10':
                     isSmsActive,
-                  'border-line bg-surface-raised hover:border-sky-300 hover:bg-sky-50/50':
+                  'border-line bg-surface-raised hover:border-accent/40 hover:bg-accent/5':
                     !isSmsActive,
                 }"
                 [disabled]="status() === 'starting'"
                 (click)="selectMethod('sms')"
               >
-                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
                   SMS code
                 </p>
                 <h3 class="mt-2 text-xl font-bold text-content">Use text message</h3>
@@ -103,15 +103,15 @@
                 type="button"
                 class="rounded-3xl border px-6 py-5 text-left transition"
                 [ngClass]="{
-                  'border-sky-400 bg-sky-50 shadow-[0_15px_40px_rgba(14,165,233,0.12)]':
+                  'border-accent/60 bg-accent/10 shadow-lg shadow-accent/10':
                     isTotpActive,
-                  'border-line bg-surface-raised hover:border-sky-300 hover:bg-sky-50/50':
+                  'border-line bg-surface-raised hover:border-accent/40 hover:bg-accent/5':
                     !isTotpActive,
                 }"
                 [disabled]="status() === 'starting'"
                 (click)="selectMethod('totp')"
               >
-                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
                   Authenticator app
                 </p>
                 <h3 class="mt-2 text-xl font-bold text-content">Use authenticator</h3>
@@ -132,12 +132,12 @@
 
         @if (isSmsActive || isTotpActive) {
           <form
-            class="space-y-5 rounded-3xl border border-sky-200 bg-sky-50 px-6 py-6"
+            class="space-y-5 rounded-3xl border border-accent/30 bg-accent/10 px-6 py-6"
             [formGroup]="codeForm"
             (ngSubmit)="verifyCode()"
           >
             <div class="space-y-2">
-              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
                 Enter code
               </p>
               <h3 class="text-2xl font-bold text-content">
@@ -168,7 +168,7 @@
                 maxlength="6"
                 formControlName="code"
                 placeholder="123456"
-                class="w-full rounded-2xl border border-line bg-surface-raised px-4 py-3 text-base tracking-[0.35em] text-content outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                class="w-full rounded-2xl border border-line bg-surface-raised px-4 py-3 text-base tracking-[0.35em] text-content outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/20"
               />
               @if (codeForm.controls.code.invalid && codeForm.controls.code.touched) {
                 <p class="text-sm text-danger">Enter the 6-digit security code.</p>
