@@ -1,5 +1,5 @@
 <div
-  class="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-8 text-center"
+  class="rounded-3xl border border-line bg-glass backdrop-blur p-8 text-center"
   [class]="className"
 >
   <div class="mx-auto w-fit">
@@ -8,8 +8,8 @@
     </icon-shell>
   </div>
 
-  <div class="mt-4 text-lg font-bold text-white/90">{{ title }}</div>
-  <div class="mt-1 text-sm text-white/60 max-w-md mx-auto">{{ subtitle }}</div>
+  <div class="mt-4 text-lg font-bold text-content">{{ title }}</div>
+  <div class="mt-1 text-sm text-subtle max-w-md mx-auto">{{ subtitle }}</div>
 
   @if (primaryLabel) {
     <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">

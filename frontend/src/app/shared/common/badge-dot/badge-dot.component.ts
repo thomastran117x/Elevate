@@ -16,11 +16,11 @@ export class BadgeDotComponent {
   get dotClass() {
     const base = 'h-2 w-2 rounded-full';
     const tones: Record<Tone, string> = {
-      neutral: 'bg-white/40',
-      success: 'bg-emerald-400',
-      warning: 'bg-amber-400',
-      danger: 'bg-red-400',
-      accent: 'bg-fuchsia-400',
+      neutral: 'bg-surface-raised/40',
+      success: 'bg-success',
+      warning: 'bg-warning',
+      danger: 'bg-danger',
+      accent: 'bg-accent',
     };
     return `${base} ${tones[this.tone]}`;
   }

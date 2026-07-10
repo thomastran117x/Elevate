@@ -1,14 +1,14 @@
 <nav aria-label="Breadcrumb" class="text-sm" [class]="className">
-  <ol class="flex flex-wrap items-center gap-2 text-white/60">
+  <ol class="flex flex-wrap items-center gap-2 text-subtle">
     @for (c of items; track c; let last = $last) {
       <li class="flex items-center gap-2">
         @if (!last && c.href) {
-          <a [routerLink]="c.href" class="hover:text-white/90 transition">{{ c.label }}</a>
+          <a [routerLink]="c.href" class="hover:text-content transition">{{ c.label }}</a>
         } @else {
-          <span [class]="last ? 'text-white/85 font-semibold' : ''">{{ c.label }}</span>
+          <span [class]="last ? 'text-content font-semibold' : ''">{{ c.label }}</span>
         }
         @if (!last) {
-          <span class="text-white/30">/</span>
+          <span class="text-faint">/</span>
         }
       </li>
     }

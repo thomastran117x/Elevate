@@ -17,8 +17,8 @@ export class DividerComponent {
   get lineClass() {
     const base = 'h-px w-full';
     const tones: Record<DividerTone, string> = {
-      subtle: 'bg-white/10',
-      strong: 'bg-white/18',
+      subtle: 'bg-glass-strong',
+      strong: 'bg-surface-raised/18',
     };
     return `${base} ${tones[this.tone]}`;
   }

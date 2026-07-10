@@ -35,10 +35,10 @@ export class AppInputComponent {
     const base = 'flex items-center gap-2 rounded-xl border px-3 py-2 transition';
     const tone =
       this.tone === 'glass'
-        ? 'bg-slate-950/50 border-white/10 focus-within:border-fuchsia-300/25 focus-within:ring-2 focus-within:ring-fuchsia-500/15'
-        : 'bg-slate-950 border-white/10 focus-within:border-fuchsia-300/25 focus-within:ring-2 focus-within:ring-fuchsia-500/15';
+        ? 'bg-surface-sunken border-line focus-within:border-accent/25 focus-within:ring-2 focus-within:ring-accent/15'
+        : 'bg-surface border-line focus-within:border-accent/25 focus-within:ring-2 focus-within:ring-accent/15';
 
-    const err = this.error ? 'border-red-300/25 ring-2 ring-red-500/10' : '';
+    const err = this.error ? 'border-danger/25 ring-2 ring-danger/10' : '';
     const dis = this.disabled ? 'opacity-60 cursor-not-allowed' : '';
 
     return `${base} ${tone} ${err} ${dis}`.trim();
@@ -46,7 +46,7 @@ export class AppInputComponent {
 
   get inputClass() {
     return (
-      'w-full bg-transparent outline-none text-sm text-white placeholder:text-white/40 ' +
+      'w-full bg-transparent outline-none text-sm text-content placeholder:text-faint ' +
       'disabled:cursor-not-allowed'
     );
   }

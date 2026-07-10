@@ -1,13 +1,13 @@
 <div [class]="wrapperClass">
   @if (label) {
-    <label class="text-xs font-semibold text-white/80">
+    <label class="text-xs font-semibold text-muted">
       {{ label }}
     </label>
   }
 
   <div [class]="fieldWrapClass">
     @if (prefix) {
-      <span class="text-white/50 text-sm">{{ prefix }}</span>
+      <span class="text-subtle text-sm">{{ prefix }}</span>
     }
 
     <input
@@ -20,14 +20,14 @@
     />
 
     @if (suffix) {
-      <span class="text-white/50 text-sm">{{ suffix }}</span>
+      <span class="text-subtle text-sm">{{ suffix }}</span>
     }
   </div>
 
   @if (error) {
-    <p class="text-xs text-red-200/90">{{ error }}</p>
+    <p class="text-xs text-danger">{{ error }}</p>
   }
   @if (!error && hint) {
-    <p class="text-xs text-white/55">{{ hint }}</p>
+    <p class="text-xs text-subtle">{{ hint }}</p>
   }
 </div>
