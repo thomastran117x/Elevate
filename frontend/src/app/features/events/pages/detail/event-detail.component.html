@@ -1,4 +1,4 @@
-<div class="min-h-screen bg-slate-950 text-white overflow-x-hidden overflow-y-visible relative">
+<div class="min-h-screen bg-surface text-content overflow-x-hidden overflow-y-visible relative">
   <div class="pointer-events-none absolute inset-0">
     <div
       class="absolute -top-24 left-1/2 -translate-x-1/2 h-[520px] w-[920px] rounded-full bg-gradient-to-r from-purple-600/35 via-fuchsia-500/25 to-indigo-500/25 blur-3xl"
@@ -26,7 +26,7 @@
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <button
           type="button"
-          class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
+          class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-line bg-glass px-4 py-2 text-sm font-medium text-muted transition hover:bg-glass-strong"
           (click)="goBack()"
         >
           <span>&larr;</span>
@@ -42,13 +42,13 @@
               {{ event.category }}
             </span>
             <span
-              class="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-white/75"
+              class="rounded-full border border-line bg-glass px-2.5 py-1 text-xs text-muted"
             >
               {{ event.status }}
             </span>
             @if (event.isPrivate) {
               <span
-                class="rounded-full border border-amber-300/20 bg-amber-400/10 px-2.5 py-1 text-xs text-amber-200"
+                class="rounded-full border border-warning/20 bg-warning/10 px-2.5 py-1 text-xs text-warning"
               >
                 Private event
               </span>
@@ -60,19 +60,19 @@
       @if (loading) {
         <div class="mt-8 grid gap-6 lg:grid-cols-12">
           <div
-            class="lg:col-span-7 h-[420px] rounded-3xl border border-white/10 bg-white/5 animate-pulse"
+            class="lg:col-span-7 h-[420px] rounded-3xl border border-line bg-glass animate-pulse"
           ></div>
           <div class="lg:col-span-5 space-y-4">
-            <div class="h-32 rounded-3xl border border-white/10 bg-white/5 animate-pulse"></div>
-            <div class="h-64 rounded-3xl border border-white/10 bg-white/5 animate-pulse"></div>
+            <div class="h-32 rounded-3xl border border-line bg-glass animate-pulse"></div>
+            <div class="h-64 rounded-3xl border border-line bg-glass animate-pulse"></div>
           </div>
         </div>
       }
 
       @if (error && !loading) {
-        <div class="mt-8 rounded-3xl border border-rose-500/20 bg-rose-500/10 p-6 text-rose-200">
+        <div class="mt-8 rounded-3xl border border-danger/20 bg-danger/10 p-6 text-danger">
           <h1 class="text-xl font-semibold">We couldn't load this event</h1>
-          <p class="mt-2 text-sm text-rose-100/85">{{ error }}</p>
+          <p class="mt-2 text-sm text-danger/85">{{ error }}</p>
         </div>
       }
 
@@ -81,14 +81,14 @@
           <div class="lg:col-span-7 space-y-4">
             @if (event.lifecycleState === 'Cancelled') {
               <div
-                class="rounded-3xl border border-rose-400/30 bg-rose-500/10 p-5 text-sm text-rose-100"
+                class="rounded-3xl border border-danger/30 bg-danger/10 p-5 text-sm text-danger"
               >
                 This event has been cancelled. The details remain available here for attendees and
                 organizers, but it is no longer an active listing.
               </div>
             }
             <div
-              class="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl shadow-fuchsia-500/10"
+              class="relative overflow-hidden rounded-3xl border border-line bg-glass shadow-2xl shadow-fuchsia-500/10"
             >
               @if (heroImage) {
                 <div
@@ -105,12 +105,12 @@
                 ></div>
               }
               <div class="absolute inset-x-0 bottom-0 p-5 sm:p-6">
-                <div class="rounded-2xl border border-white/10 bg-slate-950/50 p-4 backdrop-blur">
-                  <p class="text-xs uppercase tracking-[0.18em] text-white/45">Event details</p>
+                <div class="rounded-2xl border border-line bg-surface-sunken p-4 backdrop-blur">
+                  <p class="text-xs uppercase tracking-[0.18em] text-faint">Event details</p>
                   <h1 class="mt-2 text-2xl font-extrabold tracking-tight sm:text-4xl">
                     {{ event.name }}
                   </h1>
-                  <p class="mt-3 max-w-2xl text-sm leading-relaxed text-white/70">
+                  <p class="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
                     {{ event.description || 'No description provided yet.' }}
                   </p>
                 </div>
@@ -124,8 +124,8 @@
                     class="cursor-pointer overflow-hidden rounded-2xl border transition"
                     [ngClass]="
                       index === selectedImageIndex
-                        ? 'border-white/30 bg-white/10'
-                        : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
+                        ? 'border-white/30 bg-glass-strong'
+                        : 'border-line bg-glass hover:border-line-strong hover:bg-glass-strong'
                     "
                     (click)="selectImage(index)"
                   >
@@ -141,16 +141,16 @@
                 }
               </div>
             }
-            <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+            <div class="rounded-3xl border border-line bg-glass p-6 backdrop-blur">
               <h2 class="text-lg font-semibold">About this event</h2>
-              <p class="mt-3 text-sm leading-7 text-white/70">
+              <p class="mt-3 text-sm leading-7 text-muted">
                 {{ event.description || 'No description provided yet.' }}
               </p>
               @if (event.tags.length > 0) {
                 <div class="mt-5 flex flex-wrap gap-2">
                   @for (tag of event.tags; track tag) {
                     <span
-                      class="rounded-full border border-white/10 bg-slate-950/35 px-3 py-1 text-xs text-white/65"
+                      class="rounded-full border border-line bg-surface-sunken px-3 py-1 text-xs text-subtle"
                     >
                       #{{ tag }}
                     </span>
@@ -161,43 +161,43 @@
           </div>
           <div class="lg:col-span-5 space-y-4">
             <div
-              class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur shadow-2xl shadow-purple-500/10"
+              class="rounded-3xl border border-line bg-glass p-6 backdrop-blur shadow-2xl shadow-purple-500/10"
             >
               <div class="grid grid-cols-2 gap-3">
-                <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
-                  <div class="text-xs text-white/55">Price</div>
+                <div class="rounded-2xl border border-line bg-surface-sunken p-4">
+                  <div class="text-xs text-subtle">Price</div>
                   <div class="mt-1 text-xl font-bold">{{ formatCost(event.registerCost) }}</div>
                 </div>
-                <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
-                  <div class="text-xs text-white/55">Hosted by</div>
+                <div class="rounded-2xl border border-line bg-surface-sunken p-4">
+                  <div class="text-xs text-subtle">Hosted by</div>
                   <div class="mt-1 text-base font-bold">
                     {{ event.club?.name || 'Club #' + event.clubId }}
                   </div>
                   @if (event.club?.clubType) {
-                    <div class="mt-1 text-xs text-white/55">{{ event.club?.clubType }} club</div>
+                    <div class="mt-1 text-xs text-subtle">{{ event.club?.clubType }} club</div>
                   }
                 </div>
               </div>
               <div class="mt-5 space-y-4">
                 <div>
-                  <div class="text-xs uppercase tracking-[0.18em] text-white/45">Schedule</div>
-                  <div class="mt-2 text-sm leading-6 text-white/80">
+                  <div class="text-xs uppercase tracking-[0.18em] text-faint">Schedule</div>
+                  <div class="mt-2 text-sm leading-6 text-muted">
                     {{ formatSchedule(event) }}
                   </div>
                 </div>
                 <div>
-                  <div class="text-xs uppercase tracking-[0.18em] text-white/45">Location</div>
-                  <div class="mt-2 text-sm leading-6 text-white/80">
+                  <div class="text-xs uppercase tracking-[0.18em] text-faint">Location</div>
+                  <div class="mt-2 text-sm leading-6 text-muted">
                     <div>{{ event.venueName || event.location || 'Venue TBD' }}</div>
-                    <div class="text-white/60">
+                    <div class="text-subtle">
                       {{ event.city || event.location || 'Location details coming soon' }}
                     </div>
                   </div>
                 </div>
                 @if (event.latitude != null && event.longitude != null) {
                   <div>
-                    <div class="text-xs uppercase tracking-[0.18em] text-white/45">Coordinates</div>
-                    <div class="mt-2 text-sm text-white/70">
+                    <div class="text-xs uppercase tracking-[0.18em] text-faint">Coordinates</div>
+                    <div class="mt-2 text-sm text-muted">
                       {{ event.latitude | number: '1.3-3' }},
                       {{ event.longitude | number: '1.3-3' }}
                     </div>
@@ -206,10 +206,10 @@
               </div>
             </div>
             @if (event.club) {
-              <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+              <div class="rounded-3xl border border-line bg-glass p-6 backdrop-blur">
                 <div class="flex items-start gap-4">
                   <div
-                    class="h-16 w-16 flex-shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/35"
+                    class="h-16 w-16 flex-shrink-0 overflow-hidden rounded-2xl border border-line bg-surface-sunken"
                   >
                     @if (event.club.clubImage) {
                       <img
@@ -219,7 +219,7 @@
                       />
                     } @else {
                       <div
-                        class="flex h-full w-full items-center justify-center bg-gradient-to-br from-purple-500/25 to-fuchsia-500/20 text-lg font-bold text-white/70"
+                        class="flex h-full w-full items-center justify-center bg-gradient-to-br from-purple-500/25 to-fuchsia-500/20 text-lg font-bold text-muted"
                       >
                         {{ event.club.name.charAt(0) }}
                       </div>
@@ -229,34 +229,34 @@
                     <div class="flex flex-wrap items-center gap-2">
                       <h2 class="text-lg font-semibold">{{ event.club.name }}</h2>
                       <span
-                        class="rounded-full border border-white/10 bg-slate-950/35 px-2 py-0.5 text-[11px] text-white/60"
+                        class="rounded-full border border-line bg-surface-sunken px-2 py-0.5 text-[11px] text-subtle"
                       >
                         {{ event.club.clubType }}
                       </span>
                       @if (event.club.rating != null) {
                         <span
-                          class="rounded-full border border-white/10 bg-slate-950/35 px-2 py-0.5 text-[11px] text-white/60"
+                          class="rounded-full border border-line bg-surface-sunken px-2 py-0.5 text-[11px] text-subtle"
                         >
                           {{ event.club.rating | number: '1.1-1' }} rating
                         </span>
                       }
                     </div>
-                    <p class="mt-2 text-sm leading-7 text-white/70">
+                    <p class="mt-2 text-sm leading-7 text-muted">
                       {{ event.club.description || 'Host club details are not available yet.' }}
                     </p>
                     <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                      <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
-                        <div class="text-xs text-white/55">Members</div>
+                      <div class="rounded-2xl border border-line bg-surface-sunken p-4">
+                        <div class="text-xs text-subtle">Members</div>
                         <div class="mt-1 text-lg font-semibold">{{ event.club.memberCount }}</div>
                       </div>
-                      <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
-                        <div class="text-xs text-white/55">Active events</div>
+                      <div class="rounded-2xl border border-line bg-surface-sunken p-4">
+                        <div class="text-xs text-subtle">Active events</div>
                         <div class="mt-1 text-lg font-semibold">
                           {{ event.club.availableEventCount }}
                         </div>
                       </div>
                     </div>
-                    <div class="mt-4 space-y-1 text-sm text-white/65">
+                    <div class="mt-4 space-y-1 text-sm text-subtle">
                       @if (event.club.location) {
                         <div>Location: {{ event.club.location }}</div>
                       }
@@ -274,13 +274,13 @@
                 </div>
               </div>
             }
-            <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+            <div class="rounded-3xl border border-line bg-glass p-6 backdrop-blur">
               <!-- Progress bar — only when there's a cap -->
               @if (event.maxParticipants > 0) {
                 <div class="flex items-center justify-between gap-3">
                   <div>
                     <div class="text-sm font-semibold">Registration progress</div>
-                    <div class="mt-1 text-xs text-white/55">
+                    <div class="mt-1 text-xs text-subtle">
                       {{ event.registrationCount }} of {{ event.maxParticipants }} spots filled
                     </div>
                   </div>
@@ -288,24 +288,24 @@
                     {{ registrationPercent(event) | number: '1.0-0' }}%
                   </div>
                 </div>
-                <div class="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+                <div class="mt-4 h-2 overflow-hidden rounded-full bg-glass-strong">
                   <div
                     class="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500"
                     [style.width.%]="registrationPercent(event)"
                   ></div>
                 </div>
-                <div class="mt-4 mb-2 border-t border-white/10"></div>
+                <div class="mt-4 mb-2 border-t border-line"></div>
               }
               <!-- Unlimited capacity indicator -->
               @if (event.maxParticipants <= 0) {
-                <div class="text-sm text-white/55 mb-4">
+                <div class="text-sm text-subtle mb-4">
                   {{ event.registrationCount }} registered &bull; Unlimited spots
                 </div>
               }
               <!-- Registration error -->
               @if (registrationError) {
                 <div
-                  class="mb-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-200"
+                  class="mb-4 rounded-2xl border border-danger/20 bg-danger/10 p-3 text-sm text-danger"
                 >
                   {{ registrationError }}
                 </div>
@@ -313,7 +313,7 @@
               <!-- Not logged in -->
               @if (currentUserId === null && canRegister) {
                 <div
-                  class="rounded-2xl border border-white/10 bg-slate-950/35 p-4 text-sm text-white/70 text-center"
+                  class="rounded-2xl border border-line bg-surface-sunken p-4 text-sm text-muted text-center"
                 >
                   Sign in to register for this event.
                 </div>
@@ -323,7 +323,7 @@
                 <!-- Registration form (register or edit) -->
                 @if (showRegistrationForm) {
                   <div class="space-y-3">
-                    <div class="text-sm font-semibold text-white/80">
+                    <div class="text-sm font-semibold text-muted">
                       {{
                         isEditing
                           ? 'Update your registration details'
@@ -332,36 +332,36 @@
                     </div>
                     <div [formGroup]="registrationForm" class="space-y-3">
                       <div>
-                        <label class="block text-xs text-white/55 mb-1"
+                        <label class="block text-xs text-subtle mb-1"
                           >Notes for organizer (optional)</label
                         >
                         <input
                           formControlName="notes"
                           type="text"
                           placeholder="e.g. dietary requirements, questions..."
-                          class="w-full rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50"
+                          class="w-full rounded-xl border border-line bg-surface-sunken px-3 py-2 text-sm text-content placeholder:text-faint focus:outline-none focus:border-purple-500/50"
                         />
                       </div>
                       <div>
-                        <label class="block text-xs text-white/55 mb-1"
+                        <label class="block text-xs text-subtle mb-1"
                           >Phone number (optional)</label
                         >
                         <input
                           formControlName="phoneNumber"
                           type="tel"
                           placeholder="e.g. 416-555-0123"
-                          class="w-full rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50"
+                          class="w-full rounded-xl border border-line bg-surface-sunken px-3 py-2 text-sm text-content placeholder:text-faint focus:outline-none focus:border-purple-500/50"
                         />
                       </div>
                       <div>
-                        <label class="block text-xs text-white/55 mb-1"
+                        <label class="block text-xs text-subtle mb-1"
                           >Dietary / accessibility needs (optional)</label
                         >
                         <input
                           formControlName="dietaryNeeds"
                           type="text"
                           placeholder="e.g. vegetarian, wheelchair access..."
-                          class="w-full rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50"
+                          class="w-full rounded-xl border border-line bg-surface-sunken px-3 py-2 text-sm text-content placeholder:text-faint focus:outline-none focus:border-purple-500/50"
                         />
                       </div>
                     </div>
@@ -370,7 +370,7 @@
                         type="button"
                         [disabled]="registrationLoading"
                         (click)="isEditing ? submitUpdate() : submitRegistration()"
-                        class="flex-1 rounded-2xl bg-gradient-to-r from-purple-500/30 to-fuchsia-500/30 border border-purple-500/30 px-4 py-2.5 text-sm font-semibold text-white transition hover:from-purple-500/40 hover:to-fuchsia-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="flex-1 rounded-2xl bg-gradient-to-r from-purple-500/30 to-fuchsia-500/30 border border-purple-500/30 px-4 py-2.5 text-sm font-semibold text-content transition hover:from-purple-500/40 hover:to-fuchsia-500/40 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         @if (!registrationLoading) {
                           <span>{{ isEditing ? 'Save changes' : 'Confirm registration' }}</span>
@@ -382,7 +382,7 @@
                       <button
                         type="button"
                         (click)="closeRegistrationForm()"
-                        class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white/70 transition hover:bg-white/10"
+                        class="rounded-2xl border border-line bg-glass px-4 py-2.5 text-sm text-muted transition hover:bg-glass-strong"
                       >
                         Cancel
                       </button>
@@ -393,14 +393,14 @@
                 @if (isRegistered && !showRegistrationForm) {
                   <div class="space-y-2">
                     <div
-                      class="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200 text-center"
+                      class="rounded-2xl border border-success/20 bg-success/10 px-4 py-3 text-sm text-success text-center"
                     >
                       You're registered for this event
                     </div>
                     <button
                       type="button"
                       (click)="openEditForm()"
-                      class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white/70 transition hover:bg-white/10"
+                      class="w-full rounded-2xl border border-line bg-glass px-4 py-2.5 text-sm text-muted transition hover:bg-glass-strong"
                     >
                       Edit my registration details
                     </button>
@@ -408,7 +408,7 @@
                       type="button"
                       [disabled]="registrationLoading"
                       (click)="unregister()"
-                      class="w-full rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      class="w-full rounded-2xl border border-danger/30 bg-danger/10 px-4 py-2.5 text-sm font-semibold text-danger transition hover:bg-danger/100/20 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       @if (!registrationLoading) {
                         <span>Unregister from event</span>
@@ -424,7 +424,7 @@
                   <button
                     type="button"
                     (click)="openRegistrationForm()"
-                    class="w-full rounded-2xl border border-purple-500/30 bg-gradient-to-r from-purple-500/20 to-fuchsia-500/20 px-4 py-3 text-sm font-semibold text-white transition hover:from-purple-500/30 hover:to-fuchsia-500/30"
+                    class="w-full rounded-2xl border border-purple-500/30 bg-gradient-to-r from-purple-500/20 to-fuchsia-500/20 px-4 py-3 text-sm font-semibold text-content transition hover:from-purple-500/30 hover:to-fuchsia-500/30"
                   >
                     Register for this event
                   </button>
@@ -432,7 +432,7 @@
                 <!-- Cannot register -->
                 @if (!isRegistered && !canRegister && !showRegistrationForm) {
                   <div
-                    class="rounded-2xl border border-white/10 bg-slate-950/35 p-4 text-sm text-white/50 text-center"
+                    class="rounded-2xl border border-line bg-surface-sunken p-4 text-sm text-subtle text-center"
                   >
                     @if (event.lifecycleState === 'Cancelled') {
                       This event has been cancelled.

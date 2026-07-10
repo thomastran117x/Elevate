@@ -1,85 +1,85 @@
-<div class="min-h-screen bg-slate-950 text-white">
+<div class="min-h-screen bg-surface text-content">
   <main class="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between gap-3">
       <div>
-        <p class="text-xs uppercase tracking-[0.18em] text-white/45">Organizer tools</p>
+        <p class="text-xs uppercase tracking-[0.18em] text-faint">Organizer tools</p>
         <h1 class="mt-2 text-3xl font-bold">Manage invitations</h1>
       </div>
       <a
         [routerLink]="['/events', eventId]"
-        class="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80"
+        class="rounded-xl border border-line bg-glass px-4 py-2 text-sm text-muted"
       >
         Back to event
       </a>
     </div>
 
     @if (error) {
-      <div class="mt-6 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-rose-100">
+      <div class="mt-6 rounded-2xl border border-danger/20 bg-danger/10 p-4 text-danger">
         {{ error }}
       </div>
     }
 
     <div class="mt-8 grid gap-6 lg:grid-cols-2">
-      <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
+      <section class="rounded-3xl border border-line bg-glass p-6">
         <h2 class="text-xl font-semibold">Invite people directly</h2>
         <form class="mt-5 space-y-4" [formGroup]="inviteForm" (ngSubmit)="submitInvites()">
           <label class="block text-sm">
-            <span class="mb-2 block text-white/70">Emails</span>
+            <span class="mb-2 block text-muted">Emails</span>
             <textarea
               formControlName="emails"
               rows="5"
-              class="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white"
+              class="w-full rounded-2xl border border-line bg-surface-sunken px-4 py-3 text-content"
             ></textarea>
           </label>
 
           <label class="block text-sm">
-            <span class="mb-2 block text-white/70">User IDs</span>
+            <span class="mb-2 block text-muted">User IDs</span>
             <input
               formControlName="userIds"
-              class="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white"
+              class="w-full rounded-2xl border border-line bg-surface-sunken px-4 py-3 text-content"
             />
           </label>
 
           <label class="block text-sm">
-            <span class="mb-2 block text-white/70">Expires at</span>
+            <span class="mb-2 block text-muted">Expires at</span>
             <input
               type="datetime-local"
               formControlName="expiresAt"
-              class="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white"
+              class="w-full rounded-2xl border border-line bg-surface-sunken px-4 py-3 text-content"
             />
           </label>
 
-          <button type="submit" class="rounded-xl bg-white px-4 py-2 font-medium text-slate-950">
+          <button type="submit" class="rounded-xl bg-surface-raised px-4 py-2 font-medium text-content">
             Create invitations
           </button>
         </form>
       </section>
 
-      <section class="rounded-3xl border border-white/10 bg-white/5 p-6">
+      <section class="rounded-3xl border border-line bg-glass p-6">
         <h2 class="text-xl font-semibold">Create shareable link</h2>
         <form class="mt-5 space-y-4" [formGroup]="linkForm" (ngSubmit)="submitLink()">
           <label class="block text-sm">
-            <span class="mb-2 block text-white/70">Max redemptions</span>
+            <span class="mb-2 block text-muted">Max redemptions</span>
             <input
               type="number"
               min="1"
               formControlName="maxRedemptions"
-              class="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white"
+              class="w-full rounded-2xl border border-line bg-surface-sunken px-4 py-3 text-content"
             />
           </label>
 
           <label class="block text-sm">
-            <span class="mb-2 block text-white/70">Expires at</span>
+            <span class="mb-2 block text-muted">Expires at</span>
             <input
               type="datetime-local"
               formControlName="expiresAt"
-              class="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white"
+              class="w-full rounded-2xl border border-line bg-surface-sunken px-4 py-3 text-content"
             />
           </label>
 
           <button
             type="submit"
-            class="rounded-xl bg-emerald-400 px-4 py-2 font-medium text-slate-950"
+            class="rounded-xl bg-success px-4 py-2 font-medium text-content"
           >
             Create link
           </button>
@@ -87,13 +87,13 @@
 
         @if (latestShareUrl) {
           <div
-            class="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-4 text-sm text-emerald-100"
+            class="mt-5 rounded-2xl border border-success/20 bg-success/10 p-4 text-sm text-success"
           >
             <div class="font-medium">Latest share URL</div>
             <div class="mt-2 break-all">{{ latestShareUrl }}</div>
             <button
               type="button"
-              class="mt-3 rounded-xl bg-white px-3 py-2 text-slate-950"
+              class="mt-3 rounded-xl bg-surface-raised px-3 py-2 text-content"
               (click)="copyShareUrl(latestShareUrl)"
             >
               Copy link
@@ -106,32 +106,32 @@
     @if (loading) {
       <div class="mt-8 grid gap-4 md:grid-cols-2">
         @for (item of [1, 2, 3]; track item) {
-          <div class="h-40 animate-pulse rounded-3xl bg-white/10"></div>
+          <div class="h-40 animate-pulse rounded-3xl bg-glass-strong"></div>
         }
       </div>
     }
 
     @if (!loading) {
       <section class="mt-8 grid gap-6 lg:grid-cols-2">
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div class="rounded-3xl border border-line bg-glass p-6">
           <h2 class="text-xl font-semibold">Invitations</h2>
           @if (invitations.length === 0) {
-            <div class="mt-4 text-sm text-white/60">No invitations yet.</div>
+            <div class="mt-4 text-sm text-subtle">No invitations yet.</div>
           }
           @for (invitation of invitations; track invitation) {
-            <div class="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+            <div class="mt-4 rounded-2xl border border-line bg-surface-sunken p-4">
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <div class="font-medium">
                     {{ invitation.recipientEmail || 'User #' + invitation.recipientUserId }}
                   </div>
-                  <div class="mt-1 text-sm text-white/60">
+                  <div class="mt-1 text-sm text-subtle">
                     {{ invitation.effectiveStatus }} · {{ invitation.deliveryStatus }}
                   </div>
                 </div>
                 <button
                   type="button"
-                  class="rounded-xl border border-white/10 px-3 py-2 text-sm"
+                  class="rounded-xl border border-line px-3 py-2 text-sm"
                   (click)="revokeInvitation(invitation)"
                 >
                   Revoke
@@ -140,26 +140,26 @@
             </div>
           }
         </div>
-        <div class="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div class="rounded-3xl border border-line bg-glass p-6">
           <h2 class="text-xl font-semibold">Shareable links</h2>
           @if (links.length === 0) {
-            <div class="mt-4 text-sm text-white/60">No links yet.</div>
+            <div class="mt-4 text-sm text-subtle">No links yet.</div>
           }
           @for (link of links; track link) {
-            <div class="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+            <div class="mt-4 rounded-2xl border border-line bg-surface-sunken p-4">
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <div class="font-medium">Link #{{ link.id }}</div>
-                  <div class="mt-1 text-sm text-white/60">
+                  <div class="mt-1 text-sm text-subtle">
                     {{ link.redemptionCount }} / {{ link.maxRedemptions }} redeemed
                   </div>
-                  <div class="mt-1 text-sm text-white/60">
+                  <div class="mt-1 text-sm text-subtle">
                     Expires {{ link.expiresAt | date: 'medium' }}
                   </div>
                 </div>
                 <button
                   type="button"
-                  class="rounded-xl border border-white/10 px-3 py-2 text-sm"
+                  class="rounded-xl border border-line px-3 py-2 text-sm"
                   (click)="revokeLink(link)"
                 >
                   Revoke
@@ -169,7 +169,7 @@
                 <div class="mt-3">
                   <button
                     type="button"
-                    class="rounded-xl bg-white px-3 py-2 text-sm text-slate-950"
+                    class="rounded-xl bg-surface-raised px-3 py-2 text-sm text-content"
                     (click)="copyShareUrl(link.shareUrl)"
                   >
                     Copy share URL

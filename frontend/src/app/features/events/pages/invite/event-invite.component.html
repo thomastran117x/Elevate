@@ -1,15 +1,15 @@
-<div class="min-h-screen bg-slate-950 text-white">
+<div class="min-h-screen bg-surface text-content">
   <main class="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-    <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+    <div class="rounded-3xl border border-line bg-glass p-6 backdrop-blur">
       @if (loading) {
         <div class="space-y-4">
-          <div class="h-8 w-48 animate-pulse rounded-xl bg-white/10"></div>
-          <div class="h-64 animate-pulse rounded-3xl bg-white/10"></div>
+          <div class="h-8 w-48 animate-pulse rounded-xl bg-glass-strong"></div>
+          <div class="h-64 animate-pulse rounded-3xl bg-glass-strong"></div>
         </div>
       }
 
       @if (!loading && error) {
-        <div class="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-rose-100">
+        <div class="rounded-2xl border border-danger/20 bg-danger/10 p-4 text-danger">
           {{ error }}
         </div>
       }
@@ -17,18 +17,18 @@
       @if (!loading && invite) {
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p class="text-xs uppercase tracking-[0.18em] text-white/45">
+            <p class="text-xs uppercase tracking-[0.18em] text-faint">
               Private event invitation
             </p>
             <h1 class="mt-2 text-3xl font-bold">{{ invite.event?.name || 'Invitation' }}</h1>
           </div>
           <span
-            class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-white/70"
+            class="rounded-full border border-line bg-glass px-3 py-1 text-sm text-muted"
           >
             {{ invite.state }}
           </span>
         </div>
-        <div class="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-slate-900/60">
+        <div class="mt-6 overflow-hidden rounded-3xl border border-line bg-surface-sunken">
           <div
             class="h-52 bg-cover bg-center"
             [style.background-image]="
@@ -40,24 +40,24 @@
             "
           ></div>
           <div class="space-y-4 p-6">
-            <p class="text-sm leading-7 text-white/75">
+            <p class="text-sm leading-7 text-muted">
               {{
                 invite.event?.description ||
                   'Use this invitation to unlock access to a private event.'
               }}
             </p>
-            <div class="grid gap-3 text-sm text-white/70 sm:grid-cols-2">
-              <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div class="text-xs uppercase tracking-[0.16em] text-white/45">When</div>
+            <div class="grid gap-3 text-sm text-muted sm:grid-cols-2">
+              <div class="rounded-2xl border border-line bg-glass p-4">
+                <div class="text-xs uppercase tracking-[0.16em] text-faint">When</div>
                 <div class="mt-2">{{ invite.event?.startTime | date: 'medium' }}</div>
               </div>
-              <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div class="text-xs uppercase tracking-[0.16em] text-white/45">Where</div>
+              <div class="rounded-2xl border border-line bg-glass p-4">
+                <div class="text-xs uppercase tracking-[0.16em] text-faint">Where</div>
                 <div class="mt-2">{{ invite.event?.location || 'Location to be announced' }}</div>
               </div>
             </div>
             @if (invite.expiresAt) {
-              <p class="text-sm text-amber-200/90">
+              <p class="text-sm text-warning/90">
                 Expires {{ invite.expiresAt | date: 'medium' }}
               </p>
             }
@@ -65,14 +65,14 @@
               <div class="flex flex-wrap gap-3">
                 <button
                   type="button"
-                  class="rounded-xl bg-white px-4 py-2 font-medium text-slate-950"
+                  class="rounded-xl bg-surface-raised px-4 py-2 font-medium text-content"
                   (click)="goToAuth('login')"
                 >
                   Sign in to continue
                 </button>
                 <button
                   type="button"
-                  class="rounded-xl border border-white/15 bg-white/5 px-4 py-2 font-medium text-white"
+                  class="rounded-xl border border-line-strong bg-glass px-4 py-2 font-medium text-content"
                   (click)="goToAuth('signup')"
                 >
                   Create account
@@ -83,7 +83,7 @@
               <div class="flex flex-wrap gap-3">
                 <button
                   type="button"
-                  class="rounded-xl bg-emerald-400 px-4 py-2 font-medium text-slate-950 disabled:opacity-60"
+                  class="rounded-xl bg-success px-4 py-2 font-medium text-content disabled:opacity-60"
                   [disabled]="actionLoading"
                   (click)="accept()"
                 >
@@ -91,7 +91,7 @@
                 </button>
                 <button
                   type="button"
-                  class="rounded-xl border border-white/15 bg-white/5 px-4 py-2 font-medium text-white disabled:opacity-60"
+                  class="rounded-xl border border-line-strong bg-glass px-4 py-2 font-medium text-content disabled:opacity-60"
                   [disabled]="actionLoading"
                   (click)="decline()"
                 >
@@ -103,7 +103,7 @@
               <div class="flex gap-3">
                 <a
                   [routerLink]="['/events', invite.event.id]"
-                  class="rounded-xl bg-white px-4 py-2 font-medium text-slate-950"
+                  class="rounded-xl bg-surface-raised px-4 py-2 font-medium text-content"
                 >
                   Open event
                 </a>
