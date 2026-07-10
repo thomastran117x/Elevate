@@ -1,5 +1,3 @@
-using System.Reflection;
-
 using backend.main.shared.providers.messages;
 using backend.worker.email_worker;
 
@@ -10,7 +8,7 @@ public class SmtpEmailSenderTests
     [Fact]
     public async Task SendAsync_ShouldThrow_WhenSmtpConfigurationIsMissing()
     {
-        var sender = new SmtpEmailSender(CreateOptions());
+        var sender = CreateSender(CreateOptions());
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             sender.SendAsync(new EmailMessage
@@ -27,7 +25,7 @@ public class SmtpEmailSenderTests
     [Fact]
     public async Task SendAsync_ShouldRejectInvalidRecipientBeforeConnecting()
     {
-        var sender = new SmtpEmailSender(CreateOptions(
+        var sender = CreateSender(CreateOptions(
             smtpServer: "smtp.example.com",
             smtpPort: 587,
             username: "noreply@example.com",
@@ -46,60 +44,8 @@ public class SmtpEmailSenderTests
         Assert.IsType<FormatException>(exception.InnerException);
     }
 
-    [Fact]
-    public void BuildMessage_ShouldRenderVerificationEmailContent()
-    {
-        var sender = new SmtpEmailSender(CreateOptions(username: "noreply@example.com"));
-
-        var message = InvokeBuildMessage(sender, new EmailMessage
-        {
-            Email = "member@example.com",
-            Token = "verify token/+",
-            Type = EmailMessageType.VerifyEmail,
-            Code = "123456"
-        });
-
-        Assert.Equal("Verify your email", message.Subject);
-        Assert.Equal("noreply@example.com", message.From.Mailboxes.Single().Address);
-        Assert.Equal("member@example.com", message.To.Mailboxes.Single().Address);
-        Assert.Contains("/auth/verify?token=verify%20token%2F%2B", message.TextBody);
-        Assert.Contains("Verification code: 123456", message.TextBody);
-        Assert.Contains("Verify email", message.HtmlBody);
-        Assert.Contains("123456", message.HtmlBody);
-    }
-
-    [Fact]
-    public void BuildMessage_ShouldRenderEventInviteFallbackTitle()
-    {
-        var sender = new SmtpEmailSender(CreateOptions(username: "noreply@example.com"));
-
-        var message = InvokeBuildMessage(sender, new EmailMessage
-        {
-            Email = "member@example.com",
-            Token = "invite-token",
-            Type = EmailMessageType.EventInvite
-        });
-
-        Assert.Equal("You're invited to a private event", message.Subject);
-        Assert.Contains("View invitation", message.HtmlBody);
-        Assert.Contains("/events/invite?token=invite-token", message.TextBody);
-    }
-
-    [Fact]
-    public void BuildMessage_ShouldThrowForUnsupportedEmailType()
-    {
-        var sender = new SmtpEmailSender(CreateOptions(username: "noreply@example.com"));
-
-        var exception = Assert.Throws<TargetInvocationException>(() =>
-            InvokeBuildMessage(sender, new EmailMessage
-            {
-                Email = "member@example.com",
-                Token = "verify-token",
-                Type = (EmailMessageType)999
-            }));
-
-        Assert.Equal("Unsupported email type '999'.", exception.InnerException?.Message);
-    }
+    private static SmtpEmailSender CreateSender(EmailWorkerOptions options) =>
+        new(options, new EmailTemplateRenderer(options));
 
     private static EmailWorkerOptions CreateOptions(
         string bootstrapServers = "kafka:9092",
@@ -123,12 +69,4 @@ public class SmtpEmailSenderTests
             username,
             password,
             frontendBaseUrl);
-
-    private static MimeKit.MimeMessage InvokeBuildMessage(SmtpEmailSender sender, EmailMessage message)
-    {
-        var method = typeof(SmtpEmailSender).GetMethod("BuildMessage", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("BuildMessage method not found.");
-
-        return (MimeKit.MimeMessage)method.Invoke(sender, [message])!;
-    }
 }

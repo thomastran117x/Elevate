@@ -72,8 +72,8 @@ public class LoginStepUpChallengeServiceTests
         var cache = new InMemoryCacheService();
         var notifications = new Mock<IAuthNotificationService>();
         string? capturedToken = null;
-        notifications.Setup(n => n.SendDeviceVerificationAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<string, string>((_, token) => capturedToken = token)
+        notifications.Setup(n => n.SendDeviceVerificationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .Callback<string, string, string?>((_, token, _) => capturedToken = token)
             .Returns(Task.CompletedTask);
 
         var service = CreateService(cache, notifications, mfaRepo, deviceTrustService: deviceTrustService, userRepository: userRepository, authSessionService: authSessionService);
@@ -116,8 +116,8 @@ public class LoginStepUpChallengeServiceTests
         var cache = new InMemoryCacheService();
         var notifications = new Mock<IAuthNotificationService>();
         string? capturedToken = null;
-        notifications.Setup(n => n.SendDeviceVerificationAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<string, string>((_, token) => capturedToken = token)
+        notifications.Setup(n => n.SendDeviceVerificationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .Callback<string, string, string?>((_, token, _) => capturedToken = token)
             .Returns(Task.CompletedTask);
 
         var mfaRepo = new Mock<IMfaEnrollmentRepository>();
@@ -287,8 +287,8 @@ public class LoginStepUpChallengeServiceTests
         var cache = new InMemoryCacheService();
         var notifications = new Mock<IAuthNotificationService>();
         string? capturedEmailToken = null;
-        notifications.Setup(n => n.SendDeviceVerificationAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<string, string>((_, token) => capturedEmailToken = token)
+        notifications.Setup(n => n.SendDeviceVerificationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .Callback<string, string, string?>((_, token, _) => capturedEmailToken = token)
             .Returns(Task.CompletedTask);
 
         var mfaRepo = new Mock<IMfaEnrollmentRepository>();

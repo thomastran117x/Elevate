@@ -15,7 +15,8 @@ namespace backend.main.features.auth.notifications
         public Task SendSignupVerificationAsync(
             string email,
             string token,
-            string code)
+            string code,
+            string? recipientName = null)
         {
             return _publisher.PublishAsync(
                 NotificationTopics.Email,
@@ -24,14 +25,16 @@ namespace backend.main.features.auth.notifications
                     Type = EmailMessageType.VerifyEmail,
                     Email = email,
                     Token = token,
-                    Code = code
+                    Code = code,
+                    RecipientName = recipientName
                 });
         }
 
         public Task SendPasswordResetAsync(
             string email,
             string token,
-            string code)
+            string code,
+            string? recipientName = null)
         {
             return _publisher.PublishAsync(
                 NotificationTopics.Email,
@@ -40,13 +43,15 @@ namespace backend.main.features.auth.notifications
                     Type = EmailMessageType.ResetPassword,
                     Email = email,
                     Token = token,
+                    RecipientName = recipientName,
                     Code = code
                 });
         }
 
         public Task SendDeviceVerificationAsync(
             string email,
-            string token)
+            string token,
+            string? recipientName = null)
         {
             return _publisher.PublishAsync(
                 NotificationTopics.Email,
@@ -54,7 +59,8 @@ namespace backend.main.features.auth.notifications
                 {
                     Type = EmailMessageType.NewDevice,
                     Email = email,
-                    Token = token
+                    Token = token,
+                    RecipientName = recipientName
                 });
         }
 

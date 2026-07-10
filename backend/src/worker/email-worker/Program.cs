@@ -17,6 +17,7 @@ builder.Services.AddSingleton<ICustomLogger, FileLogger>();
 builder.Services.AddSingleton(EmailWorkerOptions.FromEnvironment());
 builder.Services.AddSingleton<IEmailWorkerDlqPublisher, KafkaEmailWorkerDlqPublisher>();
 builder.Services.AddSingleton<IEmailDeliveryStatusPublisher, KafkaEmailDeliveryStatusPublisher>();
+builder.Services.AddSingleton<IEmailContentRenderer, EmailTemplateRenderer>();
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<EmailMessageProcessor>();
 builder.Services.AddHostedService<KafkaEmailWorker>();

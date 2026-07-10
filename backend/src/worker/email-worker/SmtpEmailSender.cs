@@ -13,10 +13,12 @@ namespace backend.worker.email_worker;
 public sealed class SmtpEmailSender : IEmailSender
 {
     private readonly EmailWorkerOptions _options;
+    private readonly IEmailContentRenderer _renderer;
 
-    public SmtpEmailSender(EmailWorkerOptions options)
+    public SmtpEmailSender(EmailWorkerOptions options, IEmailContentRenderer renderer)
     {
         _options = options;
+        _renderer = renderer;
     }
 
     public async Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
@@ -45,101 +47,15 @@ public sealed class SmtpEmailSender : IEmailSender
         mail.From.Add(MailboxAddress.Parse(_options.Username!));
         mail.To.Add(MailboxAddress.Parse(message.Email));
 
-        var (subject, plainText, html) = BuildContent(message);
-        mail.Subject = subject;
+        var content = _renderer.Render(message);
+        mail.Subject = content.Subject;
         mail.Body = new BodyBuilder
         {
-            TextBody = plainText,
-            HtmlBody = html
+            TextBody = content.PlainText,
+            HtmlBody = content.Html
         }.ToMessageBody();
 
         return mail;
-    }
-
-    private (string Subject, string PlainText, string Html) BuildContent(EmailMessage message)
-    {
-        var baseUrl = _options.FrontendBaseUrl.TrimEnd('/');
-        var verifyUrl = $"{baseUrl}/auth/verify?token={Uri.EscapeDataString(message.Token)}";
-        var deviceUrl = $"{baseUrl}/auth/device/verify?token={Uri.EscapeDataString(message.Token)}";
-        var resetUrl = $"{baseUrl}/auth/change-password?token={Uri.EscapeDataString(message.Token)}";
-        var inviteUrl = $"{baseUrl}/events/invite?token={Uri.EscapeDataString(message.Token)}";
-
-        return message.Type switch
-        {
-            EmailMessageType.VerifyEmail => (
-                "Verify your email",
-                BuildPlainText("Verify your email", verifyUrl, message.Code),
-                BuildHtml("Verify your email", verifyUrl, "Verify email", message.Code)
-            ),
-            EmailMessageType.ResetPassword => (
-                "Reset your password",
-                BuildPlainText("Reset your password", resetUrl, message.Code),
-                BuildHtml("Reset your password", resetUrl, "Reset password", message.Code)
-            ),
-            EmailMessageType.NewDevice => (
-                "Confirm new device sign-in",
-                BuildPlainText("Confirm this device sign-in", deviceUrl, null),
-                BuildHtml("Confirm this device sign-in", deviceUrl, "Verify device", null)
-            ),
-            EmailMessageType.AccountConfirmation => (
-                "Account confirmation",
-                BuildPlainText("Confirm your account", verifyUrl, message.Code),
-                BuildHtml("Confirm your account", verifyUrl, "Confirm account", message.Code)
-            ),
-            EmailMessageType.EventInvite => (
-                $"You're invited to {message.EventName ?? "a private event"}",
-                BuildPlainText(
-                    $"You're invited to {message.EventName ?? "a private event"}",
-                    inviteUrl,
-                    null),
-                BuildHtml(
-                    $"You're invited to {message.EventName ?? "a private event"}",
-                    inviteUrl,
-                    "View invitation",
-                    null)
-            ),
-            _ => throw new InvalidOperationException($"Unsupported email type '{message.Type}'.")
-        };
-    }
-
-    private static string BuildPlainText(string title, string url, string? code)
-    {
-        var lines = new List<string>
-        {
-            title,
-            "",
-            $"Open this link: {url}"
-        };
-
-        if (!string.IsNullOrWhiteSpace(code))
-        {
-            lines.Add("");
-            lines.Add($"Verification code: {code}");
-        }
-
-        return string.Join(Environment.NewLine, lines);
-    }
-
-    private static string BuildHtml(string title, string url, string buttonText, string? code)
-    {
-        var codeMarkup = string.IsNullOrWhiteSpace(code)
-            ? string.Empty
-            : $"<p><strong>Verification code:</strong> {System.Net.WebUtility.HtmlEncode(code)}</p>";
-
-        return $"""
-        <html>
-          <body style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
-            <h2>{System.Net.WebUtility.HtmlEncode(title)}</h2>
-            <p>
-              <a href="{System.Net.WebUtility.HtmlEncode(url)}" style="display:inline-block;padding:10px 16px;background:#111827;color:#ffffff;text-decoration:none;border-radius:6px;">
-                {System.Net.WebUtility.HtmlEncode(buttonText)}
-              </a>
-            </p>
-            <p>{System.Net.WebUtility.HtmlEncode(url)}</p>
-            {codeMarkup}
-          </body>
-        </html>
-        """;
     }
 
     private static void ValidateEmailAddress(string email)

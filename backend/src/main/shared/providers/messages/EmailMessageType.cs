@@ -6,6 +6,11 @@ namespace backend.main.shared.providers.messages
         ResetPassword,
         AccountConfirmation,
         NewDevice,
-        EventInvite
+        EventInvite,
+        Welcome,
+        PasswordChanged,
+        InvitationAccepted,
+        InvitationDeclined,
+        EventReminder
     }
 }

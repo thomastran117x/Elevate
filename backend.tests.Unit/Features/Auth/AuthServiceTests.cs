@@ -116,7 +116,8 @@ public class AuthServiceTests
         notifications.Verify(service => service.SendSignupVerificationAsync(
             "new@example.com",
             "verify-link",
-            "123456"), Times.Once);
+            "123456",
+            It.IsAny<string?>()), Times.Once);
     }
 
     [Fact]
@@ -135,7 +136,7 @@ public class AuthServiceTests
         challenge.Code.Should().HaveLength(6);
         challenge.ExpiresAtUtc.Should().BeAfter(DateTime.UtcNow);
         notifications.Verify(
-            service => service.SendPasswordResetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            service => service.SendPasswordResetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()),
             Times.Never);
     }
 
@@ -406,7 +407,8 @@ public class AuthServiceTests
         notifications.Verify(service => service.SendPasswordResetAsync(
             "active@example.com",
             "reset-link",
-            "654321"), Times.Once);
+            "654321",
+            It.IsAny<string?>()), Times.Once);
     }
 
     [Fact]

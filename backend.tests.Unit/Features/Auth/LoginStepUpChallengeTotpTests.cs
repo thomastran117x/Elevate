@@ -70,7 +70,7 @@ public class LoginStepUpChallengeTotpTests
         response.Challenge.Should().Be(challenge.Challenge);
         response.MaskedDestination.Should().Be("authenticator app");
         notifications.Verify(service => service.SendSmsMfaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>(), It.IsAny<string>()), Times.Never);
-        notifications.Verify(service => service.SendDeviceVerificationAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        notifications.Verify(service => service.SendDeviceVerificationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()), Times.Never);
     }
 
     [Fact]
