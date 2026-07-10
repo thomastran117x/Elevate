@@ -39,6 +39,8 @@
 
   /* Feature-page gradient */
   --gradient-page: linear-gradient(to bottom right, #eef2ff, #f3f1fb 45%, #faf5ff);
+  /* Accent gradient for clipped headline text (darker stops read on light) */
+  --gradient-accent: linear-gradient(to right, #7c3aed, #c026d3, #4f46e5);
 }
 
 /* ---- Semantic theme tokens: dark overrides ---- */
@@ -71,6 +73,7 @@
   --warning: #fbbf24;
 
   --gradient-page: linear-gradient(to bottom right, #0b0822, #160f3d 50%, #24135f);
+  --gradient-accent: linear-gradient(to right, #d8b4fe, #f0abfc, #a5b4fc);
 }
 
 /* ---- Map raw tokens -> Tailwind color utilities ---- */
@@ -106,4 +109,12 @@
 /* Page-surface helper for gradient feature pages */
 .bg-page {
   background-image: var(--gradient-page);
+}
+
+/* Theme-aware clipped-text accent gradient (for headlines) */
+.text-gradient-accent {
+  background-image: var(--gradient-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }

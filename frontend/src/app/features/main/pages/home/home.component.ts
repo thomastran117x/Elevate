@@ -107,9 +107,7 @@ type Testimonial = { quote: string; name: string; role: string };
 
               <h1 class="mt-5 text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight">
                 Book unforgettable events -
-                <span
-                  class="bg-gradient-to-r from-purple-300 via-fuchsia-300 to-indigo-300 bg-clip-text text-transparent"
-                >
+                <span class="text-gradient-accent">
                   fast, safe, and beautiful
                 </span>
               </h1>
