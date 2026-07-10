@@ -104,7 +104,7 @@ public sealed class EmailMessageProcessor
         if (string.IsNullOrWhiteSpace(message.Email))
             throw new InvalidOperationException("Email payload requires a recipient address.");
 
-        if (string.IsNullOrWhiteSpace(message.Token))
-            throw new InvalidOperationException("Email payload requires a token.");
+        // Token requirement is per-type and enforced by the content renderer, since
+        // several email types (welcome, password-changed, reminders) carry no token.
     }
 }

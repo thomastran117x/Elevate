@@ -10,11 +10,15 @@ namespace backend.main.shared.providers.messages
         {
             get; init;
         }
-        public required string Token
+        public string? Token
         {
             get; init;
         }
         public string? Code
+        {
+            get; init;
+        }
+        public string? RecipientName
         {
             get; init;
         }
@@ -23,6 +27,14 @@ namespace backend.main.shared.providers.messages
             get; init;
         }
         public string? EventName
+        {
+            get; init;
+        }
+        public string? ActorName
+        {
+            get; init;
+        }
+        public DateTime? EventStartsAtUtc
         {
             get; init;
         }

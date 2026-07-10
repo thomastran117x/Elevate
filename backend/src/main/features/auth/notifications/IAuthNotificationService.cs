@@ -5,16 +5,19 @@ namespace backend.main.features.auth.notifications
         Task SendSignupVerificationAsync(
             string email,
             string token,
-            string code);
+            string code,
+            string? recipientName = null);
 
         Task SendPasswordResetAsync(
             string email,
             string token,
-            string code);
+            string code,
+            string? recipientName = null);
 
         Task SendDeviceVerificationAsync(
             string email,
-            string token);
+            string token,
+            string? recipientName = null);
 
         Task SendSmsMfaAsync(
             string phoneNumber,

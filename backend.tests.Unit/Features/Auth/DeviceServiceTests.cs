@@ -36,7 +36,7 @@ public class DeviceServiceTests
 
         await service.EnsureDeviceKnownAsync(4, "known@example.com", TestRequestInfoFactory.Browser());
 
-        notifications.Verify(s => s.SendDeviceVerificationAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        notifications.Verify(s => s.SendDeviceVerificationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()), Times.Never);
         cache.Verify(c => c.SetValueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan?>()), Times.Never);
     }
 
@@ -65,7 +65,8 @@ public class DeviceServiceTests
         await act.Should().ThrowAsync<DeviceVerificationRequiredException>();
         notifications.Verify(s => s.SendDeviceVerificationAsync(
             "unknown@example.com",
-            It.Is<string>(token => !string.IsNullOrWhiteSpace(token))), Times.Once);
+            It.Is<string>(token => !string.IsNullOrWhiteSpace(token)),
+            It.IsAny<string?>()), Times.Once);
     }
 
     [Fact]

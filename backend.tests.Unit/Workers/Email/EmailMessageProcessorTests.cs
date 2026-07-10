@@ -135,8 +135,10 @@ public class EmailMessageProcessorTests
     }
 
     [Fact]
-    public async Task ProcessAsync_ShouldPublishDlqWhenTokenIsMissing()
+    public async Task ProcessAsync_ShouldDelegateTokenValidationToSender()
     {
+        // Token requirement is now enforced per-type by the content renderer (inside the
+        // sender), so the processor forwards the message without inspecting the token itself.
         var sender = new Mock<IEmailSender>();
         var dlq = new Mock<IEmailWorkerDlqPublisher>();
         var status = new Mock<IEmailDeliveryStatusPublisher>();
@@ -151,14 +153,13 @@ public class EmailMessageProcessorTests
 
         await processor.ProcessAsync(envelope);
 
-        sender.Verify(service => service.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()), Times.Never);
+        sender.Verify(service => service.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()), Times.Once);
+        dlq.Verify(service => service.PublishAsync(It.IsAny<KafkaMessageEnvelope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         status.Verify(service => service.PublishAsync(
             It.Is<EmailDeliveryStatusMessage>(message =>
                 message.EventInvitationId == 42
-                && message.DeliveryStatus == EventInvitationDeliveryStatus.Failed
-                && message.ErrorMessage!.Contains("requires a token")),
+                && message.DeliveryStatus == EventInvitationDeliveryStatus.Sent),
             It.IsAny<CancellationToken>()), Times.Once);
-        dlq.Verify(service => service.PublishAsync(envelope, It.Is<string>(error => error.Contains("requires a token")), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
