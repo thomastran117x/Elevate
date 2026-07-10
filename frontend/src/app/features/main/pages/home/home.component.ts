@@ -26,15 +26,15 @@ type Testimonial = { quote: string; name: string; role: string };
       <div class="pointer-events-none absolute inset-0">
         <div
           class="absolute -top-24 left-1/2 -translate-x-1/2 h-[520px] w-[920px] rounded-full
-                 bg-gradient-to-r from-purple-600/35 via-fuchsia-500/25 to-indigo-500/25 blur-3xl"
+                 bg-gradient-to-r from-purple-600/12 dark:from-purple-600/35 via-fuchsia-500/9 dark:via-fuchsia-500/25 to-indigo-500/9 dark:to-indigo-500/25 blur-3xl"
         ></div>
         <div
           class="absolute top-[520px] -left-20 h-[420px] w-[420px] rounded-full
-                 bg-gradient-to-br from-indigo-500/20 to-purple-500/10 blur-3xl"
+                 bg-gradient-to-br from-indigo-500/7 dark:from-indigo-500/20 to-purple-500/4 dark:to-purple-500/10 blur-3xl"
         ></div>
         <div
           class="absolute top-[640px] -right-20 h-[420px] w-[420px] rounded-full
-                 bg-gradient-to-br from-fuchsia-500/20 to-purple-500/10 blur-3xl"
+                 bg-gradient-to-br from-fuchsia-500/7 dark:from-fuchsia-500/20 to-purple-500/4 dark:to-purple-500/10 blur-3xl"
         ></div>
         <div
           class="absolute inset-0 opacity-[0.10]"
@@ -155,12 +155,12 @@ type Testimonial = { quote: string; name: string; role: string };
                       <button
                         (click)="explore()"
                         class="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2
-                             bg-gradient-to-r from-purple-500 to-fuchsia-500
+                             bg-gradient-to-r from-purple-500 to-fuchsia-500 text-accent-contrast
                              font-semibold text-sm shadow-lg shadow-purple-500/25
                              hover:opacity-95 transition"
                       >
                         Explore events
-                        <span class="text-content">&rarr;</span>
+                        <span>&rarr;</span>
                       </button>
                     </div>
                   </div>
@@ -521,10 +521,10 @@ type Testimonial = { quote: string; name: string; role: string };
                    p-8 sm:p-10 overflow-hidden relative"
           >
             <div
-              class="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-fuchsia-500/20 blur-3xl"
+              class="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-fuchsia-500/7 dark:bg-fuchsia-500/20 blur-3xl"
             ></div>
             <div
-              class="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-purple-500/20 blur-3xl"
+              class="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-purple-500/7 dark:bg-purple-500/20 blur-3xl"
             ></div>
 
             <div class="relative grid lg:grid-cols-12 gap-8 items-center">

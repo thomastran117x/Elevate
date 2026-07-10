@@ -1,34 +1,37 @@
 @import 'tailwindcss';
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ---- Semantic theme tokens: light (default) ---- */
+/* ---- Semantic theme tokens: light (default) ----
+   Clean, neutral, high-contrast. Purple is an ACCENT only; surfaces and
+   text are neutral gray so the page reads easily. (Dark keeps the original
+   hardcoded neon brand look in the .dark block below.) */
 :root {
-  /* Surfaces */
-  --surface: #eceffa; /* soft lavender-tinted page bg */
-  --surface-raised: #ffffff; /* dropdowns, modals, solid cards */
-  --surface-sunken: #e4e7f4; /* inputs, code, wells — reads as an inset */
+  /* Surfaces — neutral gray page, white cards */
+  --surface: #f3f4f6; /* page bg (neutral gray-100) */
+  --surface-raised: #ffffff; /* cards, dropdowns, modals */
+  --surface-sunken: #e9ebef; /* inputs, code, wells — reads as an inset */
 
-  /* Glass — in light mode a frosted white card that pops above the tinted page */
-  --glass: rgba(255, 255, 255, 0.78);
-  --glass-strong: rgba(255, 255, 255, 0.95);
-  --glass-border: rgba(20, 13, 42, 0.09);
+  /* Glass — solid white cards that pop above the gray page (borders define chips) */
+  --glass: #ffffff;
+  --glass-strong: #eef0f3;
+  --glass-border: rgba(17, 24, 39, 0.08);
 
-  /* Lines / borders */
-  --line: rgba(20, 13, 42, 0.1);
-  --line-strong: rgba(20, 13, 42, 0.16);
+  /* Lines / borders — neutral gray */
+  --line: rgba(17, 24, 39, 0.1);
+  --line-strong: rgba(17, 24, 39, 0.16);
 
-  /* Content (text / icons) */
-  --content: #140d2a;
-  --muted: rgba(20, 13, 42, 0.7);
-  --subtle: rgba(20, 13, 42, 0.55);
-  --faint: rgba(20, 13, 42, 0.4);
+  /* Content (text / icons) — neutral gray ramp */
+  --content: #111827; /* gray-900 */
+  --muted: #4b5563; /* gray-600 */
+  --subtle: #6b7280; /* gray-500 */
+  --faint: #9ca3af; /* gray-400 */
 
-  /* Accent (brand) */
-  --accent: #7c3aed; /* violet-600, readable on light */
+  /* Accent (brand) — used sparingly for links / buttons / focus */
+  --accent: #7c3aed; /* violet-600, readable on white */
   --accent-contrast: #ffffff;
 
   /* Inverse (high-contrast neutral chip / button) */
-  --inverse: #140d2a;
+  --inverse: #111827;
   --inverse-content: #ffffff;
 
   /* Semantic states */
@@ -37,10 +40,10 @@
   --success: #059669;
   --warning: #d97706;
 
-  /* Feature-page gradient (light: soft lavender -> violet -> blush) */
-  --gradient-page: linear-gradient(to bottom right, #e7ebfb 0%, #efeafb 45%, #fbedf4 100%);
-  /* Accent gradient for clipped headline text (darker stops read on light) */
-  --gradient-accent: linear-gradient(to right, #7c3aed, #c026d3, #4f46e5);
+  /* Feature-page gradient — subtle, near-flat neutral */
+  --gradient-page: linear-gradient(to bottom right, #f5f6f8, #f2f3f5 60%, #f4f2f7);
+  /* Accent gradient for clipped headline text — gentle purple, readable on light */
+  --gradient-accent: linear-gradient(to right, #7c3aed, #9333ea, #6d28d9);
 }
 
 /* ---- Semantic theme tokens: dark overrides ---- */
