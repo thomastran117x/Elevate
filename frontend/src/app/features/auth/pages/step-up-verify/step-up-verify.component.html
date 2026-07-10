@@ -1,28 +1,26 @@
-<section
-  class="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),_transparent_45%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_100%)] text-slate-900"
->
+<section class="min-h-screen bg-page text-content">
   <div class="mx-auto flex max-w-4xl flex-col gap-8 px-6 py-14">
     <div class="space-y-3">
-      <p class="text-sm font-semibold uppercase tracking-[0.28em] text-sky-700">
+      <p class="text-sm font-semibold uppercase tracking-[0.28em] text-accent">
         Verify this sign-in
       </p>
-      <h1 class="text-4xl font-black tracking-tight text-slate-950">New device check</h1>
-      <p class="max-w-2xl text-base leading-7 text-slate-600">
+      <h1 class="text-4xl font-black tracking-tight text-content">New device check</h1>
+      <p class="max-w-2xl text-base leading-7 text-subtle">
         We noticed this sign-in is coming from a device we do not trust yet. Choose a verification
         method below to finish logging in.
       </p>
     </div>
 
     <div
-      class="rounded-[2rem] border border-slate-200 bg-white/90 p-8 shadow-[0_30px_80px_rgba(15,23,42,0.08)] backdrop-blur"
+      class="rounded-[2rem] border border-line bg-surface-raised/90 p-8 shadow-[0_30px_80px_rgba(15,23,42,0.08)] backdrop-blur"
     >
       <div class="flex flex-col gap-6">
-        <div class="rounded-3xl bg-slate-950 px-6 py-6 text-white">
-          <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-200">
+        <div class="rounded-3xl bg-surface px-6 py-6 text-content">
+          <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
             Available methods
           </p>
           <h2 class="mt-2 text-2xl font-bold">Choose how to verify</h2>
-          <p class="mt-3 text-sm leading-6 text-slate-300">
+          <p class="mt-3 text-sm leading-6 text-muted">
             Email: {{ maskedEmail }}
             @if (maskedPhone) {
               <span>. SMS: {{ maskedPhone }}</span>
@@ -32,7 +30,7 @@
             }
           </p>
           @if (pending()?.ExpiresAtUtc) {
-            <p class="mt-2 text-sm text-slate-400">
+            <p class="mt-2 text-sm text-subtle">
               Challenge expires at {{ pending()?.ExpiresAtUtc | date: 'medium' }}.
             </p>
           }
@@ -40,7 +38,7 @@
 
         @if (success) {
           <div
-            class="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-700"
+            class="rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success"
           >
             {{ success }}
           </div>
@@ -48,7 +46,7 @@
 
         @if (error) {
           <div
-            class="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700"
+            class="rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
           >
             {{ error }}
           </div>
@@ -60,18 +58,18 @@
               type="button"
               class="rounded-3xl border px-6 py-5 text-left transition"
               [ngClass]="{
-                'border-sky-400 bg-sky-50 shadow-[0_15px_40px_rgba(14,165,233,0.12)]':
-                  isEmailActive,
-                'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50/50': !isEmailActive,
+                'border-accent/60 bg-accent/10 shadow-lg shadow-accent/10': isEmailActive,
+                'border-line bg-surface-raised hover:border-accent/40 hover:bg-accent/5':
+                  !isEmailActive,
               }"
               [disabled]="status() === 'starting'"
               (click)="selectMethod('email')"
             >
-              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
                 Email link
               </p>
-              <h3 class="mt-2 text-xl font-bold text-slate-950">Use email</h3>
-              <p class="mt-2 text-sm leading-6 text-slate-600">
+              <h3 class="mt-2 text-xl font-bold text-content">Use email</h3>
+              <p class="mt-2 text-sm leading-6 text-subtle">
                 Send a one-click verification link to {{ maskedEmail }}.
               </p>
             </button>
@@ -80,18 +78,18 @@
                 type="button"
                 class="rounded-3xl border px-6 py-5 text-left transition"
                 [ngClass]="{
-                  'border-sky-400 bg-sky-50 shadow-[0_15px_40px_rgba(14,165,233,0.12)]':
-                    isSmsActive,
-                  'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50/50': !isSmsActive,
+                  'border-accent/60 bg-accent/10 shadow-lg shadow-accent/10': isSmsActive,
+                  'border-line bg-surface-raised hover:border-accent/40 hover:bg-accent/5':
+                    !isSmsActive,
                 }"
                 [disabled]="status() === 'starting'"
                 (click)="selectMethod('sms')"
               >
-                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
                   SMS code
                 </p>
-                <h3 class="mt-2 text-xl font-bold text-slate-950">Use text message</h3>
-                <p class="mt-2 text-sm leading-6 text-slate-600">
+                <h3 class="mt-2 text-xl font-bold text-content">Use text message</h3>
+                <p class="mt-2 text-sm leading-6 text-subtle">
                   Send a 6-digit code to {{ maskedPhone }}.
                 </p>
               </button>
@@ -101,19 +99,18 @@
                 type="button"
                 class="rounded-3xl border px-6 py-5 text-left transition"
                 [ngClass]="{
-                  'border-sky-400 bg-sky-50 shadow-[0_15px_40px_rgba(14,165,233,0.12)]':
-                    isTotpActive,
-                  'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50/50':
+                  'border-accent/60 bg-accent/10 shadow-lg shadow-accent/10': isTotpActive,
+                  'border-line bg-surface-raised hover:border-accent/40 hover:bg-accent/5':
                     !isTotpActive,
                 }"
                 [disabled]="status() === 'starting'"
                 (click)="selectMethod('totp')"
               >
-                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
                   Authenticator app
                 </p>
-                <h3 class="mt-2 text-xl font-bold text-slate-950">Use authenticator</h3>
-                <p class="mt-2 text-sm leading-6 text-slate-600">
+                <h3 class="mt-2 text-xl font-bold text-content">Use authenticator</h3>
+                <p class="mt-2 text-sm leading-6 text-subtle">
                   Enter the current 6-digit code from your authenticator app.
                 </p>
               </button>
@@ -121,7 +118,7 @@
           </div>
         } @else {
           <div
-            class="rounded-3xl border border-rose-200 bg-rose-50 px-6 py-6 text-sm leading-6 text-rose-700"
+            class="rounded-3xl border border-danger/30 bg-danger/10 px-6 py-6 text-sm leading-6 text-danger"
           >
             This sign-in verification session is unavailable. Please return to the login page and
             try again.
@@ -130,22 +127,22 @@
 
         @if (isSmsActive || isTotpActive) {
           <form
-            class="space-y-5 rounded-3xl border border-sky-200 bg-sky-50 px-6 py-6"
+            class="space-y-5 rounded-3xl border border-accent/30 bg-accent/10 px-6 py-6"
             [formGroup]="codeForm"
             (ngSubmit)="verifyCode()"
           >
             <div class="space-y-2">
-              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
                 Enter code
               </p>
-              <h3 class="text-2xl font-bold text-slate-950">
+              <h3 class="text-2xl font-bold text-content">
                 {{
                   isTotpActive
                     ? 'Finish sign-in with your authenticator app'
                     : 'Finish sign-in with SMS'
                 }}
               </h3>
-              <p class="text-sm leading-6 text-slate-600">
+              <p class="text-sm leading-6 text-subtle">
                 {{
                   isTotpActive
                     ? 'Open your authenticator app and enter the current 6-digit code.'
@@ -156,7 +153,7 @@
               </p>
             </div>
             <div class="space-y-2">
-              <label class="text-sm font-semibold text-slate-800" for="step-up-code"
+              <label class="text-sm font-semibold text-content" for="step-up-code"
                 >Security code</label
               >
               <input
@@ -166,23 +163,23 @@
                 maxlength="6"
                 formControlName="code"
                 placeholder="123456"
-                class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base tracking-[0.35em] text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                class="w-full rounded-2xl border border-line bg-surface-raised px-4 py-3 text-base tracking-[0.35em] text-content outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/20"
               />
               @if (codeForm.controls.code.invalid && codeForm.controls.code.touched) {
-                <p class="text-sm text-rose-600">Enter the 6-digit security code.</p>
+                <p class="text-sm text-danger">Enter the 6-digit security code.</p>
               }
             </div>
             <div class="flex flex-col gap-3 sm:flex-row">
               <button
                 type="submit"
                 [disabled]="status() === 'verifying'"
-                class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                class="inline-flex items-center justify-center rounded-2xl bg-surface px-5 py-3 text-sm font-semibold text-content transition hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {{ status() === 'verifying' ? 'Verifying...' : 'Verify and sign in' }}
               </button>
               <button
                 type="button"
-                class="inline-flex items-center justify-center rounded-2xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-white"
+                class="inline-flex items-center justify-center rounded-2xl border border-line px-5 py-3 text-sm font-semibold text-content transition hover:bg-surface-raised"
                 (click)="restart()"
               >
                 Choose another method
@@ -193,12 +190,12 @@
 
         @if (isEmailActive) {
           <div
-            class="rounded-3xl border border-amber-200 bg-amber-50 px-6 py-6 text-sm leading-6 text-amber-900"
+            class="rounded-3xl border border-warning/30 bg-warning/10 px-6 py-6 text-sm leading-6 text-warning"
           >
-            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-amber-700">
+            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-warning">
               Check your inbox
             </p>
-            <h3 class="mt-2 text-2xl font-bold text-slate-950">Open the verification email</h3>
+            <h3 class="mt-2 text-2xl font-bold text-content">Open the verification email</h3>
             <p class="mt-2">
               We sent a sign-in link to {{ delivery()?.MaskedDestination || maskedEmail }}. Open it
               on this device to finish logging in.
@@ -206,14 +203,14 @@
             <div class="mt-4 flex flex-col gap-3 sm:flex-row">
               <button
                 type="button"
-                class="inline-flex items-center justify-center rounded-2xl border border-amber-300 px-5 py-3 font-semibold text-amber-800 transition hover:bg-amber-100"
+                class="inline-flex items-center justify-center rounded-2xl border border-warning/40 px-5 py-3 font-semibold text-warning transition hover:bg-warning/10"
                 (click)="restart()"
               >
                 Choose another method
               </button>
               <a
                 routerLink="/auth/login"
-                class="inline-flex items-center justify-center rounded-2xl border border-slate-300 px-5 py-3 font-semibold text-slate-700 transition hover:bg-white"
+                class="inline-flex items-center justify-center rounded-2xl border border-line px-5 py-3 font-semibold text-content transition hover:bg-surface-raised"
               >
                 Start over
               </a>

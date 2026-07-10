@@ -2,17 +2,17 @@
   <!-- Error flash -->
   <div
     *ngIf="error"
-    class="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-300"
+    class="rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
   >
     {{ error }}
   </div>
 
   <!-- Delete account card -->
-  <article class="rounded-3xl border border-rose-500/20 bg-rose-500/5 px-6 py-6 backdrop-blur-xl">
+  <article class="rounded-3xl border border-danger/20 bg-danger/100/5 px-6 py-6 backdrop-blur-xl">
     <div class="mb-5 space-y-2">
-      <p class="text-xs font-semibold uppercase tracking-[0.22em] text-rose-300">Danger zone</p>
-      <h2 class="text-2xl font-bold text-rose-100">Delete account</h2>
-      <p class="text-sm leading-6 text-white/60">
+      <p class="text-xs font-semibold uppercase tracking-[0.22em] text-danger">Danger zone</p>
+      <h2 class="text-2xl font-bold text-danger">Delete account</h2>
+      <p class="text-sm leading-6 text-subtle">
         Permanently delete your account and all associated data. This action cannot be undone. Your
         events, registrations, and profile will be permanently removed.
       </p>
@@ -23,7 +23,7 @@
       <button
         type="button"
         (click)="showDeleteConfirm()"
-        class="inline-flex items-center justify-center rounded-2xl border border-rose-500/40 px-5 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10"
+        class="inline-flex items-center justify-center rounded-2xl border border-danger/40 px-5 py-3 text-sm font-semibold text-danger transition hover:bg-danger/10"
       >
         Delete account
       </button>
@@ -32,30 +32,28 @@
     <!-- Confirmation panel -->
     <div
       *ngIf="showConfirm"
-      class="space-y-5 rounded-3xl border border-rose-500/30 bg-rose-500/10 px-5 py-5"
+      class="space-y-5 rounded-3xl border border-danger/30 bg-danger/10 px-5 py-5"
     >
       <div class="space-y-1">
-        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-rose-300">
+        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-danger">
           Confirm deletion
         </p>
-        <h3 class="text-xl font-bold text-rose-100">This cannot be undone</h3>
-        <p class="text-sm leading-6 text-white/60">
+        <h3 class="text-xl font-bold text-danger">This cannot be undone</h3>
+        <p class="text-sm leading-6 text-subtle">
           Type your username
-          <span class="font-semibold text-white/80">{{ currentUser?.Username }}</span> to confirm.
+          <span class="font-semibold text-muted">{{ currentUser?.Username }}</span> to confirm.
         </p>
       </div>
 
       <div class="space-y-2">
-        <label class="text-sm font-semibold text-white/80" for="confirm-username"
-          >Your username</label
-        >
+        <label class="text-sm font-semibold text-muted" for="confirm-username">Your username</label>
         <input
           id="confirm-username"
           type="text"
           [(ngModel)]="confirmationInput"
           [placeholder]="currentUser?.Username || ''"
           autocomplete="off"
-          class="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-base text-white placeholder-white/30 outline-none transition focus:border-rose-400 focus:ring-4 focus:ring-rose-500/20"
+          class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-danger focus:ring-4 focus:ring-danger/20"
         />
       </div>
 
@@ -64,14 +62,14 @@
           type="button"
           (click)="deleteAccount()"
           [disabled]="!confirmationMatches || deleting"
-          class="inline-flex items-center justify-center rounded-2xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-40"
+          class="inline-flex items-center justify-center rounded-2xl bg-rose-600 px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-danger/100 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {{ deleting ? 'Deleting...' : 'Permanently delete my account' }}
         </button>
         <button
           type="button"
           (click)="cancelDelete()"
-          class="inline-flex items-center justify-center rounded-2xl border border-white/20 px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10"
+          class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong"
         >
           Cancel
         </button>

@@ -16,10 +16,10 @@ export class PillComponent {
   get classes() {
     const base = 'inline-flex items-center rounded-full px-3 py-1 text-xs border';
     const tones: Record<Tone, string> = {
-      neutral: 'border-white/10 bg-white/5 text-white/70',
-      accent: 'border-fuchsia-300/25 bg-fuchsia-500/10 text-fuchsia-100',
-      soft: 'border-white/10 bg-slate-950/40 text-white/70',
-      outline: 'border-white/15 bg-transparent text-white/70',
+      neutral: 'border-line bg-glass text-muted',
+      accent: 'border-accent/25 bg-accent/10 text-accent',
+      soft: 'border-line bg-surface-sunken text-muted',
+      outline: 'border-line-strong bg-transparent text-muted',
     };
     return `${base} ${tones[this.tone]} ${this.className}`.trim();
   }

@@ -1,27 +1,23 @@
-<div
-  class="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#0b0822] via-[#160f3d] to-[#24135f] text-white"
->
+<div class="relative min-h-screen overflow-hidden bg-page text-content">
   <!-- Ambient blobs -->
   <div class="pointer-events-none absolute inset-0">
     <div
-      class="absolute -left-40 -top-40 h-[520px] w-[520px] animate-pulse rounded-full bg-purple-600/20 blur-3xl"
+      class="absolute -left-40 -top-40 h-[520px] w-[520px] animate-pulse rounded-full bg-purple-600/7 dark:bg-purple-600/20 blur-3xl"
     ></div>
     <div
-      class="absolute -right-40 top-60 h-[420px] w-[420px] animate-pulse rounded-full bg-fuchsia-600/20 blur-3xl"
+      class="absolute -right-40 top-60 h-[420px] w-[420px] animate-pulse rounded-full bg-fuchsia-600/7 dark:bg-fuchsia-600/20 blur-3xl"
     ></div>
     <div
-      class="absolute bottom-0 left-1/2 h-[400px] w-[600px] -translate-x-1/2 rounded-full bg-indigo-600/15 blur-3xl"
+      class="absolute bottom-0 left-1/2 h-[400px] w-[600px] -translate-x-1/2 rounded-full bg-indigo-600/5 dark:bg-indigo-600/15 blur-3xl"
     ></div>
   </div>
 
   <div class="relative z-10 mx-auto max-w-5xl px-6 py-14">
     <!-- Page header -->
     <div class="mb-10 space-y-3">
-      <p class="text-sm font-semibold uppercase tracking-[0.28em] text-purple-300">
-        Account Security
-      </p>
+      <p class="text-sm font-semibold uppercase tracking-[0.28em] text-accent">Account Security</p>
       <h1 class="text-4xl font-black tracking-tight">Multi-factor authentication</h1>
-      <p class="max-w-3xl text-base leading-7 text-white/60">
+      <p class="max-w-3xl text-base leading-7 text-subtle">
         Manage the sign-in methods available on your account. Email always stays available as your
         fallback verification method.
       </p>
@@ -30,7 +26,7 @@
     <!-- Loading -->
     @if (loading) {
       <div
-        class="rounded-2xl border border-white/10 bg-white/5 px-6 py-10 text-center text-sm text-white/40"
+        class="rounded-2xl border border-line bg-glass px-6 py-10 text-center text-sm text-faint"
       >
         Loading your MFA settings...
       </div>
@@ -39,25 +35,25 @@
         <!-- Flash messages -->
         @if (success) {
           <div
-            class="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-300"
+            class="rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success"
           >
             {{ success }}
           </div>
         }
         @if (error) {
           <div
-            class="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-300"
+            class="rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
           >
             {{ error }}
           </div>
         }
         <div class="grid gap-5 lg:grid-cols-3">
           <!-- ── Email: always-on ───────────────────────────────────── -->
-          <article class="rounded-3xl border border-white/10 bg-white/5 px-6 py-6 backdrop-blur-xl">
+          <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
             <div class="flex items-start justify-between gap-4">
               <div>
                 <div
-                  class="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-500/20 text-purple-300"
+                  class="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-500/20 text-accent"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -74,33 +70,31 @@
                     />
                   </svg>
                 </div>
-                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">
-                  Email
-                </p>
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">Email</p>
                 <h2 class="mt-2 text-2xl font-bold">Always on</h2>
               </div>
               <span
-                class="rounded-full bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-300"
+                class="rounded-full bg-success/15 px-3 py-1.5 text-xs font-semibold text-success"
               >
                 Fallback
               </span>
             </div>
-            <p class="mt-4 text-sm leading-6 text-white/60">
+            <p class="mt-4 text-sm leading-6 text-subtle">
               Verification email: {{ emailSettings?.maskedEmail }}
             </p>
-            <p class="mt-3 text-sm leading-6 text-white/40">
+            <p class="mt-3 text-sm leading-6 text-faint">
               This method cannot be removed and stays available even if SMS and authenticator app
               MFA are turned off.
             </p>
           </article>
           <!-- ── SMS ───────────────────────────────────────────────── -->
           <article
-            class="rounded-3xl border border-white/10 bg-white/5 px-6 py-6 backdrop-blur-xl lg:col-span-2"
+            class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl lg:col-span-2"
           >
             <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
                 <div
-                  class="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-500/20 text-purple-300"
+                  class="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-500/20 text-accent"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -117,7 +111,7 @@
                     />
                   </svg>
                 </div>
-                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">SMS</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">SMS</p>
                 <h2 class="mt-2 text-2xl font-bold">
                   {{
                     smsSettings?.isEnabled
@@ -127,7 +121,7 @@
                         : 'Not configured'
                   }}
                 </h2>
-                <p class="mt-3 text-sm leading-6 text-white/60">
+                <p class="mt-3 text-sm leading-6 text-subtle">
                   {{
                     smsSettings?.maskedPhoneNumber
                       ? 'Verified phone on file: ' + smsSettings!.maskedPhoneNumber
@@ -138,8 +132,8 @@
               <span
                 class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold"
                 [ngClass]="{
-                  'bg-emerald-500/15 text-emerald-300': smsSettings?.isEnabled,
-                  'bg-amber-500/15 text-amber-300': !smsSettings?.isEnabled,
+                  'bg-success/15 text-success': smsSettings?.isEnabled,
+                  'bg-warning/15 text-warning': !smsSettings?.isEnabled,
                 }"
               >
                 {{ smsSettings?.isEnabled ? 'Protected' : 'Available' }}
@@ -147,14 +141,14 @@
             </div>
             @if (smsVerifiedAtLabel) {
               <div
-                class="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/50"
+                class="mt-4 rounded-2xl border border-line bg-glass px-4 py-3 text-sm text-subtle"
               >
                 Verified on {{ smsVerifiedAtLabel }}
               </div>
             }
             @if (smsSettings && !smsSettings.enrollmentAvailable) {
               <div
-                class="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/50"
+                class="mt-4 rounded-2xl border border-line bg-glass px-4 py-3 text-sm text-subtle"
               >
                 SMS MFA enrollment is unavailable in this environment.
               </div>
@@ -167,18 +161,18 @@
                 (ngSubmit)="startSmsEnrollment()"
               >
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">
+                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
                     Phone setup
                   </p>
                   <h3 class="mt-2 text-xl font-bold">
                     {{ smsSettings?.isConfigured ? 'Change your phone number' : 'Set up SMS MFA' }}
                   </h3>
-                  <p class="mt-2 text-sm leading-6 text-white/60">
+                  <p class="mt-2 text-sm leading-6 text-subtle">
                     Your stored phone number will only be replaced after the new number is verified.
                   </p>
                 </div>
                 <div class="space-y-2">
-                  <label class="text-sm font-semibold text-white/80" for="phone-number"
+                  <label class="text-sm font-semibold text-muted" for="phone-number"
                     >Mobile phone number</label
                   >
                   <input
@@ -187,26 +181,26 @@
                     formControlName="phoneNumber"
                     autocomplete="tel"
                     placeholder="+1 416 555 0123"
-                    class="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-base text-white placeholder-white/30 outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
+                    class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
                   />
                   @if (
                     phoneForm.controls.phoneNumber.invalid && phoneForm.controls.phoneNumber.touched
                   ) {
-                    <p class="text-sm text-rose-400">A phone number is required.</p>
+                    <p class="text-sm text-danger">A phone number is required.</p>
                   }
                 </div>
                 <div class="flex flex-col gap-3 sm:flex-row">
                   <button
                     type="submit"
                     [disabled]="smsSubmitting"
-                    class="inline-flex items-center justify-center rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    class="inline-flex items-center justify-center rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {{ smsSubmitting ? 'Sending code...' : 'Send verification code' }}
                   </button>
                   <button
                     type="button"
                     (click)="cancelSmsEditor()"
-                    class="inline-flex items-center justify-center rounded-2xl border border-white/20 px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10"
+                    class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong"
                   >
                     Cancel
                   </button>
@@ -221,19 +215,19 @@
                 (ngSubmit)="verifySmsChallenge()"
               >
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">
+                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
                     Verify SMS
                   </p>
                   <h3 class="mt-2 text-xl font-bold">
                     {{ smsFlow === 'enable' ? 'Re-enable SMS MFA' : 'Verify your phone number' }}
                   </h3>
-                  <p class="mt-2 text-sm leading-6 text-white/60">
+                  <p class="mt-2 text-sm leading-6 text-subtle">
                     Enter the 6-digit code sent to {{ smsChallenge?.MaskedDestination }}. This
                     challenge expires at {{ smsChallenge?.ExpiresAtUtc | date: 'medium' }}.
                   </p>
                 </div>
                 <div class="space-y-2">
-                  <label class="text-sm font-semibold text-white/80" for="sms-code"
+                  <label class="text-sm font-semibold text-muted" for="sms-code"
                     >Verification code</label
                   >
                   <input
@@ -243,10 +237,10 @@
                     maxlength="6"
                     formControlName="code"
                     placeholder="123456"
-                    class="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-base tracking-[0.35em] text-white placeholder-white/30 outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
+                    class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base tracking-[0.35em] text-content placeholder:text-faint outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
                   />
                   @if (smsCodeForm.controls.code.invalid && smsCodeForm.controls.code.touched) {
-                    <p class="text-sm text-rose-400">
+                    <p class="text-sm text-danger">
                       Enter the 6-digit code from your text message.
                     </p>
                   }
@@ -255,14 +249,14 @@
                   <button
                     type="submit"
                     [disabled]="smsVerifying"
-                    class="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    class="inline-flex items-center justify-center rounded-2xl bg-inverse px-5 py-3 text-sm font-semibold text-inverse-content transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {{ smsVerifying ? 'Verifying...' : 'Verify code' }}
                   </button>
                   <button
                     type="button"
                     (click)="cancelSmsChallenge()"
-                    class="inline-flex items-center justify-center rounded-2xl border border-white/20 px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10"
+                    class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong"
                   >
                     Cancel
                   </button>
@@ -276,7 +270,7 @@
                   <button
                     type="button"
                     (click)="openSmsEditor()"
-                    class="inline-flex items-center justify-center rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-500"
+                    class="inline-flex items-center justify-center rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-purple-500"
                   >
                     {{ smsSettings?.isConfigured ? 'Change number' : 'Setup' }}
                   </button>
@@ -286,7 +280,7 @@
                     type="button"
                     (click)="startSmsEnable()"
                     [disabled]="smsSubmitting"
-                    class="inline-flex items-center justify-center rounded-2xl border border-purple-400/40 px-5 py-3 text-sm font-semibold text-purple-300 transition hover:bg-purple-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    class="inline-flex items-center justify-center rounded-2xl border border-purple-400/40 px-5 py-3 text-sm font-semibold text-accent transition hover:bg-purple-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {{ smsSubmitting ? 'Sending...' : 'Enable' }}
                   </button>
@@ -296,7 +290,7 @@
                     type="button"
                     (click)="disableSms()"
                     [disabled]="smsMutating"
-                    class="inline-flex items-center justify-center rounded-2xl border border-amber-400/40 px-5 py-3 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    class="inline-flex items-center justify-center rounded-2xl border border-warning/40 px-5 py-3 text-sm font-semibold text-warning transition hover:bg-warning/10 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {{ smsMutating ? 'Updating...' : 'Disable' }}
                   </button>
@@ -306,7 +300,7 @@
                     type="button"
                     (click)="removeSms()"
                     [disabled]="smsMutating"
-                    class="inline-flex items-center justify-center rounded-2xl border border-rose-400/40 px-5 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    class="inline-flex items-center justify-center rounded-2xl border border-danger/40 px-5 py-3 text-sm font-semibold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {{ smsMutating ? 'Updating...' : 'Remove' }}
                   </button>
@@ -316,12 +310,12 @@
           </article>
           <!-- ── Authenticator app ──────────────────────────────────── -->
           <article
-            class="rounded-3xl border border-white/10 bg-white/5 px-6 py-6 backdrop-blur-xl lg:col-span-3"
+            class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl lg:col-span-3"
           >
             <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
                 <div
-                  class="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-500/20 text-purple-300"
+                  class="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-500/20 text-accent"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -338,7 +332,7 @@
                     />
                   </svg>
                 </div>
-                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
                   Authenticator app
                 </p>
                 <h2 class="mt-2 text-2xl font-bold">
@@ -350,15 +344,15 @@
                         : 'Not configured'
                   }}
                 </h2>
-                <p class="mt-3 text-sm leading-6 text-white/60">
+                <p class="mt-3 text-sm leading-6 text-subtle">
                   Use 6-digit time-based codes from an authenticator app on your phone or desktop.
                 </p>
               </div>
               <span
                 class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold"
                 [ngClass]="{
-                  'bg-emerald-500/15 text-emerald-300': totpSettings?.isEnabled,
-                  'bg-amber-500/15 text-amber-300': !totpSettings?.isEnabled,
+                  'bg-success/15 text-success': totpSettings?.isEnabled,
+                  'bg-warning/15 text-warning': !totpSettings?.isEnabled,
                 }"
               >
                 {{ totpSettings?.isEnabled ? 'App linked' : 'Optional' }}
@@ -368,14 +362,14 @@
               <div class="mt-4 grid gap-4 md:grid-cols-2">
                 @if (totpEnrolledAtLabel) {
                   <div
-                    class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/50"
+                    class="rounded-2xl border border-line bg-glass px-4 py-3 text-sm text-subtle"
                   >
                     Enrolled on {{ totpEnrolledAtLabel }}
                   </div>
                 }
                 @if (totpDisabledAtLabel) {
                   <div
-                    class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/50"
+                    class="rounded-2xl border border-line bg-glass px-4 py-3 text-sm text-subtle"
                   >
                     Disabled on {{ totpDisabledAtLabel }}
                   </div>
@@ -384,7 +378,7 @@
             }
             @if (totpSettings && !totpSettings.enrollmentAvailable && !totpSettings.isConfigured) {
               <div
-                class="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/50"
+                class="mt-4 rounded-2xl border border-line bg-glass px-4 py-3 text-sm text-subtle"
               >
                 TOTP enrollment is unavailable in this environment.
               </div>
@@ -393,34 +387,34 @@
             @if (isTotpSetupStep) {
               <div class="mt-5 rounded-3xl border border-purple-500/30 bg-purple-500/10 px-5 py-5">
                 <div class="space-y-2">
-                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">
+                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
                     Set up app
                   </p>
                   <h3 class="text-xl font-bold">Link your authenticator app</h3>
-                  <p class="text-sm leading-6 text-white/60">
+                  <p class="text-sm leading-6 text-subtle">
                     Add a new TOTP account in your authenticator app, then scan or paste the setup
                     URI below. If scanning is unavailable, use the secret key instead.
                   </p>
                 </div>
                 <div class="mt-4 grid gap-4 lg:grid-cols-2">
-                  <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-white/40">
+                  <div class="rounded-2xl border border-line bg-glass px-4 py-4">
+                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">
                       Secret key
                     </p>
-                    <p class="mt-2 break-all font-mono text-sm text-white/80">
+                    <p class="mt-2 break-all font-mono text-sm text-muted">
                       {{ totpEnrollment?.SecretKey }}
                     </p>
                   </div>
-                  <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-white/40">
+                  <div class="rounded-2xl border border-line bg-glass px-4 py-4">
+                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">
                       Setup URI
                     </p>
-                    <p class="mt-2 break-all font-mono text-xs text-white/80">
+                    <p class="mt-2 break-all font-mono text-xs text-muted">
                       {{ totpEnrollment?.QrCodeUri }}
                     </p>
                   </div>
                 </div>
-                <p class="mt-4 text-sm text-white/50">
+                <p class="mt-4 text-sm text-subtle">
                   Setup expires at {{ totpEnrollment!.ExpiresAtUtc | date: 'medium' }}.
                 </p>
                 <form
@@ -429,7 +423,7 @@
                   (ngSubmit)="verifyTotpEnrollment()"
                 >
                   <div class="space-y-2">
-                    <label class="text-sm font-semibold text-white/80" for="totp-setup-code"
+                    <label class="text-sm font-semibold text-muted" for="totp-setup-code"
                       >Authenticator code</label
                     >
                     <input
@@ -439,12 +433,12 @@
                       maxlength="6"
                       formControlName="code"
                       placeholder="123456"
-                      class="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-base tracking-[0.35em] text-white placeholder-white/30 outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
+                      class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base tracking-[0.35em] text-content placeholder:text-faint outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
                     />
                     @if (
                       totpSetupForm.controls.code.invalid && totpSetupForm.controls.code.touched
                     ) {
-                      <p class="text-sm text-rose-400">
+                      <p class="text-sm text-danger">
                         Enter the 6-digit code from your authenticator app.
                       </p>
                     }
@@ -453,14 +447,14 @@
                     <button
                       type="submit"
                       [disabled]="totpVerifying"
-                      class="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                      class="inline-flex items-center justify-center rounded-2xl bg-inverse px-5 py-3 text-sm font-semibold text-inverse-content transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {{ totpVerifying ? 'Verifying...' : 'Verify and enable' }}
                     </button>
                     <button
                       type="button"
                       (click)="cancelTotpEnrollment()"
-                      class="inline-flex items-center justify-center rounded-2xl border border-white/20 px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10"
+                      class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong"
                     >
                       Cancel
                     </button>
@@ -476,7 +470,7 @@
                 (ngSubmit)="submitTotpAction()"
               >
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">
+                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
                     Confirm action
                   </p>
                   <h3 class="mt-2 text-xl font-bold">
@@ -488,12 +482,12 @@
                           : 'Remove authenticator app MFA'
                     }}
                   </h3>
-                  <p class="mt-2 text-sm leading-6 text-white/60">
+                  <p class="mt-2 text-sm leading-6 text-subtle">
                     Enter a current 6-digit code from your authenticator app to continue.
                   </p>
                 </div>
                 <div class="space-y-2">
-                  <label class="text-sm font-semibold text-white/80" for="totp-manage-code"
+                  <label class="text-sm font-semibold text-muted" for="totp-manage-code"
                     >Authenticator code</label
                   >
                   <input
@@ -503,12 +497,12 @@
                     maxlength="6"
                     formControlName="code"
                     placeholder="123456"
-                    class="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-base tracking-[0.35em] text-white placeholder-white/30 outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
+                    class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base tracking-[0.35em] text-content placeholder:text-faint outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
                   />
                   @if (
                     totpManageForm.controls.code.invalid && totpManageForm.controls.code.touched
                   ) {
-                    <p class="text-sm text-rose-400">
+                    <p class="text-sm text-danger">
                       Enter the 6-digit code from your authenticator app.
                     </p>
                   }
@@ -517,14 +511,14 @@
                   <button
                     type="submit"
                     [disabled]="totpMutating"
-                    class="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    class="inline-flex items-center justify-center rounded-2xl bg-inverse px-5 py-3 text-sm font-semibold text-inverse-content transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {{ totpMutating ? 'Updating...' : 'Confirm' }}
                   </button>
                   <button
                     type="button"
                     (click)="cancelTotpAction()"
-                    class="inline-flex items-center justify-center rounded-2xl border border-white/20 px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10"
+                    class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong"
                   >
                     Cancel
                   </button>
@@ -539,7 +533,7 @@
                     type="button"
                     (click)="startTotpEnrollment()"
                     [disabled]="totpStarting"
-                    class="inline-flex items-center justify-center rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    class="inline-flex items-center justify-center rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {{ totpStarting ? 'Preparing...' : 'Setup' }}
                   </button>
@@ -548,7 +542,7 @@
                   <button
                     type="button"
                     (click)="beginTotpAction('enable')"
-                    class="inline-flex items-center justify-center rounded-2xl border border-purple-400/40 px-5 py-3 text-sm font-semibold text-purple-300 transition hover:bg-purple-500/10"
+                    class="inline-flex items-center justify-center rounded-2xl border border-purple-400/40 px-5 py-3 text-sm font-semibold text-accent transition hover:bg-purple-500/10"
                   >
                     Enable
                   </button>
@@ -557,7 +551,7 @@
                   <button
                     type="button"
                     (click)="beginTotpAction('disable')"
-                    class="inline-flex items-center justify-center rounded-2xl border border-amber-400/40 px-5 py-3 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/10"
+                    class="inline-flex items-center justify-center rounded-2xl border border-warning/40 px-5 py-3 text-sm font-semibold text-warning transition hover:bg-warning/10"
                   >
                     Disable
                   </button>
@@ -566,7 +560,7 @@
                   <button
                     type="button"
                     (click)="beginTotpAction('remove')"
-                    class="inline-flex items-center justify-center rounded-2xl border border-rose-400/40 px-5 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10"
+                    class="inline-flex items-center justify-center rounded-2xl border border-danger/40 px-5 py-3 text-sm font-semibold text-danger transition hover:bg-danger/10"
                   >
                     Remove
                   </button>

@@ -1,16 +1,14 @@
-<div
-  class="min-h-screen bg-gradient-to-br from-[#0b0822] via-[#160f3d] to-[#24135f] text-white overflow-x-hidden relative"
->
+<div class="min-h-screen bg-page text-content overflow-x-hidden relative">
   <!-- Orb blobs -->
   <div class="pointer-events-none absolute inset-0 overflow-hidden">
     <div
-      class="absolute -top-40 -left-40 w-[520px] h-[520px] bg-purple-600/30 rounded-full blur-3xl animate-pulse"
+      class="absolute -top-40 -left-40 w-[520px] h-[520px] bg-purple-600/11 dark:bg-purple-600/30 rounded-full blur-3xl animate-pulse"
     ></div>
     <div
-      class="absolute top-[30%] -right-40 w-[420px] h-[420px] bg-fuchsia-600/20 rounded-full blur-3xl animate-pulse"
+      class="absolute top-[30%] -right-40 w-[420px] h-[420px] bg-fuchsia-600/7 dark:bg-fuchsia-600/20 rounded-full blur-3xl animate-pulse"
     ></div>
     <div
-      class="absolute bottom-0 left-1/3 w-[360px] h-[360px] bg-indigo-600/20 rounded-full blur-3xl animate-pulse"
+      class="absolute bottom-0 left-1/3 w-[360px] h-[360px] bg-indigo-600/7 dark:bg-indigo-600/20 rounded-full blur-3xl animate-pulse"
     ></div>
   </div>
 
@@ -20,7 +18,7 @@
       <div class="grid gap-10 lg:grid-cols-12 lg:items-start">
         <div class="lg:col-span-7">
           <span
-            class="inline-flex items-center px-4 py-1.5 rounded-full bg-white/10 text-sm mb-6 gap-2"
+            class="inline-flex items-center px-4 py-1.5 rounded-full bg-glass-strong text-sm mb-6 gap-2"
           >
             <span class="h-2 w-2 rounded-full bg-purple-400 animate-pulse"></span>
             Club discovery &bull; Find your community
@@ -28,26 +26,26 @@
 
           <h1 class="text-4xl sm:text-5xl font-extrabold leading-tight tracking-tight">
             Discover clubs that
-            <span class="text-purple-400">match your interests</span>
+            <span class="text-accent">match your interests</span>
           </h1>
 
-          <p class="mt-5 text-lg text-white/70 max-w-xl">
+          <p class="mt-5 text-lg text-muted max-w-xl">
             Search by keyword, filter by type, and sort to find the perfect club. Join communities
             and stay up to date with their posts and events.
           </p>
 
           <!-- Search bar -->
           <div
-            class="mt-8 rounded-2xl border border-white/10 bg-white/[0.06] backdrop-blur shadow-xl shadow-purple-900/30"
+            class="mt-8 rounded-2xl border border-line bg-glass backdrop-blur shadow-xl shadow-purple-900/30"
           >
             <div class="grid gap-3 p-3 sm:grid-cols-12 sm:p-4">
               <div class="sm:col-span-9">
                 <div
-                  class="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5"
+                  class="flex items-center gap-2 rounded-xl border border-line bg-surface-sunken px-3 py-2.5"
                 >
-                  <span class="text-white/40">&#128269;</span>
+                  <span class="text-faint">&#128269;</span>
                   <input
-                    class="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+                    class="w-full bg-transparent text-sm text-content outline-none placeholder:text-faint"
                     placeholder="Search clubs by name, description, or location..."
                     [(ngModel)]="searchQuery"
                     (ngModelChange)="onTextChange()"
@@ -56,7 +54,7 @@
                   @if (searchQuery) {
                     <button
                       type="button"
-                      class="cursor-pointer text-xs text-white/40 transition hover:text-white/80"
+                      class="cursor-pointer text-xs text-faint transition hover:text-content"
                       (click)="searchQuery = ''; onTextChange()"
                     >
                       Clear
@@ -68,18 +66,18 @@
               <div class="sm:col-span-3">
                 <div class="relative overflow-hidden rounded-xl">
                   <select
-                    class="w-full cursor-pointer appearance-none rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 pr-9 text-sm text-white outline-none transition hover:border-white/20 focus:border-white/20"
+                    class="w-full cursor-pointer appearance-none rounded-xl border border-line bg-surface-sunken px-3 py-2.5 pr-9 text-sm text-content outline-none transition hover:border-line-strong focus:border-line-strong"
                     [(ngModel)]="selectedSort"
                     (ngModelChange)="onFilterChange()"
                   >
                     @for (option of sortOptions; track option.value) {
-                      <option class="bg-[#160f3d] text-white" [ngValue]="option.value">
+                      <option class="bg-surface-raised text-content" [ngValue]="option.value">
                         {{ option.label }}
                       </option>
                     }
                   </select>
                   <span
-                    class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-white/40 text-xs"
+                    class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-faint text-xs"
                   >
                     &#9662;
                   </span>
@@ -94,15 +92,15 @@
               @for (chip of activeFilters; track chip.kind) {
                 <button
                   type="button"
-                  class="cursor-pointer rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/10"
+                  class="cursor-pointer rounded-full border border-line-strong bg-glass px-3 py-1.5 text-xs font-medium text-muted transition hover:bg-glass-strong"
                   (click)="clearChip(chip)"
                 >
-                  {{ chip.label }} <span class="text-white/40">&times;</span>
+                  {{ chip.label }} <span class="text-faint">&times;</span>
                 </button>
               }
               <button
                 type="button"
-                class="cursor-pointer rounded-full border border-white/10 bg-transparent px-3 py-1.5 text-xs font-medium text-white/50 transition hover:bg-white/10 hover:text-white"
+                class="cursor-pointer rounded-full border border-line bg-transparent px-3 py-1.5 text-xs font-medium text-subtle transition hover:bg-glass-strong hover:text-content"
                 (click)="clearFilters()"
               >
                 Clear all
@@ -114,37 +112,35 @@
         <!-- Sidebar panel -->
         <div class="lg:col-span-5">
           <div
-            class="rounded-3xl border border-white/[0.12] bg-white/[0.06] backdrop-blur shadow-xl shadow-purple-900/20"
+            class="rounded-3xl border border-line bg-glass backdrop-blur shadow-xl shadow-purple-900/20"
           >
             <div class="p-5 sm:p-6">
               <div class="flex items-center justify-between mb-5">
-                <div class="text-sm font-semibold text-white/90">Search snapshot</div>
+                <div class="text-sm font-semibold text-content">Search snapshot</div>
                 @if (resultSource) {
-                  <div class="text-xs text-purple-300/70">{{ sourceLabel }}</div>
+                  <div class="text-xs text-accent">{{ sourceLabel }}</div>
                 }
               </div>
 
               <div class="grid grid-cols-2 gap-3">
-                <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div class="text-xs text-white/55">Results</div>
+                <div class="rounded-2xl border border-line bg-surface-sunken p-4">
+                  <div class="text-xs text-subtle">Results</div>
                   <div class="mt-1 text-2xl font-bold">
                     @if (!loading) {
                       {{ totalCount | number }}
                     } @else {
-                      <span class="animate-pulse text-purple-300">...</span>
+                      <span class="animate-pulse text-accent">...</span>
                     }
                   </div>
                 </div>
-                <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div class="text-xs text-white/55">Page</div>
+                <div class="rounded-2xl border border-line bg-surface-sunken p-4">
+                  <div class="text-xs text-subtle">Page</div>
                   <div class="mt-1 text-2xl font-bold">{{ currentPage }}</div>
                 </div>
               </div>
 
-              <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div
-                  class="text-[10px] font-semibold uppercase tracking-widest text-purple-300/70 mb-3"
-                >
+              <div class="mt-4 rounded-2xl border border-line bg-surface-sunken p-4">
+                <div class="text-[10px] font-semibold uppercase tracking-widest text-accent mb-3">
                   Filter by type
                 </div>
                 <div class="flex flex-wrap gap-2">
@@ -153,8 +149,8 @@
                     class="cursor-pointer rounded-full border px-3 py-1.5 text-xs font-medium transition"
                     [ngClass]="
                       selectedClubType === null
-                        ? 'border-transparent bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white'
-                        : 'border-white/10 bg-white/5 text-white/60 hover:bg-white/10'
+                        ? 'border-transparent bg-gradient-to-r from-purple-500 to-fuchsia-500 text-accent-contrast'
+                        : 'border-line bg-glass text-subtle hover:bg-glass-strong'
                     "
                     (click)="selectClubType(null)"
                   >
@@ -167,7 +163,7 @@
                       [ngClass]="
                         selectedClubType === type
                           ? clubTypeStyles[type] + ' border-current'
-                          : 'border-white/10 bg-white/5 text-white/60 hover:bg-white/10'
+                          : 'border-line bg-glass text-subtle hover:bg-glass-strong'
                       "
                       (click)="selectClubType(type)"
                     >
@@ -186,7 +182,7 @@
     <section class="mx-auto max-w-7xl px-6 mt-10 pb-20">
       <div class="flex items-baseline justify-between mb-6">
         <h2 class="text-xl font-bold">Browse clubs</h2>
-        <p class="text-sm text-white/50">
+        <p class="text-sm text-subtle">
           @if (!loading && totalCount > 0) {
             {{ totalCount | number }} found
           } @else if (loading) {
@@ -197,7 +193,7 @@
 
       @if (error) {
         <div
-          class="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+          class="mb-6 rounded-2xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger"
         >
           {{ error }}
         </div>
@@ -208,7 +204,7 @@
         <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           @for (item of [1, 2, 3, 4, 5, 6]; track item) {
             <div
-              class="h-72 rounded-3xl border border-white/[0.12] bg-white/[0.04] animate-pulse"
+              class="h-72 rounded-3xl border border-line bg-surface-raised/[0.04] animate-pulse"
             ></div>
           }
         </div>
@@ -216,10 +212,10 @@
 
       <!-- Empty -->
       @if (!loading && clubs.length === 0 && !error) {
-        <div class="rounded-3xl border border-white/[0.12] bg-white/[0.04] p-12 text-center">
+        <div class="rounded-3xl border border-line bg-surface-raised/[0.04] p-12 text-center">
           <div class="text-5xl mb-4">&#127970;</div>
           <h3 class="text-xl font-semibold">No clubs match this search</h3>
-          <p class="mt-2 text-sm text-white/55 max-w-sm mx-auto">
+          <p class="mt-2 text-sm text-subtle max-w-sm mx-auto">
             Try a different keyword or remove the type filter to see more clubs.
           </p>
         </div>
@@ -230,7 +226,7 @@
         <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           @for (club of clubs; track club.id) {
             <article
-              class="group cursor-pointer rounded-3xl border border-white/[0.12] bg-white/[0.06] overflow-hidden transition-all duration-500 hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(168,85,247,0.2)] hover:border-white/20"
+              class="group cursor-pointer rounded-3xl border border-line bg-glass overflow-hidden transition-all duration-500 hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(168,85,247,0.2)] hover:border-line-strong"
               tabindex="0"
               (click)="viewClub(club.id)"
               (keyup.enter)="viewClub(club.id)"
@@ -264,10 +260,10 @@
                 @if (club.rating != null) {
                   <div class="absolute right-4 bottom-4">
                     <div
-                      class="flex items-center gap-1 rounded-full border border-white/15 bg-black/50 px-2 py-1 text-[11px] backdrop-blur"
+                      class="flex items-center gap-1 rounded-full border border-line-strong bg-black/50 px-2 py-1 text-[11px] backdrop-blur"
                     >
                       <span class="text-yellow-400">&#9733;</span>
-                      <span class="font-semibold text-white">{{
+                      <span class="font-semibold text-content">{{
                         club.rating | number: '1.1-1'
                       }}</span>
                     </div>
@@ -279,33 +275,29 @@
               <div class="p-5">
                 <div class="text-base font-bold leading-tight">{{ club.name }}</div>
                 @if (club.location) {
-                  <div class="mt-1 flex items-center gap-1 text-xs text-white/50">
+                  <div class="mt-1 flex items-center gap-1 text-xs text-subtle">
                     <span>&#128205;</span>
                     <span>{{ club.location }}</span>
                   </div>
                 }
 
-                <p class="mt-3 line-clamp-2 text-sm leading-relaxed text-white/65">
+                <p class="mt-3 line-clamp-2 text-sm leading-relaxed text-subtle">
                   {{ club.description || 'No description provided.' }}
                 </p>
 
-                <div class="mt-4 flex items-center justify-between text-xs text-white/55">
+                <div class="mt-4 flex items-center justify-between text-xs text-subtle">
                   <div class="flex items-center gap-3">
                     <span>
-                      <span class="font-semibold text-white/80">{{
-                        club.memberCount | number
-                      }}</span>
+                      <span class="font-semibold text-muted">{{ club.memberCount | number }}</span>
                       members
                     </span>
                     <span>
-                      <span class="font-semibold text-white/80">{{
-                        club.eventCount | number
-                      }}</span>
+                      <span class="font-semibold text-muted">{{ club.eventCount | number }}</span>
                       events
                     </span>
                   </div>
                   @if (club.maxMemberCount > 0) {
-                    <div class="h-1.5 w-16 overflow-hidden rounded-full bg-white/10">
+                    <div class="h-1.5 w-16 overflow-hidden rounded-full bg-glass-strong">
                       <div
                         class="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500"
                         [style.width.%]="memberCapacityPercent(club)"
@@ -324,7 +316,7 @@
         <div class="mt-10 flex items-center justify-center gap-2">
           <button
             type="button"
-            class="cursor-pointer rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-white/70 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+            class="cursor-pointer rounded-xl border border-line bg-glass px-4 py-2 text-sm text-muted transition hover:bg-glass-strong disabled:cursor-not-allowed disabled:opacity-30"
             [disabled]="currentPage <= 1"
             (click)="goToPage(currentPage - 1)"
           >
@@ -333,15 +325,15 @@
 
           @for (page of pageNumbers; track page) {
             @if (page === -1) {
-              <span class="px-1 text-sm text-white/30">&hellip;</span>
+              <span class="px-1 text-sm text-faint">&hellip;</span>
             } @else {
               <button
                 type="button"
                 class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border text-sm font-medium transition"
                 [ngClass]="
                   page === currentPage
-                    ? 'border-transparent bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white'
-                    : 'border-white/10 bg-white/[0.06] text-white/65 hover:bg-white/10'
+                    ? 'border-transparent bg-gradient-to-r from-purple-500 to-fuchsia-500 text-accent-contrast'
+                    : 'border-line bg-glass text-subtle hover:bg-glass-strong'
                 "
                 (click)="goToPage(page)"
               >
@@ -352,7 +344,7 @@
 
           <button
             type="button"
-            class="cursor-pointer rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-white/70 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+            class="cursor-pointer rounded-xl border border-line bg-glass px-4 py-2 text-sm text-muted transition hover:bg-glass-strong disabled:cursor-not-allowed disabled:opacity-30"
             [disabled]="currentPage >= totalPages"
             (click)="goToPage(currentPage + 1)"
           >

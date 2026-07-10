@@ -1,9 +1,9 @@
-<div class="rounded-3xl border border-white/[0.12] bg-white/[0.06] p-6 sm:p-8">
+<div class="rounded-3xl border border-line bg-glass p-6 sm:p-8">
   <!-- Header -->
   <h2 class="text-base font-bold mb-6">
     Comments
     @if (totalCount > 0) {
-      <span class="ml-1.5 text-sm font-normal text-white/45">({{ totalCount }})</span>
+      <span class="ml-1.5 text-sm font-normal text-faint">({{ totalCount }})</span>
     }
   </h2>
 
@@ -15,18 +15,18 @@
         placeholder="Write a comment..."
         rows="3"
         maxlength="1000"
-        class="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-purple-500/50 resize-none transition"
+        class="w-full rounded-2xl border border-line bg-surface-sunken px-4 py-3 text-sm text-content placeholder:text-faint outline-none focus:border-purple-500/50 resize-none transition"
       ></textarea>
       <div class="flex items-center justify-between mt-2">
         @if (submitError) {
-          <span class="text-xs text-red-400">{{ submitError }}</span>
+          <span class="text-xs text-danger">{{ submitError }}</span>
         } @else {
           <span></span>
         }
         <button
           (click)="submitComment()"
           [disabled]="!newCommentText.trim() || submitting"
-          class="cursor-pointer px-5 py-1.5 rounded-full text-sm font-semibold bg-gradient-to-r from-purple-500 to-fuchsia-500 disabled:opacity-40 disabled:cursor-not-allowed transition hover:opacity-90"
+          class="cursor-pointer px-5 py-1.5 rounded-full text-sm font-semibold text-accent-contrast bg-gradient-to-r from-purple-500 to-fuchsia-500 disabled:opacity-40 disabled:cursor-not-allowed transition hover:opacity-90"
         >
           @if (submitting) {
             <span class="animate-pulse">Posting...</span>
@@ -41,9 +41,9 @@
   <!-- Not logged in -->
   @if (!isLoggedIn) {
     <div
-      class="mb-6 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/55"
+      class="mb-6 rounded-2xl border border-line bg-surface-sunken px-4 py-3 text-sm text-subtle"
     >
-      <a routerLink="/auth/login" class="text-purple-300 hover:text-purple-200 transition-colors"
+      <a routerLink="/auth/login" class="text-accent hover:text-accent transition-colors"
         >Sign in</a
       >
       to leave a comment.
@@ -52,18 +52,18 @@
 
   <!-- Load error -->
   @if (loadError) {
-    <div class="text-sm text-red-400 mb-4">{{ loadError }}</div>
+    <div class="text-sm text-danger mb-4">{{ loadError }}</div>
   }
 
   <!-- Loading skeleton -->
   @if (loading) {
     @for (item of [1, 2, 3]; track item) {
       <div class="flex gap-3 mb-5 animate-pulse">
-        <div class="w-8 h-8 bg-white/10 rounded-full flex-shrink-0"></div>
+        <div class="w-8 h-8 bg-glass-strong rounded-full flex-shrink-0"></div>
         <div class="flex-1">
-          <div class="h-3 bg-white/10 rounded w-1/4 mb-2"></div>
-          <div class="h-3 bg-white/10 rounded w-full mb-1.5"></div>
-          <div class="h-3 bg-white/10 rounded w-3/4"></div>
+          <div class="h-3 bg-glass-strong rounded w-1/4 mb-2"></div>
+          <div class="h-3 bg-glass-strong rounded w-full mb-1.5"></div>
+          <div class="h-3 bg-glass-strong rounded w-3/4"></div>
         </div>
       </div>
     }
@@ -71,7 +71,7 @@
 
   <!-- Empty state -->
   @if (!loading && comments.length === 0 && !loadError) {
-    <div class="text-center py-10 text-white/35 text-sm">No comments yet. Be the first!</div>
+    <div class="text-center py-10 text-faint text-sm">No comments yet. Be the first!</div>
   }
 
   <!-- Comment list -->
@@ -88,7 +88,7 @@
             />
           } @else {
             <div
-              class="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-fuchsia-500 flex items-center justify-center text-xs font-bold text-white"
+              class="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-fuchsia-500 flex items-center justify-center text-xs font-bold text-accent-contrast"
             >
               {{ authorInitials(comment) }}
             </div>
@@ -98,32 +98,32 @@
         <!-- Body -->
         <div class="flex-1 min-w-0">
           <div class="flex items-baseline gap-2 mb-1.5">
-            <span class="text-sm font-semibold text-white/90">{{ authorDisplay(comment) }}</span>
-            <span class="text-xs text-white/35">{{ formatDate(comment.createdAt) }}</span>
+            <span class="text-sm font-semibold text-content">{{ authorDisplay(comment) }}</span>
+            <span class="text-xs text-faint">{{ formatDate(comment.createdAt) }}</span>
             @if (comment.updatedAt !== comment.createdAt) {
-              <span class="text-xs text-white/30 italic">(edited)</span>
+              <span class="text-xs text-faint italic">(edited)</span>
             }
           </div>
 
           <!-- View mode -->
           @if (editingId !== comment.id) {
-            <p class="text-sm text-white/70 whitespace-pre-wrap break-words leading-relaxed">
+            <p class="text-sm text-muted whitespace-pre-wrap break-words leading-relaxed">
               {{ comment.content }}
             </p>
 
             <!-- Delete confirmation -->
             @if (deletingId === comment.id) {
               <div class="mt-2 flex items-center gap-3 text-xs">
-                <span class="text-white/55">Delete this comment?</span>
+                <span class="text-subtle">Delete this comment?</span>
                 <button
                   (click)="deleteComment(comment.id)"
-                  class="cursor-pointer text-red-400 font-medium hover:text-red-300 transition-colors"
+                  class="cursor-pointer text-danger font-medium hover:text-danger transition-colors"
                 >
                   Delete
                 </button>
                 <button
                   (click)="cancelDelete()"
-                  class="cursor-pointer text-white/40 hover:text-white/70 transition-colors"
+                  class="cursor-pointer text-faint hover:text-muted transition-colors"
                 >
                   Cancel
                 </button>
@@ -135,13 +135,13 @@
               <div class="flex gap-3 mt-1.5">
                 <button
                   (click)="startEdit(comment)"
-                  class="cursor-pointer text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                  class="cursor-pointer text-xs text-accent hover:text-accent transition-colors"
                 >
                   Edit
                 </button>
                 <button
                   (click)="confirmDelete(comment.id)"
-                  class="cursor-pointer text-xs text-red-400/70 hover:text-red-400 transition-colors"
+                  class="cursor-pointer text-xs text-danger/70 hover:text-danger transition-colors"
                 >
                   Delete
                 </button>
@@ -155,19 +155,19 @@
               [(ngModel)]="editText"
               rows="3"
               maxlength="1000"
-              class="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-purple-500/50 resize-none transition"
+              class="w-full rounded-2xl border border-line bg-surface-sunken px-4 py-3 text-sm text-content placeholder:text-faint outline-none focus:border-purple-500/50 resize-none transition"
             ></textarea>
             <div class="flex gap-3 mt-1.5">
               <button
                 (click)="saveEdit(comment)"
                 [disabled]="!editText.trim()"
-                class="cursor-pointer text-xs text-purple-400 font-medium hover:text-purple-300 disabled:opacity-40 transition-colors"
+                class="cursor-pointer text-xs text-accent font-medium hover:text-accent disabled:opacity-40 transition-colors"
               >
                 Save
               </button>
               <button
                 (click)="cancelEdit()"
-                class="cursor-pointer text-xs text-white/40 hover:text-white/70 transition-colors"
+                class="cursor-pointer text-xs text-faint hover:text-muted transition-colors"
               >
                 Cancel
               </button>
@@ -184,7 +184,7 @@
       <button
         (click)="loadMore()"
         [disabled]="loadingMore"
-        class="cursor-pointer px-6 py-2 rounded-full border border-white/15 bg-white/[0.06] text-xs font-medium text-white/60 hover:bg-white/10 hover:text-white/80 disabled:opacity-40 transition"
+        class="cursor-pointer px-6 py-2 rounded-full border border-line-strong bg-glass text-xs font-medium text-subtle hover:bg-glass-strong hover:text-content disabled:opacity-40 transition"
       >
         @if (loadingMore) {
           <span class="animate-pulse">Loading...</span>

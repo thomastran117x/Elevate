@@ -1,62 +1,159 @@
-<div class="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
-  <div class="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-8 backdrop-blur">
-    <h1 class="text-3xl font-bold">Create your account</h1>
-    <p class="mt-2 text-sm text-white/70">
-      Choose your role, verify your email, and finish setup from the inbox link.
+<div
+  class="relative min-h-screen grid grid-cols-1 lg:grid-cols-2 overflow-hidden bg-page text-content"
+>
+  <div
+    class="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-purple-500/11 dark:bg-purple-500/30 blur-3xl rounded-full animate-blob"
+  ></div>
+  <div
+    class="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-fuchsia-500/11 dark:bg-fuchsia-500/30 blur-3xl rounded-full animate-blob animation-delay-2000"
+  ></div>
+
+  <!-- Left splash -->
+  <div class="hidden lg:flex flex-col justify-center px-16 relative z-10 text-content">
+    <div class="flex items-center gap-3 mb-10">
+      <div
+        class="w-12 h-12 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center"
+      >
+        <i class="bi bi-stars text-3xl text-accent"></i>
+      </div>
+      <h1 class="text-4xl font-extrabold tracking-wide">EventXperience</h1>
+    </div>
+
+    <p class="text-lg text-muted mb-8 leading-relaxed max-w-md">
+      Create your account to host clubs, manage events, and reach your community — all from one
+      place.
     </p>
 
-    <form [formGroup]="form" (ngSubmit)="submit()" class="mt-6 space-y-4">
-      <div>
-        <label class="block text-sm font-medium text-white/80 mb-1">Email</label>
-        <input
-          type="email"
-          formControlName="email"
-          class="w-full rounded-xl border border-white/10 bg-slate-900/70 px-4 py-3 outline-none"
-        />
-      </div>
+    <ul class="space-y-3 text-sm">
+      <li class="flex items-center gap-2">
+        <i class="bi bi-check-circle-fill text-xl text-accent"></i>
+        Free to get started
+      </li>
+      <li class="flex items-center gap-2">
+        <i class="bi bi-check-circle-fill text-xl text-accent"></i>
+        Verified email sign-up
+      </li>
+      <li class="flex items-center gap-2">
+        <i class="bi bi-check-circle-fill text-xl text-accent"></i>
+        Pick the role that fits you
+      </li>
+    </ul>
+  </div>
 
-      <div>
-        <label class="block text-sm font-medium text-white/80 mb-1">Password</label>
-        <input
-          type="password"
-          formControlName="password"
-          class="w-full rounded-xl border border-white/10 bg-slate-900/70 px-4 py-3 outline-none"
-        />
-      </div>
+  <!-- Right form card -->
+  <div class="flex items-center justify-center p-8 relative z-20">
+    <div
+      class="w-full max-w-md bg-surface-raised shadow-2xl rounded-3xl p-10 border border-line-strong backdrop-blur-md"
+    >
+      <h2 class="text-3xl font-bold text-center text-accent mb-2">Create your account</h2>
+      <p class="text-center text-sm text-muted mb-8">
+        Choose your role, verify your email, and finish setup from the inbox link.
+      </p>
 
-      <div>
-        <label class="block text-sm font-medium text-white/80 mb-2">Role</label>
-        <div class="grid gap-2">
-          @for (role of roleOptions; track role) {
-            <label
-              class="flex items-center gap-3 rounded-xl border border-white/10 bg-slate-900/50 px-4 py-3"
+      <form [formGroup]="form" (ngSubmit)="submit()" class="flex flex-col gap-4">
+        <div>
+          <label class="block text-sm font-medium text-muted mb-1">Email</label>
+          <div class="relative">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="w-5 h-5 text-subtle absolute left-3 top-1/2 -translate-y-1/2"
             >
-              <input type="radio" formControlName="usertype" [value]="role.value" />
-              <span>{{ role.label }}</span>
-            </label>
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M21.75 6.75v10.5A2.25 2.25 0 0 1 19.5 19.5h-15A2.25 2.25 0 0 1 2.25 17.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15A2.25 2.25 0 0 0 2.25 6.75m19.5 0v.243a2.25 2.25 0 0 1-1.125 1.94L12 12.75 3.375 8.933A2.25 2.25 0 0 1 2.25 6.993V6.75"
+              />
+            </svg>
+            <input
+              type="email"
+              formControlName="email"
+              class="w-full pl-10 pr-4 py-2 rounded-lg bg-surface-sunken border border-line text-content focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
+            />
+          </div>
+          @if (submitted && form.controls['email'].invalid) {
+            <div class="text-danger text-sm mt-1">A valid email is required.</div>
           }
         </div>
-      </div>
 
-      @if (error) {
-        <div class="text-sm text-red-300">{{ error }}</div>
-      }
-      @if (success) {
-        <div class="text-sm text-emerald-300">{{ success }}</div>
-      }
+        <div>
+          <label class="block text-sm font-medium text-muted mb-1">Password</label>
+          <div class="relative">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="w-5 h-5 text-subtle absolute left-3 top-1/2 -translate-y-1/2"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M16.5 10.5V7.5a4.5 4.5 0 10-9 0v3m-.75 3.75h10.5M6.75 14.25v6a1.5 1.5 0 001.5 1.5h7.5a1.5 1.5 0 001.5-1.5v-6"
+              />
+            </svg>
+            <input
+              type="password"
+              formControlName="password"
+              class="w-full pl-10 pr-4 py-2 rounded-lg bg-surface-sunken border border-line text-content focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
+            />
+          </div>
+          @if (submitted && form.controls['password'].invalid) {
+            <div class="text-danger text-sm mt-1">Password must be at least 8 characters.</div>
+          }
+        </div>
 
-      <button
-        type="submit"
-        [disabled]="loading"
-        class="w-full rounded-xl bg-white px-4 py-3 font-semibold text-slate-950 disabled:opacity-60"
-      >
-        {{ loading ? 'Sending verification...' : 'Create account' }}
-      </button>
-    </form>
+        <div>
+          <label class="block text-sm font-medium text-muted mb-2">Role</label>
+          <div class="grid gap-2">
+            @for (role of roleOptions; track role.value) {
+              <label
+                class="flex items-center gap-3 rounded-xl border border-line bg-surface-sunken px-4 py-3 cursor-pointer transition hover:border-line-strong has-[:checked]:border-accent/60 has-[:checked]:bg-accent/10 has-[:checked]:ring-1 has-[:checked]:ring-accent/40"
+              >
+                <input
+                  type="radio"
+                  formControlName="usertype"
+                  [value]="role.value"
+                  class="accent-purple-600"
+                />
+                <span class="text-sm font-medium">{{ role.label }}</span>
+              </label>
+            }
+          </div>
+        </div>
 
-    <p class="mt-5 text-sm text-white/65">
-      Already have an account?
-      <a routerLink="/auth/login" class="text-white underline">Sign in</a>
-    </p>
+        @if (error) {
+          <div
+            class="rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+          >
+            {{ error }}
+          </div>
+        }
+        @if (success) {
+          <div
+            class="rounded-2xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success"
+          >
+            {{ success }}
+          </div>
+        }
+
+        <button
+          type="submit"
+          [disabled]="loading"
+          class="mt-2 w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-accent-contrast py-2.5 rounded-lg font-semibold transition-all"
+        >
+          {{ loading ? 'Sending verification...' : 'Create account' }}
+        </button>
+      </form>
+
+      <p class="text-center text-sm text-subtle mt-6">
+        Already have an account?
+        <a routerLink="/auth/login" class="text-accent font-semibold hover:underline">Sign in</a>
+      </p>
+    </div>
   </div>
 </div>

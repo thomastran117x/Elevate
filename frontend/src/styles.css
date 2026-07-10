@@ -1,1 +1,124 @@
 @import 'tailwindcss';
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---- Semantic theme tokens: light (default) ----
+   Clean, neutral, high-contrast. Purple is an ACCENT only; surfaces and
+   text are neutral gray so the page reads easily. (Dark keeps the original
+   hardcoded neon brand look in the .dark block below.) */
+:root {
+  /* Surfaces — neutral gray page, white cards */
+  --surface: #f3f4f6; /* page bg (neutral gray-100) */
+  --surface-raised: #ffffff; /* cards, dropdowns, modals */
+  --surface-sunken: #e9ebef; /* inputs, code, wells — reads as an inset */
+
+  /* Glass — solid white cards that pop above the gray page (borders define chips) */
+  --glass: #ffffff;
+  --glass-strong: #eef0f3;
+  --glass-border: rgba(17, 24, 39, 0.08);
+
+  /* Lines / borders — neutral gray */
+  --line: rgba(17, 24, 39, 0.1);
+  --line-strong: rgba(17, 24, 39, 0.16);
+
+  /* Content (text / icons) — neutral gray ramp */
+  --content: #111827; /* gray-900 */
+  --muted: #4b5563; /* gray-600 */
+  --subtle: #6b7280; /* gray-500 */
+  --faint: #9ca3af; /* gray-400 */
+
+  /* Accent (brand) — used sparingly for links / buttons / focus */
+  --accent: #7c3aed; /* violet-600, readable on white */
+  --accent-contrast: #ffffff;
+
+  /* Inverse (high-contrast neutral chip / button) */
+  --inverse: #111827;
+  --inverse-content: #ffffff;
+
+  /* Semantic states */
+  --danger: #dc2626;
+  --danger-content: #b91c1c;
+  --success: #059669;
+  --warning: #d97706;
+
+  /* Feature-page gradient — subtle, near-flat neutral */
+  --gradient-page: linear-gradient(to bottom right, #f5f6f8, #f2f3f5 60%, #f4f2f7);
+  /* Accent gradient for clipped headline text — gentle purple, readable on light */
+  --gradient-accent: linear-gradient(to right, #7c3aed, #9333ea, #6d28d9);
+}
+
+/* ---- Semantic theme tokens: dark overrides ---- */
+.dark {
+  --surface: #0f0a1c;
+  --surface-raised: #140d2a;
+  --surface-sunken: #0b0713;
+
+  --glass: rgba(255, 255, 255, 0.05);
+  --glass-strong: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.1);
+
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.16);
+
+  --content: #f8fafc;
+  --muted: rgba(255, 255, 255, 0.72);
+  --subtle: rgba(255, 255, 255, 0.55);
+  --faint: rgba(255, 255, 255, 0.4);
+
+  --accent: #c084fc; /* purple-400 */
+  --accent-contrast: #ffffff;
+
+  --inverse: #ffffff;
+  --inverse-content: #020617; /* slate-950 */
+
+  --danger: #f87171;
+  --danger-content: #fecaca;
+  --success: #34d399;
+  --warning: #fbbf24;
+
+  /* Dark: kept flat to match --surface (dark theme intentionally unchanged) */
+  --gradient-page: linear-gradient(to bottom right, #0f0a1c, #0f0a1c);
+  --gradient-accent: linear-gradient(to right, #d8b4fe, #f0abfc, #a5b4fc);
+}
+
+/* ---- Map raw tokens -> Tailwind color utilities ---- */
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+
+  --color-glass: var(--glass);
+  --color-glass-strong: var(--glass-strong);
+  --color-glass-border: var(--glass-border);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-content: var(--content);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-faint: var(--faint);
+
+  --color-accent: var(--accent);
+  --color-accent-contrast: var(--accent-contrast);
+
+  --color-inverse: var(--inverse);
+  --color-inverse-content: var(--inverse-content);
+
+  --color-danger: var(--danger);
+  --color-danger-content: var(--danger-content);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+}
+
+/* Page-surface helper for gradient feature pages */
+.bg-page {
+  background-image: var(--gradient-page);
+}
+
+/* Theme-aware clipped-text accent gradient (for headlines) */
+.text-gradient-accent {
+  background-image: var(--gradient-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

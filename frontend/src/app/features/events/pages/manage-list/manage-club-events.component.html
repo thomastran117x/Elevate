@@ -57,7 +57,7 @@
     }
 
     @if (!loading && error) {
-      <div class="rounded-3xl border border-rose-500/40 bg-rose-950/50 p-6 text-sm text-rose-100">
+      <div class="rounded-3xl border border-danger/40 bg-danger/10 p-6 text-sm text-danger">
         {{ error }}
       </div>
     }
@@ -111,15 +111,15 @@
               <div class="flex items-center justify-between gap-3">
                 <dt>Publish ready</dt>
                 <dd
-                  [class.text-emerald-300]="event.publishReady"
-                  [class.text-amber-300]="!event.publishReady"
+                  [class.text-success]="event.publishReady"
+                  [class.text-warning]="!event.publishReady"
                 >
                   {{ event.publishReady ? 'Yes' : 'Needs work' }}
                 </dd>
               </div>
             </dl>
             @if (!event.publishReady && event.publishIssues.length > 0) {
-              <p class="mt-4 text-xs text-amber-200">
+              <p class="mt-4 text-xs text-warning">
                 {{ event.publishIssues[0] }}
               </p>
             }

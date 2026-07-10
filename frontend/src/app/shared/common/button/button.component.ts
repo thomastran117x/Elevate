@@ -23,7 +23,7 @@ export class AppButtonComponent {
   get classes() {
     const base =
       'inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition ' +
-      'focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25 ' +
+      'focus:outline-none focus-visible:ring-2 focus-visible:ring-line-strong ' +
       'active:translate-y-[0.5px]';
 
     const sizes: Record<AppButtonSize, string> = {
@@ -34,11 +34,11 @@ export class AppButtonComponent {
 
     const variants: Record<AppButtonVariant, string> = {
       primary:
-        'bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white ' +
+        'bg-gradient-to-r from-purple-500 to-fuchsia-500 text-accent-contrast ' +
         'shadow-lg shadow-purple-500/25 hover:opacity-95',
-      secondary: 'bg-white text-slate-950 hover:bg-white/90 shadow-lg shadow-white/10',
-      ghost: 'border border-white/15 bg-white/5 text-white/90 hover:bg-white/10',
-      danger: 'border border-red-300/25 bg-red-500/10 text-red-100 hover:bg-red-500/15',
+      secondary: 'bg-inverse text-inverse-content hover:opacity-90 shadow-lg shadow-white/10',
+      ghost: 'border border-line-strong bg-glass text-content hover:bg-glass-strong',
+      danger: 'border border-danger/25 bg-danger/10 text-danger hover:bg-danger/15',
     };
 
     const disabled = this.disabled ? 'opacity-60 cursor-not-allowed pointer-events-none' : '';

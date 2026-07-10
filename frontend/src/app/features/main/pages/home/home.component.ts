@@ -22,19 +22,19 @@ type Testimonial = { quote: string; name: string; role: string };
   standalone: true,
   imports: [FormsModule, RouterModule],
   template: `
-    <div class="min-h-screen bg-slate-950 text-white overflow-x-hidden overflow-y-visible relative">
+    <div class="min-h-screen bg-page text-content overflow-x-hidden overflow-y-visible relative">
       <div class="pointer-events-none absolute inset-0">
         <div
           class="absolute -top-24 left-1/2 -translate-x-1/2 h-[520px] w-[920px] rounded-full
-                 bg-gradient-to-r from-purple-600/35 via-fuchsia-500/25 to-indigo-500/25 blur-3xl"
+                 bg-gradient-to-r from-purple-600/12 dark:from-purple-600/35 via-fuchsia-500/9 dark:via-fuchsia-500/25 to-indigo-500/9 dark:to-indigo-500/25 blur-3xl"
         ></div>
         <div
           class="absolute top-[520px] -left-20 h-[420px] w-[420px] rounded-full
-                 bg-gradient-to-br from-indigo-500/20 to-purple-500/10 blur-3xl"
+                 bg-gradient-to-br from-indigo-500/7 dark:from-indigo-500/20 to-purple-500/4 dark:to-purple-500/10 blur-3xl"
         ></div>
         <div
           class="absolute top-[640px] -right-20 h-[420px] w-[420px] rounded-full
-                 bg-gradient-to-br from-fuchsia-500/20 to-purple-500/10 blur-3xl"
+                 bg-gradient-to-br from-fuchsia-500/7 dark:from-fuchsia-500/20 to-purple-500/4 dark:to-purple-500/10 blur-3xl"
         ></div>
         <div
           class="absolute inset-0 opacity-[0.10]"
@@ -56,18 +56,16 @@ type Testimonial = { quote: string; name: string; role: string };
               >
                 <span class="text-base font-black">E</span>
               </span>
-              <span class="text-sm font-semibold tracking-wide text-white/90">
-                EventXperience
-              </span>
+              <span class="text-sm font-semibold tracking-wide text-content"> EventXperience </span>
             </a>
 
-            <nav class="hidden md:flex items-center gap-7 text-sm text-white/70">
+            <nav class="hidden md:flex items-center gap-7 text-sm text-muted">
               @if (eventsEnabled) {
-                <a class="hover:text-white transition" routerLink="/events">Explore</a>
+                <a class="hover:text-content transition" routerLink="/events">Explore</a>
               }
-              <a class="hover:text-white transition" routerLink="/venues">Venues</a>
-              <a class="hover:text-white transition" routerLink="/pricing">Pricing</a>
-              <a class="hover:text-white transition" routerLink="/contact">Contact</a>
+              <a class="hover:text-content transition" routerLink="/venues">Venues</a>
+              <a class="hover:text-content transition" routerLink="/pricing">Pricing</a>
+              <a class="hover:text-content transition" routerLink="/contact">Contact</a>
             </nav>
 
             @if (authEnabled) {
@@ -75,14 +73,14 @@ type Testimonial = { quote: string; name: string; role: string };
                 <a
                   routerLink="/auth/login"
                   class="hidden sm:inline-flex items-center rounded-xl px-3 py-2 text-sm
-                       text-white/80 hover:text-white transition"
+                       text-muted hover:text-content transition"
                 >
                   Sign in
                 </a>
                 <a
                   routerLink="/auth/signup"
                   class="inline-flex items-center rounded-xl px-4 py-2 text-sm font-semibold
-                       bg-white text-slate-950 hover:bg-white/90 transition
+                       bg-inverse text-inverse-content hover:opacity-90 transition
                        shadow-lg shadow-white/10"
                 >
                   Get started
@@ -98,8 +96,8 @@ type Testimonial = { quote: string; name: string; role: string };
           <div class="grid lg:grid-cols-12 gap-10 items-center">
             <div class="lg:col-span-7">
               <div
-                class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5
-                       px-3 py-1 text-xs text-white/70 backdrop-blur"
+                class="inline-flex items-center gap-2 rounded-full border border-line bg-glass
+                       px-3 py-1 text-xs text-muted backdrop-blur"
               >
                 <span class="h-2 w-2 rounded-full bg-fuchsia-400"></span>
                 Live inventory &bull; Verified tickets &bull; Instant delivery
@@ -107,32 +105,28 @@ type Testimonial = { quote: string; name: string; role: string };
 
               <h1 class="mt-5 text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight">
                 Book unforgettable events -
-                <span
-                  class="bg-gradient-to-r from-purple-300 via-fuchsia-300 to-indigo-300 bg-clip-text text-transparent"
-                >
-                  fast, safe, and beautiful
-                </span>
+                <span class="text-gradient-accent"> fast, safe, and beautiful </span>
               </h1>
 
-              <p class="mt-4 text-base sm:text-lg text-white/70 leading-relaxed max-w-2xl">
+              <p class="mt-4 text-base sm:text-lg text-muted leading-relaxed max-w-2xl">
                 Discover concerts, sports, theatre, and campus events. Real-time seating,
                 transparent fees, and one-tap checkout. Built for modern organizers and fans.
               </p>
 
               @if (eventsEnabled) {
                 <div
-                  class="mt-7 rounded-2xl border border-white/10 bg-white/5 backdrop-blur
+                  class="mt-7 rounded-2xl border border-line bg-glass backdrop-blur
                        shadow-2xl shadow-purple-500/10"
                 >
                   <div class="p-3 sm:p-4 grid gap-3 sm:grid-cols-12 items-center">
                     <div class="sm:col-span-5">
                       <label class="sr-only">Search events</label>
                       <div
-                        class="flex items-center gap-2 rounded-xl bg-slate-950/50 border border-white/10 px-3 py-2"
+                        class="flex items-center gap-2 rounded-xl bg-surface-sunken border border-line px-3 py-2"
                       >
-                        <span class="text-white/50">&#128269;</span>
+                        <span class="text-subtle">&#128269;</span>
                         <input
-                          class="w-full bg-transparent outline-none text-sm placeholder:text-white/40"
+                          class="w-full bg-transparent outline-none text-sm placeholder:text-faint"
                           placeholder="Search artists, teams, venues..."
                           [(ngModel)]="heroSearch"
                           (keyup.enter)="explore()"
@@ -142,11 +136,11 @@ type Testimonial = { quote: string; name: string; role: string };
                     <div class="sm:col-span-4">
                       <label class="sr-only">Location</label>
                       <div
-                        class="flex items-center gap-2 rounded-xl bg-slate-950/50 border border-white/10 px-3 py-2"
+                        class="flex items-center gap-2 rounded-xl bg-surface-sunken border border-line px-3 py-2"
                       >
-                        <span class="text-white/50">&#128205;</span>
+                        <span class="text-subtle">&#128205;</span>
                         <input
-                          class="w-full bg-transparent outline-none text-sm placeholder:text-white/40"
+                          class="w-full bg-transparent outline-none text-sm placeholder:text-faint"
                           placeholder="Ottawa, Toronto..."
                           [(ngModel)]="heroCity"
                           (keyup.enter)="explore()"
@@ -157,42 +151,42 @@ type Testimonial = { quote: string; name: string; role: string };
                       <button
                         (click)="explore()"
                         class="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2
-                             bg-gradient-to-r from-purple-500 to-fuchsia-500
+                             bg-gradient-to-r from-purple-500 to-fuchsia-500 text-accent-contrast
                              font-semibold text-sm shadow-lg shadow-purple-500/25
                              hover:opacity-95 transition"
                       >
                         Explore events
-                        <span class="text-white/90">&rarr;</span>
+                        <span>&rarr;</span>
                       </button>
                     </div>
                   </div>
-                  <div class="px-4 pb-4 flex flex-wrap gap-2 text-xs text-white/60">
+                  <div class="px-4 pb-4 flex flex-wrap gap-2 text-xs text-subtle">
                     <button
-                      class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                      class="rounded-full bg-glass border border-line px-2 py-1 hover:bg-glass-strong transition"
                       (click)="explore('Music')"
                     >
                       Concerts
                     </button>
                     <button
-                      class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                      class="rounded-full bg-glass border border-line px-2 py-1 hover:bg-glass-strong transition"
                       (click)="explore('Sports')"
                     >
                       Sports
                     </button>
                     <button
-                      class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                      class="rounded-full bg-glass border border-line px-2 py-1 hover:bg-glass-strong transition"
                       (click)="explore('Arts')"
                     >
                       Theatre
                     </button>
                     <button
-                      class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                      class="rounded-full bg-glass border border-line px-2 py-1 hover:bg-glass-strong transition"
                       (click)="explore('Academic')"
                     >
                       Campus
                     </button>
                     <button
-                      class="rounded-full bg-white/5 border border-white/10 px-2 py-1 hover:bg-white/10 transition"
+                      class="rounded-full bg-glass border border-line px-2 py-1 hover:bg-glass-strong transition"
                       (click)="explore('Party')"
                     >
                       Nightlife
@@ -202,24 +196,24 @@ type Testimonial = { quote: string; name: string; role: string };
               }
 
               <div class="mt-8 grid grid-cols-3 gap-4 max-w-xl">
-                <div class="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                <div class="rounded-2xl border border-line bg-glass p-4 backdrop-blur">
                   <div class="text-xl font-bold">4.9*</div>
-                  <div class="text-xs text-white/60 mt-1">avg rating</div>
+                  <div class="text-xs text-subtle mt-1">avg rating</div>
                 </div>
-                <div class="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                <div class="rounded-2xl border border-line bg-glass p-4 backdrop-blur">
                   <div class="text-xl font-bold">2M+</div>
-                  <div class="text-xs text-white/60 mt-1">tickets delivered</div>
+                  <div class="text-xs text-subtle mt-1">tickets delivered</div>
                 </div>
-                <div class="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                <div class="rounded-2xl border border-line bg-glass p-4 backdrop-blur">
                   <div class="text-xl font-bold">60s</div>
-                  <div class="text-xs text-white/60 mt-1">avg checkout</div>
+                  <div class="text-xs text-subtle mt-1">avg checkout</div>
                 </div>
               </div>
             </div>
 
             <div class="lg:col-span-5">
               <div
-                class="relative rounded-3xl border border-white/10 bg-white/5 backdrop-blur
+                class="relative rounded-3xl border border-line bg-glass backdrop-blur
                        shadow-2xl shadow-fuchsia-500/10 overflow-hidden"
               >
                 <div
@@ -228,15 +222,15 @@ type Testimonial = { quote: string; name: string; role: string };
 
                 <div class="relative p-5 sm:p-6">
                   <div class="flex items-center justify-between">
-                    <div class="text-sm font-semibold text-white/90">Trending Now</div>
-                    <div class="text-xs text-white/60">Updated live</div>
+                    <div class="text-sm font-semibold text-content">Trending Now</div>
+                    <div class="text-xs text-subtle">Updated live</div>
                   </div>
 
                   <div class="mt-4 grid gap-3">
                     @for (ev of trending; track trackByTitle($index, ev)) {
                       <div
-                        class="group rounded-2xl border border-white/10 bg-slate-950/40 p-4
-                               hover:bg-slate-950/55 transition"
+                        class="group rounded-2xl border border-line bg-surface-sunken p-4
+                               hover:bg-surface-sunken transition"
                       >
                         <div class="flex items-start justify-between gap-3">
                           <div>
@@ -244,29 +238,29 @@ type Testimonial = { quote: string; name: string; role: string };
                               <div class="text-sm font-semibold">{{ ev.title }}</div>
                               @if (ev.badge) {
                                 <span
-                                  class="text-[10px] rounded-full px-2 py-0.5 border border-white/10 bg-white/5 text-white/70"
+                                  class="text-[10px] rounded-full px-2 py-0.5 border border-line bg-glass text-muted"
                                 >
                                   {{ ev.badge }}
                                 </span>
                               }
                             </div>
-                            <div class="mt-1 text-xs text-white/60">
+                            <div class="mt-1 text-xs text-subtle">
                               {{ ev.date }} &bull; {{ ev.venue }} &bull; {{ ev.city }}
                             </div>
                           </div>
                           <div class="text-right">
                             <div class="text-sm font-semibold">{{ ev.price }}</div>
-                            <div class="text-[11px] text-white/50">from</div>
+                            <div class="text-[11px] text-subtle">from</div>
                           </div>
                         </div>
                         <div class="mt-3 flex items-center justify-between">
-                          <div class="text-xs text-white/60">
-                            <span class="text-white/80">&bull;</span> Verified inventory
+                          <div class="text-xs text-subtle">
+                            <span class="text-muted">&bull;</span> Verified inventory
                           </div>
                           @if (eventsEnabled) {
                             <a
                               routerLink="/events"
-                              class="text-xs font-semibold text-fuchsia-200 group-hover:text-white transition"
+                              class="text-xs font-semibold text-accent group-hover:text-content transition"
                             >
                               View seats &rarr;
                             </a>
@@ -277,17 +271,17 @@ type Testimonial = { quote: string; name: string; role: string };
                   </div>
 
                   <div class="mt-5 grid grid-cols-2 gap-3">
-                    <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                      <div class="text-xs text-white/60">Best deal</div>
+                    <div class="rounded-2xl border border-line bg-glass p-4">
+                      <div class="text-xs text-subtle">Best deal</div>
                       <div class="mt-1 text-sm font-semibold">Smart pricing</div>
-                      <div class="mt-2 text-xs text-white/60 leading-relaxed">
+                      <div class="mt-2 text-xs text-subtle leading-relaxed">
                         Auto-suggest seats based on budget and sightlines.
                       </div>
                     </div>
-                    <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                      <div class="text-xs text-white/60">Instant delivery</div>
+                    <div class="rounded-2xl border border-line bg-glass p-4">
+                      <div class="text-xs text-subtle">Instant delivery</div>
                       <div class="mt-1 text-sm font-semibold">Mobile tickets</div>
-                      <div class="mt-2 text-xs text-white/60 leading-relaxed">
+                      <div class="mt-2 text-xs text-subtle leading-relaxed">
                         Add to wallet in seconds, even last-minute.
                       </div>
                     </div>
@@ -298,7 +292,7 @@ type Testimonial = { quote: string; name: string; role: string };
                       <a
                         routerLink="/events"
                         class="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2
-                             bg-white text-slate-950 font-semibold text-sm hover:bg-white/90 transition"
+                             bg-inverse text-inverse-content font-semibold text-sm hover:opacity-90 transition"
                       >
                         Browse all events
                         <span>&rarr;</span>
@@ -308,17 +302,13 @@ type Testimonial = { quote: string; name: string; role: string };
                 </div>
               </div>
 
-              <div class="mt-5 flex flex-wrap gap-2 text-xs text-white/50">
-                <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1"
-                  >Stripe-ready</span
-                >
-                <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1"
-                  >Anti-fraud</span
-                >
-                <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1"
+              <div class="mt-5 flex flex-wrap gap-2 text-xs text-subtle">
+                <span class="rounded-full border border-line bg-glass px-3 py-1">Stripe-ready</span>
+                <span class="rounded-full border border-line bg-glass px-3 py-1">Anti-fraud</span>
+                <span class="rounded-full border border-line bg-glass px-3 py-1"
                   >Organizer tools</span
                 >
-                <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1"
+                <span class="rounded-full border border-line bg-glass px-3 py-1"
                   >Real-time seats</span
                 >
               </div>
@@ -331,11 +321,11 @@ type Testimonial = { quote: string; name: string; role: string };
             <div class="flex items-end justify-between gap-6">
               <div>
                 <h2 class="text-xl sm:text-2xl font-bold">Browse by category</h2>
-                <p class="mt-1 text-sm text-white/60">Pick a vibe. We'll handle the rest.</p>
+                <p class="mt-1 text-sm text-subtle">Pick a vibe. We'll handle the rest.</p>
               </div>
               <a
                 routerLink="/events"
-                class="text-sm font-semibold text-fuchsia-200 hover:text-white transition"
+                class="text-sm font-semibold text-accent hover:text-content transition"
               >
                 See all &rarr;
               </a>
@@ -344,20 +334,20 @@ type Testimonial = { quote: string; name: string; role: string };
               @for (c of categories; track trackByName($index, c)) {
                 <a
                   routerLink="/events"
-                  class="group rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur
-                       hover:bg-white/8 hover:border-white/15 transition"
+                  class="group rounded-2xl border border-line bg-glass p-5 backdrop-blur
+                       hover:bg-glass-strong hover:border-line-strong transition"
                 >
                   <div class="flex items-center justify-between">
                     <div class="text-xs font-semibold uppercase tracking-[0.2em]">{{ c.icon }}</div>
                     <div
                       class="h-9 w-9 rounded-xl bg-gradient-to-br from-purple-500/20 to-fuchsia-500/20
-                              border border-white/10 flex items-center justify-center text-white/70 group-hover:text-white transition"
+                              border border-line flex items-center justify-center text-muted group-hover:text-content transition"
                     >
                       &rarr;
                     </div>
                   </div>
                   <div class="mt-4 text-sm font-semibold">{{ c.name }}</div>
-                  <div class="mt-1 text-xs text-white/60">{{ c.count }}</div>
+                  <div class="mt-1 text-xs text-subtle">{{ c.count }}</div>
                 </a>
               }
             </div>
@@ -368,7 +358,7 @@ type Testimonial = { quote: string; name: string; role: string };
           <div class="grid lg:grid-cols-12 gap-8 items-start">
             <div class="lg:col-span-4">
               <h2 class="text-xl sm:text-2xl font-bold">Built for speed and trust</h2>
-              <p class="mt-2 text-sm text-white/60 leading-relaxed">
+              <p class="mt-2 text-sm text-subtle leading-relaxed">
                 A booking flow that feels premium: verified tickets, transparent pricing, and modern
                 organizer tools.
               </p>
@@ -386,17 +376,17 @@ type Testimonial = { quote: string; name: string; role: string };
 
             <div class="lg:col-span-8 grid sm:grid-cols-2 gap-4">
               @for (f of features; track trackByTitle($index, f)) {
-                <div class="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+                <div class="rounded-2xl border border-line bg-glass p-6 backdrop-blur">
                   <div class="flex items-center gap-3">
                     <div
-                      class="h-11 w-11 rounded-2xl border border-white/10 bg-gradient-to-br
+                      class="h-11 w-11 rounded-2xl border border-line bg-gradient-to-br
                              from-purple-500/20 to-fuchsia-500/20 flex items-center justify-center"
                     >
                       <span class="text-lg">{{ f.icon }}</span>
                     </div>
                     <div class="text-sm font-semibold">{{ f.title }}</div>
                   </div>
-                  <p class="mt-3 text-sm text-white/60 leading-relaxed">
+                  <p class="mt-3 text-sm text-subtle leading-relaxed">
                     {{ f.desc }}
                   </p>
                 </div>
@@ -410,11 +400,11 @@ type Testimonial = { quote: string; name: string; role: string };
             <div class="flex items-end justify-between gap-6">
               <div>
                 <h2 class="text-xl sm:text-2xl font-bold">Popular this week</h2>
-                <p class="mt-1 text-sm text-white/60">Curated picks near you.</p>
+                <p class="mt-1 text-sm text-subtle">Curated picks near you.</p>
               </div>
               <a
                 routerLink="/events"
-                class="text-sm font-semibold text-fuchsia-200 hover:text-white transition"
+                class="text-sm font-semibold text-accent hover:text-content transition"
               >
                 Explore &rarr;
               </a>
@@ -423,8 +413,8 @@ type Testimonial = { quote: string; name: string; role: string };
               @for (e of popular; track trackByTitle($index, e)) {
                 <a
                   routerLink="/events"
-                  class="group rounded-3xl border border-white/10 bg-white/5 overflow-hidden
-                       hover:bg-white/8 hover:border-white/15 transition"
+                  class="group rounded-3xl border border-line bg-glass overflow-hidden
+                       hover:bg-glass-strong hover:border-line-strong transition"
                 >
                   <div class="relative h-36">
                     <div
@@ -439,13 +429,13 @@ type Testimonial = { quote: string; name: string; role: string };
                     ></div>
                     <div class="absolute top-4 left-4 flex gap-2">
                       <span
-                        class="text-[10px] rounded-full px-2 py-1 border border-white/10 bg-slate-950/40 text-white/70 backdrop-blur"
+                        class="text-[10px] rounded-full px-2 py-1 border border-line bg-surface-sunken text-muted backdrop-blur"
                       >
                         Verified
                       </span>
                       @if (e.badge) {
                         <span
-                          class="text-[10px] rounded-full px-2 py-1 border border-white/10 bg-slate-950/40 text-white/70 backdrop-blur"
+                          class="text-[10px] rounded-full px-2 py-1 border border-line bg-surface-sunken text-muted backdrop-blur"
                         >
                           {{ e.badge }}
                         </span>
@@ -456,22 +446,22 @@ type Testimonial = { quote: string; name: string; role: string };
                     <div class="flex items-start justify-between gap-3">
                       <div>
                         <div class="text-sm font-semibold">{{ e.title }}</div>
-                        <div class="mt-1 text-xs text-white/60">{{ e.date }}</div>
-                        <div class="mt-1 text-xs text-white/60">
+                        <div class="mt-1 text-xs text-subtle">{{ e.date }}</div>
+                        <div class="mt-1 text-xs text-subtle">
                           {{ e.venue }} &bull; {{ e.city }}
                         </div>
                       </div>
                       <div class="text-right">
                         <div class="text-sm font-semibold">{{ e.price }}</div>
-                        <div class="text-[11px] text-white/50">from</div>
+                        <div class="text-[11px] text-subtle">from</div>
                       </div>
                     </div>
                     <div class="mt-4 flex items-center justify-between">
-                      <div class="text-xs text-white/60">
-                        <span class="text-white/80">&bull;</span> Instant mobile tickets
+                      <div class="text-xs text-subtle">
+                        <span class="text-muted">&bull;</span> Instant mobile tickets
                       </div>
                       <div
-                        class="text-xs font-semibold text-fuchsia-200 group-hover:text-white transition"
+                        class="text-xs font-semibold text-accent group-hover:text-content transition"
                       >
                         View &rarr;
                       </div>
@@ -484,11 +474,11 @@ type Testimonial = { quote: string; name: string; role: string };
         }
 
         <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-16">
-          <div class="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 sm:p-8">
+          <div class="rounded-3xl border border-line bg-glass backdrop-blur p-6 sm:p-8">
             <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
               <div>
                 <h2 class="text-xl sm:text-2xl font-bold">Loved by fans and organizers</h2>
-                <p class="mt-2 text-sm text-white/60 max-w-2xl">
+                <p class="mt-2 text-sm text-subtle max-w-2xl">
                   From pop-up campus events to arena shows - the experience stays fast, trustworthy,
                   and elegant.
                 </p>
@@ -496,7 +486,7 @@ type Testimonial = { quote: string; name: string; role: string };
               <a
                 routerLink="/contact"
                 class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2
-                       bg-white text-slate-950 font-semibold text-sm hover:bg-white/90 transition"
+                       bg-inverse text-inverse-content font-semibold text-sm hover:opacity-90 transition"
               >
                 Talk to sales
                 <span>&rarr;</span>
@@ -505,12 +495,12 @@ type Testimonial = { quote: string; name: string; role: string };
 
             <div class="mt-6 grid md:grid-cols-3 gap-4">
               @for (t of testimonials; track trackByName($index, t)) {
-                <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-6">
-                  <p class="text-sm text-white/70 italic leading-relaxed">
+                <div class="rounded-2xl border border-line bg-surface-sunken p-6">
+                  <p class="text-sm text-muted italic leading-relaxed">
                     &ldquo;{{ t.quote }}&rdquo;
                   </p>
                   <div class="mt-4 text-sm font-semibold">{{ t.name }}</div>
-                  <div class="text-xs text-white/60">{{ t.role }}</div>
+                  <div class="text-xs text-subtle">{{ t.role }}</div>
                 </div>
               }
             </div>
@@ -519,14 +509,14 @@ type Testimonial = { quote: string; name: string; role: string };
 
         <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-16 pb-16">
           <div
-            class="rounded-3xl border border-white/10 bg-gradient-to-r from-purple-500/20 via-fuchsia-500/10 to-indigo-500/20
+            class="rounded-3xl border border-line bg-gradient-to-r from-purple-500/20 via-fuchsia-500/10 to-indigo-500/20
                    p-8 sm:p-10 overflow-hidden relative"
           >
             <div
-              class="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-fuchsia-500/20 blur-3xl"
+              class="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-fuchsia-500/7 dark:bg-fuchsia-500/20 blur-3xl"
             ></div>
             <div
-              class="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-purple-500/20 blur-3xl"
+              class="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-purple-500/7 dark:bg-purple-500/20 blur-3xl"
             ></div>
 
             <div class="relative grid lg:grid-cols-12 gap-8 items-center">
@@ -534,7 +524,7 @@ type Testimonial = { quote: string; name: string; role: string };
                 <h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight">
                   Ready to launch your next event?
                 </h3>
-                <p class="mt-2 text-sm sm:text-base text-white/70 max-w-2xl">
+                <p class="mt-2 text-sm sm:text-base text-muted max-w-2xl">
                   Create listings, manage inventory, and sell tickets with a checkout that converts.
                 </p>
               </div>
@@ -544,7 +534,7 @@ type Testimonial = { quote: string; name: string; role: string };
                   <a
                     routerLink="/auth/signup"
                     class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2
-                         bg-white text-slate-950 font-semibold text-sm hover:bg-white/90 transition"
+                         bg-inverse text-inverse-content font-semibold text-sm hover:opacity-90 transition"
                   >
                     Create an account
                     <span>&rarr;</span>
@@ -554,8 +544,8 @@ type Testimonial = { quote: string; name: string; role: string };
                   <a
                     routerLink="/events"
                     class="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2
-                         border border-white/15 bg-white/5 text-white/90 text-sm font-semibold
-                         hover:bg-white/10 transition"
+                         border border-line-strong bg-glass text-content text-sm font-semibold
+                         hover:bg-glass-strong transition"
                   >
                     Browse events
                     <span>&rarr;</span>
@@ -565,13 +555,13 @@ type Testimonial = { quote: string; name: string; role: string };
             </div>
           </div>
 
-          <footer class="mt-10 text-xs text-white/50">
+          <footer class="mt-10 text-xs text-subtle">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>&copy; {{ year }} EventXperience. All rights reserved.</div>
               <div class="flex items-center gap-4">
-                <a routerLink="/terms" class="hover:text-white/80 transition">Terms</a>
-                <a routerLink="/privacy" class="hover:text-white/80 transition">Privacy</a>
-                <a routerLink="/contact" class="hover:text-white/80 transition">Support</a>
+                <a routerLink="/terms" class="hover:text-content transition">Terms</a>
+                <a routerLink="/privacy" class="hover:text-content transition">Privacy</a>
+                <a routerLink="/contact" class="hover:text-content transition">Support</a>
               </div>
             </div>
           </footer>

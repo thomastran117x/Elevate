@@ -1,20 +1,18 @@
-<div
-  class="min-h-screen bg-gradient-to-br from-[#0b0822] via-[#160f3d] to-[#24135f] text-white relative"
->
+<div class="min-h-screen bg-page text-content relative">
   <!-- Orb blobs -->
   <div class="pointer-events-none absolute inset-0 overflow-hidden">
     <div
-      class="absolute -top-40 -left-40 w-[520px] h-[520px] bg-purple-600/30 rounded-full blur-3xl animate-pulse"
+      class="absolute -top-40 -left-40 w-[520px] h-[520px] bg-purple-600/11 dark:bg-purple-600/30 rounded-full blur-3xl animate-pulse"
     ></div>
     <div
-      class="absolute top-[40%] -right-40 w-[420px] h-[420px] bg-fuchsia-600/20 rounded-full blur-3xl animate-pulse"
+      class="absolute top-[40%] -right-40 w-[420px] h-[420px] bg-fuchsia-600/7 dark:bg-fuchsia-600/20 rounded-full blur-3xl animate-pulse"
     ></div>
   </div>
 
   <div class="relative z-10 mx-auto max-w-4xl px-6 py-10">
     <button
       (click)="goBack()"
-      class="flex items-center gap-1.5 text-sm text-white/55 hover:text-white transition-colors mb-10"
+      class="flex items-center gap-1.5 text-sm text-subtle hover:text-content transition-colors mb-10"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -24,30 +22,26 @@
 
     <!-- Loading skeleton -->
     @if (loading) {
-      <div
-        class="rounded-3xl border border-white/[0.12] bg-white/[0.06] overflow-hidden animate-pulse"
-      >
-        <div class="h-52 bg-white/10"></div>
+      <div class="rounded-3xl border border-line bg-glass overflow-hidden animate-pulse">
+        <div class="h-52 bg-glass-strong"></div>
         <div class="p-8 space-y-4">
-          <div class="h-7 bg-white/10 rounded-xl w-1/3"></div>
-          <div class="h-4 bg-white/10 rounded w-full"></div>
-          <div class="h-4 bg-white/10 rounded w-3/4"></div>
+          <div class="h-7 bg-glass-strong rounded-xl w-1/3"></div>
+          <div class="h-4 bg-glass-strong rounded w-full"></div>
+          <div class="h-4 bg-glass-strong rounded w-3/4"></div>
         </div>
       </div>
     }
 
     <!-- Error -->
     @if (error && !loading) {
-      <div
-        class="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300"
-      >
+      <div class="rounded-2xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
         {{ error }}
       </div>
     }
 
     <!-- Club card -->
     @if (club && !loading) {
-      <div class="rounded-3xl border border-white/[0.12] bg-white/[0.06] overflow-hidden">
+      <div class="rounded-3xl border border-line bg-glass overflow-hidden">
         <!-- Banner -->
         <div class="relative h-52 sm:h-64">
           @if (club.clubImage) {
@@ -77,10 +71,10 @@
           @if (club.rating != null) {
             <div class="absolute top-5 right-5">
               <div
-                class="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/60 px-3 py-1.5 text-sm backdrop-blur"
+                class="flex items-center gap-1.5 rounded-full border border-line-strong bg-black/60 px-3 py-1.5 text-sm backdrop-blur"
               >
                 <span class="text-yellow-400">&#9733;</span>
-                <span class="font-semibold text-white">{{ club.rating | number: '1.1-1' }}</span>
+                <span class="font-semibold text-content">{{ club.rating | number: '1.1-1' }}</span>
               </div>
             </div>
           }
@@ -92,7 +86,7 @@
             <div>
               <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">{{ club.name }}</h1>
               @if (club.location) {
-                <div class="mt-2 flex items-center gap-1.5 text-sm text-white/55">
+                <div class="mt-2 flex items-center gap-1.5 text-sm text-subtle">
                   <span>&#128205;</span>
                   <span>{{ club.location }}</span>
                 </div>
@@ -109,43 +103,43 @@
           <!-- Stats grid -->
           <div class="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div
-              class="rounded-2xl border border-white/[0.12] bg-black/20 p-4 text-center backdrop-blur"
+              class="rounded-2xl border border-line bg-surface-sunken p-4 text-center backdrop-blur"
             >
               <div class="text-2xl font-bold">{{ club.memberCount | number }}</div>
-              <div class="mt-1 text-xs text-white/50">Members</div>
+              <div class="mt-1 text-xs text-subtle">Members</div>
             </div>
             <div
-              class="rounded-2xl border border-white/[0.12] bg-black/20 p-4 text-center backdrop-blur"
+              class="rounded-2xl border border-line bg-surface-sunken p-4 text-center backdrop-blur"
             >
               <div class="text-2xl font-bold">{{ club.eventCount | number }}</div>
-              <div class="mt-1 text-xs text-white/50">Events</div>
+              <div class="mt-1 text-xs text-subtle">Events</div>
             </div>
             <div
-              class="rounded-2xl border border-white/[0.12] bg-black/20 p-4 text-center backdrop-blur"
+              class="rounded-2xl border border-line bg-surface-sunken p-4 text-center backdrop-blur"
             >
               <div class="text-2xl font-bold">{{ club.availableEventCount | number }}</div>
-              <div class="mt-1 text-xs text-white/50">Open Events</div>
+              <div class="mt-1 text-xs text-subtle">Open Events</div>
             </div>
             <div
-              class="rounded-2xl border border-white/[0.12] bg-black/20 p-4 text-center backdrop-blur"
+              class="rounded-2xl border border-line bg-surface-sunken p-4 text-center backdrop-blur"
             >
               @if (club.rating != null) {
                 <div class="text-2xl font-bold">{{ club.rating | number: '1.1-1' }}</div>
               } @else {
-                <div class="text-2xl font-bold text-white/25">—</div>
+                <div class="text-2xl font-bold text-content/25">—</div>
               }
-              <div class="mt-1 text-xs text-white/50">Rating</div>
+              <div class="mt-1 text-xs text-subtle">Rating</div>
             </div>
           </div>
 
           <!-- Capacity bar -->
           @if (club.maxMemberCount > 0) {
             <div class="mt-5">
-              <div class="flex items-center justify-between text-xs text-white/45 mb-2">
+              <div class="flex items-center justify-between text-xs text-faint mb-2">
                 <span>Member capacity</span>
                 <span>{{ club.memberCount | number }} / {{ club.maxMemberCount | number }}</span>
               </div>
-              <div class="h-2 w-full overflow-hidden rounded-full bg-white/10">
+              <div class="h-2 w-full overflow-hidden rounded-full bg-glass-strong">
                 <div
                   class="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500 transition-all"
                   [style.width.%]="memberCapacityPercent()"
@@ -156,12 +150,10 @@
 
           <!-- About -->
           <div class="mt-7">
-            <div
-              class="text-[10px] font-semibold uppercase tracking-widest text-purple-300/70 mb-3"
-            >
+            <div class="text-[10px] font-semibold uppercase tracking-widest text-accent mb-3">
               About
             </div>
-            <p class="text-sm leading-relaxed text-white/75 whitespace-pre-wrap">
+            <p class="text-sm leading-relaxed text-muted whitespace-pre-wrap">
               {{ club.description || 'No description provided.' }}
             </p>
           </div>
@@ -169,29 +161,31 @@
           <!-- Upcoming Events -->
           <div class="mt-7">
             <div class="flex items-center justify-between mb-4">
-              <div class="text-[10px] font-semibold uppercase tracking-widest text-purple-300/70">
+              <div class="text-[10px] font-semibold uppercase tracking-widest text-accent">
                 Upcoming Events
               </div>
             </div>
 
             @if (eventsLoading) {
               @for (item of [1, 2, 3]; track item) {
-                <div class="rounded-2xl border border-white/10 bg-black/20 p-4 mb-3 animate-pulse">
-                  <div class="h-3 bg-white/10 rounded w-1/4 mb-2"></div>
-                  <div class="h-4 bg-white/10 rounded w-3/4 mb-2"></div>
-                  <div class="h-3 bg-white/10 rounded w-1/2"></div>
+                <div
+                  class="rounded-2xl border border-line bg-surface-sunken p-4 mb-3 animate-pulse"
+                >
+                  <div class="h-3 bg-glass-strong rounded w-1/4 mb-2"></div>
+                  <div class="h-4 bg-glass-strong rounded w-3/4 mb-2"></div>
+                  <div class="h-3 bg-glass-strong rounded w-1/2"></div>
                 </div>
               }
             }
 
             @if (!eventsLoading && upcomingEvents.length === 0) {
-              <p class="text-sm text-white/40 italic">No upcoming events.</p>
+              <p class="text-sm text-faint italic">No upcoming events.</p>
             }
 
             @if (!eventsLoading && upcomingEvents.length > 0) {
               @for (event of upcomingEvents; track event.id) {
                 <article
-                  class="rounded-2xl border border-white/10 bg-black/20 overflow-hidden mb-3 cursor-pointer transition-all duration-300 hover:bg-white/[0.06] hover:border-white/20"
+                  class="rounded-2xl border border-line bg-surface-sunken overflow-hidden mb-3 cursor-pointer transition-all duration-300 hover:bg-glass hover:border-line-strong"
                   (click)="navigateToEvent(event)"
                   (keyup.enter)="navigateToEvent(event)"
                   tabindex="0"
@@ -212,22 +206,21 @@
                         <span
                           class="text-[10px] font-semibold px-2 py-0.5 rounded-full border"
                           [ngClass]="{
-                            'bg-emerald-500/20 text-emerald-300 border-emerald-500/30':
+                            'bg-success/20 text-success border-success/30':
                               event.status === 'Upcoming',
-                            'bg-purple-500/20 text-purple-300 border-purple-500/30':
+                            'bg-purple-500/20 text-accent border-purple-500/30':
                               event.status === 'Ongoing',
-                            'bg-white/10 text-white/45 border-white/15': event.status === 'Closed',
+                            'bg-glass-strong text-faint border-line-strong':
+                              event.status === 'Closed',
                           }"
                           >{{ event.status }}</span
                         >
-                        <span class="text-[10px] text-white/35 font-medium">{{
-                          event.category
-                        }}</span>
+                        <span class="text-[10px] text-faint font-medium">{{ event.category }}</span>
                       </div>
                       <div class="text-sm font-semibold leading-snug line-clamp-1">
                         {{ event.name }}
                       </div>
-                      <div class="mt-1 flex items-center gap-2 text-[11px] text-white/45">
+                      <div class="mt-1 flex items-center gap-2 text-[11px] text-faint">
                         @if (event.startTime) {
                           <span
                             >{{ formatEventDate(event.startTime) }} &bull;
@@ -240,14 +233,14 @@
                           >
                         }
                       </div>
-                      <div class="mt-2 flex items-center justify-between text-[11px] text-white/40">
-                        <span class="font-medium text-white/60">{{
+                      <div class="mt-2 flex items-center justify-between text-[11px] text-faint">
+                        <span class="font-medium text-subtle">{{
                           formatCost(event.registerCost)
                         }}</span>
                         @if (event.maxParticipants > 0) {
                           <div class="flex items-center gap-1.5">
                             <span>{{ event.registrationCount }}/{{ event.maxParticipants }}</span>
-                            <div class="h-1 w-12 overflow-hidden rounded-full bg-white/10">
+                            <div class="h-1 w-12 overflow-hidden rounded-full bg-glass-strong">
                               <div
                                 class="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500"
                                 [style.width.%]="registrationPercent(event)"
@@ -266,12 +259,12 @@
           <!-- Recent Posts -->
           <div class="mt-7">
             <div class="flex items-center justify-between mb-4">
-              <div class="text-[10px] font-semibold uppercase tracking-widest text-purple-300/70">
+              <div class="text-[10px] font-semibold uppercase tracking-widest text-accent">
                 Recent Posts
               </div>
               <button
                 (click)="viewPosts()"
-                class="cursor-pointer text-xs text-purple-300/70 hover:text-purple-200 transition-colors"
+                class="cursor-pointer text-xs text-accent hover:text-accent transition-colors"
               >
                 View all &rarr;
               </button>
@@ -279,21 +272,23 @@
 
             @if (postsLoading) {
               @for (item of [1, 2, 3]; track item) {
-                <div class="rounded-2xl border border-white/10 bg-black/20 p-4 mb-3 animate-pulse">
-                  <div class="h-3 bg-white/10 rounded w-1/4 mb-2"></div>
-                  <div class="h-4 bg-white/10 rounded w-3/4"></div>
+                <div
+                  class="rounded-2xl border border-line bg-surface-sunken p-4 mb-3 animate-pulse"
+                >
+                  <div class="h-3 bg-glass-strong rounded w-1/4 mb-2"></div>
+                  <div class="h-4 bg-glass-strong rounded w-3/4"></div>
                 </div>
               }
             }
 
             @if (!postsLoading && recentPosts.length === 0) {
-              <p class="text-sm text-white/40 italic">No posts yet.</p>
+              <p class="text-sm text-faint italic">No posts yet.</p>
             }
 
             @if (!postsLoading && recentPosts.length > 0) {
               @for (post of recentPosts; track post.id) {
                 <article
-                  class="rounded-2xl border border-white/10 bg-black/20 p-4 mb-3 cursor-pointer transition-all duration-300 hover:bg-white/[0.06] hover:border-white/20"
+                  class="rounded-2xl border border-line bg-surface-sunken p-4 mb-3 cursor-pointer transition-all duration-300 hover:bg-glass hover:border-line-strong"
                   (click)="navigateToPost(post)"
                   (keyup.enter)="navigateToPost(post)"
                   tabindex="0"
@@ -301,7 +296,7 @@
                   <div class="flex items-center gap-2 mb-2">
                     @if (post.isPinned) {
                       <span
-                        class="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-amber-500/20 text-amber-300 border-amber-500/30"
+                        class="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-warning/20 text-warning border-warning/30"
                         >Pinned</span
                       >
                     }
@@ -314,10 +309,10 @@
                   <div class="text-sm font-semibold leading-snug line-clamp-1">
                     {{ post.title }}
                   </div>
-                  <p class="mt-1 text-xs text-white/50 line-clamp-2 leading-relaxed">
+                  <p class="mt-1 text-xs text-subtle line-clamp-2 leading-relaxed">
                     {{ post.content }}
                   </p>
-                  <div class="mt-2 flex items-center justify-between text-[11px] text-white/35">
+                  <div class="mt-2 flex items-center justify-between text-[11px] text-faint">
                     <span>{{ authorDisplay(post) }}</span>
                     <span>{{ formatDate(post.createdAt) }}</span>
                   </div>
@@ -328,19 +323,17 @@
 
           <!-- Contact -->
           @if (club.email || club.phone || club.websiteUrl) {
-            <div class="mt-6 rounded-2xl border border-white/[0.12] bg-black/20 p-5 backdrop-blur">
-              <div
-                class="text-[10px] font-semibold uppercase tracking-widest text-purple-300/70 mb-4"
-              >
+            <div class="mt-6 rounded-2xl border border-line bg-surface-sunken p-5 backdrop-blur">
+              <div class="text-[10px] font-semibold uppercase tracking-widest text-accent mb-4">
                 Contact
               </div>
-              <div class="flex flex-col gap-3 text-sm text-white/65">
+              <div class="flex flex-col gap-3 text-sm text-subtle">
                 @if (club.email) {
                   <div class="flex items-center gap-2.5">
-                    <span class="text-white/35">&#9993;</span>
+                    <span class="text-faint">&#9993;</span>
                     <a
                       [href]="'mailto:' + club.email"
-                      class="hover:text-white transition-colors"
+                      class="hover:text-content transition-colors"
                       (click)="$event.stopPropagation()"
                       >{{ club.email }}</a
                     >
@@ -348,18 +341,18 @@
                 }
                 @if (club.phone) {
                   <div class="flex items-center gap-2.5">
-                    <span class="text-white/35">&#128222;</span>
+                    <span class="text-faint">&#128222;</span>
                     <span>{{ club.phone }}</span>
                   </div>
                 }
                 @if (club.websiteUrl) {
                   <div class="flex items-center gap-2.5">
-                    <span class="text-white/35">&#127760;</span>
+                    <span class="text-faint">&#127760;</span>
                     <a
                       [href]="club.websiteUrl"
                       target="_blank"
                       rel="noopener noreferrer"
-                      class="hover:text-white transition-colors underline underline-offset-2"
+                      class="hover:text-content transition-colors underline underline-offset-2"
                       (click)="$event.stopPropagation()"
                       >{{ club.websiteUrl }}</a
                     >
