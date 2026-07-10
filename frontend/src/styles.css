@@ -37,8 +37,8 @@
   --success: #059669;
   --warning: #d97706;
 
-  /* Feature-page gradient */
-  --gradient-page: linear-gradient(to bottom right, #eef2ff, #f3f1fb 45%, #faf5ff);
+  /* Feature-page gradient (light: soft lavender -> violet -> blush) */
+  --gradient-page: linear-gradient(to bottom right, #e7ebfb 0%, #efeafb 45%, #fbedf4 100%);
   /* Accent gradient for clipped headline text (darker stops read on light) */
   --gradient-accent: linear-gradient(to right, #7c3aed, #c026d3, #4f46e5);
 }
@@ -72,7 +72,8 @@
   --success: #34d399;
   --warning: #fbbf24;
 
-  --gradient-page: linear-gradient(to bottom right, #0b0822, #160f3d 50%, #24135f);
+  /* Dark: kept flat to match --surface (dark theme intentionally unchanged) */
+  --gradient-page: linear-gradient(to bottom right, #0f0a1c, #0f0a1c);
   --gradient-accent: linear-gradient(to right, #d8b4fe, #f0abfc, #a5b4fc);
 }
 

@@ -22,7 +22,7 @@ type Testimonial = { quote: string; name: string; role: string };
   standalone: true,
   imports: [FormsModule, RouterModule],
   template: `
-    <div class="min-h-screen bg-surface text-content overflow-x-hidden overflow-y-visible relative">
+    <div class="min-h-screen bg-page text-content overflow-x-hidden overflow-y-visible relative">
       <div class="pointer-events-none absolute inset-0">
         <div
           class="absolute -top-24 left-1/2 -translate-x-1/2 h-[520px] w-[920px] rounded-full
