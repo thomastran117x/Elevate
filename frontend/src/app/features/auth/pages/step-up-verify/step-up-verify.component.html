@@ -1,6 +1,4 @@
-<section
-  class="min-h-screen bg-page text-content"
->
+<section class="min-h-screen bg-page text-content">
   <div class="mx-auto flex max-w-4xl flex-col gap-8 px-6 py-14">
     <div class="space-y-3">
       <p class="text-sm font-semibold uppercase tracking-[0.28em] text-accent">
@@ -60,8 +58,7 @@
               type="button"
               class="rounded-3xl border px-6 py-5 text-left transition"
               [ngClass]="{
-                'border-accent/60 bg-accent/10 shadow-lg shadow-accent/10':
-                  isEmailActive,
+                'border-accent/60 bg-accent/10 shadow-lg shadow-accent/10': isEmailActive,
                 'border-line bg-surface-raised hover:border-accent/40 hover:bg-accent/5':
                   !isEmailActive,
               }"
@@ -81,8 +78,7 @@
                 type="button"
                 class="rounded-3xl border px-6 py-5 text-left transition"
                 [ngClass]="{
-                  'border-accent/60 bg-accent/10 shadow-lg shadow-accent/10':
-                    isSmsActive,
+                  'border-accent/60 bg-accent/10 shadow-lg shadow-accent/10': isSmsActive,
                   'border-line bg-surface-raised hover:border-accent/40 hover:bg-accent/5':
                     !isSmsActive,
                 }"
@@ -103,8 +99,7 @@
                 type="button"
                 class="rounded-3xl border px-6 py-5 text-left transition"
                 [ngClass]="{
-                  'border-accent/60 bg-accent/10 shadow-lg shadow-accent/10':
-                    isTotpActive,
+                  'border-accent/60 bg-accent/10 shadow-lg shadow-accent/10': isTotpActive,
                   'border-line bg-surface-raised hover:border-accent/40 hover:bg-accent/5':
                     !isTotpActive,
                 }"
