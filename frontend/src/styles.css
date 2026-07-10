@@ -4,18 +4,18 @@
 /* ---- Semantic theme tokens: light (default) ---- */
 :root {
   /* Surfaces */
-  --surface: #eef2ff; /* page bg (indigo-50) */
+  --surface: #eceffa; /* soft lavender-tinted page bg */
   --surface-raised: #ffffff; /* dropdowns, modals, solid cards */
-  --surface-sunken: #f3f1fb; /* inputs, code, wells */
+  --surface-sunken: #e4e7f4; /* inputs, code, wells — reads as an inset */
 
-  /* Glass (translucent) */
-  --glass: rgba(20, 13, 42, 0.04);
-  --glass-strong: rgba(20, 13, 42, 0.07);
-  --glass-border: rgba(20, 13, 42, 0.1);
+  /* Glass — in light mode a frosted white card that pops above the tinted page */
+  --glass: rgba(255, 255, 255, 0.78);
+  --glass-strong: rgba(255, 255, 255, 0.95);
+  --glass-border: rgba(20, 13, 42, 0.09);
 
   /* Lines / borders */
-  --line: rgba(20, 13, 42, 0.08);
-  --line-strong: rgba(20, 13, 42, 0.14);
+  --line: rgba(20, 13, 42, 0.1);
+  --line-strong: rgba(20, 13, 42, 0.16);
 
   /* Content (text / icons) */
   --content: #140d2a;
