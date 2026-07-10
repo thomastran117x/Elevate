@@ -46,9 +46,7 @@
     </div>
 
     @if (loading) {
-      <div
-        class="rounded-3xl border border-line bg-surface-raised/60 p-6 text-sm text-muted"
-      >
+      <div class="rounded-3xl border border-line bg-surface-raised/60 p-6 text-sm text-muted">
         Loading event editor...
       </div>
     }
@@ -60,9 +58,7 @@
     }
 
     @if (!loading && successMessage) {
-      <div
-        class="rounded-3xl border border-success/40 bg-success/10 p-4 text-sm text-success"
-      >
+      <div class="rounded-3xl border border-success/40 bg-success/10 p-4 text-sm text-success">
         {{ successMessage }}
       </div>
     }
@@ -270,9 +266,7 @@
             {{ uploading ? 'Uploading images...' : 'Select images to upload' }}
           </label>
           @if (imageUrls.length === 0) {
-            <div
-              class="rounded-3xl border border-line bg-surface/70 p-4 text-sm text-subtle"
-            >
+            <div class="rounded-3xl border border-line bg-surface/70 p-4 text-sm text-subtle">
               No event images yet.
             </div>
           }

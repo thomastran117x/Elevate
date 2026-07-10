@@ -186,15 +186,9 @@
   </div>
 
   @if (mobileOpen) {
-    <div
-      class="md:hidden px-6 pb-6 space-y-4 bg-surface/95 backdrop-blur-xl border-t border-line"
-    >
-      <a class="block text-muted hover:text-content">
-        Features
-      </a>
-      <a class="block text-muted hover:text-content">
-        Pricing
-      </a>
+    <div class="md:hidden px-6 pb-6 space-y-4 bg-surface/95 backdrop-blur-xl border-t border-line">
+      <a class="block text-muted hover:text-content"> Features </a>
+      <a class="block text-muted hover:text-content"> Pricing </a>
       <button
         type="button"
         (click)="toggleTheme()"
@@ -233,17 +227,9 @@
               {{ user.Usertype }}
             </div>
           </div>
-          <a
-            routerLink="/account"
-            class="block text-muted hover:text-content"
-          >
-            Account
-          </a>
+          <a routerLink="/account" class="block text-muted hover:text-content"> Account </a>
           @if (invitationsEnabled) {
-            <a
-              routerLink="/events/me/invited"
-              class="block text-muted hover:text-content"
-            >
+            <a routerLink="/events/me/invited" class="block text-muted hover:text-content">
               My Invites
             </a>
           }

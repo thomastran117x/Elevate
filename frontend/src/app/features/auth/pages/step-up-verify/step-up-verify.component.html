@@ -62,7 +62,8 @@
               [ngClass]="{
                 'border-sky-400 bg-sky-50 shadow-[0_15px_40px_rgba(14,165,233,0.12)]':
                   isEmailActive,
-                'border-line bg-surface-raised hover:border-sky-300 hover:bg-sky-50/50': !isEmailActive,
+                'border-line bg-surface-raised hover:border-sky-300 hover:bg-sky-50/50':
+                  !isEmailActive,
               }"
               [disabled]="status() === 'starting'"
               (click)="selectMethod('email')"
@@ -82,7 +83,8 @@
                 [ngClass]="{
                   'border-sky-400 bg-sky-50 shadow-[0_15px_40px_rgba(14,165,233,0.12)]':
                     isSmsActive,
-                  'border-line bg-surface-raised hover:border-sky-300 hover:bg-sky-50/50': !isSmsActive,
+                  'border-line bg-surface-raised hover:border-sky-300 hover:bg-sky-50/50':
+                    !isSmsActive,
                 }"
                 [disabled]="status() === 'starting'"
                 (click)="selectMethod('sms')"

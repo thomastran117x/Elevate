@@ -56,9 +56,7 @@ type Testimonial = { quote: string; name: string; role: string };
               >
                 <span class="text-base font-black">E</span>
               </span>
-              <span class="text-sm font-semibold tracking-wide text-content">
-                EventXperience
-              </span>
+              <span class="text-sm font-semibold tracking-wide text-content"> EventXperience </span>
             </a>
 
             <nav class="hidden md:flex items-center gap-7 text-sm text-muted">
@@ -107,9 +105,7 @@ type Testimonial = { quote: string; name: string; role: string };
 
               <h1 class="mt-5 text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight">
                 Book unforgettable events -
-                <span class="text-gradient-accent">
-                  fast, safe, and beautiful
-                </span>
+                <span class="text-gradient-accent"> fast, safe, and beautiful </span>
               </h1>
 
               <p class="mt-4 text-base sm:text-lg text-muted leading-relaxed max-w-2xl">
@@ -307,12 +303,8 @@ type Testimonial = { quote: string; name: string; role: string };
               </div>
 
               <div class="mt-5 flex flex-wrap gap-2 text-xs text-subtle">
-                <span class="rounded-full border border-line bg-glass px-3 py-1"
-                  >Stripe-ready</span
-                >
-                <span class="rounded-full border border-line bg-glass px-3 py-1"
-                  >Anti-fraud</span
-                >
+                <span class="rounded-full border border-line bg-glass px-3 py-1">Stripe-ready</span>
+                <span class="rounded-full border border-line bg-glass px-3 py-1">Anti-fraud</span>
                 <span class="rounded-full border border-line bg-glass px-3 py-1"
                   >Organizer tools</span
                 >

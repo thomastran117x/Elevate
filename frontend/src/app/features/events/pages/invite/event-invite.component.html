@@ -17,14 +17,10 @@
       @if (!loading && invite) {
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p class="text-xs uppercase tracking-[0.18em] text-faint">
-              Private event invitation
-            </p>
+            <p class="text-xs uppercase tracking-[0.18em] text-faint">Private event invitation</p>
             <h1 class="mt-2 text-3xl font-bold">{{ invite.event?.name || 'Invitation' }}</h1>
           </div>
-          <span
-            class="rounded-full border border-line bg-glass px-3 py-1 text-sm text-muted"
-          >
+          <span class="rounded-full border border-line bg-glass px-3 py-1 text-sm text-muted">
             {{ invite.state }}
           </span>
         </div>
@@ -57,9 +53,7 @@
               </div>
             </div>
             @if (invite.expiresAt) {
-              <p class="text-sm text-warning/90">
-                Expires {{ invite.expiresAt | date: 'medium' }}
-              </p>
+              <p class="text-sm text-warning/90">Expires {{ invite.expiresAt | date: 'medium' }}</p>
             }
             @if (invite.state === 'LoginRequired') {
               <div class="flex flex-wrap gap-3">

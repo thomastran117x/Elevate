@@ -41,9 +41,7 @@
             >
               {{ event.category }}
             </span>
-            <span
-              class="rounded-full border border-line bg-glass px-2.5 py-1 text-xs text-muted"
-            >
+            <span class="rounded-full border border-line bg-glass px-2.5 py-1 text-xs text-muted">
               {{ event.status }}
             </span>
             @if (event.isPrivate) {
@@ -80,9 +78,7 @@
         <div class="mt-8 grid gap-6 lg:grid-cols-12">
           <div class="lg:col-span-7 space-y-4">
             @if (event.lifecycleState === 'Cancelled') {
-              <div
-                class="rounded-3xl border border-danger/30 bg-danger/10 p-5 text-sm text-danger"
-              >
+              <div class="rounded-3xl border border-danger/30 bg-danger/10 p-5 text-sm text-danger">
                 This event has been cancelled. The details remain available here for attendees and
                 organizers, but it is no longer an active listing.
               </div>

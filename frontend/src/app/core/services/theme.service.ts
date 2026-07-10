@@ -25,13 +25,11 @@ export class ThemeService {
 
     // Follow the system preference until the user makes an explicit choice.
     if (!stored) {
-      window
-        .matchMedia('(prefers-color-scheme: dark)')
-        .addEventListener('change', (event) => {
-          if (!this.readStored()) {
-            this.apply(event.matches ? 'dark' : 'light');
-          }
-        });
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (event) => {
+        if (!this.readStored()) {
+          this.apply(event.matches ? 'dark' : 'light');
+        }
+      });
     }
   }
 
