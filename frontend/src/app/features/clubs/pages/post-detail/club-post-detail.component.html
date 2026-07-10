@@ -1,5 +1,5 @@
 <div
-  class="min-h-screen bg-gradient-to-br from-[#0b0822] via-[#160f3d] to-[#24135f] text-white relative overflow-x-hidden"
+  class="min-h-screen bg-page text-content relative overflow-x-hidden"
 >
   <!-- Orb blobs -->
   <div class="pointer-events-none absolute inset-0 overflow-hidden">
@@ -14,7 +14,7 @@
   <div class="relative z-10 mx-auto max-w-3xl px-6 py-10">
     <button
       (click)="goBack()"
-      class="flex items-center gap-1.5 text-sm text-white/55 hover:text-white transition-colors mb-8"
+      class="flex items-center gap-1.5 text-sm text-subtle hover:text-content transition-colors mb-8"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -24,19 +24,19 @@
 
     <!-- Loading skeleton -->
     @if (loading) {
-      <div class="rounded-3xl border border-white/[0.12] bg-white/[0.06] p-6 animate-pulse mb-4">
-        <div class="h-3 bg-white/10 rounded w-1/4 mb-4"></div>
-        <div class="h-6 bg-white/10 rounded w-2/3 mb-4"></div>
-        <div class="h-3 bg-white/10 rounded w-full mb-2"></div>
-        <div class="h-3 bg-white/10 rounded w-full mb-2"></div>
-        <div class="h-3 bg-white/10 rounded w-3/4"></div>
+      <div class="rounded-3xl border border-line bg-glass p-6 animate-pulse mb-4">
+        <div class="h-3 bg-glass-strong rounded w-1/4 mb-4"></div>
+        <div class="h-6 bg-glass-strong rounded w-2/3 mb-4"></div>
+        <div class="h-3 bg-glass-strong rounded w-full mb-2"></div>
+        <div class="h-3 bg-glass-strong rounded w-full mb-2"></div>
+        <div class="h-3 bg-glass-strong rounded w-3/4"></div>
       </div>
     }
 
     <!-- Error -->
     @if (error && !loading) {
       <div
-        class="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300 mb-4"
+        class="rounded-2xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger mb-4"
       >
         {{ error }}
       </div>
@@ -44,12 +44,12 @@
 
     <!-- Post -->
     @if (post && !loading) {
-      <article class="rounded-3xl border border-white/[0.12] bg-white/[0.06] p-6 sm:p-8 mb-6">
+      <article class="rounded-3xl border border-line bg-glass p-6 sm:p-8 mb-6">
         <!-- Badges -->
         <div class="flex items-center gap-2 mb-4">
           @if (post.isPinned) {
             <span
-              class="text-xs font-semibold px-2.5 py-0.5 rounded-full border bg-amber-500/20 text-amber-300 border-amber-500/30"
+              class="text-xs font-semibold px-2.5 py-0.5 rounded-full border bg-warning/20 text-warning border-warning/30"
             >
               Pinned
             </span>
@@ -64,15 +64,15 @@
 
         <h1 class="text-2xl font-extrabold tracking-tight mb-5">{{ post.title }}</h1>
 
-        <p class="text-sm leading-relaxed text-white/75 whitespace-pre-wrap mb-6">
+        <p class="text-sm leading-relaxed text-muted whitespace-pre-wrap mb-6">
           {{ post.content }}
         </p>
 
         <div
-          class="flex items-center justify-between pt-4 border-t border-white/10 text-xs text-white/45"
+          class="flex items-center justify-between pt-4 border-t border-line text-xs text-faint"
         >
           <div class="flex items-center gap-4">
-            <span class="text-white/60">{{ authorDisplay(post) }}</span>
+            <span class="text-subtle">{{ authorDisplay(post) }}</span>
             <span class="flex items-center gap-1">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path

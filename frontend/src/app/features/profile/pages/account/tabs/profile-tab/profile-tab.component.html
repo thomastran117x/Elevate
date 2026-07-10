@@ -2,13 +2,13 @@
   <!-- Flash messages -->
   <div
     *ngIf="success"
-    class="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-300"
+    class="rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success"
   >
     {{ success }}
   </div>
   <div
     *ngIf="error"
-    class="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-300"
+    class="rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
   >
     {{ error }}
   </div>
@@ -16,7 +16,7 @@
   <!-- Loading -->
   <ng-container *ngIf="loading; else loaded">
     <div
-      class="rounded-2xl border border-white/10 bg-white/5 px-6 py-10 text-center text-sm text-white/40"
+      class="rounded-2xl border border-line bg-glass px-6 py-10 text-center text-sm text-faint"
     >
       Loading your profile...
     </div>
@@ -25,7 +25,7 @@
   <ng-template #loaded>
     <ng-container *ngIf="profile as p">
       <!-- Profile card -->
-      <article class="rounded-3xl border border-white/10 bg-white/5 px-6 py-6 backdrop-blur-xl">
+      <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
         <!-- Avatar + identity header -->
         <div class="flex flex-col gap-5 sm:flex-row sm:items-start">
           <div class="flex flex-col items-center gap-3">
@@ -46,7 +46,7 @@
               type="button"
               (click)="avatarInput.click()"
               [disabled]="avatarUploading"
-              class="text-xs font-semibold text-purple-300 transition hover:text-purple-200 disabled:cursor-not-allowed disabled:opacity-60"
+              class="text-xs font-semibold text-accent transition hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
             >
               {{ avatarUploading ? 'Uploading...' : 'Change photo' }}
             </button>
@@ -63,11 +63,11 @@
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 class="text-2xl font-bold">{{ p.Name || p.Username }}</h2>
-                <p class="mt-1 text-sm text-white/50">&#64;{{ p.Username }}</p>
+                <p class="mt-1 text-sm text-subtle">&#64;{{ p.Username }}</p>
               </div>
               <div class="flex items-center gap-3">
                 <span
-                  class="rounded-full bg-purple-500/20 px-3 py-1 text-xs font-semibold text-purple-300"
+                  class="rounded-full bg-purple-500/20 px-3 py-1 text-xs font-semibold text-accent"
                 >
                   {{ usertypeLabel }}
                 </span>
@@ -75,17 +75,17 @@
                   *ngIf="!editing"
                   type="button"
                   (click)="startEditing()"
-                  class="inline-flex items-center justify-center rounded-2xl border border-white/20 px-4 py-2 text-sm font-semibold text-white/70 transition hover:bg-white/10"
+                  class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-4 py-2 text-sm font-semibold text-muted transition hover:bg-glass-strong"
                 >
                   Edit profile
                 </button>
               </div>
             </div>
-            <p class="mt-3 text-sm text-white/40">{{ p.Email }}</p>
+            <p class="mt-3 text-sm text-faint">{{ p.Email }}</p>
             <a
               *ngIf="p.Username"
               [routerLink]="['/profile', p.Username]"
-              class="mt-2 inline-flex text-xs font-semibold text-purple-300 transition hover:text-purple-200"
+              class="mt-2 inline-flex text-xs font-semibold text-accent transition hover:text-accent"
             >
               View public profile &rarr;
             </a>
@@ -94,13 +94,13 @@
 
         <!-- Read-only summary (when not editing) -->
         <div *ngIf="!editing" class="mt-6 grid gap-4 sm:grid-cols-2">
-          <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-white/40">Phone</p>
-            <p class="mt-2 text-sm text-white/80">{{ p.Phone || 'Not set' }}</p>
+          <div class="rounded-2xl border border-line bg-glass px-4 py-4">
+            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">Phone</p>
+            <p class="mt-2 text-sm text-muted">{{ p.Phone || 'Not set' }}</p>
           </div>
-          <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-white/40">Address</p>
-            <p class="mt-2 text-sm text-white/80">{{ p.Address || 'Not set' }}</p>
+          <div class="rounded-2xl border border-line bg-glass px-4 py-4">
+            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">Address</p>
+            <p class="mt-2 text-sm text-muted">{{ p.Address || 'Not set' }}</p>
           </div>
         </div>
 
@@ -112,7 +112,7 @@
           (ngSubmit)="saveProfile()"
         >
           <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">
+            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
               Edit profile
             </p>
             <h3 class="mt-2 text-xl font-bold">Update your information</h3>
@@ -120,7 +120,7 @@
 
           <!-- Name -->
           <div class="space-y-2">
-            <label class="text-sm font-semibold text-white/80" for="profile-name"
+            <label class="text-sm font-semibold text-muted" for="profile-name"
               >Display name</label
             >
             <input
@@ -129,11 +129,11 @@
               formControlName="name"
               autocomplete="name"
               placeholder="Your full name"
-              class="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-base text-white placeholder-white/30 outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
+              class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
             />
             <p
               *ngIf="profileForm.controls.name.invalid && profileForm.controls.name.touched"
-              class="text-sm text-rose-400"
+              class="text-sm text-danger"
             >
               Name must be 100 characters or fewer.
             </p>
@@ -141,7 +141,7 @@
 
           <!-- Username -->
           <div class="space-y-2">
-            <label class="text-sm font-semibold text-white/80" for="profile-username"
+            <label class="text-sm font-semibold text-muted" for="profile-username"
               >Username</label
             >
             <input
@@ -150,11 +150,11 @@
               formControlName="username"
               autocomplete="username"
               placeholder="username"
-              class="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-base text-white placeholder-white/30 outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
+              class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
             />
             <p
               *ngIf="profileForm.controls.username.invalid && profileForm.controls.username.touched"
-              class="text-sm text-rose-400"
+              class="text-sm text-danger"
             >
               Username is required and must be 50 characters or fewer.
             </p>
@@ -162,8 +162,8 @@
 
           <!-- Phone -->
           <div class="space-y-2">
-            <label class="text-sm font-semibold text-white/80" for="profile-phone"
-              >Phone <span class="font-normal text-white/40">(optional)</span></label
+            <label class="text-sm font-semibold text-muted" for="profile-phone"
+              >Phone <span class="font-normal text-faint">(optional)</span></label
             >
             <input
               id="profile-phone"
@@ -171,11 +171,11 @@
               formControlName="phone"
               autocomplete="tel"
               placeholder="+1 416 555 0123"
-              class="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-base text-white placeholder-white/30 outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
+              class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
             />
             <p
               *ngIf="profileForm.controls.phone.invalid && profileForm.controls.phone.touched"
-              class="text-sm text-rose-400"
+              class="text-sm text-danger"
             >
               Phone must be 30 characters or fewer.
             </p>
@@ -183,8 +183,8 @@
 
           <!-- Address -->
           <div class="space-y-2">
-            <label class="text-sm font-semibold text-white/80" for="profile-address"
-              >Address <span class="font-normal text-white/40">(optional)</span></label
+            <label class="text-sm font-semibold text-muted" for="profile-address"
+              >Address <span class="font-normal text-faint">(optional)</span></label
             >
             <input
               id="profile-address"
@@ -192,17 +192,17 @@
               formControlName="address"
               autocomplete="street-address"
               placeholder="123 Main St, City"
-              class="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-base text-white placeholder-white/30 outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
+              class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
             />
             <p
               *ngIf="profileForm.controls.address.invalid && profileForm.controls.address.touched"
-              class="text-sm text-rose-400"
+              class="text-sm text-danger"
             >
               Address must be 200 characters or fewer.
             </p>
           </div>
 
-          <p class="text-xs text-white/30">
+          <p class="text-xs text-faint">
             Email address and account type cannot be changed here.
           </p>
 
@@ -210,14 +210,14 @@
             <button
               type="submit"
               [disabled]="saving"
-              class="inline-flex items-center justify-center rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
+              class="inline-flex items-center justify-center rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {{ saving ? 'Saving...' : 'Save changes' }}
             </button>
             <button
               type="button"
               (click)="cancelEditing()"
-              class="inline-flex items-center justify-center rounded-2xl border border-white/20 px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10"
+              class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong"
             >
               Cancel
             </button>
@@ -226,44 +226,44 @@
       </article>
 
       <!-- Account metadata card -->
-      <article class="rounded-3xl border border-white/10 bg-white/5 px-6 py-6 backdrop-blur-xl">
-        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300">
+      <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
+        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
           Account details
         </p>
         <h2 class="mt-2 text-xl font-bold">Account information</h2>
         <div class="mt-5 grid gap-4 sm:grid-cols-2">
-          <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-white/40">
+          <div class="rounded-2xl border border-line bg-glass px-4 py-4">
+            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">
               Member since
             </p>
-            <p class="mt-2 text-sm text-white/80">{{ p.CreatedAtUtc | date: 'longDate' }}</p>
+            <p class="mt-2 text-sm text-muted">{{ p.CreatedAtUtc | date: 'longDate' }}</p>
           </div>
-          <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-white/40">
+          <div class="rounded-2xl border border-line bg-glass px-4 py-4">
+            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">
               Last updated
             </p>
-            <p class="mt-2 text-sm text-white/80">{{ p.UpdatedAtUtc | date: 'medium' }}</p>
+            <p class="mt-2 text-sm text-muted">{{ p.UpdatedAtUtc | date: 'medium' }}</p>
           </div>
-          <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 sm:col-span-2">
-            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-white/40">
+          <div class="rounded-2xl border border-line bg-glass px-4 py-4 sm:col-span-2">
+            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">
               Linked sign-in methods
             </p>
             <div class="mt-3 flex flex-wrap gap-2">
               <span
                 *ngIf="p.GoogleLinked"
-                class="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300"
+                class="rounded-full bg-success/15 px-3 py-1 text-xs font-semibold text-success"
               >
                 Google
               </span>
               <span
                 *ngIf="p.MicrosoftLinked"
-                class="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300"
+                class="rounded-full bg-success/15 px-3 py-1 text-xs font-semibold text-success"
               >
                 Microsoft
               </span>
               <span
                 *ngIf="!p.GoogleLinked && !p.MicrosoftLinked"
-                class="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/70"
+                class="rounded-full bg-glass-strong px-3 py-1 text-xs font-semibold text-muted"
               >
                 Email &amp; password
               </span>
