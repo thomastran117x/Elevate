@@ -19,7 +19,9 @@
             <p class="mt-1 text-sm text-subtle">Current club results and source status.</p>
           </div>
           @if (resultSource) {
-            <span class="rounded-full border border-line bg-surface-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
+            <span
+              class="rounded-full border border-line bg-surface-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle"
+            >
               {{ sourceLabel }}
             </span>
           }
@@ -43,12 +45,18 @@
         </div>
 
         <div class="mt-4 rounded-2xl border border-line bg-surface-muted p-4">
-          <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Filter by type</div>
+          <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+            Filter by type
+          </div>
           <div class="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
               class="rounded-full border px-3 py-1.5 text-xs font-semibold transition"
-              [ngClass]="selectedClubType === null ? 'border-accent/25 bg-accent/10 text-accent' : 'border-line bg-surface text-muted hover:bg-surface-muted'"
+              [ngClass]="
+                selectedClubType === null
+                  ? 'border-accent/25 bg-accent/10 text-accent'
+                  : 'border-line bg-surface text-muted hover:bg-surface-muted'
+              "
               (click)="selectClubType(null)"
             >
               All
@@ -57,7 +65,11 @@
               <button
                 type="button"
                 class="rounded-full border px-3 py-1.5 text-xs font-semibold transition"
-                [ngClass]="selectedClubType === type ? clubTypeStyles[type] + ' border-current' : 'border-line bg-surface text-muted hover:bg-surface-muted'"
+                [ngClass]="
+                  selectedClubType === type
+                    ? clubTypeStyles[type] + ' border-current'
+                    : 'border-line bg-surface text-muted hover:bg-surface-muted'
+                "
                 (click)="selectClubType(type)"
               >
                 {{ type }}
@@ -71,7 +83,9 @@
     <section class="surface-panel mt-8 rounded-3xl p-6 sm:p-7">
       <div class="grid gap-4 lg:grid-cols-[1fr_16rem]">
         <div>
-          <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Search clubs</label>
+          <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-subtle"
+            >Search clubs</label
+          >
           <div class="relative">
             <input
               class="form-field w-full px-4 py-3 text-sm"
@@ -93,7 +107,9 @@
         </div>
 
         <div>
-          <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Sort</label>
+          <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-subtle"
+            >Sort</label
+          >
           <select
             class="form-field w-full px-4 py-3 text-sm"
             [(ngModel)]="selectedSort"
@@ -144,7 +160,9 @@
       </div>
 
       @if (error) {
-        <div class="mt-6 rounded-2xl border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger">
+        <div
+          class="mt-6 rounded-2xl border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger"
+        >
           {{ error }}
         </div>
       }
@@ -178,10 +196,14 @@
             >
               <div class="h-36 bg-surface-muted">
                 @if (club.clubImage) {
-                  <div class="h-full w-full bg-cover bg-center" [style.background-image]="'url(' + club.clubImage + ')'">
-                  </div>
+                  <div
+                    class="h-full w-full bg-cover bg-center"
+                    [style.background-image]="'url(' + club.clubImage + ')'"
+                  ></div>
                 } @else {
-                  <div class="flex h-full items-center justify-center bg-accent/10 text-sm font-semibold uppercase tracking-[0.16em] text-accent">
+                  <div
+                    class="flex h-full items-center justify-center bg-accent/10 text-sm font-semibold uppercase tracking-[0.16em] text-accent"
+                  >
                     Club
                   </div>
                 }
@@ -190,13 +212,18 @@
               <div class="p-5">
                 <div class="flex items-start justify-between gap-3">
                   <div>
-                    <span class="rounded-full border px-2.5 py-1 text-[11px] font-semibold" [ngClass]="clubTypeStyles[club.clubType]">
+                    <span
+                      class="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                      [ngClass]="clubTypeStyles[club.clubType]"
+                    >
                       {{ club.clubType }}
                     </span>
                     <h3 class="mt-3 text-lg font-semibold text-content">{{ club.name }}</h3>
                   </div>
                   @if (club.rating != null) {
-                    <span class="rounded-full border border-line bg-surface-muted px-2.5 py-1 text-[11px] font-semibold text-subtle">
+                    <span
+                      class="rounded-full border border-line bg-surface-muted px-2.5 py-1 text-[11px] font-semibold text-subtle"
+                    >
                       {{ club.rating | number: '1.1-1' }}
                     </span>
                   }
@@ -212,12 +239,25 @@
 
                 <div class="mt-5 flex items-center justify-between gap-4 text-xs text-subtle">
                   <div class="flex items-center gap-3">
-                    <span><span class="font-semibold text-content">{{ club.memberCount | number }}</span> members</span>
-                    <span><span class="font-semibold text-content">{{ club.eventCount | number }}</span> events</span>
+                    <span
+                      ><span class="font-semibold text-content">{{
+                        club.memberCount | number
+                      }}</span>
+                      members</span
+                    >
+                    <span
+                      ><span class="font-semibold text-content">{{
+                        club.eventCount | number
+                      }}</span>
+                      events</span
+                    >
                   </div>
                   @if (club.maxMemberCount > 0) {
                     <div class="h-2 w-16 overflow-hidden rounded-full bg-surface-muted">
-                      <div class="h-full rounded-full bg-accent" [style.width.%]="memberCapacityPercent(club)"></div>
+                      <div
+                        class="h-full rounded-full bg-accent"
+                        [style.width.%]="memberCapacityPercent(club)"
+                      ></div>
                     </div>
                   }
                 </div>
@@ -245,7 +285,11 @@
               <button
                 type="button"
                 class="flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition"
-                [ngClass]="page === currentPage ? 'border-accent/25 bg-accent/10 text-accent' : 'border-line bg-surface text-muted hover:bg-surface-muted'"
+                [ngClass]="
+                  page === currentPage
+                    ? 'border-accent/25 bg-accent/10 text-accent'
+                    : 'border-line bg-surface text-muted hover:bg-surface-muted'
+                "
                 (click)="goToPage(page)"
               >
                 {{ page }}

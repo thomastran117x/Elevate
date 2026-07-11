@@ -248,4 +248,3 @@ export const CATEGORY_STYLES: Record<EventCategory, { badge: string; bg: string 
     bg: 'bg-zinc-500/60',
   },
 };
-

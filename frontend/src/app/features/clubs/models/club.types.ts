@@ -125,4 +125,3 @@ export function normalizeClubsPagedData(raw: PagedPayload<ClubPayload>): ClubsPa
     totalPages: raw.totalPages ?? raw.TotalPages ?? 0,
   };
 }
-

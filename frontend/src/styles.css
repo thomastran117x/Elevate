@@ -166,8 +166,7 @@ body {
 .app-page {
   min-height: 100vh;
   background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.04), transparent 35%),
-    var(--gradient-page);
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.04), transparent 35%), var(--gradient-page);
   color: var(--text);
 }
 
