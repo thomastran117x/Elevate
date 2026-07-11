@@ -356,8 +356,10 @@
                       {{ formatDate(event.startTime) }} &bull; {{ formatTime(event.startTime) }}
                     </p>
                     <p class="mt-1 text-xs text-muted">
-                      {{ event.venueName || event.location || 'Venue TBD'
-                      }}<span *ngIf="event.city"> &bull; {{ event.city }}</span>
+                      {{ event.venueName || event.location || 'Venue TBD' }}
+                      @if (event.city) {
+                        <span> &bull; {{ event.city }}</span>
+                      }
                     </p>
                   </div>
                   <div class="text-right">

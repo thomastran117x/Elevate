@@ -371,7 +371,7 @@ export class HomeComponent {
     this.eventsEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.events);
   }
 
-  explore(category?: string): void {
+  explore(): void {
     if (!this.eventsEnabled) {
       return;
     }
@@ -384,10 +384,6 @@ export class HomeComponent {
 
     if (this.heroCity.trim()) {
       queryParams['city'] = this.heroCity.trim();
-    }
-
-    if (category) {
-      queryParams['category'] = category;
     }
 
     this.router.navigate(['/events'], { queryParams });
