@@ -549,6 +549,12 @@ public class AuthEndpointsTests
         // Trust the device so a later fresh login resolves straight to an authenticated session.
         await app.SeedKnownDeviceAsync(user!.Id, "known-device");
 
+        // The step-up options endpoint is reachable without prior verification and
+        // always offers email as the universal fallback.
+        var options = await app.GetWithBearerAsync("/api/auth/mfa/step-up/options", session.AccessToken);
+        options.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await options.Content.ReadAsStringAsync()).Should().Contain("email");
+
         // Without an in-session MFA verification the security status endpoint is gated.
         var gated = await app.GetWithBearerAsync("/api/auth/mfa", session.AccessToken);
         gated.StatusCode.Should().Be(HttpStatusCode.Forbidden);

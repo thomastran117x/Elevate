@@ -87,6 +87,28 @@ public class SessionMfaVerificationServiceTests
     }
 
     [Fact]
+    public async Task VerifyAsync_WithRepeatedInvalidTotp_ShouldThrottleAfterMaxAttempts()
+    {
+        var totp = new Mock<ITotpMfaEnrollmentService>();
+        totp.Setup(t => t.VerifyPersistedCodeAsync(UserId, It.IsAny<string>()))
+            .ThrowsAsync(new UnauthorizedException("Invalid or expired TOTP code."));
+
+        var (service, _) = CreateService(totp: totp);
+
+        // The first four failures surface as Unauthorized; the fifth trips the throttle.
+        for (var attempt = 0; attempt < 4; attempt++)
+        {
+            var invalid = () => service.VerifyAsync(UserId, Email, SessionId, "totp", "000000");
+            await invalid.Should().ThrowAsync<UnauthorizedException>();
+        }
+
+        var throttled = () => service.VerifyAsync(UserId, Email, SessionId, "totp", "000000");
+        await throttled.Should().ThrowAsync<TooManyRequestException>();
+
+        (await service.IsSessionVerifiedAsync(SessionId)).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task VerifyAsync_WithoutSessionId_ShouldThrow()
     {
         var (service, _) = CreateService();

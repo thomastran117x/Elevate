@@ -188,8 +188,26 @@ namespace backend.main.features.auth.mfa.session
 
                 if (normalizedMethod == TotpMethod)
                 {
-                    // Throws UnauthorizedException on an invalid code.
-                    await _totpMfaEnrollmentService.VerifyPersistedCodeAsync(userId, code);
+                    try
+                    {
+                        // Throws UnauthorizedException on an invalid code.
+                        await _totpMfaEnrollmentService.VerifyPersistedCodeAsync(userId, code);
+                    }
+                    catch (UnauthorizedException)
+                    {
+                        // Throttle brute-force guessing against the gate: TOTP verification is
+                        // otherwise stateless, so cap failures per user over a short window.
+                        var totpAttempts = await _cacheService.IncrementAsync(TotpAttemptKey(userId));
+                        if (totpAttempts == 1)
+                            await _cacheService.SetExpiryAsync(TotpAttemptKey(userId), ChallengeTtl);
+                        if (totpAttempts >= MaxOtpAttempts)
+                            throw new TooManyRequestException("Too many verification attempts. Please try again later.");
+
+                        LogAudit(userId, normalizedMethod, false);
+                        throw;
+                    }
+
+                    await _cacheService.DeleteKeyAsync(TotpAttemptKey(userId));
                     await MarkSessionVerifiedAsync(sessionId);
                     LogAudit(userId, normalizedMethod, true);
                     return;
@@ -198,6 +216,12 @@ namespace backend.main.features.auth.mfa.session
                 var state = await GetStateAsync(userId);
                 if (state == null || state.Method != normalizedMethod)
                     throw new UnauthorizedException("Invalid or expired verification challenge.");
+
+                if (state.ExpiresAtUtc <= DateTime.UtcNow)
+                {
+                    await DeleteStateAsync(userId);
+                    throw new UnauthorizedException("Invalid or expired verification challenge.");
+                }
 
                 var expected = ComputeProof(userId, normalizedMethod, state.ExpiresAtUtc, code);
                 if (!CryptoHelper.FixedTimeEquals(state.CodeHash, expected))
@@ -290,8 +314,14 @@ namespace backend.main.features.auth.mfa.session
 
         private async Task<bool> PersistStateAsync(PendingState state)
         {
+            // Preserve the original expiry so a failed attempt near the end of the
+            // window cannot extend the challenge's advertised lifetime.
+            var ttl = state.ExpiresAtUtc - DateTime.UtcNow;
+            if (ttl <= TimeSpan.Zero)
+                return false;
+
             var json = JsonConvert.SerializeObject(state);
-            return await _cacheService.SetValueAsync(UserKey(state.UserId), json, ChallengeTtl);
+            return await _cacheService.SetValueAsync(UserKey(state.UserId), json, ttl);
         }
 
         private async Task<PendingState?> GetStateAsync(int userId)
@@ -340,6 +370,7 @@ namespace backend.main.features.auth.mfa.session
 
         private static string UserKey(int userId) => $"mfa:stepup:user:{userId}";
         private static string StartKey(int userId) => $"mfa:stepup:start:user:{userId}";
+        private static string TotpAttemptKey(int userId) => $"mfa:stepup:totp-attempts:user:{userId}";
         private static string VerifiedMarkerKey(string sessionId) => $"mfa:session-verified:{sessionId}";
 
         private sealed class PendingState

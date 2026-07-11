@@ -92,16 +92,16 @@ export interface TotpEnrollmentStartResponse {
 export type SessionMfaMethod = 'sms' | 'email' | 'totp';
 
 export interface SessionMfaOptionsResponse {
-  AvailableMethods: SessionMfaMethod[];
-  MaskedPhone?: string | null;
-  MaskedEmail: string;
+  availableMethods: SessionMfaMethod[];
+  maskedPhone?: string | null;
+  maskedEmail: string;
 }
 
 export interface SessionMfaStartResponse {
-  SelectedMethod: SessionMfaMethod;
-  MaskedDestination: string;
-  ExpiresAtUtc: string;
-  CooldownEndsAtUtc: string;
+  selectedMethod: SessionMfaMethod;
+  maskedDestination: string;
+  expiresAtUtc: string;
+  cooldownEndsAtUtc: string;
 }
 
 export interface LoginStepUpChallengeResponse {

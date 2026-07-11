@@ -131,7 +131,7 @@ export class SecurityTabComponent implements OnInit {
       .subscribe({
         next: (res) => {
           this.mfaCodeSent = true;
-          this.mfaMaskedDestination = res.MaskedDestination;
+          this.mfaMaskedDestination = res.maskedDestination;
           this.mfaGateForm.reset();
         },
         error: (err) => {
@@ -210,7 +210,7 @@ export class SecurityTabComponent implements OnInit {
       .subscribe({
         next: (options) => {
           this.mfaOptions = options;
-          this.mfaMethod = options.AvailableMethods[0] ?? 'email';
+          this.mfaMethod = options.availableMethods[0] ?? 'email';
         },
         error: (err) => {
           this.mfaError = getApiClientMessage(err, 'Unable to load verification options.');
