@@ -3,21 +3,27 @@ import { Component, OnInit } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 
-import { getApiClientMessage } from '../../../../../../core/api/models/api-client-error.model';
+import {
+  getApiClientMessage,
+  isApiClientErrorCode,
+} from '../../../../../../core/api/models/api-client-error.model';
 import {
   AuthService,
   MfaChallengeResponse,
   MfaSettingsResponse,
   TotpEnrollmentStartResponse,
 } from '../../../../../auth/services/auth.service';
+import { MfaGateComponent } from '../../mfa-gate/mfa-gate.component';
 
 type SmsFlow = 'enroll' | 'enable' | null;
 type TotpManageAction = 'enable' | 'disable' | 'remove' | null;
 
+const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
+
 @Component({
   selector: 'app-security-tab',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, MfaGateComponent],
   templateUrl: './security-tab.component.html',
 })
 export class SecurityTabComponent implements OnInit {
@@ -55,9 +61,19 @@ export class SecurityTabComponent implements OnInit {
   error = '';
   success = '';
 
+  // Viewing this tab requires a fresh in-session MFA verification, handled by the
+  // reusable <app-mfa-gate>. Settings load only once it emits (verified).
+  mfaVerified = false;
+
   constructor(private auth: AuthService) {}
 
   ngOnInit(): void {
+    // The MFA gate drives the initial load: it verifies the session first, then
+    // emits (verified), at which point we fetch the security settings.
+  }
+
+  onMfaVerified(): void {
+    this.mfaVerified = true;
     this.refreshStatus();
   }
 
@@ -376,6 +392,13 @@ export class SecurityTabComponent implements OnInit {
           this.settings = settings;
         },
         error: (err) => {
+          // If the session verification lapsed (e.g. marker expired), fall back to
+          // the gate so the user can re-verify.
+          if (isApiClientErrorCode(err, MFA_REQUIRED_ERROR_CODE)) {
+            this.mfaVerified = false;
+            return;
+          }
+
           if (!silent) {
             this.error = getApiClientMessage(err, 'Unable to load security settings.');
           }

@@ -89,6 +89,21 @@ export interface TotpEnrollmentStartResponse {
   ExpiresAtUtc: string;
 }
 
+export type SessionMfaMethod = 'sms' | 'email' | 'totp';
+
+export interface SessionMfaOptionsResponse {
+  availableMethods: SessionMfaMethod[];
+  maskedPhone?: string | null;
+  maskedEmail: string;
+}
+
+export interface SessionMfaStartResponse {
+  selectedMethod: SessionMfaMethod;
+  maskedDestination: string;
+  expiresAtUtc: string;
+  cooldownEndsAtUtc: string;
+}
+
 export interface LoginStepUpChallengeResponse {
   Challenge: string;
   ExpiresAtUtc: string;
@@ -381,6 +396,33 @@ export class AuthService {
     return this.getWithCsrf<ApiEnvelope<MfaSettingsResponse>>(`${this.baseUrl}/mfa`).pipe(
       map((res) => this.requireData(res, 'MFA settings response was incomplete.')),
     );
+  }
+
+  getSessionMfaStatus(): Observable<void> {
+    // Gated probe: resolves when the session is MFA-verified, otherwise errors
+    // with the MFA_REQUIRED code so callers can prompt for verification.
+    return this.getWithCsrf<void>(`${this.baseUrl}/mfa/step-up/status`);
+  }
+
+  getSessionMfaOptions(): Observable<SessionMfaOptionsResponse> {
+    return this.getWithCsrf<ApiEnvelope<SessionMfaOptionsResponse>>(
+      `${this.baseUrl}/mfa/step-up/options`,
+    ).pipe(
+      map((res) => this.requireData(res, 'MFA verification options response was incomplete.')),
+    );
+  }
+
+  startSessionMfa(method: SessionMfaMethod): Observable<SessionMfaStartResponse> {
+    return this.postWithCsrf<ApiEnvelope<SessionMfaStartResponse>>(
+      `${this.baseUrl}/mfa/step-up/start`,
+      { method },
+    ).pipe(
+      map((res) => this.requireData(res, 'MFA verification delivery response was incomplete.')),
+    );
+  }
+
+  verifySessionMfa(method: SessionMfaMethod, code: string): Observable<void> {
+    return this.postWithCsrf<void>(`${this.baseUrl}/mfa/step-up/verify`, { method, code });
   }
 
   startMfaEnrollment(phoneNumber: string): Observable<MfaChallengeResponse> {

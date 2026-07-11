@@ -28,7 +28,10 @@ namespace backend.main.features.auth
             try
             {
                 user.Usertype = AuthRoles.NormalizeStored(user.Usertype);
-                var accessToken = _tokenService.GenerateAccessToken(user);
+                // Mint the refresh session first so the access token can carry its
+                // session id (sid) claim. On login the session id is generated here;
+                // on refresh the existing session id is passed through and reused, so
+                // sid stays stable across access-token rotations within one session.
                 var refreshToken = await _tokenService.GenerateRefreshToken(
                     user.Id,
                     _requestInfo,
@@ -36,6 +39,7 @@ namespace backend.main.features.auth
                     sessionId,
                     rememberMe
                 );
+                var accessToken = _tokenService.GenerateAccessToken(user, refreshToken.SessionId);
                 var authToken = new Token(
                     accessToken.Value,
                     accessToken.ExpiresAtUtc,

@@ -235,7 +235,7 @@ public class AuthServiceTests
             .ReturnsAsync(new OAuthUser("google-1", "existing@example.com", "Existing User", "google"));
 
         var tokenService = new Mock<ITokenService>();
-        tokenService.Setup(service => service.GenerateAccessToken(It.IsAny<backend.main.features.profile.User>()))
+        tokenService.Setup(service => service.GenerateAccessToken(It.IsAny<backend.main.features.profile.User>(), It.IsAny<string>()))
             .Returns(new AccessTokenIssue("access-token", DateTime.UtcNow.AddMinutes(15)));
         tokenService.Setup(service => service.GenerateRefreshToken(
                 9,
@@ -247,7 +247,8 @@ public class AuthServiceTests
                 "refresh-token",
                 "binding-token",
                 TimeSpan.FromDays(1),
-                SessionTransport.BrowserCookie));
+                SessionTransport.BrowserCookie,
+                "session-9"));
 
         var deviceService = new Mock<IDeviceService>();
         var authSessionService = CreateAuthSessionServiceForUser(new backend.main.features.profile.User
@@ -1001,7 +1002,7 @@ public class AuthServiceTests
     private static Mock<ITokenService> CreateTokenServiceForUser(backend.main.features.profile.User user)
     {
         var tokenService = new Mock<ITokenService>();
-        tokenService.Setup(service => service.GenerateAccessToken(It.IsAny<backend.main.features.profile.User>()))
+        tokenService.Setup(service => service.GenerateAccessToken(It.IsAny<backend.main.features.profile.User>(), It.IsAny<string>()))
             .Returns(new AccessTokenIssue("access-token", DateTime.UtcNow.AddMinutes(15)));
         tokenService.Setup(service => service.GenerateRefreshToken(
                 user.Id,
@@ -1013,7 +1014,8 @@ public class AuthServiceTests
                 "refresh-token",
                 "binding-token",
                 TimeSpan.FromDays(1),
-                SessionTransport.BrowserCookie));
+                SessionTransport.BrowserCookie,
+                "session-" + user.Id));
         return tokenService;
     }
 

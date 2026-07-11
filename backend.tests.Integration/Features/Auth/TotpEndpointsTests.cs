@@ -55,6 +55,7 @@ public class TotpEndpointsTests
         persistedEnrollment!.IsTotpMfaEnabled.Should().BeTrue();
         persistedEnrollment.EnrolledAtUtc.Should().NotBeNull();
 
+        await app.CompleteSessionMfaByEmailAsync("totp-enroll@example.com", session.AccessToken);
         var status = await app.GetWithBearerAsync("/api/auth/mfa", session.AccessToken);
         status.StatusCode.Should().Be(HttpStatusCode.OK);
         var statusBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(status);
@@ -107,6 +108,7 @@ public class TotpEndpointsTests
         persistedDisabled.IsTotpMfaEnabled.Should().BeFalse();
         persistedDisabled.DisabledAtUtc.Should().NotBeNull();
 
+        await app.CompleteSessionMfaByEmailAsync("totp-disable@example.com", session.AccessToken);
         var status = await app.GetWithBearerAsync("/api/auth/mfa", session.AccessToken);
         var statusBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(status);
         statusBody.Data!.Totp.IsEnabled.Should().BeFalse();

@@ -21,6 +21,7 @@ namespace backend.main.features.auth.token
     public class TokenService : ITokenService
     {
         public const string AuthVersionClaimType = "auth_version";
+        public const string SessionIdClaimType = "sid";
         private readonly JwtSecurityTokenHandler _tokenHandler = new();
         private readonly string JWT_ACCESS_SECRET;
         private readonly string JWT_VERIFICATION_SECRET;
@@ -42,7 +43,7 @@ namespace backend.main.features.auth.token
             _cacheService = cacheService;
         }
 
-        public AccessTokenIssue GenerateAccessToken(User user)
+        public AccessTokenIssue GenerateAccessToken(User user, string sessionId)
         {
             try
             {
@@ -55,6 +56,7 @@ namespace backend.main.features.auth.token
                     new Claim(ClaimTypes.Name, user.Email),
                     new Claim(ClaimTypes.Role, AuthRoles.NormalizeStored(user.Usertype)),
                     new Claim(AuthVersionClaimType, user.AuthVersion.ToString()),
+                    new Claim(SessionIdClaimType, sessionId),
                 };
 
                 var tokenDescriptor = new SecurityTokenDescriptor
@@ -181,7 +183,8 @@ namespace backend.main.features.auth.token
                     refreshToken,
                     sessionBindingToken,
                     refreshTtl,
-                    session.Transport
+                    session.Transport,
+                    session.SessionId
                 );
             }
             catch (Exception e)
@@ -526,6 +529,14 @@ namespace backend.main.features.auth.token
                 Logger.Error($"[TokenService] VerificationTokenExist failed: {e}");
                 throw new InternalServerErrorException();
             }
+        }
+
+        public async Task<TimeSpan?> GetRefreshSessionTtlAsync(string sessionId)
+        {
+            if (string.IsNullOrWhiteSpace(sessionId))
+                return null;
+
+            return await _cacheService.GetTTLAsync(SessionKey(sessionId));
         }
 
         public async Task RevokeRefreshSessionAsync(string sessionId)

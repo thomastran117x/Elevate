@@ -25,5 +25,10 @@ namespace backend.main.features.auth.notifications
             string challenge,
             DateTime expiresAtUtc,
             string purpose);
+
+        Task SendEmailMfaCodeAsync(
+            string email,
+            string code,
+            string? recipientName = null);
     }
 }

@@ -208,6 +208,28 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         return await Client.SendAsync(request);
     }
 
+    /// <summary>
+    /// Satisfies a <c>[RequireMfa]</c> gate for the given session by completing an
+    /// in-session email step-up (start + verify with the emitted code).
+    /// </summary>
+    public async Task CompleteSessionMfaByEmailAsync(string email, string accessToken)
+    {
+        var start = await PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/step-up/start",
+            new SessionMfaStartRequest { Method = "email" },
+            accessToken);
+        start.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+
+        var codeEmail = await WaitForEmailAsync(
+            message => message.Type == EmailMessageType.MfaCode && message.Email == email);
+
+        var verify = await PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/step-up/verify",
+            new SessionMfaVerifyRequest { Method = "email", Code = codeEmail.Code! },
+            accessToken);
+        verify.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+    }
+
     public async Task AddClubStaffAsync(int clubId, int userId, int grantedByUserId, ClubStaffRole role = ClubStaffRole.Manager)
     {
         await using var scope = _factory.Services.CreateAsyncScope();

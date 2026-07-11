@@ -82,5 +82,21 @@ namespace backend.main.features.auth.notifications
                     Purpose = purpose
                 });
         }
+
+        public Task SendEmailMfaCodeAsync(
+            string email,
+            string code,
+            string? recipientName = null)
+        {
+            return _publisher.PublishAsync(
+                NotificationTopics.Email,
+                new EmailMessage
+                {
+                    Type = EmailMessageType.MfaCode,
+                    Email = email,
+                    Code = code,
+                    RecipientName = recipientName
+                });
+        }
     }
 }
