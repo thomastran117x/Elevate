@@ -37,7 +37,7 @@
           <div class="flex items-start justify-between gap-4">
             <div>
               <div
-                class="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-500/20 text-accent"
+                class="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-accent/10 text-accent"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -77,7 +77,7 @@
           <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <div
-                class="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-500/20 text-accent"
+                class="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-accent/10 text-accent"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -140,7 +140,7 @@
           <!-- Phone setup form -->
           <form
             *ngIf="smsEditorOpen"
-            class="mt-5 space-y-4 rounded-3xl border border-purple-500/30 bg-purple-500/10 px-5 py-5"
+            class="mt-5 space-y-4 rounded-3xl border border-accent/25 bg-accent/10 px-5 py-5"
             [formGroup]="phoneForm"
             (ngSubmit)="startSmsEnrollment()"
           >
@@ -165,7 +165,7 @@
                 formControlName="phoneNumber"
                 autocomplete="tel"
                 placeholder="+1 416 555 0123"
-                class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
+                class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
               />
               <p
                 *ngIf="
@@ -180,7 +180,7 @@
               <button
                 type="submit"
                 [disabled]="smsSubmitting"
-                class="inline-flex items-center justify-center rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
+                class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {{ smsSubmitting ? 'Sending code...' : 'Send verification code' }}
               </button>
@@ -197,7 +197,7 @@
           <!-- SMS verification form -->
           <form
             *ngIf="isSmsVerificationStep"
-            class="mt-5 space-y-4 rounded-3xl border border-purple-500/30 bg-purple-500/10 px-5 py-5"
+            class="mt-5 space-y-4 rounded-3xl border border-accent/25 bg-accent/10 px-5 py-5"
             [formGroup]="smsCodeForm"
             (ngSubmit)="verifySmsChallenge()"
           >
@@ -224,7 +224,7 @@
                 maxlength="6"
                 formControlName="code"
                 placeholder="123456"
-                class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base tracking-[0.35em] text-content placeholder:text-faint outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
+                class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base tracking-[0.35em] text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
               />
               <p
                 *ngIf="smsCodeForm.controls.code.invalid && smsCodeForm.controls.code.touched"
@@ -257,7 +257,7 @@
               *ngIf="smsSettings?.canEnroll"
               type="button"
               (click)="openSmsEditor()"
-              class="inline-flex items-center justify-center rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-purple-500"
+              class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover"
             >
               {{ smsSettings?.isConfigured ? 'Change number' : 'Setup' }}
             </button>
@@ -266,7 +266,7 @@
               type="button"
               (click)="startSmsEnable()"
               [disabled]="smsSubmitting"
-              class="inline-flex items-center justify-center rounded-2xl border border-purple-400/40 px-5 py-3 text-sm font-semibold text-accent transition hover:bg-purple-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              class="inline-flex items-center justify-center rounded-2xl border border-accent/25 px-5 py-3 text-sm font-semibold text-accent transition hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {{ smsSubmitting ? 'Sending...' : 'Enable' }}
             </button>
@@ -298,7 +298,7 @@
           <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <div
-                class="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-500/20 text-accent"
+                class="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-accent/10 text-accent"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -370,7 +370,7 @@
           <!-- TOTP setup step -->
           <div
             *ngIf="isTotpSetupStep"
-            class="mt-5 rounded-3xl border border-purple-500/30 bg-purple-500/10 px-5 py-5"
+            class="mt-5 rounded-3xl border border-accent/25 bg-accent/10 px-5 py-5"
           >
             <div class="space-y-2">
               <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
@@ -422,7 +422,7 @@
                   maxlength="6"
                   formControlName="code"
                   placeholder="123456"
-                  class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base tracking-[0.35em] text-content placeholder:text-faint outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
+                  class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base tracking-[0.35em] text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
                 />
                 <p
                   *ngIf="totpSetupForm.controls.code.invalid && totpSetupForm.controls.code.touched"
@@ -453,7 +453,7 @@
           <!-- TOTP confirm action -->
           <form
             *ngIf="isTotpManageStep"
-            class="mt-5 space-y-4 rounded-3xl border border-purple-500/30 bg-purple-500/10 px-5 py-5"
+            class="mt-5 space-y-4 rounded-3xl border border-accent/25 bg-accent/10 px-5 py-5"
             [formGroup]="totpManageForm"
             (ngSubmit)="submitTotpAction()"
           >
@@ -485,7 +485,7 @@
                 maxlength="6"
                 formControlName="code"
                 placeholder="123456"
-                class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base tracking-[0.35em] text-content placeholder:text-faint outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-500/20"
+                class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base tracking-[0.35em] text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
               />
               <p
                 *ngIf="totpManageForm.controls.code.invalid && totpManageForm.controls.code.touched"
@@ -519,7 +519,7 @@
               type="button"
               (click)="startTotpEnrollment()"
               [disabled]="totpStarting"
-              class="inline-flex items-center justify-center rounded-2xl bg-purple-600 px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-60"
+              class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
               {{ totpStarting ? 'Preparing...' : 'Setup' }}
             </button>
@@ -527,7 +527,7 @@
               *ngIf="totpSettings?.canEnable"
               type="button"
               (click)="beginTotpAction('enable')"
-              class="inline-flex items-center justify-center rounded-2xl border border-purple-400/40 px-5 py-3 text-sm font-semibold text-accent transition hover:bg-purple-500/10"
+              class="inline-flex items-center justify-center rounded-2xl border border-accent/25 px-5 py-3 text-sm font-semibold text-accent transition hover:bg-accent/10"
             >
               Enable
             </button>

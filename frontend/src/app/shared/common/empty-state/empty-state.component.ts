@@ -11,7 +11,7 @@ import { IconShellComponent } from '@common/icon-shell/icon-shell.component';
   styleUrl: './empty-state.component.css',
 })
 export class EmptyStateComponent {
-  @Input() icon = '✨';
+  @Input() icon = '*';
   @Input() title = 'Nothing here yet';
   @Input() subtitle = 'Try adjusting your filters or searching for a different event.';
 

@@ -32,13 +32,10 @@ export class AppInputComponent {
   }
 
   get fieldWrapClass() {
-    const base = 'flex items-center gap-2 rounded-xl border px-3 py-2 transition';
-    const tone =
-      this.tone === 'glass'
-        ? 'bg-surface-sunken border-line focus-within:border-accent/25 focus-within:ring-2 focus-within:ring-accent/15'
-        : 'bg-surface border-line focus-within:border-accent/25 focus-within:ring-2 focus-within:ring-accent/15';
-
-    const err = this.error ? 'border-danger/25 ring-2 ring-danger/10' : '';
+    const base =
+      'form-field focus-ring flex items-center gap-2 rounded-xl border px-3 py-2.5 transition';
+    const tone = this.tone === 'glass' ? 'bg-surface-muted' : 'bg-surface';
+    const err = this.error ? 'border-danger/30 ring-4 ring-danger/10' : '';
     const dis = this.disabled ? 'opacity-60 cursor-not-allowed' : '';
 
     return `${base} ${tone} ${err} ${dis}`.trim();

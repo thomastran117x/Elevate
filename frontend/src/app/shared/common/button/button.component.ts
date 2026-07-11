@@ -22,22 +22,19 @@ export class AppButtonComponent {
 
   get classes() {
     const base =
-      'inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition ' +
-      'focus:outline-none focus-visible:ring-2 focus-visible:ring-line-strong ' +
-      'active:translate-y-[0.5px]';
+      'inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition duration-200 ' +
+      'focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15 active:translate-y-px';
 
     const sizes: Record<AppButtonSize, string> = {
-      sm: 'px-3 py-1.5 text-xs',
-      md: 'px-4 py-2 text-sm',
-      lg: 'px-5 py-2.5 text-sm',
+      sm: 'px-3 py-2 text-xs',
+      md: 'px-4 py-2.5 text-sm',
+      lg: 'px-5 py-3 text-sm',
     };
 
     const variants: Record<AppButtonVariant, string> = {
-      primary:
-        'bg-gradient-to-r from-purple-500 to-fuchsia-500 text-accent-contrast ' +
-        'shadow-lg shadow-purple-500/25 hover:opacity-95',
-      secondary: 'bg-inverse text-inverse-content hover:opacity-90 shadow-lg shadow-white/10',
-      ghost: 'border border-line-strong bg-glass text-content hover:bg-glass-strong',
+      primary: 'cta-solid',
+      secondary: 'cta-subtle',
+      ghost: 'cta-ghost',
       danger: 'border border-danger/25 bg-danger/10 text-danger hover:bg-danger/15',
     };
 

@@ -14,11 +14,12 @@ export class IconShellComponent {
   @Input() className = '';
 
   get classes() {
-    const base = 'h-11 w-11 rounded-2xl border flex items-center justify-center';
+    const base = 'flex h-11 w-11 items-center justify-center rounded-2xl border';
     const tones: Record<Tone, string> = {
-      accent: 'border-line bg-gradient-to-br from-purple-500/20 to-fuchsia-500/20',
-      neutral: 'border-line bg-glass',
+      accent: 'border-accent/20 bg-accent/10 text-accent',
+      neutral: 'border-line bg-surface-muted text-muted',
     };
+
     return `${base} ${tones[this.tone]} ${this.className}`.trim();
   }
 }

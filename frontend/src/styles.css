@@ -1,88 +1,103 @@
 @import 'tailwindcss';
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ---- Semantic theme tokens: light (default) ----
-   Clean, neutral, high-contrast. Purple is an ACCENT only; surfaces and
-   text are neutral gray so the page reads easily. (Dark keeps the original
-   hardcoded neon brand look in the .dark block below.) */
 :root {
-  /* Surfaces — neutral gray page, white cards */
-  --surface: #f3f4f6; /* page bg (neutral gray-100) */
-  --surface-raised: #ffffff; /* cards, dropdowns, modals */
-  --surface-sunken: #e9ebef; /* inputs, code, wells — reads as an inset */
+  color-scheme: light;
+  --canvas: #f3f6fa;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-muted: #eef3f8;
 
-  /* Glass — solid white cards that pop above the gray page (borders define chips) */
-  --glass: #ffffff;
-  --glass-strong: #eef0f3;
-  --glass-border: rgba(17, 24, 39, 0.08);
+  --border: rgba(15, 23, 42, 0.1);
+  --border-strong: rgba(15, 23, 42, 0.18);
 
-  /* Lines / borders — neutral gray */
-  --line: rgba(17, 24, 39, 0.1);
-  --line-strong: rgba(17, 24, 39, 0.16);
+  --text: #0f172a;
+  --text-muted: #475569;
+  --text-subtle: #64748b;
+  --text-faint: #94a3b8;
 
-  /* Content (text / icons) — neutral gray ramp */
-  --content: #111827; /* gray-900 */
-  --muted: #4b5563; /* gray-600 */
-  --subtle: #6b7280; /* gray-500 */
-  --faint: #9ca3af; /* gray-400 */
-
-  /* Accent (brand) — used sparingly for links / buttons / focus */
-  --accent: #7c3aed; /* violet-600, readable on white */
+  --accent: #0f766e;
+  --accent-hover: #115e59;
+  --accent-soft: rgba(15, 118, 110, 0.1);
   --accent-contrast: #ffffff;
+  --focus-ring: rgba(15, 118, 110, 0.22);
 
-  /* Inverse (high-contrast neutral chip / button) */
+  --success: #1f7a5a;
+  --warning: #b7791f;
+  --danger: #b24343;
+  --danger-content: #8f2f2f;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 16px 32px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 28px 60px rgba(15, 23, 42, 0.12);
+
+  --surface-raised: var(--surface-elevated);
+  --surface-sunken: var(--surface-muted);
+  --glass: var(--surface-elevated);
+  --glass-strong: var(--surface-muted);
+  --glass-border: var(--border);
+  --line: var(--border);
+  --line-strong: var(--border-strong);
+  --content: var(--text);
+  --muted: var(--text-muted);
+  --subtle: var(--text-subtle);
+  --faint: var(--text-faint);
   --inverse: #111827;
   --inverse-content: #ffffff;
-
-  /* Semantic states */
-  --danger: #dc2626;
-  --danger-content: #b91c1c;
-  --success: #059669;
-  --warning: #d97706;
-
-  /* Feature-page gradient — subtle, near-flat neutral */
-  --gradient-page: linear-gradient(to bottom right, #f5f6f8, #f2f3f5 60%, #f4f2f7);
-  /* Accent gradient for clipped headline text — gentle purple, readable on light */
-  --gradient-accent: linear-gradient(to right, #7c3aed, #9333ea, #6d28d9);
+  --gradient-page: linear-gradient(180deg, #f3f6fa 0%, #eef3f8 100%);
 }
 
-/* ---- Semantic theme tokens: dark overrides ---- */
 .dark {
-  --surface: #0f0a1c;
-  --surface-raised: #140d2a;
-  --surface-sunken: #0b0713;
+  color-scheme: dark;
+  --canvas: #0f1720;
+  --surface: #16202c;
+  --surface-elevated: #1b2734;
+  --surface-muted: #223141;
 
-  --glass: rgba(255, 255, 255, 0.05);
-  --glass-strong: rgba(255, 255, 255, 0.1);
-  --glass-border: rgba(255, 255, 255, 0.1);
+  --border: rgba(148, 163, 184, 0.16);
+  --border-strong: rgba(148, 163, 184, 0.28);
 
-  --line: rgba(255, 255, 255, 0.1);
-  --line-strong: rgba(255, 255, 255, 0.16);
+  --text: #e7eef6;
+  --text-muted: #c1cedb;
+  --text-subtle: #8fa2b7;
+  --text-faint: #70849a;
 
-  --content: #f8fafc;
-  --muted: rgba(255, 255, 255, 0.72);
-  --subtle: rgba(255, 255, 255, 0.55);
-  --faint: rgba(255, 255, 255, 0.4);
+  --accent: #78c7c0;
+  --accent-hover: #91d7d1;
+  --accent-soft: rgba(120, 199, 192, 0.18);
+  --accent-contrast: #071b1a;
+  --focus-ring: rgba(120, 199, 192, 0.28);
 
-  --accent: #c084fc; /* purple-400 */
-  --accent-contrast: #ffffff;
-
-  --inverse: #ffffff;
-  --inverse-content: #020617; /* slate-950 */
-
-  --danger: #f87171;
+  --success: #6fc4a6;
+  --warning: #d6a355;
+  --danger: #db7d7d;
   --danger-content: #fecaca;
-  --success: #34d399;
-  --warning: #fbbf24;
 
-  /* Dark: kept flat to match --surface (dark theme intentionally unchanged) */
-  --gradient-page: linear-gradient(to bottom right, #0f0a1c, #0f0a1c);
-  --gradient-accent: linear-gradient(to right, #d8b4fe, #f0abfc, #a5b4fc);
+  --shadow-sm: 0 1px 2px rgba(2, 8, 23, 0.35);
+  --shadow-md: 0 16px 32px rgba(2, 8, 23, 0.32);
+  --shadow-lg: 0 28px 60px rgba(2, 8, 23, 0.42);
+
+  --surface-raised: var(--surface-elevated);
+  --surface-sunken: var(--surface-muted);
+  --glass: var(--surface-elevated);
+  --glass-strong: var(--surface-muted);
+  --glass-border: var(--border);
+  --line: var(--border);
+  --line-strong: var(--border-strong);
+  --content: var(--text);
+  --muted: var(--text-muted);
+  --subtle: var(--text-subtle);
+  --faint: var(--text-faint);
+  --inverse: #e7eef6;
+  --inverse-content: #08111b;
+  --gradient-page: linear-gradient(180deg, #0f1720 0%, #121d29 100%);
 }
 
-/* ---- Map raw tokens -> Tailwind color utilities ---- */
 @theme inline {
+  --color-canvas: var(--canvas);
   --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-muted: var(--surface-muted);
   --color-surface-raised: var(--surface-raised);
   --color-surface-sunken: var(--surface-sunken);
 
@@ -90,15 +105,22 @@
   --color-glass-strong: var(--glass-strong);
   --color-glass-border: var(--glass-border);
 
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
 
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+  --color-text-faint: var(--text-faint);
   --color-content: var(--content);
   --color-muted: var(--muted);
   --color-subtle: var(--subtle);
   --color-faint: var(--faint);
 
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-contrast: var(--accent-contrast);
 
   --color-inverse: var(--inverse);
@@ -110,15 +132,172 @@
   --color-warning: var(--warning);
 }
 
-/* Page-surface helper for gradient feature pages */
+html {
+  background: var(--canvas);
+}
+
+body {
+  min-height: 100vh;
+  background: var(--canvas);
+  color: var(--text);
+  font-family:
+    'Manrope',
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  border-color: var(--border);
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
 .bg-page {
   background-image: var(--gradient-page);
 }
 
-/* Theme-aware clipped-text accent gradient (for headlines) */
-.text-gradient-accent {
-  background-image: var(--gradient-accent);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+.app-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.04), transparent 35%), var(--gradient-page);
+  color: var(--text);
+}
+
+.page-section {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 80rem;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.surface-panel {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+
+.surface-card {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.surface-muted {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+}
+
+.section-muted {
+  background: color-mix(in srgb, var(--surface-muted) 72%, transparent);
+  border: 1px solid var(--border);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-elevated) 88%, transparent);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.focus-ring {
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.focus-ring:focus,
+.focus-ring:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--focus-ring);
+}
+
+.form-field {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  color: var(--text);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.form-field::placeholder {
+  color: var(--text-faint);
+}
+
+.form-field:focus,
+.form-field:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--focus-ring);
+}
+
+.cta-solid {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border: 1px solid transparent;
+  box-shadow: var(--shadow-sm);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.cta-solid:hover {
+  background: var(--accent-hover);
+}
+
+.cta-subtle {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.cta-subtle:hover,
+.cta-ghost:hover {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--surface-elevated) 85%, var(--surface-muted));
+}
+
+.cta-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.cta-solid:hover,
+.cta-subtle:hover,
+.cta-ghost:hover {
+  transform: translateY(-1px);
 }

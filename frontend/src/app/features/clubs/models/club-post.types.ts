@@ -10,10 +10,10 @@ export const POST_TYPE_LABELS: Record<PostType, string> = {
 };
 
 export const POST_TYPE_STYLES: Record<PostType, string> = {
-  General: 'bg-white/10 text-white/70 border-white/15',
-  Announcement: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-  Event: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-  Poll: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+  General: 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20',
+  Announcement: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20',
+  Event: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20',
+  Poll: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/20',
 };
 
 export const ALL_POST_SORTS = ['Recent', 'Popular'] as const;

@@ -1,458 +1,441 @@
-<div class="min-h-screen bg-surface text-content overflow-x-hidden overflow-y-visible relative">
-  <div class="pointer-events-none absolute inset-0">
-    <div
-      class="absolute -top-24 left-1/2 -translate-x-1/2 h-[520px] w-[920px] rounded-full bg-gradient-to-r from-purple-600/12 dark:from-purple-600/35 via-fuchsia-500/9 dark:via-fuchsia-500/25 to-indigo-500/9 dark:to-indigo-500/25 blur-3xl"
-    ></div>
-    <div
-      class="absolute top-[420px] -left-20 h-[420px] w-[420px] rounded-full bg-gradient-to-br from-indigo-500/7 dark:from-indigo-500/20 to-purple-500/4 dark:to-purple-500/10 blur-3xl"
-    ></div>
-    <div
-      class="absolute top-[620px] -right-20 h-[420px] w-[420px] rounded-full bg-gradient-to-br from-fuchsia-500/7 dark:from-fuchsia-500/20 to-purple-500/4 dark:to-purple-500/10 blur-3xl"
-    ></div>
+<div class="app-page">
+  <main class="page-section py-12 sm:py-16">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <button
+        type="button"
+        class="cta-ghost inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold"
+        (click)="goBack()"
+      >
+        <span>&larr;</span>
+        Back to events
+      </button>
 
-    <div
-      class="absolute inset-0 opacity-[0.10]"
-      style="
-        background-image:
-          linear-gradient(to right, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-          linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-        background-size: 56px 56px;
-      "
-    ></div>
-  </div>
-
-  <main class="relative z-10">
-    <section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-10 sm:pt-14 pb-16">
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <button
-          type="button"
-          class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-line bg-glass px-4 py-2 text-sm font-medium text-muted transition hover:bg-glass-strong"
-          (click)="goBack()"
-        >
-          <span>&larr;</span>
-          Back to events
-        </button>
-
-        @if (event) {
-          <div class="flex flex-wrap gap-2">
+      @if (event) {
+        <div class="flex flex-wrap gap-2">
+          <span
+            class="rounded-full border px-3 py-1 text-xs font-semibold"
+            [ngClass]="categoryStyles[event.category].badge"
+          >
+            {{ event.category }}
+          </span>
+          <span
+            class="rounded-full border border-line bg-surface-muted px-3 py-1 text-xs font-semibold text-subtle"
+          >
+            {{ event.status }}
+          </span>
+          @if (event.isPrivate) {
             <span
-              class="rounded-full border px-2.5 py-1 text-xs font-medium backdrop-blur"
-              [ngClass]="categoryStyles[event.category].badge"
+              class="rounded-full border border-warning/25 bg-warning/10 px-3 py-1 text-xs font-semibold text-warning"
             >
-              {{ event.category }}
+              Private event
             </span>
-            <span class="rounded-full border border-line bg-glass px-2.5 py-1 text-xs text-muted">
-              {{ event.status }}
-            </span>
-            @if (event.isPrivate) {
-              <span
-                class="rounded-full border border-warning/20 bg-warning/10 px-2.5 py-1 text-xs text-warning"
-              >
-                Private event
-              </span>
-            }
-          </div>
-        }
+          }
+        </div>
+      }
+    </div>
+
+    @if (loading) {
+      <div class="mt-8 grid gap-6 lg:grid-cols-12">
+        <div class="surface-card lg:col-span-7 h-[420px] animate-pulse rounded-3xl"></div>
+        <div class="lg:col-span-5 space-y-4">
+          <div class="surface-card h-32 animate-pulse rounded-3xl"></div>
+          <div class="surface-card h-72 animate-pulse rounded-3xl"></div>
+        </div>
       </div>
+    }
 
-      @if (loading) {
-        <div class="mt-8 grid gap-6 lg:grid-cols-12">
-          <div
-            class="lg:col-span-7 h-[420px] rounded-3xl border border-line bg-glass animate-pulse"
-          ></div>
-          <div class="lg:col-span-5 space-y-4">
-            <div class="h-32 rounded-3xl border border-line bg-glass animate-pulse"></div>
-            <div class="h-64 rounded-3xl border border-line bg-glass animate-pulse"></div>
-          </div>
-        </div>
-      }
+    @if (error && !loading) {
+      <div class="mt-8 rounded-3xl border border-danger/25 bg-danger/10 p-6 text-danger">
+        <h1 class="text-xl font-semibold">We could not load this event</h1>
+        <p class="mt-2 text-sm text-danger/85">{{ error }}</p>
+      </div>
+    }
 
-      @if (error && !loading) {
-        <div class="mt-8 rounded-3xl border border-danger/20 bg-danger/10 p-6 text-danger">
-          <h1 class="text-xl font-semibold">We couldn't load this event</h1>
-          <p class="mt-2 text-sm text-danger/85">{{ error }}</p>
-        </div>
-      }
-
-      @if (event && !loading) {
-        <div class="mt-8 grid gap-6 lg:grid-cols-12">
-          <div class="lg:col-span-7 space-y-4">
-            @if (event.lifecycleState === 'Cancelled') {
-              <div class="rounded-3xl border border-danger/30 bg-danger/10 p-5 text-sm text-danger">
-                This event has been cancelled. The details remain available here for attendees and
-                organizers, but it is no longer an active listing.
-              </div>
-            }
+    @if (event && !loading) {
+      <div class="mt-8 grid gap-6 lg:grid-cols-12">
+        <div class="lg:col-span-7 space-y-4">
+          @if (event.lifecycleState === 'Cancelled') {
             <div
-              class="relative overflow-hidden rounded-3xl border border-line bg-glass shadow-2xl shadow-fuchsia-500/10"
+              class="rounded-3xl border border-danger/25 bg-danger/10 p-5 text-sm leading-6 text-danger"
             >
+              This event has been cancelled. Details remain visible for organizers and attendees,
+              but it is no longer an active listing.
+            </div>
+          }
+
+          <section class="surface-panel overflow-hidden rounded-3xl">
+            <div class="h-[320px] bg-surface-muted sm:h-[420px]">
               @if (heroImage) {
                 <div
-                  class="h-[320px] sm:h-[420px] bg-cover bg-center"
+                  class="h-full w-full bg-cover bg-center"
                   [style.background-image]="
-                    'linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.55)), url(' +
+                    'linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.48)), url(' +
                     heroImage +
                     ')'
                   "
                 ></div>
               } @else {
                 <div
-                  class="h-[320px] sm:h-[420px] bg-gradient-to-br from-purple-500/35 via-fuchsia-500/15 to-indigo-500/25"
-                ></div>
+                  class="flex h-full items-center justify-center bg-accent/10 text-base font-semibold uppercase tracking-[0.18em] text-accent"
+                >
+                  Event preview
+                </div>
               }
-              <div class="absolute inset-x-0 bottom-0 p-5 sm:p-6">
-                <div class="rounded-2xl border border-line bg-surface-sunken p-4 backdrop-blur">
-                  <p class="text-xs uppercase tracking-[0.18em] text-faint">Event details</p>
-                  <h1 class="mt-2 text-2xl font-extrabold tracking-tight sm:text-4xl">
-                    {{ event.name }}
-                  </h1>
-                  <p class="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
-                    {{ event.description || 'No description provided yet.' }}
+            </div>
+            <div class="border-t border-line p-6 sm:p-7">
+              <p class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                Event details
+              </p>
+              <h1 class="mt-2 text-3xl font-extrabold tracking-tight text-content sm:text-4xl">
+                {{ event.name }}
+              </h1>
+              <p class="mt-4 text-sm leading-7 text-muted">
+                {{ event.description || 'No description provided yet.' }}
+              </p>
+            </div>
+          </section>
+
+          @if (event.imageUrls.length > 1) {
+            <div class="grid grid-cols-4 gap-3 sm:grid-cols-5">
+              @for (image of event.imageUrls; track image; let index = $index) {
+                <button
+                  type="button"
+                  class="overflow-hidden rounded-2xl border transition"
+                  [ngClass]="
+                    index === selectedImageIndex
+                      ? 'border-accent/30 bg-accent/10'
+                      : 'border-line bg-surface hover:border-line-strong hover:bg-surface-muted'
+                  "
+                  (click)="selectImage(index)"
+                >
+                  <span
+                    class="block h-20 bg-cover bg-center"
+                    [style.background-image]="'url(' + image + ')'"
+                  >
+                  </span>
+                </button>
+              }
+            </div>
+          }
+
+          <section class="surface-card rounded-3xl p-6 sm:p-7">
+            <h2 class="text-lg font-semibold text-content">About this event</h2>
+            <p class="mt-3 text-sm leading-7 text-muted">
+              {{ event.description || 'No description provided yet.' }}
+            </p>
+            @if (event.tags.length > 0) {
+              <div class="mt-5 flex flex-wrap gap-2">
+                @for (tag of event.tags; track tag) {
+                  <span
+                    class="rounded-full border border-line bg-surface-muted px-3 py-1 text-xs font-semibold text-subtle"
+                  >
+                    #{{ tag }}
+                  </span>
+                }
+              </div>
+            }
+          </section>
+        </div>
+
+        <div class="lg:col-span-5 space-y-4">
+          <section class="surface-panel rounded-3xl p-6">
+            <div class="grid grid-cols-2 gap-3">
+              <div class="surface-muted rounded-2xl p-4">
+                <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                  Price
+                </div>
+                <div class="mt-2 text-xl font-bold text-content">
+                  {{ formatCost(event.registerCost) }}
+                </div>
+              </div>
+              <div class="surface-muted rounded-2xl p-4">
+                <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                  Hosted by
+                </div>
+                <div class="mt-2 text-base font-semibold text-content">
+                  {{ event.club?.name || 'Club #' + event.clubId }}
+                </div>
+                @if (event.club?.clubType) {
+                  <div class="mt-1 text-xs text-subtle">{{ event.club?.clubType }} club</div>
+                }
+              </div>
+            </div>
+
+            <div class="mt-5 space-y-4">
+              <div>
+                <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                  Schedule
+                </div>
+                <div class="mt-2 text-sm leading-6 text-muted">{{ formatSchedule(event) }}</div>
+              </div>
+              <div>
+                <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                  Location
+                </div>
+                <div class="mt-2 text-sm leading-6 text-muted">
+                  <div>{{ event.venueName || event.location || 'Venue TBD' }}</div>
+                  <div class="text-subtle">
+                    {{ event.city || event.location || 'Location details coming soon' }}
+                  </div>
+                </div>
+              </div>
+              @if (event.latitude != null && event.longitude != null) {
+                <div>
+                  <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                    Coordinates
+                  </div>
+                  <div class="mt-2 text-sm text-muted">
+                    {{ event.latitude | number: '1.3-3' }}, {{ event.longitude | number: '1.3-3' }}
+                  </div>
+                </div>
+              }
+            </div>
+          </section>
+
+          @if (event.club) {
+            <section class="surface-card rounded-3xl p-6">
+              <div class="flex items-start gap-4">
+                <div
+                  class="h-16 w-16 flex-shrink-0 overflow-hidden rounded-2xl border border-line bg-surface-muted"
+                >
+                  @if (event.club.clubImage) {
+                    <img
+                      [src]="event.club.clubImage"
+                      [alt]="event.club.name"
+                      class="h-full w-full object-cover"
+                    />
+                  } @else {
+                    <div
+                      class="flex h-full w-full items-center justify-center bg-accent/10 text-lg font-bold text-accent"
+                    >
+                      {{ event.club.name.charAt(0) }}
+                    </div>
+                  }
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="text-lg font-semibold text-content">{{ event.club.name }}</h2>
+                    <span
+                      class="rounded-full border border-line bg-surface-muted px-2 py-0.5 text-[11px] font-semibold text-subtle"
+                    >
+                      {{ event.club.clubType }}
+                    </span>
+                    @if (event.club.rating != null) {
+                      <span
+                        class="rounded-full border border-line bg-surface-muted px-2 py-0.5 text-[11px] font-semibold text-subtle"
+                      >
+                        {{ event.club.rating | number: '1.1-1' }} rating
+                      </span>
+                    }
+                  </div>
+                  <p class="mt-2 text-sm leading-7 text-muted">
+                    {{ event.club.description || 'Host club details are not available yet.' }}
                   </p>
                 </div>
               </div>
-            </div>
-            @if (event.imageUrls.length > 1) {
-              <div class="grid grid-cols-4 gap-3 sm:grid-cols-5">
-                @for (image of event.imageUrls; track image; let index = $index) {
-                  <button
-                    type="button"
-                    class="cursor-pointer overflow-hidden rounded-2xl border transition"
-                    [ngClass]="
-                      index === selectedImageIndex
-                        ? 'border-white/30 bg-glass-strong'
-                        : 'border-line bg-glass hover:border-line-strong hover:bg-glass-strong'
-                    "
-                    (click)="selectImage(index)"
-                  >
-                    <span
-                      class="block h-20 bg-cover bg-center"
-                      [style.background-image]="
-                        'linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.35)), url(' +
-                        image +
-                        ')'
-                      "
-                    ></span>
-                  </button>
-                }
+
+              <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                <div class="surface-muted rounded-2xl p-4">
+                  <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                    Members
+                  </div>
+                  <div class="mt-2 text-lg font-semibold text-content">
+                    {{ event.club.memberCount }}
+                  </div>
+                </div>
+                <div class="surface-muted rounded-2xl p-4">
+                  <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                    Active events
+                  </div>
+                  <div class="mt-2 text-lg font-semibold text-content">
+                    {{ event.club.availableEventCount }}
+                  </div>
+                </div>
+              </div>
+            </section>
+          }
+
+          <section class="surface-panel rounded-3xl p-6">
+            @if (event.maxParticipants > 0) {
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <div class="text-sm font-semibold text-content">Registration progress</div>
+                  <div class="mt-1 text-xs text-subtle">
+                    {{ event.registrationCount }} of {{ event.maxParticipants }} spots filled
+                  </div>
+                </div>
+                <div class="text-lg font-bold text-content">
+                  {{ registrationPercent(event) | number: '1.0-0' }}%
+                </div>
+              </div>
+              <div class="mt-4 h-2 overflow-hidden rounded-full bg-surface-muted">
+                <div
+                  class="h-full rounded-full bg-accent"
+                  [style.width.%]="registrationPercent(event)"
+                ></div>
+              </div>
+              <div class="my-5 border-t border-line"></div>
+            }
+
+            @if (event.maxParticipants <= 0) {
+              <div class="mb-4 text-sm text-subtle">
+                {{ event.registrationCount }} registered � Unlimited spots
               </div>
             }
-            <div class="rounded-3xl border border-line bg-glass p-6 backdrop-blur">
-              <h2 class="text-lg font-semibold">About this event</h2>
-              <p class="mt-3 text-sm leading-7 text-muted">
-                {{ event.description || 'No description provided yet.' }}
-              </p>
-              @if (event.tags.length > 0) {
-                <div class="mt-5 flex flex-wrap gap-2">
-                  @for (tag of event.tags; track tag) {
-                    <span
-                      class="rounded-full border border-line bg-surface-sunken px-3 py-1 text-xs text-subtle"
-                    >
-                      #{{ tag }}
-                    </span>
-                  }
-                </div>
-              }
-            </div>
-          </div>
-          <div class="lg:col-span-5 space-y-4">
-            <div
-              class="rounded-3xl border border-line bg-glass p-6 backdrop-blur shadow-2xl shadow-purple-500/10"
-            >
-              <div class="grid grid-cols-2 gap-3">
-                <div class="rounded-2xl border border-line bg-surface-sunken p-4">
-                  <div class="text-xs text-subtle">Price</div>
-                  <div class="mt-1 text-xl font-bold">{{ formatCost(event.registerCost) }}</div>
-                </div>
-                <div class="rounded-2xl border border-line bg-surface-sunken p-4">
-                  <div class="text-xs text-subtle">Hosted by</div>
-                  <div class="mt-1 text-base font-bold">
-                    {{ event.club?.name || 'Club #' + event.clubId }}
-                  </div>
-                  @if (event.club?.clubType) {
-                    <div class="mt-1 text-xs text-subtle">{{ event.club?.clubType }} club</div>
-                  }
-                </div>
+
+            @if (registrationError) {
+              <div
+                class="mb-4 rounded-2xl border border-danger/25 bg-danger/10 p-3 text-sm text-danger"
+              >
+                {{ registrationError }}
               </div>
-              <div class="mt-5 space-y-4">
-                <div>
-                  <div class="text-xs uppercase tracking-[0.18em] text-faint">Schedule</div>
-                  <div class="mt-2 text-sm leading-6 text-muted">
-                    {{ formatSchedule(event) }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-xs uppercase tracking-[0.18em] text-faint">Location</div>
-                  <div class="mt-2 text-sm leading-6 text-muted">
-                    <div>{{ event.venueName || event.location || 'Venue TBD' }}</div>
-                    <div class="text-subtle">
-                      {{ event.city || event.location || 'Location details coming soon' }}
-                    </div>
-                  </div>
-                </div>
-                @if (event.latitude != null && event.longitude != null) {
-                  <div>
-                    <div class="text-xs uppercase tracking-[0.18em] text-faint">Coordinates</div>
-                    <div class="mt-2 text-sm text-muted">
-                      {{ event.latitude | number: '1.3-3' }},
-                      {{ event.longitude | number: '1.3-3' }}
-                    </div>
-                  </div>
-                }
+            }
+
+            @if (currentUserId === null && canRegister) {
+              <div
+                class="rounded-2xl border border-line bg-surface-muted p-4 text-center text-sm text-muted"
+              >
+                Sign in to register for this event.
               </div>
-            </div>
-            @if (event.club) {
-              <div class="rounded-3xl border border-line bg-glass p-6 backdrop-blur">
-                <div class="flex items-start gap-4">
-                  <div
-                    class="h-16 w-16 flex-shrink-0 overflow-hidden rounded-2xl border border-line bg-surface-sunken"
-                  >
-                    @if (event.club.clubImage) {
-                      <img
-                        [src]="event.club.clubImage"
-                        [alt]="event.club.name"
-                        class="h-full w-full object-cover"
+            }
+
+            @if (currentUserId !== null) {
+              @if (showRegistrationForm) {
+                <div class="space-y-4">
+                  <div class="text-sm font-semibold text-content">
+                    {{
+                      isEditing ? 'Update your registration details' : 'Complete your registration'
+                    }}
+                  </div>
+                  <div [formGroup]="registrationForm" class="space-y-3">
+                    <div>
+                      <label
+                        class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-subtle"
+                        >Notes for organizer</label
+                      >
+                      <input
+                        formControlName="notes"
+                        type="text"
+                        placeholder="Dietary requirements, questions, access notes"
+                        class="form-field w-full px-4 py-3 text-sm"
                       />
-                    } @else {
-                      <div
-                        class="flex h-full w-full items-center justify-center bg-gradient-to-br from-purple-500/25 to-fuchsia-500/20 text-lg font-bold text-muted"
+                    </div>
+                    <div>
+                      <label
+                        class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-subtle"
+                        >Phone number</label
                       >
-                        {{ event.club.name.charAt(0) }}
-                      </div>
-                    }
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <h2 class="text-lg font-semibold">{{ event.club.name }}</h2>
-                      <span
-                        class="rounded-full border border-line bg-surface-sunken px-2 py-0.5 text-[11px] text-subtle"
+                      <input
+                        formControlName="phoneNumber"
+                        type="tel"
+                        placeholder="416-555-0123"
+                        class="form-field w-full px-4 py-3 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-subtle"
+                        >Dietary or accessibility needs</label
                       >
-                        {{ event.club.clubType }}
-                      </span>
-                      @if (event.club.rating != null) {
-                        <span
-                          class="rounded-full border border-line bg-surface-sunken px-2 py-0.5 text-[11px] text-subtle"
-                        >
-                          {{ event.club.rating | number: '1.1-1' }} rating
-                        </span>
-                      }
-                    </div>
-                    <p class="mt-2 text-sm leading-7 text-muted">
-                      {{ event.club.description || 'Host club details are not available yet.' }}
-                    </p>
-                    <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                      <div class="rounded-2xl border border-line bg-surface-sunken p-4">
-                        <div class="text-xs text-subtle">Members</div>
-                        <div class="mt-1 text-lg font-semibold">{{ event.club.memberCount }}</div>
-                      </div>
-                      <div class="rounded-2xl border border-line bg-surface-sunken p-4">
-                        <div class="text-xs text-subtle">Active events</div>
-                        <div class="mt-1 text-lg font-semibold">
-                          {{ event.club.availableEventCount }}
-                        </div>
-                      </div>
-                    </div>
-                    <div class="mt-4 space-y-1 text-sm text-subtle">
-                      @if (event.club.location) {
-                        <div>Location: {{ event.club.location }}</div>
-                      }
-                      @if (event.club.email) {
-                        <div>Email: {{ event.club.email }}</div>
-                      }
-                      @if (event.club.phone) {
-                        <div>Phone: {{ event.club.phone }}</div>
-                      }
-                      @if (event.club.websiteUrl) {
-                        <div>Website: {{ event.club.websiteUrl }}</div>
-                      }
+                      <input
+                        formControlName="dietaryNeeds"
+                        type="text"
+                        placeholder="Vegetarian, wheelchair access, ASL"
+                        class="form-field w-full px-4 py-3 text-sm"
+                      />
                     </div>
                   </div>
-                </div>
-              </div>
-            }
-            <div class="rounded-3xl border border-line bg-glass p-6 backdrop-blur">
-              <!-- Progress bar — only when there's a cap -->
-              @if (event.maxParticipants > 0) {
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <div class="text-sm font-semibold">Registration progress</div>
-                    <div class="mt-1 text-xs text-subtle">
-                      {{ event.registrationCount }} of {{ event.maxParticipants }} spots filled
-                    </div>
-                  </div>
-                  <div class="text-lg font-bold">
-                    {{ registrationPercent(event) | number: '1.0-0' }}%
-                  </div>
-                </div>
-                <div class="mt-4 h-2 overflow-hidden rounded-full bg-glass-strong">
-                  <div
-                    class="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500"
-                    [style.width.%]="registrationPercent(event)"
-                  ></div>
-                </div>
-                <div class="mt-4 mb-2 border-t border-line"></div>
-              }
-              <!-- Unlimited capacity indicator -->
-              @if (event.maxParticipants <= 0) {
-                <div class="text-sm text-subtle mb-4">
-                  {{ event.registrationCount }} registered &bull; Unlimited spots
-                </div>
-              }
-              <!-- Registration error -->
-              @if (registrationError) {
-                <div
-                  class="mb-4 rounded-2xl border border-danger/20 bg-danger/10 p-3 text-sm text-danger"
-                >
-                  {{ registrationError }}
-                </div>
-              }
-              <!-- Not logged in -->
-              @if (currentUserId === null && canRegister) {
-                <div
-                  class="rounded-2xl border border-line bg-surface-sunken p-4 text-sm text-muted text-center"
-                >
-                  Sign in to register for this event.
-                </div>
-              }
-              <!-- Logged in -->
-              @if (currentUserId !== null) {
-                <!-- Registration form (register or edit) -->
-                @if (showRegistrationForm) {
-                  <div class="space-y-3">
-                    <div class="text-sm font-semibold text-muted">
-                      {{
-                        isEditing
-                          ? 'Update your registration details'
-                          : 'Complete your registration'
-                      }}
-                    </div>
-                    <div [formGroup]="registrationForm" class="space-y-3">
-                      <div>
-                        <label class="block text-xs text-subtle mb-1"
-                          >Notes for organizer (optional)</label
-                        >
-                        <input
-                          formControlName="notes"
-                          type="text"
-                          placeholder="e.g. dietary requirements, questions..."
-                          class="w-full rounded-xl border border-line bg-surface-sunken px-3 py-2 text-sm text-content placeholder:text-faint focus:outline-none focus:border-purple-500/50"
-                        />
-                      </div>
-                      <div>
-                        <label class="block text-xs text-subtle mb-1"
-                          >Phone number (optional)</label
-                        >
-                        <input
-                          formControlName="phoneNumber"
-                          type="tel"
-                          placeholder="e.g. 416-555-0123"
-                          class="w-full rounded-xl border border-line bg-surface-sunken px-3 py-2 text-sm text-content placeholder:text-faint focus:outline-none focus:border-purple-500/50"
-                        />
-                      </div>
-                      <div>
-                        <label class="block text-xs text-subtle mb-1"
-                          >Dietary / accessibility needs (optional)</label
-                        >
-                        <input
-                          formControlName="dietaryNeeds"
-                          type="text"
-                          placeholder="e.g. vegetarian, wheelchair access..."
-                          class="w-full rounded-xl border border-line bg-surface-sunken px-3 py-2 text-sm text-content placeholder:text-faint focus:outline-none focus:border-purple-500/50"
-                        />
-                      </div>
-                    </div>
-                    <div class="flex gap-2 pt-1">
-                      <button
-                        type="button"
-                        [disabled]="registrationLoading"
-                        (click)="isEditing ? submitUpdate() : submitRegistration()"
-                        class="flex-1 rounded-2xl bg-gradient-to-r from-purple-500/30 to-fuchsia-500/30 border border-purple-500/30 px-4 py-2.5 text-sm font-semibold text-content transition hover:from-purple-500/40 hover:to-fuchsia-500/40 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        @if (!registrationLoading) {
-                          <span>{{ isEditing ? 'Save changes' : 'Confirm registration' }}</span>
-                        }
-                        @if (registrationLoading) {
-                          <span>Please wait...</span>
-                        }
-                      </button>
-                      <button
-                        type="button"
-                        (click)="closeRegistrationForm()"
-                        class="rounded-2xl border border-line bg-glass px-4 py-2.5 text-sm text-muted transition hover:bg-glass-strong"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                }
-                <!-- Registered state -->
-                @if (isRegistered && !showRegistrationForm) {
-                  <div class="space-y-2">
-                    <div
-                      class="rounded-2xl border border-success/20 bg-success/10 px-4 py-3 text-sm text-success text-center"
-                    >
-                      You're registered for this event
-                    </div>
-                    <button
-                      type="button"
-                      (click)="openEditForm()"
-                      class="w-full rounded-2xl border border-line bg-glass px-4 py-2.5 text-sm text-muted transition hover:bg-glass-strong"
-                    >
-                      Edit my registration details
-                    </button>
+                  <div class="flex gap-2 pt-1">
                     <button
                       type="button"
                       [disabled]="registrationLoading"
-                      (click)="unregister()"
-                      class="w-full rounded-2xl border border-danger/30 bg-danger/10 px-4 py-2.5 text-sm font-semibold text-danger transition hover:bg-danger/100/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      (click)="isEditing ? submitUpdate() : submitRegistration()"
+                      class="cta-solid flex-1 rounded-xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       @if (!registrationLoading) {
-                        <span>Unregister from event</span>
+                        <span>{{ isEditing ? 'Save changes' : 'Confirm registration' }}</span>
                       }
                       @if (registrationLoading) {
                         <span>Please wait...</span>
                       }
                     </button>
+                    <button
+                      type="button"
+                      (click)="closeRegistrationForm()"
+                      class="cta-ghost rounded-xl px-4 py-3 text-sm font-semibold"
+                    >
+                      Cancel
+                    </button>
                   </div>
-                }
-                <!-- Can register (not yet registered, form not open) -->
-                @if (!isRegistered && canRegister && !showRegistrationForm) {
+                </div>
+              }
+
+              @if (isRegistered && !showRegistrationForm) {
+                <div class="space-y-3">
+                  <div
+                    class="rounded-2xl border border-success/25 bg-success/10 px-4 py-3 text-center text-sm text-success"
+                  >
+                    You're registered for this event
+                  </div>
                   <button
                     type="button"
-                    (click)="openRegistrationForm()"
-                    class="w-full rounded-2xl border border-purple-500/30 bg-gradient-to-r from-purple-500/20 to-fuchsia-500/20 px-4 py-3 text-sm font-semibold text-content transition hover:from-purple-500/30 hover:to-fuchsia-500/30"
+                    (click)="openEditForm()"
+                    class="cta-subtle w-full rounded-xl px-4 py-3 text-sm font-semibold"
                   >
-                    Register for this event
+                    Edit my registration details
                   </button>
-                }
-                <!-- Cannot register -->
-                @if (!isRegistered && !canRegister && !showRegistrationForm) {
-                  <div
-                    class="rounded-2xl border border-line bg-surface-sunken p-4 text-sm text-subtle text-center"
+                  <button
+                    type="button"
+                    [disabled]="registrationLoading"
+                    (click)="unregister()"
+                    class="w-full rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm font-semibold text-danger transition hover:bg-danger/15 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    @if (event.lifecycleState === 'Cancelled') {
-                      This event has been cancelled.
+                    @if (!registrationLoading) {
+                      <span>Unregister from event</span>
                     }
-                    @if (
-                      event.lifecycleState === 'Published' &&
-                      event.maxParticipants > 0 &&
-                      event.registrationCount >= event.maxParticipants
-                    ) {
-                      This event is full.
+                    @if (registrationLoading) {
+                      <span>Please wait...</span>
                     }
-                    @if (event.lifecycleState === 'Published' && event.registerCost > 0) {
-                      Paid registration is required.
-                    }
-                    @if (event.lifecycleState === 'Published' && isEventStarted(event)) {
-                      Registration is closed — this event has started.
-                    }
-                  </div>
-                }
+                  </button>
+                </div>
               }
-            </div>
-          </div>
+
+              @if (!isRegistered && canRegister && !showRegistrationForm) {
+                <button
+                  type="button"
+                  (click)="openRegistrationForm()"
+                  class="cta-solid w-full rounded-xl px-4 py-3 text-sm font-semibold"
+                >
+                  Register for this event
+                </button>
+              }
+
+              @if (!isRegistered && !canRegister && !showRegistrationForm) {
+                <div
+                  class="rounded-2xl border border-line bg-surface-muted p-4 text-center text-sm text-subtle"
+                >
+                  @if (event.lifecycleState === 'Cancelled') {
+                    This event has been cancelled.
+                  }
+                  @if (
+                    event.lifecycleState === 'Published' &&
+                    event.maxParticipants > 0 &&
+                    event.registrationCount >= event.maxParticipants
+                  ) {
+                    This event is full.
+                  }
+                  @if (event.lifecycleState === 'Published' && event.registerCost > 0) {
+                    Paid registration is required.
+                  }
+                  @if (event.lifecycleState === 'Published' && isEventStarted(event)) {
+                    Registration is closed - this event has started.
+                  }
+                </div>
+              }
+            }
+          </section>
         </div>
-      }
-    </section>
+      </div>
+    }
   </main>
 </div>

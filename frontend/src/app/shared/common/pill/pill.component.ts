@@ -14,13 +14,15 @@ export class PillComponent {
   @Input() className = '';
 
   get classes() {
-    const base = 'inline-flex items-center rounded-full px-3 py-1 text-xs border';
+    const base =
+      'inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold tracking-[0.04em]';
     const tones: Record<Tone, string> = {
-      neutral: 'border-line bg-glass text-muted',
-      accent: 'border-accent/25 bg-accent/10 text-accent',
-      soft: 'border-line bg-surface-sunken text-muted',
+      neutral: 'border-line bg-surface text-muted',
+      accent: 'border-accent/20 bg-accent/10 text-accent',
+      soft: 'border-line bg-surface-muted text-muted',
       outline: 'border-line-strong bg-transparent text-muted',
     };
+
     return `${base} ${tones[this.tone]} ${this.className}`.trim();
   }
 }

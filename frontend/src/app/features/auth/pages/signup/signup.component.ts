@@ -3,6 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 import { environment } from '@environments/environment';
+import { PillComponent } from '@common/pill/pill.component';
 import { AuthService, SignupRole } from '../../services/auth.service';
 import { RecaptchaV3Service } from '../../services/recaptcha.service';
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
@@ -11,7 +12,7 @@ import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 @Component({
   selector: 'app-signup',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, PillComponent],
   templateUrl: './signup.component.html',
   styleUrls: ['./signup.component.css'],
 })

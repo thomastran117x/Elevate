@@ -9,7 +9,7 @@ import { ClubPostsService } from '../../services/club-posts.service';
 import { ClubPost, POST_TYPE_STYLES } from '../../models/club-post.types';
 import { EventsService } from '../../../events/services/events.service';
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
-import { EventItem } from '../../../events/models/event.types';
+import { CATEGORY_STYLES, EventItem } from '../../../events/models/event.types';
 
 @Component({
   selector: 'app-club-detail',
@@ -31,6 +31,7 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
 
   readonly clubTypeStyles = CLUB_TYPE_STYLES;
   readonly postTypeStyles = POST_TYPE_STYLES;
+  readonly categoryStyles = CATEGORY_STYLES;
 
   private readonly destroy$ = new Subject<void>();
 

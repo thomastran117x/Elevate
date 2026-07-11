@@ -4,6 +4,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { finalize } from 'rxjs/operators';
 
 import { environment } from '@environments/environment';
+import { PillComponent } from '@common/pill/pill.component';
 import {
   DEVICE_VERIFICATION_REQUIRED_ERROR_CODE,
   DEVICE_VERIFICATION_REQUIRED_MESSAGE,
@@ -20,7 +21,13 @@ import { RecaptchaV3Service } from '../../services/recaptcha.service';
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterModule, GoogleButtonComponent, MicrosoftButtonComponent],
+  imports: [
+    ReactiveFormsModule,
+    RouterModule,
+    GoogleButtonComponent,
+    MicrosoftButtonComponent,
+    PillComponent,
+  ],
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.css'],
 })
