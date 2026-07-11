@@ -2,10 +2,10 @@
   <!-- Gradient Glow -->
   <div class="absolute inset-0 pointer-events-none">
     <div
-      class="absolute -top-40 -left-40 w-[500px] h-[500px] bg-purple-500/11 dark:bg-purple-500/30 rounded-full blur-3xl"
+      class="absolute -top-40 -left-40 w-[500px] h-[500px] bg-accent/10 dark:bg-accent/20 rounded-full blur-3xl"
     ></div>
     <div
-      class="absolute -bottom-40 -right-40 w-[500px] h-[500px] bg-fuchsia-500/11 dark:bg-fuchsia-500/30 rounded-full blur-3xl"
+      class="absolute -bottom-40 -right-40 w-[500px] h-[500px] bg-accent/10 dark:bg-accent/20 rounded-full blur-3xl"
     ></div>
   </div>
 
@@ -17,7 +17,7 @@
     @if (status() === 'loading') {
       <div class="space-y-6">
         <div
-          class="mx-auto w-14 h-14 rounded-full border-4 border-purple-200 border-t-purple-500 animate-spin"
+          class="mx-auto w-14 h-14 rounded-full border-4 border-accent/20 border-t-accent animate-spin"
         ></div>
         <p class="text-sm font-medium text-muted">
           {{ message() }}
@@ -51,7 +51,7 @@
         </p>
         <a
           routerLink="/dashboard"
-          class="inline-flex items-center justify-center px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-accent-contrast font-medium transition"
+          class="inline-flex items-center justify-center px-5 py-3 rounded-xl bg-accent hover:bg-accent-hover text-accent-contrast font-medium transition"
         >
           Go to Dashboard
         </a>
@@ -84,7 +84,7 @@
         <div class="flex justify-center gap-3 pt-2">
           <a
             routerLink="/auth/login"
-            class="px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-accent-contrast font-medium transition"
+            class="px-5 py-3 rounded-xl bg-accent hover:bg-accent-hover text-accent-contrast font-medium transition"
           >
             Back to Login
           </a>
@@ -119,7 +119,7 @@
         <div class="flex justify-center gap-3 pt-2">
           <button
             (click)="retry()"
-            class="px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-accent-contrast font-medium transition"
+            class="px-5 py-3 rounded-xl bg-accent hover:bg-accent-hover text-accent-contrast font-medium transition"
           >
             Retry
           </button>
@@ -134,3 +134,4 @@
     }
   </div>
 </div>
+

@@ -25,17 +25,21 @@ type Testimonial = { quote: string; name: string; role: string };
   imports: [FormsModule, RouterModule, AppButtonComponent, PillComponent],
   template: `
     <div class="app-page">
-      <main>
-        <section class="page-section pt-12 pb-10 sm:pt-16 sm:pb-14">
-          <div class="grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
-            <div>
+      <main class="pb-16 sm:pb-20">
+        <section class="page-section pt-10 pb-12 sm:pt-14 sm:pb-14 lg:pt-16 lg:pb-16">
+          <div
+            class="grid gap-10 lg:grid-cols-[minmax(0,1.16fr)_24rem] lg:items-start xl:grid-cols-[minmax(0,1.18fr)_27rem] xl:gap-12"
+          >
+            <div class="max-w-3xl lg:pr-4">
               <pill tone="accent">Professional event discovery for teams and attendees</pill>
-              <h1 class="mt-6 max-w-4xl text-4xl font-extrabold tracking-tight text-content sm:text-5xl lg:text-6xl">
+              <h1
+                class="mt-6 max-w-[44rem] text-4xl font-extrabold tracking-tight text-content sm:text-5xl lg:text-[3.4rem] lg:leading-[1.02]"
+              >
                 A cleaner way to discover, organize, and launch memorable events.
               </h1>
               <p class="mt-5 max-w-2xl text-base leading-8 text-muted sm:text-lg">
-                EventXperience helps organizers manage listings and communities while giving attendees
-                a faster, more trustworthy browsing and registration experience.
+                EventXperience helps organizers manage listings and communities while giving
+                attendees a faster, more trustworthy browsing and registration experience.
               </p>
 
               <div class="mt-8 flex flex-wrap gap-3">
@@ -43,33 +47,59 @@ type Testimonial = { quote: string; name: string; role: string };
                   <app-button variant="primary" [href]="['/events']">Browse events</app-button>
                 }
                 @if (authEnabled) {
-                  <app-button variant="secondary" [href]="['/auth/signup']">Create account</app-button>
+                  <app-button variant="secondary" [href]="['/auth/signup']"
+                    >Create account</app-button
+                  >
                 }
               </div>
 
-              <div class="mt-10 grid max-w-3xl gap-4 sm:grid-cols-3">
-                <div class="surface-card rounded-2xl p-5">
+              <div
+                class="mt-8 hidden flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-subtle sm:flex"
+              >
+                <span class="rounded-full border border-line bg-surface px-3 py-1.5"
+                  >Verified listings</span
+                >
+                <span class="rounded-full border border-line bg-surface px-3 py-1.5"
+                  >Real-time availability</span
+                >
+                <span class="rounded-full border border-line bg-surface px-3 py-1.5"
+                  >Fast checkout</span
+                >
+              </div>
+
+              <div class="mt-8 grid grid-cols-3 gap-3 xl:max-w-2xl">
+                <div class="surface-card rounded-2xl p-4 xl:p-5">
                   <div class="text-2xl font-bold text-content">4.9/5</div>
-                  <div class="mt-1 text-sm text-subtle">average organizer satisfaction</div>
+                  <div class="mt-1 text-[13px] leading-5 text-subtle">
+                    average organizer satisfaction
+                  </div>
                 </div>
-                <div class="surface-card rounded-2xl p-5">
+                <div class="surface-card rounded-2xl p-4 xl:p-5">
                   <div class="text-2xl font-bold text-content">2M+</div>
-                  <div class="mt-1 text-sm text-subtle">tickets and registrations processed</div>
+                  <div class="mt-1 text-[13px] leading-5 text-subtle">
+                    tickets and registrations processed
+                  </div>
                 </div>
-                <div class="surface-card rounded-2xl p-5">
+                <div class="surface-card rounded-2xl p-4 xl:p-5">
                   <div class="text-2xl font-bold text-content">60s</div>
-                  <div class="mt-1 text-sm text-subtle">average checkout completion</div>
+                  <div class="mt-1 text-[13px] leading-5 text-subtle">
+                    average checkout completion
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div class="surface-panel rounded-3xl p-6 sm:p-7">
+            <div class="surface-panel self-start rounded-[1.75rem] p-6 sm:p-7 lg:sticky lg:top-24">
               <div class="flex items-center justify-between gap-4">
                 <div>
                   <p class="text-sm font-semibold text-content">Find the right event faster</p>
-                  <p class="mt-1 text-sm text-subtle">Search live inventory, city, and category in one place.</p>
+                  <p class="mt-1 text-sm leading-6 text-subtle">
+                    Search live inventory, city, and category in one place.
+                  </p>
                 </div>
-                <span class="rounded-full border border-line bg-surface-muted px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                <span
+                  class="rounded-full border border-line bg-surface-muted px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle"
+                >
                   Live
                 </span>
               </div>
@@ -77,7 +107,9 @@ type Testimonial = { quote: string; name: string; role: string };
               @if (eventsEnabled) {
                 <div class="mt-6 grid gap-3">
                   <div class="space-y-2">
-                    <label class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Search</label>
+                    <label class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle"
+                      >Search</label
+                    >
                     <input
                       class="form-field w-full px-4 py-3 text-sm"
                       placeholder="Artist, campus event, venue, organizer"
@@ -86,7 +118,9 @@ type Testimonial = { quote: string; name: string; role: string };
                     />
                   </div>
                   <div class="space-y-2">
-                    <label class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">City</label>
+                    <label class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle"
+                      >City</label
+                    >
                     <input
                       class="form-field w-full px-4 py-3 text-sm"
                       placeholder="Ottawa, Toronto, Montreal"
@@ -94,14 +128,23 @@ type Testimonial = { quote: string; name: string; role: string };
                       (keyup.enter)="explore()"
                     />
                   </div>
-                  <app-button variant="primary" className="w-full justify-center" (clicked)="explore()">
+                  <app-button
+                    variant="primary"
+                    className="w-full justify-center"
+                    (clicked)="explore()"
+                  >
                     Explore events
                   </app-button>
                 </div>
               }
 
-              <div class="mt-6 rounded-2xl border border-line bg-surface-muted p-5">
-                <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Trending now</div>
+              <div class="mt-5 rounded-2xl border border-line bg-surface-muted p-5">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                    Trending now
+                  </div>
+                  <div class="text-[11px] font-medium text-subtle">Updated live</div>
+                </div>
                 <div class="mt-4 space-y-3">
                   @for (ev of trending; track trackByTitle($index, ev)) {
                     <div class="rounded-2xl border border-line bg-surface px-4 py-4">
@@ -110,12 +153,16 @@ type Testimonial = { quote: string; name: string; role: string };
                           <div class="flex items-center gap-2">
                             <p class="text-sm font-semibold text-content">{{ ev.title }}</p>
                             @if (ev.badge) {
-                              <span class="rounded-full border border-line bg-surface-muted px-2 py-0.5 text-[11px] text-subtle">
+                              <span
+                                class="rounded-full border border-line bg-surface-muted px-2 py-0.5 text-[11px] text-subtle"
+                              >
                                 {{ ev.badge }}
                               </span>
                             }
                           </div>
-                          <p class="mt-1 text-xs text-subtle">{{ ev.date }} · {{ ev.venue }} · {{ ev.city }}</p>
+                          <p class="mt-1 text-xs leading-5 text-subtle">
+                            {{ ev.date }} / {{ ev.venue }} / {{ ev.city }}
+                          </p>
                         </div>
                         <div class="text-right">
                           <div class="text-sm font-semibold text-content">{{ ev.price }}</div>
@@ -130,136 +177,180 @@ type Testimonial = { quote: string; name: string; role: string };
           </div>
         </section>
 
-        @if (eventsEnabled) {
-          <section class="page-section pb-10 sm:pb-14">
-            <div class="surface-card rounded-3xl p-6 sm:p-8">
+        <div class="page-section flex flex-col gap-10 sm:gap-12 lg:gap-14">
+          @if (eventsEnabled) {
+            <section>
+              <div class="surface-card rounded-[1.75rem] p-6 sm:p-8">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">
+                      Categories
+                    </p>
+                    <h2 class="mt-2 text-2xl font-bold text-content">Browse by event type</h2>
+                  </div>
+                  <a
+                    routerLink="/events"
+                    class="text-sm font-semibold text-accent transition hover:text-content"
+                  >
+                    See all events
+                  </a>
+                </div>
+                <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                  @for (c of categories; track trackByName($index, c)) {
+                    <a
+                      routerLink="/events"
+                      class="surface-muted rounded-2xl p-5 transition hover:border-line-strong hover:bg-surface"
+                    >
+                      <div class="flex items-center justify-between">
+                        <span
+                          class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle"
+                          >{{ c.icon }}</span
+                        >
+                        <span
+                          class="rounded-full border border-line bg-surface px-2 py-1 text-[11px] text-subtle"
+                          >{{ c.count }}</span
+                        >
+                      </div>
+                      <div class="mt-4 text-base font-semibold text-content">{{ c.name }}</div>
+                    </a>
+                  }
+                </div>
+              </div>
+            </section>
+          }
+
+          <section>
+            <div class="grid gap-6 lg:grid-cols-[0.82fr_1.18fr] lg:items-start">
+              <div class="max-w-lg">
+                <p class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">
+                  Why teams choose it
+                </p>
+                <h2 class="mt-2 text-2xl font-bold text-content">
+                  Built for trust, speed, and operational clarity
+                </h2>
+                <p class="mt-4 text-sm leading-7 text-muted">
+                  The redesigned experience favors legibility and control: better defaults, cleaner
+                  forms, and fewer distractions around the actions that matter.
+                </p>
+              </div>
+              <div class="grid gap-4 sm:grid-cols-2">
+                @for (f of features; track trackByTitle($index, f)) {
+                  <article class="surface-card rounded-2xl p-6">
+                    <div class="flex items-center gap-3">
+                      <div
+                        class="flex h-11 w-11 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10 text-sm font-bold text-accent"
+                      >
+                        {{ f.icon }}
+                      </div>
+                      <h3 class="text-base font-semibold text-content">{{ f.title }}</h3>
+                    </div>
+                    <p class="mt-4 text-sm leading-7 text-muted">{{ f.desc }}</p>
+                  </article>
+                }
+              </div>
+            </div>
+          </section>
+
+          @if (eventsEnabled) {
+            <section>
               <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">Categories</p>
-                  <h2 class="mt-2 text-2xl font-bold text-content">Browse by event type</h2>
+                  <p class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">
+                    Popular this week
+                  </p>
+                  <h2 class="mt-2 text-2xl font-bold text-content">
+                    Highlights across your region
+                  </h2>
                 </div>
-                <a routerLink="/events" class="text-sm font-semibold text-accent transition hover:text-content">
-                  See all events
+                <a
+                  routerLink="/events"
+                  class="text-sm font-semibold text-accent transition hover:text-content"
+                >
+                  Explore event listings
                 </a>
               </div>
-              <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-                @for (c of categories; track trackByName($index, c)) {
-                  <a routerLink="/events" class="surface-muted rounded-2xl p-5 transition hover:border-line-strong hover:bg-surface">
-                    <div class="flex items-center justify-between">
-                      <span class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">{{ c.icon }}</span>
-                      <span class="rounded-full border border-line bg-surface px-2 py-1 text-[11px] text-subtle">{{ c.count }}</span>
+              <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                @for (e of popular; track trackByTitle($index, e)) {
+                  <a
+                    routerLink="/events"
+                    class="surface-card rounded-3xl p-6 transition hover:border-line-strong hover:bg-surface-muted"
+                  >
+                    <div class="flex items-center justify-between gap-3">
+                      <span
+                        class="rounded-full border border-line bg-surface-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle"
+                      >
+                        {{ e.badge || 'Featured' }}
+                      </span>
+                      <span class="text-sm font-semibold text-content">{{ e.price }}</span>
                     </div>
-                    <div class="mt-4 text-base font-semibold text-content">{{ c.name }}</div>
+                    <h3 class="mt-5 text-lg font-semibold text-content">{{ e.title }}</h3>
+                    <p class="mt-2 text-sm text-subtle">{{ e.date }}</p>
+                    <p class="mt-1 text-sm text-muted">{{ e.venue }} / {{ e.city }}</p>
+                    <div class="mt-6 text-sm font-semibold text-accent">View details -></div>
                   </a>
                 }
               </div>
-            </div>
-          </section>
-        }
+            </section>
+          }
 
-        <section class="page-section pb-10 sm:pb-14">
-          <div class="grid gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
-            <div>
-              <p class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">Why teams choose it</p>
-              <h2 class="mt-2 text-2xl font-bold text-content">Built for trust, speed, and operational clarity</h2>
-              <p class="mt-4 text-sm leading-7 text-muted">
-                The redesigned experience favors legibility and control: better defaults, cleaner forms,
-                and fewer distractions around the actions that matter.
-              </p>
-            </div>
-            <div class="grid gap-4 sm:grid-cols-2">
-              @for (f of features; track trackByTitle($index, f)) {
-                <article class="surface-card rounded-2xl p-6">
-                  <div class="flex items-center gap-3">
-                    <div class="flex h-11 w-11 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10 text-sm font-bold text-accent">
-                      {{ f.icon }}
-                    </div>
-                    <h3 class="text-base font-semibold text-content">{{ f.title }}</h3>
-                  </div>
-                  <p class="mt-4 text-sm leading-7 text-muted">{{ f.desc }}</p>
-                </article>
-              }
-            </div>
-          </div>
-        </section>
-
-        @if (eventsEnabled) {
-          <section class="page-section pb-10 sm:pb-14">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">Popular this week</p>
-                <h2 class="mt-2 text-2xl font-bold text-content">Highlights across your region</h2>
-              </div>
-              <a routerLink="/events" class="text-sm font-semibold text-accent transition hover:text-content">
-                Explore event listings
-              </a>
-            </div>
-            <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              @for (e of popular; track trackByTitle($index, e)) {
-                <a routerLink="/events" class="surface-card rounded-3xl p-6 transition hover:border-line-strong hover:bg-surface-muted">
-                  <div class="flex items-center justify-between gap-3">
-                    <span class="rounded-full border border-line bg-surface-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
-                      {{ e.badge || 'Featured' }}
-                    </span>
-                    <span class="text-sm font-semibold text-content">{{ e.price }}</span>
-                  </div>
-                  <h3 class="mt-5 text-lg font-semibold text-content">{{ e.title }}</h3>
-                  <p class="mt-2 text-sm text-subtle">{{ e.date }}</p>
-                  <p class="mt-1 text-sm text-muted">{{ e.venue }} · {{ e.city }}</p>
-                  <div class="mt-6 text-sm font-semibold text-accent">View details -></div>
-                </a>
-              }
-            </div>
-          </section>
-        }
-
-        <section class="page-section pb-10 sm:pb-14">
-          <div class="section-muted rounded-3xl p-6 sm:p-8">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">Customer signal</p>
-                <h2 class="mt-2 text-2xl font-bold text-content">Loved by organizers and attendees</h2>
-              </div>
-              @if (authEnabled) {
-                <app-button variant="secondary" [href]="['/auth/signup']">Start with your team</app-button>
-              }
-            </div>
-            <div class="mt-6 grid gap-4 md:grid-cols-3">
-              @for (t of testimonials; track trackByName($index, t)) {
-                <article class="surface-card rounded-2xl p-6">
-                  <p class="text-sm leading-7 text-muted">"{{ t.quote }}"</p>
-                  <div class="mt-5 text-sm font-semibold text-content">{{ t.name }}</div>
-                  <div class="text-xs text-subtle">{{ t.role }}</div>
-                </article>
-              }
-            </div>
-          </div>
-        </section>
-
-        <section class="page-section pb-16 sm:pb-20">
-          <div class="surface-panel rounded-3xl p-8 sm:p-10">
-            <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-              <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">Ready to launch</p>
-                <h2 class="mt-2 text-3xl font-bold tracking-tight text-content">
-                  Bring a more polished event experience to your audience.
-                </h2>
-                <p class="mt-4 max-w-2xl text-sm leading-7 text-muted">
-                  Create listings, manage attendance, and publish updates from one platform designed
-                  to feel professional in both light and dark mode.
-                </p>
-              </div>
-              <div class="flex flex-col gap-3 sm:flex-row lg:justify-end">
+          <section>
+            <div class="section-muted rounded-[1.75rem] p-6 sm:p-8">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">
+                    Customer signal
+                  </p>
+                  <h2 class="mt-2 text-2xl font-bold text-content">
+                    Loved by organizers and attendees
+                  </h2>
+                </div>
                 @if (authEnabled) {
-                  <app-button variant="primary" [href]="['/auth/signup']">Create an account</app-button>
+                  <app-button variant="secondary" [href]="['/auth/signup']"
+                    >Start with your team</app-button
+                  >
                 }
-                @if (eventsEnabled) {
-                  <app-button variant="ghost" [href]="['/events']">Browse events</app-button>
+              </div>
+              <div class="mt-6 grid gap-4 md:grid-cols-3">
+                @for (t of testimonials; track trackByName($index, t)) {
+                  <article class="surface-card rounded-2xl p-6">
+                    <p class="text-sm leading-7 text-muted">"{{ t.quote }}"</p>
+                    <div class="mt-5 text-sm font-semibold text-content">{{ t.name }}</div>
+                    <div class="text-xs text-subtle">{{ t.role }}</div>
+                  </article>
                 }
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+
+          <section>
+            <div class="surface-panel rounded-[1.75rem] p-8 sm:p-10">
+              <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+                <div class="max-w-2xl">
+                  <p class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">
+                    Ready to launch
+                  </p>
+                  <h2 class="mt-2 text-3xl font-bold tracking-tight text-content">
+                    Bring a more polished event experience to your audience.
+                  </h2>
+                  <p class="mt-4 text-sm leading-7 text-muted">
+                    Create listings, manage attendance, and publish updates from one platform
+                    designed to feel professional in both light and dark mode.
+                  </p>
+                </div>
+                <div class="flex flex-col gap-3 sm:flex-row lg:justify-end">
+                  @if (authEnabled) {
+                    <app-button variant="primary" [href]="['/auth/signup']"
+                      >Create an account</app-button
+                    >
+                  }
+                  @if (eventsEnabled) {
+                    <app-button variant="ghost" [href]="['/events']">Browse events</app-button>
+                  }
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
       </main>
     </div>
   `,
@@ -388,17 +479,20 @@ export class HomeComponent {
 
   testimonials: Testimonial[] = [
     {
-      quote: 'The checkout is smooth and dependable. I had my tickets in my wallet in under a minute.',
+      quote:
+        'The checkout is smooth and dependable. I had my tickets in my wallet in under a minute.',
       name: 'Ayesha K.',
       role: 'Fan - Concerts',
     },
     {
-      quote: 'Our team sold out faster and support tickets dropped noticeably once we moved organizers onto the platform.',
+      quote:
+        'Our team sold out faster and support tickets dropped noticeably once we moved organizers onto the platform.',
       name: 'Marco D.',
       role: 'Organizer - Campus events',
     },
     {
-      quote: 'Transparent pricing and a cleaner flow made the whole experience feel much more trustworthy.',
+      quote:
+        'Transparent pricing and a cleaner flow made the whole experience feel much more trustworthy.',
       name: 'Jules P.',
       role: 'Fan - Sports',
     },

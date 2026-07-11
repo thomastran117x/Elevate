@@ -16,11 +16,11 @@
   --text-subtle: #64748b;
   --text-faint: #94a3b8;
 
-  --accent: #315f9d;
-  --accent-hover: #274d82;
-  --accent-soft: rgba(49, 95, 157, 0.1);
+  --accent: #0f766e;
+  --accent-hover: #115e59;
+  --accent-soft: rgba(15, 118, 110, 0.1);
   --accent-contrast: #ffffff;
-  --focus-ring: rgba(49, 95, 157, 0.24);
+  --focus-ring: rgba(15, 118, 110, 0.22);
 
   --success: #1f7a5a;
   --warning: #b7791f;
@@ -45,7 +45,6 @@
   --inverse: #111827;
   --inverse-content: #ffffff;
   --gradient-page: linear-gradient(180deg, #f3f6fa 0%, #eef3f8 100%);
-  --gradient-accent: linear-gradient(90deg, #315f9d 0%, #3b6fad 100%);
 }
 
 .dark {
@@ -63,11 +62,11 @@
   --text-subtle: #8fa2b7;
   --text-faint: #70849a;
 
-  --accent: #79a4d6;
-  --accent-hover: #8ab1df;
-  --accent-soft: rgba(121, 164, 214, 0.16);
-  --accent-contrast: #08111b;
-  --focus-ring: rgba(121, 164, 214, 0.28);
+  --accent: #78c7c0;
+  --accent-hover: #91d7d1;
+  --accent-soft: rgba(120, 199, 192, 0.18);
+  --accent-contrast: #071b1a;
+  --focus-ring: rgba(120, 199, 192, 0.28);
 
   --success: #6fc4a6;
   --warning: #d6a355;
@@ -92,7 +91,6 @@
   --inverse: #e7eef6;
   --inverse-content: #08111b;
   --gradient-page: linear-gradient(180deg, #0f1720 0%, #121d29 100%);
-  --gradient-accent: linear-gradient(90deg, #79a4d6 0%, #8ab1df 100%);
 }
 
 @theme inline {
@@ -163,13 +161,6 @@ body {
 
 .bg-page {
   background-image: var(--gradient-page);
-}
-
-.text-gradient-accent {
-  background-image: var(--gradient-accent);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
 }
 
 .app-page {

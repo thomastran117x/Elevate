@@ -2,13 +2,13 @@
   <!-- Ambient blobs -->
   <div class="pointer-events-none absolute inset-0">
     <div
-      class="absolute -left-40 -top-40 h-[520px] w-[520px] animate-pulse rounded-full bg-purple-600/7 dark:bg-purple-600/20 blur-3xl"
+      class="absolute -left-40 -top-40 h-[520px] w-[520px] animate-pulse rounded-full bg-accent/7 dark:bg-accent/20 blur-3xl"
     ></div>
     <div
-      class="absolute -right-40 top-60 h-[420px] w-[420px] animate-pulse rounded-full bg-fuchsia-600/7 dark:bg-fuchsia-600/20 blur-3xl"
+      class="absolute -right-40 top-60 h-[420px] w-[420px] animate-pulse rounded-full bg-accent/5 dark:bg-accent/10 blur-3xl"
     ></div>
     <div
-      class="absolute bottom-0 left-1/2 h-[400px] w-[600px] -translate-x-1/2 rounded-full bg-indigo-600/5 dark:bg-indigo-600/15 blur-3xl"
+      class="absolute bottom-0 left-1/2 h-[400px] w-[600px] -translate-x-1/2 rounded-full bg-accent/5 dark:bg-accent/10 blur-3xl"
     ></div>
   </div>
 
@@ -23,7 +23,7 @@
     <nav class="mb-8 flex gap-1 border-b border-line pb-0">
       <a
         routerLink="profile"
-        routerLinkActive="border-b-2 border-purple-400 text-content font-semibold"
+        routerLinkActive="border-b-2 border-accent text-content font-semibold"
         [routerLinkActiveOptions]="{ exact: false }"
         class="px-4 pb-3 pt-2 text-sm font-medium text-subtle transition hover:text-content"
       >
@@ -31,7 +31,7 @@
       </a>
       <a
         routerLink="security"
-        routerLinkActive="border-b-2 border-purple-400 text-content font-semibold"
+        routerLinkActive="border-b-2 border-accent text-content font-semibold"
         [routerLinkActiveOptions]="{ exact: false }"
         class="px-4 pb-3 pt-2 text-sm font-medium text-subtle transition hover:text-content"
       >
@@ -39,7 +39,7 @@
       </a>
       <a
         routerLink="password"
-        routerLinkActive="border-b-2 border-purple-400 text-content font-semibold"
+        routerLinkActive="border-b-2 border-accent text-content font-semibold"
         [routerLinkActiveOptions]="{ exact: false }"
         class="px-4 pb-3 pt-2 text-sm font-medium text-subtle transition hover:text-content"
       >
@@ -59,3 +59,4 @@
     <router-outlet></router-outlet>
   </div>
 </div>
+

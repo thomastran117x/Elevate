@@ -8,12 +8,12 @@
     </icon-shell>
   </div>
 
-  <div class="mt-4 text-lg font-bold text-content">{{ title }}</div>
-  <div class="mt-1 text-sm text-subtle max-w-md mx-auto">{{ subtitle }}</div>
+  <div class="mt-4 mx-auto max-w-md text-lg font-bold text-content">{{ title }}</div>
+  <div class="mx-auto mt-1 max-w-md text-sm text-subtle">{{ subtitle }}</div>
 
   @if (primaryLabel) {
-    <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
-      <app-button variant="primary" [href]="primaryHref">{{ primaryLabel }} →</app-button>
+    <div class="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+      <app-button variant="primary" [href]="primaryHref">{{ primaryLabel }} -></app-button>
       @if (secondaryLabel) {
         <app-button variant="ghost" [href]="secondaryHref">{{ secondaryLabel }}</app-button>
       }

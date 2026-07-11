@@ -1,40 +1,66 @@
 <footer class="border-t border-line bg-canvas">
-  <div class="mx-auto grid max-w-7xl gap-12 px-6 py-14 lg:grid-cols-[1.4fr_1fr_1fr]">
-    <div class="space-y-4">
-      <div class="flex items-center gap-3">
-        <span class="flex h-10 w-10 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10 text-sm font-bold text-accent">
-          EX
-        </span>
+  <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+    <div class="surface-panel overflow-hidden rounded-[2rem] p-8 sm:p-10">
+      <div class="grid gap-10 lg:grid-cols-[1.25fr_0.75fr_0.75fr] lg:gap-12">
         <div>
-          <div class="text-lg font-semibold text-content">EventXperience</div>
-          <div class="text-sm text-subtle">Professional tools for events, communities, and registration.</div>
+          <div class="flex items-start gap-4">
+            <span
+              class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-line bg-surface shadow-sm"
+            >
+              <span class="absolute inset-[8px] rounded-xl bg-accent/10"></span>
+              <span class="relative text-xs font-extrabold uppercase tracking-[0.22em] text-accent"
+                >EX</span
+              >
+            </span>
+            <div>
+              <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-subtle">
+                Event Operations
+              </div>
+              <div class="mt-1 text-2xl font-semibold tracking-tight text-content">
+                EventXperience
+              </div>
+              <p class="mt-3 max-w-xl text-sm leading-7 text-muted">
+                Professional tools for discovering events, managing communities, and running
+                registration flows with a cleaner experience in light and dark mode.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">Explore</h4>
+          <div class="mt-4 flex flex-col gap-3 text-sm text-muted">
+            <a routerLink="/" class="transition hover:text-content">Home</a>
+            @if (eventsEnabled) {
+              <a routerLink="/events" class="transition hover:text-content">Events</a>
+            }
+            @if (clubsEnabled) {
+              <a routerLink="/clubs" class="transition hover:text-content">Clubs</a>
+            }
+          </div>
+        </div>
+
+        <div>
+          <h4 class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">Account</h4>
+          <div class="mt-4 flex flex-col gap-3 text-sm text-muted">
+            @if (authEnabled) {
+              <a routerLink="/auth/login" class="transition hover:text-content">Sign in</a>
+              <a routerLink="/auth/signup" class="transition hover:text-content">Create account</a>
+              <a routerLink="/account" class="transition hover:text-content">Settings</a>
+            } @else {
+              <span>Authentication controls hidden</span>
+            }
+          </div>
         </div>
       </div>
-      <p class="max-w-md text-sm leading-6 text-muted">
-        A cleaner event platform for discovering experiences, organizing communities, and running registrations with confidence.
-      </p>
-    </div>
 
-    <div>
-      <h4 class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">Explore</h4>
-      <div class="mt-4 flex flex-col gap-3 text-sm text-muted">
-        <a routerLink="/" class="transition hover:text-content">Home</a>
-        <a routerLink="/events" class="transition hover:text-content">Events</a>
-        <a routerLink="/clubs" class="transition hover:text-content">Clubs</a>
+      <div
+        class="mt-10 flex flex-col gap-4 border-t border-line pt-6 text-sm sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div class="text-subtle">&copy; {{ currentYear }} EventXperience. All rights reserved.</div>
+        `r`n
+        <div class="text-subtle">Built for clean event operations.</div>
       </div>
     </div>
-
-    <div>
-      <h4 class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">Account</h4>
-      <div class="mt-4 flex flex-col gap-3 text-sm text-muted">
-        <a routerLink="/auth/login" class="transition hover:text-content">Sign in</a>
-        <a routerLink="/auth/signup" class="transition hover:text-content">Create account</a>
-        <a routerLink="/account" class="transition hover:text-content">Settings</a>
-      </div>
-    </div>
-  </div>
-
-  <div class="border-t border-line px-6 py-5 text-center text-sm text-subtle">
-    &copy; {{ currentYear }} EventXperience. All rights reserved.
   </div>
 </footer>

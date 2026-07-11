@@ -204,8 +204,8 @@ export const CATEGORY_STYLES: Record<EventCategory, { badge: string; bg: string 
     bg: 'bg-cyan-500/60',
   },
   Conference: {
-    badge: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20',
-    bg: 'bg-indigo-500/60',
+    badge: 'bg-stone-500/10 text-stone-700 dark:text-stone-300 border-stone-500/20',
+    bg: 'bg-stone-500/60',
   },
   Social: {
     badge: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20',
@@ -236,15 +236,16 @@ export const CATEGORY_STYLES: Record<EventCategory, { badge: string; bg: string 
     bg: 'bg-green-500/60',
   },
   Party: {
-    badge: 'bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/20',
-    bg: 'bg-fuchsia-500/60',
+    badge: 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/20',
+    bg: 'bg-red-500/60',
   },
   Arts: {
-    badge: 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20',
-    bg: 'bg-violet-500/60',
+    badge: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 border-yellow-500/20',
+    bg: 'bg-yellow-500/60',
   },
   Other: {
     badge: 'bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-500/20',
     bg: 'bg-zinc-500/60',
   },
 };
+

@@ -1,207 +1,324 @@
 <nav
-  class="sticky top-0 z-50 border-b transition-all duration-200"
-  [ngClass]="scrolled ? 'border-line bg-surface/95 backdrop-blur-md shadow-sm' : 'border-transparent bg-canvas/90'"
+  class="sticky top-0 z-50 transition-all duration-200"
+  [ngClass]="
+    scrolled
+      ? 'border-b border-line/80 bg-canvas/92 shadow-sm backdrop-blur-xl'
+      : 'bg-canvas/78 backdrop-blur-lg'
+  "
 >
-  <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-    <a routerLink="/" class="flex items-center gap-3 text-sm font-semibold tracking-[0.12em] text-content uppercase">
-      <span class="flex h-10 w-10 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10 text-accent">
-        EX
-      </span>
-      <span class="text-base tracking-[0.08em] text-content normal-case">EventXperience</span>
-    </a>
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between gap-4 py-4">
+      <a routerLink="/" (click)="closeMenus()" class="group flex min-w-0 items-center gap-4">
+        <span
+          class="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-line bg-surface shadow-sm transition group-hover:border-accent/25 group-hover:bg-surface-muted"
+        >
+          <span class="absolute inset-[8px] rounded-xl bg-accent/10"></span>
+          <span class="relative text-xs font-extrabold uppercase tracking-[0.22em] text-accent"
+            >EX</span
+          >
+        </span>
+        <span class="min-w-0">
+          <span class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-subtle">
+            Event Operations
+          </span>
+          <span class="block truncate text-base font-semibold tracking-tight text-content">
+            EventXperience
+          </span>
+        </span>
+      </a>
 
-    <div class="hidden items-center gap-3 md:flex">
-      <div class="flex items-center gap-1 rounded-full border border-line bg-surface px-1 py-1 text-sm text-muted shadow-sm">
-        <a routerLink="/" class="rounded-full px-4 py-2 transition hover:bg-surface-muted hover:text-content">
-          Home
-        </a>
-        @if (eventsEnabled) {
+      <div class="hidden items-center gap-3 lg:flex">
+        <div
+          class="flex items-center gap-1 rounded-2xl border border-line bg-surface/90 p-1.5 shadow-sm"
+        >
           <a
-            routerLink="/events"
-            class="rounded-full px-4 py-2 transition hover:bg-surface-muted hover:text-content"
+            routerLink="/"
+            routerLinkActive="bg-surface-muted text-content shadow-sm"
+            [routerLinkActiveOptions]="{ exact: true }"
+            class="rounded-xl px-4 py-2 text-sm font-medium text-subtle transition hover:bg-surface-muted hover:text-content"
           >
-            Events
+            Home
           </a>
-        }
-        @if (clubsEnabled) {
-          <a
-            routerLink="/clubs"
-            class="rounded-full px-4 py-2 transition hover:bg-surface-muted hover:text-content"
-          >
-            Clubs
-          </a>
+          @if (eventsEnabled) {
+            <a
+              routerLink="/events"
+              routerLinkActive="bg-surface-muted text-content shadow-sm"
+              class="rounded-xl px-4 py-2 text-sm font-medium text-subtle transition hover:bg-surface-muted hover:text-content"
+            >
+              Events
+            </a>
+          }
+          @if (clubsEnabled) {
+            <a
+              routerLink="/clubs"
+              routerLinkActive="bg-surface-muted text-content shadow-sm"
+              class="rounded-xl px-4 py-2 text-sm font-medium text-subtle transition hover:bg-surface-muted hover:text-content"
+            >
+              Clubs
+            </a>
+          }
+        </div>
+        <button
+          type="button"
+          (click)="toggleTheme()"
+          [attr.aria-label]="theme.isDark() ? 'Switch to light mode' : 'Switch to dark mode'"
+          class="flex h-11 w-11 items-center justify-center rounded-2xl border border-line bg-surface text-muted shadow-sm transition hover:border-line-strong hover:bg-surface-muted hover:text-content"
+        >
+          @if (theme.isDark()) {
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.8"
+                d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+              />
+            </svg>
+          } @else {
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.8"
+                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+              />
+            </svg>
+          }
+        </button>
+
+        @if (authEnabled) {
+          @if (user$ | async; as user) {
+            <div class="relative">
+              <button
+                (click)="toggleUserMenu()"
+                class="flex items-center gap-3 rounded-2xl border border-line bg-surface px-3 py-2 shadow-sm transition hover:border-line-strong hover:bg-surface-muted"
+              >
+                @if (user.Avatar) {
+                  <img
+                    [src]="user.Avatar"
+                    alt="User avatar"
+                    class="h-9 w-9 rounded-2xl border border-line object-cover"
+                  />
+                } @else {
+                  <div
+                    class="flex h-9 w-9 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10 text-xs font-bold uppercase text-accent"
+                  >
+                    {{ user.Username[0] }}
+                  </div>
+                }
+                <div class="text-left leading-tight">
+                  <div class="text-sm font-semibold text-content">{{ user.Username }}</div>
+                  <div class="mt-1 text-[11px] uppercase tracking-[0.12em] text-subtle">
+                    {{ user.Usertype }}
+                  </div>
+                </div>
+              </button>
+
+              @if (userMenuOpen) {
+                <div
+                  class="absolute right-0 top-[calc(100%+0.75rem)] w-64 rounded-3xl border border-line bg-surface p-2 shadow-[var(--shadow-lg)]"
+                >
+                  <div class="rounded-2xl border border-line bg-surface-muted px-4 py-3">
+                    <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                      Workspace
+                    </div>
+                    <div class="mt-1 text-sm font-semibold text-content">Signed in and ready</div>
+                  </div>
+                  <div class="mt-2 flex flex-col gap-1">
+                    <a
+                      routerLink="/account"
+                      (click)="closeMenus()"
+                      class="block rounded-2xl px-4 py-3 text-sm text-muted transition hover:bg-surface-muted hover:text-content"
+                    >
+                      Account settings
+                    </a>
+                    @if (invitationsEnabled) {
+                      <a
+                        routerLink="/events/me/invited"
+                        (click)="closeMenus()"
+                        class="block rounded-2xl px-4 py-3 text-sm text-muted transition hover:bg-surface-muted hover:text-content"
+                      >
+                        My invites
+                      </a>
+                    }
+                    <button
+                      (click)="logout()"
+                      class="mt-1 w-full rounded-2xl px-4 py-3 text-left text-sm text-danger transition hover:bg-danger/10"
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="flex items-center gap-2">
+              <a
+                routerLink="/auth/login"
+                class="cta-ghost rounded-xl px-4 py-2.5 text-sm font-semibold"
+              >
+                Sign in
+              </a>
+              <a
+                routerLink="/auth/signup"
+                class="cta-solid rounded-xl px-4 py-2.5 text-sm font-semibold"
+              >
+                Create account
+              </a>
+            </div>
+          }
         }
       </div>
 
-      <button
-        type="button"
-        (click)="toggleTheme()"
-        [attr.aria-label]="theme.isDark() ? 'Switch to light mode' : 'Switch to dark mode'"
-        class="flex h-11 w-11 items-center justify-center rounded-2xl border border-line bg-surface text-muted shadow-sm transition hover:border-line-strong hover:bg-surface-muted hover:text-content"
-      >
-        @if (theme.isDark()) {
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="1.8"
-              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-            />
-          </svg>
-        } @else {
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="1.8"
-              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-            />
-          </svg>
-        }
-      </button>
+      <div class="flex items-center gap-2 lg:hidden">
+        <button
+          type="button"
+          (click)="toggleTheme()"
+          [attr.aria-label]="theme.isDark() ? 'Switch to light mode' : 'Switch to dark mode'"
+          class="flex h-11 w-11 items-center justify-center rounded-2xl border border-line bg-surface text-content shadow-sm"
+        >
+          @if (theme.isDark()) {
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.8"
+                d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+              />
+            </svg>
+          } @else {
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.8"
+                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+              />
+            </svg>
+          }
+        </button>
 
-      @if (authEnabled) {
-        @if (user$ | async; as user) {
-          <div class="relative">
-            <button
-              (click)="toggleUserMenu()"
-              class="flex items-center gap-3 rounded-2xl border border-line bg-surface px-3 py-2 shadow-sm transition hover:border-line-strong hover:bg-surface-muted"
+        <button
+          (click)="toggleMobile()"
+          class="flex h-11 w-11 items-center justify-center rounded-2xl border border-line bg-surface text-content shadow-sm"
+        >
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.8"
+              d="M4 6h16M4 12h16M4 18h16"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    @if (mobileOpen) {
+      <div class="border-t border-line/80 pb-4 lg:hidden">
+        <div class="surface-panel mt-4 rounded-[1.75rem] p-5 shadow-[var(--shadow-md)]">
+          <div class="mt-4 grid gap-2 text-sm text-muted">
+            <a
+              routerLink="/"
+              routerLinkActive="bg-surface-muted text-content"
+              [routerLinkActiveOptions]="{ exact: true }"
+              (click)="closeMenus()"
+              class="rounded-2xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
             >
-              @if (user.Avatar) {
-                <img
-                  [src]="user.Avatar"
-                  alt="User avatar"
-                  class="h-8 w-8 rounded-full border border-line object-cover"
-                />
-              } @else {
-                <div
-                  class="flex h-8 w-8 items-center justify-center rounded-full border border-accent/20 bg-accent/10 text-xs font-bold uppercase text-accent"
-                >
-                  {{ user.Username[0] }}
-                </div>
-              }
-              <div class="text-left">
-                <div class="text-sm font-semibold text-content">{{ user.Username }}</div>
-                <div class="text-[11px] uppercase tracking-[0.12em] text-subtle">
-                  {{ user.Usertype }}
+              Home
+            </a>
+            @if (eventsEnabled) {
+              <a
+                routerLink="/events"
+                routerLinkActive="bg-surface-muted text-content"
+                (click)="closeMenus()"
+                class="rounded-2xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
+              >
+                Events
+              </a>
+            }
+            @if (clubsEnabled) {
+              <a
+                routerLink="/clubs"
+                routerLinkActive="bg-surface-muted text-content"
+                (click)="closeMenus()"
+                class="rounded-2xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
+              >
+                Clubs
+              </a>
+            }
+          </div>
+
+          @if (authEnabled) {
+            @if (user$ | async; as user) {
+              <div class="mt-4 rounded-2xl border border-line bg-surface px-4 py-4">
+                <div class="flex items-center gap-3">
+                  @if (user.Avatar) {
+                    <img
+                      [src]="user.Avatar"
+                      alt="User avatar"
+                      class="h-10 w-10 rounded-2xl border border-line object-cover"
+                    />
+                  } @else {
+                    <div
+                      class="flex h-10 w-10 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10 text-xs font-bold uppercase text-accent"
+                    >
+                      {{ user.Username[0] }}
+                    </div>
+                  }
+                  <div>
+                    <div class="text-sm font-semibold text-content">{{ user.Username }}</div>
+                    <div class="mt-1 text-[11px] uppercase tracking-[0.12em] text-subtle">
+                      {{ user.Usertype }}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </button>
 
-            @if (userMenuOpen) {
-              <div
-                class="absolute right-0 top-14 w-60 rounded-2xl border border-line bg-surface p-2 shadow-[var(--shadow-lg)]"
-              >
+              <div class="grid gap-2 text-sm text-muted">
                 <a
                   routerLink="/account"
-                  class="block rounded-xl px-4 py-3 text-sm text-muted transition hover:bg-surface-muted hover:text-content"
+                  (click)="closeMenus()"
+                  class="rounded-2xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
                 >
                   Account settings
                 </a>
                 @if (invitationsEnabled) {
                   <a
                     routerLink="/events/me/invited"
-                    class="block rounded-xl px-4 py-3 text-sm text-muted transition hover:bg-surface-muted hover:text-content"
+                    (click)="closeMenus()"
+                    class="rounded-2xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
                   >
                     My invites
                   </a>
                 }
                 <button
                   (click)="logout()"
-                  class="mt-1 w-full rounded-xl px-4 py-3 text-left text-sm text-danger transition hover:bg-danger/10"
+                  class="rounded-2xl px-4 py-3 text-left text-danger transition hover:bg-danger/10"
                 >
                   Sign out
                 </button>
               </div>
-            }
-          </div>
-        } @else {
-          <a routerLink="/auth/login" class="cta-subtle rounded-xl px-4 py-2.5 text-sm font-semibold">
-            Sign in
-          </a>
-        }
-      }
-    </div>
-
-    <button
-      (click)="toggleMobile()"
-      class="flex h-11 w-11 items-center justify-center rounded-2xl border border-line bg-surface text-content shadow-sm md:hidden"
-    >
-      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="1.8"
-          d="M4 6h16M4 12h16M4 18h16"
-        />
-      </svg>
-    </button>
-  </div>
-
-  @if (mobileOpen) {
-    <div class="border-t border-line bg-surface px-6 py-5 md:hidden">
-      <div class="flex flex-col gap-2 text-sm text-muted">
-        <a routerLink="/" class="rounded-xl px-4 py-3 transition hover:bg-surface-muted hover:text-content">
-          Home
-        </a>
-        @if (eventsEnabled) {
-          <a
-            routerLink="/events"
-            class="rounded-xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
-          >
-            Events
-          </a>
-        }
-        @if (clubsEnabled) {
-          <a
-            routerLink="/clubs"
-            class="rounded-xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
-          >
-            Clubs
-          </a>
-        }
-        <button
-          type="button"
-          (click)="toggleTheme()"
-          class="flex items-center gap-3 rounded-xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
-        >
-          <span class="text-accent">{{ theme.isDark() ? 'Light mode' : 'Dark mode' }}</span>
-        </button>
-        @if (authEnabled) {
-          @if (user$ | async; as user) {
-            <div class="mt-2 rounded-2xl border border-line bg-surface-muted px-4 py-4">
-              <div class="text-sm font-semibold text-content">{{ user.Username }}</div>
-              <div class="mt-1 text-[11px] uppercase tracking-[0.12em] text-subtle">
-                {{ user.Usertype }}
+            } @else {
+              <div class="mt-4 grid gap-2">
+                <a
+                  routerLink="/auth/login"
+                  (click)="closeMenus()"
+                  class="cta-ghost rounded-xl px-4 py-3 text-center text-sm font-semibold"
+                >
+                  Sign in
+                </a>
+                <a
+                  routerLink="/auth/signup"
+                  (click)="closeMenus()"
+                  class="cta-solid rounded-xl px-4 py-3 text-center text-sm font-semibold"
+                >
+                  Create account
+                </a>
               </div>
-            </div>
-            <a
-              routerLink="/account"
-              class="rounded-xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
-            >
-              Account settings
-            </a>
-            @if (invitationsEnabled) {
-              <a
-                routerLink="/events/me/invited"
-                class="rounded-xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
-              >
-                My invites
-              </a>
             }
-            <button
-              (click)="logout()"
-              class="mt-2 rounded-xl px-4 py-3 text-left text-danger transition hover:bg-danger/10"
-            >
-              Sign out
-            </button>
-          } @else {
-            <a routerLink="/auth/login" class="cta-solid mt-2 rounded-xl px-4 py-3 text-center text-sm font-semibold">
-              Sign in
-            </a>
           }
-        }
+        </div>
       </div>
-    </div>
-  }
+    }
+  </div>
 </nav>

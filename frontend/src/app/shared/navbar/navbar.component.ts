@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, HostListener } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { RouterLink, RouterLinkActive } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { Observable } from 'rxjs';
 import { selectUser } from '../../core/stores/user.selectors';
@@ -15,7 +15,7 @@ import { ThemeService } from '../../core/services/theme.service';
 @Component({
   selector: 'app-navbar',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, RouterLinkActive],
   templateUrl: './navbar.component.html',
 })
 export class NavbarComponent {
@@ -52,15 +52,22 @@ export class NavbarComponent {
     this.userMenuOpen = false;
   }
 
+  closeMenus() {
+    this.mobileOpen = false;
+    this.userMenuOpen = false;
+  }
+
   toggleTheme() {
     this.theme.toggle();
   }
 
   toggleUserMenu() {
     this.userMenuOpen = !this.userMenuOpen;
+    this.mobileOpen = false;
   }
 
   logout() {
+    this.closeMenus();
     this.auth.logout().subscribe({
       next: () => this.authToken.logoutLocal(),
       error: () => this.authToken.logoutLocal(),
