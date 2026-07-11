@@ -1,94 +1,40 @@
-<footer class="w-full border-t border-line bg-surface">
-  <div class="max-w-7xl mx-auto px-6 py-16 grid gap-12 sm:grid-cols-2 lg:grid-cols-5">
-    <!-- Brand -->
-    <div class="lg:col-span-2 space-y-4">
-      <div class="text-2xl font-extrabold tracking-tight">
-        <span class="text-accent">Event</span>
-        <span class="text-content">Xperience</span>
+<footer class="border-t border-line bg-canvas">
+  <div class="mx-auto grid max-w-7xl gap-12 px-6 py-14 lg:grid-cols-[1.4fr_1fr_1fr]">
+    <div class="space-y-4">
+      <div class="flex items-center gap-3">
+        <span class="flex h-10 w-10 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10 text-sm font-bold text-accent">
+          EX
+        </span>
+        <div>
+          <div class="text-lg font-semibold text-content">EventXperience</div>
+          <div class="text-sm text-subtle">Professional tools for events, communities, and registration.</div>
+        </div>
       </div>
-
-      <p class="text-sm text-subtle max-w-sm">
-        A modern platform for creating, managing, and scaling unforgettable event experiences.
+      <p class="max-w-md text-sm leading-6 text-muted">
+        A cleaner event platform for discovering experiences, organizing communities, and running registrations with confidence.
       </p>
+    </div>
 
-      <!-- Socials -->
-      <div class="flex items-center gap-4 pt-2">
-        <!-- X / Twitter -->
-        <a href="#" class="text-subtle hover:text-content transition" aria-label="Twitter">
-          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-            <path
-              d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.65l-5.21-6.817-5.97 6.817H1.69l7.73-8.835L1.25 2.25h6.82l4.713 6.231 5.46-6.231Z"
-            />
-          </svg>
-        </a>
-
-        <!-- GitHub -->
-        <a href="#" class="text-subtle hover:text-content transition" aria-label="GitHub">
-          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-            <path
-              fill-rule="evenodd"
-              d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.868-.014-1.703-2.782.605-3.369-1.344-3.369-1.344-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.071 1.532 1.032 1.532 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.27.098-2.646 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.026 2.747-1.026.546 1.376.203 2.393.1 2.646.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.944.359.31.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.523 2 12 2Z"
-              clip-rule="evenodd"
-            />
-          </svg>
-        </a>
-
-        <!-- Instagram -->
-        <a href="#" class="text-subtle hover:text-content transition" aria-label="Instagram">
-          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-            <path
-              d="M7.75 2h8.5C19.44 2 22 4.56 22 7.75v8.5C22 19.44 19.44 22 16.25 22h-8.5C4.56 22 2 19.44 2 16.25v-8.5C2 4.56 4.56 2 7.75 2ZM12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm6.5-.75a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5Z"
-            />
-          </svg>
-        </a>
-
-        <!-- Facebook -->
-        <a href="#" class="text-subtle hover:text-content transition" aria-label="Facebook">
-          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-            <path
-              d="M22 12.07C22 6.504 17.523 2 12 2S2 6.504 2 12.07c0 5.025 3.657 9.19 8.438 9.93v-7.02H7.898v-2.91h2.54V9.845c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.463h-1.26c-1.242 0-1.63.774-1.63 1.566v1.88h2.773l-.443 2.91h-2.33v7.02C18.343 21.26 22 17.095 22 12.07Z"
-            />
-          </svg>
-        </a>
+    <div>
+      <h4 class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">Explore</h4>
+      <div class="mt-4 flex flex-col gap-3 text-sm text-muted">
+        <a routerLink="/" class="transition hover:text-content">Home</a>
+        <a routerLink="/events" class="transition hover:text-content">Events</a>
+        <a routerLink="/clubs" class="transition hover:text-content">Clubs</a>
       </div>
     </div>
 
-    <!-- Product -->
     <div>
-      <h4 class="font-semibold mb-4 text-content">Product</h4>
-      <ul class="space-y-3 text-sm text-muted">
-        <li><a href="#" class="hover:underline">Features</a></li>
-        <li><a href="#" class="hover:underline">Pricing</a></li>
-        <li><a href="#" class="hover:underline">Integrations</a></li>
-        <li><a href="#" class="hover:underline">Roadmap</a></li>
-      </ul>
-    </div>
-
-    <!-- Company -->
-    <div>
-      <h4 class="font-semibold mb-4 text-content">Company</h4>
-      <ul class="space-y-3 text-sm text-muted">
-        <li><a href="#" class="hover:underline">About</a></li>
-        <li><a href="#" class="hover:underline">Careers</a></li>
-        <li><a href="#" class="hover:underline">Customers</a></li>
-        <li><a href="#" class="hover:underline">Contact</a></li>
-      </ul>
-    </div>
-
-    <!-- Legal -->
-    <div>
-      <h4 class="font-semibold mb-4 text-content">Legal</h4>
-      <ul class="space-y-3 text-sm text-muted">
-        <li><a href="#" class="hover:underline">Privacy Policy</a></li>
-        <li><a href="#" class="hover:underline">Terms of Service</a></li>
-        <li><a href="#" class="hover:underline">Cookie Policy</a></li>
-        <li><a href="#" class="hover:underline">Security</a></li>
-      </ul>
+      <h4 class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">Account</h4>
+      <div class="mt-4 flex flex-col gap-3 text-sm text-muted">
+        <a routerLink="/auth/login" class="transition hover:text-content">Sign in</a>
+        <a routerLink="/auth/signup" class="transition hover:text-content">Create account</a>
+        <a routerLink="/account" class="transition hover:text-content">Settings</a>
+      </div>
     </div>
   </div>
 
-  <!-- Bottom Bar -->
-  <div class="border-t border-line py-6 text-center text-sm text-subtle">
-    © {{ currentYear }} EventXperience. All rights reserved.
+  <div class="border-t border-line px-6 py-5 text-center text-sm text-subtle">
+    &copy; {{ currentYear }} EventXperience. All rights reserved.
   </div>
 </footer>

@@ -1,368 +1,250 @@
-<div class="min-h-screen bg-page text-content relative">
-  <!-- Orb blobs -->
-  <div class="pointer-events-none absolute inset-0 overflow-hidden">
-    <div
-      class="absolute -top-40 -left-40 w-[520px] h-[520px] bg-purple-600/11 dark:bg-purple-600/30 rounded-full blur-3xl animate-pulse"
-    ></div>
-    <div
-      class="absolute top-[40%] -right-40 w-[420px] h-[420px] bg-fuchsia-600/7 dark:bg-fuchsia-600/20 rounded-full blur-3xl animate-pulse"
-    ></div>
-  </div>
-
-  <div class="relative z-10 mx-auto max-w-4xl px-6 py-10">
+<div class="app-page">
+  <main class="page-section py-12 sm:py-16">
     <button
       (click)="goBack()"
-      class="flex items-center gap-1.5 text-sm text-subtle hover:text-content transition-colors mb-10"
+      class="cta-ghost mb-8 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold"
     >
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-      </svg>
+      <span>&larr;</span>
       Back to clubs
     </button>
 
-    <!-- Loading skeleton -->
     @if (loading) {
-      <div class="rounded-3xl border border-line bg-glass overflow-hidden animate-pulse">
-        <div class="h-52 bg-glass-strong"></div>
-        <div class="p-8 space-y-4">
-          <div class="h-7 bg-glass-strong rounded-xl w-1/3"></div>
-          <div class="h-4 bg-glass-strong rounded w-full"></div>
-          <div class="h-4 bg-glass-strong rounded w-3/4"></div>
+      <div class="surface-panel animate-pulse overflow-hidden rounded-3xl">
+        <div class="h-56 bg-surface-muted"></div>
+        <div class="space-y-4 p-8">
+          <div class="h-8 w-1/3 rounded-xl bg-surface-muted"></div>
+          <div class="h-4 w-full rounded bg-surface-muted"></div>
+          <div class="h-4 w-3/4 rounded bg-surface-muted"></div>
         </div>
       </div>
     }
 
-    <!-- Error -->
     @if (error && !loading) {
-      <div class="rounded-2xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
+      <div class="rounded-2xl border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger">
         {{ error }}
       </div>
     }
 
-    <!-- Club card -->
     @if (club && !loading) {
-      <div class="rounded-3xl border border-line bg-glass overflow-hidden">
-        <!-- Banner -->
-        <div class="relative h-52 sm:h-64">
+      <section class="surface-panel overflow-hidden rounded-3xl">
+        <div class="h-56 bg-surface-muted sm:h-72">
           @if (club.clubImage) {
-            <div
-              class="absolute inset-0 bg-cover bg-center"
-              [style.background-image]="
-                'linear-gradient(180deg, rgba(11,8,34,0.10), rgba(11,8,34,0.70)), url(' +
-                club.clubImage +
-                ')'
-              "
-            ></div>
+            <div class="h-full w-full bg-cover bg-center" [style.background-image]="'url(' + club.clubImage + ')'">
+            </div>
           } @else {
-            <div
-              class="absolute inset-0 bg-gradient-to-br from-purple-500/30 via-fuchsia-500/15 to-indigo-500/20"
-            ></div>
-          }
-
-          <div class="absolute top-5 left-5">
-            <span
-              class="rounded-full border px-3 py-1 text-xs font-semibold backdrop-blur"
-              [ngClass]="clubTypeStyles[club.clubType]"
-            >
-              {{ club.clubType }}
-            </span>
-          </div>
-
-          @if (club.rating != null) {
-            <div class="absolute top-5 right-5">
-              <div
-                class="flex items-center gap-1.5 rounded-full border border-line-strong bg-black/60 px-3 py-1.5 text-sm backdrop-blur"
-              >
-                <span class="text-yellow-400">&#9733;</span>
-                <span class="font-semibold text-content">{{ club.rating | number: '1.1-1' }}</span>
-              </div>
+            <div class="flex h-full items-center justify-center bg-accent/10 text-base font-semibold uppercase tracking-[0.18em] text-accent">
+              Club profile
             </div>
           }
         </div>
 
         <div class="p-6 sm:p-8">
-          <!-- Title row -->
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">{{ club.name }}</h1>
+              <span class="rounded-full border px-3 py-1 text-xs font-semibold" [ngClass]="clubTypeStyles[club.clubType]">
+                {{ club.clubType }}
+              </span>
+              <h1 class="mt-4 text-3xl font-extrabold tracking-tight text-content sm:text-4xl">
+                {{ club.name }}
+              </h1>
               @if (club.location) {
-                <div class="mt-2 flex items-center gap-1.5 text-sm text-subtle">
-                  <span>&#128205;</span>
-                  <span>{{ club.location }}</span>
-                </div>
+                <div class="mt-2 text-sm text-subtle">{{ club.location }}</div>
               }
             </div>
+
             <button
               (click)="viewPosts()"
-              class="flex-shrink-0 cursor-pointer rounded-full px-6 py-2.5 text-sm font-semibold bg-gradient-to-r from-purple-500 to-fuchsia-500 shadow-lg shadow-purple-500/30 transition hover:scale-105 hover:shadow-[0_20px_40px_rgba(168,85,247,0.4)]"
+              class="cta-solid rounded-xl px-5 py-3 text-sm font-semibold"
             >
-              View Posts
+              View posts
             </button>
           </div>
 
-          <!-- Stats grid -->
-          <div class="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div
-              class="rounded-2xl border border-line bg-surface-sunken p-4 text-center backdrop-blur"
-            >
-              <div class="text-2xl font-bold">{{ club.memberCount | number }}</div>
-              <div class="mt-1 text-xs text-subtle">Members</div>
+          <div class="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="surface-muted rounded-2xl p-4 text-center">
+              <div class="text-2xl font-bold text-content">{{ club.memberCount | number }}</div>
+              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Members</div>
             </div>
-            <div
-              class="rounded-2xl border border-line bg-surface-sunken p-4 text-center backdrop-blur"
-            >
-              <div class="text-2xl font-bold">{{ club.eventCount | number }}</div>
-              <div class="mt-1 text-xs text-subtle">Events</div>
+            <div class="surface-muted rounded-2xl p-4 text-center">
+              <div class="text-2xl font-bold text-content">{{ club.eventCount | number }}</div>
+              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Events</div>
             </div>
-            <div
-              class="rounded-2xl border border-line bg-surface-sunken p-4 text-center backdrop-blur"
-            >
-              <div class="text-2xl font-bold">{{ club.availableEventCount | number }}</div>
-              <div class="mt-1 text-xs text-subtle">Open Events</div>
+            <div class="surface-muted rounded-2xl p-4 text-center">
+              <div class="text-2xl font-bold text-content">{{ club.availableEventCount | number }}</div>
+              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Open events</div>
             </div>
-            <div
-              class="rounded-2xl border border-line bg-surface-sunken p-4 text-center backdrop-blur"
-            >
+            <div class="surface-muted rounded-2xl p-4 text-center">
               @if (club.rating != null) {
-                <div class="text-2xl font-bold">{{ club.rating | number: '1.1-1' }}</div>
+                <div class="text-2xl font-bold text-content">{{ club.rating | number: '1.1-1' }}</div>
               } @else {
-                <div class="text-2xl font-bold text-content/25">â€”</div>
+                <div class="text-2xl font-bold text-content/30">-</div>
               }
-              <div class="mt-1 text-xs text-subtle">Rating</div>
+              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Rating</div>
             </div>
           </div>
 
-          <!-- Capacity bar -->
           @if (club.maxMemberCount > 0) {
-            <div class="mt-5">
-              <div class="flex items-center justify-between text-xs text-faint mb-2">
+            <div class="mt-6">
+              <div class="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
                 <span>Member capacity</span>
                 <span>{{ club.memberCount | number }} / {{ club.maxMemberCount | number }}</span>
               </div>
-              <div class="h-2 w-full overflow-hidden rounded-full bg-glass-strong">
-                <div
-                  class="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500 transition-all"
-                  [style.width.%]="memberCapacityPercent()"
-                ></div>
+              <div class="h-2 w-full overflow-hidden rounded-full bg-surface-muted">
+                <div class="h-full rounded-full bg-accent" [style.width.%]="memberCapacityPercent()"></div>
               </div>
             </div>
           }
 
-          <!-- About -->
-          <div class="mt-7">
-            <div class="text-[10px] font-semibold uppercase tracking-widest text-accent mb-3">
-              About
-            </div>
-            <p class="text-sm leading-relaxed text-muted whitespace-pre-wrap">
-              {{ club.description || 'No description provided.' }}
-            </p>
-          </div>
-
-          <!-- Upcoming Events -->
-          <div class="mt-7">
-            <div class="flex items-center justify-between mb-4">
-              <div class="text-[10px] font-semibold uppercase tracking-widest text-accent">
-                Upcoming Events
-              </div>
+          <div class="mt-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+            <div>
+              <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">About</div>
+              <p class="mt-3 whitespace-pre-wrap text-sm leading-7 text-muted">
+                {{ club.description || 'No description provided.' }}
+              </p>
             </div>
 
-            @if (eventsLoading) {
-              @for (item of [1, 2, 3]; track item) {
-                <div
-                  class="rounded-2xl border border-line bg-surface-sunken p-4 mb-3 animate-pulse"
-                >
-                  <div class="h-3 bg-glass-strong rounded w-1/4 mb-2"></div>
-                  <div class="h-4 bg-glass-strong rounded w-3/4 mb-2"></div>
-                  <div class="h-3 bg-glass-strong rounded w-1/2"></div>
-                </div>
-              }
-            }
-
-            @if (!eventsLoading && upcomingEvents.length === 0) {
-              <p class="text-sm text-faint italic">No upcoming events.</p>
-            }
-
-            @if (!eventsLoading && upcomingEvents.length > 0) {
-              @for (event of upcomingEvents; track event.id) {
-                <article
-                  class="rounded-2xl border border-line bg-surface-sunken overflow-hidden mb-3 cursor-pointer transition-all duration-300 hover:bg-glass hover:border-line-strong"
-                  (click)="navigateToEvent(event)"
-                  (keyup.enter)="navigateToEvent(event)"
-                  tabindex="0"
-                >
-                  <div class="flex gap-0">
-                    @if (event.imageUrls.length) {
-                      <div
-                        class="w-20 flex-shrink-0 bg-cover bg-center"
-                        [style.background-image]="'url(' + event.imageUrls[0] + ')'"
-                      ></div>
-                    } @else {
-                      <div
-                        class="w-20 flex-shrink-0 bg-gradient-to-br from-purple-500/30 to-fuchsia-500/20"
-                      ></div>
-                    }
-                    <div class="flex-1 p-4 min-w-0">
-                      <div class="flex items-center gap-2 mb-1.5">
-                        <span
-                          class="text-[10px] font-semibold px-2 py-0.5 rounded-full border"
-                          [ngClass]="{
-                            'bg-success/20 text-success border-success/30':
-                              event.status === 'Upcoming',
-                            'bg-purple-500/20 text-accent border-purple-500/30':
-                              event.status === 'Ongoing',
-                            'bg-glass-strong text-faint border-line-strong':
-                              event.status === 'Closed',
-                          }"
-                          >{{ event.status }}</span
-                        >
-                        <span class="text-[10px] text-faint font-medium">{{ event.category }}</span>
-                      </div>
-                      <div class="text-sm font-semibold leading-snug line-clamp-1">
-                        {{ event.name }}
-                      </div>
-                      <div class="mt-1 flex items-center gap-2 text-[11px] text-faint">
-                        @if (event.startTime) {
-                          <span
-                            >{{ formatEventDate(event.startTime) }} &bull;
-                            {{ formatEventTime(event.startTime) }}</span
-                          >
-                        }
-                        @if (event.venueName || event.city) {
-                          <span class="truncate"
-                            >&#128205; {{ event.venueName || event.city }}</span
-                          >
-                        }
-                      </div>
-                      <div class="mt-2 flex items-center justify-between text-[11px] text-faint">
-                        <span class="font-medium text-subtle">{{
-                          formatCost(event.registerCost)
-                        }}</span>
-                        @if (event.maxParticipants > 0) {
-                          <div class="flex items-center gap-1.5">
-                            <span>{{ event.registrationCount }}/{{ event.maxParticipants }}</span>
-                            <div class="h-1 w-12 overflow-hidden rounded-full bg-glass-strong">
-                              <div
-                                class="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500"
-                                [style.width.%]="registrationPercent(event)"
-                              ></div>
-                            </div>
-                          </div>
-                        }
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              }
-            }
-          </div>
-
-          <!-- Recent Posts -->
-          <div class="mt-7">
-            <div class="flex items-center justify-between mb-4">
-              <div class="text-[10px] font-semibold uppercase tracking-widest text-accent">
-                Recent Posts
-              </div>
-              <button
-                (click)="viewPosts()"
-                class="cursor-pointer text-xs text-accent hover:text-accent transition-colors"
-              >
-                View all &rarr;
-              </button>
-            </div>
-
-            @if (postsLoading) {
-              @for (item of [1, 2, 3]; track item) {
-                <div
-                  class="rounded-2xl border border-line bg-surface-sunken p-4 mb-3 animate-pulse"
-                >
-                  <div class="h-3 bg-glass-strong rounded w-1/4 mb-2"></div>
-                  <div class="h-4 bg-glass-strong rounded w-3/4"></div>
-                </div>
-              }
-            }
-
-            @if (!postsLoading && recentPosts.length === 0) {
-              <p class="text-sm text-faint italic">No posts yet.</p>
-            }
-
-            @if (!postsLoading && recentPosts.length > 0) {
-              @for (post of recentPosts; track post.id) {
-                <article
-                  class="rounded-2xl border border-line bg-surface-sunken p-4 mb-3 cursor-pointer transition-all duration-300 hover:bg-glass hover:border-line-strong"
-                  (click)="navigateToPost(post)"
-                  (keyup.enter)="navigateToPost(post)"
-                  tabindex="0"
-                >
-                  <div class="flex items-center gap-2 mb-2">
-                    @if (post.isPinned) {
-                      <span
-                        class="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-warning/20 text-warning border-warning/30"
-                        >Pinned</span
-                      >
-                    }
-                    <span
-                      class="text-[10px] font-medium px-2 py-0.5 rounded-full border"
-                      [ngClass]="postTypeStyles[post.postType]"
-                      >{{ post.postType }}</span
-                    >
-                  </div>
-                  <div class="text-sm font-semibold leading-snug line-clamp-1">
-                    {{ post.title }}
-                  </div>
-                  <p class="mt-1 text-xs text-subtle line-clamp-2 leading-relaxed">
-                    {{ post.content }}
-                  </p>
-                  <div class="mt-2 flex items-center justify-between text-[11px] text-faint">
-                    <span>{{ authorDisplay(post) }}</span>
-                    <span>{{ formatDate(post.createdAt) }}</span>
-                  </div>
-                </article>
-              }
-            }
-          </div>
-
-          <!-- Contact -->
-          @if (club.email || club.phone || club.websiteUrl) {
-            <div class="mt-6 rounded-2xl border border-line bg-surface-sunken p-5 backdrop-blur">
-              <div class="text-[10px] font-semibold uppercase tracking-widest text-accent mb-4">
-                Contact
-              </div>
-              <div class="flex flex-col gap-3 text-sm text-subtle">
-                @if (club.email) {
-                  <div class="flex items-center gap-2.5">
-                    <span class="text-faint">&#9993;</span>
-                    <a
-                      [href]="'mailto:' + club.email"
-                      class="hover:text-content transition-colors"
-                      (click)="$event.stopPropagation()"
-                      >{{ club.email }}</a
-                    >
-                  </div>
-                }
-                @if (club.phone) {
-                  <div class="flex items-center gap-2.5">
-                    <span class="text-faint">&#128222;</span>
+            @if (club.email || club.phone || club.websiteUrl) {
+              <div class="surface-muted rounded-2xl p-5">
+                <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Contact</div>
+                <div class="mt-4 flex flex-col gap-3 text-sm text-muted">
+                  @if (club.email) {
+                    <a [href]="'mailto:' + club.email" class="transition hover:text-content" (click)="$event.stopPropagation()">
+                      {{ club.email }}
+                    </a>
+                  }
+                  @if (club.phone) {
                     <span>{{ club.phone }}</span>
-                  </div>
-                }
-                @if (club.websiteUrl) {
-                  <div class="flex items-center gap-2.5">
-                    <span class="text-faint">&#127760;</span>
+                  }
+                  @if (club.websiteUrl) {
                     <a
                       [href]="club.websiteUrl"
                       target="_blank"
                       rel="noopener noreferrer"
-                      class="hover:text-content transition-colors underline underline-offset-2"
+                      class="transition hover:text-content"
                       (click)="$event.stopPropagation()"
-                      >{{ club.websiteUrl }}</a
                     >
+                      {{ club.websiteUrl }}
+                    </a>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+
+          <div class="mt-8 grid gap-6 lg:grid-cols-2">
+            <section>
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Upcoming events</div>
+                  <h2 class="mt-2 text-xl font-semibold text-content">What this club is hosting</h2>
+                </div>
+              </div>
+
+              @if (eventsLoading) {
+                @for (item of [1, 2, 3]; track item) {
+                  <div class="surface-card mt-4 animate-pulse rounded-2xl p-4">
+                    <div class="h-3 w-1/4 rounded bg-surface-muted"></div>
+                    <div class="mt-3 h-4 w-3/4 rounded bg-surface-muted"></div>
+                    <div class="mt-3 h-3 w-1/2 rounded bg-surface-muted"></div>
                   </div>
                 }
+              }
+
+              @if (!eventsLoading && upcomingEvents.length === 0) {
+                <p class="mt-4 text-sm text-subtle">No upcoming events.</p>
+              }
+
+              @if (!eventsLoading && upcomingEvents.length > 0) {
+                @for (event of upcomingEvents; track event.id) {
+                  <article
+                    class="surface-card mt-4 cursor-pointer rounded-2xl p-4 transition hover:border-line-strong hover:bg-surface-muted"
+                    (click)="navigateToEvent(event)"
+                    (keyup.enter)="navigateToEvent(event)"
+                    tabindex="0"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="rounded-full border px-2 py-0.5 text-[10px] font-semibold" [ngClass]="categoryStyles[event.category].badge">
+                        {{ event.category }}
+                      </span>
+                      <span class="text-[11px] text-subtle">{{ event.status }}</span>
+                    </div>
+                    <div class="mt-3 text-base font-semibold text-content">{{ event.name }}</div>
+                    <div class="mt-1 text-xs text-subtle">
+                      {{ formatEventDate(event.startTime) }} · {{ formatEventTime(event.startTime) }}
+                    </div>
+                    <div class="mt-1 text-xs text-muted">{{ event.venueName || event.city || 'Venue TBD' }}</div>
+                    <div class="mt-3 flex items-center justify-between text-xs text-subtle">
+                      <span class="font-semibold text-content">{{ formatCost(event.registerCost) }}</span>
+                      @if (event.maxParticipants > 0) {
+                        <div class="flex items-center gap-2">
+                          <span>{{ event.registrationCount }}/{{ event.maxParticipants }}</span>
+                          <div class="h-2 w-14 overflow-hidden rounded-full bg-surface-muted">
+                            <div class="h-full rounded-full bg-accent" [style.width.%]="registrationPercent(event)"></div>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  </article>
+                }
+              }
+            </section>
+
+            <section>
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Recent posts</div>
+                  <h2 class="mt-2 text-xl font-semibold text-content">Latest community updates</h2>
+                </div>
+                <button (click)="viewPosts()" class="text-sm font-semibold text-accent transition hover:text-content">
+                  View all
+                </button>
               </div>
-            </div>
-          }
+
+              @if (postsLoading) {
+                @for (item of [1, 2, 3]; track item) {
+                  <div class="surface-card mt-4 animate-pulse rounded-2xl p-4">
+                    <div class="h-3 w-1/4 rounded bg-surface-muted"></div>
+                    <div class="mt-3 h-4 w-3/4 rounded bg-surface-muted"></div>
+                    <div class="mt-3 h-3 w-full rounded bg-surface-muted"></div>
+                  </div>
+                }
+              }
+
+              @if (!postsLoading && recentPosts.length === 0) {
+                <p class="mt-4 text-sm text-subtle">No posts yet.</p>
+              }
+
+              @if (!postsLoading && recentPosts.length > 0) {
+                @for (post of recentPosts; track post.id) {
+                  <article
+                    class="surface-card mt-4 cursor-pointer rounded-2xl p-4 transition hover:border-line-strong hover:bg-surface-muted"
+                    (click)="navigateToPost(post)"
+                    (keyup.enter)="navigateToPost(post)"
+                    tabindex="0"
+                  >
+                    <div class="flex items-center gap-2">
+                      @if (post.isPinned) {
+                        <span class="rounded-full border border-warning/25 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
+                          Pinned
+                        </span>
+                      }
+                      <span class="rounded-full border px-2 py-0.5 text-[10px] font-semibold" [ngClass]="postTypeStyles[post.postType]">
+                        {{ post.postType }}
+                      </span>
+                    </div>
+                    <div class="mt-3 text-base font-semibold text-content">{{ post.title }}</div>
+                    <p class="mt-2 line-clamp-2 text-sm leading-7 text-muted">{{ post.content }}</p>
+                    <div class="mt-3 flex items-center justify-between text-xs text-subtle">
+                      <span>{{ authorDisplay(post) }}</span>
+                      <span>{{ formatDate(post.createdAt) }}</span>
+                    </div>
+                  </article>
+                }
+              }
+            </section>
+          </div>
         </div>
-      </div>
+      </section>
     }
-  </div>
+  </main>
 </div>

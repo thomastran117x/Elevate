@@ -1,58 +1,42 @@
-<div
-  class="relative min-h-screen grid grid-cols-1 lg:grid-cols-2 overflow-hidden bg-page text-content"
->
-  <div
-    class="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-purple-500/11 dark:bg-purple-500/30 blur-3xl rounded-full animate-blob"
-  ></div>
-  <div
-    class="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-fuchsia-500/11 dark:bg-fuchsia-500/30 blur-3xl rounded-full animate-blob animation-delay-2000"
-  ></div>
-
-  <!-- Left splash -->
-  <div class="hidden lg:flex flex-col justify-center px-16 relative z-10 text-content">
-    <div class="flex items-center gap-3 mb-10">
-      <div
-        class="w-12 h-12 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center"
-      >
-        <i class="bi bi-stars text-3xl text-accent"></i>
-      </div>
-      <h1 class="text-4xl font-extrabold tracking-wide">EventXperience</h1>
-    </div>
-
-    <p class="text-lg text-muted mb-8 leading-relaxed max-w-md">
-      Create your account to host clubs, manage events, and reach your community — all from one
-      place.
-    </p>
-
-    <ul class="space-y-3 text-sm">
-      <li class="flex items-center gap-2">
-        <i class="bi bi-check-circle-fill text-xl text-accent"></i>
-        Free to get started
-      </li>
-      <li class="flex items-center gap-2">
-        <i class="bi bi-check-circle-fill text-xl text-accent"></i>
-        Verified email sign-up
-      </li>
-      <li class="flex items-center gap-2">
-        <i class="bi bi-check-circle-fill text-xl text-accent"></i>
-        Pick the role that fits you
-      </li>
-    </ul>
-  </div>
-
-  <!-- Right form card -->
-  <div class="flex items-center justify-center p-8 relative z-20">
-    <div
-      class="w-full max-w-md bg-surface-raised shadow-2xl rounded-3xl p-10 border border-line-strong backdrop-blur-md"
-    >
-      <h2 class="text-3xl font-bold text-center text-accent mb-2">Create your account</h2>
-      <p class="text-center text-sm text-muted mb-8">
-        Choose your role, verify your email, and finish setup from the inbox link.
+<div class="app-page">
+  <div class="page-section grid min-h-screen items-center gap-10 py-12 lg:grid-cols-[0.95fr_1.05fr] lg:py-16">
+    <section class="hidden lg:block">
+      <pill class="mb-5" tone="accent">Account creation</pill>
+      <h1 class="max-w-xl text-4xl font-extrabold tracking-tight text-content">
+        Create a professional account for organizers, volunteers, or attendees.
+      </h1>
+      <p class="mt-5 max-w-xl text-base leading-8 text-muted">
+        Set up access once, verify your email, and move straight into a cleaner event management
+        experience built for both everyday users and team workflows.
       </p>
+      <div class="mt-8 grid gap-4 sm:grid-cols-3">
+        <div class="surface-card rounded-2xl p-5">
+          <div class="text-sm font-semibold text-content">Role-based setup</div>
+          <div class="mt-2 text-sm text-subtle">Choose the account path that matches how you work.</div>
+        </div>
+        <div class="surface-card rounded-2xl p-5">
+          <div class="text-sm font-semibold text-content">Verified onboarding</div>
+          <div class="mt-2 text-sm text-subtle">Email confirmation keeps account activation clear and secure.</div>
+        </div>
+        <div class="surface-card rounded-2xl p-5">
+          <div class="text-sm font-semibold text-content">Shared design system</div>
+          <div class="mt-2 text-sm text-subtle">The same clean interface carries through the product after signup.</div>
+        </div>
+      </div>
+    </section>
 
-      <form [formGroup]="form" (ngSubmit)="submit()" class="flex flex-col gap-4">
+    <section class="surface-panel mx-auto w-full max-w-lg rounded-3xl p-8 sm:p-10">
+      <div class="mb-8">
+        <p class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">New account</p>
+        <h2 class="mt-2 text-3xl font-bold tracking-tight text-content">Create your account</h2>
+        <p class="mt-2 text-sm leading-6 text-muted">
+          Choose your role, verify your email, and finish setup from the inbox link.
+        </p>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="submit()" class="flex flex-col gap-5">
         <div>
-          <label class="block text-sm font-medium text-muted mb-1">Email</label>
+          <label class="mb-2 block text-sm font-semibold text-content">Email</label>
           <div class="relative">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -60,7 +44,7 @@
               viewBox="0 0 24 24"
               stroke-width="1.5"
               stroke="currentColor"
-              class="w-5 h-5 text-subtle absolute left-3 top-1/2 -translate-y-1/2"
+              class="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle"
             >
               <path
                 stroke-linecap="round"
@@ -71,16 +55,17 @@
             <input
               type="email"
               formControlName="email"
-              class="w-full pl-10 pr-4 py-2 rounded-lg bg-surface-sunken border border-line text-content focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
+              class="form-field w-full pl-12 pr-4 py-3 text-sm"
+              placeholder="name@company.com"
             />
           </div>
           @if (submitted && form.controls['email'].invalid) {
-            <div class="text-danger text-sm mt-1">A valid email is required.</div>
+            <div class="mt-2 text-sm text-danger">A valid email is required.</div>
           }
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-muted mb-1">Password</label>
+          <label class="mb-2 block text-sm font-semibold text-content">Password</label>
           <div class="relative">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -88,7 +73,7 @@
               viewBox="0 0 24 24"
               stroke-width="1.5"
               stroke="currentColor"
-              class="w-5 h-5 text-subtle absolute left-3 top-1/2 -translate-y-1/2"
+              class="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle"
             >
               <path
                 stroke-linecap="round"
@@ -99,44 +84,55 @@
             <input
               type="password"
               formControlName="password"
-              class="w-full pl-10 pr-4 py-2 rounded-lg bg-surface-sunken border border-line text-content focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
+              class="form-field w-full pl-12 pr-4 py-3 text-sm"
+              placeholder="Create a secure password"
             />
           </div>
           @if (submitted && form.controls['password'].invalid) {
-            <div class="text-danger text-sm mt-1">Password must be at least 8 characters.</div>
+            <div class="mt-2 text-sm text-danger">Password must be at least 8 characters.</div>
           }
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-muted mb-2">Role</label>
-          <div class="grid gap-2">
+          <label class="mb-2 block text-sm font-semibold text-content">Role</label>
+          <div class="grid gap-3">
             @for (role of roleOptions; track role.value) {
               <label
-                class="flex items-center gap-3 rounded-xl border border-line bg-surface-sunken px-4 py-3 cursor-pointer transition hover:border-line-strong has-[:checked]:border-accent/60 has-[:checked]:bg-accent/10 has-[:checked]:ring-1 has-[:checked]:ring-accent/40"
+                class="surface-muted flex cursor-pointer items-center gap-3 rounded-2xl px-4 py-4 transition has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:checked]:text-content"
               >
                 <input
                   type="radio"
                   formControlName="usertype"
                   [value]="role.value"
-                  class="accent-purple-600"
+                  class="h-4 w-4"
                 />
-                <span class="text-sm font-medium">{{ role.label }}</span>
+                <div>
+                  <div class="text-sm font-semibold text-content">{{ role.label }}</div>
+                  <div class="text-xs text-subtle">
+                    @if (role.value === 'participant') {
+                      Join and register for events.
+                    }
+                    @if (role.value === 'organizer') {
+                      Create and manage events for your group.
+                    }
+                    @if (role.value === 'volunteer') {
+                      Support operations and community activity.
+                    }
+                  </div>
+                </div>
               </label>
             }
           </div>
         </div>
 
         @if (error) {
-          <div
-            class="rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
-          >
+          <div class="rounded-2xl border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger">
             {{ error }}
           </div>
         }
+
         @if (success) {
-          <div
-            class="rounded-2xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success"
-          >
+          <div class="rounded-2xl border border-success/25 bg-success/10 px-4 py-3 text-sm text-success">
             {{ success }}
           </div>
         }
@@ -144,16 +140,16 @@
         <button
           type="submit"
           [disabled]="loading"
-          class="mt-2 w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-accent-contrast py-2.5 rounded-lg font-semibold transition-all"
+          class="cta-solid rounded-xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
         >
           {{ loading ? 'Sending verification...' : 'Create account' }}
         </button>
       </form>
 
-      <p class="text-center text-sm text-subtle mt-6">
+      <p class="mt-6 text-center text-sm text-subtle">
         Already have an account?
-        <a routerLink="/auth/login" class="text-accent font-semibold hover:underline">Sign in</a>
+        <a routerLink="/auth/login" class="font-semibold text-accent transition hover:text-content">Sign in</a>
       </p>
-    </div>
+    </section>
   </div>
 </div>

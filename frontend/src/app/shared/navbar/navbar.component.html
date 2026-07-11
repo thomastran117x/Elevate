@@ -1,59 +1,35 @@
 <nav
-  class="sticky top-0 z-50 w-full transition-all duration-300 ease-out"
-  [ngClass]="{
-    'bg-surface border-b border-line': !scrolled,
-    'bg-transparent backdrop-blur-xl border-transparent': scrolled,
-  }"
+  class="sticky top-0 z-50 border-b transition-all duration-200"
+  [ngClass]="scrolled ? 'border-line bg-surface/95 backdrop-blur-md shadow-sm' : 'border-transparent bg-canvas/90'"
 >
-  <div class="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
-    <a routerLink="/" class="text-2xl font-extrabold tracking-tight">
-      <span class="text-accent">Event</span>
-      <span class="text-content">Xperience</span>
+  <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+    <a routerLink="/" class="flex items-center gap-3 text-sm font-semibold tracking-[0.12em] text-content uppercase">
+      <span class="flex h-10 w-10 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10 text-accent">
+        EX
+      </span>
+      <span class="text-base tracking-[0.08em] text-content normal-case">EventXperience</span>
     </a>
 
-    <div class="hidden md:flex items-center gap-10 text-sm text-muted">
-      <a href="#features" class="hover:text-content transition">Features</a>
-      <a href="#pricing" class="hover:text-content transition">Pricing</a>
-
-      <div class="relative">
-        <button
-          (click)="toggleCustomers()"
-          class="flex items-center gap-2 hover:text-content transition"
-        >
-          Customers
-          <svg
-            class="w-4 h-4 transition"
-            [class.rotate-180]="customersOpen"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+    <div class="hidden items-center gap-3 md:flex">
+      <div class="flex items-center gap-1 rounded-full border border-line bg-surface px-1 py-1 text-sm text-muted shadow-sm">
+        <a routerLink="/" class="rounded-full px-4 py-2 transition hover:bg-surface-muted hover:text-content">
+          Home
+        </a>
+        @if (eventsEnabled) {
+          <a
+            routerLink="/events"
+            class="rounded-full px-4 py-2 transition hover:bg-surface-muted hover:text-content"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
-        </button>
-
-        @if (customersOpen) {
-          <div
-            class="absolute top-10 right-0 w-48 rounded-xl bg-surface-raised border border-line shadow-xl overflow-hidden"
+            Events
+          </a>
+        }
+        @if (clubsEnabled) {
+          <a
+            routerLink="/clubs"
+            class="rounded-full px-4 py-2 transition hover:bg-surface-muted hover:text-content"
           >
-            <a
-              href="#testimonials"
-              class="block px-4 py-3 text-sm hover:bg-glass-strong transition"
-            >
-              Testimonials
-            </a>
-            <a
-              href="#case-studies"
-              class="block px-4 py-3 text-sm hover:bg-glass-strong transition"
-            >
-              Case Studies
-            </a>
-          </div>
+            Clubs
+          </a>
         }
       </div>
 
@@ -61,23 +37,23 @@
         type="button"
         (click)="toggleTheme()"
         [attr.aria-label]="theme.isDark() ? 'Switch to light mode' : 'Switch to dark mode'"
-        class="p-2 rounded-xl bg-glass hover:bg-glass-strong text-content transition"
+        class="flex h-11 w-11 items-center justify-center rounded-2xl border border-line bg-surface text-muted shadow-sm transition hover:border-line-strong hover:bg-surface-muted hover:text-content"
       >
         @if (theme.isDark()) {
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
-              stroke-width="2"
+              stroke-width="1.8"
               d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
             />
           </svg>
         } @else {
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
-              stroke-width="2"
+              stroke-width="1.8"
               d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
             />
           </svg>
@@ -89,73 +65,50 @@
           <div class="relative">
             <button
               (click)="toggleUserMenu()"
-              class="flex items-center gap-3 hover:text-content transition"
+              class="flex items-center gap-3 rounded-2xl border border-line bg-surface px-3 py-2 shadow-sm transition hover:border-line-strong hover:bg-surface-muted"
             >
               @if (user.Avatar) {
                 <img
                   [src]="user.Avatar"
                   alt="User avatar"
-                  class="w-8 h-8 rounded-full object-cover border border-line"
+                  class="h-8 w-8 rounded-full border border-line object-cover"
                 />
               } @else {
                 <div
-                  class="w-8 h-8 rounded-full bg-accent text-accent-contrast flex items-center justify-center text-xs font-bold uppercase"
+                  class="flex h-8 w-8 items-center justify-center rounded-full border border-accent/20 bg-accent/10 text-xs font-bold uppercase text-accent"
                 >
                   {{ user.Username[0] }}
                 </div>
               }
-              <svg
-                class="w-4 h-4 transition"
-                [class.rotate-180]="userMenuOpen"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
+              <div class="text-left">
+                <div class="text-sm font-semibold text-content">{{ user.Username }}</div>
+                <div class="text-[11px] uppercase tracking-[0.12em] text-subtle">
+                  {{ user.Usertype }}
+                </div>
+              </div>
             </button>
+
             @if (userMenuOpen) {
               <div
-                class="absolute top-10 right-0 w-56 rounded-xl bg-surface-raised border border-line shadow-xl overflow-hidden"
+                class="absolute right-0 top-14 w-60 rounded-2xl border border-line bg-surface p-2 shadow-[var(--shadow-lg)]"
               >
-                <div class="px-4 py-3 text-xs text-subtle">
-                  Signed in as
-                  <div class="font-medium truncate text-content">
-                    {{ user.Username }}
-                  </div>
-                  <div class="text-[11px] uppercase tracking-wide mt-1">
-                    {{ user.Usertype }}
-                  </div>
-                </div>
-                <div class="border-t border-line"></div>
-                <a
-                  routerLink="/dashboard"
-                  class="block px-4 py-3 text-sm hover:bg-glass-strong transition"
-                >
-                  Dashboard
-                </a>
                 <a
                   routerLink="/account"
-                  class="block px-4 py-3 text-sm hover:bg-glass-strong transition"
+                  class="block rounded-xl px-4 py-3 text-sm text-muted transition hover:bg-surface-muted hover:text-content"
                 >
-                  Account
+                  Account settings
                 </a>
                 @if (invitationsEnabled) {
                   <a
                     routerLink="/events/me/invited"
-                    class="block px-4 py-3 text-sm hover:bg-glass-strong transition"
+                    class="block rounded-xl px-4 py-3 text-sm text-muted transition hover:bg-surface-muted hover:text-content"
                   >
-                    My Invites
+                    My invites
                   </a>
                 }
                 <button
                   (click)="logout()"
-                  class="w-full text-left px-4 py-3 text-sm text-danger hover:bg-danger/10 transition"
+                  class="mt-1 w-full rounded-xl px-4 py-3 text-left text-sm text-danger transition hover:bg-danger/10"
                 >
                   Sign out
                 </button>
@@ -163,22 +116,22 @@
             }
           </div>
         } @else {
-          <a
-            routerLink="/auth/login"
-            class="px-5 py-2 rounded-xl bg-glass hover:bg-glass-strong transition"
-          >
-            Sign In
+          <a routerLink="/auth/login" class="cta-subtle rounded-xl px-4 py-2.5 text-sm font-semibold">
+            Sign in
           </a>
         }
       }
     </div>
 
-    <button (click)="toggleMobile()" class="md:hidden text-content">
-      <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <button
+      (click)="toggleMobile()"
+      class="flex h-11 w-11 items-center justify-center rounded-2xl border border-line bg-surface text-content shadow-sm md:hidden"
+    >
+      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
           stroke-linecap="round"
           stroke-linejoin="round"
-          stroke-width="2"
+          stroke-width="1.8"
           d="M4 6h16M4 12h16M4 18h16"
         />
       </svg>
@@ -186,68 +139,69 @@
   </div>
 
   @if (mobileOpen) {
-    <div class="md:hidden px-6 pb-6 space-y-4 bg-surface/95 backdrop-blur-xl border-t border-line">
-      <a class="block text-muted hover:text-content"> Features </a>
-      <a class="block text-muted hover:text-content"> Pricing </a>
-      <button
-        type="button"
-        (click)="toggleTheme()"
-        class="flex w-full items-center gap-3 text-muted hover:text-content transition"
-      >
-        @if (theme.isDark()) {
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-            />
-          </svg>
-          Light mode
-        } @else {
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-            />
-          </svg>
-          Dark mode
-        }
-      </button>
-      @if (authEnabled) {
-        @if (user$ | async; as user) {
-          <div class="pt-2 text-sm text-subtle">
-            Signed in as
-            <div class="font-medium text-content">
-              {{ user.Username }}
-            </div>
-            <div class="text-[11px] uppercase tracking-wide">
-              {{ user.Usertype }}
-            </div>
-          </div>
-          <a routerLink="/account" class="block text-muted hover:text-content"> Account </a>
-          @if (invitationsEnabled) {
-            <a routerLink="/events/me/invited" class="block text-muted hover:text-content">
-              My Invites
-            </a>
-          }
-          <button
-            (click)="logout()"
-            class="w-full mt-4 px-5 py-3 rounded-xl bg-danger/10 text-danger hover:bg-danger/20 transition"
-          >
-            Sign out
-          </button>
-        } @else {
+    <div class="border-t border-line bg-surface px-6 py-5 md:hidden">
+      <div class="flex flex-col gap-2 text-sm text-muted">
+        <a routerLink="/" class="rounded-xl px-4 py-3 transition hover:bg-surface-muted hover:text-content">
+          Home
+        </a>
+        @if (eventsEnabled) {
           <a
-            routerLink="/auth/login"
-            class="block w-full mt-4 px-5 py-3 text-center rounded-xl bg-glass hover:bg-glass-strong transition"
+            routerLink="/events"
+            class="rounded-xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
           >
-            Sign In
+            Events
           </a>
         }
-      }
+        @if (clubsEnabled) {
+          <a
+            routerLink="/clubs"
+            class="rounded-xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
+          >
+            Clubs
+          </a>
+        }
+        <button
+          type="button"
+          (click)="toggleTheme()"
+          class="flex items-center gap-3 rounded-xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
+        >
+          <span class="text-accent">{{ theme.isDark() ? 'Light mode' : 'Dark mode' }}</span>
+        </button>
+        @if (authEnabled) {
+          @if (user$ | async; as user) {
+            <div class="mt-2 rounded-2xl border border-line bg-surface-muted px-4 py-4">
+              <div class="text-sm font-semibold text-content">{{ user.Username }}</div>
+              <div class="mt-1 text-[11px] uppercase tracking-[0.12em] text-subtle">
+                {{ user.Usertype }}
+              </div>
+            </div>
+            <a
+              routerLink="/account"
+              class="rounded-xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
+            >
+              Account settings
+            </a>
+            @if (invitationsEnabled) {
+              <a
+                routerLink="/events/me/invited"
+                class="rounded-xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
+              >
+                My invites
+              </a>
+            }
+            <button
+              (click)="logout()"
+              class="mt-2 rounded-xl px-4 py-3 text-left text-danger transition hover:bg-danger/10"
+            >
+              Sign out
+            </button>
+          } @else {
+            <a routerLink="/auth/login" class="cta-solid mt-2 rounded-xl px-4 py-3 text-center text-sm font-semibold">
+              Sign in
+            </a>
+          }
+        }
+      </div>
     </div>
   }
 </nav>

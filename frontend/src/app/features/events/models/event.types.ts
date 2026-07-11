@@ -187,28 +187,64 @@ export const ALL_LIFECYCLE_STATES: EventLifecycleState[] = [
 export const ALL_EVENT_SORTS: EventSortBy[] = ['Relevance', 'Date', 'Distance', 'Popularity'];
 
 export const CATEGORY_STYLES: Record<EventCategory, { badge: string; bg: string }> = {
-  Sports: { badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30', bg: 'bg-blue-500' },
+  Sports: {
+    badge: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20',
+    bg: 'bg-emerald-500/60',
+  },
   Music: {
-    badge: 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30',
-    bg: 'bg-fuchsia-500',
+    badge: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/20',
+    bg: 'bg-sky-500/60',
   },
-  Academic: { badge: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30', bg: 'bg-indigo-500' },
-  Workshop: { badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30', bg: 'bg-cyan-500' },
+  Academic: {
+    badge: 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20',
+    bg: 'bg-slate-500/60',
+  },
+  Workshop: {
+    badge: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/20',
+    bg: 'bg-cyan-500/60',
+  },
   Conference: {
-    badge: 'bg-violet-500/20 text-violet-300 border-violet-500/30',
-    bg: 'bg-violet-500',
+    badge: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20',
+    bg: 'bg-indigo-500/60',
   },
-  Social: { badge: 'bg-pink-500/20 text-pink-300 border-pink-500/30', bg: 'bg-pink-500' },
-  Cultural: { badge: 'bg-orange-500/20 text-orange-300 border-orange-500/30', bg: 'bg-orange-500' },
-  Gaming: { badge: 'bg-green-500/20 text-green-300 border-green-500/30', bg: 'bg-green-500' },
-  Food: { badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30', bg: 'bg-amber-500' },
-  Fitness: { badge: 'bg-red-500/20 text-red-300 border-red-500/30', bg: 'bg-red-500' },
-  Networking: { badge: 'bg-teal-500/20 text-teal-300 border-teal-500/30', bg: 'bg-teal-500' },
+  Social: {
+    badge: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20',
+    bg: 'bg-amber-500/60',
+  },
+  Cultural: {
+    badge: 'bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20',
+    bg: 'bg-orange-500/60',
+  },
+  Gaming: {
+    badge: 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/20',
+    bg: 'bg-teal-500/60',
+  },
+  Food: {
+    badge: 'bg-lime-500/10 text-lime-700 dark:text-lime-300 border-lime-500/20',
+    bg: 'bg-lime-500/60',
+  },
+  Fitness: {
+    badge: 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20',
+    bg: 'bg-rose-500/60',
+  },
+  Networking: {
+    badge: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20',
+    bg: 'bg-blue-500/60',
+  },
   Volunteer: {
-    badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-    bg: 'bg-emerald-500',
+    badge: 'bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20',
+    bg: 'bg-green-500/60',
   },
-  Party: { badge: 'bg-rose-500/20 text-rose-300 border-rose-500/30', bg: 'bg-rose-500' },
-  Arts: { badge: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30', bg: 'bg-yellow-500' },
-  Other: { badge: 'bg-slate-500/20 text-slate-300 border-slate-500/30', bg: 'bg-slate-500' },
+  Party: {
+    badge: 'bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/20',
+    bg: 'bg-fuchsia-500/60',
+  },
+  Arts: {
+    badge: 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20',
+    bg: 'bg-violet-500/60',
+  },
+  Other: {
+    badge: 'bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-500/20',
+    bg: 'bg-zinc-500/60',
+  },
 };

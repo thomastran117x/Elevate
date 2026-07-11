@@ -1,25 +1,21 @@
 <div
-  class="relative overflow-hidden rounded-3xl border border-line bg-glass backdrop-blur p-8"
+  class="relative overflow-hidden rounded-3xl border surface-panel p-8"
   [class]="className"
 >
-  <div
-    class="pointer-events-none absolute inset-0 bg-gradient-to-br from-purple-500/15 via-transparent to-fuchsia-500/15"
-  ></div>
-
   <div class="relative">
     @if (pill) {
       <pill tone="accent">{{ pill }}</pill>
     }
 
-    <h3 class="mt-4 text-2xl sm:text-3xl font-extrabold tracking-tight">
+    <h3 class="mt-4 text-2xl font-extrabold tracking-tight sm:text-3xl">
       {{ title }}
     </h3>
-    <p class="mt-2 text-sm sm:text-base text-muted max-w-2xl">
+    <p class="mt-2 max-w-2xl text-sm text-muted sm:text-base">
       {{ subtitle }}
     </p>
 
-    <div class="mt-6 flex flex-col sm:flex-row gap-3">
-      <app-button variant="primary" [href]="primaryHref">{{ primaryLabel }} →</app-button>
+    <div class="mt-6 flex flex-col gap-3 sm:flex-row">
+      <app-button variant="primary" [href]="primaryHref">{{ primaryLabel }} -></app-button>
       <app-button variant="ghost" [href]="secondaryHref">{{ secondaryLabel }}</app-button>
     </div>
   </div>

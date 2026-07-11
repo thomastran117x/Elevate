@@ -20,13 +20,13 @@ import { ThemeService } from '../../core/services/theme.service';
 })
 export class NavbarComponent {
   scrolled = false;
-  customersOpen = false;
   userMenuOpen = false;
   mobileOpen = false;
   user$: Observable<User | null>;
-  isCollapsed = true;
   readonly authEnabled: boolean;
   readonly invitationsEnabled: boolean;
+  readonly eventsEnabled: boolean;
+  readonly clubsEnabled: boolean;
 
   constructor(
     private store: Store<{ user: UserState }>,
@@ -38,34 +38,26 @@ export class NavbarComponent {
     this.user$ = this.store.select(selectUser);
     this.authEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.auth);
     this.invitationsEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.eventsInvitations);
+    this.eventsEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.events);
+    this.clubsEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.clubs);
   }
 
   @HostListener('window:scroll')
   onScroll() {
-    this.scrolled = window.scrollY > 40;
+    this.scrolled = window.scrollY > 16;
   }
 
   toggleMobile() {
     this.mobileOpen = !this.mobileOpen;
+    this.userMenuOpen = false;
   }
 
   toggleTheme() {
     this.theme.toggle();
   }
 
-  toggleCustomers() {
-    this.customersOpen = !this.customersOpen;
-    this.userMenuOpen = false;
-  }
-
   toggleUserMenu() {
     this.userMenuOpen = !this.userMenuOpen;
-    this.customersOpen = false;
-  }
-
-  closeAllDropdowns() {
-    this.customersOpen = false;
-    this.userMenuOpen = false;
   }
 
   logout() {
