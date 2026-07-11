@@ -69,12 +69,15 @@ export class SecurityTabComponent implements OnInit {
   success = '';
 
   // In-session MFA gate: viewing this page requires a fresh MFA verification
-  // (backend returns 403 MFA_REQUIRED until the session is verified).
+  // (backend returns 403 MFA_REQUIRED until the session is verified). When gated
+  // we show a locked state with a button that opens a verification modal — the
+  // user picks a method, then enters the 6-digit code.
   mfaGateRequired = false;
+  mfaModalOpen = false;
+  mfaStep: 'method' | 'code' = 'method';
   mfaOptionsLoading = false;
   mfaOptions: SessionMfaOptionsResponse | null = null;
   mfaMethod: SessionMfaMethod | null = null;
-  mfaCodeSent = false;
   mfaMaskedDestination = '';
   mfaSending = false;
   mfaVerifying = false;
@@ -94,10 +97,6 @@ export class SecurityTabComponent implements OnInit {
     return this.mfaMethod === 'sms' || this.mfaMethod === 'email';
   }
 
-  get mfaShowCodeInput(): boolean {
-    return this.mfaMethod === 'totp' || this.mfaCodeSent;
-  }
-
   mfaMethodLabel(method: SessionMfaMethod): string {
     return method === 'totp'
       ? 'Authenticator app'
@@ -106,18 +105,57 @@ export class SecurityTabComponent implements OnInit {
         : 'Email';
   }
 
-  selectMfaMethod(method: SessionMfaMethod): void {
-    if (this.mfaMethod === method) {
+  mfaMethodDescription(method: SessionMfaMethod): string {
+    return method === 'totp'
+      ? 'Enter a 6-digit code from your authenticator app.'
+      : method === 'sms'
+        ? 'We text a 6-digit code to your verified phone.'
+        : 'We email a 6-digit code to your inbox.';
+  }
+
+  openMfaModal(): void {
+    this.mfaModalOpen = true;
+    this.mfaStep = 'method';
+    this.mfaMethod = null;
+    this.mfaMaskedDestination = '';
+    this.mfaError = '';
+    this.mfaGateForm.reset();
+    this.loadMfaOptions();
+  }
+
+  closeMfaModal(): void {
+    if (this.mfaSending || this.mfaVerifying) {
       return;
     }
-    this.mfaMethod = method;
-    this.mfaCodeSent = false;
+    this.mfaModalOpen = false;
+    this.mfaStep = 'method';
     this.mfaMaskedDestination = '';
     this.mfaError = '';
     this.mfaGateForm.reset();
   }
 
-  sendMfaCode(): void {
+  selectMfaMethod(method: SessionMfaMethod): void {
+    this.mfaMethod = method;
+    this.mfaError = '';
+  }
+
+  continueToCode(): void {
+    if (!this.mfaMethod) {
+      return;
+    }
+
+    // TOTP needs no delivery — go straight to code entry. SMS/email send first.
+    if (!this.mfaSelectedNeedsDelivery) {
+      this.mfaError = '';
+      this.mfaGateForm.reset();
+      this.mfaStep = 'code';
+      return;
+    }
+
+    this.sendMfaCode(true);
+  }
+
+  sendMfaCode(advanceToCode = false): void {
     if (!this.mfaMethod || !this.mfaSelectedNeedsDelivery) {
       return;
     }
@@ -130,14 +168,22 @@ export class SecurityTabComponent implements OnInit {
       .pipe(finalize(() => (this.mfaSending = false)))
       .subscribe({
         next: (res) => {
-          this.mfaCodeSent = true;
           this.mfaMaskedDestination = res.maskedDestination;
-          this.mfaGateForm.reset();
+          if (advanceToCode) {
+            this.mfaGateForm.reset();
+            this.mfaStep = 'code';
+          }
         },
         error: (err) => {
           this.mfaError = getApiClientMessage(err, 'Unable to send the verification code.');
         },
       });
+  }
+
+  backToMethodStep(): void {
+    this.mfaStep = 'method';
+    this.mfaError = '';
+    this.mfaGateForm.reset();
   }
 
   verifyMfaCode(): void {
@@ -168,11 +214,30 @@ export class SecurityTabComponent implements OnInit {
       });
   }
 
+  private loadMfaOptions(): void {
+    this.mfaOptionsLoading = true;
+    this.mfaError = '';
+
+    this.auth
+      .getSessionMfaOptions()
+      .pipe(finalize(() => (this.mfaOptionsLoading = false)))
+      .subscribe({
+        next: (options) => {
+          this.mfaOptions = options;
+          this.mfaMethod = options.availableMethods[0] ?? 'email';
+        },
+        error: (err) => {
+          this.mfaError = getApiClientMessage(err, 'Unable to load verification options.');
+        },
+      });
+  }
+
   private resetMfaGate(): void {
     this.mfaGateRequired = false;
+    this.mfaModalOpen = false;
+    this.mfaStep = 'method';
     this.mfaOptions = null;
     this.mfaMethod = null;
-    this.mfaCodeSent = false;
     this.mfaMaskedDestination = '';
     this.mfaError = '';
     this.mfaGateForm.reset();
@@ -201,21 +266,6 @@ export class SecurityTabComponent implements OnInit {
 
   private enterMfaGate(): void {
     this.mfaGateRequired = true;
-    this.mfaOptionsLoading = true;
-    this.mfaError = '';
-
-    this.auth
-      .getSessionMfaOptions()
-      .pipe(finalize(() => (this.mfaOptionsLoading = false)))
-      .subscribe({
-        next: (options) => {
-          this.mfaOptions = options;
-          this.mfaMethod = options.availableMethods[0] ?? 'email';
-        },
-        error: (err) => {
-          this.mfaError = getApiClientMessage(err, 'Unable to load verification options.');
-        },
-      });
   }
 
   get emailSettings() {
