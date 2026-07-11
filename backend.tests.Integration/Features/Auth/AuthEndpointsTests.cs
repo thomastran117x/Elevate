@@ -545,6 +545,9 @@ public class AuthEndpointsTests
     {
         await using var app = await AuthApiTestApp.CreateAsync();
         var session = await app.SignUpAndVerifyByTokenAsync("mfa-gate@example.com", transport: SessionTransportResolver.ApiValue);
+        var user = await app.FindUserByEmailAsync("mfa-gate@example.com");
+        // Trust the device so a later fresh login resolves straight to an authenticated session.
+        await app.SeedKnownDeviceAsync(user!.Id, "known-device");
 
         // Without an in-session MFA verification the security status endpoint is gated.
         var gated = await app.GetWithBearerAsync("/api/auth/mfa", session.AccessToken);
