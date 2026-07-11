@@ -52,6 +52,19 @@ namespace backend.main.features.auth.mfa.session
             }
         }
 
+        /// <summary>
+        /// Gated probe used by the frontend to decide whether a screen behind
+        /// <c>[RequireMfa]</c> can be shown. Returns 200 when the session has been
+        /// MFA-verified, otherwise the filter short-circuits with 403 MFA_REQUIRED.
+        /// </summary>
+        [HttpGet("status")]
+        [RequireMfa]
+        [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status200OK)]
+        public IActionResult Status()
+        {
+            return Ok(new ApiResponse<object?>("Session MFA verification is active.", null));
+        }
+
         [HttpPost("start")]
         [ProducesResponseType(typeof(ApiResponse<SessionMfaStartResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> Start([FromBody] SessionMfaStartRequest request)

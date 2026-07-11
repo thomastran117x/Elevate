@@ -555,15 +555,22 @@ public class AuthEndpointsTests
         options.StatusCode.Should().Be(HttpStatusCode.OK);
         (await options.Content.ReadAsStringAsync()).Should().Contain("email");
 
-        // Without an in-session MFA verification the security status endpoint is gated.
+        // Without an in-session MFA verification the security status endpoint and
+        // the gated verification-status probe are both blocked.
         var gated = await app.GetWithBearerAsync("/api/auth/mfa", session.AccessToken);
         gated.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await gated.Content.ReadAsStringAsync()).Should().Contain("MFA_REQUIRED");
 
-        // After an email step-up the same session may access the endpoint.
+        var statusBefore = await app.GetWithBearerAsync("/api/auth/mfa/step-up/status", session.AccessToken);
+        statusBefore.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        // After an email step-up the same session may access the endpoints.
         await app.CompleteSessionMfaByEmailAsync("mfa-gate@example.com", session.AccessToken);
         var allowed = await app.GetWithBearerAsync("/api/auth/mfa", session.AccessToken);
         allowed.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var statusAfter = await app.GetWithBearerAsync("/api/auth/mfa/step-up/status", session.AccessToken);
+        statusAfter.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // A separate fresh session (new sid) must verify again.
         var secondSession = await app.LoginApiAsync("mfa-gate@example.com");

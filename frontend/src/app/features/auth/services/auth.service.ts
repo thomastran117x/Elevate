@@ -398,6 +398,12 @@ export class AuthService {
     );
   }
 
+  getSessionMfaStatus(): Observable<void> {
+    // Gated probe: resolves when the session is MFA-verified, otherwise errors
+    // with the MFA_REQUIRED code so callers can prompt for verification.
+    return this.getWithCsrf<void>(`${this.baseUrl}/mfa/step-up/status`);
+  }
+
   getSessionMfaOptions(): Observable<SessionMfaOptionsResponse> {
     return this.getWithCsrf<ApiEnvelope<SessionMfaOptionsResponse>>(
       `${this.baseUrl}/mfa/step-up/options`,

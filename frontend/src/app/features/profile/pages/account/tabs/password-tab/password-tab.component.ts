@@ -14,6 +14,7 @@ import { finalize } from 'rxjs/operators';
 import { getApiClientMessage } from '../../../../../../core/api/models/api-client-error.model';
 import { AuthTokenService } from '../../../../../../core/api/services/auth-token.service';
 import { ProfileService } from '../../../../services/profile.service';
+import { MfaGateComponent } from '../../mfa-gate/mfa-gate.component';
 
 const passwordsMatchValidator: ValidatorFn = (group: AbstractControl): ValidationErrors | null => {
   const newPassword = group.get('newPassword')?.value;
@@ -26,11 +27,15 @@ const passwordsMatchValidator: ValidatorFn = (group: AbstractControl): Validatio
 @Component({
   selector: 'app-password-tab',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, MfaGateComponent],
   templateUrl: './password-tab.component.html',
 })
 export class PasswordTabComponent {
   private readonly fb = new FormBuilder();
+
+  // The form is revealed only after the reusable gate confirms a fresh MFA
+  // verification; the change-password endpoint is also [RequireMfa]-gated.
+  mfaVerified = false;
 
   readonly passwordForm = this.fb.nonNullable.group(
     {

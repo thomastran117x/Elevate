@@ -164,6 +164,7 @@ namespace backend.main.features.profile
         }
 
         [HttpPost("change-password")]
+        [RequireMfa]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordAuthenticatedRequest request)
         {
@@ -189,6 +190,7 @@ namespace backend.main.features.profile
         }
 
         [HttpDelete]
+        [RequireMfa]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> DeleteAccount()
         {

@@ -107,6 +107,7 @@ public class ProfileEndpointsTests
         var session = await app.LoginApiAsync(
             "pw-user@example.com",
             trustedDeviceToken: "pw-device");
+        await app.CompleteSessionMfaByEmailAsync("pw-user@example.com", session.AccessToken);
 
         var response = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/profile/change-password",
@@ -137,6 +138,7 @@ public class ProfileEndpointsTests
         var session = await app.LoginApiAsync(
             "delete-user@example.com",
             trustedDeviceToken: "delete-device");
+        await app.CompleteSessionMfaByEmailAsync("delete-user@example.com", session.AccessToken);
 
         var request = new HttpRequestMessage(HttpMethod.Delete, "/api/profile");
         await AddAuthAndCsrfAsync(app, request, session.AccessToken);

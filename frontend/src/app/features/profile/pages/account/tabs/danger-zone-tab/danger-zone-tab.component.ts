@@ -11,16 +11,20 @@ import { AuthTokenService } from '../../../../../../core/api/services/auth-token
 import { User } from '../../../../../../core/stores/user.model';
 import { selectUser } from '../../../../../../core/stores/user.selectors';
 import { ProfileService } from '../../../../services/profile.service';
+import { MfaGateComponent } from '../../mfa-gate/mfa-gate.component';
 
 @Component({
   selector: 'app-danger-zone-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MfaGateComponent],
   templateUrl: './danger-zone-tab.component.html',
 })
 export class DangerZoneTabComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
+  // The delete flow is revealed only after the reusable gate confirms a fresh
+  // MFA verification; the delete endpoint is also [RequireMfa]-gated.
+  mfaVerified = false;
   currentUser: User | null = null;
   showConfirm = false;
   confirmationInput = '';
