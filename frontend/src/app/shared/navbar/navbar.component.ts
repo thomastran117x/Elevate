@@ -1,5 +1,5 @@
-import { CommonModule } from '@angular/common';
-import { Component, HostListener } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { Component, ElementRef, HostListener, Inject, PLATFORM_ID } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { Observable } from 'rxjs';
@@ -33,6 +33,8 @@ export class NavbarComponent {
     private auth: AuthService,
     private authToken: AuthTokenService,
     private featureFlags: FeatureFlagsService,
+    private host: ElementRef<HTMLElement>,
+    @Inject(PLATFORM_ID) private platformId: object,
     protected theme: ThemeService,
   ) {
     this.user$ = this.store.select(selectUser);
@@ -47,14 +49,38 @@ export class NavbarComponent {
     this.scrolled = window.scrollY > 16;
   }
 
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent) {
+    if (!this.mobileOpen && !this.userMenuOpen) {
+      return;
+    }
+    if (!this.host.nativeElement.contains(event.target as Node)) {
+      this.closeMenus();
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape() {
+    this.closeMenus();
+  }
+
   toggleMobile() {
     this.mobileOpen = !this.mobileOpen;
     this.userMenuOpen = false;
+    this.syncScrollLock();
   }
 
   closeMenus() {
     this.mobileOpen = false;
     this.userMenuOpen = false;
+    this.syncScrollLock();
+  }
+
+  private syncScrollLock() {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+    document.body.style.overflow = this.mobileOpen ? 'hidden' : '';
   }
 
   toggleTheme() {

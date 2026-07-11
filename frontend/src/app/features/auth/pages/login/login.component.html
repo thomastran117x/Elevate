@@ -1,245 +1,307 @@
 <div class="app-page">
-  <main class="page-section py-8 sm:py-10 lg:py-14">
-    <div
-      class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_30rem] lg:items-start xl:grid-cols-[minmax(0,1.02fr)_31rem] xl:gap-12"
-    >
-      <section class="hidden lg:block lg:pt-8">
-        <pill class="mb-5" tone="accent">Secure access</pill>
-        <h1
-          class="max-w-2xl text-4xl font-extrabold tracking-tight text-content xl:text-[3.25rem] xl:leading-[1.03]"
-        >
-          Sign in to manage events, registrations, and community activity.
-        </h1>
-        <p class="mt-5 max-w-xl text-base leading-8 text-muted">
-          The new experience favors clarity over decoration, so your team can move through sign-in
-          and account management without visual noise.
-        </p>
-        <div class="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <div class="surface-card rounded-2xl p-5">
-            <div class="text-sm font-semibold text-content">Verified access</div>
-            <div class="mt-2 text-sm leading-6 text-subtle">
-              Device and step-up flows stay visible and understandable.
+  <main class="page-section flex min-h-[calc(100dvh-5rem)] items-center py-10 sm:py-12 lg:py-16">
+    <div class="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-2 lg:items-stretch lg:gap-8">
+      <section
+        class="relative hidden overflow-hidden rounded-[2rem] border border-line bg-surface p-10 shadow-[var(--shadow-md)] lg:flex lg:flex-col lg:justify-between"
+      >
+        <div
+          class="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent/10 blur-3xl"
+        ></div>
+        <div
+          class="pointer-events-none absolute -bottom-24 -left-16 h-64 w-64 rounded-full bg-accent/10 blur-3xl"
+        ></div>
+
+        <div class="relative">
+          <div class="flex items-center gap-3">
+            <span
+              class="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-line bg-canvas shadow-sm"
+            >
+              <span class="absolute inset-[8px] rounded-xl bg-accent/10"></span>
+              <span class="relative text-xs font-extrabold uppercase tracking-[0.22em] text-accent"
+                >EX</span
+              >
+            </span>
+            <div>
+              <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-subtle">
+                Event Operations
+              </div>
+              <div class="text-base font-semibold tracking-tight text-content">EventXperience</div>
             </div>
           </div>
-          <div class="surface-card rounded-2xl p-5">
-            <div class="text-sm font-semibold text-content">Faster recovery</div>
-            <div class="mt-2 text-sm leading-6 text-subtle">
-              Session restoration and redirects stay consistent.
-            </div>
-          </div>
-          <div class="surface-card rounded-2xl p-5 sm:col-span-2 xl:col-span-1">
-            <div class="text-sm font-semibold text-content">Clear actions</div>
-            <div class="mt-2 text-sm leading-6 text-subtle">
-              Primary and fallback sign-in methods are easier to scan.
-            </div>
-          </div>
+
+          <pill class="mt-8" tone="accent">Secure access</pill>
+          <h1
+            class="mt-5 max-w-md text-4xl font-extrabold leading-[1.05] tracking-tight text-content"
+          >
+            Sign in to manage events, registrations, and your community.
+          </h1>
+          <p class="mt-4 max-w-md text-base leading-7 text-muted">
+            A calmer, clearer experience for signing in and managing your account — no visual noise.
+          </p>
         </div>
 
-        <div class="section-muted mt-8 rounded-[1.75rem] p-6">
-          <div class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">
-            Team-ready sign-in
-          </div>
-          <div class="mt-3 grid gap-3 sm:grid-cols-2">
-            <div class="rounded-2xl border border-line bg-surface px-4 py-4">
+        <div class="relative mt-10 grid gap-3">
+          <div class="flex items-start gap-4 rounded-2xl border border-line bg-canvas/60 p-4">
+            <span
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 text-accent"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.8"
+                  d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z"
+                />
+              </svg>
+            </span>
+            <div>
               <div class="text-sm font-semibold text-content">Protected sessions</div>
-              <p class="mt-2 text-sm leading-6 text-muted">
-                Device verification, MFA, and secure redirect flows stay readable from start to
-                finish.
+              <p class="mt-1 text-sm leading-6 text-subtle">
+                Device checks, MFA, and secure redirects stay clear from start to finish.
               </p>
             </div>
-            <div class="rounded-2xl border border-line bg-surface px-4 py-4">
-              <div class="text-sm font-semibold text-content">Consistent workflows</div>
-              <p class="mt-2 text-sm leading-6 text-muted">
-                The auth experience now matches the same calmer design system used across the app.
+          </div>
+
+          <div class="flex items-start gap-4 rounded-2xl border border-line bg-canvas/60 p-4">
+            <span
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 text-accent"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.8"
+                  d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"
+                />
+              </svg>
+            </span>
+            <div>
+              <div class="text-sm font-semibold text-content">Fast recovery</div>
+              <p class="mt-1 text-sm leading-6 text-subtle">
+                Session restoration and redirects stay consistent every time.
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-start gap-4 rounded-2xl border border-line bg-canvas/60 p-4">
+            <span
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 text-accent"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.8"
+                  d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"
+                />
+              </svg>
+            </span>
+            <div>
+              <div class="text-sm font-semibold text-content">Calm interface</div>
+              <p class="mt-1 text-sm leading-6 text-subtle">
+                Sign-in matches the same clean system used across the app.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      <section
-        class="surface-panel mx-auto w-full max-w-xl rounded-[1.75rem] p-7 sm:p-8 lg:sticky lg:top-24"
-      >
-        <div class="mb-8">
-          <p class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">
-            Account access
-          </p>
-          <h2 class="mt-2 text-3xl font-bold tracking-tight text-content">Welcome back</h2>
-          <p class="mt-2 text-sm leading-6 text-muted">
-            Sign in with your email and password or continue with a connected provider.
-          </p>
-        </div>
-
-        <div class="mb-6 grid gap-3">
-          <app-google-button></app-google-button>
-          <app-microsoft-button></app-microsoft-button>
-        </div>
-
-        <div class="my-6 flex items-center gap-3">
-          <div class="h-px flex-1 bg-line"></div>
-          <span class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">or</span>
-          <div class="h-px flex-1 bg-line"></div>
-        </div>
-
-        <form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex flex-col gap-5">
-          <div>
-            <label class="mb-2 block text-sm font-semibold text-content">Email</label>
-            <div class="relative">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke-width="1.5"
-                stroke="currentColor"
-                class="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle"
+      <section class="mx-auto w-full max-w-md lg:mx-0 lg:max-w-none">
+        <div class="surface-panel rounded-[2rem] p-6 sm:p-8 lg:p-10">
+          <div class="mb-8 flex items-center gap-3 lg:hidden">
+            <span
+              class="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-line bg-surface shadow-sm"
+            >
+              <span class="absolute inset-[8px] rounded-xl bg-accent/10"></span>
+              <span class="relative text-xs font-extrabold uppercase tracking-[0.22em] text-accent"
+                >EX</span
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M21.75 6.75v10.5A2.25 2.25 0 0 1 19.5 19.5h-15A2.25 2.25 0 0 1 2.25 17.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15A2.25 2.25 0 0 0 2.25 6.75m19.5 0v.243a2.25 2.25 0 0 1-1.125 1.94L12 12.75 3.375 8.933A2.25 2.25 0 0 1 2.25 6.993V6.75"
+            </span>
+            <div class="text-base font-semibold tracking-tight text-content">EventXperience</div>
+          </div>
+
+          <div class="mb-8">
+            <p class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">
+              Account access
+            </p>
+            <h2 class="mt-2 text-3xl font-bold tracking-tight text-content">Welcome back</h2>
+            <p class="mt-2 text-sm leading-6 text-muted">
+              Sign in with your email and password or continue with a connected provider.
+            </p>
+          </div>
+
+          <div class="grid gap-3">
+            <app-google-button></app-google-button>
+            <app-microsoft-button></app-microsoft-button>
+          </div>
+
+          <div class="my-6 flex items-center gap-3">
+            <div class="h-px flex-1 bg-line"></div>
+            <span class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">or</span>
+            <div class="h-px flex-1 bg-line"></div>
+          </div>
+
+          <form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex flex-col gap-5">
+            <div>
+              <label class="mb-2 block text-sm font-semibold text-content">Email</label>
+              <div class="relative">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="1.5"
+                  stroke="currentColor"
+                  class="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M21.75 6.75v10.5A2.25 2.25 0 0 1 19.5 19.5h-15A2.25 2.25 0 0 1 2.25 17.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15A2.25 2.25 0 0 0 2.25 6.75m19.5 0v.243a2.25 2.25 0 0 1-1.125 1.94L12 12.75 3.375 8.933A2.25 2.25 0 0 1 2.25 6.993V6.75"
+                  />
+                </svg>
+                <input
+                  type="email"
+                  formControlName="email"
+                  class="form-field w-full py-3 pl-12 pr-4 text-sm"
+                  placeholder="name@company.com"
                 />
-              </svg>
-              <input
-                type="email"
-                formControlName="email"
-                class="form-field w-full pl-12 pr-4 py-3 text-sm"
-                placeholder="name@company.com"
-              />
+              </div>
+              @if (submitted && form.controls['email'].invalid) {
+                <div class="mt-2 text-sm text-danger">A valid email is required.</div>
+              }
             </div>
-            @if (submitted && form.controls['email'].invalid) {
-              <div class="mt-2 text-sm text-danger">A valid email is required.</div>
-            }
-          </div>
 
-          <div>
-            <label class="mb-2 block text-sm font-semibold text-content">Password</label>
-            <div class="relative">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke-width="1.5"
-                stroke="currentColor"
-                class="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M16.5 10.5V7.5a4.5 4.5 0 10-9 0v3m-.75 3.75h10.5M6.75 14.25v6a1.5 1.5 0 001.5 1.5h7.5a1.5 1.5 0 001.5-1.5v-6"
+            <div>
+              <label class="mb-2 block text-sm font-semibold text-content">Password</label>
+              <div class="relative">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="1.5"
+                  stroke="currentColor"
+                  class="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M16.5 10.5V7.5a4.5 4.5 0 10-9 0v3m-.75 3.75h10.5M6.75 14.25v6a1.5 1.5 0 001.5 1.5h7.5a1.5 1.5 0 001.5-1.5v-6"
+                  />
+                </svg>
+                <input
+                  [type]="showPw ? 'text' : 'password'"
+                  formControlName="password"
+                  class="form-field w-full py-3 pl-12 pr-12 text-sm"
+                  placeholder="Enter your password"
                 />
-              </svg>
-              <input
-                [type]="showPw ? 'text' : 'password'"
-                formControlName="password"
-                class="form-field w-full pl-12 pr-12 py-3 text-sm"
-                placeholder="Enter your password"
-              />
-              <button
-                type="button"
-                (click)="togglePassword()"
-                class="absolute inset-y-0 right-3 flex items-center text-subtle transition hover:text-content"
+                <button
+                  type="button"
+                  (click)="togglePassword()"
+                  [attr.aria-label]="showPw ? 'Hide password' : 'Show password'"
+                  class="absolute inset-y-0 right-3 flex items-center text-subtle transition hover:text-content"
+                >
+                  @if (!showPw) {
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke-width="1.5"
+                      stroke="currentColor"
+                      class="h-5 w-5"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M1.5 12s3.75-7.5 10.5-7.5S22.5 12 22.5 12s-3.75 7.5-10.5 7.5S1.5 12 1.5 12z"
+                      />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M12 15a3 3 0 100-6 3 3 0 000 6z"
+                      />
+                    </svg>
+                  }
+                  @if (showPw) {
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke-width="1.5"
+                      stroke="currentColor"
+                      class="h-5 w-5"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M3.98 8.223A10.477 10.477 0 001.5 12s3.75 7.5 10.5 7.5a10.47 10.47 0 004.74-1.223M6.223 6.223A10.47 10.47 0 0112 4.5c6.75 0 10.5 7.5 10.5 7.5a10.48 10.48 0 01-4.5 5.59M6.223 6.223L3 3m0 0l3.223 3.223M3 3l18 18"
+                      />
+                    </svg>
+                  }
+                </button>
+              </div>
+              @if (submitted && form.controls['password'].invalid) {
+                <div class="mt-2 text-sm text-danger">Password must be at least 6 characters.</div>
+              }
+            </div>
+
+            <div class="flex items-center justify-between gap-4 text-sm">
+              <label class="flex items-center gap-2 text-muted">
+                <input
+                  type="checkbox"
+                  formControlName="rememberMe"
+                  class="h-4 w-4 rounded border-line"
+                />
+                Remember me
+              </label>
+              <a
+                routerLink="/auth/forgot-password"
+                class="font-semibold text-accent transition hover:text-content"
               >
-                @if (!showPw) {
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke-width="1.5"
-                    stroke="currentColor"
-                    class="h-5 w-5"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M1.5 12s3.75-7.5 10.5-7.5S22.5 12 22.5 12s-3.75 7.5-10.5 7.5S1.5 12 1.5 12z"
-                    />
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M12 15a3 3 0 100-6 3 3 0 000 6z"
-                    />
-                  </svg>
-                }
-                @if (showPw) {
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke-width="1.5"
-                    stroke="currentColor"
-                    class="h-5 w-5"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M3.98 8.223A10.477 10.477 0 001.5 12s3.75 7.5 10.5 7.5a10.47 10.47 0 004.74-1.223M6.223 6.223A10.47 10.47 0 0112 4.5c6.75 0 10.5 7.5 10.5 7.5a10.48 10.48 0 01-4.5 5.59M6.223 6.223L3 3m0 0l3.223 3.223M3 3l18 18"
-                    />
-                  </svg>
-                }
-              </button>
+                Forgot password?
+              </a>
             </div>
-            @if (submitted && form.controls['password'].invalid) {
-              <div class="mt-2 text-sm text-danger">Password must be at least 6 characters.</div>
-            }
-          </div>
 
-          <div class="flex items-center justify-between gap-4 text-sm">
-            <label class="flex items-center gap-2 text-muted">
-              <input
-                type="checkbox"
-                formControlName="rememberMe"
-                class="h-4 w-4 rounded border-line"
-              />
-              Remember me
-            </label>
-            <a
-              routerLink="/auth/forgot-password"
-              class="font-semibold text-accent transition hover:text-content"
-            >
-              Forgot password?
-            </a>
-          </div>
-
-          @if (notice) {
-            <div
-              class="rounded-2xl border border-warning/25 bg-warning/10 px-4 py-3 text-sm text-warning"
-            >
-              {{ notice }}
-            </div>
-          }
-
-          @if (error) {
-            <div
-              class="rounded-2xl border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger"
-            >
-              {{ error }}
-            </div>
-          }
-
-          <button
-            type="submit"
-            [disabled]="loading"
-            class="cta-solid relative rounded-xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            @if (loading) {
-              <div class="absolute inset-0 flex items-center justify-center">
-                <div
-                  class="h-5 w-5 animate-spin rounded-full border-2 border-white/35 border-t-white"
-                ></div>
+            @if (notice) {
+              <div
+                class="rounded-2xl border border-warning/25 bg-warning/10 px-4 py-3 text-sm text-warning"
+              >
+                {{ notice }}
               </div>
             }
-            <span [class.opacity-0]="loading">Sign in</span>
-          </button>
-        </form>
 
-        <p class="mt-6 text-center text-sm text-subtle">
-          Need an account?
-          <a
-            routerLink="/auth/signup"
-            class="font-semibold text-accent transition hover:text-content"
-            >Create one</a
-          >
-        </p>
+            @if (error) {
+              <div
+                class="rounded-2xl border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger"
+              >
+                {{ error }}
+              </div>
+            }
+
+            <button
+              type="submit"
+              [disabled]="loading"
+              class="cta-solid relative rounded-xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              @if (loading) {
+                <div class="absolute inset-0 flex items-center justify-center">
+                  <div
+                    class="h-5 w-5 animate-spin rounded-full border-2 border-white/35 border-t-white"
+                  ></div>
+                </div>
+              }
+              <span [class.opacity-0]="loading">Sign in</span>
+            </button>
+          </form>
+
+          <p class="mt-6 text-center text-sm text-subtle">
+            Need an account?
+            <a
+              routerLink="/auth/signup"
+              class="font-semibold text-accent transition hover:text-content"
+              >Create one</a
+            >
+          </p>
+        </div>
       </section>
     </div>
   </main>

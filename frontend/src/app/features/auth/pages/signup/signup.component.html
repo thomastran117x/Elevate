@@ -1,197 +1,259 @@
 <div class="app-page">
-  <main class="page-section py-8 sm:py-10 lg:py-14">
-    <div
-      class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_30rem] lg:items-start xl:grid-cols-[minmax(0,1.02fr)_31rem] xl:gap-12"
-    >
-      <section class="hidden lg:block lg:pt-8">
-        <pill class="mb-5" tone="accent">Account creation</pill>
-        <h1
-          class="max-w-2xl text-4xl font-extrabold tracking-tight text-content xl:text-[3.25rem] xl:leading-[1.03]"
-        >
-          Create a professional account for organizers, volunteers, or attendees.
-        </h1>
-        <p class="mt-5 max-w-xl text-base leading-8 text-muted">
-          Set up access once, verify your email, and move straight into a cleaner event management
-          experience built for both everyday users and team workflows.
-        </p>
-        <div class="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <div class="surface-card rounded-2xl p-5">
-            <div class="text-sm font-semibold text-content">Role-based setup</div>
-            <div class="mt-2 text-sm leading-6 text-subtle">
-              Choose the account path that matches how you work.
+  <main class="page-section flex min-h-[calc(100dvh-5rem)] items-center py-10 sm:py-12 lg:py-16">
+    <div class="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-2 lg:items-stretch lg:gap-8">
+      <section
+        class="relative hidden overflow-hidden rounded-[2rem] border border-line bg-surface p-10 shadow-[var(--shadow-md)] lg:flex lg:flex-col lg:justify-between"
+      >
+        <div
+          class="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent/10 blur-3xl"
+        ></div>
+        <div
+          class="pointer-events-none absolute -bottom-24 -left-16 h-64 w-64 rounded-full bg-accent/10 blur-3xl"
+        ></div>
+
+        <div class="relative">
+          <div class="flex items-center gap-3">
+            <span
+              class="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-line bg-canvas shadow-sm"
+            >
+              <span class="absolute inset-[8px] rounded-xl bg-accent/10"></span>
+              <span class="relative text-xs font-extrabold uppercase tracking-[0.22em] text-accent"
+                >EX</span
+              >
+            </span>
+            <div>
+              <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-subtle">
+                Event Operations
+              </div>
+              <div class="text-base font-semibold tracking-tight text-content">EventXperience</div>
             </div>
           </div>
-          <div class="surface-card rounded-2xl p-5">
-            <div class="text-sm font-semibold text-content">Verified onboarding</div>
-            <div class="mt-2 text-sm leading-6 text-subtle">
-              Email confirmation keeps account activation clear and secure.
-            </div>
-          </div>
-          <div class="surface-card rounded-2xl p-5 sm:col-span-2 xl:col-span-1">
-            <div class="text-sm font-semibold text-content">Shared design system</div>
-            <div class="mt-2 text-sm leading-6 text-subtle">
-              The same clean interface carries through the product after signup.
-            </div>
-          </div>
+
+          <pill class="mt-8" tone="accent">Account creation</pill>
+          <h1
+            class="mt-5 max-w-md text-4xl font-extrabold leading-[1.05] tracking-tight text-content"
+          >
+            Create an account for organizers, volunteers, or attendees.
+          </h1>
+          <p class="mt-4 max-w-md text-base leading-7 text-muted">
+            Set up access once, verify your email, and move straight into a cleaner event
+            experience.
+          </p>
         </div>
 
-        <div class="section-muted mt-8 rounded-[1.75rem] p-6">
-          <div class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">
-            Built for multiple roles
-          </div>
-          <div class="mt-3 grid gap-3 sm:grid-cols-2">
-            <div class="rounded-2xl border border-line bg-surface px-4 py-4">
-              <div class="text-sm font-semibold text-content">Organizers and teams</div>
-              <p class="mt-2 text-sm leading-6 text-muted">
-                Start with a structured account setup that supports event publishing and operations.
+        <div class="relative mt-10 grid gap-3">
+          <div class="flex items-start gap-4 rounded-2xl border border-line bg-canvas/60 p-4">
+            <span
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 text-accent"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.8"
+                  d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"
+                />
+              </svg>
+            </span>
+            <div>
+              <div class="text-sm font-semibold text-content">Role-based setup</div>
+              <p class="mt-1 text-sm leading-6 text-subtle">
+                Pick the account path that matches how you work.
               </p>
             </div>
-            <div class="rounded-2xl border border-line bg-surface px-4 py-4">
-              <div class="text-sm font-semibold text-content">Attendees and volunteers</div>
-              <p class="mt-2 text-sm leading-6 text-muted">
-                Join with a simpler path while keeping verification, role choice, and next steps
-                clear.
+          </div>
+
+          <div class="flex items-start gap-4 rounded-2xl border border-line bg-canvas/60 p-4">
+            <span
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 text-accent"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.8"
+                  d="M21.75 6.75v10.5A2.25 2.25 0 0119.5 19.5h-15A2.25 2.25 0 012.25 17.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15A2.25 2.25 0 002.25 6.75m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
+                />
+              </svg>
+            </span>
+            <div>
+              <div class="text-sm font-semibold text-content">Verified onboarding</div>
+              <p class="mt-1 text-sm leading-6 text-subtle">
+                Email confirmation keeps account activation clear and secure.
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-start gap-4 rounded-2xl border border-line bg-canvas/60 p-4">
+            <span
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 text-accent"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.8"
+                  d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"
+                />
+              </svg>
+            </span>
+            <div>
+              <div class="text-sm font-semibold text-content">Shared design system</div>
+              <p class="mt-1 text-sm leading-6 text-subtle">
+                The same clean interface carries through the product after signup.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      <section
-        class="surface-panel mx-auto w-full max-w-xl rounded-[1.75rem] p-7 sm:p-8 lg:sticky lg:top-24"
-      >
-        <div class="mb-8">
-          <p class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">New account</p>
-          <h2 class="mt-2 text-3xl font-bold tracking-tight text-content">Create your account</h2>
-          <p class="mt-2 text-sm leading-6 text-muted">
-            Choose your role, verify your email, and finish setup from the inbox link.
-          </p>
-        </div>
-
-        <form [formGroup]="form" (ngSubmit)="submit()" class="flex flex-col gap-5">
-          <div>
-            <label class="mb-2 block text-sm font-semibold text-content">Email</label>
-            <div class="relative">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke-width="1.5"
-                stroke="currentColor"
-                class="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle"
+      <section class="mx-auto w-full max-w-md lg:mx-0 lg:max-w-none">
+        <div class="surface-panel rounded-[2rem] p-6 sm:p-8 lg:p-10">
+          <div class="mb-8 flex items-center gap-3 lg:hidden">
+            <span
+              class="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-line bg-surface shadow-sm"
+            >
+              <span class="absolute inset-[8px] rounded-xl bg-accent/10"></span>
+              <span class="relative text-xs font-extrabold uppercase tracking-[0.22em] text-accent"
+                >EX</span
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M21.75 6.75v10.5A2.25 2.25 0 0 1 19.5 19.5h-15A2.25 2.25 0 0 1 2.25 17.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15A2.25 2.25 0 0 0 2.25 6.75m19.5 0v.243a2.25 2.25 0 0 1-1.125 1.94L12 12.75 3.375 8.933A2.25 2.25 0 0 1 2.25 6.993V6.75"
-                />
-              </svg>
-              <input
-                type="email"
-                formControlName="email"
-                class="form-field w-full pl-12 pr-4 py-3 text-sm"
-                placeholder="name@company.com"
-              />
-            </div>
-            @if (submitted && form.controls['email'].invalid) {
-              <div class="mt-2 text-sm text-danger">A valid email is required.</div>
-            }
+            </span>
+            <div class="text-base font-semibold tracking-tight text-content">EventXperience</div>
           </div>
 
-          <div>
-            <label class="mb-2 block text-sm font-semibold text-content">Password</label>
-            <div class="relative">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke-width="1.5"
-                stroke="currentColor"
-                class="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M16.5 10.5V7.5a4.5 4.5 0 10-9 0v3m-.75 3.75h10.5M6.75 14.25v6a1.5 1.5 0 001.5 1.5h7.5a1.5 1.5 0 001.5-1.5v-6"
-                />
-              </svg>
-              <input
-                type="password"
-                formControlName="password"
-                class="form-field w-full pl-12 pr-4 py-3 text-sm"
-                placeholder="Create a secure password"
-              />
-            </div>
-            @if (submitted && form.controls['password'].invalid) {
-              <div class="mt-2 text-sm text-danger">Password must be at least 8 characters.</div>
-            }
+          <div class="mb-8">
+            <p class="text-sm font-semibold uppercase tracking-[0.12em] text-subtle">New account</p>
+            <h2 class="mt-2 text-3xl font-bold tracking-tight text-content">Create your account</h2>
+            <p class="mt-2 text-sm leading-6 text-muted">
+              Choose your role, verify your email, and finish setup from the inbox link.
+            </p>
           </div>
 
-          <div>
-            <label class="mb-2 block text-sm font-semibold text-content">Role</label>
-            <div class="grid gap-3">
-              @for (role of roleOptions; track role.value) {
-                <label
-                  class="surface-muted flex cursor-pointer items-center gap-3 rounded-2xl px-4 py-4 transition has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:checked]:text-content"
+          <form [formGroup]="form" (ngSubmit)="submit()" class="flex flex-col gap-5">
+            <div>
+              <label class="mb-2 block text-sm font-semibold text-content">Email</label>
+              <div class="relative">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="1.5"
+                  stroke="currentColor"
+                  class="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle"
                 >
-                  <input
-                    type="radio"
-                    formControlName="usertype"
-                    [value]="role.value"
-                    class="h-4 w-4"
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M21.75 6.75v10.5A2.25 2.25 0 0 1 19.5 19.5h-15A2.25 2.25 0 0 1 2.25 17.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15A2.25 2.25 0 0 0 2.25 6.75m19.5 0v.243a2.25 2.25 0 0 1-1.125 1.94L12 12.75 3.375 8.933A2.25 2.25 0 0 1 2.25 6.993V6.75"
                   />
-                  <div>
-                    <div class="text-sm font-semibold text-content">{{ role.label }}</div>
-                    <div class="text-xs leading-5 text-subtle">
-                      @if (role.value === 'participant') {
-                        Join and register for events.
-                      }
-                      @if (role.value === 'organizer') {
-                        Create and manage events for your group.
-                      }
-                      @if (role.value === 'volunteer') {
-                        Support operations and community activity.
-                      }
-                    </div>
-                  </div>
-                </label>
+                </svg>
+                <input
+                  type="email"
+                  formControlName="email"
+                  class="form-field w-full py-3 pl-12 pr-4 text-sm"
+                  placeholder="name@company.com"
+                />
+              </div>
+              @if (submitted && form.controls['email'].invalid) {
+                <div class="mt-2 text-sm text-danger">A valid email is required.</div>
               }
             </div>
-          </div>
 
-          @if (error) {
-            <div
-              class="rounded-2xl border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger"
-            >
-              {{ error }}
+            <div>
+              <label class="mb-2 block text-sm font-semibold text-content">Password</label>
+              <div class="relative">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="1.5"
+                  stroke="currentColor"
+                  class="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M16.5 10.5V7.5a4.5 4.5 0 10-9 0v3m-.75 3.75h10.5M6.75 14.25v6a1.5 1.5 0 001.5 1.5h7.5a1.5 1.5 0 001.5-1.5v-6"
+                  />
+                </svg>
+                <input
+                  type="password"
+                  formControlName="password"
+                  class="form-field w-full py-3 pl-12 pr-4 text-sm"
+                  placeholder="Create a secure password"
+                />
+              </div>
+              @if (submitted && form.controls['password'].invalid) {
+                <div class="mt-2 text-sm text-danger">Password must be at least 8 characters.</div>
+              }
             </div>
-          }
 
-          @if (success) {
-            <div
-              class="rounded-2xl border border-success/25 bg-success/10 px-4 py-3 text-sm text-success"
-            >
-              {{ success }}
+            <div>
+              <label class="mb-2 block text-sm font-semibold text-content">Role</label>
+              <div class="grid gap-3">
+                @for (role of roleOptions; track role.value) {
+                  <label
+                    class="surface-muted flex cursor-pointer items-center gap-3 rounded-2xl px-4 py-4 transition has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:checked]:text-content"
+                  >
+                    <input
+                      type="radio"
+                      formControlName="usertype"
+                      [value]="role.value"
+                      class="h-4 w-4"
+                    />
+                    <div>
+                      <div class="text-sm font-semibold text-content">{{ role.label }}</div>
+                      <div class="text-xs leading-5 text-subtle">
+                        @if (role.value === 'participant') {
+                          Join and register for events.
+                        }
+                        @if (role.value === 'organizer') {
+                          Create and manage events for your group.
+                        }
+                        @if (role.value === 'volunteer') {
+                          Support operations and community activity.
+                        }
+                      </div>
+                    </div>
+                  </label>
+                }
+              </div>
             </div>
-          }
 
-          <button
-            type="submit"
-            [disabled]="loading"
-            class="cta-solid rounded-xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {{ loading ? 'Sending verification...' : 'Create account' }}
-          </button>
-        </form>
+            @if (error) {
+              <div
+                class="rounded-2xl border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger"
+              >
+                {{ error }}
+              </div>
+            }
 
-        <p class="mt-6 text-center text-sm text-subtle">
-          Already have an account?
-          <a
-            routerLink="/auth/login"
-            class="font-semibold text-accent transition hover:text-content"
-            >Sign in</a
-          >
-        </p>
+            @if (success) {
+              <div
+                class="rounded-2xl border border-success/25 bg-success/10 px-4 py-3 text-sm text-success"
+              >
+                {{ success }}
+              </div>
+            }
+
+            <button
+              type="submit"
+              [disabled]="loading"
+              class="cta-solid rounded-xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {{ loading ? 'Sending verification...' : 'Create account' }}
+            </button>
+          </form>
+
+          <p class="mt-6 text-center text-sm text-subtle">
+            Already have an account?
+            <a
+              routerLink="/auth/login"
+              class="font-semibold text-accent transition hover:text-content"
+              >Sign in</a
+            >
+          </p>
+        </div>
       </section>
     </div>
   </main>
