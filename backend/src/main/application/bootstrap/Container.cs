@@ -3,6 +3,7 @@ using backend.main.features.auth;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.device;
 using backend.main.features.auth.mfa;
+using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
@@ -175,6 +176,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IMfaEnrollmentService, MfaEnrollmentService>();
             services.AddScoped<IMfaSettingsBuilder, MfaSettingsBuilder>();
             services.AddScoped<ITotpMfaEnrollmentService, TotpMfaEnrollmentService>();
+            services.AddScoped<ISessionMfaVerificationService, SessionMfaVerificationService>();
             services.AddScoped<IOAuthService, OAuthService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IClubService, ClubService>();

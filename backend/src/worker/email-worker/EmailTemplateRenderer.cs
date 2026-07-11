@@ -75,6 +75,16 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
                 Code: null,
                 MutedNote: "If this wasn't you, please reset your password immediately and review your account security."),
 
+            EmailMessageType.MfaCode => new Content(
+                Subject: "Your verification code",
+                Preheader: "Use this code to verify it's you.",
+                Heading: "Verify it's you",
+                Greeting: greeting,
+                Intro: ["Enter the code below to continue. It expires shortly, so use it soon."],
+                Cta: null,
+                Code: RequireCode(message),
+                MutedNote: "If you didn't request this code, you can safely ignore this email — no action is needed."),
+
             EmailMessageType.EventInvite => new Content(
                 Subject: $"You're invited to {eventName}",
                 Preheader: $"You've been invited to {eventName} on EventXperience.",
@@ -155,6 +165,11 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
 
     private static string ActorLabel(EmailMessage message) =>
         string.IsNullOrWhiteSpace(message.ActorName) ? "A guest" : message.ActorName!.Trim();
+
+    private static string RequireCode(EmailMessage message) =>
+        string.IsNullOrWhiteSpace(message.Code)
+            ? throw new InvalidOperationException($"Email type '{message.Type}' requires a code.")
+            : message.Code!;
 
     private static string RequireToken(EmailMessage message) =>
         string.IsNullOrWhiteSpace(message.Token)

@@ -83,18 +83,24 @@ namespace backend.main.features.auth.token
         {
             get; set;
         }
+        public string SessionId
+        {
+            get; set;
+        }
 
         public RefreshTokenIssue(
             string value,
             string sessionBindingToken,
             TimeSpan lifetime,
-            SessionTransport transport
+            SessionTransport transport,
+            string sessionId
         )
         {
             Value = value;
             SessionBindingToken = sessionBindingToken;
             Lifetime = lifetime;
             Transport = transport;
+            SessionId = sessionId;
         }
     }
 

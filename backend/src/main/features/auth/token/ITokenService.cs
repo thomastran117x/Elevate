@@ -5,7 +5,7 @@ namespace backend.main.features.auth.token
 {
     public interface ITokenService
     {
-        public AccessTokenIssue GenerateAccessToken(User user);
+        public AccessTokenIssue GenerateAccessToken(User user, string sessionId);
         public Task<RefreshTokenIssue> GenerateRefreshToken(
             int userId,
             ClientRequestInfo requestInfo,
@@ -34,6 +34,7 @@ namespace backend.main.features.auth.token
             SessionTransport expectedTransport,
             ClientRequestInfo requestInfo
         );
+        public Task<TimeSpan?> GetRefreshSessionTtlAsync(string sessionId);
         public Task RevokeRefreshSessionAsync(string sessionId);
         public Task RevokeAllRefreshSessionsAsync(int userId);
         public Task<string?> VerificationTokenExist(string email, VerificationPurpose purpose);

@@ -1,18 +1,27 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { from } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
-import { getApiClientMessage } from '../../../../../../core/api/models/api-client-error.model';
+import {
+  getApiClientMessage,
+  isApiClientErrorCode,
+} from '../../../../../../core/api/models/api-client-error.model';
+import { AuthTokenService } from '../../../../../../core/api/services/auth-token.service';
 import {
   AuthService,
   MfaChallengeResponse,
   MfaSettingsResponse,
+  SessionMfaMethod,
+  SessionMfaOptionsResponse,
   TotpEnrollmentStartResponse,
 } from '../../../../../auth/services/auth.service';
 
 type SmsFlow = 'enroll' | 'enable' | null;
 type TotpManageAction = 'enable' | 'disable' | 'remove' | null;
+
+const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
 
 @Component({
   selector: 'app-security-tab',
@@ -39,6 +48,10 @@ export class SecurityTabComponent implements OnInit {
     code: this.fb.nonNullable.control('', [Validators.required, Validators.pattern(/^\d{6}$/)]),
   });
 
+  readonly mfaGateForm = this.fb.nonNullable.group({
+    code: this.fb.nonNullable.control('', [Validators.required, Validators.pattern(/^\d{6}$/)]),
+  });
+
   settings: MfaSettingsResponse | null = null;
   smsChallenge: MfaChallengeResponse | null = null;
   smsFlow: SmsFlow = null;
@@ -55,10 +68,154 @@ export class SecurityTabComponent implements OnInit {
   error = '';
   success = '';
 
-  constructor(private auth: AuthService) {}
+  // In-session MFA gate: viewing this page requires a fresh MFA verification
+  // (backend returns 403 MFA_REQUIRED until the session is verified).
+  mfaGateRequired = false;
+  mfaOptionsLoading = false;
+  mfaOptions: SessionMfaOptionsResponse | null = null;
+  mfaMethod: SessionMfaMethod | null = null;
+  mfaCodeSent = false;
+  mfaMaskedDestination = '';
+  mfaSending = false;
+  mfaVerifying = false;
+  mfaError = '';
+  private mfaRefreshAttempted = false;
+
+  constructor(
+    private auth: AuthService,
+    private authToken: AuthTokenService,
+  ) {}
 
   ngOnInit(): void {
     this.refreshStatus();
+  }
+
+  get mfaSelectedNeedsDelivery(): boolean {
+    return this.mfaMethod === 'sms' || this.mfaMethod === 'email';
+  }
+
+  get mfaShowCodeInput(): boolean {
+    return this.mfaMethod === 'totp' || this.mfaCodeSent;
+  }
+
+  mfaMethodLabel(method: SessionMfaMethod): string {
+    return method === 'totp'
+      ? 'Authenticator app'
+      : method === 'sms'
+        ? 'Text message (SMS)'
+        : 'Email';
+  }
+
+  selectMfaMethod(method: SessionMfaMethod): void {
+    if (this.mfaMethod === method) {
+      return;
+    }
+    this.mfaMethod = method;
+    this.mfaCodeSent = false;
+    this.mfaMaskedDestination = '';
+    this.mfaError = '';
+    this.mfaGateForm.reset();
+  }
+
+  sendMfaCode(): void {
+    if (!this.mfaMethod || !this.mfaSelectedNeedsDelivery) {
+      return;
+    }
+
+    this.mfaError = '';
+    this.mfaSending = true;
+
+    this.auth
+      .startSessionMfa(this.mfaMethod)
+      .pipe(finalize(() => (this.mfaSending = false)))
+      .subscribe({
+        next: (res) => {
+          this.mfaCodeSent = true;
+          this.mfaMaskedDestination = res.MaskedDestination;
+          this.mfaGateForm.reset();
+        },
+        error: (err) => {
+          this.mfaError = getApiClientMessage(err, 'Unable to send the verification code.');
+        },
+      });
+  }
+
+  verifyMfaCode(): void {
+    if (!this.mfaMethod) {
+      return;
+    }
+
+    if (this.mfaGateForm.invalid) {
+      this.mfaGateForm.markAllAsTouched();
+      return;
+    }
+
+    const { code } = this.mfaGateForm.getRawValue();
+    this.mfaError = '';
+    this.mfaVerifying = true;
+
+    this.auth
+      .verifySessionMfa(this.mfaMethod, code)
+      .pipe(finalize(() => (this.mfaVerifying = false)))
+      .subscribe({
+        next: () => {
+          this.resetMfaGate();
+          this.refreshStatus();
+        },
+        error: (err) => {
+          this.mfaError = getApiClientMessage(err, 'Unable to verify the code. Please try again.');
+        },
+      });
+  }
+
+  private resetMfaGate(): void {
+    this.mfaGateRequired = false;
+    this.mfaOptions = null;
+    this.mfaMethod = null;
+    this.mfaCodeSent = false;
+    this.mfaMaskedDestination = '';
+    this.mfaError = '';
+    this.mfaGateForm.reset();
+  }
+
+  private handleMfaRequired(): void {
+    // Sessions created before the sid-claim rollout have no session id in their
+    // access token, so a fresh token must be minted before verification can bind
+    // to the session. Try one silent refresh, then re-check; if still gated, prompt.
+    if (!this.mfaRefreshAttempted) {
+      this.mfaRefreshAttempted = true;
+      this.loading = true;
+      from(this.authToken.refreshAccessToken()).subscribe({
+        next: () => this.refreshStatus(),
+        error: () => {
+          this.loading = false;
+          this.enterMfaGate();
+        },
+      });
+      return;
+    }
+
+    this.loading = false;
+    this.enterMfaGate();
+  }
+
+  private enterMfaGate(): void {
+    this.mfaGateRequired = true;
+    this.mfaOptionsLoading = true;
+    this.mfaError = '';
+
+    this.auth
+      .getSessionMfaOptions()
+      .pipe(finalize(() => (this.mfaOptionsLoading = false)))
+      .subscribe({
+        next: (options) => {
+          this.mfaOptions = options;
+          this.mfaMethod = options.AvailableMethods[0] ?? 'email';
+        },
+        error: (err) => {
+          this.mfaError = getApiClientMessage(err, 'Unable to load verification options.');
+        },
+      });
   }
 
   get emailSettings() {
@@ -374,8 +531,14 @@ export class SecurityTabComponent implements OnInit {
       .subscribe({
         next: (settings) => {
           this.settings = settings;
+          this.mfaGateRequired = false;
         },
         error: (err) => {
+          if (isApiClientErrorCode(err, MFA_REQUIRED_ERROR_CODE)) {
+            this.handleMfaRequired();
+            return;
+          }
+
           if (!silent) {
             this.error = getApiClientMessage(err, 'Unable to load security settings.');
           }

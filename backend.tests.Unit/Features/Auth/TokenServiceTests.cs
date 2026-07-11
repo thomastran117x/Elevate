@@ -24,13 +24,14 @@ public class TokenServiceTests
             AuthVersion = 7
         };
 
-        var issue = service.GenerateAccessToken(user);
+        var issue = service.GenerateAccessToken(user, "session-abc");
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(issue.Value);
 
         jwt.Claims.Should().Contain(claim => (claim.Type == ClaimTypes.NameIdentifier || claim.Type == "nameid") && claim.Value == "23");
         jwt.Claims.Should().Contain(claim => (claim.Type == ClaimTypes.Name || claim.Type == "unique_name") && claim.Value == "claims@example.com");
         jwt.Claims.Should().Contain(claim => (claim.Type == ClaimTypes.Role || claim.Type == "role") && claim.Value == "Participant");
         jwt.Claims.Should().Contain(claim => claim.Type == TokenService.AuthVersionClaimType && claim.Value == "7");
+        jwt.Claims.Should().Contain(claim => claim.Type == TokenService.SessionIdClaimType && claim.Value == "session-abc");
         issue.ExpiresAtUtc.Should().BeAfter(DateTime.UtcNow.AddMinutes(10));
     }
 

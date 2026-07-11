@@ -5,8 +5,8 @@ namespace backend.worker.email_worker;
 /// <summary>
 /// Builds the shared, branded HTML chrome for every outbound email so that all
 /// message types share one consistent look that mirrors the EventXperience
-/// frontend (purple/fuchsia gradient logo, white rounded card on a gray page,
-/// gradient call-to-action button, wordmark + tagline footer).
+/// frontend (teal accent monogram, white rounded card on a cool gray page,
+/// teal call-to-action button, wordmark + tagline footer).
 ///
 /// The markup is intentionally email-safe: table-based layout, inline CSS only,
 /// no flexbox/grid, and a solid-color button fallback for Outlook.
@@ -14,15 +14,15 @@ namespace backend.worker.email_worker;
 internal static class EmailLayout
 {
     // Design tokens (frontend light theme -> email-safe values).
-    private const string PageBackground = "#f3f4f6";
+    private const string PageBackground = "#f3f6fa";
     private const string CardBackground = "#ffffff";
-    private const string CardBorder = "#e5e7eb";
-    private const string HeadingColor = "#111827";
-    private const string BodyColor = "#4b5563";
-    private const string SubtleColor = "#6b7280";
-    private const string AccentColor = "#7c3aed";
-    private const string GradientCss = "linear-gradient(to right, #a855f7, #d946ef)";
-    private const string CodeWellBackground = "#e9ebef";
+    private const string CardBorder = "#e2e8f0";
+    private const string HeadingColor = "#0f172a";
+    private const string BodyColor = "#475569";
+    private const string SubtleColor = "#64748b";
+    private const string AccentColor = "#0f766e";
+    private const string GradientCss = "linear-gradient(to right, #0f766e, #0d9488)";
+    private const string CodeWellBackground = "#eef3f8";
     private const string FontStack = "-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
     private const string Tagline = "A modern platform for creating, managing, and scaling unforgettable event experiences.";
 
@@ -103,7 +103,7 @@ internal static class EmailLayout
                         <tr>
                           <td valign="middle" style="padding-right:12px;">
                             <div style="width:40px;height:40px;border-radius:12px;background-color:{AccentColor};background-image:{GradientCss};text-align:center;">
-                              <span style="display:inline-block;line-height:40px;font-family:{FontStack};font-size:22px;font-weight:800;color:#ffffff;">E</span>
+                              <span style="display:inline-block;line-height:40px;font-family:{FontStack};font-size:15px;font-weight:800;letter-spacing:1px;color:#ffffff;">EX</span>
                             </div>
                           </td>
                           <td valign="middle">

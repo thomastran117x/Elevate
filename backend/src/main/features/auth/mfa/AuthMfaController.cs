@@ -31,6 +31,7 @@ namespace backend.main.features.auth.mfa
         }
 
         [HttpGet]
+        [RequireMfa]
         [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetStatus()
         {
