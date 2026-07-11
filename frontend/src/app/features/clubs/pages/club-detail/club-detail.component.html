@@ -29,10 +29,14 @@
       <section class="surface-panel overflow-hidden rounded-3xl">
         <div class="h-56 bg-surface-muted sm:h-72">
           @if (club.clubImage) {
-            <div class="h-full w-full bg-cover bg-center" [style.background-image]="'url(' + club.clubImage + ')'">
-            </div>
+            <div
+              class="h-full w-full bg-cover bg-center"
+              [style.background-image]="'url(' + club.clubImage + ')'"
+            ></div>
           } @else {
-            <div class="flex h-full items-center justify-center bg-accent/10 text-base font-semibold uppercase tracking-[0.18em] text-accent">
+            <div
+              class="flex h-full items-center justify-center bg-accent/10 text-base font-semibold uppercase tracking-[0.18em] text-accent"
+            >
               Club profile
             </div>
           }
@@ -41,7 +45,10 @@
         <div class="p-6 sm:p-8">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <span class="rounded-full border px-3 py-1 text-xs font-semibold" [ngClass]="clubTypeStyles[club.clubType]">
+              <span
+                class="rounded-full border px-3 py-1 text-xs font-semibold"
+                [ngClass]="clubTypeStyles[club.clubType]"
+              >
                 {{ club.clubType }}
               </span>
               <h1 class="mt-4 text-3xl font-extrabold tracking-tight text-content sm:text-4xl">
@@ -63,34 +70,51 @@
           <div class="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div class="surface-muted rounded-2xl p-4 text-center">
               <div class="text-2xl font-bold text-content">{{ club.memberCount | number }}</div>
-              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Members</div>
+              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                Members
+              </div>
             </div>
             <div class="surface-muted rounded-2xl p-4 text-center">
               <div class="text-2xl font-bold text-content">{{ club.eventCount | number }}</div>
-              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Events</div>
+              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                Events
+              </div>
             </div>
             <div class="surface-muted rounded-2xl p-4 text-center">
-              <div class="text-2xl font-bold text-content">{{ club.availableEventCount | number }}</div>
-              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Open events</div>
+              <div class="text-2xl font-bold text-content">
+                {{ club.availableEventCount | number }}
+              </div>
+              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                Open events
+              </div>
             </div>
             <div class="surface-muted rounded-2xl p-4 text-center">
               @if (club.rating != null) {
-                <div class="text-2xl font-bold text-content">{{ club.rating | number: '1.1-1' }}</div>
+                <div class="text-2xl font-bold text-content">
+                  {{ club.rating | number: '1.1-1' }}
+                </div>
               } @else {
                 <div class="text-2xl font-bold text-content/30">-</div>
               }
-              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Rating</div>
+              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                Rating
+              </div>
             </div>
           </div>
 
           @if (club.maxMemberCount > 0) {
             <div class="mt-6">
-              <div class="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+              <div
+                class="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em] text-subtle"
+              >
                 <span>Member capacity</span>
                 <span>{{ club.memberCount | number }} / {{ club.maxMemberCount | number }}</span>
               </div>
               <div class="h-2 w-full overflow-hidden rounded-full bg-surface-muted">
-                <div class="h-full rounded-full bg-accent" [style.width.%]="memberCapacityPercent()"></div>
+                <div
+                  class="h-full rounded-full bg-accent"
+                  [style.width.%]="memberCapacityPercent()"
+                ></div>
               </div>
             </div>
           }
@@ -105,10 +129,16 @@
 
             @if (club.email || club.phone || club.websiteUrl) {
               <div class="surface-muted rounded-2xl p-5">
-                <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Contact</div>
+                <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                  Contact
+                </div>
                 <div class="mt-4 flex flex-col gap-3 text-sm text-muted">
                   @if (club.email) {
-                    <a [href]="'mailto:' + club.email" class="transition hover:text-content" (click)="$event.stopPropagation()">
+                    <a
+                      [href]="'mailto:' + club.email"
+                      class="transition hover:text-content"
+                      (click)="$event.stopPropagation()"
+                    >
                       {{ club.email }}
                     </a>
                   }
@@ -135,7 +165,9 @@
             <section>
               <div class="flex items-center justify-between">
                 <div>
-                  <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Upcoming events</div>
+                  <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                    Upcoming events
+                  </div>
                   <h2 class="mt-2 text-xl font-semibold text-content">What this club is hosting</h2>
                 </div>
               </div>
@@ -163,23 +195,34 @@
                     tabindex="0"
                   >
                     <div class="flex items-center gap-2">
-                      <span class="rounded-full border px-2 py-0.5 text-[10px] font-semibold" [ngClass]="categoryStyles[event.category].badge">
+                      <span
+                        class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                        [ngClass]="categoryStyles[event.category].badge"
+                      >
                         {{ event.category }}
                       </span>
                       <span class="text-[11px] text-subtle">{{ event.status }}</span>
                     </div>
                     <div class="mt-3 text-base font-semibold text-content">{{ event.name }}</div>
                     <div class="mt-1 text-xs text-subtle">
-                      {{ formatEventDate(event.startTime) }} · {{ formatEventTime(event.startTime) }}
+                      {{ formatEventDate(event.startTime) }} &bull;
+                      {{ formatEventTime(event.startTime) }}
                     </div>
-                    <div class="mt-1 text-xs text-muted">{{ event.venueName || event.city || 'Venue TBD' }}</div>
+                    <div class="mt-1 text-xs text-muted">
+                      {{ event.venueName || event.city || 'Venue TBD' }}
+                    </div>
                     <div class="mt-3 flex items-center justify-between text-xs text-subtle">
-                      <span class="font-semibold text-content">{{ formatCost(event.registerCost) }}</span>
+                      <span class="font-semibold text-content">{{
+                        formatCost(event.registerCost)
+                      }}</span>
                       @if (event.maxParticipants > 0) {
                         <div class="flex items-center gap-2">
                           <span>{{ event.registrationCount }}/{{ event.maxParticipants }}</span>
                           <div class="h-2 w-14 overflow-hidden rounded-full bg-surface-muted">
-                            <div class="h-full rounded-full bg-accent" [style.width.%]="registrationPercent(event)"></div>
+                            <div
+                              class="h-full rounded-full bg-accent"
+                              [style.width.%]="registrationPercent(event)"
+                            ></div>
                           </div>
                         </div>
                       }
@@ -192,10 +235,15 @@
             <section>
               <div class="flex items-center justify-between">
                 <div>
-                  <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Recent posts</div>
+                  <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                    Recent posts
+                  </div>
                   <h2 class="mt-2 text-xl font-semibold text-content">Latest community updates</h2>
                 </div>
-                <button (click)="viewPosts()" class="text-sm font-semibold text-accent transition hover:text-content">
+                <button
+                  (click)="viewPosts()"
+                  class="text-sm font-semibold text-accent transition hover:text-content"
+                >
                   View all
                 </button>
               </div>
@@ -224,11 +272,16 @@
                   >
                     <div class="flex items-center gap-2">
                       @if (post.isPinned) {
-                        <span class="rounded-full border border-warning/25 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
+                        <span
+                          class="rounded-full border border-warning/25 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning"
+                        >
                           Pinned
                         </span>
                       }
-                      <span class="rounded-full border px-2 py-0.5 text-[10px] font-semibold" [ngClass]="postTypeStyles[post.postType]">
+                      <span
+                        class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                        [ngClass]="postTypeStyles[post.postType]"
+                      >
                         {{ post.postType }}
                       </span>
                     </div>
