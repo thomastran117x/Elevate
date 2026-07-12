@@ -140,6 +140,24 @@ namespace backend.main.shared.storage
             }
         }
 
+        public async IAsyncEnumerable<BlobListItem> ListBlobsAsync(
+            string blobPathPrefix,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var container = _container;
+            if (container == null)
+                yield break;
+
+            var normalizedPrefix = NormalizeBlobPathPrefix(blobPathPrefix, string.Empty);
+            var listPrefix = string.IsNullOrEmpty(normalizedPrefix) ? null : normalizedPrefix + "/";
+
+            await foreach (var blob in container.GetBlobsAsync(prefix: listPrefix, cancellationToken: cancellationToken))
+            {
+                var url = container.GetBlobClient(blob.Name).Uri.ToString();
+                yield return new BlobListItem(url, blob.Properties.LastModified);
+            }
+        }
+
         private BlobContainerClient GetRequiredContainer()
         {
             if (_container != null)

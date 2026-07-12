@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 using backend.main.features.events.contracts.responses;
 using backend.main.shared.storage;
 
@@ -6,9 +8,12 @@ namespace backend.tests.Integration.Infrastructure;
 public sealed class FakeAzureBlobService : IAzureBlobService
 {
     private const string BaseUrl = "https://storage.test/event-assets";
-    private readonly HashSet<string> _ownedUrls = [];
+    private readonly Dictionary<string, DateTimeOffset> _ownedUrls = [];
 
     public string CreateOwnedBlobUrl(string blobPathPrefix, string fileName)
+        => CreateOwnedBlobUrl(blobPathPrefix, fileName, DateTimeOffset.UtcNow);
+
+    public string CreateOwnedBlobUrl(string blobPathPrefix, string fileName, DateTimeOffset lastModified)
     {
         var safePrefix = string.Join(
             '/',
@@ -17,7 +22,7 @@ public sealed class FakeAzureBlobService : IAzureBlobService
                 .Where(segment => segment is not "." and not ".."));
         var safeFileName = Path.GetFileName(fileName);
         var publicUrl = $"{BaseUrl}/{safePrefix}/{Guid.NewGuid():N}-{safeFileName}";
-        _ownedUrls.Add(publicUrl);
+        _ownedUrls[publicUrl] = lastModified;
         return publicUrl;
     }
 
@@ -38,11 +43,25 @@ public sealed class FakeAzureBlobService : IAzureBlobService
         });
     }
 
-    public bool IsOwnedBlobUrl(string blobUrl) => _ownedUrls.Contains(blobUrl);
+    public bool IsOwnedBlobUrl(string blobUrl) => _ownedUrls.ContainsKey(blobUrl);
 
     public Task DeleteBlobAsync(string blobUrl)
     {
         _ownedUrls.Remove(blobUrl);
         return Task.CompletedTask;
+    }
+
+    public async IAsyncEnumerable<BlobListItem> ListBlobsAsync(
+        string blobPathPrefix,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var prefix = $"{BaseUrl}/{blobPathPrefix.Trim('/')}/";
+        foreach (var entry in _ownedUrls.ToList())
+        {
+            if (entry.Key.StartsWith(prefix, StringComparison.Ordinal))
+                yield return new BlobListItem(entry.Key, entry.Value);
+        }
+
+        await Task.CompletedTask;
     }
 }

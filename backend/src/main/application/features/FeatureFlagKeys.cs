@@ -19,4 +19,5 @@ public static class FeatureFlagKeys
     public const string ProfileAdmin = "profile.admin";
     public const string Search = "search";
     public const string SearchReindex = "search.reindex";
+    public const string StorageOrphanCleanup = "storage.orphan-cleanup";
 }

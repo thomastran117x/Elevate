@@ -117,13 +117,55 @@ namespace backend.main.features.auth
             return true;
         }
 
-        public async Task<bool> DeleteUserAsync(int id)
+        public async Task<IReadOnlyList<string>> DeleteUserAsync(int id)
         {
             var user = await _context.Users.FindAsync(id);
             if (user == null)
-                return false;
+                return Array.Empty<string>();
 
             await using var transaction = await _context.Database.BeginTransactionAsync();
+
+            // Deleting the user cascades to their clubs, club versions, events and event
+            // images (all DeleteBehavior.Cascade). EF only removes the rows, so the blob URLs
+            // those rows carry become unrecoverable once the cascade runs. Gather them here,
+            // before the delete, so the caller can clean up the orphaned blobs afterwards.
+            var ownedClubIds = await _context.Clubs
+                .Where(club => club.UserId == id)
+                .Select(club => club.Id)
+                .ToListAsync();
+
+            var orphanedBlobUrls = new List<string>();
+            if (!string.IsNullOrEmpty(user.Avatar))
+                orphanedBlobUrls.Add(user.Avatar);
+
+            if (ownedClubIds.Count > 0)
+            {
+                orphanedBlobUrls.AddRange(await _context.Clubs
+                    .Where(club => ownedClubIds.Contains(club.Id)
+                        && club.ClubImage != null && club.ClubImage != string.Empty)
+                    .Select(club => club.ClubImage!)
+                    .ToListAsync());
+
+                orphanedBlobUrls.AddRange(await _context.ClubVersions
+                    .Where(version => ownedClubIds.Contains(version.ClubId)
+                        && version.ClubImage != null && version.ClubImage != string.Empty)
+                    .Select(version => version.ClubImage!)
+                    .ToListAsync());
+
+                var ownedEventIds = await _context.Events
+                    .Where(ev => ownedClubIds.Contains(ev.ClubId))
+                    .Select(ev => ev.Id)
+                    .ToListAsync();
+
+                if (ownedEventIds.Count > 0)
+                {
+                    orphanedBlobUrls.AddRange(await _context.EventImages
+                        .Where(image => ownedEventIds.Contains(image.EventId)
+                            && image.ImageUrl != null && image.ImageUrl != string.Empty)
+                        .Select(image => image.ImageUrl!)
+                        .ToListAsync());
+                }
+            }
 
             // ClubStaff.GrantedByUserId is a Restrict FK, so staff roles this user granted to
             // others would block the delete. Reassign those grants to the club's owner (falling
@@ -134,9 +176,9 @@ namespace backend.main.features.auth
 
             if (grantsByUser.Count > 0)
             {
-                var clubIds = grantsByUser.Select(staff => staff.ClubId).Distinct().ToList();
+                var grantClubIds = grantsByUser.Select(staff => staff.ClubId).Distinct().ToList();
                 var clubOwners = await _context.Clubs
-                    .Where(club => clubIds.Contains(club.Id))
+                    .Where(club => grantClubIds.Contains(club.Id))
                     .ToDictionaryAsync(club => club.Id, club => club.UserId);
 
                 foreach (var grant in grantsByUser)
@@ -154,7 +196,10 @@ namespace backend.main.features.auth
             await _context.SaveChangesAsync();
 
             await transaction.CommitAsync();
-            return true;
+
+            return orphanedBlobUrls
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
         }
 
         public async Task<User?> GetUserAsync(int id)
