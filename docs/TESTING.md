@@ -97,3 +97,24 @@ Auth integration tests use:
 - Kafka-backed test probes for email and SMS assertions
 
 The backend app exposes a `Testing` startup path so integration tests can boot with real infra wiring while still avoiding production-only side effects such as background email/SMS workers. A running Docker daemon is now a hard requirement for `backend.tests.Integration` locally and in CI.
+
+## Frontend E2E (Playwright)
+
+Frontend end-to-end tests live in `frontend/tests/` and use Playwright (`frontend/playwright.config.ts`). Playwright auto-starts the E2E dev server (`npm run start:e2e`, served at `http://127.0.0.1:3101`, matching the config `baseURL`). The regular dev server runs at `http://localhost:3090` (`npm start`).
+
+```powershell
+cd frontend
+npm run playwright:install   # first time only, installs browsers
+npm run test:e2e
+```
+
+### MCP servers (for Claude Code / agents)
+
+Two `.mcp.json` files register MCP servers for Claude Code so agents can drive a real browser (and query the Angular workspace) through MCP tools instead of writing one-off scripts. VS Code uses the equivalent `frontend/.vscode/mcp.json`.
+
+- **Repo-root `.mcp.json`** — the **Playwright** MCP server (`browser_navigate`, `browser_snapshot`, etc.). Loaded when you launch Claude Code from the repo root. Browser automation needs no project context, so it works from anywhere. Runs headless by default; remove the `--headless` flag to watch a visible browser.
+- **`frontend/.mcp.json`** — **Playwright + Angular CLI** (`ng mcp`). Loaded when you launch Claude Code from `frontend/`.
+
+Why the Angular CLI MCP lives only in `frontend/.mcp.json`: Claude Code launches stdio MCP servers with their working directory set to wherever you started Claude Code, and it [ignores the `cwd` field](https://github.com/anthropics/claude-code/issues/17565). The Angular CLI MCP must run inside the Angular workspace (`frontend/`) to resolve the local `@angular/cli` and read `angular.json`, so it only works when Claude Code is launched from `frontend/`. For frontend-focused agent work, run `cd frontend && claude`.
+
+To exercise a running app via the Playwright MCP, start `npm run start:e2e` first (serves `http://127.0.0.1:3101`), then point the MCP browser at that URL.
