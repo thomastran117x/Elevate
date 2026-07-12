@@ -97,3 +97,17 @@ Auth integration tests use:
 - Kafka-backed test probes for email and SMS assertions
 
 The backend app exposes a `Testing` startup path so integration tests can boot with real infra wiring while still avoiding production-only side effects such as background email/SMS workers. A running Docker daemon is now a hard requirement for `backend.tests.Integration` locally and in CI.
+
+## Frontend E2E (Playwright)
+
+Frontend end-to-end tests live in `frontend/tests/` and use Playwright (`frontend/playwright.config.ts`). Playwright auto-starts the E2E dev server (`npm run start:e2e`, served at `http://127.0.0.1:3101`, matching the config `baseURL`). The regular dev server runs at `http://localhost:3090` (`npm start`).
+
+```powershell
+cd frontend
+npm run playwright:install   # first time only, installs browsers
+npm run test:e2e
+```
+
+### Playwright MCP (for Claude Code / agents)
+
+The repo-root `.mcp.json` registers the Playwright MCP server for Claude Code, so agents can drive a real browser through MCP tools (`browser_navigate`, `browser_snapshot`, etc.) instead of writing one-off Playwright scripts. It runs headless by default; remove the `--headless` flag in `.mcp.json` to watch a visible browser. VS Code uses the equivalent `frontend/.vscode/mcp.json`. To exercise a running app, start `npm run start:e2e` first, then point the MCP browser at `http://127.0.0.1:3101`.
