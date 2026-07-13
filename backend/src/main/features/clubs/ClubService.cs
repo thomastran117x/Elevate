@@ -97,23 +97,23 @@ namespace backend.main.features.clubs
                 UpdatedAt = now
             };
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
+            await ExecuteInTransactionAsync(async () =>
+            {
+                _db.Clubs.Add(club);
+                await _db.SaveChangesAsync();
 
-            _db.Clubs.Add(club);
-            await _db.SaveChangesAsync();
+                AddVersionRecord(
+                    club,
+                    ClubVersionActions.Create,
+                    actorUserId: userId,
+                    actorRole: NormalizeActorRole(user.Usertype),
+                    rollbackSourceVersionNumber: null,
+                    changedFields: BuildChangedFields(null, BuildSnapshot(club)),
+                    createdAt: now);
+                _outboxWriter.StageUpsert(club);
 
-            AddVersionRecord(
-                club,
-                ClubVersionActions.Create,
-                actorUserId: userId,
-                actorRole: NormalizeActorRole(user.Usertype),
-                rollbackSourceVersionNumber: null,
-                changedFields: BuildChangedFields(null, BuildSnapshot(club)),
-                createdAt: now);
-            _outboxWriter.StageUpsert(club);
-
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+                await _db.SaveChangesAsync();
+            });
 
             await CacheClubAsync(club);
             await BumpClubListVersionAsync();
@@ -400,22 +400,22 @@ namespace backend.main.features.clubs
             var newSnapshot = BuildSnapshot(existing);
             var changedFields = BuildChangedFields(previousSnapshot, newSnapshot);
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
+            await ExecuteInTransactionAsync(async () =>
+            {
+                await _db.SaveChangesAsync();
 
-            await _db.SaveChangesAsync();
+                AddVersionRecord(
+                    existing,
+                    ClubVersionActions.Update,
+                    actorUserId: userId,
+                    actorRole: NormalizeActorRole(userRole),
+                    rollbackSourceVersionNumber: null,
+                    changedFields: changedFields,
+                    createdAt: existing.UpdatedAt);
+                _outboxWriter.StageUpsert(existing);
 
-            AddVersionRecord(
-                existing,
-                ClubVersionActions.Update,
-                actorUserId: userId,
-                actorRole: NormalizeActorRole(userRole),
-                rollbackSourceVersionNumber: null,
-                changedFields: changedFields,
-                createdAt: existing.UpdatedAt);
-            _outboxWriter.StageUpsert(existing);
-
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+                await _db.SaveChangesAsync();
+            });
 
             await CacheClubAsync(existing);
             await BumpClubListVersionAsync();
@@ -674,22 +674,22 @@ namespace backend.main.features.clubs
 
             var changedFields = BuildChangedFields(currentSnapshot, BuildSnapshot(club));
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
+            await ExecuteInTransactionAsync(async () =>
+            {
+                await _db.SaveChangesAsync();
 
-            await _db.SaveChangesAsync();
+                AddVersionRecord(
+                    club,
+                    ClubVersionActions.Rollback,
+                    actorUserId: userId,
+                    actorRole: NormalizeActorRole(userRole),
+                    rollbackSourceVersionNumber: targetVersion.VersionNumber,
+                    changedFields: changedFields,
+                    createdAt: club.UpdatedAt);
+                _outboxWriter.StageUpsert(club);
 
-            AddVersionRecord(
-                club,
-                ClubVersionActions.Rollback,
-                actorUserId: userId,
-                actorRole: NormalizeActorRole(userRole),
-                rollbackSourceVersionNumber: targetVersion.VersionNumber,
-                changedFields: changedFields,
-                createdAt: club.UpdatedAt);
-            _outboxWriter.StageUpsert(club);
-
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+                await _db.SaveChangesAsync();
+            });
 
             await CacheClubAsync(club);
             await BumpClubListVersionAsync();
@@ -774,6 +774,25 @@ namespace backend.main.features.clubs
 
                 Console.WriteLine("hot");
             }
+        }
+
+        private async Task ExecuteInTransactionAsync(Func<Task> action)
+        {
+            var strategy = _db.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+                try
+                {
+                    await action();
+                    await transaction.CommitAsync();
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
 
         private async Task<Club> GetTrackedClubOrThrowAsync(int clubId)
@@ -1015,3 +1034,5 @@ namespace backend.main.features.clubs
             string Source);
     }
 }
+
+
