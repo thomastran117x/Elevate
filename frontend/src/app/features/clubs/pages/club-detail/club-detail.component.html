@@ -78,27 +78,43 @@
           </div>
 
           <div class="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div class="surface-muted rounded-2xl p-4 text-center">
+            <button
+              type="button"
+              (click)="openPanel('members')"
+              class="surface-muted rounded-2xl p-4 text-center transition hover:border-line-strong hover:-translate-y-0.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
+            >
               <div class="text-2xl font-bold text-content">{{ club.memberCount | number }}</div>
               <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
                 Members
               </div>
-            </div>
-            <div class="surface-muted rounded-2xl p-4 text-center">
+            </button>
+            <button
+              type="button"
+              (click)="openPanel('events')"
+              class="surface-muted rounded-2xl p-4 text-center transition hover:border-line-strong hover:-translate-y-0.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
+            >
               <div class="text-2xl font-bold text-content">{{ club.eventCount | number }}</div>
               <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
                 Events
               </div>
-            </div>
-            <div class="surface-muted rounded-2xl p-4 text-center">
+            </button>
+            <button
+              type="button"
+              (click)="openPanel('openEvents')"
+              class="surface-muted rounded-2xl p-4 text-center transition hover:border-line-strong hover:-translate-y-0.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
+            >
               <div class="text-2xl font-bold text-content">
                 {{ club.availableEventCount | number }}
               </div>
               <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
                 Open events
               </div>
-            </div>
-            <div class="surface-muted rounded-2xl p-4 text-center">
+            </button>
+            <button
+              type="button"
+              (click)="openPanel('reviews')"
+              class="surface-muted rounded-2xl p-4 text-center transition hover:border-line-strong hover:-translate-y-0.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
+            >
               @if (club.rating != null) {
                 <div class="text-2xl font-bold text-content">
                   {{ club.rating | number: '1.1-1' }}
@@ -107,9 +123,9 @@
                 <div class="text-2xl font-bold text-content/30">-</div>
               }
               <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
-                Rating
+                Reviews
               </div>
-            </div>
+            </button>
           </div>
 
           @if (club.maxMemberCount > 0) {
@@ -310,4 +326,158 @@
       </section>
     }
   </main>
+
+  <!-- Drill-down modal -->
+  @if (activePanel) {
+    <div
+      class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+      (click)="closePanel()"
+    >
+      <div
+        class="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-line bg-page shadow-2xl sm:rounded-3xl"
+        role="dialog"
+        aria-modal="true"
+        (click)="$event.stopPropagation()"
+      >
+        <!-- Header -->
+        <div class="flex items-center justify-between gap-3 border-b border-line px-6 py-4">
+          <div>
+            <h2 class="text-lg font-bold text-content">{{ panelTitle }}</h2>
+            @if (!panelLoading && !panelError) {
+              <p class="text-xs text-subtle">{{ panelTotalCount | number }} total</p>
+            }
+          </div>
+          <button
+            type="button"
+            (click)="closePanel()"
+            class="flex h-9 w-9 items-center justify-center rounded-full text-subtle transition hover:bg-surface-muted hover:text-content"
+            aria-label="Close"
+          >
+            &#10005;
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="flex-1 overflow-y-auto px-6 py-4">
+          @if (panelLoading) {
+            <p class="py-10 text-center text-sm text-faint">Loading…</p>
+          } @else if (panelError) {
+            <p class="py-10 text-center text-sm text-danger">{{ panelError }}</p>
+          } @else {
+            <!-- Members -->
+            @if (activePanel === 'members') {
+              @if (panelMembers.length === 0) {
+                <p class="py-10 text-center text-sm text-subtle">No members yet.</p>
+              } @else {
+                <ul class="divide-y divide-line">
+                  @for (member of panelMembers; track member.id) {
+                    <li class="flex items-center gap-3 py-3">
+                      <div class="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full bg-accent/10">
+                        @if (member.avatar) {
+                          <img [src]="member.avatar" [alt]="memberName(member)" class="h-full w-full object-cover" />
+                        } @else {
+                          <span class="flex h-full w-full items-center justify-center text-xs font-bold text-accent">
+                            {{ memberInitials(member) }}
+                          </span>
+                        }
+                      </div>
+                      <div class="min-w-0">
+                        <p class="truncate font-semibold text-content">{{ memberName(member) }}</p>
+                        <p class="truncate text-xs text-faint">
+                          @if (member.username) { &#64;{{ member.username }} · }
+                          Joined {{ member.createdAt | date: 'mediumDate' }}
+                        </p>
+                      </div>
+                    </li>
+                  }
+                </ul>
+              }
+            }
+
+            <!-- Events / Open events -->
+            @if (activePanel === 'events' || activePanel === 'openEvents') {
+              @if (panelEvents.length === 0) {
+                <p class="py-10 text-center text-sm text-subtle">No events to show.</p>
+              } @else {
+                <ul class="divide-y divide-line">
+                  @for (event of panelEvents; track event.id) {
+                    <li
+                      class="flex cursor-pointer items-center justify-between gap-3 py-3 transition hover:opacity-80"
+                      (click)="navigateToEvent(event)"
+                      (keyup.enter)="navigateToEvent(event)"
+                      tabindex="0"
+                    >
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="rounded-full border px-2 py-0.5 text-[10px] font-semibold" [ngClass]="categoryStyles[event.category].badge">
+                            {{ event.category }}
+                          </span>
+                          <span class="text-[11px] text-subtle">{{ event.status }}</span>
+                        </div>
+                        <p class="mt-1 truncate font-semibold text-content">{{ event.name }}</p>
+                        <p class="text-xs text-faint">
+                          {{ formatEventDate(event.startTime) }} · {{ formatEventTime(event.startTime) }}
+                        </p>
+                      </div>
+                      <span class="shrink-0 text-sm font-semibold text-content">{{ formatCost(event.registerCost) }}</span>
+                    </li>
+                  }
+                </ul>
+              }
+            }
+
+            <!-- Reviews -->
+            @if (activePanel === 'reviews') {
+              @if (panelReviews.length === 0) {
+                <p class="py-10 text-center text-sm text-subtle">No reviews yet.</p>
+              } @else {
+                <ul class="flex flex-col gap-4">
+                  @for (review of panelReviews; track review.id) {
+                    <li class="rounded-2xl border border-line bg-surface-muted p-4">
+                      <div class="flex items-center justify-between gap-3">
+                        <span class="truncate text-sm font-semibold text-content">{{ reviewerName(review) }}</span>
+                        <span class="shrink-0 text-sm text-warning" aria-label="{{ review.rating }} out of 5">
+                          @for (filled of starsFor(review.rating); track $index) {
+                            <span [class]="filled ? 'text-warning' : 'text-content/20'">&#9733;</span>
+                          }
+                        </span>
+                      </div>
+                      <p class="mt-2 font-semibold text-content">{{ review.title }}</p>
+                      @if (review.comment) {
+                        <p class="mt-1 whitespace-pre-wrap text-sm leading-6 text-muted">{{ review.comment }}</p>
+                      }
+                      <p class="mt-2 text-xs text-faint">{{ formatDate(review.createdAt) }}</p>
+                    </li>
+                  }
+                </ul>
+              }
+            }
+          }
+        </div>
+
+        <!-- Footer pagination -->
+        @if (!panelLoading && !panelError && panelTotalPages > 1) {
+          <div class="flex items-center justify-center gap-2 border-t border-line px-6 py-3">
+            <button
+              type="button"
+              (click)="goToPanelPage(panelPage - 1)"
+              [disabled]="panelPage === 1"
+              class="rounded-2xl border border-line-strong px-3 py-2 text-xs font-semibold text-muted transition hover:bg-surface-muted disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span class="text-xs text-faint">Page {{ panelPage }} of {{ panelTotalPages }}</span>
+            <button
+              type="button"
+              (click)="goToPanelPage(panelPage + 1)"
+              [disabled]="panelPage === panelTotalPages"
+              class="rounded-2xl border border-line-strong px-3 py-2 text-xs font-semibold text-muted transition hover:bg-surface-muted disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  }
 </div>

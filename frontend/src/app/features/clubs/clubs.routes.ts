@@ -3,6 +3,7 @@ import { Routes } from '@angular/router';
 import { featureCanMatch } from '../../core/features/feature-can-match.guard';
 import { FEATURE_KEYS } from '../../core/features/feature-flags.types';
 import { clubManageAuthGuard } from './guards/club-manage-auth.guard';
+import { unsavedChangesGuard } from './guards/unsaved-changes.guard';
 
 export const CLUBS_ROUTES: Routes = [
   {
@@ -14,6 +15,7 @@ export const CLUBS_ROUTES: Routes = [
   {
     path: 'manage/new',
     canActivate: [clubManageAuthGuard],
+    canDeactivate: [unsavedChangesGuard],
     loadComponent: () =>
       import('./pages/manage/club-editor/club-editor.component').then((m) => m.ClubEditorComponent),
   },

@@ -1,5 +1,7 @@
 using backend.main.features.cache;
 using backend.main.features.clubs.search;
+using backend.main.features.profile;
+using backend.main.features.profile.contracts;
 using backend.main.infrastructure.database.core;
 using backend.main.shared.exceptions.http;
 
@@ -10,6 +12,7 @@ namespace backend.main.features.clubs.reviews
         private readonly AppDatabaseContext _db;
         private readonly IClubReviewRepository _reviewRepository;
         private readonly IClubRepository _clubRepository;
+        private readonly IUserRepository _userRepository;
         private readonly IClubSearchOutboxWriter _outboxWriter;
         private readonly ICacheService _cache;
 
@@ -17,12 +20,14 @@ namespace backend.main.features.clubs.reviews
             AppDatabaseContext db,
             IClubReviewRepository reviewRepository,
             IClubRepository clubRepository,
+            IUserRepository userRepository,
             IClubSearchOutboxWriter outboxWriter,
             ICacheService cache)
         {
             _db = db;
             _reviewRepository = reviewRepository;
             _clubRepository = clubRepository;
+            _userRepository = userRepository;
             _outboxWriter = outboxWriter;
             _cache = cache;
         }
@@ -56,6 +61,24 @@ namespace backend.main.features.clubs.reviews
                 throw new ResourceNotFoundException($"Club with ID {clubId} was not found.");
 
             return await _reviewRepository.GetByClubIdAsync(clubId, page, pageSize);
+        }
+
+        public async Task<(IReadOnlyList<ClubReview> Reviews, IReadOnlyDictionary<int, UserListRecord> Users, int TotalCount)>
+            GetClubReviewsAsync(int clubId, int page, int pageSize)
+        {
+            var clubExists = await _clubRepository.ExistsAsync(clubId);
+            if (!clubExists)
+                throw new ResourceNotFoundException($"Club with ID {clubId} was not found.");
+
+            var reviews = await _reviewRepository.GetByClubIdAsync(clubId, page, pageSize);
+            var totalCount = await _reviewRepository.CountByClubIdAsync(clubId);
+
+            var userIds = reviews.Select(r => r.UserId).Distinct().ToList();
+            IReadOnlyDictionary<int, UserListRecord> users = userIds.Count == 0
+                ? new Dictionary<int, UserListRecord>()
+                : (await _userRepository.GetByIdsAsync(userIds)).ToDictionary(u => u.Id);
+
+            return (reviews, users, totalCount);
         }
 
         public async Task<List<ClubReview>> GetReviewsByUserAsync(int userId, int page, int pageSize)

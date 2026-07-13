@@ -6,6 +6,7 @@ namespace backend.main.features.clubs.reviews
     {
         Task<ClubReview> CreateAsync(ClubReview review);
         Task<List<ClubReview>> GetByClubIdAsync(int clubId, int page, int pageSize);
+        Task<int> CountByClubIdAsync(int clubId);
         Task<List<ClubReview>> GetByUserIdAsync(int userId, int page, int pageSize);
         Task<ClubReview?> GetByIdAsync(int id);
         Task<ClubReview?> UpdateAsync(int id, ClubReview updated);

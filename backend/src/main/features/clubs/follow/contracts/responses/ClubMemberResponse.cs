@@ -1,6 +1,10 @@
-namespace backend.main.features.clubs.reviews.contracts.responses
+namespace backend.main.features.clubs.follow.contracts.responses
 {
-    public class ClubReviewResponse
+    /// <summary>
+    /// A club member (follow record) enriched with the member's public profile
+    /// fields. Profile fields are null when the referenced user no longer exists.
+    /// </summary>
+    public class ClubMemberResponse
     {
         public int Id
         {
@@ -11,15 +15,6 @@ namespace backend.main.features.clubs.reviews.contracts.responses
             get; set;
         }
         public int ClubId
-        {
-            get; set;
-        }
-        public string Title { get; set; } = string.Empty;
-        public int Rating
-        {
-            get; set;
-        }
-        public string? Comment
         {
             get; set;
         }
@@ -40,15 +35,18 @@ namespace backend.main.features.clubs.reviews.contracts.responses
             get; set;
         }
 
-        public ClubReviewResponse(int id, int userId, int clubId, string title, int rating, string? comment, DateTime createdAt,
-            string? name = null, string? username = null, string? avatar = null)
+        public ClubMemberResponse(
+            int id,
+            int userId,
+            int clubId,
+            DateTime createdAt,
+            string? name,
+            string? username,
+            string? avatar)
         {
             Id = id;
             UserId = userId;
             ClubId = clubId;
-            Title = title;
-            Rating = rating;
-            Comment = comment;
             CreatedAt = createdAt;
             Name = name;
             Username = username;

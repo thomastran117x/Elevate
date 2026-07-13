@@ -5,7 +5,11 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
+import { CATEGORY_STYLES, EventItem } from '../../../../events/models/event.types';
+import { EventsService } from '../../../../events/services/events.service';
+import { ClubPost, POST_TYPE_STYLES } from '../../../models/club-post.types';
 import { Club, CLUB_TYPE_STYLES } from '../../../models/club.types';
+import { ClubPostsService } from '../../../services/club-posts.service';
 import { ClubsService } from '../../../services/clubs.service';
 
 @Component({
@@ -22,26 +26,44 @@ export class OverviewTabComponent implements OnInit {
   loading = true;
   error = '';
 
+  recentPosts: ClubPost[] = [];
+  postsLoading = true;
+
+  upcomingEvents: EventItem[] = [];
+  eventsLoading = true;
+
   readonly clubTypeStyles = CLUB_TYPE_STYLES;
+  readonly postTypeStyles = POST_TYPE_STYLES;
+  readonly categoryStyles = CATEGORY_STYLES;
 
   constructor(
     private route: ActivatedRoute,
     private clubsService: ClubsService,
+    private postsService: ClubPostsService,
+    private eventsService: EventsService,
   ) {}
 
   ngOnInit(): void {
     this.clubId = Number.parseInt(this.route.parent?.snapshot.paramMap.get('clubId') ?? '', 10) || 0;
     if (!this.clubId) {
       this.loading = false;
+      this.postsLoading = false;
+      this.eventsLoading = false;
       this.error = 'A valid club ID is required.';
       return;
     }
     this.load();
+    this.loadRecentPosts();
+    this.loadUpcomingEvents();
   }
 
   memberCapacityPercent(): number {
     if (!this.club || this.club.maxMemberCount <= 0) return 0;
     return Math.min(100, (this.club.memberCount / this.club.maxMemberCount) * 100);
+  }
+
+  authorDisplay(post: ClubPost): string {
+    return post.author?.name ?? post.author?.username ?? `User #${post.userId}`;
   }
 
   private load(): void {
@@ -60,6 +82,42 @@ export class OverviewTabComponent implements OnInit {
         },
         error: (err) => {
           this.error = getApiClientMessage(err, 'Unable to load this club.');
+        },
+      });
+  }
+
+  private loadRecentPosts(): void {
+    this.postsLoading = true;
+    this.postsService
+      .getPosts(this.clubId, { sortBy: 'Recent', page: 1, pageSize: 3 })
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => (this.postsLoading = false)),
+      )
+      .subscribe({
+        next: (response) => {
+          this.recentPosts = response.data?.items ?? [];
+        },
+        error: () => {
+          this.recentPosts = [];
+        },
+      });
+  }
+
+  private loadUpcomingEvents(): void {
+    this.eventsLoading = true;
+    this.eventsService
+      .getEventsByClub(this.clubId, { status: 'Upcoming', page: 1, pageSize: 3 })
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => (this.eventsLoading = false)),
+      )
+      .subscribe({
+        next: (response) => {
+          this.upcomingEvents = response.data?.items ?? [];
+        },
+        error: () => {
+          this.upcomingEvents = [];
         },
       });
   }

@@ -1,5 +1,7 @@
 using backend.main.features.cache;
 using backend.main.features.clubs.follow;
+using backend.main.features.profile;
+using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
 
 namespace backend.main.features.clubs.follow
@@ -7,6 +9,7 @@ namespace backend.main.features.clubs.follow
     public class FollowService : IFollowService
     {
         private readonly IFollowRepository _followRepository;
+        private readonly IUserRepository _userRepository;
         private readonly ICacheService _cache;
         private readonly IRefreshAheadCache _refreshCache;
 
@@ -16,10 +19,12 @@ namespace backend.main.features.clubs.follow
 
         public FollowService(
             IFollowRepository followRepository,
+            IUserRepository userRepository,
             ICacheService cache,
             IRefreshAheadCache refreshCache)
         {
             _followRepository = followRepository;
+            _userRepository = userRepository;
             _cache = cache;
             _refreshCache = refreshCache;
         }
@@ -53,6 +58,20 @@ namespace backend.main.features.clubs.follow
                 ClubFollowsKey(clubId, page, pageSize),
                 async () => (await _followRepository.GetFollowsByClubAsync(clubId, page, pageSize)).ToList(),
                 ListTTL) ?? [];
+        }
+
+        public async Task<(IReadOnlyList<FollowClub> Members, IReadOnlyDictionary<int, UserListRecord> Users, int TotalCount)>
+            GetClubMembersAsync(int clubId, int page = 1, int pageSize = 20)
+        {
+            var members = (await GetFollowsByClubAsync(clubId, page, pageSize)).ToList();
+            var totalCount = await _followRepository.CountFollowsByClubAsync(clubId);
+
+            var userIds = members.Select(m => m.UserId).Distinct().ToList();
+            IReadOnlyDictionary<int, UserListRecord> users = userIds.Count == 0
+                ? new Dictionary<int, UserListRecord>()
+                : (await _userRepository.GetByIdsAsync(userIds)).ToDictionary(u => u.Id);
+
+            return (members, users, totalCount);
         }
 
         public async Task<IEnumerable<FollowClub>> GetFollowsAsync(int page = 1, int pageSize = 20)

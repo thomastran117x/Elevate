@@ -57,6 +57,13 @@ namespace backend.main.features.clubs.follow
                 .ToListAsync();
         }
 
+        public async Task<int> CountFollowsByClubAsync(int clubId)
+        {
+            return await _context.FollowClubs
+                .AsNoTracking()
+                .CountAsync(f => f.ClubId == clubId);
+        }
+
         public async Task<IEnumerable<FollowClub>> GetFollowsByUserAsync(int userId, int page = 1, int pageSize = 20)
         {
             page = Math.Max(page, 1);

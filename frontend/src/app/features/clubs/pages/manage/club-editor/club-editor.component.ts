@@ -7,12 +7,15 @@ import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
 import { EventsManagementService } from '../../../../events/services/events-management.service';
+import { CanComponentDeactivate } from '../../../guards/unsaved-changes.guard';
 import { ALL_CLUB_TYPES, ClubType } from '../../../models/club.types';
 import { toClubtypeAlias } from '../../../models/club-management.types';
 import { ClubManagementService } from '../../../services/club-management.service';
 import { ClubsService } from '../../../services/clubs.service';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const NAME_MAX = 30;
+const DESCRIPTION_MAX = 30;
 
 @Component({
   selector: 'app-club-editor',
@@ -20,15 +23,20 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
   imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './club-editor.component.html',
 })
-export class ClubEditorComponent implements OnInit {
+export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
   private readonly fb = new FormBuilder();
   private readonly destroyRef = inject(DestroyRef);
 
   readonly clubTypes = ALL_CLUB_TYPES;
+  readonly nameMax = NAME_MAX;
+  readonly descriptionMax = DESCRIPTION_MAX;
 
   readonly form = this.fb.nonNullable.group({
-    name: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(30)]),
-    description: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(30)]),
+    name: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(NAME_MAX)]),
+    description: this.fb.nonNullable.control('', [
+      Validators.required,
+      Validators.maxLength(DESCRIPTION_MAX),
+    ]),
     clubType: this.fb.nonNullable.control<ClubType>('Social', [Validators.required]),
     phone: this.fb.nonNullable.control('', [Validators.maxLength(30)]),
     email: this.fb.nonNullable.control('', [Validators.email]),
@@ -38,8 +46,10 @@ export class ClubEditorComponent implements OnInit {
   clubId = 0;
   imageUrl = '';
   imageUploading = false;
+  dragActive = false;
   loading = false;
   saving = false;
+  saved = false;
   error = '';
   success = '';
 
@@ -66,6 +76,15 @@ export class ClubEditorComponent implements OnInit {
     }
   }
 
+  canDeactivate(): boolean {
+    if (this.saved || (!this.form.dirty && !this.imageDirty)) {
+      return true;
+    }
+    return window.confirm('You have unsaved changes. Leave without saving?');
+  }
+
+  private imageDirty = false;
+
   private loadClub(): void {
     this.loading = true;
     this.clubsService
@@ -89,6 +108,7 @@ export class ClubEditorComponent implements OnInit {
             phone: club.phone ?? '',
             email: club.email ?? '',
           });
+          this.form.markAsPristine();
         },
         error: (err) => {
           this.error = getApiClientMessage(err, 'Unable to load this club.');
@@ -96,12 +116,31 @@ export class ClubEditorComponent implements OnInit {
       });
   }
 
+  onDragOver(event: DragEvent): void {
+    event.preventDefault();
+    this.dragActive = true;
+  }
+
+  onDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    this.dragActive = false;
+  }
+
+  onDrop(event: DragEvent): void {
+    event.preventDefault();
+    this.dragActive = false;
+    const file = event.dataTransfer?.files?.[0];
+    if (file) this.uploadFile(file);
+  }
+
   onImageSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
-    if (!file) return;
+    if (file) this.uploadFile(file);
+  }
 
+  private uploadFile(file: File): void {
     this.error = '';
     this.success = '';
 
@@ -125,6 +164,7 @@ export class ClubEditorComponent implements OnInit {
       .subscribe({
         next: (publicUrl) => {
           this.imageUrl = publicUrl;
+          this.imageDirty = true;
         },
         error: (err) => {
           this.error = getApiClientMessage(err, 'The image upload failed.');
@@ -168,6 +208,9 @@ export class ClubEditorComponent implements OnInit {
       .subscribe({
         next: (response) => {
           const club = response.data;
+          this.saved = true;
+          this.imageDirty = false;
+          this.form.markAsPristine();
           if (this.isCreate && club) {
             void this.router.navigate(['/clubs', club.id, 'manage']);
             return;
@@ -175,6 +218,7 @@ export class ClubEditorComponent implements OnInit {
           this.success = 'Club details saved.';
         },
         error: (err) => {
+          this.saved = false;
           this.error = getApiClientMessage(err, 'Unable to save the club.');
         },
       });
@@ -188,8 +232,5 @@ export class ClubEditorComponent implements OnInit {
   }
   get emailControl() {
     return this.form.controls.email;
-  }
-  get phoneControl() {
-    return this.form.controls.phone;
   }
 }

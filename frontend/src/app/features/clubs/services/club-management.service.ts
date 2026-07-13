@@ -8,6 +8,7 @@ import { ApiClient } from '../../../core/api/services/api-client.service';
 import { Club, normalizeClub } from '../models/club.types';
 import {
   ClubAnalyticsApiResponse,
+  ClubMembersApiResponse,
   ClubMutationPayload,
   ClubRollbackApiResponse,
   ClubStaff,
@@ -17,6 +18,7 @@ import {
   ClubVersionsApiResponse,
   ManagedClubsApiResponse,
   normalizeClubAnalytics,
+  normalizeClubMembersPagedData,
   normalizeClubRollback,
   normalizeClubStaff,
   normalizeClubVersionDetail,
@@ -61,6 +63,28 @@ export class ClubManagementService {
     return this.api
       .put<ApiEnvelope<unknown>>(`${this.base}/${clubId}`, payload, { withCredentials: true })
       .pipe(map((response) => this.mapClub(response)));
+  }
+
+  getMembers(clubId: number, page = 1, pageSize = 20): Observable<ClubMembersApiResponse> {
+    const params = new HttpParams().set('page', String(page)).set('pageSize', String(pageSize));
+    return this.api
+      .get<ApiEnvelope<unknown>>(`${this.base}/${clubId}/members`, {
+        params,
+        withCredentials: true,
+      })
+      .pipe(
+        map((response) => {
+          const raw = this.rawData(response);
+          return {
+            ...response,
+            data: raw
+              ? normalizeClubMembersPagedData(
+                  raw as Parameters<typeof normalizeClubMembersPagedData>[0],
+                )
+              : null,
+          } as ClubMembersApiResponse;
+        }),
+      );
   }
 
   getStaff(clubId: number): Observable<ClubStaffListApiResponse> {

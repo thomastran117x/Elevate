@@ -62,6 +62,71 @@ export function normalizeClubStaff(raw: ClubStaffPayload): ClubStaff {
 }
 
 // ---------------------------------------------------------------------------
+// Members (follow records)
+// ---------------------------------------------------------------------------
+
+export interface ClubMember {
+  id: number;
+  userId: number;
+  clubId: number;
+  createdAt: string;
+  name: string | null;
+  username: string | null;
+  avatar: string | null;
+}
+
+type ClubMemberPayload = Partial<ClubMember> & {
+  Id?: number;
+  UserId?: number;
+  ClubId?: number;
+  CreatedAt?: string;
+  Name?: string | null;
+  Username?: string | null;
+  Avatar?: string | null;
+};
+
+export function normalizeClubMember(raw: ClubMemberPayload): ClubMember {
+  return {
+    id: raw.id ?? raw.Id ?? 0,
+    userId: raw.userId ?? raw.UserId ?? 0,
+    clubId: raw.clubId ?? raw.ClubId ?? 0,
+    createdAt: raw.createdAt ?? raw.CreatedAt ?? '',
+    name: raw.name ?? raw.Name ?? null,
+    username: raw.username ?? raw.Username ?? null,
+    avatar: raw.avatar ?? raw.Avatar ?? null,
+  };
+}
+
+export interface ClubMembersPagedData {
+  items: ClubMember[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export function normalizeClubMembersPagedData(raw: {
+  items?: ClubMemberPayload[];
+  Items?: ClubMemberPayload[];
+  totalCount?: number;
+  TotalCount?: number;
+  page?: number;
+  Page?: number;
+  pageSize?: number;
+  PageSize?: number;
+  totalPages?: number;
+  TotalPages?: number;
+}): ClubMembersPagedData {
+  return {
+    items: (raw.items ?? raw.Items ?? []).map(normalizeClubMember),
+    totalCount: raw.totalCount ?? raw.TotalCount ?? 0,
+    page: raw.page ?? raw.Page ?? 1,
+    pageSize: raw.pageSize ?? raw.PageSize ?? 20,
+    totalPages: raw.totalPages ?? raw.TotalPages ?? 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Version history
 // ---------------------------------------------------------------------------
 
@@ -247,6 +312,11 @@ export interface TopEventEntry {
   revenue: number;
 }
 
+export interface TrendPoint {
+  date: string;
+  value: number;
+}
+
 export interface ClubAnalytics {
   clubId: number;
   totalEvents: number;
@@ -266,6 +336,8 @@ export interface ClubAnalytics {
   topEventsByRegistrations: TopEventEntry[];
   topEventsByRevenue: TopEventEntry[];
   topEventsByFillRate: TopEventEntry[];
+  registrationTrend: TrendPoint[];
+  revenueTrend: TrendPoint[];
 }
 
 type TopEventPayload = Partial<TopEventEntry> & {
@@ -299,6 +371,29 @@ function topList(raw: AnalyticsPayload, camel: string, pascal: string): TopEvent
   return list.map(normalizeTopEvent);
 }
 
+type TrendPayload = {
+  date?: string;
+  Date?: string;
+  count?: number;
+  Count?: number;
+  amount?: number;
+  Amount?: number;
+};
+
+function trendList(
+  raw: AnalyticsPayload,
+  camel: string,
+  pascal: string,
+  valueCamel: 'count' | 'amount',
+  valuePascal: 'Count' | 'Amount',
+): TrendPoint[] {
+  const list = (raw[camel] ?? raw[pascal] ?? []) as TrendPayload[];
+  return list.map((point) => ({
+    date: point.date ?? point.Date ?? '',
+    value: (point[valueCamel] ?? point[valuePascal] ?? 0) as number,
+  }));
+}
+
 export function normalizeClubAnalytics(raw: AnalyticsPayload): ClubAnalytics {
   return {
     clubId: num(raw, 'clubId', 'ClubId'),
@@ -319,6 +414,8 @@ export function normalizeClubAnalytics(raw: AnalyticsPayload): ClubAnalytics {
     topEventsByRegistrations: topList(raw, 'topEventsByRegistrations', 'TopEventsByRegistrations'),
     topEventsByRevenue: topList(raw, 'topEventsByRevenue', 'TopEventsByRevenue'),
     topEventsByFillRate: topList(raw, 'topEventsByFillRate', 'TopEventsByFillRate'),
+    registrationTrend: trendList(raw, 'registrationTrend', 'RegistrationTrend', 'count', 'Count'),
+    revenueTrend: trendList(raw, 'revenueTrend', 'RevenueTrend', 'amount', 'Amount'),
   };
 }
 
@@ -327,6 +424,7 @@ export function normalizeClubAnalytics(raw: AnalyticsPayload): ClubAnalytics {
 // ---------------------------------------------------------------------------
 
 export type ManagedClubsApiResponse = ApiEnvelope<Club[]>;
+export type ClubMembersApiResponse = ApiEnvelope<ClubMembersPagedData>;
 export type ClubStaffListApiResponse = ApiEnvelope<ClubStaff[]>;
 export type ClubStaffApiResponse = ApiEnvelope<ClubStaff>;
 export type ClubVersionsApiResponse = ApiEnvelope<ClubVersionsPagedData>;

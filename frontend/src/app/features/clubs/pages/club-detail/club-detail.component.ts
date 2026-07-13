@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
@@ -7,9 +7,15 @@ import { ClubsService } from '../../services/clubs.service';
 import { Club, CLUB_TYPE_STYLES } from '../../models/club.types';
 import { ClubPostsService } from '../../services/club-posts.service';
 import { ClubPost, POST_TYPE_STYLES } from '../../models/club-post.types';
+import { ClubReview } from '../../models/club-review.types';
+import { ClubReviewsService } from '../../services/club-reviews.service';
+import { ClubMember } from '../../models/club-management.types';
+import { ClubManagementService } from '../../services/club-management.service';
 import { EventsService } from '../../../events/services/events.service';
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { CATEGORY_STYLES, EventItem } from '../../../events/models/event.types';
+
+export type DetailPanel = 'members' | 'events' | 'openEvents' | 'reviews';
 
 @Component({
   selector: 'app-club-detail',
@@ -29,6 +35,17 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
   upcomingEvents: EventItem[] = [];
   eventsLoading = false;
 
+  // Drill-down modal state
+  activePanel: DetailPanel | null = null;
+  panelLoading = false;
+  panelError = '';
+  panelPage = 1;
+  readonly panelPageSize = 10;
+  panelTotalCount = 0;
+  panelMembers: ClubMember[] = [];
+  panelEvents: EventItem[] = [];
+  panelReviews: ClubReview[] = [];
+
   readonly clubTypeStyles = CLUB_TYPE_STYLES;
   readonly postTypeStyles = POST_TYPE_STYLES;
   readonly categoryStyles = CATEGORY_STYLES;
@@ -41,6 +58,8 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
     private clubsService: ClubsService,
     private postsService: ClubPostsService,
     private eventsService: EventsService,
+    private reviewsService: ClubReviewsService,
+    private managementService: ClubManagementService,
   ) {}
 
   ngOnInit(): void {
@@ -72,6 +91,134 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
 
   manageClub(): void {
     this.router.navigate(['/clubs', this.clubId, 'manage']);
+  }
+
+  // ---- Drill-down modal ----------------------------------------------------
+
+  openPanel(panel: DetailPanel): void {
+    this.activePanel = panel;
+    this.panelPage = 1;
+    this.panelError = '';
+    this.panelMembers = [];
+    this.panelEvents = [];
+    this.panelReviews = [];
+    this.panelTotalCount = 0;
+    this.loadPanel();
+  }
+
+  closePanel(): void {
+    this.activePanel = null;
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.activePanel) this.closePanel();
+  }
+
+  get panelTotalPages(): number {
+    return Math.max(1, Math.ceil(this.panelTotalCount / this.panelPageSize));
+  }
+
+  get panelTitle(): string {
+    switch (this.activePanel) {
+      case 'members':
+        return 'Members';
+      case 'events':
+        return 'All events';
+      case 'openEvents':
+        return 'Open events';
+      case 'reviews':
+        return 'Reviews';
+      default:
+        return '';
+    }
+  }
+
+  goToPanelPage(page: number): void {
+    if (page < 1 || page > this.panelTotalPages || page === this.panelPage) return;
+    this.panelPage = page;
+    this.loadPanel();
+  }
+
+  memberName(member: ClubMember): string {
+    return member.name || member.username || `User #${member.userId}`;
+  }
+
+  memberInitials(member: ClubMember): string {
+    const source = member.name || member.username || '';
+    return source ? source.slice(0, 2).toUpperCase() : `#${member.userId}`.slice(0, 2);
+  }
+
+  reviewerName(review: ClubReview): string {
+    return review.name || review.username || `User #${review.userId}`;
+  }
+
+  starsFor(rating: number): number[] {
+    return [1, 2, 3, 4, 5].map((n) => (n <= Math.round(rating) ? 1 : 0));
+  }
+
+  private loadPanel(): void {
+    const panel = this.activePanel;
+    if (!panel) return;
+
+    this.panelLoading = true;
+    this.panelError = '';
+
+    if (panel === 'reviews') {
+      this.reviewsService
+        .getReviews(this.clubId, this.panelPage, this.panelPageSize)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (response) => {
+            this.panelReviews = response.data?.items ?? [];
+            this.panelTotalCount = response.data?.totalCount ?? 0;
+            this.panelLoading = false;
+          },
+          error: (err) => {
+            this.panelError = getApiClientMessage(err, 'Unable to load reviews.');
+            this.panelLoading = false;
+          },
+        });
+      return;
+    }
+
+    if (panel === 'members') {
+      this.managementService
+        .getMembers(this.clubId, this.panelPage, this.panelPageSize)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (response) => {
+            this.panelMembers = response.data?.items ?? [];
+            this.panelTotalCount = response.data?.totalCount ?? 0;
+            this.panelLoading = false;
+          },
+          error: (err) => {
+            this.panelError = getApiClientMessage(err, 'Unable to load members.');
+            this.panelLoading = false;
+          },
+        });
+      return;
+    }
+
+    // events | openEvents
+    this.eventsService
+      .getEventsByClub(this.clubId, {
+        status: panel === 'openEvents' ? 'Upcoming' : undefined,
+        page: this.panelPage,
+        pageSize: this.panelPageSize,
+      })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          this.panelEvents = response.data?.items ?? [];
+          this.panelTotalCount = response.data?.totalCount ?? 0;
+          this.panelLoading = false;
+        },
+        error: (err) => {
+          this.panelError = getApiClientMessage(err, 'Unable to load events.');
+          this.panelLoading = false;
+        },
+      });
   }
 
   navigateToPost(post: ClubPost): void {
