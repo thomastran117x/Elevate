@@ -1,0 +1,81 @@
+<div class="flex flex-col gap-6">
+  <div
+    *ngIf="error"
+    class="rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
+  >
+    {{ error }}
+  </div>
+
+  <div
+    *ngIf="loading"
+    class="rounded-3xl border border-line bg-glass px-6 py-10 text-center text-sm text-faint"
+  >
+    Loading analytics…
+  </div>
+
+  <ng-container *ngIf="!loading && analytics as a">
+    <!-- Headline stats -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="rounded-2xl border border-line bg-glass px-5 py-4">
+        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">Registrations</p>
+        <p class="mt-2 text-2xl font-bold">{{ a.totalRegistrations }}</p>
+      </div>
+      <div class="rounded-2xl border border-line bg-glass px-5 py-4">
+        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">Unique attendees</p>
+        <p class="mt-2 text-2xl font-bold">{{ a.uniqueAttendees }}</p>
+        <p class="mt-1 text-xs text-faint">{{ a.repeatAttendees }} repeat</p>
+      </div>
+      <div class="rounded-2xl border border-line bg-glass px-5 py-4">
+        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">Revenue</p>
+        <p class="mt-2 text-2xl font-bold">{{ toDollars(a.totalRevenue) | currency }}</p>
+        <p class="mt-1 text-xs text-faint">{{ toDollars(a.pendingRevenue) | currency }} pending</p>
+      </div>
+      <div class="rounded-2xl border border-line bg-glass px-5 py-4">
+        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">Avg fill rate</p>
+        <p class="mt-2 text-2xl font-bold">{{ a.avgFillRate | number: '1.0-1' }}%</p>
+      </div>
+    </div>
+
+    <!-- Event breakdown -->
+    <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
+      <h2 class="text-lg font-bold">Events</h2>
+      <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div class="rounded-2xl bg-surface-muted px-4 py-3 text-center">
+          <p class="text-xl font-bold">{{ a.totalEvents }}</p>
+          <p class="text-xs text-faint">Total</p>
+        </div>
+        <div class="rounded-2xl bg-surface-muted px-4 py-3 text-center">
+          <p class="text-xl font-bold">{{ a.publishedEvents }}</p>
+          <p class="text-xs text-faint">Published</p>
+        </div>
+        <div class="rounded-2xl bg-surface-muted px-4 py-3 text-center">
+          <p class="text-xl font-bold">{{ a.draftEvents }}</p>
+          <p class="text-xs text-faint">Drafts</p>
+        </div>
+        <div class="rounded-2xl bg-surface-muted px-4 py-3 text-center">
+          <p class="text-xl font-bold">{{ a.upcomingEvents }}</p>
+          <p class="text-xs text-faint">Upcoming</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- Top events -->
+    <article
+      *ngIf="a.topEventsByRegistrations.length > 0"
+      class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl"
+    >
+      <h2 class="text-lg font-bold">Top events by registrations</h2>
+      <ul class="mt-4 divide-y divide-line">
+        <li
+          *ngFor="let event of a.topEventsByRegistrations"
+          class="flex items-center justify-between gap-3 py-3"
+        >
+          <span class="font-semibold text-content">{{ event.name }}</span>
+          <span class="text-sm text-subtle">
+            {{ event.registrationCount }} reg · {{ event.fillRate | number: '1.0-1' }}% full
+          </span>
+        </li>
+      </ul>
+    </article>
+  </ng-container>
+</div>

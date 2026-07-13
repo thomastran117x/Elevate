@@ -7,7 +7,8 @@ namespace backend.main.features.events.contracts.requests
     /// </summary>
     public class PresignedUrlRequest : IValidatableObject
     {
-        [Range(1, int.MaxValue, ErrorMessage = "ClubId must be greater than 0.")]
+        // 0 is allowed for uploads tied to a club that does not exist yet (club creation).
+        [Range(0, int.MaxValue, ErrorMessage = "ClubId cannot be negative.")]
         public int ClubId
         {
             get; set;

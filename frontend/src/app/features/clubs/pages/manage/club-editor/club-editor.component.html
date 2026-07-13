@@ -1,0 +1,201 @@
+<!-- Create mode renders its own full-page chrome; edit mode is embedded in the manage shell. -->
+<ng-container *ngIf="isCreate; else cardOnly">
+  <div class="relative min-h-screen overflow-hidden bg-page text-content">
+    <div class="pointer-events-none absolute inset-0">
+      <div
+        class="absolute -left-40 -top-40 h-[520px] w-[520px] animate-pulse rounded-full bg-accent/7 dark:bg-accent/20 blur-3xl"
+      ></div>
+      <div
+        class="absolute -right-40 top-60 h-[420px] w-[420px] animate-pulse rounded-full bg-accent/5 dark:bg-accent/10 blur-3xl"
+      ></div>
+    </div>
+
+    <div class="relative z-10 mx-auto max-w-2xl px-6 py-14">
+      <div class="mb-8 space-y-3">
+        <a
+          routerLink="/clubs/manage"
+          class="text-xs font-semibold text-subtle transition hover:text-content"
+        >
+          &larr; All clubs
+        </a>
+        <p class="text-sm font-semibold uppercase tracking-[0.28em] text-accent">
+          Club management
+        </p>
+        <h1 class="text-4xl font-black tracking-tight">Create a club</h1>
+      </div>
+      <ng-container *ngTemplateOutlet="formCard"></ng-container>
+    </div>
+  </div>
+</ng-container>
+
+<ng-template #cardOnly>
+  <ng-container *ngTemplateOutlet="formCard"></ng-container>
+</ng-template>
+
+<ng-template #formCard>
+  <div class="flex flex-col gap-6">
+    <div
+      *ngIf="success"
+      class="rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success"
+    >
+      {{ success }}
+    </div>
+    <div
+      *ngIf="error"
+      class="rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
+    >
+      {{ error }}
+    </div>
+
+    <div
+      *ngIf="loading"
+      class="rounded-3xl border border-line bg-glass px-6 py-10 text-center text-sm text-faint"
+    >
+      Loading club details…
+    </div>
+
+    <form
+      *ngIf="!loading"
+      class="space-y-6 rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl"
+      [formGroup]="form"
+      (ngSubmit)="save()"
+    >
+      <!-- Image -->
+      <div class="space-y-3">
+        <label class="text-sm font-semibold text-muted">Club image</label>
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div
+            class="flex h-28 w-40 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-line bg-surface-muted text-xs text-faint"
+          >
+            <img
+              *ngIf="imageUrl; else noImage"
+              [src]="imageUrl"
+              alt="Club image preview"
+              class="h-full w-full object-cover"
+            />
+            <ng-template #noImage>No image</ng-template>
+          </div>
+          <div class="space-y-2">
+            <button
+              type="button"
+              (click)="imageInput.click()"
+              [disabled]="imageUploading"
+              class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-4 py-2 text-sm font-semibold text-muted transition hover:bg-glass-strong disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {{ imageUploading ? 'Uploading…' : imageUrl ? 'Replace image' : 'Upload image' }}
+            </button>
+            <p class="text-xs text-faint">PNG or JPG, up to 5MB.</p>
+            <input
+              #imageInput
+              type="file"
+              accept="image/*"
+              class="hidden"
+              (change)="onImageSelected($event)"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Name -->
+      <div class="space-y-2">
+        <label class="text-sm font-semibold text-muted" for="club-name">Name</label>
+        <input
+          id="club-name"
+          type="text"
+          formControlName="name"
+          maxlength="30"
+          placeholder="Chess Club"
+          class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+        />
+        <p
+          *ngIf="nameControl.invalid && nameControl.touched"
+          class="text-sm text-danger"
+        >
+          Name is required and must be 30 characters or fewer.
+        </p>
+      </div>
+
+      <!-- Description -->
+      <div class="space-y-2">
+        <label class="text-sm font-semibold text-muted" for="club-description">Description</label>
+        <input
+          id="club-description"
+          type="text"
+          formControlName="description"
+          maxlength="30"
+          placeholder="A short tagline"
+          class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+        />
+        <p
+          *ngIf="descriptionControl.invalid && descriptionControl.touched"
+          class="text-sm text-danger"
+        >
+          Description is required and must be 30 characters or fewer.
+        </p>
+      </div>
+
+      <!-- Club type -->
+      <div class="space-y-2">
+        <label class="text-sm font-semibold text-muted" for="club-type">Type</label>
+        <select
+          id="club-type"
+          formControlName="clubType"
+          class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+        >
+          <option *ngFor="let type of clubTypes" [value]="type">{{ type }}</option>
+        </select>
+      </div>
+
+      <!-- Phone -->
+      <div class="space-y-2">
+        <label class="text-sm font-semibold text-muted" for="club-phone"
+          >Phone <span class="font-normal text-faint">(optional)</span></label
+        >
+        <input
+          id="club-phone"
+          type="tel"
+          formControlName="phone"
+          placeholder="+1 416 555 0123"
+          class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+        />
+      </div>
+
+      <!-- Email -->
+      <div class="space-y-2">
+        <label class="text-sm font-semibold text-muted" for="club-email"
+          >Email <span class="font-normal text-faint">(optional)</span></label
+        >
+        <input
+          id="club-email"
+          type="email"
+          formControlName="email"
+          placeholder="club@example.com"
+          class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+        />
+        <p
+          *ngIf="emailControl.invalid && emailControl.touched"
+          class="text-sm text-danger"
+        >
+          Enter a valid email address.
+        </p>
+      </div>
+
+      <div class="flex flex-col gap-3 pt-2 sm:flex-row">
+        <button
+          type="submit"
+          [disabled]="saving || imageUploading"
+          class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {{ saving ? 'Saving…' : isCreate ? 'Create club' : 'Save changes' }}
+        </button>
+        <a
+          *ngIf="isCreate"
+          routerLink="/clubs/manage"
+          class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong"
+        >
+          Cancel
+        </a>
+      </div>
+    </form>
+  </div>
+</ng-template>

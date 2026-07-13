@@ -1181,6 +1181,11 @@ namespace backend.main.features.events
         {
             try
             {
+                // clubId <= 0 (with no eventId) means the club does not exist yet — this is a
+                // club-creation upload, so any authenticated user may request it and the
+                // club-manage check is skipped. The issued URL is still an owned-blob URL.
+                var isNewClubUpload = !eventId.HasValue && clubId <= 0;
+
                 if (eventId.HasValue)
                 {
                     var ev = await GetEvent(eventId.Value);
@@ -1188,14 +1193,16 @@ namespace backend.main.features.events
                     if (ev.ClubId != clubId)
                         throw new ForbiddenException("Not allowed");
                 }
-                else
+                else if (!isNewClubUpload)
                 {
                     await EnsureCanManageClubAsync(clubId, userId, userRole);
                 }
 
                 var scope = eventId.HasValue
                     ? $"events/clubs/{clubId}/events/{eventId.Value}"
-                    : $"events/clubs/{clubId}/pending";
+                    : isNewClubUpload
+                        ? $"clubs/pending/{userId}"
+                        : $"events/clubs/{clubId}/pending";
 
                 var result = await _blobService.GenerateUploadUrlAsync(scope, fileName, contentType);
 

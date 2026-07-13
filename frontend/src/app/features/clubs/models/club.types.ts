@@ -40,6 +40,11 @@ export interface Club {
   phone: string | null;
   email: string | null;
   websiteUrl: string | null;
+  currentVersionNumber: number;
+  isOwner: boolean;
+  isManager: boolean;
+  isVolunteer: boolean;
+  canManage: boolean;
 }
 
 export interface ClubsPagedData {
@@ -73,6 +78,12 @@ type ClubPayload = Partial<Club> & {
   Phone?: string | null;
   Email?: string | null;
   WebsiteUrl?: string | null;
+  CurrentVersionNumber?: number;
+  currentVersionNumber?: number;
+  IsOwner?: boolean;
+  IsManager?: boolean;
+  IsVolunteer?: boolean;
+  CanManage?: boolean;
 };
 
 type PagedPayload<T> = {
@@ -113,6 +124,11 @@ export function normalizeClub(raw: ClubPayload): Club {
     phone: raw.phone ?? raw.Phone ?? null,
     email: raw.email ?? raw.Email ?? null,
     websiteUrl: raw.websiteUrl ?? raw.WebsiteUrl ?? null,
+    currentVersionNumber: raw.currentVersionNumber ?? raw.CurrentVersionNumber ?? 0,
+    isOwner: raw.isOwner ?? raw.IsOwner ?? false,
+    isManager: raw.isManager ?? raw.IsManager ?? false,
+    isVolunteer: raw.isVolunteer ?? raw.IsVolunteer ?? false,
+    canManage: raw.canManage ?? raw.CanManage ?? false,
   };
 }
 

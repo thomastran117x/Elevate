@@ -70,6 +70,10 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
     this.router.navigate(['/clubs', this.clubId, 'posts']);
   }
 
+  manageClub(): void {
+    this.router.navigate(['/clubs', this.clubId, 'manage']);
+  }
+
   navigateToPost(post: ClubPost): void {
     this.router.navigate(['/clubs', this.clubId, 'posts', post.id]);
   }

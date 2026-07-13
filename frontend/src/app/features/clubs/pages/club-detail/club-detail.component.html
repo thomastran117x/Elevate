@@ -59,12 +59,22 @@
               }
             </div>
 
-            <button
-              (click)="viewPosts()"
-              class="cta-solid rounded-xl px-5 py-3 text-sm font-semibold"
-            >
-              View posts
-            </button>
+            <div class="flex flex-wrap items-center gap-3">
+              @if (club.canManage) {
+                <button
+                  (click)="manageClub()"
+                  class="cta-subtle rounded-xl px-5 py-3 text-sm font-semibold"
+                >
+                  Manage
+                </button>
+              }
+              <button
+                (click)="viewPosts()"
+                class="cta-solid rounded-xl px-5 py-3 text-sm font-semibold"
+              >
+                View posts
+              </button>
+            </div>
           </div>
 
           <div class="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

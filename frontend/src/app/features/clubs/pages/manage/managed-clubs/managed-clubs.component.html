@@ -1,0 +1,104 @@
+<div class="relative min-h-screen overflow-hidden bg-page text-content">
+  <!-- Ambient blobs -->
+  <div class="pointer-events-none absolute inset-0">
+    <div
+      class="absolute -left-40 -top-40 h-[520px] w-[520px] animate-pulse rounded-full bg-accent/7 dark:bg-accent/20 blur-3xl"
+    ></div>
+    <div
+      class="absolute -right-40 top-60 h-[420px] w-[420px] animate-pulse rounded-full bg-accent/5 dark:bg-accent/10 blur-3xl"
+    ></div>
+  </div>
+
+  <div class="relative z-10 mx-auto max-w-5xl px-6 py-14">
+    <!-- Header -->
+    <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div class="space-y-3">
+        <p class="text-sm font-semibold uppercase tracking-[0.28em] text-accent">Club management</p>
+        <h1 class="text-4xl font-black tracking-tight">Your clubs</h1>
+        <p class="text-sm text-subtle">Clubs you own or help run.</p>
+      </div>
+      <a
+        routerLink="/clubs/manage/new"
+        class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover"
+      >
+        + Create club
+      </a>
+    </div>
+
+    <!-- Error -->
+    <div
+      *ngIf="error"
+      class="mb-6 rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
+    >
+      {{ error }}
+    </div>
+
+    <!-- Loading -->
+    <div
+      *ngIf="loading"
+      class="rounded-3xl border border-line bg-glass px-6 py-12 text-center text-sm text-faint"
+    >
+      Loading your clubs…
+    </div>
+
+    <!-- Empty -->
+    <div
+      *ngIf="!loading && !error && clubs.length === 0"
+      class="rounded-3xl border border-line bg-glass px-6 py-14 text-center"
+    >
+      <h2 class="text-xl font-bold">No clubs yet</h2>
+      <p class="mx-auto mt-2 max-w-md text-sm text-subtle">
+        You don't own or manage any clubs. Create one to start posting updates, running events, and
+        growing your community.
+      </p>
+      <a
+        routerLink="/clubs/manage/new"
+        class="mt-6 inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover"
+      >
+        + Create your first club
+      </a>
+    </div>
+
+    <!-- Grid -->
+    <div
+      *ngIf="!loading && clubs.length > 0"
+      class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
+    >
+      <a
+        *ngFor="let club of clubs; trackBy: trackByClubId"
+        [routerLink]="['/clubs', club.id, 'manage']"
+        class="group flex flex-col overflow-hidden rounded-3xl border border-line bg-glass transition hover:border-accent/40 hover:shadow-lg"
+      >
+        <div class="relative h-32 w-full overflow-hidden bg-surface-muted">
+          <img
+            *ngIf="club.clubImage"
+            [src]="club.clubImage"
+            [alt]="club.name"
+            class="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+          />
+          <span
+            class="absolute left-3 top-3 rounded-full border px-2.5 py-1 text-xs font-semibold"
+            [ngClass]="clubTypeStyles[club.clubType]"
+          >
+            {{ club.clubType }}
+          </span>
+        </div>
+        <div class="flex flex-1 flex-col gap-2 px-5 py-4">
+          <div class="flex items-start justify-between gap-2">
+            <h3 class="font-bold leading-tight text-content">{{ club.name }}</h3>
+            <span
+              class="shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent"
+            >
+              {{ roleLabel(club) }}
+            </span>
+          </div>
+          <p class="line-clamp-2 text-sm text-subtle">{{ club.description }}</p>
+          <p class="mt-auto pt-2 text-xs text-faint">
+            {{ club.memberCount }} member{{ club.memberCount === 1 ? '' : 's' }} ·
+            {{ club.eventCount }} event{{ club.eventCount === 1 ? '' : 's' }}
+          </p>
+        </div>
+      </a>
+    </div>
+  </div>
+</div>
