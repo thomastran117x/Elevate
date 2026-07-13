@@ -134,8 +134,10 @@ public class AuthUserRepositoryTests
         (await harness.Db.Users.SingleAsync(user => user.Id == userId)).AuthVersion.Should().Be(2);
         (await harness.Repository.IncrementAuthVersionAsync(9999)).Should().BeFalse();
 
-        (await harness.Repository.DeleteUserAsync(userId)).Should().BeTrue();
-        (await harness.Repository.DeleteUserAsync(userId)).Should().BeFalse();
+        // Deleting a present user returns the blob URLs (here just the avatar) it orphaned;
+        // deleting a missing user returns an empty list.
+        (await harness.Repository.DeleteUserAsync(userId)).Should().Contain("/avatars/seed.png");
+        (await harness.Repository.DeleteUserAsync(userId)).Should().BeEmpty();
     }
 
     [Fact]

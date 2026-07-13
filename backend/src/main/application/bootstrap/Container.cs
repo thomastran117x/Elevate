@@ -32,6 +32,7 @@ using backend.main.infrastructure.elasticsearch;
 using backend.main.seeders;
 using backend.main.shared.providers;
 using backend.main.shared.storage;
+using backend.main.shared.storage.cleanup;
 using backend.main.shared.utilities.logger;
 
 using Microsoft.Extensions.Options;
@@ -147,6 +148,7 @@ namespace backend.main.application.bootstrap
 
             services.Configure<ClubVersioningOptions>(config.GetSection("ClubVersioning"));
             services.Configure<EventVersioningOptions>(config.GetSection("EventVersioning"));
+            services.Configure<OrphanBlobCleanupOptions>(config.GetSection("OrphanBlobCleanup"));
             services.AddSingleton(TimeProvider.System);
             services.AddSearchInfrastructure(config, featureFlags);
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
@@ -189,6 +191,7 @@ namespace backend.main.application.bootstrap
             services.AddSingleton<CommentEventBroker>();
             services.AddSingleton<IRefreshAheadCache, RefreshAheadCache>();
             services.AddScoped<IAzureBlobService, AzureBlobService>();
+            services.AddScoped<OrphanBlobCleanupRunner>();
 
             if (featureFlags.IsEnabled(FeatureFlagKeys.ClubsFollow))
                 services.AddScoped<IFollowService, FollowService>();
@@ -229,6 +232,9 @@ namespace backend.main.application.bootstrap
 
                 if (featureFlags.IsEnabled(FeatureFlagKeys.EventsInvitations))
                     services.AddHostedService<EventInvitationStatusConsumer>();
+
+                if (featureFlags.IsEnabled(FeatureFlagKeys.StorageOrphanCleanup))
+                    services.AddHostedService<OrphanBlobCleanupService>();
             }
 
             services.AddSingleton<ICustomLogger, FileLogger>();

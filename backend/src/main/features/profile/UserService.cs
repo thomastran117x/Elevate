@@ -91,7 +91,13 @@ namespace backend.main.features.profile
 
         public async Task<bool> DeleteUserAsync(int id)
         {
-            _ = await _userRepository.DeleteUserAsync(id);
+            IReadOnlyList<string> orphanedBlobs = await _userRepository.DeleteUserAsync(id);
+
+            // Best-effort cleanup of the avatar plus any cascade-deleted club/event images
+            // (no-op for external/legacy URLs). Failures are swallowed inside DeleteBlobAsync.
+            foreach (string blobUrl in orphanedBlobs)
+                await _blobService.DeleteBlobAsync(blobUrl);
+
             await _refreshCache.RemoveAsync(GetUserCacheKey(id));
             return true;
         }
@@ -118,8 +124,19 @@ namespace backend.main.features.profile
             string filePath = await _blobService.UploadImageAsync(image, "users");
             user.Avatar = filePath;
 
-            User updatedUser = await _userRepository.UpdatePartialAsync(user)
-                ?? throw new ResourceNotFoundException($"User with the id {id} is not found");
+            User updatedUser;
+            try
+            {
+                updatedUser = await _userRepository.UpdatePartialAsync(user)
+                    ?? throw new ResourceNotFoundException($"User with the id {id} is not found");
+            }
+            catch
+            {
+                // The new blob was uploaded but never persisted — best-effort delete it so the
+                // failed update doesn't leave an orphan behind, then surface the original error.
+                await _blobService.DeleteBlobAsync(filePath);
+                throw;
+            }
 
             // Best-effort cleanup of the replaced image (no-op for external/legacy URLs).
             if (!string.IsNullOrEmpty(previousAvatar) && previousAvatar != filePath)

@@ -3,6 +3,11 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
 using backend.main.application.security;
+using backend.main.features.clubs;
+using backend.main.features.clubs.versions;
+using backend.main.features.events.images;
+
+using EventEntity = backend.main.features.events.Events;
 using backend.main.features.profile.contracts.requests;
 using backend.main.features.profile.contracts.responses;
 
@@ -147,6 +152,79 @@ public class ProfileEndpointsTests
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         (await response.Content.ReadAsStringAsync()).Should().Contain("Account deleted");
         (await app.FindUserByEmailAsync("delete-user@example.com")).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DeleteAccount_ShouldDeleteAvatarAndCascadedResourceBlobs()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var user = await app.SeedUserAsync("blob-delete@example.com", role: "Organizer");
+        await app.SeedKnownDeviceAsync(user.Id, "blob-delete-device");
+
+        // Seed the user's avatar plus a club (with a version) and an event with images —
+        // every one of these carries a blob URL that the delete cascade would orphan.
+        var avatarUrl = app.BlobStorage.CreateOwnedBlobUrl("users", "avatar.png");
+        var clubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club.png");
+        var versionImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club-v1.png");
+        var eventImageUrl1 = app.BlobStorage.CreateOwnedBlobUrl("events", "event-1.png");
+        var eventImageUrl2 = app.BlobStorage.CreateOwnedBlobUrl("events", "event-2.png");
+
+        await app.QueryDbAsync(async db =>
+        {
+            var owner = await db.Users.FindAsync(user.Id);
+            owner!.Avatar = avatarUrl;
+
+            var club = new Club
+            {
+                Name = "Blob Club",
+                Description = "Club with an image",
+                Clubtype = ClubType.Social,
+                ClubImage = clubImageUrl,
+                UserId = user.Id
+            };
+            db.Clubs.Add(club);
+            await db.SaveChangesAsync();
+
+            db.ClubVersions.Add(new ClubVersion
+            {
+                ClubId = club.Id,
+                VersionNumber = 1,
+                ClubImage = versionImageUrl,
+                ActorUserId = user.Id
+            });
+
+            var ev = new EventEntity
+            {
+                Name = "Blob Event",
+                ClubId = club.Id
+            };
+            db.Events.Add(ev);
+            await db.SaveChangesAsync();
+
+            db.EventImages.Add(new EventImage { EventId = ev.Id, ImageUrl = eventImageUrl1, SortOrder = 0 });
+            db.EventImages.Add(new EventImage { EventId = ev.Id, ImageUrl = eventImageUrl2, SortOrder = 1 });
+            await db.SaveChangesAsync();
+            return true;
+        });
+
+        var session = await app.LoginApiAsync(
+            "blob-delete@example.com",
+            trustedDeviceToken: "blob-delete-device");
+        await app.CompleteSessionMfaByEmailAsync("blob-delete@example.com", session.AccessToken);
+
+        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/profile");
+        await AddAuthAndCsrfAsync(app, request, session.AccessToken);
+        var response = await app.Client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await app.FindUserByEmailAsync("blob-delete@example.com")).Should().BeNull();
+
+        // Every blob the deleted account (and its cascaded clubs/events) referenced is gone.
+        app.BlobStorage.IsOwnedBlobUrl(avatarUrl).Should().BeFalse();
+        app.BlobStorage.IsOwnedBlobUrl(clubImageUrl).Should().BeFalse();
+        app.BlobStorage.IsOwnedBlobUrl(versionImageUrl).Should().BeFalse();
+        app.BlobStorage.IsOwnedBlobUrl(eventImageUrl1).Should().BeFalse();
+        app.BlobStorage.IsOwnedBlobUrl(eventImageUrl2).Should().BeFalse();
     }
 
     [Fact]
