@@ -49,7 +49,6 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
   dragActive = false;
   loading = false;
   saving = false;
-  saved = false;
   error = '';
   success = '';
 
@@ -77,7 +76,10 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
   }
 
   canDeactivate(): boolean {
-    if (this.saved || (!this.form.dirty && !this.imageDirty)) {
+    // A successful save marks the form pristine and clears imageDirty, so this
+    // correctly allows navigation right after saving and prompts again once the
+    // user makes further edits.
+    if (!this.form.dirty && !this.imageDirty) {
       return true;
     }
     return window.confirm('You have unsaved changes. Leave without saving?');
@@ -208,7 +210,6 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
       .subscribe({
         next: (response) => {
           const club = response.data;
-          this.saved = true;
           this.imageDirty = false;
           this.form.markAsPristine();
           if (this.isCreate && club) {
@@ -218,7 +219,6 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
           this.success = 'Club details saved.';
         },
         error: (err) => {
-          this.saved = false;
           this.error = getApiClientMessage(err, 'Unable to save the club.');
         },
       });

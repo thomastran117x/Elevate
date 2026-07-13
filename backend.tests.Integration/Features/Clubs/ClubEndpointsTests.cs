@@ -150,8 +150,8 @@ public class ClubEndpointsTests
 
         var members = await app.Client.GetAsync($"/api/clubs/{club.Id}/members");
         members.StatusCode.Should().Be(HttpStatusCode.OK);
-        var membersBody = await app.ReadApiResponseAsync<IEnumerable<FollowResponse>>(members);
-        membersBody.Data.Should().ContainSingle(entry => entry.ClubId == club.Id);
+        var membersBody = await app.ReadApiResponseAsync<PagedResponse<ClubMemberResponse>>(members);
+        membersBody.Data!.Items.Should().ContainSingle(entry => entry.ClubId == club.Id);
 
         var left = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete,
@@ -426,8 +426,8 @@ public class ClubEndpointsTests
 
         var reviews = await app.Client.GetAsync($"/api/clubs/{club.Id}/reviews");
         reviews.StatusCode.Should().Be(HttpStatusCode.OK);
-        var reviewsBody = await app.ReadApiResponseAsync<IEnumerable<ClubReviewResponse>>(reviews);
-        reviewsBody.Data.Should().ContainSingle(entry => entry.Id == review.Id);
+        var reviewsBody = await app.ReadApiResponseAsync<PagedResponse<ClubReviewResponse>>(reviews);
+        reviewsBody.Data!.Items.Should().ContainSingle(entry => entry.Id == review.Id);
 
         var clubAfterCreate = await app.Client.GetAsync($"/api/clubs/{club.Id}");
         var clubAfterCreateBody = await app.ReadApiResponseAsync<ClubApiModel>(clubAfterCreate);

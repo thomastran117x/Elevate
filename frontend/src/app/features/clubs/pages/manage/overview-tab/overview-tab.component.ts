@@ -44,7 +44,8 @@ export class OverviewTabComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.clubId = Number.parseInt(this.route.parent?.snapshot.paramMap.get('clubId') ?? '', 10) || 0;
+    this.clubId =
+      Number.parseInt(this.route.parent?.snapshot.paramMap.get('clubId') ?? '', 10) || 0;
     if (!this.clubId) {
       this.loading = false;
       this.postsLoading = false;

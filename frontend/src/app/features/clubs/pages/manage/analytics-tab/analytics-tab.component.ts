@@ -47,7 +47,8 @@ export class AnalyticsTabComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.clubId = Number.parseInt(this.route.parent?.snapshot.paramMap.get('clubId') ?? '', 10) || 0;
+    this.clubId =
+      Number.parseInt(this.route.parent?.snapshot.paramMap.get('clubId') ?? '', 10) || 0;
     if (!this.clubId) {
       this.loading = false;
       this.error = 'A valid club ID is required.';

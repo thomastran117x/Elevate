@@ -294,8 +294,7 @@ type ClubRollbackPayload = {
 export function normalizeClubRollback(raw: ClubRollbackPayload): ClubRollback {
   return {
     club: normalizeClub(raw.club ?? raw.Club ?? {}),
-    restoredFromVersionNumber:
-      raw.restoredFromVersionNumber ?? raw.RestoredFromVersionNumber ?? 0,
+    restoredFromVersionNumber: raw.restoredFromVersionNumber ?? raw.RestoredFromVersionNumber ?? 0,
     newVersionNumber: raw.newVersionNumber ?? raw.NewVersionNumber ?? 0,
   };
 }

@@ -372,11 +372,19 @@
                 <ul class="divide-y divide-line">
                   @for (member of panelMembers; track member.id) {
                     <li class="flex items-center gap-3 py-3">
-                      <div class="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full bg-accent/10">
+                      <div
+                        class="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full bg-accent/10"
+                      >
                         @if (member.avatar) {
-                          <img [src]="member.avatar" [alt]="memberName(member)" class="h-full w-full object-cover" />
+                          <img
+                            [src]="member.avatar"
+                            [alt]="memberName(member)"
+                            class="h-full w-full object-cover"
+                          />
                         } @else {
-                          <span class="flex h-full w-full items-center justify-center text-xs font-bold text-accent">
+                          <span
+                            class="flex h-full w-full items-center justify-center text-xs font-bold text-accent"
+                          >
                             {{ memberInitials(member) }}
                           </span>
                         }
@@ -384,7 +392,9 @@
                       <div class="min-w-0">
                         <p class="truncate font-semibold text-content">{{ memberName(member) }}</p>
                         <p class="truncate text-xs text-faint">
-                          @if (member.username) { &#64;{{ member.username }} · }
+                          @if (member.username) {
+                            &#64;{{ member.username }} ·
+                          }
                           Joined {{ member.createdAt | date: 'mediumDate' }}
                         </p>
                       </div>
@@ -409,17 +419,23 @@
                     >
                       <div class="min-w-0">
                         <div class="flex items-center gap-2">
-                          <span class="rounded-full border px-2 py-0.5 text-[10px] font-semibold" [ngClass]="categoryStyles[event.category].badge">
+                          <span
+                            class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                            [ngClass]="categoryStyles[event.category].badge"
+                          >
                             {{ event.category }}
                           </span>
                           <span class="text-[11px] text-subtle">{{ event.status }}</span>
                         </div>
                         <p class="mt-1 truncate font-semibold text-content">{{ event.name }}</p>
                         <p class="text-xs text-faint">
-                          {{ formatEventDate(event.startTime) }} · {{ formatEventTime(event.startTime) }}
+                          {{ formatEventDate(event.startTime) }} ·
+                          {{ formatEventTime(event.startTime) }}
                         </p>
                       </div>
-                      <span class="shrink-0 text-sm font-semibold text-content">{{ formatCost(event.registerCost) }}</span>
+                      <span class="shrink-0 text-sm font-semibold text-content">{{
+                        formatCost(event.registerCost)
+                      }}</span>
                     </li>
                   }
                 </ul>
@@ -435,16 +451,25 @@
                   @for (review of panelReviews; track review.id) {
                     <li class="rounded-2xl border border-line bg-surface-muted p-4">
                       <div class="flex items-center justify-between gap-3">
-                        <span class="truncate text-sm font-semibold text-content">{{ reviewerName(review) }}</span>
-                        <span class="shrink-0 text-sm text-warning" aria-label="{{ review.rating }} out of 5">
+                        <span class="truncate text-sm font-semibold text-content">{{
+                          reviewerName(review)
+                        }}</span>
+                        <span
+                          class="shrink-0 text-sm text-warning"
+                          aria-label="{{ review.rating }} out of 5"
+                        >
                           @for (filled of starsFor(review.rating); track $index) {
-                            <span [class]="filled ? 'text-warning' : 'text-content/20'">&#9733;</span>
+                            <span [class]="filled ? 'text-warning' : 'text-content/20'"
+                              >&#9733;</span
+                            >
                           }
                         </span>
                       </div>
                       <p class="mt-2 font-semibold text-content">{{ review.title }}</p>
                       @if (review.comment) {
-                        <p class="mt-1 whitespace-pre-wrap text-sm leading-6 text-muted">{{ review.comment }}</p>
+                        <p class="mt-1 whitespace-pre-wrap text-sm leading-6 text-muted">
+                          {{ review.comment }}
+                        </p>
                       }
                       <p class="mt-2 text-xs text-faint">{{ formatDate(review.createdAt) }}</p>
                     </li>

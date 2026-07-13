@@ -22,8 +22,7 @@ export const CLUB_MANAGE_TABS: Routes = [
   },
   {
     path: 'staff',
-    loadComponent: () =>
-      import('./staff-tab/staff-tab.component').then((m) => m.StaffTabComponent),
+    loadComponent: () => import('./staff-tab/staff-tab.component').then((m) => m.StaffTabComponent),
   },
   {
     path: 'history',

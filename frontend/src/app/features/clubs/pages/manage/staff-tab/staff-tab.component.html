@@ -16,7 +16,9 @@
   <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
     <div class="mb-4">
       <h2 class="text-xl font-bold">Staff</h2>
-      <p class="text-sm text-subtle">Managers can edit the club and run events; volunteers can manage posts.</p>
+      <p class="text-sm text-subtle">
+        Managers can edit the club and run events; volunteers can manage posts.
+      </p>
     </div>
 
     <div
@@ -125,7 +127,10 @@
       Transfer ownership
     </button>
 
-    <div *ngIf="showTransfer" class="mt-4 space-y-4 rounded-2xl border border-danger/30 bg-danger/10 px-5 py-5">
+    <div
+      *ngIf="showTransfer"
+      class="mt-4 space-y-4 rounded-2xl border border-danger/30 bg-danger/10 px-5 py-5"
+    >
       <div class="space-y-2">
         <label class="text-sm font-semibold text-muted" for="transfer-user-id"
           >New owner's user ID</label

@@ -32,7 +32,9 @@
 
     <!-- Error -->
     @if (error) {
-      <div class="mb-6 rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger">
+      <div
+        class="mb-6 rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
+      >
         {{ error }}
       </div>
     }
@@ -41,7 +43,9 @@
     @if (!loading && clubs.length > 0) {
       <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div class="relative flex-1">
-          <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-faint">⌕</span>
+          <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-faint"
+            >⌕</span
+          >
           <input
             type="search"
             [(ngModel)]="search"
@@ -53,21 +57,33 @@
           <button
             type="button"
             (click)="roleFilter = 'all'"
-            [class]="roleFilter === 'all' ? 'rounded-xl bg-accent px-3 py-1.5 font-semibold text-accent-contrast' : 'rounded-xl px-3 py-1.5 text-subtle transition hover:text-content'"
+            [class]="
+              roleFilter === 'all'
+                ? 'rounded-xl bg-accent px-3 py-1.5 font-semibold text-accent-contrast'
+                : 'rounded-xl px-3 py-1.5 text-subtle transition hover:text-content'
+            "
           >
             All
           </button>
           <button
             type="button"
             (click)="roleFilter = 'owned'"
-            [class]="roleFilter === 'owned' ? 'rounded-xl bg-accent px-3 py-1.5 font-semibold text-accent-contrast' : 'rounded-xl px-3 py-1.5 text-subtle transition hover:text-content'"
+            [class]="
+              roleFilter === 'owned'
+                ? 'rounded-xl bg-accent px-3 py-1.5 font-semibold text-accent-contrast'
+                : 'rounded-xl px-3 py-1.5 text-subtle transition hover:text-content'
+            "
           >
             Owned
           </button>
           <button
             type="button"
             (click)="roleFilter = 'staffed'"
-            [class]="roleFilter === 'staffed' ? 'rounded-xl bg-accent px-3 py-1.5 font-semibold text-accent-contrast' : 'rounded-xl px-3 py-1.5 text-subtle transition hover:text-content'"
+            [class]="
+              roleFilter === 'staffed'
+                ? 'rounded-xl bg-accent px-3 py-1.5 font-semibold text-accent-contrast'
+                : 'rounded-xl px-3 py-1.5 text-subtle transition hover:text-content'
+            "
           >
             Staffed
           </button>
@@ -112,7 +128,9 @@
 
     <!-- No matches for filter -->
     @if (!loading && clubs.length > 0 && filteredClubs.length === 0) {
-      <div class="rounded-3xl border border-line bg-glass px-6 py-12 text-center text-sm text-subtle">
+      <div
+        class="rounded-3xl border border-line bg-glass px-6 py-12 text-center text-sm text-subtle"
+      >
         No clubs match your filters.
       </div>
     }
@@ -121,7 +139,9 @@
     @if (!loading && filteredClubs.length > 0) {
       <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         @for (club of filteredClubs; track club.id) {
-          <div class="group flex flex-col overflow-hidden rounded-3xl border border-line bg-glass transition hover:border-accent/40 hover:shadow-lg">
+          <div
+            class="group flex flex-col overflow-hidden rounded-3xl border border-line bg-glass transition hover:border-accent/40 hover:shadow-lg"
+          >
             <a [routerLink]="['/clubs', club.id, 'manage']" class="block">
               <div class="relative h-32 w-full overflow-hidden bg-surface-muted">
                 @if (club.clubImage) {
@@ -141,10 +161,15 @@
             </a>
             <div class="flex flex-1 flex-col gap-2 px-5 py-4">
               <div class="flex items-start justify-between gap-2">
-                <a [routerLink]="['/clubs', club.id, 'manage']" class="font-bold leading-tight text-content hover:text-accent">
+                <a
+                  [routerLink]="['/clubs', club.id, 'manage']"
+                  class="font-bold leading-tight text-content hover:text-accent"
+                >
                   {{ club.name }}
                 </a>
-                <span class="shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
+                <span
+                  class="shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent"
+                >
                   {{ roleLabel(club) }}
                 </span>
               </div>

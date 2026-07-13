@@ -12,7 +12,10 @@
 
     <div class="relative z-10 mx-auto max-w-3xl px-6 py-14">
       <div class="mb-8 space-y-3">
-        <a routerLink="/clubs/manage" class="text-xs font-semibold text-subtle transition hover:text-content">
+        <a
+          routerLink="/clubs/manage"
+          class="text-xs font-semibold text-subtle transition hover:text-content"
+        >
           &larr; All clubs
         </a>
         <p class="text-sm font-semibold uppercase tracking-[0.28em] text-accent">Club management</p>
@@ -28,7 +31,9 @@
 <ng-template #formCard>
   <div class="flex flex-col gap-6">
     @if (success) {
-      <div class="rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success">
+      <div
+        class="rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success"
+      >
         {{ success }}
       </div>
     }
@@ -39,7 +44,9 @@
     }
 
     @if (loading) {
-      <div class="rounded-3xl border border-line bg-glass px-6 py-10 text-center text-sm text-faint">
+      <div
+        class="rounded-3xl border border-line bg-glass px-6 py-10 text-center text-sm text-faint"
+      >
         Loading club details…
       </div>
     } @else {
@@ -60,8 +67,12 @@
               @if (imageUrl) {
                 <div class="relative">
                   <img [src]="imageUrl" alt="Club image preview" class="h-44 w-full object-cover" />
-                  <div class="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition hover:bg-black/40 hover:opacity-100">
-                    <span class="rounded-xl bg-white/90 px-3 py-1.5 text-xs font-semibold text-gray-900">
+                  <div
+                    class="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition hover:bg-black/40 hover:opacity-100"
+                  >
+                    <span
+                      class="rounded-xl bg-white/90 px-3 py-1.5 text-xs font-semibold text-gray-900"
+                    >
                       Change image
                     </span>
                   </div>
@@ -69,7 +80,9 @@
               } @else {
                 <div class="flex h-44 flex-col items-center justify-center gap-2 px-4 text-center">
                   <span class="text-2xl">🖼️</span>
-                  <span class="text-sm font-semibold text-content">Drop an image or click to browse</span>
+                  <span class="text-sm font-semibold text-content"
+                    >Drop an image or click to browse</span
+                  >
                   <span class="text-xs text-faint">PNG, JPG, WEBP or GIF · up to 5MB</span>
                 </div>
               }
@@ -100,7 +113,10 @@
             <div class="space-y-2">
               <div class="flex items-center justify-between">
                 <label class="text-sm font-semibold text-muted" for="club-name">Name</label>
-                <span class="text-xs" [class]="nameControl.value.length > nameMax ? 'text-danger' : 'text-faint'">
+                <span
+                  class="text-xs"
+                  [class]="nameControl.value.length > nameMax ? 'text-danger' : 'text-faint'"
+                >
                   {{ nameControl.value.length }}/{{ nameMax }}
                 </span>
               </div>
@@ -113,15 +129,24 @@
                 class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
               />
               @if (nameControl.invalid && nameControl.touched) {
-                <p class="text-sm text-danger">Name is required and must be {{ nameMax }} characters or fewer.</p>
+                <p class="text-sm text-danger">
+                  Name is required and must be {{ nameMax }} characters or fewer.
+                </p>
               }
             </div>
 
             <!-- Description -->
             <div class="mt-5 space-y-2">
               <div class="flex items-center justify-between">
-                <label class="text-sm font-semibold text-muted" for="club-description">Description</label>
-                <span class="text-xs" [class]="descriptionControl.value.length > descriptionMax ? 'text-danger' : 'text-faint'">
+                <label class="text-sm font-semibold text-muted" for="club-description"
+                  >Description</label
+                >
+                <span
+                  class="text-xs"
+                  [class]="
+                    descriptionControl.value.length > descriptionMax ? 'text-danger' : 'text-faint'
+                  "
+                >
                   {{ descriptionControl.value.length }}/{{ descriptionMax }}
                 </span>
               </div>
@@ -134,7 +159,9 @@
                 class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
               />
               @if (descriptionControl.invalid && descriptionControl.touched) {
-                <p class="text-sm text-danger">Description is required and must be {{ descriptionMax }} characters or fewer.</p>
+                <p class="text-sm text-danger">
+                  Description is required and must be {{ descriptionMax }} characters or fewer.
+                </p>
               }
             </div>
 

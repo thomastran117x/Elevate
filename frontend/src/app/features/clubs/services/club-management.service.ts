@@ -47,7 +47,9 @@ export class ClubManagementService {
           const raw = this.rawData(response) as unknown[] | null;
           return {
             ...response,
-            data: raw ? raw.map((c) => normalizeClub(c as Parameters<typeof normalizeClub>[0])) : [],
+            data: raw
+              ? raw.map((c) => normalizeClub(c as Parameters<typeof normalizeClub>[0]))
+              : [],
           } as ManagedClubsApiResponse;
         }),
       );
@@ -117,19 +119,15 @@ export class ClubManagementService {
     userId: number,
   ): Observable<ClubStaffApiResponse> {
     return this.api
-      .post<ApiEnvelope<unknown>>(
-        `${this.base}/${clubId}/staff/${kind}`,
-        { userId },
-        { withCredentials: true },
-      )
+      .post<
+        ApiEnvelope<unknown>
+      >(`${this.base}/${clubId}/staff/${kind}`, { userId }, { withCredentials: true })
       .pipe(
         map((response) => {
           const raw = this.rawData(response);
           return {
             ...response,
-            data: raw
-              ? normalizeClubStaff(raw as Parameters<typeof normalizeClubStaff>[0])
-              : null,
+            data: raw ? normalizeClubStaff(raw as Parameters<typeof normalizeClubStaff>[0]) : null,
           } as ClubStaffApiResponse;
         }),
       );
@@ -143,11 +141,9 @@ export class ClubManagementService {
 
   transferOwnership(clubId: number, newOwnerUserId: number): Observable<ApiEnvelope<Club>> {
     return this.api
-      .post<ApiEnvelope<unknown>>(
-        `${this.base}/${clubId}/transfer-ownership`,
-        { newOwnerUserId },
-        { withCredentials: true },
-      )
+      .post<
+        ApiEnvelope<unknown>
+      >(`${this.base}/${clubId}/transfer-ownership`, { newOwnerUserId }, { withCredentials: true })
       .pipe(map((response) => this.mapClub(response)));
   }
 
@@ -193,11 +189,9 @@ export class ClubManagementService {
 
   rollback(clubId: number, versionNumber: number): Observable<ClubRollbackApiResponse> {
     return this.api
-      .post<ApiEnvelope<unknown>>(
-        `${this.base}/${clubId}/versions/${versionNumber}/rollback`,
-        {},
-        { withCredentials: true },
-      )
+      .post<
+        ApiEnvelope<unknown>
+      >(`${this.base}/${clubId}/versions/${versionNumber}/rollback`, {}, { withCredentials: true })
       .pipe(
         map((response) => {
           const raw = this.rawData(response);

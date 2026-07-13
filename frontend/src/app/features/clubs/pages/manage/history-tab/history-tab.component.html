@@ -15,7 +15,9 @@
   <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
     <div class="mb-4">
       <h2 class="text-xl font-bold">Version history</h2>
-      <p class="text-sm text-subtle">Every change to this club is recorded. Eligible versions can be rolled back.</p>
+      <p class="text-sm text-subtle">
+        Every change to this club is recorded. Eligible versions can be rolled back.
+      </p>
     </div>
 
     <div
@@ -35,7 +37,11 @@
     <ul *ngIf="!loading && versions.length > 0" class="divide-y divide-line">
       <li *ngFor="let version of versions; trackBy: trackByVersion" class="py-3">
         <div class="flex items-center justify-between gap-3">
-          <button type="button" (click)="toggleDetail(version)" class="flex items-center gap-3 text-left">
+          <button
+            type="button"
+            (click)="toggleDetail(version)"
+            class="flex items-center gap-3 text-left"
+          >
             <span
               class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent/10 text-sm font-bold text-accent"
             >
@@ -44,10 +50,16 @@
             <span>
               <span class="block font-semibold text-content">
                 {{ version.actionType }}
-                <span class="font-normal text-faint">· {{ version.changedFields.length }} field{{ version.changedFields.length === 1 ? '' : 's' }}</span>
+                <span class="font-normal text-faint"
+                  >· {{ version.changedFields.length }} field{{
+                    version.changedFields.length === 1 ? '' : 's'
+                  }}</span
+                >
               </span>
               <span class="block text-xs text-faint">
-                {{ version.createdAt | date: 'medium' }} · by user #{{ version.actorUserId }} ({{ version.actorRole }})
+                {{ version.createdAt | date: 'medium' }} · by user #{{ version.actorUserId }} ({{
+                  version.actorRole
+                }})
               </span>
             </span>
           </button>
@@ -63,11 +75,16 @@
         </div>
 
         <!-- Expanded detail -->
-        <div *ngIf="expandedVersion === version.versionNumber" class="mt-3 rounded-2xl border border-line bg-surface-muted px-4 py-4">
+        <div
+          *ngIf="expandedVersion === version.versionNumber"
+          class="mt-3 rounded-2xl border border-line bg-surface-muted px-4 py-4"
+        >
           <div *ngIf="detailLoading" class="text-sm text-faint">Loading details…</div>
 
           <ng-container *ngIf="!detailLoading && detail as d">
-            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">Changed fields</p>
+            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">
+              Changed fields
+            </p>
             <ul *ngIf="d.changedFields.length > 0" class="mt-2 space-y-2">
               <li *ngFor="let change of d.changedFields" class="text-sm">
                 <span class="font-semibold text-content">{{ change.field }}:</span>
@@ -76,14 +93,30 @@
                 <span class="text-content">{{ change.newValue ?? '—' }}</span>
               </li>
             </ul>
-            <p *ngIf="d.changedFields.length === 0" class="mt-2 text-sm text-faint">No field changes recorded.</p>
+            <p *ngIf="d.changedFields.length === 0" class="mt-2 text-sm text-faint">
+              No field changes recorded.
+            </p>
 
-            <p class="mt-4 text-xs font-semibold uppercase tracking-[0.22em] text-faint">Snapshot</p>
+            <p class="mt-4 text-xs font-semibold uppercase tracking-[0.22em] text-faint">
+              Snapshot
+            </p>
             <dl class="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
-              <div class="flex justify-between gap-2"><dt class="text-faint">Name</dt><dd class="text-content">{{ d.snapshot.name }}</dd></div>
-              <div class="flex justify-between gap-2"><dt class="text-faint">Type</dt><dd class="text-content">{{ d.snapshot.clubtype }}</dd></div>
-              <div class="flex justify-between gap-2"><dt class="text-faint">Description</dt><dd class="text-content">{{ d.snapshot.description }}</dd></div>
-              <div class="flex justify-between gap-2"><dt class="text-faint">Private</dt><dd class="text-content">{{ d.snapshot.isPrivate ? 'Yes' : 'No' }}</dd></div>
+              <div class="flex justify-between gap-2">
+                <dt class="text-faint">Name</dt>
+                <dd class="text-content">{{ d.snapshot.name }}</dd>
+              </div>
+              <div class="flex justify-between gap-2">
+                <dt class="text-faint">Type</dt>
+                <dd class="text-content">{{ d.snapshot.clubtype }}</dd>
+              </div>
+              <div class="flex justify-between gap-2">
+                <dt class="text-faint">Description</dt>
+                <dd class="text-content">{{ d.snapshot.description }}</dd>
+              </div>
+              <div class="flex justify-between gap-2">
+                <dt class="text-faint">Private</dt>
+                <dd class="text-content">{{ d.snapshot.isPrivate ? 'Yes' : 'No' }}</dd>
+              </div>
             </dl>
           </ng-container>
         </div>

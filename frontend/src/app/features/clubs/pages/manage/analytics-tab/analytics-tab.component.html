@@ -48,7 +48,12 @@
             role="img"
             aria-label="Daily registrations trend"
           >
-            <path [attr.d]="registrationSpark!.area" fill="currentColor" fill-opacity="0.12" stroke="none" />
+            <path
+              [attr.d]="registrationSpark!.area"
+              fill="currentColor"
+              fill-opacity="0.12"
+              stroke="none"
+            />
             <path
               [attr.d]="registrationSpark!.line"
               fill="none"
@@ -75,7 +80,7 @@
       <article class="rounded-3xl border border-line bg-glass px-5 py-5 backdrop-blur-xl">
         <div class="flex items-baseline justify-between">
           <h3 class="font-bold">Revenue over time</h3>
-          <span class="text-sm text-subtle">{{ (revenueSpark?.total ?? 0) | currency }}</span>
+          <span class="text-sm text-subtle">{{ revenueSpark?.total ?? 0 | currency }}</span>
         </div>
         @if (revenueSpark?.hasData) {
           <svg
@@ -85,7 +90,12 @@
             role="img"
             aria-label="Daily revenue trend"
           >
-            <path [attr.d]="revenueSpark!.area" fill="currentColor" fill-opacity="0.12" stroke="none" />
+            <path
+              [attr.d]="revenueSpark!.area"
+              fill="currentColor"
+              fill-opacity="0.12"
+              stroke="none"
+            />
             <path
               [attr.d]="revenueSpark!.line"
               fill="none"

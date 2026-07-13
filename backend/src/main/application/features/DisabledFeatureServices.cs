@@ -11,9 +11,9 @@ using backend.main.features.events.registration.contracts.requests;
 using backend.main.features.events.registration.contracts.responses;
 using backend.main.features.events.search;
 using backend.main.features.payment;
+using backend.main.features.profile.contracts;
 using backend.main.infrastructure.elasticsearch;
 using backend.main.shared.exceptions.http;
-using backend.main.features.profile.contracts;
 
 namespace backend.main.application.features;
 

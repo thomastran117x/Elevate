@@ -34,8 +34,7 @@ export const CLUBS_ROUTES: Routes = [
       import('./pages/manage/club-manage-shell/club-manage-shell.component').then(
         (m) => m.ClubManageShellComponent,
       ),
-    loadChildren: () =>
-      import('./pages/manage/club-manage.routes').then((m) => m.CLUB_MANAGE_TABS),
+    loadChildren: () => import('./pages/manage/club-manage.routes').then((m) => m.CLUB_MANAGE_TABS),
   },
   {
     path: ':clubId/posts/:postId',

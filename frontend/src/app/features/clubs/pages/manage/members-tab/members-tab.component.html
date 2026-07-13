@@ -24,7 +24,9 @@
         Loading members…
       </div>
     } @else if (members.length === 0) {
-      <div class="rounded-2xl border border-line bg-glass px-5 py-8 text-center text-sm text-subtle">
+      <div
+        class="rounded-2xl border border-line bg-glass px-5 py-8 text-center text-sm text-subtle"
+      >
         No members yet. Share your club to grow your community.
       </div>
     } @else {
@@ -34,9 +36,15 @@
             <div class="flex min-w-0 items-center gap-3">
               <div class="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full bg-accent/10">
                 @if (member.avatar) {
-                  <img [src]="member.avatar" [alt]="displayName(member)" class="h-full w-full object-cover" />
+                  <img
+                    [src]="member.avatar"
+                    [alt]="displayName(member)"
+                    class="h-full w-full object-cover"
+                  />
                 } @else {
-                  <span class="flex h-full w-full items-center justify-center text-xs font-bold text-accent">
+                  <span
+                    class="flex h-full w-full items-center justify-center text-xs font-bold text-accent"
+                  >
                     {{ initials(member) }}
                   </span>
                 }

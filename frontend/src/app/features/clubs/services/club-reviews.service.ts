@@ -5,10 +5,7 @@ import { map, Observable } from 'rxjs';
 import { environment } from '@environments/environment';
 import { ApiEnvelope } from '../../../core/api/models/api-envelope.model';
 import { ApiClient } from '../../../core/api/services/api-client.service';
-import {
-  ClubReviewsApiResponse,
-  normalizeClubReviewsPagedData,
-} from '../models/club-review.types';
+import { ClubReviewsApiResponse, normalizeClubReviewsPagedData } from '../models/club-review.types';
 
 @Injectable({ providedIn: 'root' })
 export class ClubReviewsService {

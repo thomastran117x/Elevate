@@ -2,6 +2,7 @@ using System.Security.Claims;
 
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.follow.contracts.responses;
+using backend.main.features.profile.contracts;
 using backend.main.shared.responses;
 
 using FluentAssertions;
@@ -19,15 +20,21 @@ public class ClubFollowControllerTests
     public async Task GetClubMembers_ShouldMapFollowResponses()
     {
         var service = new Mock<IFollowService>();
-        service.Setup(s => s.GetFollowsByClubAsync(4, 1, 20))
-            .ReturnsAsync([
-                new FollowClub
-                {
-                    Id = 6,
-                    ClubId = 4,
-                    UserId = 22
-                }
-            ]);
+        IReadOnlyList<FollowClub> members =
+        [
+            new FollowClub
+            {
+                Id = 6,
+                ClubId = 4,
+                UserId = 22
+            }
+        ];
+        IReadOnlyDictionary<int, UserListRecord> users = new Dictionary<int, UserListRecord>
+        {
+            [22] = new UserListRecord { Id = 22, Username = "member22", Name = "Member 22" }
+        };
+        service.Setup(s => s.GetClubMembersAsync(4, 1, 20))
+            .ReturnsAsync((members, users, 1));
 
         var controller = CreateClubController(service.Object);
 
@@ -35,9 +42,10 @@ public class ClubFollowControllerTests
 
         var ok = result.Should().BeOfType<ObjectResult>().Subject;
         ok.StatusCode.Should().Be(200);
-        var response = ok.Value.Should().BeOfType<ApiResponse<IEnumerable<FollowResponse>>>().Subject;
-        response.Data.Should().ContainSingle();
-        response.Data!.Single().UserId.Should().Be(22);
+        var response = ok.Value.Should().BeOfType<ApiResponse<PagedResponse<ClubMemberResponse>>>().Subject;
+        response.Data!.Items.Should().ContainSingle();
+        response.Data!.Items.Single().UserId.Should().Be(22);
+        response.Data!.Items.Single().Name.Should().Be("Member 22");
     }
 
     [Fact]
