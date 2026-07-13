@@ -188,6 +188,18 @@ public class AzureBlobServiceTests
     }
 
     [Fact]
+    public async Task ListBlobsAsync_ShouldYieldNothing_WhenContainerIsMissing()
+    {
+        var service = CreateServiceWithoutContainer("missing config");
+
+        var items = new List<BlobListItem>();
+        await foreach (var item in service.ListBlobsAsync("users"))
+            items.Add(item);
+
+        items.Should().BeEmpty();
+    }
+
+    [Fact]
     public void GetRequiredContainer_ShouldThrowInvalidOperation_WhenContainerIsMissing()
     {
         var service = CreateServiceWithoutContainer("AZURE_STORAGE_CONNECTION_STRING is not configured.");

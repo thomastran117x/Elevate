@@ -129,14 +129,44 @@ public class UserServiceTests
     }
 
     [Fact]
-    public async Task DeleteUserAsync_ShouldInvalidateCacheAfterDeletion()
+    public async Task DeleteUserAsync_ShouldDeleteOrphanedBlobsAndInvalidateCache()
     {
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(r => r.DeleteUserAsync(5))
+            .ReturnsAsync(new[] { "https://cdn.test/users/a.png", "https://cdn.test/clubs/b.png" });
+
+        var blobService = new Mock<IAzureBlobService>();
         var refreshCache = new Mock<IRefreshAheadCache>();
-        var service = CreateService(refreshCache: refreshCache);
+        var service = CreateService(userRepository: repository, blobService: blobService, refreshCache: refreshCache);
 
         await service.DeleteUserAsync(5);
 
+        blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/users/a.png"), Times.Once);
+        blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/clubs/b.png"), Times.Once);
         refreshCache.Verify(c => c.RemoveAsync("user:5"), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateAvatarAsync_WhenPersistFails_ShouldDeleteUploadedBlobAndRethrow()
+    {
+        var blobService = new Mock<IAzureBlobService>();
+        blobService.Setup(service => service.UploadImageAsync(It.IsAny<IFormFile>(), "users"))
+            .ReturnsAsync("https://cdn.test/users/new.png");
+
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.GetUserAsync(7))
+            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
+        repository.Setup(repo => repo.UpdatePartialAsync(It.IsAny<User>()))
+            .ThrowsAsync(new InvalidOperationException("db down"));
+
+        var service = CreateService(userRepository: repository, blobService: blobService);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
+
+        var act = () => service.UpdateAvatarAsync(7, formFile);
+
+        // The persist failure surfaces, but the just-uploaded blob is cleaned up first.
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/users/new.png"), Times.Once);
     }
 
     [Fact]

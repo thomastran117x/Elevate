@@ -25,7 +25,9 @@ public sealed class FeatureFlagRegistry
             FeatureFlagKeys.Profile,
             FeatureFlagKeys.ProfileAdmin,
             FeatureFlagKeys.Search,
-            FeatureFlagKeys.SearchReindex
+            FeatureFlagKeys.SearchReindex,
+            FeatureFlagKeys.Storage,
+            FeatureFlagKeys.StorageOrphanCleanup
         ]);
 
     public FeatureFlagRegistry(IEnumerable<string> keys)
