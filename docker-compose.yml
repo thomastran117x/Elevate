@@ -1,3 +1,44 @@
+# ---------------------------------------------------------------------------
+# Shared environment groups (YAML anchors).
+# These are merged into each service's `environment:` via `<<: [*anchor]`.
+# Every value carries a `${VAR:-default}` fallback so `docker compose up` works
+# even without a .env file. Real values come from the root .env (env_file).
+# ---------------------------------------------------------------------------
+x-common-env: &common-env
+  ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Development}"
+
+x-kafka-env: &kafka-env
+  KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
+
+x-elasticsearch-env: &elasticsearch-env
+  ELASTICSEARCH_URL: "${ELASTICSEARCH_URL:-http://elasticsearch:9200}"
+
+# Shared by backend + sms-worker
+x-sms-mfa-env: &sms-mfa-env
+  AUTH_SMS_MFA_ENROLLMENT_ENABLED: "${AUTH_SMS_MFA_ENROLLMENT_ENABLED:-true}"
+  AUTH_SMS_MFA_ENFORCEMENT_ENABLED: "${AUTH_SMS_MFA_ENFORCEMENT_ENABLED:-false}"
+  AUTH_SMS_MFA_STEP_UP_SMS_ENABLED: "${AUTH_SMS_MFA_STEP_UP_SMS_ENABLED:-true}"
+
+# Shared by backend + frontend (all 17 feature flags)
+x-feature-flags-env: &feature-flags-env
+  FEATURE_AUTH: "${FEATURE_AUTH:-true}"
+  FEATURE_CLUBS: "${FEATURE_CLUBS:-true}"
+  FEATURE_CLUBS_FOLLOW: "${FEATURE_CLUBS_FOLLOW:-true}"
+  FEATURE_CLUBS_POSTS: "${FEATURE_CLUBS_POSTS:-true}"
+  FEATURE_CLUBS_REVIEWS: "${FEATURE_CLUBS_REVIEWS:-true}"
+  FEATURE_CLUBS_VERSIONING: "${FEATURE_CLUBS_VERSIONING:-true}"
+  FEATURE_EVENTS: "${FEATURE_EVENTS:-true}"
+  FEATURE_EVENTS_ANALYTICS: "${FEATURE_EVENTS_ANALYTICS:-true}"
+  FEATURE_EVENTS_IMAGES: "${FEATURE_EVENTS_IMAGES:-true}"
+  FEATURE_EVENTS_INVITATIONS: "${FEATURE_EVENTS_INVITATIONS:-true}"
+  FEATURE_EVENTS_REGISTRATION: "${FEATURE_EVENTS_REGISTRATION:-true}"
+  FEATURE_EVENTS_VERSIONING: "${FEATURE_EVENTS_VERSIONING:-true}"
+  FEATURE_PAYMENT: "${FEATURE_PAYMENT:-true}"
+  FEATURE_PROFILE: "${FEATURE_PROFILE:-true}"
+  FEATURE_PROFILE_ADMIN: "${FEATURE_PROFILE_ADMIN:-true}"
+  FEATURE_SEARCH: "${FEATURE_SEARCH:-true}"
+  FEATURE_SEARCH_REINDEX: "${FEATURE_SEARCH_REINDEX:-true}"
+
 services:
   frontend:
     container_name: event-frontend
@@ -8,12 +49,20 @@ services:
       - path: ./.env
         required: false
     environment:
+      <<: [*feature-flags-env]
       NODE_ENV: "${NODE_ENV:-development}"
+      # Browser-facing API base. Kept on a distinct interpolation name so it does
+      # not collide with the root .env BACKEND_URL (used for local, non-docker runs).
+      # The browser calls same-origin /api, which the SSR server proxies to the backend.
       BACKEND_URL: "${FRONTEND_BACKEND_URL:-http://localhost:3090/api}"
       API_PROXY_TARGET: "${FRONTEND_API_PROXY_TARGET:-http://backend:8090}"
       FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3090}"
       # Angular 21 SSR Host allowlist (SSRF protection). Hostnames only, no ports.
       NG_ALLOWED_HOSTS: "${NG_ALLOWED_HOSTS:-localhost,127.0.0.1}"
+      # Public OAuth / captcha ids baked into the browser bundle by generate-env.mjs.
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      MSAL_CLIENT_ID: "${MSAL_CLIENT_ID:-}"
+      GOOGLE_SITE_KEY: "${GOOGLE_SITE_KEY:-}"
     ports:
       - "3090:3090"
     depends_on:
@@ -30,19 +79,47 @@ services:
       - path: ./.env
         required: false
     environment:
-      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Development}"
+      <<: [*common-env, *kafka-env, *elasticsearch-env, *sms-mfa-env, *feature-flags-env]
       PORT: "${BACKEND_PORT:-8090}"
       DB_CONNECTION_STRING: "${DB_CONNECTION_STRING:-Server=mysql;Port=3306;Database=appdb;User=appuser;Password=apppass}"
       REDIS_URL: "${REDIS_URL:-redis:6379}"
       JWT_SECRET_ACCESS: "${JWT_SECRET_ACCESS:-amazing_secret_key_yup_yes_abcdef123}"
       JWT_SECRET_VERIFICATION: "${JWT_SECRET_VERIFICATION:-amazing_verification_secret_yup_yes_abcdef123}"
-      ELASTICSEARCH_URL: "${ELASTICSEARCH_URL:-http://elasticsearch:9200}"
-      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      # Topics the backend publishes to (consumed by the workers).
       EMAIL_TOPIC: "${EMAIL_TOPIC:-eventxperience-email}"
       SMS_TOPIC: "${SMS_TOPIC:-eventxperience-sms}"
-      AUTH_SMS_MFA_ENROLLMENT_ENABLED: "${AUTH_SMS_MFA_ENROLLMENT_ENABLED:-true}"
-      AUTH_SMS_MFA_ENFORCEMENT_ENABLED: "${AUTH_SMS_MFA_ENFORCEMENT_ENABLED:-false}"
-      AUTH_SMS_MFA_STEP_UP_SMS_ENABLED: "${AUTH_SMS_MFA_STEP_UP_SMS_ENABLED:-true}"
+      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3090}"
+      # OAuth. The backend reads MS_CLIENT_ID; the single source var is MSAL_CLIENT_ID
+      # (also consumed by the frontend), mapped here.
+      MS_CLIENT_ID: "${MSAL_CLIENT_ID:-}"
+      MS_TENANT_ID: "${MS_TENANT_ID:-}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
+      APPLE_CLIENT_ID: "${APPLE_CLIENT_ID:-}"
+      # Captcha.
+      CAPTCHA_PROVIDER: "${CAPTCHA_PROVIDER:-google}"
+      GOOGLE_CAPTCHA_SECRET: "${GOOGLE_CAPTCHA_SECRET:-}"
+      # Blob storage (Azure).
+      AZURE_STORAGE_CONNECTION_STRING: "${AZURE_STORAGE_CONNECTION_STRING:-}"
+      AZURE_STORAGE_CONTAINER_NAME: "${AZURE_STORAGE_CONTAINER_NAME:-}"
+      # TOTP / MFA. Empty key => code uses the dev fallback (validated in prod).
+      AUTH_TOTP_ENCRYPTION_KEY: "${AUTH_TOTP_ENCRYPTION_KEY:-}"
+      AUTH_TOTP_MFA_ENROLLMENT_ENABLED: "${AUTH_TOTP_MFA_ENROLLMENT_ENABLED:-true}"
+      AUTH_TOTP_MFA_STEP_UP_ENABLED: "${AUTH_TOTP_MFA_STEP_UP_ENABLED:-true}"
+      # Payments (Stripe).
+      STRIPE_API_KEY: "${STRIPE_API_KEY:-}"
+      STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET:-}"
+      STRIPE_SUCCESS_URL: "${STRIPE_SUCCESS_URL:-http://localhost:3090/payment/success}"
+      STRIPE_CANCEL_URL: "${STRIPE_CANCEL_URL:-http://localhost:3090/payment/cancel}"
+      # Seeders (dev/optional).
+      RUN_SEEDERS: "${RUN_SEEDERS:-false}"
+      AUTH_SEED_ACCOUNT_BYPASS: "${AUTH_SEED_ACCOUNT_BYPASS:-false}"
+      AUTH_SEED_USERS_PASSWORD: "${AUTH_SEED_USERS_PASSWORD:-Password123!}"
+      AUTH_SEED_ADMIN_PASSWORD: "${AUTH_SEED_ADMIN_PASSWORD:-AdminPassword123!}"
+      AUTH_SEED_ADMIN_EMAIL: "${AUTH_SEED_ADMIN_EMAIL:-admin@seed.eventxperience.test}"
+      AUTH_SEED_ADMIN_USERNAME: "${AUTH_SEED_ADMIN_USERNAME:-seedadmin}"
+      AUTH_SEED_ADMIN_NAME: "${AUTH_SEED_ADMIN_NAME:-Seed Admin}"
     ports:
       - "8090:8090"
     depends_on:
@@ -66,9 +143,7 @@ services:
       - path: ./.env
         required: false
     environment:
-      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Development}"
-      ELASTICSEARCH_URL: "${ELASTICSEARCH_URL:-http://elasticsearch:9200}"
-      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
+      <<: [*common-env, *kafka-env, *elasticsearch-env]
       EVENT_INDEX_TOPIC: "${EVENT_INDEX_TOPIC:-event-index-events}"
       EVENT_INDEX_GROUP_ID: "${EVENT_INDEX_GROUP_ID:-event-indexer}"
       EVENT_INDEX_DLQ_TOPIC: "${EVENT_INDEX_DLQ_TOPIC:-event-index-events-dlq}"
@@ -93,9 +168,7 @@ services:
       - path: ./.env
         required: false
     environment:
-      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Development}"
-      ELASTICSEARCH_URL: "${ELASTICSEARCH_URL:-http://elasticsearch:9200}"
-      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
+      <<: [*common-env, *kafka-env, *elasticsearch-env]
       CLUB_INDEX_TOPIC: "${CLUB_INDEX_TOPIC:-club-index-events}"
       CLUB_INDEX_GROUP_ID: "${CLUB_INDEX_GROUP_ID:-club-indexer}"
       CLUB_INDEX_DLQ_TOPIC: "${CLUB_INDEX_DLQ_TOPIC:-club-index-events-dlq}"
@@ -120,9 +193,7 @@ services:
       - path: ./.env
         required: false
     environment:
-      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Development}"
-      ELASTICSEARCH_URL: "${ELASTICSEARCH_URL:-http://elasticsearch:9200}"
-      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
+      <<: [*common-env, *kafka-env, *elasticsearch-env]
       CLUB_POST_INDEX_TOPIC: "${CLUB_POST_INDEX_TOPIC:-clubpost-index-events}"
       CLUB_POST_INDEX_GROUP_ID: "${CLUB_POST_INDEX_GROUP_ID:-clubpost-indexer}"
       CLUB_POST_INDEX_DLQ_TOPIC: "${CLUB_POST_INDEX_DLQ_TOPIC:-clubpost-index-events-dlq}"
@@ -147,8 +218,7 @@ services:
       - path: ./.env
         required: false
     environment:
-      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Development}"
-      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
+      <<: [*common-env, *kafka-env]
       EMAIL_TOPIC: "${EMAIL_TOPIC:-eventxperience-email}"
       EMAIL_GROUP_ID: "${EMAIL_GROUP_ID:-email-worker}"
       EMAIL_DLQ_TOPIC: "${EMAIL_DLQ_TOPIC:-eventxperience-email-dlq}"
@@ -173,12 +243,8 @@ services:
       - path: ./.env
         required: false
     environment:
-      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Development}"
-      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
+      <<: [*common-env, *kafka-env, *sms-mfa-env]
       SMS_TOPIC: "${SMS_TOPIC:-eventxperience-sms}"
-      AUTH_SMS_MFA_ENROLLMENT_ENABLED: "${AUTH_SMS_MFA_ENROLLMENT_ENABLED:-true}"
-      AUTH_SMS_MFA_ENFORCEMENT_ENABLED: "${AUTH_SMS_MFA_ENFORCEMENT_ENABLED:-false}"
-      AUTH_SMS_MFA_STEP_UP_SMS_ENABLED: "${AUTH_SMS_MFA_STEP_UP_SMS_ENABLED:-true}"
       SMS_GROUP_ID: "${SMS_GROUP_ID:-sms-worker}"
       SMS_DLQ_TOPIC: "${SMS_DLQ_TOPIC:-eventxperience-sms-dlq}"
       TWILIO_ACCOUNT_SID: "${TWILIO_ACCOUNT_SID:-}"
