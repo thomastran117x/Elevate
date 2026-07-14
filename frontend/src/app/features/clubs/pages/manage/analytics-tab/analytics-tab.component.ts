@@ -8,6 +8,11 @@ import { getApiClientMessage } from '../../../../../core/api/models/api-client-e
 import { ClubAnalytics, TrendPoint } from '../../../models/club-management.types';
 import { ClubManagementService } from '../../../services/club-management.service';
 
+interface TrendWindow {
+  label: string;
+  days: number; // 0 = all
+}
+
 interface Sparkline {
   line: string;
   area: string;
@@ -40,6 +45,14 @@ export class AnalyticsTabComponent implements OnInit {
 
   registrationSpark: Sparkline | null = null;
   revenueSpark: Sparkline | null = null;
+
+  readonly windows: TrendWindow[] = [
+    { label: '7d', days: 7 },
+    { label: '14d', days: 14 },
+    { label: '30d', days: 30 },
+    { label: 'All', days: 0 },
+  ];
+  activeWindow = 30;
 
   constructor(
     private route: ActivatedRoute,
@@ -74,17 +87,86 @@ export class AnalyticsTabComponent implements OnInit {
       .subscribe({
         next: (response) => {
           this.analytics = response.data ?? null;
-          if (this.analytics) {
-            this.registrationSpark = this.buildSparkline(this.analytics.registrationTrend);
-            this.revenueSpark = this.buildSparkline(
-              this.analytics.revenueTrend.map((p) => ({ date: p.date, value: p.value / 100 })),
-            );
-          }
+          this.rebuildSparks();
         },
         error: (err) => {
           this.error = getApiClientMessage(err, 'Unable to load analytics.');
         },
       });
+  }
+
+  setWindow(days: number): void {
+    this.activeWindow = days;
+    this.rebuildSparks();
+  }
+
+  private windowed(points: TrendPoint[]): TrendPoint[] {
+    if (this.activeWindow <= 0 || points.length <= this.activeWindow) return points;
+    return points.slice(points.length - this.activeWindow);
+  }
+
+  private rebuildSparks(): void {
+    if (!this.analytics) {
+      this.registrationSpark = null;
+      this.revenueSpark = null;
+      return;
+    }
+    this.registrationSpark = this.buildSparkline(this.windowed(this.analytics.registrationTrend));
+    this.revenueSpark = this.buildSparkline(
+      this.windowed(this.analytics.revenueTrend).map((p) => ({
+        date: p.date,
+        value: p.value / 100,
+      })),
+    );
+  }
+
+  exportCsv(): void {
+    const a = this.analytics;
+    if (!a) return;
+
+    const lines: string[] = [];
+    const row = (cells: (string | number)[]) =>
+      cells.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',');
+
+    lines.push(row(['Metric', 'Value']));
+    lines.push(row(['Total events', a.totalEvents]));
+    lines.push(row(['Published events', a.publishedEvents]));
+    lines.push(row(['Draft events', a.draftEvents]));
+    lines.push(row(['Upcoming events', a.upcomingEvents]));
+    lines.push(row(['Total registrations', a.totalRegistrations]));
+    lines.push(row(['Unique attendees', a.uniqueAttendees]));
+    lines.push(row(['Repeat attendees', a.repeatAttendees]));
+    lines.push(row(['Total revenue', this.toDollars(a.totalRevenue).toFixed(2)]));
+    lines.push(row(['Pending revenue', this.toDollars(a.pendingRevenue).toFixed(2)]));
+    lines.push(row(['Avg fill rate %', a.avgFillRate.toFixed(1)]));
+
+    lines.push('');
+    lines.push(row(['Top events by registrations', 'Registrations', 'Fill rate %', 'Revenue']));
+    for (const e of a.topEventsByRegistrations) {
+      lines.push(
+        row([
+          e.name,
+          e.registrationCount,
+          e.fillRate.toFixed(1),
+          this.toDollars(e.revenue).toFixed(2),
+        ]),
+      );
+    }
+
+    lines.push('');
+    lines.push(row(['Date', 'Registrations', 'Revenue']));
+    const revByDate = new Map(a.revenueTrend.map((p) => [p.date, p.value]));
+    for (const p of a.registrationTrend) {
+      lines.push(row([p.date, p.value, this.toDollars(revByDate.get(p.date) ?? 0).toFixed(2)]));
+    }
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `club-${this.clubId}-analytics.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   private buildSparkline(points: TrendPoint[]): Sparkline {

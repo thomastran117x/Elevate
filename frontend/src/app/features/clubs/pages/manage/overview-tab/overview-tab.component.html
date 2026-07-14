@@ -90,6 +90,34 @@
       </div>
     </div>
 
+    <!-- Health indicators -->
+    @if (analytics; as an) {
+      <div class="grid gap-4 sm:grid-cols-3">
+        <div class="rounded-2xl border border-line bg-glass px-5 py-4">
+          <div class="flex items-center justify-between">
+            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">
+              Avg fill rate
+            </p>
+            <a routerLink="../analytics" class="text-xs font-semibold text-accent">Details →</a>
+          </div>
+          <p class="mt-2 text-2xl font-bold">{{ an.avgFillRate | number: '1.0-1' }}%</p>
+          <p class="mt-1 text-xs text-faint">{{ an.totalRegistrations }} registrations</p>
+        </div>
+        <div class="rounded-2xl border border-line bg-glass px-5 py-4">
+          <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">Revenue</p>
+          <p class="mt-2 text-2xl font-bold">{{ toDollars(an.totalRevenue) | currency }}</p>
+          <p class="mt-1 text-xs" [class]="an.pendingRevenue > 0 ? 'text-warning' : 'text-faint'">
+            {{ toDollars(an.pendingRevenue) | currency }} pending
+          </p>
+        </div>
+        <div class="rounded-2xl border border-line bg-glass px-5 py-4">
+          <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">Attendees</p>
+          <p class="mt-2 text-2xl font-bold">{{ an.uniqueAttendees }}</p>
+          <p class="mt-1 text-xs text-faint">{{ an.repeatAttendees }} returning</p>
+        </div>
+      </div>
+    }
+
     <!-- Recent posts + upcoming events -->
     <div class="grid gap-4 lg:grid-cols-2">
       <!-- Recent posts -->

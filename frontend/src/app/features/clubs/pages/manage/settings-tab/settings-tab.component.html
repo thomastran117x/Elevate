@@ -1,0 +1,131 @@
+<div class="flex flex-col gap-6">
+  @if (error) {
+    <div class="rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger">
+      {{ error }}
+    </div>
+  }
+
+  @if (loading) {
+    <div class="rounded-3xl border border-line bg-glass px-6 py-10 text-center text-sm text-faint">
+      Loading settings…
+    </div>
+  } @else {
+    <!-- Transfer ownership -->
+    <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
+      <h2 class="text-lg font-bold">Transfer ownership</h2>
+      <p class="mt-1 text-sm text-subtle">
+        Hand this club to another member by their username or email. You'll lose owner privileges
+        immediately, keeping only whatever staff role they grant you.
+      </p>
+
+      @if (!showTransfer) {
+        <button
+          type="button"
+          (click)="showTransfer = true"
+          class="mt-4 inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong"
+        >
+          Transfer ownership
+        </button>
+      } @else {
+        <div class="mt-4 space-y-4 rounded-2xl border border-line bg-surface-muted px-5 py-5">
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-muted" for="transfer-identifier">
+              New owner's username or email
+            </label>
+            <input
+              id="transfer-identifier"
+              type="text"
+              autocomplete="off"
+              [(ngModel)]="transferIdentifier"
+              placeholder="e.g. jordan or jordan@example.com"
+              class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+            />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-muted" for="transfer-confirm">
+              Type <span class="font-bold text-content">TRANSFER</span> to confirm
+            </label>
+            <input
+              id="transfer-confirm"
+              type="text"
+              autocomplete="off"
+              [(ngModel)]="transferConfirm"
+              placeholder="TRANSFER"
+              class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+            />
+          </div>
+          <div class="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              (click)="transferOwnership()"
+              [disabled]="!transferConfirmed || !transferIdentifier.trim() || transferring"
+              class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {{ transferring ? 'Transferring…' : 'Transfer ownership' }}
+            </button>
+            <button
+              type="button"
+              (click)="showTransfer = false; transferConfirm = ''; transferIdentifier = ''"
+              class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      }
+    </article>
+
+    <!-- Danger zone -->
+    <article class="rounded-3xl border border-danger/20 bg-danger/5 px-6 py-6 backdrop-blur-xl">
+      <p class="text-xs font-semibold uppercase tracking-[0.22em] text-danger">Danger zone</p>
+      <h2 class="mt-2 text-lg font-bold text-danger">Delete club</h2>
+      <p class="mt-1 text-sm text-subtle">
+        Permanently delete this club, its posts, events, staff, and history. This cannot be undone.
+      </p>
+
+      @if (!showDelete) {
+        <button
+          type="button"
+          (click)="showDelete = true"
+          class="mt-4 inline-flex items-center justify-center rounded-2xl border border-danger/40 px-5 py-3 text-sm font-semibold text-danger transition hover:bg-danger/10"
+        >
+          Delete club
+        </button>
+      } @else {
+        <div class="mt-4 space-y-4 rounded-2xl border border-danger/30 bg-danger/10 px-5 py-5">
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-muted" for="delete-confirm">
+              Type the club name
+              <span class="font-bold text-danger">{{ club?.name }}</span> to confirm
+            </label>
+            <input
+              id="delete-confirm"
+              type="text"
+              autocomplete="off"
+              [(ngModel)]="deleteConfirm"
+              [placeholder]="club?.name || ''"
+              class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-danger focus:ring-4 focus:ring-danger/20"
+            />
+          </div>
+          <div class="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              (click)="deleteClub()"
+              [disabled]="!deleteConfirmed || deleting"
+              class="inline-flex items-center justify-center rounded-2xl bg-rose-600 px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-danger/100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {{ deleting ? 'Deleting…' : 'Permanently delete this club' }}
+            </button>
+            <button
+              type="button"
+              (click)="showDelete = false; deleteConfirm = ''"
+              class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      }
+    </article>
+  }
+</div>

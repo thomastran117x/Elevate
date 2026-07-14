@@ -288,12 +288,19 @@ export class ClubManagementService {
     });
   }
 
-  transferOwnership(clubId: number, newOwnerUserId: number): Observable<ApiEnvelope<Club>> {
+  /** Transfer ownership to an existing user identified by username or email. */
+  transferOwnership(clubId: number, newOwnerIdentifier: string): Observable<ApiEnvelope<Club>> {
     return this.api
       .post<
         ApiEnvelope<unknown>
-      >(`${this.base}/${clubId}/transfer-ownership`, { newOwnerUserId }, { withCredentials: true })
+      >(`${this.base}/${clubId}/transfer-ownership`, { newOwnerIdentifier }, { withCredentials: true })
       .pipe(map((response) => this.mapClub(response)));
+  }
+
+  deleteClub(clubId: number): Observable<ApiEnvelope<unknown>> {
+    return this.api.delete<ApiEnvelope<unknown>>(`${this.base}/${clubId}`, {
+      withCredentials: true,
+    });
   }
 
   getVersions(clubId: number, page = 1, pageSize = 20): Observable<ClubVersionsApiResponse> {

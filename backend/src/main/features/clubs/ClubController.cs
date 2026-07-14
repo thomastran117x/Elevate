@@ -7,6 +7,7 @@ using backend.main.features.clubs.versions;
 using backend.main.features.clubs.versions.contracts.responses;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
+using backend.main.shared.exceptions.http;
 using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Authorization;
@@ -255,6 +256,17 @@ namespace backend.main.features.clubs
             return (await _userRepository.GetByIdsAsync(ids)).ToDictionary(user => user.Id);
         }
 
+        private async Task<int> ResolveUserIdAsync(string identifier)
+        {
+            var trimmed = identifier.Trim();
+            var profile = trimmed.Contains('@')
+                ? await _userRepository.GetProfileByEmailAsync(trimmed.ToLowerInvariant())
+                : await _userRepository.GetProfileByUsernameAsync(trimmed);
+
+            return profile?.Id
+                ?? throw new ResourceNotFoundException($"No account found for '{trimmed}'.");
+        }
+
         [Authorize]
         [HttpPost("{id}/staff/managers")]
         [ProducesResponseType(typeof(ApiResponse<ClubStaffResponse>), StatusCodes.Status201Created)]
@@ -316,9 +328,13 @@ namespace backend.main.features.clubs
         public async Task<IActionResult> TransferOwnership(int id, [FromBody] ClubOwnershipTransferRequest request)
         {
             var userPayload = User.GetUserPayload();
+            var newOwnerUserId = string.IsNullOrWhiteSpace(request.NewOwnerIdentifier)
+                ? request.NewOwnerUserId
+                : await ResolveUserIdAsync(request.NewOwnerIdentifier);
+
             var club = await _clubService.TransferOwnershipAsync(
                 id,
-                request.NewOwnerUserId,
+                newOwnerUserId,
                 userPayload.Id,
                 userPayload.Role);
 

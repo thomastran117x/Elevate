@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
@@ -38,15 +38,8 @@ export class StaffTabComponent implements OnInit {
   // Remove
   removingUserId: number | null = null;
 
-  // Transfer ownership
-  showTransfer = false;
-  transferUserId: number | null = null;
-  transferConfirm = '';
-  transferring = false;
-
   constructor(
     private route: ActivatedRoute,
-    private router: Router,
     private management: ClubManagementService,
   ) {}
 
@@ -60,10 +53,6 @@ export class StaffTabComponent implements OnInit {
     }
     this.load();
     this.loadInvitations();
-  }
-
-  get transferConfirmed(): boolean {
-    return this.transferConfirm.trim().toUpperCase() === 'TRANSFER';
   }
 
   private load(): void {
@@ -178,37 +167,6 @@ export class StaffTabComponent implements OnInit {
         },
         error: (err) => {
           this.error = getApiClientMessage(err, 'Unable to remove staff member.');
-        },
-      });
-  }
-
-  transferOwnership(): void {
-    const userId = Number(this.transferUserId);
-    if (!Number.isFinite(userId) || userId <= 0) {
-      this.error = 'Enter a valid user ID to transfer to.';
-      return;
-    }
-    if (!this.transferConfirmed) {
-      return;
-    }
-
-    this.transferring = true;
-    this.error = '';
-    this.success = '';
-
-    this.management
-      .transferOwnership(this.clubId, userId)
-      .pipe(
-        takeUntilDestroyed(this.destroyRef),
-        finalize(() => (this.transferring = false)),
-      )
-      .subscribe({
-        next: () => {
-          // The current user is no longer the owner — return to the dashboard.
-          void this.router.navigate(['/clubs/manage']);
-        },
-        error: (err) => {
-          this.error = getApiClientMessage(err, 'Unable to transfer ownership.');
         },
       });
   }

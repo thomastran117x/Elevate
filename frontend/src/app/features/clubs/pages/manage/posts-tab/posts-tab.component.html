@@ -1,0 +1,202 @@
+<div class="flex flex-col gap-6">
+  @if (success) {
+    <div class="rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success">
+      {{ success }}
+    </div>
+  }
+  @if (error) {
+    <div class="rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger">
+      {{ error }}
+    </div>
+  }
+
+  <!-- Header + create -->
+  <div class="flex items-center justify-between gap-3">
+    <div>
+      <h2 class="text-xl font-bold">Posts</h2>
+      <p class="text-sm text-subtle">Share announcements and updates with your members.</p>
+    </div>
+    @if (!showEditor) {
+      <button
+        type="button"
+        (click)="openCreate()"
+        class="rounded-2xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover"
+      >
+        + New post
+      </button>
+    }
+  </div>
+
+  <!-- Editor -->
+  @if (showEditor) {
+    <article class="rounded-3xl border border-accent/25 bg-accent/5 px-6 py-6 backdrop-blur-xl">
+      <h3 class="text-lg font-bold">{{ editingId != null ? 'Edit post' : 'New post' }}</h3>
+
+      <div class="mt-4 space-y-4">
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-sm font-semibold text-muted" for="post-title">Title</label>
+            <span class="text-xs text-faint">{{ form.title.length }}/{{ titleMax }}</span>
+          </div>
+          <input
+            id="post-title"
+            type="text"
+            [(ngModel)]="form.title"
+            [maxlength]="titleMax"
+            placeholder="What's the update?"
+            class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+          />
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-sm font-semibold text-muted" for="post-content">Content</label>
+            <span class="text-xs text-faint">{{ form.content.length }}/{{ contentMax }}</span>
+          </div>
+          <textarea
+            id="post-content"
+            rows="6"
+            [(ngModel)]="form.content"
+            [maxlength]="contentMax"
+            placeholder="Write your post…"
+            class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+          ></textarea>
+        </div>
+
+        <div class="flex flex-wrap items-end gap-4">
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-muted" for="post-type">Type</label>
+            <select
+              id="post-type"
+              [(ngModel)]="form.postType"
+              class="rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+            >
+              @for (type of postTypes; track type) {
+                <option [value]="type">{{ type }}</option>
+              }
+            </select>
+          </div>
+          <label
+            class="flex cursor-pointer items-center gap-2 py-3 text-sm font-semibold text-muted"
+          >
+            <input type="checkbox" [(ngModel)]="form.isPinned" class="h-4 w-4 accent-accent" />
+            Pin to top
+          </label>
+        </div>
+
+        <div class="flex flex-col gap-3 pt-1 sm:flex-row">
+          <button
+            type="button"
+            (click)="savePost()"
+            [disabled]="saving"
+            class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {{ saving ? 'Saving…' : editingId != null ? 'Save changes' : 'Publish' }}
+          </button>
+          <button
+            type="button"
+            (click)="cancelEditor()"
+            class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </article>
+  }
+
+  <!-- List -->
+  <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
+    @if (loading) {
+      <ul class="divide-y divide-line">
+        @for (s of skeletons; track $index) {
+          <li class="space-y-2 py-4">
+            <div class="h-4 w-1/3 animate-pulse rounded bg-surface-muted"></div>
+            <div class="h-3 w-full animate-pulse rounded bg-surface-muted"></div>
+            <div class="h-3 w-2/3 animate-pulse rounded bg-surface-muted"></div>
+          </li>
+        }
+      </ul>
+    } @else if (posts.length === 0) {
+      <div class="px-5 py-10 text-center text-sm text-subtle">
+        No posts yet. Publish your first update to keep members in the loop.
+      </div>
+    } @else {
+      <ul class="divide-y divide-line">
+        @for (post of posts; track post.id) {
+          <li class="py-4">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  @if (post.isPinned) {
+                    <span class="text-xs font-semibold text-accent">📌 Pinned</span>
+                  }
+                  <span
+                    class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                    [ngClass]="postTypeStyles[post.postType]"
+                  >
+                    {{ post.postType }}
+                  </span>
+                </div>
+                <p class="mt-1 font-semibold text-content">{{ post.title }}</p>
+                <p class="mt-1 line-clamp-2 text-sm text-subtle">{{ post.content }}</p>
+                <p class="mt-1 text-xs text-faint">
+                  {{ authorDisplay(post) }} · {{ post.createdAt | date: 'mediumDate' }} ·
+                  {{ post.likesCount }} likes · {{ post.viewCount }} views
+                </p>
+              </div>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                (click)="togglePin(post)"
+                [disabled]="pinningId === post.id"
+                class="rounded-xl border border-line-strong px-3 py-1.5 text-xs font-semibold text-muted transition hover:bg-glass-strong disabled:opacity-50"
+              >
+                {{ pinningId === post.id ? '…' : post.isPinned ? 'Unpin' : 'Pin' }}
+              </button>
+              <button
+                type="button"
+                (click)="openEdit(post)"
+                class="rounded-xl border border-line-strong px-3 py-1.5 text-xs font-semibold text-muted transition hover:bg-glass-strong"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                (click)="deletePost(post)"
+                [disabled]="deletingId === post.id"
+                class="rounded-xl border border-danger/30 px-3 py-1.5 text-xs font-semibold text-danger transition hover:bg-danger/10 disabled:opacity-50"
+              >
+                {{ deletingId === post.id ? 'Deleting…' : 'Delete' }}
+              </button>
+            </div>
+          </li>
+        }
+      </ul>
+
+      <!-- Pagination -->
+      @if (totalPages > 1) {
+        <div class="mt-4 flex items-center justify-center gap-2">
+          <button
+            type="button"
+            (click)="goToPage(page - 1)"
+            [disabled]="page === 1"
+            class="rounded-2xl border border-line-strong px-3 py-2 text-xs font-semibold text-muted transition hover:bg-glass-strong disabled:opacity-40"
+          >
+            Previous
+          </button>
+          <span class="text-xs text-faint">Page {{ page }} of {{ totalPages }}</span>
+          <button
+            type="button"
+            (click)="goToPage(page + 1)"
+            [disabled]="page === totalPages"
+            class="rounded-2xl border border-line-strong px-3 py-2 text-xs font-semibold text-muted transition hover:bg-glass-strong disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      }
+    }
+  </article>
+</div>

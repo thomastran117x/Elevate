@@ -15,6 +15,10 @@ export const CLUB_MANAGE_TABS: Routes = [
       import('./members-tab/members-tab.component').then((m) => m.MembersTabComponent),
   },
   {
+    path: 'posts',
+    loadComponent: () => import('./posts-tab/posts-tab.component').then((m) => m.PostsTabComponent),
+  },
+  {
     path: 'details',
     canDeactivate: [unsavedChangesGuard],
     loadComponent: () =>
@@ -33,5 +37,10 @@ export const CLUB_MANAGE_TABS: Routes = [
     path: 'analytics',
     loadComponent: () =>
       import('./analytics-tab/analytics-tab.component').then((m) => m.AnalyticsTabComponent),
+  },
+  {
+    path: 'settings',
+    loadComponent: () =>
+      import('./settings-tab/settings-tab.component').then((m) => m.SettingsTabComponent),
   },
 ];

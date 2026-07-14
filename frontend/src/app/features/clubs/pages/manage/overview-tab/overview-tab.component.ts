@@ -7,8 +7,10 @@ import { finalize } from 'rxjs/operators';
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
 import { CATEGORY_STYLES, EventItem } from '../../../../events/models/event.types';
 import { EventsService } from '../../../../events/services/events.service';
+import { ClubAnalytics } from '../../../models/club-management.types';
 import { ClubPost, POST_TYPE_STYLES } from '../../../models/club-post.types';
 import { Club, CLUB_TYPE_STYLES } from '../../../models/club.types';
+import { ClubManagementService } from '../../../services/club-management.service';
 import { ClubPostsService } from '../../../services/club-posts.service';
 import { ClubsService } from '../../../services/clubs.service';
 
@@ -32,6 +34,9 @@ export class OverviewTabComponent implements OnInit {
   upcomingEvents: EventItem[] = [];
   eventsLoading = true;
 
+  analytics: ClubAnalytics | null = null;
+  analyticsLoading = true;
+
   readonly clubTypeStyles = CLUB_TYPE_STYLES;
   readonly postTypeStyles = POST_TYPE_STYLES;
   readonly categoryStyles = CATEGORY_STYLES;
@@ -41,6 +46,7 @@ export class OverviewTabComponent implements OnInit {
     private clubsService: ClubsService,
     private postsService: ClubPostsService,
     private eventsService: EventsService,
+    private management: ClubManagementService,
   ) {}
 
   ngOnInit(): void {
@@ -50,17 +56,43 @@ export class OverviewTabComponent implements OnInit {
       this.loading = false;
       this.postsLoading = false;
       this.eventsLoading = false;
+      this.analyticsLoading = false;
       this.error = 'A valid club ID is required.';
       return;
     }
     this.load();
     this.loadRecentPosts();
     this.loadUpcomingEvents();
+    this.loadAnalytics();
   }
 
   memberCapacityPercent(): number {
     if (!this.club || this.club.maxMemberCount <= 0) return 0;
     return Math.min(100, (this.club.memberCount / this.club.maxMemberCount) * 100);
+  }
+
+  /** Revenue values are stored in cents. */
+  toDollars(cents: number): number {
+    return cents / 100;
+  }
+
+  private loadAnalytics(): void {
+    this.analyticsLoading = true;
+    this.management
+      .getAnalytics(this.clubId)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => (this.analyticsLoading = false)),
+      )
+      .subscribe({
+        next: (response) => {
+          this.analytics = response.data ?? null;
+        },
+        // Health indicators are best-effort; keep the overview usable if analytics fail.
+        error: () => {
+          this.analytics = null;
+        },
+      });
   }
 
   authorDisplay(post: ClubPost): string {

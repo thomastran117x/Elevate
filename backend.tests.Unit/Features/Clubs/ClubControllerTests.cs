@@ -507,6 +507,38 @@ public class ClubControllerTests
     }
 
     [Fact]
+    public async Task TransferOwnership_ShouldResolveNewOwnerByIdentifier()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.TransferOwnershipAsync(4, 88, 7, "Organizer"))
+            .ReturnsAsync(new Club
+            {
+                Id = 4,
+                UserId = 88,
+                Name = "Chess Club",
+                Description = "Strategy nights",
+                Clubtype = ClubType.Social,
+                ClubImage = "https://cdn.test/clubs/chess.png"
+            });
+        service.Setup(s => s.GetClubAccessAsync(4, 7, "Organizer"))
+            .ReturnsAsync(new ClubAccessInfo { IsOwner = false, CanManage = false });
+
+        var userRepository = new Mock<IUserRepository>();
+        userRepository.Setup(r => r.GetProfileByUsernameAsync("jordan"))
+            .ReturnsAsync(new UserProfileRecord { Id = 88, Username = "jordan", Email = "jordan@example.com", Usertype = "Participant" });
+
+        var controller = CreateController(service.Object, userRepository.Object);
+
+        var result = await controller.TransferOwnership(4, new ClubOwnershipTransferRequest
+        {
+            NewOwnerIdentifier = "jordan"
+        });
+
+        result.Should().BeOfType<OkObjectResult>();
+        service.Verify(s => s.TransferOwnershipAsync(4, 88, 7, "Organizer"), Times.Once);
+    }
+
+    [Fact]
     public async Task GetClubVersion_ShouldReturnDetailedVersionPayload()
     {
         var service = new Mock<IClubService>();

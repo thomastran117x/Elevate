@@ -10,6 +10,32 @@
       Loading analytics…
     </div>
   } @else if (analytics; as a) {
+    <!-- Toolbar: trend window + export -->
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="inline-flex rounded-2xl border border-line bg-glass-strong p-1 text-xs">
+        @for (w of windows; track w.days) {
+          <button
+            type="button"
+            (click)="setWindow(w.days)"
+            [class]="
+              activeWindow === w.days
+                ? 'rounded-xl bg-accent px-3 py-1.5 font-semibold text-accent-contrast'
+                : 'rounded-xl px-3 py-1.5 text-subtle transition hover:text-content'
+            "
+          >
+            {{ w.label }}
+          </button>
+        }
+      </div>
+      <button
+        type="button"
+        (click)="exportCsv()"
+        class="rounded-2xl border border-line-strong px-4 py-2 text-xs font-semibold text-muted transition hover:bg-glass-strong"
+      >
+        ⭳ Export CSV
+      </button>
+    </div>
+
     <!-- Headline stats -->
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <div class="rounded-2xl border border-line bg-glass px-5 py-4">
@@ -165,21 +191,39 @@
       </article>
     }
 
-    <!-- Top events by registrations -->
-    @if (a.topEventsByRegistrations.length > 0) {
-      <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
-        <h2 class="text-lg font-bold">Top events by registrations</h2>
-        <ul class="mt-4 divide-y divide-line">
-          @for (event of a.topEventsByRegistrations; track event.id) {
-            <li class="flex items-center justify-between gap-3 py-3">
-              <span class="font-semibold text-content">{{ event.name }}</span>
-              <span class="text-sm text-subtle">
-                {{ event.registrationCount }} reg · {{ event.fillRate | number: '1.0-1' }}% full
-              </span>
-            </li>
-          }
-        </ul>
-      </article>
-    }
+    <!-- Top events by registrations / revenue -->
+    <div class="grid gap-4 lg:grid-cols-2">
+      @if (a.topEventsByRegistrations.length > 0) {
+        <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
+          <h2 class="text-lg font-bold">Top events by registrations</h2>
+          <ul class="mt-4 divide-y divide-line">
+            @for (event of a.topEventsByRegistrations; track event.id) {
+              <li class="flex items-center justify-between gap-3 py-3">
+                <span class="truncate font-semibold text-content">{{ event.name }}</span>
+                <span class="shrink-0 text-sm text-subtle">
+                  {{ event.registrationCount }} reg · {{ event.fillRate | number: '1.0-1' }}% full
+                </span>
+              </li>
+            }
+          </ul>
+        </article>
+      }
+
+      @if (a.topEventsByRevenue.length > 0) {
+        <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
+          <h2 class="text-lg font-bold">Top events by revenue</h2>
+          <ul class="mt-4 divide-y divide-line">
+            @for (event of a.topEventsByRevenue; track event.id) {
+              <li class="flex items-center justify-between gap-3 py-3">
+                <span class="truncate font-semibold text-content">{{ event.name }}</span>
+                <span class="shrink-0 text-sm font-semibold text-content">
+                  {{ toDollars(event.revenue) | currency }}
+                </span>
+              </li>
+            }
+          </ul>
+        </article>
+      }
+    </div>
   }
 </div>

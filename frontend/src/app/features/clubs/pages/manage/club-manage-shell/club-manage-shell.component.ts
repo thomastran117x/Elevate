@@ -25,10 +25,12 @@ export class ClubManageShellComponent implements OnInit {
   readonly tabs = [
     { path: 'overview', label: 'Overview' },
     { path: 'members', label: 'Members' },
+    { path: 'posts', label: 'Posts' },
     { path: 'details', label: 'Details' },
     { path: 'staff', label: 'Staff' },
     { path: 'history', label: 'History' },
     { path: 'analytics', label: 'Analytics' },
+    { path: 'settings', label: 'Settings' },
   ];
 
   constructor(
