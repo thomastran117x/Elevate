@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
@@ -18,7 +18,7 @@ import { ClubsService } from '../../../services/clubs.service';
 @Component({
   selector: 'app-members-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './members-tab.component.html',
 })
 export class MembersTabComponent implements OnInit {
@@ -34,6 +34,7 @@ export class MembersTabComponent implements OnInit {
   page = 1;
   readonly pageSize = 20;
   totalCount = 0;
+  readonly skeletons = Array.from({ length: 6 });
 
   // Specific (emailed) invitations
   inviteIdentifier = '';
@@ -74,6 +75,12 @@ export class MembersTabComponent implements OnInit {
 
   get totalPages(): number {
     return Math.max(1, Math.ceil(this.totalCount / this.pageSize));
+  }
+
+  capacityPercent(): number {
+    const max = this.club?.maxMemberCount ?? 0;
+    if (max <= 0) return 0;
+    return Math.min(100, (this.totalCount / max) * 100);
   }
 
   displayName(member: ClubMember): string {

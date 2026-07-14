@@ -40,9 +40,29 @@
         *ngFor="let member of staff; trackBy: trackByUserId"
         class="flex items-center justify-between gap-3 py-3"
       >
-        <div>
-          <p class="font-semibold text-content">User #{{ member.userId }}</p>
-          <p class="text-xs text-faint">Added {{ member.createdAt | date: 'mediumDate' }}</p>
+        <div class="flex min-w-0 items-center gap-3">
+          <div class="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full bg-accent/10">
+            <img
+              *ngIf="member.avatar; else staffInitials"
+              [src]="member.avatar"
+              [alt]="displayName(member)"
+              class="h-full w-full object-cover"
+            />
+            <ng-template #staffInitials>
+              <span
+                class="flex h-full w-full items-center justify-center text-xs font-bold text-accent"
+              >
+                {{ initials(member) }}
+              </span>
+            </ng-template>
+          </div>
+          <div class="min-w-0">
+            <p class="truncate font-semibold text-content">{{ displayName(member) }}</p>
+            <p class="truncate text-xs text-faint">
+              <ng-container *ngIf="member.username">&#64;{{ member.username }} · </ng-container>
+              Added {{ member.createdAt | date: 'mediumDate' }}
+            </p>
+          </div>
         </div>
         <div class="flex items-center gap-3">
           <span

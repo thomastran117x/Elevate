@@ -7,6 +7,8 @@ using backend.main.features.clubs.search;
 using backend.main.features.clubs.staff;
 using backend.main.features.clubs.versions;
 using backend.main.features.clubs.versions.contracts.responses;
+using backend.main.features.profile;
+using backend.main.features.profile.contracts;
 using backend.main.shared.responses;
 
 using FluentAssertions;
@@ -381,13 +383,25 @@ public class ClubControllerTests
                 }
             ]);
 
-        var controller = CreateController(service.Object);
+        var userRepository = new Mock<IUserRepository>();
+        userRepository
+            .Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), It.IsAny<UserReadDetailLevel>()))
+            .ReturnsAsync(new List<UserListRecord>
+            {
+                new() { Id = 55, Username = "staffer55", Name = "Staffer 55", Avatar = "https://cdn.test/u/55.png" }
+            });
+
+        var controller = CreateController(service.Object, userRepository.Object);
 
         var result = await controller.GetClubStaff(4);
 
         var ok = result.Should().BeOfType<OkObjectResult>().Subject;
         var response = ok.Value.Should().BeOfType<ApiResponse<IEnumerable<ClubStaffResponse>>>().Subject;
-        response.Data!.Single().Role.Should().Be("Manager");
+        var member = response.Data!.Single();
+        member.Role.Should().Be("Manager");
+        member.Username.Should().Be("staffer55");
+        member.Name.Should().Be("Staffer 55");
+        member.Avatar.Should().Be("https://cdn.test/u/55.png");
     }
 
     [Fact]
@@ -546,9 +560,17 @@ public class ClubControllerTests
         response.Data!.ToString().Should().Contain("8");
     }
 
-    private static ClubController CreateController(IClubService service)
+    private static ClubController CreateController(IClubService service, IUserRepository? userRepository = null)
     {
-        var controller = new ClubController(service);
+        if (userRepository is null)
+        {
+            var repo = new Mock<IUserRepository>();
+            repo.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), It.IsAny<UserReadDetailLevel>()))
+                .ReturnsAsync(new List<UserListRecord>());
+            userRepository = repo.Object;
+        }
+
+        var controller = new ClubController(service, userRepository);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

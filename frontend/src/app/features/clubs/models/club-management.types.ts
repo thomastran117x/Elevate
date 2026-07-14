@@ -33,6 +33,9 @@ export interface ClubStaff {
   grantedByUserId: number;
   createdAt: string;
   updatedAt: string;
+  name: string | null;
+  username: string | null;
+  avatar: string | null;
 }
 
 type ClubStaffPayload = Partial<ClubStaff> & {
@@ -43,6 +46,9 @@ type ClubStaffPayload = Partial<ClubStaff> & {
   GrantedByUserId?: number;
   CreatedAt?: string;
   UpdatedAt?: string;
+  Name?: string | null;
+  Username?: string | null;
+  Avatar?: string | null;
 };
 
 function normalizeStaffRole(value: string | undefined): ClubStaffRole {
@@ -58,6 +64,9 @@ export function normalizeClubStaff(raw: ClubStaffPayload): ClubStaff {
     grantedByUserId: raw.grantedByUserId ?? raw.GrantedByUserId ?? 0,
     createdAt: raw.createdAt ?? raw.CreatedAt ?? '',
     updatedAt: raw.updatedAt ?? raw.UpdatedAt ?? '',
+    name: raw.name ?? raw.Name ?? null,
+    username: raw.username ?? raw.Username ?? null,
+    avatar: raw.avatar ?? raw.Avatar ?? null,
   };
 }
 

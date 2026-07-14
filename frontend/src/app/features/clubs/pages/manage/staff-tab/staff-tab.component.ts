@@ -213,6 +213,15 @@ export class StaffTabComponent implements OnInit {
       });
   }
 
+  displayName(member: ClubStaff): string {
+    return member.name || member.username || `User #${member.userId}`;
+  }
+
+  initials(member: ClubStaff): string {
+    const source = member.name || member.username || '';
+    return source ? source.slice(0, 2).toUpperCase() : `#${member.userId}`.slice(0, 2);
+  }
+
   trackByUserId(_index: number, member: ClubStaff): number {
     return member.userId;
   }

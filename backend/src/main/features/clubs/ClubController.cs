@@ -5,6 +5,8 @@ using backend.main.features.clubs.contracts.responses;
 using backend.main.features.clubs.search;
 using backend.main.features.clubs.versions;
 using backend.main.features.clubs.versions.contracts.responses;
+using backend.main.features.profile;
+using backend.main.features.profile.contracts;
 using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Authorization;
@@ -21,10 +23,12 @@ namespace backend.main.features.clubs
     public class ClubController : ControllerBase
     {
         private readonly IClubService _clubService;
+        private readonly IUserRepository _userRepository;
 
-        public ClubController(IClubService clubService)
+        public ClubController(IClubService clubService, IUserRepository userRepository)
         {
             _clubService = clubService;
+            _userRepository = userRepository;
         }
 
         [Authorize]
@@ -234,11 +238,21 @@ namespace backend.main.features.clubs
         {
             var userPayload = User.GetUserPayload();
             var staff = await _clubService.GetStaffAsync(id, userPayload.Id, userPayload.Role);
+            var users = await LoadUserLookupAsync(staff.Select(member => member.UserId));
 
             return Ok(new ApiResponse<IEnumerable<ClubStaffResponse>>(
                 $"Staff for club with ID {id} has been fetched successfully.",
-                staff.Select(MapToStaffResponse)
+                staff.Select(member => MapToStaffResponse(member, users.GetValueOrDefault(member.UserId)))
             ));
+        }
+
+        private async Task<IReadOnlyDictionary<int, UserListRecord>> LoadUserLookupAsync(IEnumerable<int> userIds)
+        {
+            var ids = userIds.Distinct().ToList();
+            if (ids.Count == 0)
+                return new Dictionary<int, UserListRecord>();
+
+            return (await _userRepository.GetByIdsAsync(ids)).ToDictionary(user => user.Id);
         }
 
         [Authorize]
@@ -254,9 +268,11 @@ namespace backend.main.features.clubs
                 userPayload.Id,
                 userPayload.Role);
 
+            var users = await LoadUserLookupAsync([staff.UserId]);
+
             return StatusCode(201, new ApiResponse<ClubStaffResponse>(
                 $"Manager has been added to club with ID {id} successfully.",
-                MapToStaffResponse(staff)
+                MapToStaffResponse(staff, users.GetValueOrDefault(staff.UserId))
             ));
         }
 
@@ -273,9 +289,11 @@ namespace backend.main.features.clubs
                 userPayload.Id,
                 userPayload.Role);
 
+            var users = await LoadUserLookupAsync([staff.UserId]);
+
             return StatusCode(201, new ApiResponse<ClubStaffResponse>(
                 $"Volunteer has been added to club with ID {id} successfully.",
-                MapToStaffResponse(staff)
+                MapToStaffResponse(staff, users.GetValueOrDefault(staff.UserId))
             ));
         }
 
@@ -431,7 +449,9 @@ namespace backend.main.features.clubs
             return response;
         }
 
-        private static ClubStaffResponse MapToStaffResponse(backend.main.features.clubs.staff.ClubStaff staff) =>
+        private static ClubStaffResponse MapToStaffResponse(
+            backend.main.features.clubs.staff.ClubStaff staff,
+            UserListRecord? user = null) =>
             new(
                 staff.Id,
                 staff.ClubId,
@@ -439,7 +459,10 @@ namespace backend.main.features.clubs
                 staff.Role.ToString(),
                 staff.GrantedByUserId,
                 staff.CreatedAt,
-                staff.UpdatedAt
+                staff.UpdatedAt,
+                user?.Name,
+                user?.Username,
+                user?.Avatar
             );
 
         private static ClubVersionListItemResponse MapToVersionListItemResponse(ClubVersionHistoryItem item) =>
