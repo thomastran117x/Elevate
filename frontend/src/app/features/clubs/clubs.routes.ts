@@ -36,11 +36,18 @@ export const CLUBS_ROUTES: Routes = [
       ),
     loadChildren: () => import('./pages/manage/club-manage.routes').then((m) => m.CLUB_MANAGE_TABS),
   },
-  // Recipient-facing invite accept page. Must precede the `:clubId` catch-all.
+  // Recipient-facing invite accept pages. Must precede the `:clubId` catch-all.
   {
     path: 'invite',
     loadComponent: () =>
       import('./pages/invite/club-invite.component').then((m) => m.ClubInviteComponent),
+  },
+  {
+    path: 'member-invite',
+    loadComponent: () =>
+      import('./pages/member-invite/club-member-invite.component').then(
+        (m) => m.ClubMemberInviteComponent,
+      ),
   },
   {
     path: ':clubId/posts/:postId',

@@ -419,6 +419,63 @@ public class ClubServiceTests
     }
 
     [Fact]
+    public async Task JoinClubAsync_PrivateClub_ThrowsForbiddenAndDoesNotGrant()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        harness.ConfigureClubPersistence();
+        var club = await harness.SeedPersistedClubAsync(id: 101, userId: harness.OtherOwnerUserId, memberCount: 2);
+        club.isPrivate = true;
+        await harness.Db.SaveChangesAsync();
+
+        var act = () => harness.Service.JoinClubAsync(club.Id, harness.MemberUserId);
+
+        await act.Should().ThrowAsync<ForbiddenException>();
+        harness.FollowServiceMock.Verify(
+            service => service.AddMembershipAsync(It.IsAny<int>(), It.IsAny<int>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task GrantMembershipFromInvitationAsync_PrivateClub_BypassesGateAndIncrementsMembers()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        harness.ConfigureClubPersistence();
+        var club = await harness.SeedPersistedClubAsync(id: 102, userId: harness.OtherOwnerUserId, memberCount: 4);
+        club.isPrivate = true;
+        await harness.Db.SaveChangesAsync();
+
+        harness.FollowServiceMock
+            .Setup(service => service.IsMemberAsync(club.Id, harness.MemberUserId))
+            .ReturnsAsync(false);
+
+        await harness.Service.GrantMembershipFromInvitationAsync(club.Id, harness.MemberUserId);
+
+        var persisted = await harness.Db.Clubs.SingleAsync(item => item.Id == club.Id);
+        persisted.MemberCount.Should().Be(5);
+        harness.FollowServiceMock.Verify(service => service.AddMembershipAsync(club.Id, harness.MemberUserId), Times.Once);
+    }
+
+    [Fact]
+    public async Task GrantMembershipFromInvitationAsync_AlreadyMember_IsNoOp()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        harness.ConfigureClubPersistence();
+        var club = await harness.SeedPersistedClubAsync(id: 103, userId: harness.OtherOwnerUserId, memberCount: 6);
+
+        harness.FollowServiceMock
+            .Setup(service => service.IsMemberAsync(club.Id, harness.MemberUserId))
+            .ReturnsAsync(true);
+
+        await harness.Service.GrantMembershipFromInvitationAsync(club.Id, harness.MemberUserId);
+
+        var persisted = await harness.Db.Clubs.SingleAsync(item => item.Id == club.Id);
+        persisted.MemberCount.Should().Be(6);
+        harness.FollowServiceMock.Verify(
+            service => service.AddMembershipAsync(It.IsAny<int>(), It.IsAny<int>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task GetManagedClubsAsync_ShouldReturnOwnedAndStaffManagedClubs()
     {
         await using var harness = await ClubServiceHarness.CreateAsync();

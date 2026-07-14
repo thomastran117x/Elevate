@@ -5,6 +5,7 @@ using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
+using backend.main.features.clubs.follow.invitations;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
@@ -35,6 +36,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<Events> Events { get; set; } = null!;
         public DbSet<EventVersion> EventVersions { get; set; } = null!;
         public DbSet<FollowClub> FollowClubs { get; set; } = null!;
+        public DbSet<ClubInvitationLink> ClubInvitationLinks { get; set; } = null!;
         public DbSet<Payment> Payments { get; set; } = null!;
         public DbSet<ClubReview> ClubReviews { get; set; } = null!;
         public DbSet<Device> Devices { get; set; } = null!;
@@ -170,6 +172,31 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<FollowClub>()
                 .HasIndex(f => f.UserId);
+
+            modelBuilder.Entity<ClubInvitationLink>()
+                .HasOne(l => l.Club)
+                .WithMany()
+                .HasForeignKey(l => l.ClubId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClubInvitationLink>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(l => l.CreatedByUserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ClubInvitationLink>()
+                .Property(l => l.TokenHash)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<ClubInvitationLink>()
+                .HasIndex(l => l.ClubId);
+
+            modelBuilder.Entity<ClubInvitationLink>()
+                .HasIndex(l => l.TokenHash)
+                .IsUnique();
 
             modelBuilder.Entity<Events>()
                 .HasOne<Club>()

@@ -4,6 +4,7 @@ using backend.main.application.bootstrap;
 using backend.main.application.features;
 using backend.main.features.auth.captcha;
 using backend.main.features.clubs.follow;
+using backend.main.features.clubs.follow.invitations;
 using backend.main.features.clubs.invitations;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.search;
@@ -135,6 +136,9 @@ public class ContainerTests
         services.Should().Contain(descriptor =>
             descriptor.ServiceType == typeof(IClubInvitationService)
             && descriptor.ImplementationType == typeof(ClubInvitationService));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IClubMemberInvitationService)
+            && descriptor.ImplementationType == typeof(ClubMemberInvitationService));
         services.Should().NotContain(descriptor =>
             descriptor.ServiceType == typeof(IHostedService));
     }

@@ -110,6 +110,25 @@ public class EmailTemplateRendererTests
         Assert.Equal("You're invited to join a club as staff", content.Subject);
     }
 
+    [Fact]
+    public void Render_ClubMemberInvite_UsesClubNameAndMemberInviteLink()
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Token = "member-token",
+            Type = EmailMessageType.ClubMemberInvite,
+            ClubName = "Chess Club",
+            RecipientName = "Jordan"
+        });
+
+        Assert.Equal("You're invited to join Chess Club", content.Subject);
+        Assert.Contains("Hi Jordan,", content.Html);
+        Assert.Contains("View invitation", content.Html);
+        Assert.Contains("/clubs/member-invite?token=member-token", content.PlainText);
+        Assert.Contains("/clubs/member-invite?token=member-token", content.Html);
+    }
+
     [Theory]
     [InlineData(EmailMessageType.Welcome)]
     [InlineData(EmailMessageType.PasswordChanged)]
@@ -119,6 +138,7 @@ public class EmailTemplateRendererTests
     [InlineData(EmailMessageType.AccountConfirmation)]
     [InlineData(EmailMessageType.NewDevice)]
     [InlineData(EmailMessageType.ClubStaffInvite)]
+    [InlineData(EmailMessageType.ClubMemberInvite)]
     public void Render_AllSupportedTypes_ProduceNonEmptyBrandedOutput(EmailMessageType type)
     {
         var content = CreateRenderer().Render(new EmailMessage

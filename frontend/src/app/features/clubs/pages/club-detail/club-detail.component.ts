@@ -1,8 +1,11 @@
 import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
+import { Store } from '@ngrx/store';
 import { Subject, takeUntil } from 'rxjs';
 
+import { selectUser } from '../../../../core/stores/user.selectors';
+import { User } from '../../../../core/stores/user.model';
 import { ClubsService } from '../../services/clubs.service';
 import { Club, CLUB_TYPE_STYLES } from '../../models/club.types';
 import { ClubPostsService } from '../../services/club-posts.service';
@@ -28,6 +31,12 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
   club: Club | null = null;
   loading = true;
   error = '';
+
+  currentUser: User | null = null;
+  isMember = false;
+  membershipLoading = false;
+  joinLeaveLoading = false;
+  joinError = '';
 
   recentPosts: ClubPost[] = [];
   postsLoading = false;
@@ -60,20 +69,124 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
     private eventsService: EventsService,
     private reviewsService: ClubReviewsService,
     private managementService: ClubManagementService,
+    private store: Store,
   ) {}
 
   ngOnInit(): void {
+    this.store
+      .select(selectUser)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((user) => {
+        this.currentUser = user;
+        if (this.clubId && user) {
+          this.fetchMembership();
+        } else {
+          this.isMember = false;
+        }
+      });
+
     this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
       this.clubId = Number(params.get('clubId')) || 0;
       if (this.clubId) {
         this.fetchClub();
         this.fetchRecentPosts();
         this.fetchUpcomingEvents();
+        if (this.currentUser) {
+          this.fetchMembership();
+        }
       } else {
         this.loading = false;
         this.error = 'Invalid club URL.';
       }
     });
+  }
+
+  get isLoggedIn(): boolean {
+    return this.currentUser !== null;
+  }
+
+  /** A public club can be joined directly; a private one is invite-only. */
+  get canJoinDirectly(): boolean {
+    return !!this.club && !this.club.isPrivate;
+  }
+
+  joinClub(): void {
+    if (!this.club || this.joinLeaveLoading) {
+      return;
+    }
+    if (!this.isLoggedIn) {
+      void this.router.navigate(['/auth/login'], {
+        queryParams: { returnUrl: this.router.url },
+      });
+      return;
+    }
+
+    this.joinLeaveLoading = true;
+    this.joinError = '';
+    this.clubsService
+      .joinClub(this.clubId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.joinLeaveLoading = false;
+          this.isMember = true;
+          if (this.club) {
+            this.club = { ...this.club, memberCount: this.club.memberCount + 1 };
+          }
+        },
+        error: (err) => {
+          this.joinLeaveLoading = false;
+          this.joinError = getApiClientMessage(err, 'Unable to join this club.');
+        },
+      });
+  }
+
+  leaveClub(): void {
+    if (!this.club || this.joinLeaveLoading) {
+      return;
+    }
+
+    this.joinLeaveLoading = true;
+    this.joinError = '';
+    this.clubsService
+      .leaveClub(this.clubId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.joinLeaveLoading = false;
+          this.isMember = false;
+          if (this.club) {
+            this.club = {
+              ...this.club,
+              memberCount: Math.max(0, this.club.memberCount - 1),
+            };
+          }
+        },
+        error: (err) => {
+          this.joinLeaveLoading = false;
+          this.joinError = getApiClientMessage(err, 'Unable to leave this club.');
+        },
+      });
+  }
+
+  private fetchMembership(): void {
+    if (!this.clubId) {
+      return;
+    }
+    this.membershipLoading = true;
+    this.clubsService
+      .getMembershipStatus(this.clubId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (isMember) => {
+          this.isMember = isMember;
+          this.membershipLoading = false;
+        },
+        // Membership state is best-effort; a failure just hides the "joined" state.
+        error: () => {
+          this.membershipLoading = false;
+        },
+      });
   }
 
   ngOnDestroy(): void {

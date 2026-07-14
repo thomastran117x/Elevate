@@ -39,6 +39,13 @@ namespace backend.main.features.clubs
         Task RemoveStaffAsync(int clubId, int targetUserId, int actorUserId, string actorUserRole);
         Task<Club> TransferOwnershipAsync(int clubId, int newOwnerUserId, int actorUserId, string actorUserRole);
         Task JoinClubAsync(int clubId, int userId);
+        /// <summary>
+        /// Grants club membership as the result of an accepted member invitation or a redeemed
+        /// invite link. Unlike <see cref="JoinClubAsync"/> this bypasses the <c>isPrivate</c> gate
+        /// (the invitation is the authorization) and is idempotent: a no-op when the user is already
+        /// a member.
+        /// </summary>
+        Task GrantMembershipFromInvitationAsync(int clubId, int userId);
         Task LeaveClubAsync(int clubId, int userId);
         Task EventCreatedAsync(int clubId, int eventId);
         Task EventDeletedAsync(int clubId, int eventId);

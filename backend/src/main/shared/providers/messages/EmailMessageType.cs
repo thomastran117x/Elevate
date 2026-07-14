@@ -13,6 +13,7 @@ namespace backend.main.shared.providers.messages
         InvitationAccepted,
         InvitationDeclined,
         EventReminder,
-        ClubStaffInvite
+        ClubStaffInvite,
+        ClubMemberInvite
     }
 }

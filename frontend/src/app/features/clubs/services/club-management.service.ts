@@ -24,6 +24,12 @@ import {
   normalizeClubVersionsPagedData,
 } from '../models/club-management.types';
 import { ClubInvitation, normalizeClubInvitation } from '../models/club-invitation.types';
+import {
+  ClubInvitationLink,
+  ClubMemberInvitation,
+  normalizeClubInvitationLink,
+  normalizeClubMemberInvitation,
+} from '../models/club-member-invitation.types';
 
 @Injectable({ providedIn: 'root' })
 export class ClubManagementService {
@@ -157,6 +163,123 @@ export class ClubManagementService {
       {},
       { withCredentials: true },
     );
+  }
+
+  // ---- Member invitations (specific, emailed) ----
+
+  /** Invites an existing user (by username or email) to become a member; the backend emails them. */
+  inviteMember(clubId: number, identifier: string): Observable<ApiEnvelope<ClubMemberInvitation>> {
+    return this.api
+      .post<
+        ApiEnvelope<unknown>
+      >(`${this.base}/${clubId}/members/invitations`, { identifier }, { withCredentials: true })
+      .pipe(
+        map((response) => {
+          const raw = this.rawData(response);
+          return {
+            ...response,
+            data: raw
+              ? normalizeClubMemberInvitation(
+                  raw as Parameters<typeof normalizeClubMemberInvitation>[0],
+                )
+              : null,
+          } as ApiEnvelope<ClubMemberInvitation>;
+        }),
+      );
+  }
+
+  getMemberInvitations(clubId: number): Observable<ApiEnvelope<ClubMemberInvitation[]>> {
+    return this.api
+      .get<
+        ApiEnvelope<unknown>
+      >(`${this.base}/${clubId}/members/invitations`, { withCredentials: true })
+      .pipe(
+        map((response) => {
+          const raw = this.rawData(response) as unknown[] | null;
+          return {
+            ...response,
+            data: raw
+              ? raw.map((i) =>
+                  normalizeClubMemberInvitation(
+                    i as Parameters<typeof normalizeClubMemberInvitation>[0],
+                  ),
+                )
+              : [],
+          } as ApiEnvelope<ClubMemberInvitation[]>;
+        }),
+      );
+  }
+
+  revokeMemberInvitation(
+    clubId: number,
+    recipientUserId: number,
+  ): Observable<ApiEnvelope<unknown>> {
+    return this.api.post<ApiEnvelope<unknown>>(
+      `${this.base}/${clubId}/members/invitations/${recipientUserId}/revoke`,
+      {},
+      { withCredentials: true },
+    );
+  }
+
+  // ---- Member invite links (shareable, no email) ----
+
+  createMemberInviteLink(
+    clubId: number,
+    expiresAt: string,
+    maxRedemptions: number | null,
+  ): Observable<ApiEnvelope<ClubInvitationLink>> {
+    const body: { expiresAt: string; maxRedemptions?: number } = { expiresAt };
+    if (maxRedemptions != null) {
+      body.maxRedemptions = maxRedemptions;
+    }
+    return this.api
+      .post<
+        ApiEnvelope<unknown>
+      >(`${this.base}/${clubId}/members/invitation-links`, body, { withCredentials: true })
+      .pipe(map((response) => this.mapLink(response)));
+  }
+
+  getMemberInviteLinks(clubId: number): Observable<ApiEnvelope<ClubInvitationLink[]>> {
+    return this.api
+      .get<
+        ApiEnvelope<unknown>
+      >(`${this.base}/${clubId}/members/invitation-links`, { withCredentials: true })
+      .pipe(
+        map((response) => {
+          const raw = this.rawData(response) as unknown[] | null;
+          return {
+            ...response,
+            data: raw
+              ? raw.map((l) =>
+                  normalizeClubInvitationLink(
+                    l as Parameters<typeof normalizeClubInvitationLink>[0],
+                  ),
+                )
+              : [],
+          } as ApiEnvelope<ClubInvitationLink[]>;
+        }),
+      );
+  }
+
+  revokeMemberInviteLink(
+    clubId: number,
+    linkId: number,
+  ): Observable<ApiEnvelope<ClubInvitationLink>> {
+    return this.api
+      .post<
+        ApiEnvelope<unknown>
+      >(`${this.base}/${clubId}/members/invitation-links/${linkId}/revoke`, {}, { withCredentials: true })
+      .pipe(map((response) => this.mapLink(response)));
+  }
+
+  private mapLink(response: ApiEnvelope<unknown>): ApiEnvelope<ClubInvitationLink> {
+    const raw = this.rawData(response);
+    return {
+      ...response,
+      data: raw
+        ? normalizeClubInvitationLink(raw as Parameters<typeof normalizeClubInvitationLink>[0])
+        : null,
+    } as ApiEnvelope<ClubInvitationLink>;
   }
 
   removeStaff(clubId: number, userId: number): Observable<ApiEnvelope<unknown>> {

@@ -589,18 +589,39 @@ namespace backend.main.features.clubs
             var club = await _clubRepository.GetByIdAsync(clubId)
                 ?? throw new ResourceNotFoundException("Club not found");
 
+            if (club.isPrivate)
+                throw new ForbiddenException("This club is invite-only. Ask a club organiser for an invitation to join.");
+
             if (await _followService.IsMemberAsync(clubId, userId))
                 throw new ConflictException("Already a member");
 
-            await _followService.AddMembershipAsync(clubId, userId);
+            await GrantMembershipCoreAsync(club, userId);
+        }
+
+        public async Task GrantMembershipFromInvitationAsync(int clubId, int userId)
+        {
+            var club = await _clubRepository.GetByIdAsync(clubId)
+                ?? throw new ResourceNotFoundException("Club not found");
+
+            // Idempotent: accepting an invite or redeeming a link twice is a no-op, and unlike the
+            // public join path this bypasses the isPrivate gate (the invitation is the authorization).
+            if (await _followService.IsMemberAsync(clubId, userId))
+                return;
+
+            await GrantMembershipCoreAsync(club, userId);
+        }
+
+        private async Task GrantMembershipCoreAsync(Club club, int userId)
+        {
+            await _followService.AddMembershipAsync(club.Id, userId);
 
             club.MemberCount++;
-            club = await _clubRepository.UpdateAsync(clubId, club)
+            var updated = await _clubRepository.UpdateAsync(club.Id, club)
                 ?? throw new ResourceNotFoundException("Club not found");
-            _outboxWriter.StageUpsert(club);
+            _outboxWriter.StageUpsert(updated);
             await _db.SaveChangesAsync();
 
-            await CacheClubAsync(club);
+            await CacheClubAsync(updated);
             await BumpClubListVersionAsync();
         }
 

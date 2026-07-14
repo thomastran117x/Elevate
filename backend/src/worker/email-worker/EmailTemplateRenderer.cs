@@ -106,6 +106,16 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
                 Code: null,
                 MutedNote: "If you weren't expecting this invitation, you can safely ignore this email."),
 
+            EmailMessageType.ClubMemberInvite => new Content(
+                Subject: $"You're invited to join {clubName}",
+                Preheader: $"You've been invited to become a member of {clubName} on EventXperience.",
+                Heading: $"You're invited to {clubName}",
+                Greeting: greeting,
+                Intro: [$"You've been invited to join {clubName} as a member. View the invitation to accept or decline."],
+                Cta: new Cta(BuildUrl(baseUrl, "/clubs/member-invite", RequireToken(message)), "View invitation"),
+                Code: null,
+                MutedNote: "If you weren't expecting this invitation, you can safely ignore this email."),
+
             EmailMessageType.Welcome => new Content(
                 Subject: "Welcome to EventXperience",
                 Preheader: "Your account is ready — start exploring events.",
