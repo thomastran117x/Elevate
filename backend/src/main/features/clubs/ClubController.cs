@@ -370,8 +370,10 @@ namespace backend.main.features.clubs
                 effectivePage,
                 effectivePageSize);
 
+            var actors = await LoadUserLookupAsync(items.Select(item => item.ActorUserId));
+
             var paged = new PagedResponse<ClubVersionListItemResponse>(
-                items.Select(MapToVersionListItemResponse),
+                items.Select(item => MapToVersionListItemResponse(item, actors.GetValueOrDefault(item.ActorUserId))),
                 totalCount,
                 effectivePage,
                 effectivePageSize);
@@ -395,9 +397,11 @@ namespace backend.main.features.clubs
                 userPayload.Id,
                 userPayload.Role);
 
+            var actors = await LoadUserLookupAsync([version.ActorUserId]);
+
             return Ok(new ApiResponse<ClubVersionDetailResponse>(
                 $"Version {versionNumber} for club with ID {id} has been fetched successfully.",
-                MapToVersionDetailResponse(version)
+                MapToVersionDetailResponse(version, actors.GetValueOrDefault(version.ActorUserId))
             ));
         }
 
@@ -481,7 +485,9 @@ namespace backend.main.features.clubs
                 user?.Avatar
             );
 
-        private static ClubVersionListItemResponse MapToVersionListItemResponse(ClubVersionHistoryItem item) =>
+        private static ClubVersionListItemResponse MapToVersionListItemResponse(
+            ClubVersionHistoryItem item,
+            UserListRecord? actor = null) =>
             new(
                 item.VersionNumber,
                 item.ActionType,
@@ -491,10 +497,15 @@ namespace backend.main.features.clubs
                 item.RollbackEligible,
                 item.RollbackExpiresAt,
                 item.RollbackSourceVersionNumber,
-                item.ChangedFields.Select(MapToFieldChangeResponse).ToList()
+                item.ChangedFields.Select(MapToFieldChangeResponse).ToList(),
+                actor?.Name,
+                actor?.Username,
+                actor?.Avatar
             );
 
-        private static ClubVersionDetailResponse MapToVersionDetailResponse(ClubVersionDetail detail) =>
+        private static ClubVersionDetailResponse MapToVersionDetailResponse(
+            ClubVersionDetail detail,
+            UserListRecord? actor = null) =>
             new(
                 detail.VersionNumber,
                 detail.ActionType,
@@ -516,7 +527,10 @@ namespace backend.main.features.clubs
                     detail.Snapshot.Location,
                     detail.Snapshot.MaxMemberCount,
                     detail.Snapshot.IsPrivate
-                )
+                ),
+                actor?.Name,
+                actor?.Username,
+                actor?.Avatar
             );
 
         private static ClubVersionFieldChangeResponse MapToFieldChangeResponse(ClubVersionFieldChange change) =>

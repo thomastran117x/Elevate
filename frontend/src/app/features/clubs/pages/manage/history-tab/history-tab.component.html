@@ -56,10 +56,21 @@
                   }}</span
                 >
               </span>
-              <span class="block text-xs text-faint">
-                {{ version.createdAt | date: 'medium' }} · by user #{{ version.actorUserId }} ({{
-                  version.actorRole
-                }})
+              <span class="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-faint">
+                <span>{{ version.createdAt | date: 'medium' }} · by</span>
+                <span
+                  class="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent/10 text-[8px] font-bold text-accent"
+                >
+                  <img
+                    *ngIf="version.actorAvatar; else actorInit"
+                    [src]="version.actorAvatar"
+                    [alt]="actorName(version)"
+                    class="h-full w-full object-cover"
+                  />
+                  <ng-template #actorInit>{{ actorInitials(version) }}</ng-template>
+                </span>
+                <span class="font-medium text-subtle">{{ actorName(version) }}</span>
+                <span>· {{ version.actorRole }}</span>
               </span>
             </span>
           </button>

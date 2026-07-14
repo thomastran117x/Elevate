@@ -136,6 +136,15 @@ export class HistoryTabComponent implements OnInit {
       });
   }
 
+  actorName(version: ClubVersionListItem): string {
+    return version.actorName || version.actorUsername || `User #${version.actorUserId}`;
+  }
+
+  actorInitials(version: ClubVersionListItem): string {
+    const source = version.actorName || version.actorUsername || '';
+    return source ? source.slice(0, 2).toUpperCase() : `#${version.actorUserId}`.slice(0, 2);
+  }
+
   trackByVersion(_index: number, version: ClubVersionListItem): number {
     return version.versionNumber;
   }

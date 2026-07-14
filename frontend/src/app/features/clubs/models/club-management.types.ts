@@ -168,6 +168,9 @@ export interface ClubVersionListItem {
   rollbackExpiresAt: string;
   rollbackSourceVersionNumber: number | null;
   changedFields: ClubVersionFieldChange[];
+  actorName: string | null;
+  actorUsername: string | null;
+  actorAvatar: string | null;
 }
 
 export interface ClubVersionDetail extends ClubVersionListItem {
@@ -212,6 +215,9 @@ type VersionListItemPayload = Partial<ClubVersionListItem> & {
   RollbackSourceVersionNumber?: number | null;
   ChangedFields?: FieldChangePayload[];
   changedFields?: FieldChangePayload[];
+  ActorName?: string | null;
+  ActorUsername?: string | null;
+  ActorAvatar?: string | null;
 };
 
 type VersionDetailPayload = VersionListItemPayload & {
@@ -239,6 +245,9 @@ export function normalizeClubVersionListItem(raw: VersionListItemPayload): ClubV
     rollbackSourceVersionNumber:
       raw.rollbackSourceVersionNumber ?? raw.RollbackSourceVersionNumber ?? null,
     changedFields: (raw.changedFields ?? raw.ChangedFields ?? []).map(normalizeFieldChange),
+    actorName: raw.actorName ?? raw.ActorName ?? null,
+    actorUsername: raw.actorUsername ?? raw.ActorUsername ?? null,
+    actorAvatar: raw.actorAvatar ?? raw.ActorAvatar ?? null,
   };
 }
 
