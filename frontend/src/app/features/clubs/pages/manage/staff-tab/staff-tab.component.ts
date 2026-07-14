@@ -6,6 +6,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
+import { ClubInvitation } from '../../../models/club-invitation.types';
 import { ClubStaff, ClubStaffRole } from '../../../models/club-management.types';
 import { ClubManagementService } from '../../../services/club-management.service';
 
@@ -24,10 +25,15 @@ export class StaffTabComponent implements OnInit {
   error = '';
   success = '';
 
-  // Add staff form
-  addUserId: number | null = null;
+  // Invite staff form
+  addIdentifier = '';
   addRole: ClubStaffRole = 'Manager';
   adding = false;
+
+  // Pending invitations
+  invitations: ClubInvitation[] = [];
+  loadingInvitations = true;
+  revokingUserId: number | null = null;
 
   // Remove
   removingUserId: number | null = null;
@@ -53,6 +59,7 @@ export class StaffTabComponent implements OnInit {
       return;
     }
     this.load();
+    this.loadInvitations();
   }
 
   get transferConfirmed(): boolean {
@@ -81,10 +88,29 @@ export class StaffTabComponent implements OnInit {
       });
   }
 
-  addStaff(): void {
-    const userId = Number(this.addUserId);
-    if (!Number.isFinite(userId) || userId <= 0) {
-      this.error = 'Enter a valid user ID.';
+  private loadInvitations(): void {
+    this.loadingInvitations = true;
+    this.management
+      .getStaffInvitations(this.clubId)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => (this.loadingInvitations = false)),
+      )
+      .subscribe({
+        next: (response) => {
+          this.invitations = response.data ?? [];
+        },
+        // Pending invitations are non-critical; keep the tab usable if they fail to load.
+        error: () => {
+          this.invitations = [];
+        },
+      });
+  }
+
+  sendInvite(): void {
+    const identifier = this.addIdentifier.trim();
+    if (!identifier) {
+      this.error = 'Enter a username or email address.';
       return;
     }
 
@@ -92,24 +118,44 @@ export class StaffTabComponent implements OnInit {
     this.error = '';
     this.success = '';
 
-    const request$ =
-      this.addRole === 'Volunteer'
-        ? this.management.addVolunteer(this.clubId, userId)
-        : this.management.addManager(this.clubId, userId);
-
-    request$
+    this.management
+      .inviteStaff(this.clubId, identifier, this.addRole)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => (this.adding = false)),
       )
       .subscribe({
-        next: () => {
-          this.success = `User #${userId} added as ${this.addRole.toLowerCase()}.`;
-          this.addUserId = null;
-          this.load();
+        next: (response) => {
+          const email = response.data?.recipientEmail ?? identifier;
+          this.success = `Invitation sent to ${email} as ${this.addRole.toLowerCase()}.`;
+          this.addIdentifier = '';
+          this.loadInvitations();
         },
         error: (err) => {
-          this.error = getApiClientMessage(err, 'Unable to add staff member.');
+          this.error = getApiClientMessage(err, 'Unable to send invitation.');
+        },
+      });
+  }
+
+  revokeInvitation(invitation: ClubInvitation): void {
+    this.revokingUserId = invitation.recipientUserId;
+    this.error = '';
+    this.success = '';
+
+    this.management
+      .revokeStaffInvitation(this.clubId, invitation.recipientUserId)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => (this.revokingUserId = null)),
+      )
+      .subscribe({
+        next: () => {
+          this.invitations = this.invitations.filter(
+            (i) => i.recipientUserId !== invitation.recipientUserId,
+          );
+        },
+        error: (err) => {
+          this.error = getApiClientMessage(err, 'Unable to revoke invitation.');
         },
       });
   }
@@ -169,5 +215,9 @@ export class StaffTabComponent implements OnInit {
 
   trackByUserId(_index: number, member: ClubStaff): number {
     return member.userId;
+  }
+
+  trackByInvitation(_index: number, invitation: ClubInvitation): number {
+    return invitation.recipientUserId;
   }
 }

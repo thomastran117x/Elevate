@@ -28,6 +28,14 @@ namespace backend.main.features.clubs
         Task DeleteClub(int clubId, int userId);
         Task<IReadOnlyList<ClubStaff>> GetStaffAsync(int clubId, int userId, string userRole);
         Task<ClubStaff> AddStaffAsync(int clubId, int targetUserId, ClubStaffRole role, int actorUserId, string actorUserRole);
+        /// <summary>
+        /// Grants a staff role as the result of an accepted invitation. Unlike <see cref="AddStaffAsync"/>
+        /// this skips the owner-actor authorization check (the invited user is the actor) but still
+        /// validates the target exists and the club owner is not re-added. Idempotent: returns the
+        /// existing assignment when the user already holds a staff role.
+        /// </summary>
+        Task<ClubStaff> GrantStaffFromInvitationAsync(int clubId, int targetUserId, ClubStaffRole role, int grantedByUserId);
+        Task<bool> IsClubStaffMemberAsync(int clubId, int targetUserId);
         Task RemoveStaffAsync(int clubId, int targetUserId, int actorUserId, string actorUserRole);
         Task<Club> TransferOwnershipAsync(int clubId, int newOwnerUserId, int actorUserId, string actorUserRole);
         Task JoinClubAsync(int clubId, int userId);

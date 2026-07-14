@@ -498,6 +498,45 @@ namespace backend.main.features.clubs
             return staff;
         }
 
+        public async Task<ClubStaff> GrantStaffFromInvitationAsync(int clubId, int targetUserId, ClubStaffRole role, int grantedByUserId)
+        {
+            var club = await GetTrackedClubOrThrowAsync(clubId);
+
+            if (club.UserId == targetUserId)
+                throw new ConflictException("The club owner already has full access.");
+
+            _ = await _userService.GetUserByIdAsync(targetUserId);
+
+            var existing = await _db.ClubStaff
+                .FirstOrDefaultAsync(staff => staff.ClubId == clubId && staff.UserId == targetUserId);
+
+            if (existing != null)
+                return existing;
+
+            var now = GetUtcNow();
+            var staff = new ClubStaff
+            {
+                ClubId = clubId,
+                UserId = targetUserId,
+                Role = role,
+                GrantedByUserId = grantedByUserId,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            _db.ClubStaff.Add(staff);
+            await _db.SaveChangesAsync();
+
+            return staff;
+        }
+
+        public async Task<bool> IsClubStaffMemberAsync(int clubId, int targetUserId)
+        {
+            return await _db.ClubStaff
+                .AsNoTracking()
+                .AnyAsync(staff => staff.ClubId == clubId && staff.UserId == targetUserId);
+        }
+
         public async Task RemoveStaffAsync(int clubId, int targetUserId, int actorUserId, string actorUserRole)
         {
             var club = await GetTrackedClubOrThrowAsync(clubId);

@@ -11,9 +11,8 @@ import {
   ClubMembersApiResponse,
   ClubMutationPayload,
   ClubRollbackApiResponse,
-  ClubStaff,
-  ClubStaffApiResponse,
   ClubStaffListApiResponse,
+  ClubStaffRole,
   ClubVersionDetailApiResponse,
   ClubVersionsApiResponse,
   ManagedClubsApiResponse,
@@ -24,6 +23,7 @@ import {
   normalizeClubVersionDetail,
   normalizeClubVersionsPagedData,
 } from '../models/club-management.types';
+import { ClubInvitation, normalizeClubInvitation } from '../models/club-invitation.types';
 
 @Injectable({ providedIn: 'root' })
 export class ClubManagementService {
@@ -105,32 +105,56 @@ export class ClubManagementService {
       );
   }
 
-  addManager(clubId: number, userId: number): Observable<ClubStaffApiResponse> {
-    return this.addStaff(clubId, 'managers', userId);
-  }
-
-  addVolunteer(clubId: number, userId: number): Observable<ClubStaffApiResponse> {
-    return this.addStaff(clubId, 'volunteers', userId);
-  }
-
-  private addStaff(
+  /**
+   * Invites an existing user (by username or email) to become staff. The backend resolves the
+   * identifier, and if the account exists, emails them a recipient-bound invitation to accept.
+   */
+  inviteStaff(
     clubId: number,
-    kind: 'managers' | 'volunteers',
-    userId: number,
-  ): Observable<ClubStaffApiResponse> {
+    identifier: string,
+    role: ClubStaffRole,
+  ): Observable<ApiEnvelope<ClubInvitation>> {
     return this.api
       .post<
         ApiEnvelope<unknown>
-      >(`${this.base}/${clubId}/staff/${kind}`, { userId }, { withCredentials: true })
+      >(`${this.base}/${clubId}/staff/invitations`, { identifier, role }, { withCredentials: true })
       .pipe(
         map((response) => {
           const raw = this.rawData(response);
           return {
             ...response,
-            data: raw ? normalizeClubStaff(raw as Parameters<typeof normalizeClubStaff>[0]) : null,
-          } as ClubStaffApiResponse;
+            data: raw
+              ? normalizeClubInvitation(raw as Parameters<typeof normalizeClubInvitation>[0])
+              : null,
+          } as ApiEnvelope<ClubInvitation>;
         }),
       );
+  }
+
+  getStaffInvitations(clubId: number): Observable<ApiEnvelope<ClubInvitation[]>> {
+    return this.api
+      .get<
+        ApiEnvelope<unknown>
+      >(`${this.base}/${clubId}/staff/invitations`, { withCredentials: true })
+      .pipe(
+        map((response) => {
+          const raw = this.rawData(response) as unknown[] | null;
+          return {
+            ...response,
+            data: raw
+              ? raw.map((i) => normalizeClubInvitation(i as Parameters<typeof normalizeClubInvitation>[0]))
+              : [],
+          } as ApiEnvelope<ClubInvitation[]>;
+        }),
+      );
+  }
+
+  revokeStaffInvitation(clubId: number, recipientUserId: number): Observable<ApiEnvelope<unknown>> {
+    return this.api.post<ApiEnvelope<unknown>>(
+      `${this.base}/${clubId}/staff/invitations/${recipientUserId}/revoke`,
+      {},
+      { withCredentials: true },
+    );
   }
 
   removeStaff(clubId: number, userId: number): Observable<ApiEnvelope<unknown>> {

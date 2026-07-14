@@ -12,6 +12,7 @@ using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
+using backend.main.features.clubs.invitations;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
@@ -182,6 +183,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IOAuthService, OAuthService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IClubService, ClubService>();
+            services.AddScoped<IClubInvitationService, ClubInvitationService>();
             services.AddScoped<ClubVersionCleanupRunner>();
             services.AddScoped<IClubReviewService, ClubReviewService>();
             services.AddScoped<IDeviceService, DeviceService>();
