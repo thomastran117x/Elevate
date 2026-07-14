@@ -39,10 +39,11 @@
           <div class="space-y-4 p-6">
             @if (invite.role) {
               <p class="text-sm leading-7 text-muted">
-                You've been invited to join <span class="font-semibold text-content">{{
+                You've been invited to join
+                <span class="font-semibold text-content">{{
                   invite.club?.name || 'this club'
-                }}</span> as a
-                <span class="font-semibold text-content">{{ invite.role }}</span
+                }}</span>
+                as a <span class="font-semibold text-content">{{ invite.role }}</span
                 >.
               </p>
             }

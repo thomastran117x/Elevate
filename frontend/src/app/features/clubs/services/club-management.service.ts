@@ -142,7 +142,9 @@ export class ClubManagementService {
           return {
             ...response,
             data: raw
-              ? raw.map((i) => normalizeClubInvitation(i as Parameters<typeof normalizeClubInvitation>[0]))
+              ? raw.map((i) =>
+                  normalizeClubInvitation(i as Parameters<typeof normalizeClubInvitation>[0]),
+                )
               : [],
           } as ApiEnvelope<ClubInvitation[]>;
         }),
