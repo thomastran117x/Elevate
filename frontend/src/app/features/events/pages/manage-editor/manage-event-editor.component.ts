@@ -52,6 +52,45 @@ export class ManageEventEditorComponent {
   error = '';
   successMessage = '';
 
+  // Wizard state
+  readonly steps = [
+    { label: 'Basics', hint: 'Name, category & description' },
+    { label: 'Schedule', hint: 'When it happens' },
+    { label: 'Location', hint: 'Where it happens' },
+    { label: 'Details', hint: 'Capacity, pricing & tags' },
+    { label: 'Images', hint: 'Optional gallery' },
+    { label: 'Review', hint: 'Confirm & submit' },
+  ];
+  currentStep = 0;
+
+  get progressPercent(): number {
+    return (this.currentStep / (this.steps.length - 1)) * 100;
+  }
+
+  get isReviewStep(): boolean {
+    return this.currentStep === this.steps.length - 1;
+  }
+
+  get reviewTags(): string[] {
+    return (this.form.controls.tags.value ?? '')
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+  }
+
+  goToStep(index: number): void {
+    if (index < 0 || index >= this.steps.length) return;
+    this.currentStep = index;
+  }
+
+  nextStep(): void {
+    if (this.currentStep < this.steps.length - 1) this.currentStep += 1;
+  }
+
+  prevStep(): void {
+    if (this.currentStep > 0) this.currentStep -= 1;
+  }
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
