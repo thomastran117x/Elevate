@@ -1,74 +1,81 @@
-<section class="min-h-screen bg-surface px-4 py-8 text-content">
-  <div class="mx-auto max-w-6xl space-y-6">
+<div class="relative min-h-screen overflow-hidden bg-page text-content">
+  <!-- Ambient blobs -->
+  <div class="pointer-events-none absolute inset-0">
     <div
-      class="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_right,_rgba(14,165,233,0.18),_transparent_32%),linear-gradient(135deg,_#111827,_#0a0a0a)] p-6 shadow-2xl shadow-black/30"
-    >
-      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <p class="text-xs uppercase tracking-[0.35em] text-white/60">Lifecycle Editor</p>
-          <div class="mt-3 flex flex-wrap items-center gap-3">
-            <h1 class="text-3xl font-semibold text-white">
-              {{ event?.name || 'New event draft' }}
-            </h1>
-            <span
-              class="inline-flex rounded-full px-3 py-1 text-xs font-semibold"
-              [ngClass]="lifecycleBadge(lifecycleState)"
-            >
-              {{ lifecycleState }}
-            </span>
-          </div>
-          <p class="mt-3 max-w-2xl text-sm text-white/70">
-            Save partial details privately, then publish only when the event is complete enough for
-            attendees to see.
-          </p>
-        </div>
+      class="absolute -left-40 -top-40 h-[520px] w-[520px] animate-pulse rounded-full bg-accent/7 blur-3xl dark:bg-accent/20"
+    ></div>
+    <div
+      class="absolute -right-40 top-60 h-[420px] w-[420px] animate-pulse rounded-full bg-accent/5 blur-3xl dark:bg-accent/10"
+    ></div>
+  </div>
 
-        <div class="flex flex-wrap gap-3">
-          @if (clubId) {
-            <a
-              [routerLink]="['/events/clubs', clubId, 'manage']"
-              class="rounded-full border border-white/15 px-4 py-2 text-sm text-white/70 transition hover:border-white/25 hover:bg-white/10"
-            >
-              Back to club events
-            </a>
-          }
-
-          @if (canManageInvitations) {
-            <a
-              [routerLink]="['/events', eventId, 'invitations', 'manage']"
-              class="rounded-full border border-sky-500/40 bg-sky-500/10 px-4 py-2 text-sm text-sky-100 transition hover:bg-sky-500/20"
-            >
-              Manage invitations
-            </a>
-          }
+  <div class="relative z-10 mx-auto max-w-5xl px-6 py-14">
+    <!-- Header -->
+    <div class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div class="space-y-3">
+        @if (clubId) {
+          <a
+            [routerLink]="['/events/clubs', clubId, 'manage']"
+            class="text-xs font-semibold text-subtle transition hover:text-content"
+          >
+            &larr; Back to club events
+          </a>
+        }
+        <p class="text-sm font-semibold uppercase tracking-[0.28em] text-accent">Event editor</p>
+        <div class="flex flex-wrap items-center gap-3">
+          <h1 class="text-4xl font-black tracking-tight">{{ event?.name || 'New event draft' }}</h1>
+          <span
+            class="rounded-full px-2.5 py-1 text-xs font-semibold"
+            [ngClass]="lifecycleBadge(lifecycleState)"
+          >
+            {{ lifecycleState }}
+          </span>
         </div>
+        <p class="max-w-2xl text-sm text-subtle">
+          Save details privately, then publish only when the event is ready for attendees.
+        </p>
       </div>
+
+      @if (canManageInvitations) {
+        <a
+          [routerLink]="['/events', eventId, 'invitations', 'manage']"
+          class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-4 py-2.5 text-sm font-semibold text-muted transition hover:bg-glass-strong"
+        >
+          Manage invitations
+        </a>
+      }
     </div>
 
     @if (loading) {
-      <div class="rounded-3xl border border-line bg-surface-raised/60 p-6 text-sm text-muted">
-        Loading event editor...
+      <div
+        class="rounded-3xl border border-line bg-glass px-6 py-10 text-center text-sm text-faint"
+      >
+        Loading event editor…
       </div>
     }
 
     @if (!loading && error) {
-      <div class="rounded-3xl border border-danger/40 bg-danger/10 p-4 text-sm text-danger">
+      <div
+        class="mb-6 rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
+      >
         {{ error }}
       </div>
     }
 
     @if (!loading && successMessage) {
-      <div class="rounded-3xl border border-success/40 bg-success/10 p-4 text-sm text-success">
+      <div
+        class="mb-6 rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success"
+      >
         {{ successMessage }}
       </div>
     }
 
     @if (!loading && event && !event.publishReady) {
-      <div class="rounded-3xl border border-warning/40 bg-warning/10 p-5">
-        <h2 class="text-sm font-semibold uppercase tracking-[0.25em] text-warning">
+      <div class="mb-6 rounded-3xl border border-warning/30 bg-warning/10 px-6 py-5">
+        <h2 class="text-xs font-semibold uppercase tracking-[0.25em] text-warning">
           Publish readiness
         </h2>
-        <ul class="mt-3 space-y-2 text-sm text-warning">
+        <ul class="mt-3 space-y-1.5 text-sm text-warning">
           @for (issue of publishIssues; track issue) {
             <li>• {{ issue }}</li>
           }
@@ -77,149 +84,111 @@
     }
 
     @if (!loading) {
-      <div class="grid gap-6 xl:grid-cols-[1.6fr,0.9fr]">
+      <div class="grid gap-6 xl:grid-cols-[1.6fr_0.9fr]">
+        <!-- Form -->
         <form
           [formGroup]="form"
-          class="space-y-6 rounded-[2rem] border border-line bg-surface-raised/75 p-6"
+          class="space-y-5 rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl"
         >
           <div class="grid gap-5 md:grid-cols-2">
-            <label class="block">
-              <span class="mb-2 block text-sm text-muted">Name</span>
-              <input
-                formControlName="name"
-                class="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-sm"
-              />
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">Name</span>
+              <input formControlName="name" [class]="inputClass" />
             </label>
-            <label class="block">
-              <span class="mb-2 block text-sm text-muted">Category</span>
-              <select
-                formControlName="category"
-                class="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-sm"
-              >
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">Category</span>
+              <select formControlName="category" [class]="inputClass">
                 @for (category of categories; track category) {
                   <option [value]="category">{{ category }}</option>
                 }
               </select>
             </label>
           </div>
-          <label class="block">
-            <span class="mb-2 block text-sm text-muted">Description</span>
-            <textarea
-              formControlName="description"
-              rows="5"
-              class="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-sm"
-            ></textarea>
+
+          <label class="block space-y-2">
+            <span class="text-sm font-semibold text-muted">Description</span>
+            <textarea formControlName="description" rows="5" [class]="inputClass"></textarea>
           </label>
+
           <div class="grid gap-5 md:grid-cols-2">
-            <label class="block">
-              <span class="mb-2 block text-sm text-muted">Location</span>
-              <input
-                formControlName="location"
-                class="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-sm"
-              />
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">Location</span>
+              <input formControlName="location" [class]="inputClass" />
             </label>
-            <label class="block">
-              <span class="mb-2 block text-sm text-muted">Venue name</span>
-              <input
-                formControlName="venueName"
-                class="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-sm"
-              />
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">Venue name</span>
+              <input formControlName="venueName" [class]="inputClass" />
             </label>
           </div>
+
           <div class="grid gap-5 md:grid-cols-3">
-            <label class="block">
-              <span class="mb-2 block text-sm text-muted">City</span>
-              <input
-                formControlName="city"
-                class="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-sm"
-              />
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">City</span>
+              <input formControlName="city" [class]="inputClass" />
             </label>
-            <label class="block">
-              <span class="mb-2 block text-sm text-muted">Latitude</span>
-              <input
-                formControlName="latitude"
-                type="number"
-                class="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-sm"
-              />
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">Latitude</span>
+              <input formControlName="latitude" type="number" [class]="inputClass" />
             </label>
-            <label class="block">
-              <span class="mb-2 block text-sm text-muted">Longitude</span>
-              <input
-                formControlName="longitude"
-                type="number"
-                class="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-sm"
-              />
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">Longitude</span>
+              <input formControlName="longitude" type="number" [class]="inputClass" />
             </label>
           </div>
+
           <div class="grid gap-5 md:grid-cols-2">
-            <label class="block">
-              <span class="mb-2 block text-sm text-muted">Start time</span>
-              <input
-                formControlName="startTime"
-                type="datetime-local"
-                class="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-sm"
-              />
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">Start time</span>
+              <input formControlName="startTime" type="datetime-local" [class]="inputClass" />
             </label>
-            <label class="block">
-              <span class="mb-2 block text-sm text-muted">End time</span>
-              <input
-                formControlName="endTime"
-                type="datetime-local"
-                class="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-sm"
-              />
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">End time</span>
+              <input formControlName="endTime" type="datetime-local" [class]="inputClass" />
             </label>
           </div>
+
           <div class="grid gap-5 md:grid-cols-3">
-            <label class="block">
-              <span class="mb-2 block text-sm text-muted">Capacity</span>
-              <input
-                formControlName="maxParticipants"
-                type="number"
-                class="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-sm"
-              />
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">Capacity</span>
+              <input formControlName="maxParticipants" type="number" [class]="inputClass" />
             </label>
-            <label class="block">
-              <span class="mb-2 block text-sm text-muted">Registration cost</span>
-              <input
-                formControlName="registerCost"
-                type="number"
-                class="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-sm"
-              />
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">Registration cost</span>
+              <input formControlName="registerCost" type="number" [class]="inputClass" />
             </label>
             <label
-              class="flex items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3 text-sm"
+              class="flex cursor-pointer items-center gap-2 self-end rounded-2xl border border-line bg-glass-strong px-4 py-3 text-sm font-semibold text-muted"
             >
-              <input
-                formControlName="isPrivate"
-                type="checkbox"
-                class="h-4 w-4 rounded border-line bg-surface-raised"
-              />
+              <input formControlName="isPrivate" type="checkbox" class="h-4 w-4 accent-accent" />
               Private event
             </label>
           </div>
-          <label class="block">
-            <span class="mb-2 block text-sm text-muted">Tags</span>
+
+          <label class="block space-y-2">
+            <span class="text-sm font-semibold text-muted">Tags</span>
             <input
               formControlName="tags"
               placeholder="networking, student, beginner"
-              class="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-sm"
+              [class]="inputClass"
             />
           </label>
-          <div class="flex flex-wrap gap-3">
+
+          <!-- Actions -->
+          <div class="flex flex-wrap gap-3 pt-1">
             <button
               type="button"
               (click)="saveDraft()"
               [disabled]="saving || uploading"
-              class="rounded-full bg-sky-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+              class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {{ saving ? 'Saving...' : eventId ? 'Save draft' : 'Create draft' }}
+              {{ saving ? 'Saving…' : eventId ? 'Save draft' : 'Create draft' }}
             </button>
             @if (lifecycleState === 'Draft') {
               <button
                 type="button"
                 (click)="publish()"
                 [disabled]="saving || uploading"
-                class="rounded-full bg-emerald-300 px-5 py-3 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
+                class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Publish
               </button>
@@ -229,9 +198,9 @@
                 type="button"
                 (click)="cancel()"
                 [disabled]="saving || uploading"
-                class="rounded-full bg-rose-300 px-5 py-3 text-sm font-semibold text-rose-950 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
+                class="inline-flex items-center justify-center rounded-2xl border border-danger/30 px-5 py-3 text-sm font-semibold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Cancel
+                Cancel event
               </button>
             }
             @if (lifecycleState === 'Published' || lifecycleState === 'Cancelled') {
@@ -239,22 +208,25 @@
                 type="button"
                 (click)="archive()"
                 [disabled]="saving || uploading"
-                class="rounded-full border border-line px-5 py-3 text-sm font-semibold text-content transition hover:border-line-strong hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-60"
+                class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Archive
               </button>
             }
           </div>
         </form>
-        <aside class="space-y-6 rounded-[2rem] border border-line bg-surface-raised/75 p-6">
+
+        <!-- Images aside -->
+        <aside class="space-y-5 rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
           <div>
-            <h2 class="text-lg font-semibold text-content">Images</h2>
-            <p class="mt-2 text-sm text-muted">
-              Upload up to five images. These stay private until the event is published.
+            <h2 class="text-lg font-bold">Images</h2>
+            <p class="mt-1 text-sm text-subtle">
+              Upload up to five images. They stay private until the event is published.
             </p>
           </div>
+
           <label
-            class="flex cursor-pointer items-center justify-center rounded-3xl border border-dashed border-line bg-surface/80 px-4 py-8 text-center text-sm text-muted transition hover:border-sky-500/50 hover:text-content"
+            class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line bg-surface-muted px-4 py-8 text-center text-sm text-subtle transition hover:border-accent hover:text-content"
           >
             <input
               type="file"
@@ -263,22 +235,26 @@
               class="hidden"
               (change)="onFilesSelected($event)"
             />
-            {{ uploading ? 'Uploading images...' : 'Select images to upload' }}
+            <span class="text-2xl">🖼️</span>
+            {{ uploading ? 'Uploading images…' : 'Drop or click to upload' }}
           </label>
+
           @if (imageUrls.length === 0) {
-            <div class="rounded-3xl border border-line bg-surface/70 p-4 text-sm text-subtle">
+            <div
+              class="rounded-2xl border border-line bg-glass px-4 py-6 text-center text-sm text-faint"
+            >
               No event images yet.
             </div>
           }
+
           @for (imageUrl of imageUrls; track imageUrl; let index = $index) {
-            <div class="overflow-hidden rounded-3xl border border-line bg-surface/70">
+            <div class="overflow-hidden rounded-2xl border border-line bg-glass">
               <img [src]="imageUrl" alt="" class="h-40 w-full object-cover" />
-              <div class="flex items-center justify-between gap-3 p-3">
-                <span class="truncate text-xs text-subtle">{{ imageUrl }}</span>
+              <div class="flex items-center justify-end p-2">
                 <button
                   type="button"
                   (click)="removeImage(index)"
-                  class="rounded-full border border-line px-3 py-1 text-xs text-muted transition hover:border-rose-400 hover:text-danger"
+                  class="rounded-xl border border-danger/30 px-3 py-1.5 text-xs font-semibold text-danger transition hover:bg-danger/10"
                 >
                   Remove
                 </button>
@@ -289,4 +265,4 @@
       </div>
     }
   </div>
-</section>
+</div>

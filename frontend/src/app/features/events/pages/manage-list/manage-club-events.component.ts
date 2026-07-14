@@ -62,13 +62,13 @@ export class ManageClubEventsComponent {
   lifecycleBadge(lifecycleState: EventLifecycleState): string {
     switch (lifecycleState) {
       case 'Draft':
-        return 'bg-amber-100 text-amber-900';
+        return 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20';
       case 'Published':
-        return 'bg-emerald-100 text-emerald-900';
+        return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20';
       case 'Cancelled':
-        return 'bg-rose-100 text-rose-900';
+        return 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20';
       case 'Archived':
-        return 'bg-slate-200 text-slate-800';
+        return 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border border-slate-500/20';
     }
   }
 
