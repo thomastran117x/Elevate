@@ -1,453 +1,434 @@
-<div class="relative min-h-screen overflow-hidden bg-page text-content">
-  <!-- Ambient blobs -->
-  <div class="pointer-events-none absolute inset-0">
-    <div
-      class="absolute -left-40 -top-40 h-[520px] w-[520px] animate-pulse rounded-full bg-accent/7 blur-3xl dark:bg-accent/20"
-    ></div>
-    <div
-      class="absolute -right-40 top-60 h-[420px] w-[420px] animate-pulse rounded-full bg-accent/5 blur-3xl dark:bg-accent/10"
-    ></div>
-  </div>
-
-  <div class="relative z-10 mx-auto max-w-3xl px-6 py-14">
-    <!-- Header -->
-    <div class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-      <div class="space-y-3">
-        @if (clubId) {
-          <a
-            [routerLink]="['/events/clubs', clubId, 'manage']"
-            class="text-xs font-semibold text-subtle transition hover:text-content"
-          >
-            &larr; Back to club events
-          </a>
-        }
-        <p class="text-sm font-semibold uppercase tracking-[0.28em] text-accent">Event editor</p>
-        <div class="flex flex-wrap items-center gap-3">
-          <h1 class="text-4xl font-black tracking-tight">
-            {{ form.controls.name.value || event?.name || 'New event draft' }}
-          </h1>
-          <span
-            class="rounded-full px-2.5 py-1 text-xs font-semibold"
-            [ngClass]="lifecycleBadge(lifecycleState)"
-          >
-            {{ lifecycleState }}
-          </span>
-        </div>
-      </div>
-
-      @if (canManageInvitations) {
-        <a
-          [routerLink]="['/events', eventId, 'invitations', 'manage']"
-          class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-4 py-2.5 text-sm font-semibold text-muted transition hover:bg-glass-strong"
+<div class="mx-auto max-w-3xl">
+  <!-- Header -->
+  <div class="mb-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div class="space-y-2">
+      <a
+        [routerLink]="['/clubs', clubId, 'manage', 'events']"
+        class="text-xs font-semibold text-subtle transition hover:text-content"
+      >
+        &larr; Back to events
+      </a>
+      <div class="flex flex-wrap items-center gap-3">
+        <h2 class="text-2xl font-bold tracking-tight">
+          {{ form.controls.name.value || event?.name || 'New event' }}
+        </h2>
+        <span
+          class="rounded-full px-2.5 py-1 text-xs font-semibold"
+          [ngClass]="lifecycleBadge(lifecycleState)"
         >
-          Manage invitations
-        </a>
-      }
+          {{ lifecycleState }}
+        </span>
+      </div>
     </div>
 
-    @if (loading) {
-      <div
-        class="rounded-3xl border border-line bg-glass px-6 py-10 text-center text-sm text-faint"
+    @if (canManageInvitations) {
+      <a
+        [routerLink]="['/events', eventId, 'invitations', 'manage']"
+        class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-4 py-2.5 text-sm font-semibold text-muted transition hover:bg-glass-strong"
       >
-        Loading event editor…
-      </div>
-    }
-
-    @if (!loading && error) {
-      <div
-        class="mb-6 rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
-      >
-        {{ error }}
-      </div>
-    }
-
-    @if (!loading && successMessage) {
-      <div
-        class="mb-6 rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success"
-      >
-        {{ successMessage }}
-      </div>
-    }
-
-    @if (!loading) {
-      <!-- Progress stepper -->
-      <div class="mb-8">
-        <div class="flex items-center gap-1 overflow-x-auto pb-1">
-          @for (step of steps; track step.label; let i = $index) {
-            <button
-              type="button"
-              (click)="goToStep(i)"
-              class="flex flex-shrink-0 items-center gap-2 rounded-2xl px-3 py-2 text-sm transition"
-              [class]="
-                i === currentStep
-                  ? 'bg-accent/10 font-semibold text-accent'
-                  : 'text-subtle hover:text-content'
-              "
-            >
-              <span
-                class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold"
-                [class]="
-                  i < currentStep
-                    ? 'bg-accent text-accent-contrast'
-                    : i === currentStep
-                      ? 'border-2 border-accent text-accent'
-                      : 'border border-line text-faint'
-                "
-              >
-                @if (i < currentStep) {
-                  ✓
-                } @else {
-                  {{ i + 1 }}
-                }
-              </span>
-              <span class="hidden sm:inline">{{ step.label }}</span>
-            </button>
-          }
-        </div>
-        <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
-          <div
-            class="h-full rounded-full bg-accent transition-all duration-300"
-            [style.width.%]="progressPercent"
-          ></div>
-        </div>
-      </div>
-
-      <form
-        [formGroup]="form"
-        class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl"
-      >
-        <div class="mb-5">
-          <h2 class="text-xl font-bold">{{ steps[currentStep].label }}</h2>
-          <p class="text-sm text-subtle">{{ steps[currentStep].hint }}</p>
-        </div>
-
-        @switch (currentStep) {
-          <!-- Basics -->
-          @case (0) {
-            <div class="space-y-5">
-              <label class="block space-y-2">
-                <span class="text-sm font-semibold text-muted">Name</span>
-                <input
-                  formControlName="name"
-                  placeholder="e.g. Fall Welcome Mixer"
-                  [class]="inputClass"
-                />
-              </label>
-              <label class="block space-y-2">
-                <span class="text-sm font-semibold text-muted">Category</span>
-                <select formControlName="category" [class]="inputClass">
-                  @for (category of categories; track category) {
-                    <option [value]="category">{{ category }}</option>
-                  }
-                </select>
-              </label>
-              <label class="block space-y-2">
-                <span class="text-sm font-semibold text-muted">Description</span>
-                <textarea
-                  formControlName="description"
-                  rows="6"
-                  placeholder="What should attendees know?"
-                  [class]="inputClass"
-                ></textarea>
-              </label>
-            </div>
-          }
-
-          <!-- Schedule -->
-          @case (1) {
-            <div class="grid gap-5 sm:grid-cols-2">
-              <label class="block space-y-2">
-                <span class="text-sm font-semibold text-muted">Start time</span>
-                <input formControlName="startTime" type="datetime-local" [class]="inputClass" />
-              </label>
-              <label class="block space-y-2">
-                <span class="text-sm font-semibold text-muted">End time</span>
-                <input formControlName="endTime" type="datetime-local" [class]="inputClass" />
-              </label>
-            </div>
-          }
-
-          <!-- Location -->
-          @case (2) {
-            <div class="space-y-5">
-              <div class="grid gap-5 sm:grid-cols-2">
-                <label class="block space-y-2">
-                  <span class="text-sm font-semibold text-muted">Location</span>
-                  <input
-                    formControlName="location"
-                    placeholder="Address or area"
-                    [class]="inputClass"
-                  />
-                </label>
-                <label class="block space-y-2">
-                  <span class="text-sm font-semibold text-muted">Venue name</span>
-                  <input formControlName="venueName" [class]="inputClass" />
-                </label>
-              </div>
-              <div class="grid gap-5 sm:grid-cols-3">
-                <label class="block space-y-2">
-                  <span class="text-sm font-semibold text-muted">City</span>
-                  <input formControlName="city" [class]="inputClass" />
-                </label>
-                <label class="block space-y-2">
-                  <span class="text-sm font-semibold text-muted">Latitude</span>
-                  <input formControlName="latitude" type="number" [class]="inputClass" />
-                </label>
-                <label class="block space-y-2">
-                  <span class="text-sm font-semibold text-muted">Longitude</span>
-                  <input formControlName="longitude" type="number" [class]="inputClass" />
-                </label>
-              </div>
-            </div>
-          }
-
-          <!-- Details -->
-          @case (3) {
-            <div class="space-y-5">
-              <div class="grid gap-5 sm:grid-cols-2">
-                <label class="block space-y-2">
-                  <span class="text-sm font-semibold text-muted">Capacity</span>
-                  <input
-                    formControlName="maxParticipants"
-                    type="number"
-                    placeholder="Unlimited if blank"
-                    [class]="inputClass"
-                  />
-                </label>
-                <label class="block space-y-2">
-                  <span class="text-sm font-semibold text-muted">Registration cost</span>
-                  <input formControlName="registerCost" type="number" [class]="inputClass" />
-                </label>
-              </div>
-              <label class="block space-y-2">
-                <span class="text-sm font-semibold text-muted">Tags</span>
-                <input
-                  formControlName="tags"
-                  placeholder="networking, student, beginner"
-                  [class]="inputClass"
-                />
-              </label>
-              <label
-                class="flex cursor-pointer items-center gap-3 rounded-2xl border border-line bg-glass-strong px-4 py-3 text-sm font-semibold text-muted"
-              >
-                <input formControlName="isPrivate" type="checkbox" class="h-4 w-4 accent-accent" />
-                Private event (invite-only)
-              </label>
-            </div>
-          }
-
-          <!-- Images -->
-          @case (4) {
-            <div class="space-y-5">
-              <label
-                class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line bg-surface-muted px-4 py-10 text-center text-sm text-subtle transition hover:border-accent hover:text-content"
-              >
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  class="hidden"
-                  (change)="onFilesSelected($event)"
-                />
-                <span class="text-2xl">🖼️</span>
-                {{ uploading ? 'Uploading images…' : 'Drop or click to upload (up to 5)' }}
-              </label>
-
-              @if (imageUrls.length === 0) {
-                <p class="text-center text-sm text-faint">No images yet — this step is optional.</p>
-              } @else {
-                <div class="grid gap-4 sm:grid-cols-2">
-                  @for (imageUrl of imageUrls; track imageUrl; let index = $index) {
-                    <div class="overflow-hidden rounded-2xl border border-line bg-glass">
-                      <img [src]="imageUrl" alt="" class="h-40 w-full object-cover" />
-                      <div class="flex items-center justify-end p-2">
-                        <button
-                          type="button"
-                          (click)="removeImage(index)"
-                          class="rounded-xl border border-danger/30 px-3 py-1.5 text-xs font-semibold text-danger transition hover:bg-danger/10"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  }
-                </div>
-              }
-            </div>
-          }
-
-          <!-- Review -->
-          @case (5) {
-            <div class="space-y-5">
-              @if (event && !event.publishReady && publishIssues.length > 0) {
-                <div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3">
-                  <p class="text-xs font-semibold uppercase tracking-[0.22em] text-warning">
-                    Before publishing
-                  </p>
-                  <ul class="mt-2 space-y-1 text-sm text-warning">
-                    @for (issue of publishIssues; track issue) {
-                      <li>• {{ issue }}</li>
-                    }
-                  </ul>
-                </div>
-              }
-
-              <dl class="divide-y divide-line rounded-2xl border border-line bg-surface-muted px-5">
-                <div class="flex items-start justify-between gap-4 py-3">
-                  <dt class="text-sm text-faint">Name</dt>
-                  <dd class="text-right text-sm font-medium text-content">
-                    {{ form.controls.name.value || 'Not set' }}
-                  </dd>
-                </div>
-                <div class="flex items-start justify-between gap-4 py-3">
-                  <dt class="text-sm text-faint">Category</dt>
-                  <dd class="text-right text-sm font-medium text-content">
-                    {{ form.controls.category.value }}
-                  </dd>
-                </div>
-                <div class="flex items-start justify-between gap-4 py-3">
-                  <dt class="text-sm text-faint">Description</dt>
-                  <dd class="max-w-[60%] text-right text-sm text-content">
-                    {{ form.controls.description.value || 'Not set' }}
-                  </dd>
-                </div>
-                <div class="flex items-start justify-between gap-4 py-3">
-                  <dt class="text-sm text-faint">Schedule</dt>
-                  <dd class="text-right text-sm font-medium text-content">
-                    @if (form.controls.startTime.value) {
-                      {{ form.controls.startTime.value | date: 'MMM d, y · h:mm a' }}
-                      @if (form.controls.endTime.value) {
-                        → {{ form.controls.endTime.value | date: 'h:mm a' }}
-                      }
-                    } @else {
-                      Not set
-                    }
-                  </dd>
-                </div>
-                <div class="flex items-start justify-between gap-4 py-3">
-                  <dt class="text-sm text-faint">Location</dt>
-                  <dd class="max-w-[60%] text-right text-sm text-content">
-                    {{ form.controls.venueName.value || form.controls.location.value || 'Not set' }}
-                    @if (form.controls.city.value) {
-                      · {{ form.controls.city.value }}
-                    }
-                  </dd>
-                </div>
-                <div class="flex items-start justify-between gap-4 py-3">
-                  <dt class="text-sm text-faint">Capacity</dt>
-                  <dd class="text-right text-sm font-medium text-content">
-                    {{ form.controls.maxParticipants.value || 'Unlimited' }}
-                  </dd>
-                </div>
-                <div class="flex items-start justify-between gap-4 py-3">
-                  <dt class="text-sm text-faint">Cost</dt>
-                  <dd class="text-right text-sm font-medium text-content">
-                    {{
-                      form.controls.registerCost.value
-                        ? (form.controls.registerCost.value | currency)
-                        : 'Free'
-                    }}
-                  </dd>
-                </div>
-                <div class="flex items-start justify-between gap-4 py-3">
-                  <dt class="text-sm text-faint">Visibility</dt>
-                  <dd class="text-right text-sm font-medium text-content">
-                    {{ form.controls.isPrivate.value ? 'Private' : 'Public' }}
-                  </dd>
-                </div>
-                @if (reviewTags.length > 0) {
-                  <div class="flex items-start justify-between gap-4 py-3">
-                    <dt class="text-sm text-faint">Tags</dt>
-                    <dd class="flex max-w-[60%] flex-wrap justify-end gap-1.5">
-                      @for (tag of reviewTags; track tag) {
-                        <span
-                          class="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent"
-                          >{{ tag }}</span
-                        >
-                      }
-                    </dd>
-                  </div>
-                }
-                <div class="flex items-start justify-between gap-4 py-3">
-                  <dt class="text-sm text-faint">Images</dt>
-                  <dd class="text-right text-sm font-medium text-content">
-                    {{ imageUrls.length }} uploaded
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          }
-        }
-
-        <!-- Navigation / actions -->
-        <div
-          class="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5"
-        >
-          <button
-            type="button"
-            (click)="prevStep()"
-            [disabled]="currentStep === 0"
-            class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            &larr; Back
-          </button>
-
-          @if (!isReviewStep) {
-            <button
-              type="button"
-              (click)="nextStep()"
-              class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover"
-            >
-              Next &rarr;
-            </button>
-          } @else {
-            <div class="flex flex-wrap gap-3">
-              <button
-                type="button"
-                (click)="saveDraft()"
-                [disabled]="saving || uploading"
-                class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {{ saving ? 'Saving…' : eventId ? 'Save draft' : 'Create draft' }}
-              </button>
-              @if (lifecycleState === 'Draft' && eventId) {
-                <button
-                  type="button"
-                  (click)="publish()"
-                  [disabled]="saving || uploading"
-                  class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Publish
-                </button>
-              }
-              @if (lifecycleState === 'Published') {
-                <button
-                  type="button"
-                  (click)="cancel()"
-                  [disabled]="saving || uploading"
-                  class="inline-flex items-center justify-center rounded-2xl border border-danger/30 px-5 py-3 text-sm font-semibold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Cancel event
-                </button>
-              }
-              @if (lifecycleState === 'Published' || lifecycleState === 'Cancelled') {
-                <button
-                  type="button"
-                  (click)="archive()"
-                  [disabled]="saving || uploading"
-                  class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Archive
-                </button>
-              }
-            </div>
-          }
-        </div>
-      </form>
-
-      <p class="mt-4 text-center text-xs text-faint">
-        You can save a draft at any point and keep editing — nothing is public until you publish.
-      </p>
+        Manage invitations
+      </a>
     }
   </div>
+
+  @if (loading) {
+    <div class="rounded-3xl border border-line bg-glass px-6 py-10 text-center text-sm text-faint">
+      Loading event editor…
+    </div>
+  }
+
+  @if (!loading && error) {
+    <div
+      class="mb-6 rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
+    >
+      {{ error }}
+    </div>
+  }
+
+  @if (!loading && successMessage) {
+    <div
+      class="mb-6 rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success"
+    >
+      {{ successMessage }}
+    </div>
+  }
+
+  @if (!loading) {
+    <!-- Progress stepper -->
+    <div class="mb-8">
+      <div class="flex items-center gap-1 overflow-x-auto pb-1">
+        @for (step of steps; track step.label; let i = $index) {
+          <button
+            type="button"
+            (click)="goToStep(i)"
+            class="flex flex-shrink-0 items-center gap-2 rounded-2xl px-3 py-2 text-sm transition"
+            [class]="
+              i === currentStep
+                ? 'bg-accent/10 font-semibold text-accent'
+                : 'text-subtle hover:text-content'
+            "
+          >
+            <span
+              class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold"
+              [class]="
+                i < currentStep
+                  ? 'bg-accent text-accent-contrast'
+                  : i === currentStep
+                    ? 'border-2 border-accent text-accent'
+                    : 'border border-line text-faint'
+              "
+            >
+              @if (i < currentStep) {
+                ✓
+              } @else {
+                {{ i + 1 }}
+              }
+            </span>
+            <span class="hidden sm:inline">{{ step.label }}</span>
+          </button>
+        }
+      </div>
+      <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+        <div
+          class="h-full rounded-full bg-accent transition-all duration-300"
+          [style.width.%]="progressPercent"
+        ></div>
+      </div>
+    </div>
+
+    <form
+      [formGroup]="form"
+      class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl"
+    >
+      <div class="mb-5">
+        <h2 class="text-xl font-bold">{{ steps[currentStep].label }}</h2>
+        <p class="text-sm text-subtle">{{ steps[currentStep].hint }}</p>
+      </div>
+
+      @switch (currentStep) {
+        <!-- Basics -->
+        @case (0) {
+          <div class="space-y-5">
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">Name</span>
+              <input
+                formControlName="name"
+                placeholder="e.g. Fall Welcome Mixer"
+                [class]="inputClass"
+              />
+            </label>
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">Category</span>
+              <select formControlName="category" [class]="inputClass">
+                @for (category of categories; track category) {
+                  <option [value]="category">{{ category }}</option>
+                }
+              </select>
+            </label>
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">Description</span>
+              <textarea
+                formControlName="description"
+                rows="6"
+                placeholder="What should attendees know?"
+                [class]="inputClass"
+              ></textarea>
+            </label>
+          </div>
+        }
+
+        <!-- Schedule -->
+        @case (1) {
+          <div class="grid gap-5 sm:grid-cols-2">
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">Start time</span>
+              <input formControlName="startTime" type="datetime-local" [class]="inputClass" />
+            </label>
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">End time</span>
+              <input formControlName="endTime" type="datetime-local" [class]="inputClass" />
+            </label>
+          </div>
+        }
+
+        <!-- Location -->
+        @case (2) {
+          <div class="space-y-5">
+            <div class="grid gap-5 sm:grid-cols-2">
+              <label class="block space-y-2">
+                <span class="text-sm font-semibold text-muted">Location</span>
+                <input
+                  formControlName="location"
+                  placeholder="Address or area"
+                  [class]="inputClass"
+                />
+              </label>
+              <label class="block space-y-2">
+                <span class="text-sm font-semibold text-muted">Venue name</span>
+                <input formControlName="venueName" [class]="inputClass" />
+              </label>
+            </div>
+            <div class="grid gap-5 sm:grid-cols-3">
+              <label class="block space-y-2">
+                <span class="text-sm font-semibold text-muted">City</span>
+                <input formControlName="city" [class]="inputClass" />
+              </label>
+              <label class="block space-y-2">
+                <span class="text-sm font-semibold text-muted">Latitude</span>
+                <input formControlName="latitude" type="number" [class]="inputClass" />
+              </label>
+              <label class="block space-y-2">
+                <span class="text-sm font-semibold text-muted">Longitude</span>
+                <input formControlName="longitude" type="number" [class]="inputClass" />
+              </label>
+            </div>
+          </div>
+        }
+
+        <!-- Details -->
+        @case (3) {
+          <div class="space-y-5">
+            <div class="grid gap-5 sm:grid-cols-2">
+              <label class="block space-y-2">
+                <span class="text-sm font-semibold text-muted">Capacity</span>
+                <input
+                  formControlName="maxParticipants"
+                  type="number"
+                  placeholder="Unlimited if blank"
+                  [class]="inputClass"
+                />
+              </label>
+              <label class="block space-y-2">
+                <span class="text-sm font-semibold text-muted">Registration cost</span>
+                <input formControlName="registerCost" type="number" [class]="inputClass" />
+              </label>
+            </div>
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-muted">Tags</span>
+              <input
+                formControlName="tags"
+                placeholder="networking, student, beginner"
+                [class]="inputClass"
+              />
+            </label>
+            <label
+              class="flex cursor-pointer items-center gap-3 rounded-2xl border border-line bg-glass-strong px-4 py-3 text-sm font-semibold text-muted"
+            >
+              <input formControlName="isPrivate" type="checkbox" class="h-4 w-4 accent-accent" />
+              Private event (invite-only)
+            </label>
+          </div>
+        }
+
+        <!-- Images -->
+        @case (4) {
+          <div class="space-y-5">
+            <label
+              class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line bg-surface-muted px-4 py-10 text-center text-sm text-subtle transition hover:border-accent hover:text-content"
+            >
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                class="hidden"
+                (change)="onFilesSelected($event)"
+              />
+              <span class="text-2xl">🖼️</span>
+              {{ uploading ? 'Uploading images…' : 'Drop or click to upload (up to 5)' }}
+            </label>
+
+            @if (imageUrls.length === 0) {
+              <p class="text-center text-sm text-faint">No images yet — this step is optional.</p>
+            } @else {
+              <div class="grid gap-4 sm:grid-cols-2">
+                @for (imageUrl of imageUrls; track imageUrl; let index = $index) {
+                  <div class="overflow-hidden rounded-2xl border border-line bg-glass">
+                    <img [src]="imageUrl" alt="" class="h-40 w-full object-cover" />
+                    <div class="flex items-center justify-end p-2">
+                      <button
+                        type="button"
+                        (click)="removeImage(index)"
+                        class="rounded-xl border border-danger/30 px-3 py-1.5 text-xs font-semibold text-danger transition hover:bg-danger/10"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Review -->
+        @case (5) {
+          <div class="space-y-5">
+            @if (event && !event.publishReady && publishIssues.length > 0) {
+              <div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3">
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-warning">
+                  Before publishing
+                </p>
+                <ul class="mt-2 space-y-1 text-sm text-warning">
+                  @for (issue of publishIssues; track issue) {
+                    <li>• {{ issue }}</li>
+                  }
+                </ul>
+              </div>
+            }
+
+            <dl class="divide-y divide-line rounded-2xl border border-line bg-surface-muted px-5">
+              <div class="flex items-start justify-between gap-4 py-3">
+                <dt class="text-sm text-faint">Name</dt>
+                <dd class="text-right text-sm font-medium text-content">
+                  {{ form.controls.name.value || 'Not set' }}
+                </dd>
+              </div>
+              <div class="flex items-start justify-between gap-4 py-3">
+                <dt class="text-sm text-faint">Category</dt>
+                <dd class="text-right text-sm font-medium text-content">
+                  {{ form.controls.category.value }}
+                </dd>
+              </div>
+              <div class="flex items-start justify-between gap-4 py-3">
+                <dt class="text-sm text-faint">Description</dt>
+                <dd class="max-w-[60%] text-right text-sm text-content">
+                  {{ form.controls.description.value || 'Not set' }}
+                </dd>
+              </div>
+              <div class="flex items-start justify-between gap-4 py-3">
+                <dt class="text-sm text-faint">Schedule</dt>
+                <dd class="text-right text-sm font-medium text-content">
+                  @if (form.controls.startTime.value) {
+                    {{ form.controls.startTime.value | date: 'MMM d, y · h:mm a' }}
+                    @if (form.controls.endTime.value) {
+                      → {{ form.controls.endTime.value | date: 'h:mm a' }}
+                    }
+                  } @else {
+                    Not set
+                  }
+                </dd>
+              </div>
+              <div class="flex items-start justify-between gap-4 py-3">
+                <dt class="text-sm text-faint">Location</dt>
+                <dd class="max-w-[60%] text-right text-sm text-content">
+                  {{ form.controls.venueName.value || form.controls.location.value || 'Not set' }}
+                  @if (form.controls.city.value) {
+                    · {{ form.controls.city.value }}
+                  }
+                </dd>
+              </div>
+              <div class="flex items-start justify-between gap-4 py-3">
+                <dt class="text-sm text-faint">Capacity</dt>
+                <dd class="text-right text-sm font-medium text-content">
+                  {{ form.controls.maxParticipants.value || 'Unlimited' }}
+                </dd>
+              </div>
+              <div class="flex items-start justify-between gap-4 py-3">
+                <dt class="text-sm text-faint">Cost</dt>
+                <dd class="text-right text-sm font-medium text-content">
+                  {{
+                    form.controls.registerCost.value
+                      ? (form.controls.registerCost.value | currency)
+                      : 'Free'
+                  }}
+                </dd>
+              </div>
+              <div class="flex items-start justify-between gap-4 py-3">
+                <dt class="text-sm text-faint">Visibility</dt>
+                <dd class="text-right text-sm font-medium text-content">
+                  {{ form.controls.isPrivate.value ? 'Private' : 'Public' }}
+                </dd>
+              </div>
+              @if (reviewTags.length > 0) {
+                <div class="flex items-start justify-between gap-4 py-3">
+                  <dt class="text-sm text-faint">Tags</dt>
+                  <dd class="flex max-w-[60%] flex-wrap justify-end gap-1.5">
+                    @for (tag of reviewTags; track tag) {
+                      <span
+                        class="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent"
+                        >{{ tag }}</span
+                      >
+                    }
+                  </dd>
+                </div>
+              }
+              <div class="flex items-start justify-between gap-4 py-3">
+                <dt class="text-sm text-faint">Images</dt>
+                <dd class="text-right text-sm font-medium text-content">
+                  {{ imageUrls.length }} uploaded
+                </dd>
+              </div>
+            </dl>
+          </div>
+        }
+      }
+
+      <!-- Navigation / actions -->
+      <div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
+        <button
+          type="button"
+          (click)="prevStep()"
+          [disabled]="currentStep === 0"
+          class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          &larr; Back
+        </button>
+
+        @if (!isReviewStep) {
+          <button
+            type="button"
+            (click)="nextStep()"
+            class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover"
+          >
+            Next &rarr;
+          </button>
+        } @else {
+          <div class="flex flex-wrap gap-3">
+            <button
+              type="button"
+              (click)="saveDraft()"
+              [disabled]="saving || uploading"
+              class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {{ saving ? 'Saving…' : eventId ? 'Save draft' : 'Create draft' }}
+            </button>
+            @if (lifecycleState === 'Draft' && eventId) {
+              <button
+                type="button"
+                (click)="publish()"
+                [disabled]="saving || uploading"
+                class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Publish
+              </button>
+            }
+            @if (lifecycleState === 'Published') {
+              <button
+                type="button"
+                (click)="cancel()"
+                [disabled]="saving || uploading"
+                class="inline-flex items-center justify-center rounded-2xl border border-danger/30 px-5 py-3 text-sm font-semibold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel event
+              </button>
+            }
+            @if (lifecycleState === 'Published' || lifecycleState === 'Cancelled') {
+              <button
+                type="button"
+                (click)="archive()"
+                [disabled]="saving || uploading"
+                class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Archive
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </form>
+
+    <p class="mt-4 text-center text-xs text-faint">
+      You can save a draft at any point and keep editing — nothing is public until you publish.
+    </p>
+  }
 </div>

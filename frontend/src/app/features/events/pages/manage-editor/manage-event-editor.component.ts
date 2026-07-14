@@ -98,7 +98,13 @@ export class ManageEventEditorComponent {
   ) {}
 
   ngOnInit(): void {
-    const clubId = Number.parseInt(this.route.snapshot.paramMap.get('clubId') ?? '', 10);
+    // clubId lives on the parent (club shell) route when nested under /clubs/:clubId/manage/events.
+    const clubId = Number.parseInt(
+      this.route.snapshot.paramMap.get('clubId') ??
+        this.route.parent?.snapshot.paramMap.get('clubId') ??
+        '',
+      10,
+    );
     const eventId = Number.parseInt(this.route.snapshot.paramMap.get('eventId') ?? '', 10);
 
     this.clubId = Number.isFinite(clubId) && clubId > 0 ? clubId : 0;
@@ -192,7 +198,7 @@ export class ManageEventEditorComponent {
 
         if (!this.eventId) {
           this.eventId = managedEvent.id;
-          void this.router.navigate(['/events', managedEvent.id, 'manage'], {
+          void this.router.navigate(['/clubs', this.clubId, 'manage', 'events', managedEvent.id], {
             replaceUrl: true,
           });
         }

@@ -12,7 +12,7 @@
       <p class="text-sm text-subtle">Draft, publish, and manage this club's events.</p>
     </div>
     <a
-      [routerLink]="['/events/clubs', clubId, 'manage', 'new']"
+      [routerLink]="['/clubs', clubId, 'manage', 'events', 'new']"
       class="rounded-2xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover"
     >
       + New event
@@ -62,7 +62,7 @@
     <div class="rounded-3xl border border-line bg-glass px-6 py-12 text-center text-sm text-subtle">
       No events match this filter yet.
       <a
-        [routerLink]="['/events/clubs', clubId, 'manage', 'new']"
+        [routerLink]="['/clubs', clubId, 'manage', 'events', 'new']"
         class="ml-1 font-semibold text-accent"
         >Create one →</a
       >
@@ -120,7 +120,7 @@
           }
 
           <a
-            [routerLink]="['/events', event.id, 'manage']"
+            [routerLink]="['/clubs', clubId, 'manage', 'events', event.id]"
             class="mt-auto inline-flex items-center justify-center rounded-2xl border border-line-strong px-4 py-2 text-sm font-semibold text-muted transition hover:bg-glass-strong"
           >
             Open editor

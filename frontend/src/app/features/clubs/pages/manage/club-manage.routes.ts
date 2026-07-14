@@ -24,6 +24,20 @@ export const CLUB_MANAGE_TABS: Routes = [
       import('./events-tab/events-tab.component').then((m) => m.EventsTabComponent),
   },
   {
+    path: 'events/new',
+    loadComponent: () =>
+      import('../../../events/pages/manage-editor/manage-event-editor.component').then(
+        (m) => m.ManageEventEditorComponent,
+      ),
+  },
+  {
+    path: 'events/:eventId',
+    loadComponent: () =>
+      import('../../../events/pages/manage-editor/manage-event-editor.component').then(
+        (m) => m.ManageEventEditorComponent,
+      ),
+  },
+  {
     path: 'details',
     canDeactivate: [unsavedChangesGuard],
     loadComponent: () =>
