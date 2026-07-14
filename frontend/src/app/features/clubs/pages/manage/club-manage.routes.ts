@@ -19,6 +19,11 @@ export const CLUB_MANAGE_TABS: Routes = [
     loadComponent: () => import('./posts-tab/posts-tab.component').then((m) => m.PostsTabComponent),
   },
   {
+    path: 'events',
+    loadComponent: () =>
+      import('./events-tab/events-tab.component').then((m) => m.EventsTabComponent),
+  },
+  {
     path: 'details',
     canDeactivate: [unsavedChangesGuard],
     loadComponent: () =>
