@@ -29,9 +29,10 @@ namespace backend.main.features.clubs.follow
         public async Task<IActionResult> GetClubMembers(
             int clubId,
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 20)
+            [FromQuery] int pageSize = 20,
+            [FromQuery] string? search = null)
         {
-            var (members, users, totalCount) = await _followService.GetClubMembersAsync(clubId, page, pageSize);
+            var (members, users, totalCount) = await _followService.GetClubMembersAsync(clubId, page, pageSize, search);
 
             var items = members.Select(m =>
             {

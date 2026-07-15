@@ -94,6 +94,7 @@ export class EventsManagementService {
     }
     if (params.page) httpParams = httpParams.set('page', String(params.page));
     if (params.pageSize) httpParams = httpParams.set('pageSize', String(params.pageSize));
+    if (params.search?.trim()) httpParams = httpParams.set('search', params.search.trim());
 
     return this.http
       .get<ManagedEventsApiPayload>(`${this.base}/clubs/${clubId}/manage`, { params: httpParams })

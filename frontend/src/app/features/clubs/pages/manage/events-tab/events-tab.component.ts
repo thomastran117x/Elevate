@@ -1,7 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 import { extractEnvelopeData } from '../../../../../core/api/models/api-envelope.model';
@@ -16,7 +18,7 @@ import { EventsManagementService } from '../../../../events/services/events-mana
 @Component({
   selector: 'app-events-tab',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './events-tab.component.html',
 })
 export class EventsTabComponent implements OnInit {
@@ -31,6 +33,9 @@ export class EventsTabComponent implements OnInit {
   page = 1;
   readonly pageSize = 9;
   totalCount = 0;
+
+  eventSearch = '';
+  private readonly searchInput$ = new Subject<string>();
 
   readonly lifecycles = ALL_LIFECYCLE_STATES;
   readonly skeletons = Array.from({ length: 6 });
@@ -49,6 +54,18 @@ export class EventsTabComponent implements OnInit {
       return;
     }
     this.load();
+
+    this.searchInput$
+      .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.page = 1;
+        this.load();
+      });
+  }
+
+  onEventSearch(value: string): void {
+    this.eventSearch = value;
+    this.searchInput$.next(value);
   }
 
   get totalPages(): number {
@@ -88,6 +105,7 @@ export class EventsTabComponent implements OnInit {
         lifecycleState: this.selectedLifecycle,
         page: this.page,
         pageSize: this.pageSize,
+        search: this.eventSearch || undefined,
       })
       .pipe(
         takeUntilDestroyed(this.destroyRef),

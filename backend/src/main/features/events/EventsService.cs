@@ -296,7 +296,8 @@ namespace backend.main.features.events
             int clubId,
             EventStatus? status = null,
             int page = 1,
-            int pageSize = 20)
+            int pageSize = 20,
+            string? search = null)
         {
             try
             {
@@ -304,7 +305,7 @@ namespace backend.main.features.events
 
                 var (events, totalCount) = await _eventsRepository.SearchAsync(new EventSearchCriteria
                 {
-                    Query = null,
+                    Query = string.IsNullOrWhiteSpace(search) ? null : search.Trim(),
                     ClubId = clubId,
                     IsPrivate = false,
                     LifecycleState = EventLifecycleState.Published,
@@ -331,7 +332,8 @@ namespace backend.main.features.events
             string userRole,
             EventLifecycleState? lifecycleState = null,
             int page = 1,
-            int pageSize = 20)
+            int pageSize = 20,
+            string? search = null)
         {
             try
             {
@@ -339,6 +341,7 @@ namespace backend.main.features.events
 
                 var criteria = new EventSearchCriteria
                 {
+                    Query = string.IsNullOrWhiteSpace(search) ? null : search.Trim(),
                     ClubId = clubId,
                     LifecycleState = lifecycleState,
                     Page = NormalizePage(page),

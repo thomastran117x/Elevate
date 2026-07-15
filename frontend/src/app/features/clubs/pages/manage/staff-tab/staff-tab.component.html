@@ -14,11 +14,21 @@
 
   <!-- Staff list -->
   <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
-    <div class="mb-4">
-      <h2 class="text-xl font-bold">Staff</h2>
-      <p class="text-sm text-subtle">
-        Managers can edit the club and run events; volunteers can manage posts.
-      </p>
+    <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-bold">Staff</h2>
+        <p class="text-sm text-subtle">
+          Managers can edit the club and run events; volunteers can manage posts.
+        </p>
+      </div>
+      <input
+        *ngIf="!loading && staff.length > 0"
+        type="search"
+        [(ngModel)]="staffSearch"
+        placeholder="Search staff…"
+        aria-label="Search staff"
+        class="w-full rounded-2xl border border-line-strong bg-surface px-4 py-2.5 text-sm text-content placeholder:text-faint focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15 sm:w-56"
+      />
     </div>
 
     <div
@@ -35,9 +45,16 @@
       No staff yet. Add a manager or volunteer below.
     </div>
 
-    <ul *ngIf="!loading && staff.length > 0" class="divide-y divide-line">
+    <div
+      *ngIf="!loading && staff.length > 0 && filteredStaff.length === 0"
+      class="rounded-2xl border border-line bg-glass px-5 py-8 text-center text-sm text-subtle"
+    >
+      No staff match “{{ staffSearch }}”.
+    </div>
+
+    <ul *ngIf="!loading && filteredStaff.length > 0" class="divide-y divide-line">
       <li
-        *ngFor="let member of staff; trackBy: trackByUserId"
+        *ngFor="let member of filteredStaff; trackBy: trackByUserId"
         class="flex items-center justify-between gap-3 py-3"
       >
         <div class="flex min-w-0 items-center gap-3">

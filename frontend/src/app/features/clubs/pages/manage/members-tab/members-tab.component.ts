@@ -3,6 +3,7 @@ import { Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
@@ -35,6 +36,9 @@ export class MembersTabComponent implements OnInit {
   readonly pageSize = 20;
   totalCount = 0;
   readonly skeletons = Array.from({ length: 6 });
+
+  memberSearch = '';
+  private readonly searchInput$ = new Subject<string>();
 
   // Specific (emailed) invitations
   inviteIdentifier = '';
@@ -71,6 +75,18 @@ export class MembersTabComponent implements OnInit {
     this.loadMembers();
     this.loadInvitations();
     this.loadLinks();
+
+    this.searchInput$
+      .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.page = 1;
+        this.loadMembers();
+      });
+  }
+
+  onMemberSearch(value: string): void {
+    this.memberSearch = value;
+    this.searchInput$.next(value);
   }
 
   get totalPages(): number {
@@ -254,7 +270,7 @@ export class MembersTabComponent implements OnInit {
     this.loading = true;
     this.error = '';
     this.management
-      .getMembers(this.clubId, this.page, this.pageSize)
+      .getMembers(this.clubId, this.page, this.pageSize, this.memberSearch)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => (this.loading = false)),

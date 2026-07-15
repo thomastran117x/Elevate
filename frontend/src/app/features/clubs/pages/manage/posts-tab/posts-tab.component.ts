@@ -3,6 +3,7 @@ import { Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
+import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
@@ -30,6 +31,9 @@ export class PostsTabComponent implements OnInit {
   page = 1;
   readonly pageSize = 10;
   totalCount = 0;
+
+  postSearch = '';
+  private readonly searchInput$ = new Subject<string>();
 
   readonly postTypeStyles = POST_TYPE_STYLES;
   readonly postTypes: PostType[] = ['General', 'Announcement', 'Event', 'Poll'];
@@ -60,6 +64,18 @@ export class PostsTabComponent implements OnInit {
       return;
     }
     this.load();
+
+    this.searchInput$
+      .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.page = 1;
+        this.load();
+      });
+  }
+
+  onPostSearch(value: string): void {
+    this.postSearch = value;
+    this.searchInput$.next(value);
   }
 
   get totalPages(): number {
@@ -200,7 +216,12 @@ export class PostsTabComponent implements OnInit {
     this.loading = true;
     this.error = '';
     this.postsService
-      .getPosts(this.clubId, { sortBy: 'Recent', page: this.page, pageSize: this.pageSize })
+      .getPosts(this.clubId, {
+        search: this.postSearch || undefined,
+        sortBy: 'Recent',
+        page: this.page,
+        pageSize: this.pageSize,
+      })
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => (this.loading = false)),

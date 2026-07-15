@@ -14,7 +14,7 @@ namespace backend.main.features.clubs.follow
         /// plus the total member count for the club.
         /// </summary>
         Task<(IReadOnlyList<FollowClub> Members, IReadOnlyDictionary<int, UserListRecord> Users, int TotalCount)>
-            GetClubMembersAsync(int clubId, int page = 1, int pageSize = 20);
+            GetClubMembersAsync(int clubId, int page = 1, int pageSize = 20, string? search = null);
         Task<bool> IsMemberAsync(int clubId, int userId);
         Task AddMembershipAsync(int clubId, int userId);
         Task RemoveMembershipAsync(int clubId, int userId);

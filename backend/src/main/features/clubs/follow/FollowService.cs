@@ -61,10 +61,23 @@ namespace backend.main.features.clubs.follow
         }
 
         public async Task<(IReadOnlyList<FollowClub> Members, IReadOnlyDictionary<int, UserListRecord> Users, int TotalCount)>
-            GetClubMembersAsync(int clubId, int page = 1, int pageSize = 20)
+            GetClubMembersAsync(int clubId, int page = 1, int pageSize = 20, string? search = null)
         {
-            var members = (await GetFollowsByClubAsync(clubId, page, pageSize)).ToList();
-            var totalCount = await _followRepository.CountFollowsByClubAsync(clubId);
+            List<FollowClub> members;
+            int totalCount;
+
+            if (string.IsNullOrWhiteSpace(search))
+            {
+                members = (await GetFollowsByClubAsync(clubId, page, pageSize)).ToList();
+                totalCount = await _followRepository.CountFollowsByClubAsync(clubId);
+            }
+            else
+            {
+                // Searched results join Users and bypass the list cache.
+                var (found, count) = await _followRepository.SearchClubMembersAsync(clubId, search, page, pageSize);
+                members = found.ToList();
+                totalCount = count;
+            }
 
             var userIds = members.Select(m => m.UserId).Distinct().ToList();
             IReadOnlyDictionary<int, UserListRecord> users = userIds.Count == 0

@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Store } from '@ngrx/store';
-import { Subject, takeUntil, finalize } from 'rxjs';
+import { Subject, takeUntil, finalize, debounceTime, distinctUntilChanged } from 'rxjs';
 
 import { selectUser } from '../../../../core/stores/user.selectors';
 import { User } from '../../../../core/stores/user.model';
@@ -58,6 +58,10 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
   panelMembers: ClubMember[] = [];
   panelEvents: EventItem[] = [];
   panelReviews: ClubReview[] = [];
+
+  // Search within the members/events panels (server-side, debounced)
+  panelSearch = '';
+  private readonly panelSearch$ = new Subject<string>();
 
   // Review compose/edit state (within the reviews panel)
   reviewFormOpen = false;
@@ -115,6 +119,27 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
         this.error = 'Invalid club URL.';
       }
     });
+
+    this.panelSearch$
+      .pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.panelPage = 1;
+        this.loadPanel();
+      });
+  }
+
+  /** Members and events panels support text search; reviews has its own compose UI. */
+  get panelSupportsSearch(): boolean {
+    return (
+      this.activePanel === 'members' ||
+      this.activePanel === 'events' ||
+      this.activePanel === 'openEvents'
+    );
+  }
+
+  onPanelSearch(value: string): void {
+    this.panelSearch = value;
+    this.panelSearch$.next(value);
   }
 
   get isLoggedIn(): boolean {
@@ -258,6 +283,7 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
     this.activePanel = panel;
     this.panelPage = 1;
     this.panelError = '';
+    this.panelSearch = '';
     this.closeReviewForm();
     this.panelMembers = [];
     this.panelEvents = [];
@@ -446,7 +472,7 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
 
     if (panel === 'members') {
       this.managementService
-        .getMembers(this.clubId, this.panelPage, this.panelPageSize)
+        .getMembers(this.clubId, this.panelPage, this.panelPageSize, this.panelSearch)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: (response) => {
@@ -468,6 +494,7 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
         status: panel === 'openEvents' ? 'Upcoming' : undefined,
         page: this.panelPage,
         pageSize: this.panelPageSize,
+        search: this.panelSearch || undefined,
       })
       .pipe(takeUntil(this.destroy$))
       .subscribe({

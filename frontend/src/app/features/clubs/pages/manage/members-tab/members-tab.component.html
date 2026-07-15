@@ -172,6 +172,15 @@
       </div>
     }
 
+    <input
+      type="search"
+      [ngModel]="memberSearch"
+      (ngModelChange)="onMemberSearch($event)"
+      placeholder="Search members by name or username…"
+      aria-label="Search members"
+      class="mb-4 w-full rounded-2xl border border-line-strong bg-surface px-4 py-2.5 text-sm text-content placeholder:text-faint focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
+    />
+
     @if (loading) {
       <ul class="divide-y divide-line">
         @for (s of skeletons; track $index) {

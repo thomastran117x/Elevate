@@ -13,6 +13,9 @@ namespace backend.main.features.clubs.follow
         Task<IEnumerable<FollowClub>> GetFollowsByUserAsync(int userId, int page = 1, int pageSize = 20);
         Task<IEnumerable<FollowClub>> GetFollowsByClubAsync(int clubId, int page = 1, int pageSize = 20);
         Task<int> CountFollowsByClubAsync(int clubId);
+        /// <summary>Paginates a club's members, filtered by member name/username when <paramref name="search"/> is set.</summary>
+        Task<(IReadOnlyList<FollowClub> Members, int TotalCount)> SearchClubMembersAsync(
+            int clubId, string? search, int page, int pageSize);
     }
 }
 

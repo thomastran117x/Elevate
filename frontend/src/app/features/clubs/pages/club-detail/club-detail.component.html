@@ -510,6 +510,16 @@
 
         <!-- Body -->
         <div class="flex-1 overflow-y-auto px-6 py-4">
+          @if (panelSupportsSearch) {
+            <input
+              type="search"
+              [ngModel]="panelSearch"
+              (ngModelChange)="onPanelSearch($event)"
+              [placeholder]="activePanel === 'members' ? 'Search members…' : 'Search events…'"
+              [attr.aria-label]="activePanel === 'members' ? 'Search members' : 'Search events'"
+              class="mb-4 w-full rounded-2xl border border-line-strong bg-surface px-4 py-2.5 text-sm text-content placeholder:text-faint focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
+            />
+          }
           @if (panelLoading) {
             <p class="py-10 text-center text-sm text-faint">Loading…</p>
           } @else if (panelError) {

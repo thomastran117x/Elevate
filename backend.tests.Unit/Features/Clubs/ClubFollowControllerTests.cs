@@ -33,7 +33,7 @@ public class ClubFollowControllerTests
         {
             [22] = new UserListRecord { Id = 22, Username = "member22", Name = "Member 22" }
         };
-        service.Setup(s => s.GetClubMembersAsync(4, 1, 20))
+        service.Setup(s => s.GetClubMembersAsync(4, 1, 20, null))
             .ReturnsAsync((members, users, 1));
 
         var controller = CreateClubController(service.Object);

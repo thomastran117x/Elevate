@@ -19,6 +19,15 @@
     </a>
   </div>
 
+  <input
+    type="search"
+    [ngModel]="eventSearch"
+    (ngModelChange)="onEventSearch($event)"
+    placeholder="Search events…"
+    aria-label="Search events"
+    class="w-full rounded-2xl border border-line-strong bg-surface px-4 py-2.5 text-sm text-content placeholder:text-faint focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
+  />
+
   <!-- Lifecycle filter -->
   <div class="flex flex-wrap gap-2">
     <button

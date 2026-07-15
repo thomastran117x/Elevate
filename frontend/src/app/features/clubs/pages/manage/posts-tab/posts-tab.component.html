@@ -27,6 +27,15 @@
     }
   </div>
 
+  <input
+    type="search"
+    [ngModel]="postSearch"
+    (ngModelChange)="onPostSearch($event)"
+    placeholder="Search posts…"
+    aria-label="Search posts"
+    class="w-full rounded-2xl border border-line-strong bg-surface px-4 py-2.5 text-sm text-content placeholder:text-faint focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
+  />
+
   <!-- Editor -->
   @if (showEditor) {
     <article class="rounded-3xl border border-accent/25 bg-accent/5 px-6 py-6 backdrop-blur-xl">

@@ -73,8 +73,14 @@ export class ClubManagementService {
       .pipe(map((response) => this.mapClub(response)));
   }
 
-  getMembers(clubId: number, page = 1, pageSize = 20): Observable<ClubMembersApiResponse> {
-    const params = new HttpParams().set('page', String(page)).set('pageSize', String(pageSize));
+  getMembers(
+    clubId: number,
+    page = 1,
+    pageSize = 20,
+    search?: string,
+  ): Observable<ClubMembersApiResponse> {
+    let params = new HttpParams().set('page', String(page)).set('pageSize', String(pageSize));
+    if (search?.trim()) params = params.set('search', search.trim());
     return this.api
       .get<ApiEnvelope<unknown>>(`${this.base}/${clubId}/members`, {
         params,

@@ -25,6 +25,9 @@ export class StaffTabComponent implements OnInit {
   error = '';
   success = '';
 
+  // Client-side search (staff is fully loaded)
+  staffSearch = '';
+
   // Invite staff form
   addIdentifier = '';
   addRole: ClubStaffRole = 'Manager';
@@ -53,6 +56,18 @@ export class StaffTabComponent implements OnInit {
     }
     this.load();
     this.loadInvitations();
+  }
+
+  get filteredStaff(): ClubStaff[] {
+    const q = this.staffSearch.trim().toLowerCase();
+    if (!q) return this.staff;
+    return this.staff.filter(
+      (s) =>
+        (s.name?.toLowerCase().includes(q) ?? false) ||
+        (s.username?.toLowerCase().includes(q) ?? false) ||
+        s.role.toLowerCase().includes(q) ||
+        `#${s.userId}`.includes(q),
+    );
   }
 
   private load(): void {
