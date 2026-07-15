@@ -58,6 +58,11 @@ export const CLUB_MANAGE_TABS: Routes = [
       import('./analytics-tab/analytics-tab.component').then((m) => m.AnalyticsTabComponent),
   },
   {
+    path: 'reviews',
+    loadComponent: () =>
+      import('./reviews-tab/reviews-tab.component').then((m) => m.ReviewsTabComponent),
+  },
+  {
     path: 'settings',
     loadComponent: () =>
       import('./settings-tab/settings-tab.component').then((m) => m.SettingsTabComponent),

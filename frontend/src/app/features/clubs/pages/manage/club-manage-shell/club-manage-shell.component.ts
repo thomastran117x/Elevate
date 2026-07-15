@@ -31,6 +31,7 @@ export class ClubManageShellComponent implements OnInit {
     { path: 'staff', label: 'Staff' },
     { path: 'history', label: 'History' },
     { path: 'analytics', label: 'Analytics' },
+    { path: 'reviews', label: 'Reviews' },
     { path: 'settings', label: 'Settings' },
   ];
 

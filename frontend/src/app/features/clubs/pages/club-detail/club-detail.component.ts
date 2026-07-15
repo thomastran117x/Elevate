@@ -1,8 +1,9 @@
 import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Store } from '@ngrx/store';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, takeUntil, finalize } from 'rxjs';
 
 import { selectUser } from '../../../../core/stores/user.selectors';
 import { User } from '../../../../core/stores/user.model';
@@ -23,7 +24,7 @@ export type DetailPanel = 'members' | 'events' | 'openEvents' | 'reviews';
 @Component({
   selector: 'app-club-detail',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './club-detail.component.html',
 })
 export class ClubDetailComponent implements OnInit, OnDestroy {
@@ -57,6 +58,18 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
   panelMembers: ClubMember[] = [];
   panelEvents: EventItem[] = [];
   panelReviews: ClubReview[] = [];
+
+  // Review compose/edit state (within the reviews panel)
+  reviewFormOpen = false;
+  reviewEditingId: number | null = null;
+  reviewTitle = '';
+  reviewRating = 0;
+  reviewComment = '';
+  reviewSubmitting = false;
+  reviewError = '';
+  reviewDeletingId: number | null = null;
+  readonly reviewTitleMax = 100;
+  readonly reviewCommentMax = 500;
 
   readonly clubTypeStyles = CLUB_TYPE_STYLES;
   readonly postTypeStyles = POST_TYPE_STYLES;
@@ -245,6 +258,7 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
     this.activePanel = panel;
     this.panelPage = 1;
     this.panelError = '';
+    this.closeReviewForm();
     this.panelMembers = [];
     this.panelEvents = [];
     this.panelReviews = [];
@@ -301,6 +315,108 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
 
   starsFor(rating: number): number[] {
     return [1, 2, 3, 4, 5].map((n) => (n <= Math.round(rating) ? 1 : 0));
+  }
+
+  // ---- Review compose / edit / delete -------------------------------------
+
+  canEditReview(review: ClubReview): boolean {
+    return this.currentUser != null && review.userId === this.currentUser.Id;
+  }
+
+  openReviewForm(existing?: ClubReview): void {
+    this.reviewError = '';
+    if (existing) {
+      this.reviewEditingId = existing.id;
+      this.reviewTitle = existing.title;
+      this.reviewRating = existing.rating;
+      this.reviewComment = existing.comment ?? '';
+    } else {
+      this.reviewEditingId = null;
+      this.reviewTitle = '';
+      this.reviewRating = 0;
+      this.reviewComment = '';
+    }
+    this.reviewFormOpen = true;
+  }
+
+  closeReviewForm(): void {
+    this.reviewFormOpen = false;
+    this.reviewEditingId = null;
+    this.reviewTitle = '';
+    this.reviewRating = 0;
+    this.reviewComment = '';
+    this.reviewError = '';
+  }
+
+  setReviewRating(value: number): void {
+    this.reviewRating = value;
+  }
+
+  submitReview(): void {
+    const title = this.reviewTitle.trim();
+    if (!title) {
+      this.reviewError = 'Add a short title for your review.';
+      return;
+    }
+    if (this.reviewRating < 1 || this.reviewRating > 5) {
+      this.reviewError = 'Choose a star rating.';
+      return;
+    }
+
+    const payload = {
+      title,
+      rating: this.reviewRating,
+      comment: this.reviewComment.trim() || null,
+    };
+
+    this.reviewSubmitting = true;
+    this.reviewError = '';
+
+    const request$ = this.reviewEditingId
+      ? this.reviewsService.updateReview(this.clubId, this.reviewEditingId, payload)
+      : this.reviewsService.createReview(this.clubId, payload);
+
+    request$
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => (this.reviewSubmitting = false)),
+      )
+      .subscribe({
+        next: () => {
+          this.closeReviewForm();
+          this.panelPage = 1;
+          this.loadPanel();
+          // The average rating shown in the hero/stat tile may have shifted.
+          this.fetchClub();
+        },
+        error: (err) => {
+          this.reviewError = getApiClientMessage(err, 'Unable to submit your review.');
+        },
+      });
+  }
+
+  deleteReview(review: ClubReview): void {
+    this.reviewDeletingId = review.id;
+    this.reviewError = '';
+
+    this.reviewsService
+      .deleteReview(this.clubId, review.id)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => (this.reviewDeletingId = null)),
+      )
+      .subscribe({
+        next: () => {
+          if (this.reviewEditingId === review.id) {
+            this.closeReviewForm();
+          }
+          this.loadPanel();
+          this.fetchClub();
+        },
+        error: (err) => {
+          this.reviewError = getApiClientMessage(err, 'Unable to delete this review.');
+        },
+      });
   }
 
   private loadPanel(): void {
