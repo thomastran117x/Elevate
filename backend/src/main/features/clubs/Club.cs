@@ -27,6 +27,8 @@ namespace backend.main.features.clubs
         {
             get; set;
         }
+        /// <summary>Ordered gallery of display photos (max 5). Stored as JSON. Non-versioned.</summary>
+        public List<string> GalleryImages { get; set; } = [];
         public string? Phone
         {
             get; set;

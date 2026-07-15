@@ -12,6 +12,7 @@ export interface ClubMutationPayload {
   clubtype: string;
   clubImageUrl: string;
   bannerImageUrl?: string | null;
+  galleryImageUrls?: string[];
   phone?: string | null;
   email?: string | null;
   websiteUrl?: string | null;

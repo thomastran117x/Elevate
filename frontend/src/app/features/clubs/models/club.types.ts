@@ -31,6 +31,7 @@ export interface Club {
   clubType: ClubType;
   clubImage: string;
   bannerImage: string | null;
+  galleryImages: string[];
   memberCount: number;
   eventCount: number;
   availableEventCount: number;
@@ -69,6 +70,7 @@ type ClubPayload = Partial<Club> & {
   clubtype?: string;
   ClubImage?: string;
   BannerImage?: string | null;
+  GalleryImages?: string[];
   MemberCount?: number;
   EventCount?: number;
   AvaliableEventCount?: number;
@@ -117,6 +119,7 @@ export function normalizeClub(raw: ClubPayload): Club {
     clubType: normalizeClubType(raw.clubType ?? raw.Clubtype ?? raw.clubtype),
     clubImage: raw.clubImage ?? raw.ClubImage ?? '',
     bannerImage: raw.bannerImage ?? raw.BannerImage ?? null,
+    galleryImages: raw.galleryImages ?? raw.GalleryImages ?? [],
     memberCount: raw.memberCount ?? raw.MemberCount ?? 0,
     eventCount: raw.eventCount ?? raw.EventCount ?? 0,
     availableEventCount: raw.availableEventCount ?? raw.AvaliableEventCount ?? 0,

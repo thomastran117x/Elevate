@@ -68,40 +68,30 @@ namespace backend.main.features.clubs
             _timeProvider = timeProvider;
         }
 
-        public async Task<Club> CreateClub(
-            string name,
-            int userId,
-            string description,
-            string clubtype,
-            string clubImageUrl,
-            string? bannerImageUrl = null,
-            string? phone = null,
-            string? email = null,
-            bool isPrivate = false,
-            string? websiteUrl = null,
-            string? location = null,
-            int? maxMemberCount = null)
+        public async Task<Club> CreateClub(int userId, ClubWriteModel model)
         {
             var user = await _userService.GetUserByIdAsync(userId)
                 ?? throw new ResourceNotFoundException("User not found");
 
-            ValidateClubImageUrl(clubImageUrl);
-            ValidateOptionalBannerImageUrl(bannerImageUrl);
+            ValidateClubImageUrl(model.ClubImageUrl);
+            ValidateOptionalBannerImageUrl(model.BannerImageUrl);
+            var gallery = ValidateAndNormalizeGallery(model.GalleryImageUrls);
 
             var now = GetUtcNow();
             var club = new Club
             {
-                Name = name,
-                Description = description,
-                Clubtype = ParseClubType(clubtype),
-                ClubImage = clubImageUrl,
-                BannerImage = NormalizeOptionalUrl(bannerImageUrl),
-                Phone = phone,
-                Email = email,
-                WebsiteUrl = NormalizeOptionalUrl(websiteUrl),
-                Location = NormalizeOptionalUrl(location),
-                MaxMemberCount = maxMemberCount ?? 1000,
-                isPrivate = isPrivate,
+                Name = model.Name,
+                Description = model.Description,
+                Clubtype = ParseClubType(model.Clubtype),
+                ClubImage = model.ClubImageUrl,
+                BannerImage = NormalizeOptionalUrl(model.BannerImageUrl),
+                GalleryImages = gallery,
+                Phone = model.Phone,
+                Email = model.Email,
+                WebsiteUrl = NormalizeOptionalUrl(model.WebsiteUrl),
+                Location = NormalizeOptionalUrl(model.Location),
+                MaxMemberCount = model.MaxMemberCount ?? 1000,
+                isPrivate = model.IsPrivate,
                 UserId = userId,
                 CurrentVersionNumber = 1,
                 CreatedAt = now,
@@ -381,44 +371,33 @@ namespace backend.main.features.clubs
             return results;
         }
 
-        public async Task<Club> UpdateClub(
-            int clubId,
-            int userId,
-            string userRole,
-            string name,
-            string description,
-            string clubtype,
-            string clubImageUrl,
-            string? bannerImageUrl = null,
-            string? phone = null,
-            string? email = null,
-            bool isPrivate = false,
-            string? websiteUrl = null,
-            string? location = null,
-            int? maxMemberCount = null)
+        public async Task<Club> UpdateClub(int clubId, int userId, string userRole, ClubWriteModel model)
         {
             var existing = await GetTrackedClubOrThrowAsync(clubId);
             await EnsureCanManageClubAsync(existing, userId, userRole);
 
             var previousSnapshot = BuildSnapshot(existing);
 
-            ValidateClubImageUrl(clubImageUrl);
-            ValidateOptionalBannerImageUrl(bannerImageUrl);
+            ValidateClubImageUrl(model.ClubImageUrl);
+            ValidateOptionalBannerImageUrl(model.BannerImageUrl);
 
             var previousBanner = existing.BannerImage;
-            var newBanner = NormalizeOptionalUrl(bannerImageUrl);
+            var newBanner = NormalizeOptionalUrl(model.BannerImageUrl);
+            var previousGallery = existing.GalleryImages ?? [];
+            var newGallery = ValidateAndNormalizeGallery(model.GalleryImageUrls);
 
-            existing.Name = name;
-            existing.Description = description;
-            existing.Clubtype = ParseClubType(clubtype);
-            existing.ClubImage = clubImageUrl;
+            existing.Name = model.Name;
+            existing.Description = model.Description;
+            existing.Clubtype = ParseClubType(model.Clubtype);
+            existing.ClubImage = model.ClubImageUrl;
             existing.BannerImage = newBanner;
-            existing.WebsiteUrl = NormalizeOptionalUrl(websiteUrl);
-            existing.Location = NormalizeOptionalUrl(location);
-            existing.MaxMemberCount = maxMemberCount ?? existing.MaxMemberCount;
-            existing.isPrivate = isPrivate;
-            existing.Phone = phone;
-            existing.Email = email;
+            existing.GalleryImages = newGallery;
+            existing.WebsiteUrl = NormalizeOptionalUrl(model.WebsiteUrl);
+            existing.Location = NormalizeOptionalUrl(model.Location);
+            existing.MaxMemberCount = model.MaxMemberCount ?? existing.MaxMemberCount;
+            existing.isPrivate = model.IsPrivate;
+            existing.Phone = model.Phone;
+            existing.Email = model.Email;
             existing.CurrentVersionNumber += 1;
             existing.UpdatedAt = GetUtcNow();
 
@@ -449,6 +428,10 @@ namespace backend.main.features.clubs
             if (!string.IsNullOrWhiteSpace(previousBanner) && previousBanner != newBanner)
                 await _blobService.DeleteBlobAsync(previousBanner);
 
+            // Gallery images are not versioned either — clean up any that were removed.
+            foreach (var removed in previousGallery.Where(url => !newGallery.Contains(url)))
+                await _blobService.DeleteBlobAsync(removed);
+
             return existing;
         }
 
@@ -460,6 +443,8 @@ namespace backend.main.features.clubs
             await _blobService.DeleteBlobAsync(club.ClubImage);
             if (!string.IsNullOrWhiteSpace(club.BannerImage))
                 await _blobService.DeleteBlobAsync(club.BannerImage);
+            foreach (var galleryUrl in club.GalleryImages ?? [])
+                await _blobService.DeleteBlobAsync(galleryUrl);
 
             _outboxWriter.StageDelete(clubId);
             _db.Clubs.Remove(club);
@@ -495,6 +480,27 @@ namespace backend.main.features.clubs
 
         private static string? NormalizeOptionalUrl(string? url) =>
             string.IsNullOrWhiteSpace(url) ? null : url.Trim();
+
+        /// <summary>Trims/dedupes gallery URLs, enforces the 5-image cap, and validates each is an owned blob.</summary>
+        private List<string> ValidateAndNormalizeGallery(List<string>? urls)
+        {
+            if (urls == null || urls.Count == 0)
+                return [];
+
+            var normalized = urls
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Select(url => url.Trim())
+                .Distinct()
+                .ToList();
+
+            if (normalized.Count > 5)
+                throw new BadRequestException("A club can have at most 5 gallery images.");
+
+            foreach (var url in normalized)
+                ValidateClubImageUrl(url);
+
+            return normalized;
+        }
 
         public async Task<IReadOnlyList<ClubStaff>> GetStaffAsync(int clubId, int userId, string userRole, string? search = null)
         {

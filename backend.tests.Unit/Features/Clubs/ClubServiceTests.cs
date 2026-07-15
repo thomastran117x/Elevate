@@ -42,13 +42,16 @@ public class ClubServiceTests
             });
 
         var created = await harness.Service.CreateClub(
-            "Chess Club",
             harness.OwnerUserId,
-            "A focused club for competitive and casual chess players.",
-            " gaming ",
-            "https://cdn.test/clubs/new-club.png",
-            phone: "555-0100",
-            email: "chess@test.local");
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "A focused club for competitive and casual chess players.",
+                Clubtype = " gaming ",
+                ClubImageUrl = "https://cdn.test/clubs/new-club.png",
+                Phone = "555-0100",
+                Email = "chess@test.local"
+            });
 
         created.Id.Should().BeGreaterThan(0);
         created.Name.Should().Be("Chess Club");
@@ -250,12 +253,15 @@ public class ClubServiceTests
             existing.Id,
             harness.OwnerUserId,
             harness.OwnerRole,
-            "Updated Club",
-            "An updated description for the club.",
-            "music",
-            "https://cdn.test/clubs/updated.png",
-            phone: "555-0111",
-            email: "updated@test.local");
+            new ClubWriteModel
+            {
+                Name = "Updated Club",
+                Description = "An updated description for the club.",
+                Clubtype = "music",
+                ClubImageUrl = "https://cdn.test/clubs/updated.png",
+                Phone = "555-0111",
+                Email = "updated@test.local"
+            });
 
         updated.Name.Should().Be("Updated Club");
         updated.Clubtype.Should().Be(ClubType.Cultural);
@@ -327,11 +333,14 @@ public class ClubServiceTests
             });
 
         var act = () => harness.Service.CreateClub(
-            "Chess Club",
             harness.OwnerUserId,
-            "A focused club for competitive and casual chess players.",
-            "gaming",
-            "https://example.com/clubs/chess.png");
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "A focused club for competitive and casual chess players.",
+                Clubtype = "gaming",
+                ClubImageUrl = "https://example.com/clubs/chess.png"
+            });
 
         await act.Should()
             .ThrowAsync<BadRequestException>()
@@ -353,11 +362,14 @@ public class ClubServiceTests
             });
 
         var act = () => harness.Service.CreateClub(
-            "Chess Club",
             harness.OwnerUserId,
-            "A focused club for competitive and casual chess players.",
-            "gaming",
-            "http://cdn.test/clubs/chess.png");
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "A focused club for competitive and casual chess players.",
+                Clubtype = "gaming",
+                ClubImageUrl = "http://cdn.test/clubs/chess.png"
+            });
 
         await act.Should()
             .ThrowAsync<BadRequestException>()

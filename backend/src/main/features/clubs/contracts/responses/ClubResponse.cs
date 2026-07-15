@@ -20,6 +20,7 @@ namespace backend.main.features.clubs.contracts.responses
         {
             get; set;
         }
+        public List<string> GalleryImages { get; set; } = [];
         public int MemberCount { get; set; } = 0;
         public int EventCount { get; set; } = 0;
         public int AvaliableEventCount { get; set; } = 0;

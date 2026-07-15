@@ -238,6 +238,32 @@
             </p>
           </section>
 
+          <!-- Photos -->
+          @if (club.galleryImages.length > 0) {
+            <section class="rounded-3xl border border-line bg-glass p-6 sm:p-7">
+              <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                Photos
+              </div>
+              <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                @for (photo of club.galleryImages; track photo) {
+                  <a
+                    [href]="photo"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="focus-ring block aspect-square overflow-hidden rounded-2xl border border-line"
+                  >
+                    <img
+                      [src]="photo"
+                      [alt]="club.name + ' photo'"
+                      loading="lazy"
+                      class="h-full w-full object-cover transition hover:scale-105"
+                    />
+                  </a>
+                }
+              </div>
+            </section>
+          }
+
           <!-- Upcoming events -->
           <section class="rounded-3xl border border-line bg-glass p-6 sm:p-7">
             <div class="flex items-center justify-between gap-3">

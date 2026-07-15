@@ -38,6 +38,13 @@ namespace backend.main.features.clubs.contracts.requests
             get; set;
         }
 
+        /// <summary>Up to 5 display photos shown in a gallery on the public page.</summary>
+        [MaxLength(5, ErrorMessage = "A club can have at most 5 gallery images.")]
+        public List<string>? GalleryImageUrls
+        {
+            get; set;
+        }
+
         [Phone]
         public string? Phone
         {

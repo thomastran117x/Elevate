@@ -46,7 +46,13 @@ public class ClubControllerTests
     public async Task CreateClub_ShouldReturnCreatedClubResponse()
     {
         var service = new Mock<IClubService>();
-        service.Setup(s => s.CreateClub("Chess Club", 7, "Strategy nights", "social", "https://cdn.test/clubs/chess.png", null, "555-0100", "club@example.com", false, null, null, null))
+        service.Setup(s => s.CreateClub(7, It.Is<ClubWriteModel>(m =>
+                m.Name == "Chess Club" &&
+                m.Description == "Strategy nights" &&
+                m.Clubtype == "social" &&
+                m.ClubImageUrl == "https://cdn.test/clubs/chess.png" &&
+                m.Phone == "555-0100" &&
+                m.Email == "club@example.com")))
             .ReturnsAsync(new Club
             {
                 Id = 4,
@@ -82,7 +88,12 @@ public class ClubControllerTests
     public async Task UpdateClub_ShouldReturnUpdatedClubResponse()
     {
         var service = new Mock<IClubService>();
-        service.Setup(s => s.UpdateClub(4, 7, "Organizer", "Updated Club", "Updated description", "social", "https://cdn.test/clubs/updated.png", null, null, "updated@example.com", false, null, null, null))
+        service.Setup(s => s.UpdateClub(4, 7, "Organizer", It.Is<ClubWriteModel>(m =>
+                m.Name == "Updated Club" &&
+                m.Description == "Updated description" &&
+                m.Clubtype == "social" &&
+                m.ClubImageUrl == "https://cdn.test/clubs/updated.png" &&
+                m.Email == "updated@example.com")))
             .ReturnsAsync(new Club
             {
                 Id = 4,

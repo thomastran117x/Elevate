@@ -92,6 +92,24 @@ namespace backend.main.infrastructure.database.core
                 .Property(c => c.Rating)
                 .HasPrecision(2, 1);
 
+            var clubGalleryComparer = new ValueComparer<List<string>>(
+                (a, b) => (a ?? new List<string>()).SequenceEqual(b ?? new List<string>()),
+                v => v.Aggregate(0, (acc, s) => HashCode.Combine(acc, s.GetHashCode())),
+                v => v.ToList());
+
+            modelBuilder.Entity<Club>()
+                .Property(c => c.GalleryImages)
+                .HasConversion(
+                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                    v => string.IsNullOrEmpty(v)
+                        ? new List<string>()
+                        : JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>())
+                .HasColumnType("json")
+                // Nullable in the DB so the column can be added to a table with existing rows
+                // (MySQL JSON columns can't take a literal default); null reads back as an empty list.
+                .IsRequired(false)
+                .Metadata.SetValueComparer(clubGalleryComparer);
+
             modelBuilder.Entity<Club>()
                 .HasIndex(c => c.UserId);
 

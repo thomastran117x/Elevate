@@ -17,6 +17,7 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const NAME_MAX = 30;
 const DESCRIPTION_MAX = 30;
 const LOCATION_MAX = 100;
+const MAX_GALLERY = 5;
 const MAX_MEMBERS = 100000;
 
 @Component({
@@ -65,6 +66,10 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
   bannerUrl = '';
   bannerUploading = false;
   bannerDragActive = false;
+  galleryUrls: string[] = [];
+  galleryUploading = false;
+  galleryDragActive = false;
+  readonly maxGallery = MAX_GALLERY;
   loading = false;
   saving = false;
   error = '';
@@ -97,7 +102,7 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
     // A successful save marks the form pristine and clears imageDirty, so this
     // correctly allows navigation right after saving and prompts again once the
     // user makes further edits.
-    if (!this.form.dirty && !this.imageDirty && !this.bannerDirty) {
+    if (!this.form.dirty && !this.imageDirty && !this.bannerDirty && !this.galleryDirty) {
       return true;
     }
     return window.confirm('You have unsaved changes. Leave without saving?');
@@ -105,6 +110,12 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
 
   private imageDirty = false;
   private bannerDirty = false;
+  private galleryDirty = false;
+  private galleryPending = 0;
+
+  get canAddGallery(): boolean {
+    return this.galleryUrls.length < MAX_GALLERY;
+  }
 
   private loadClub(): void {
     this.loading = true;
@@ -123,6 +134,7 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
           }
           this.imageUrl = club.clubImage;
           this.bannerUrl = club.bannerImage ?? '';
+          this.galleryUrls = [...(club.galleryImages ?? [])];
           this.form.patchValue({
             name: club.name,
             description: club.description,
@@ -172,6 +184,79 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
   removeBanner(): void {
     this.bannerUrl = '';
     this.bannerDirty = true;
+  }
+
+  onGalleryDragOver(event: DragEvent): void {
+    event.preventDefault();
+    this.galleryDragActive = true;
+  }
+
+  onGalleryDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    this.galleryDragActive = false;
+  }
+
+  onGalleryDrop(event: DragEvent): void {
+    event.preventDefault();
+    this.galleryDragActive = false;
+    if (event.dataTransfer?.files) this.uploadGalleryFiles(event.dataTransfer.files);
+  }
+
+  onGallerySelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const files = input.files;
+    input.value = '';
+    if (files) this.uploadGalleryFiles(files);
+  }
+
+  removeGalleryImage(index: number): void {
+    this.galleryUrls = this.galleryUrls.filter((_, i) => i !== index);
+    this.galleryDirty = true;
+  }
+
+  private uploadGalleryFiles(files: FileList): void {
+    this.error = '';
+    this.success = '';
+
+    const remaining = MAX_GALLERY - this.galleryUrls.length;
+    if (remaining <= 0) {
+      this.error = `You can add up to ${MAX_GALLERY} photos.`;
+      return;
+    }
+
+    for (const file of Array.from(files).slice(0, remaining)) {
+      if (!file.type.startsWith('image/')) {
+        this.error = 'Please choose image files.';
+        continue;
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        this.error = 'Each image must be smaller than 5MB.';
+        continue;
+      }
+
+      this.galleryPending++;
+      this.galleryUploading = true;
+      this.eventsManagement
+        .uploadImage(this.clubId, file)
+        .pipe(
+          takeUntilDestroyed(this.destroyRef),
+          finalize(() => {
+            this.galleryPending--;
+            this.galleryUploading = this.galleryPending > 0;
+          }),
+        )
+        .subscribe({
+          next: (publicUrl) => {
+            if (this.galleryUrls.length < MAX_GALLERY) {
+              this.galleryUrls = [...this.galleryUrls, publicUrl];
+              this.galleryDirty = true;
+            }
+          },
+          error: (err) => {
+            this.error = getApiClientMessage(err, 'The image upload failed.');
+          },
+        });
+    }
   }
 
   private uploadFile(file: File, target: 'icon' | 'banner'): void {
@@ -224,14 +309,24 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
       return;
     }
 
-    const { name, description, clubType, phone, email, location, websiteUrl, maxMemberCount, isPrivate } =
-      this.form.getRawValue();
+    const {
+      name,
+      description,
+      clubType,
+      phone,
+      email,
+      location,
+      websiteUrl,
+      maxMemberCount,
+      isPrivate,
+    } = this.form.getRawValue();
     const payload = {
       name,
       description,
       clubtype: toClubtypeAlias(clubType),
       clubImageUrl: this.imageUrl,
       bannerImageUrl: this.bannerUrl || null,
+      galleryImageUrls: this.galleryUrls,
       phone: phone || undefined,
       email: email || undefined,
       location: location.trim() || null,
@@ -258,6 +353,7 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
           const club = response.data;
           this.imageDirty = false;
           this.bannerDirty = false;
+          this.galleryDirty = false;
           this.form.markAsPristine();
           if (this.isCreate && club) {
             void this.router.navigate(['/clubs', club.id, 'manage']);

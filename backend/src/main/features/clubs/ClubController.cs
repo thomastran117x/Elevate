@@ -75,20 +75,21 @@ namespace backend.main.features.clubs
         {
             var userPayload = User.GetUserPayload();
 
-            Club club = await _clubService.CreateClub(
-                name: request.Name,
-                userId: userPayload.Id,
-                description: request.Description,
-                clubtype: request.Clubtype,
-                clubImageUrl: request.ClubImageUrl,
-                bannerImageUrl: request.BannerImageUrl,
-                phone: request.Phone,
-                email: request.Email,
-                isPrivate: request.IsPrivate,
-                websiteUrl: request.WebsiteUrl,
-                location: request.Location,
-                maxMemberCount: request.MaxMemberCount
-            );
+            Club club = await _clubService.CreateClub(userPayload.Id, new ClubWriteModel
+            {
+                Name = request.Name,
+                Description = request.Description,
+                Clubtype = request.Clubtype,
+                ClubImageUrl = request.ClubImageUrl,
+                BannerImageUrl = request.BannerImageUrl,
+                GalleryImageUrls = request.GalleryImageUrls,
+                Phone = request.Phone,
+                Email = request.Email,
+                WebsiteUrl = request.WebsiteUrl,
+                Location = request.Location,
+                MaxMemberCount = request.MaxMemberCount,
+                IsPrivate = request.IsPrivate
+            });
 
             ClubResponse response = MapToResponse(club, new ClubAccessInfo
             {
@@ -112,22 +113,21 @@ namespace backend.main.features.clubs
         {
             var userPayload = User.GetUserPayload();
 
-            Club club = await _clubService.UpdateClub(
-                clubId: id,
-                userId: userPayload.Id,
-                userRole: userPayload.Role,
-                name: request.Name,
-                description: request.Description,
-                clubtype: request.Clubtype,
-                clubImageUrl: request.ClubImageUrl,
-                bannerImageUrl: request.BannerImageUrl,
-                phone: request.Phone,
-                email: request.Email,
-                isPrivate: request.IsPrivate,
-                websiteUrl: request.WebsiteUrl,
-                location: request.Location,
-                maxMemberCount: request.MaxMemberCount
-            );
+            Club club = await _clubService.UpdateClub(id, userPayload.Id, userPayload.Role, new ClubWriteModel
+            {
+                Name = request.Name,
+                Description = request.Description,
+                Clubtype = request.Clubtype,
+                ClubImageUrl = request.ClubImageUrl,
+                BannerImageUrl = request.BannerImageUrl,
+                GalleryImageUrls = request.GalleryImageUrls,
+                Phone = request.Phone,
+                Email = request.Email,
+                WebsiteUrl = request.WebsiteUrl,
+                Location = request.Location,
+                MaxMemberCount = request.MaxMemberCount,
+                IsPrivate = request.IsPrivate
+            });
 
             var access = await _clubService.GetClubAccessAsync(id, userPayload.Id, userPayload.Role);
             ClubResponse response = MapToResponse(club, access);
@@ -466,6 +466,7 @@ namespace backend.main.features.clubs
             )
             {
                 BannerImage = club.BannerImage,
+                GalleryImages = club.GalleryImages ?? [],
                 Phone = club.Phone,
                 Email = club.Email,
                 Rating = club.Rating,
