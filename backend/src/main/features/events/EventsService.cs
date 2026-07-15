@@ -296,7 +296,8 @@ namespace backend.main.features.events
             int clubId,
             EventStatus? status = null,
             int page = 1,
-            int pageSize = 20)
+            int pageSize = 20,
+            string? search = null)
         {
             try
             {
@@ -304,7 +305,7 @@ namespace backend.main.features.events
 
                 var (events, totalCount) = await _eventsRepository.SearchAsync(new EventSearchCriteria
                 {
-                    Query = null,
+                    Query = string.IsNullOrWhiteSpace(search) ? null : search.Trim(),
                     ClubId = clubId,
                     IsPrivate = false,
                     LifecycleState = EventLifecycleState.Published,
@@ -331,7 +332,8 @@ namespace backend.main.features.events
             string userRole,
             EventLifecycleState? lifecycleState = null,
             int page = 1,
-            int pageSize = 20)
+            int pageSize = 20,
+            string? search = null)
         {
             try
             {
@@ -339,6 +341,7 @@ namespace backend.main.features.events
 
                 var criteria = new EventSearchCriteria
                 {
+                    Query = string.IsNullOrWhiteSpace(search) ? null : search.Trim(),
                     ClubId = clubId,
                     LifecycleState = lifecycleState,
                     Page = NormalizePage(page),
@@ -1181,6 +1184,11 @@ namespace backend.main.features.events
         {
             try
             {
+                // clubId <= 0 (with no eventId) means the club does not exist yet — this is a
+                // club-creation upload, so any authenticated user may request it and the
+                // club-manage check is skipped. The issued URL is still an owned-blob URL.
+                var isNewClubUpload = !eventId.HasValue && clubId <= 0;
+
                 if (eventId.HasValue)
                 {
                     var ev = await GetEvent(eventId.Value);
@@ -1188,14 +1196,16 @@ namespace backend.main.features.events
                     if (ev.ClubId != clubId)
                         throw new ForbiddenException("Not allowed");
                 }
-                else
+                else if (!isNewClubUpload)
                 {
                     await EnsureCanManageClubAsync(clubId, userId, userRole);
                 }
 
                 var scope = eventId.HasValue
                     ? $"events/clubs/{clubId}/events/{eventId.Value}"
-                    : $"events/clubs/{clubId}/pending";
+                    : isNewClubUpload
+                        ? $"clubs/pending/{userId}"
+                        : $"events/clubs/{clubId}/pending";
 
                 var result = await _blobService.GenerateUploadUrlAsync(scope, fileName, contentType);
 

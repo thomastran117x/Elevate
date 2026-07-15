@@ -7,6 +7,8 @@ using backend.main.features.clubs.search;
 using backend.main.features.clubs.staff;
 using backend.main.features.clubs.versions;
 using backend.main.features.clubs.versions.contracts.responses;
+using backend.main.features.profile;
+using backend.main.features.profile.contracts;
 using backend.main.shared.responses;
 
 using FluentAssertions;
@@ -44,7 +46,13 @@ public class ClubControllerTests
     public async Task CreateClub_ShouldReturnCreatedClubResponse()
     {
         var service = new Mock<IClubService>();
-        service.Setup(s => s.CreateClub("Chess Club", 7, "Strategy nights", "social", "https://cdn.test/clubs/chess.png", "555-0100", "club@example.com"))
+        service.Setup(s => s.CreateClub(7, It.Is<ClubWriteModel>(m =>
+                m.Name == "Chess Club" &&
+                m.Description == "Strategy nights" &&
+                m.Clubtype == "social" &&
+                m.ClubImageUrl == "https://cdn.test/clubs/chess.png" &&
+                m.Phone == "555-0100" &&
+                m.Email == "club@example.com")))
             .ReturnsAsync(new Club
             {
                 Id = 4,
@@ -80,7 +88,12 @@ public class ClubControllerTests
     public async Task UpdateClub_ShouldReturnUpdatedClubResponse()
     {
         var service = new Mock<IClubService>();
-        service.Setup(s => s.UpdateClub(4, 7, "Organizer", "Updated Club", "Updated description", "social", "https://cdn.test/clubs/updated.png", null, "updated@example.com"))
+        service.Setup(s => s.UpdateClub(4, 7, "Organizer", It.Is<ClubWriteModel>(m =>
+                m.Name == "Updated Club" &&
+                m.Description == "Updated description" &&
+                m.Clubtype == "social" &&
+                m.ClubImageUrl == "https://cdn.test/clubs/updated.png" &&
+                m.Email == "updated@example.com")))
             .ReturnsAsync(new Club
             {
                 Id = 4,
@@ -367,7 +380,7 @@ public class ClubControllerTests
     public async Task GetClubStaff_ShouldReturnStaffResponses()
     {
         var service = new Mock<IClubService>();
-        service.Setup(s => s.GetStaffAsync(4, 7, "Organizer"))
+        service.Setup(s => s.GetStaffAsync(4, 7, "Organizer", null))
             .ReturnsAsync([
                 new ClubStaff
                 {
@@ -381,13 +394,25 @@ public class ClubControllerTests
                 }
             ]);
 
-        var controller = CreateController(service.Object);
+        var userRepository = new Mock<IUserRepository>();
+        userRepository
+            .Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), It.IsAny<UserReadDetailLevel>()))
+            .ReturnsAsync(new List<UserListRecord>
+            {
+                new() { Id = 55, Username = "staffer55", Name = "Staffer 55", Avatar = "https://cdn.test/u/55.png" }
+            });
+
+        var controller = CreateController(service.Object, userRepository.Object);
 
         var result = await controller.GetClubStaff(4);
 
         var ok = result.Should().BeOfType<OkObjectResult>().Subject;
         var response = ok.Value.Should().BeOfType<ApiResponse<IEnumerable<ClubStaffResponse>>>().Subject;
-        response.Data!.Single().Role.Should().Be("Manager");
+        var member = response.Data!.Single();
+        member.Role.Should().Be("Manager");
+        member.Username.Should().Be("staffer55");
+        member.Name.Should().Be("Staffer 55");
+        member.Avatar.Should().Be("https://cdn.test/u/55.png");
     }
 
     [Fact]
@@ -493,6 +518,38 @@ public class ClubControllerTests
     }
 
     [Fact]
+    public async Task TransferOwnership_ShouldResolveNewOwnerByIdentifier()
+    {
+        var service = new Mock<IClubService>();
+        service.Setup(s => s.TransferOwnershipAsync(4, 88, 7, "Organizer"))
+            .ReturnsAsync(new Club
+            {
+                Id = 4,
+                UserId = 88,
+                Name = "Chess Club",
+                Description = "Strategy nights",
+                Clubtype = ClubType.Social,
+                ClubImage = "https://cdn.test/clubs/chess.png"
+            });
+        service.Setup(s => s.GetClubAccessAsync(4, 7, "Organizer"))
+            .ReturnsAsync(new ClubAccessInfo { IsOwner = false, CanManage = false });
+
+        var userRepository = new Mock<IUserRepository>();
+        userRepository.Setup(r => r.GetProfileByUsernameAsync("jordan"))
+            .ReturnsAsync(new UserProfileRecord { Id = 88, Username = "jordan", Email = "jordan@example.com", Usertype = "Participant" });
+
+        var controller = CreateController(service.Object, userRepository.Object);
+
+        var result = await controller.TransferOwnership(4, new ClubOwnershipTransferRequest
+        {
+            NewOwnerIdentifier = "jordan"
+        });
+
+        result.Should().BeOfType<OkObjectResult>();
+        service.Verify(s => s.TransferOwnershipAsync(4, 88, 7, "Organizer"), Times.Once);
+    }
+
+    [Fact]
     public async Task GetClubVersion_ShouldReturnDetailedVersionPayload()
     {
         var service = new Mock<IClubService>();
@@ -546,9 +603,17 @@ public class ClubControllerTests
         response.Data!.ToString().Should().Contain("8");
     }
 
-    private static ClubController CreateController(IClubService service)
+    private static ClubController CreateController(IClubService service, IUserRepository? userRepository = null)
     {
-        var controller = new ClubController(service);
+        if (userRepository is null)
+        {
+            var repo = new Mock<IUserRepository>();
+            repo.Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), It.IsAny<UserReadDetailLevel>()))
+                .ReturnsAsync(new List<UserListRecord>());
+            userRepository = repo.Object;
+        }
+
+        var controller = new ClubController(service, userRepository);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

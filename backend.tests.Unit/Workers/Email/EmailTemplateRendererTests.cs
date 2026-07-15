@@ -78,6 +78,57 @@ public class EmailTemplateRendererTests
         Assert.Contains("Launch Party", content.Html);
     }
 
+    [Fact]
+    public void Render_ClubStaffInvite_UsesClubNameAndClubInviteLink()
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Token = "club-token",
+            Type = EmailMessageType.ClubStaffInvite,
+            ClubName = "Chess Club",
+            RecipientName = "Jordan"
+        });
+
+        Assert.Equal("You're invited to join Chess Club as staff", content.Subject);
+        Assert.Contains("Hi Jordan,", content.Html);
+        Assert.Contains("View invitation", content.Html);
+        Assert.Contains("/clubs/invite?token=club-token", content.PlainText);
+        Assert.Contains("/clubs/invite?token=club-token", content.Html);
+    }
+
+    [Fact]
+    public void Render_ClubStaffInvite_FallsBackWhenClubNameMissing()
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Token = "club-token",
+            Type = EmailMessageType.ClubStaffInvite
+        });
+
+        Assert.Equal("You're invited to join a club as staff", content.Subject);
+    }
+
+    [Fact]
+    public void Render_ClubMemberInvite_UsesClubNameAndMemberInviteLink()
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Token = "member-token",
+            Type = EmailMessageType.ClubMemberInvite,
+            ClubName = "Chess Club",
+            RecipientName = "Jordan"
+        });
+
+        Assert.Equal("You're invited to join Chess Club", content.Subject);
+        Assert.Contains("Hi Jordan,", content.Html);
+        Assert.Contains("View invitation", content.Html);
+        Assert.Contains("/clubs/member-invite?token=member-token", content.PlainText);
+        Assert.Contains("/clubs/member-invite?token=member-token", content.Html);
+    }
+
     [Theory]
     [InlineData(EmailMessageType.Welcome)]
     [InlineData(EmailMessageType.PasswordChanged)]
@@ -86,6 +137,8 @@ public class EmailTemplateRendererTests
     [InlineData(EmailMessageType.EventReminder)]
     [InlineData(EmailMessageType.AccountConfirmation)]
     [InlineData(EmailMessageType.NewDevice)]
+    [InlineData(EmailMessageType.ClubStaffInvite)]
+    [InlineData(EmailMessageType.ClubMemberInvite)]
     public void Render_AllSupportedTypes_ProduceNonEmptyBrandedOutput(EmailMessageType type)
     {
         var content = CreateRenderer().Render(new EmailMessage

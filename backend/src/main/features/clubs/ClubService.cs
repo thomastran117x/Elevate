@@ -68,52 +68,53 @@ namespace backend.main.features.clubs
             _timeProvider = timeProvider;
         }
 
-        public async Task<Club> CreateClub(
-            string name,
-            int userId,
-            string description,
-            string clubtype,
-            string clubImageUrl,
-            string? phone = null,
-            string? email = null)
+        public async Task<Club> CreateClub(int userId, ClubWriteModel model)
         {
             var user = await _userService.GetUserByIdAsync(userId)
                 ?? throw new ResourceNotFoundException("User not found");
 
-            ValidateClubImageUrl(clubImageUrl);
+            ValidateClubImageUrl(model.ClubImageUrl);
+            ValidateOptionalBannerImageUrl(model.BannerImageUrl);
+            var gallery = ValidateAndNormalizeGallery(model.GalleryImageUrls);
 
             var now = GetUtcNow();
             var club = new Club
             {
-                Name = name,
-                Description = description,
-                Clubtype = ParseClubType(clubtype),
-                ClubImage = clubImageUrl,
-                Phone = phone,
-                Email = email,
+                Name = model.Name,
+                Description = model.Description,
+                Clubtype = ParseClubType(model.Clubtype),
+                ClubImage = model.ClubImageUrl,
+                BannerImage = NormalizeOptionalUrl(model.BannerImageUrl),
+                GalleryImages = gallery,
+                Phone = model.Phone,
+                Email = model.Email,
+                WebsiteUrl = NormalizeOptionalUrl(model.WebsiteUrl),
+                Location = NormalizeOptionalUrl(model.Location),
+                MaxMemberCount = model.MaxMemberCount ?? 1000,
+                isPrivate = model.IsPrivate,
                 UserId = userId,
                 CurrentVersionNumber = 1,
                 CreatedAt = now,
                 UpdatedAt = now
             };
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
+            await ExecuteInTransactionAsync(async () =>
+            {
+                _db.Clubs.Add(club);
+                await _db.SaveChangesAsync();
 
-            _db.Clubs.Add(club);
-            await _db.SaveChangesAsync();
+                AddVersionRecord(
+                    club,
+                    ClubVersionActions.Create,
+                    actorUserId: userId,
+                    actorRole: NormalizeActorRole(user.Usertype),
+                    rollbackSourceVersionNumber: null,
+                    changedFields: BuildChangedFields(null, BuildSnapshot(club)),
+                    createdAt: now);
+                _outboxWriter.StageUpsert(club);
 
-            AddVersionRecord(
-                club,
-                ClubVersionActions.Create,
-                actorUserId: userId,
-                actorRole: NormalizeActorRole(user.Usertype),
-                rollbackSourceVersionNumber: null,
-                changedFields: BuildChangedFields(null, BuildSnapshot(club)),
-                createdAt: now);
-            _outboxWriter.StageUpsert(club);
-
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+                await _db.SaveChangesAsync();
+            });
 
             await CacheClubAsync(club);
             await BumpClubListVersionAsync();
@@ -370,55 +371,66 @@ namespace backend.main.features.clubs
             return results;
         }
 
-        public async Task<Club> UpdateClub(
-            int clubId,
-            int userId,
-            string userRole,
-            string name,
-            string description,
-            string clubtype,
-            string clubImageUrl,
-            string? phone = null,
-            string? email = null)
+        public async Task<Club> UpdateClub(int clubId, int userId, string userRole, ClubWriteModel model)
         {
             var existing = await GetTrackedClubOrThrowAsync(clubId);
             await EnsureCanManageClubAsync(existing, userId, userRole);
 
             var previousSnapshot = BuildSnapshot(existing);
 
-            ValidateClubImageUrl(clubImageUrl);
+            ValidateClubImageUrl(model.ClubImageUrl);
+            ValidateOptionalBannerImageUrl(model.BannerImageUrl);
 
-            existing.Name = name;
-            existing.Description = description;
-            existing.Clubtype = ParseClubType(clubtype);
-            existing.ClubImage = clubImageUrl;
-            existing.Phone = phone;
-            existing.Email = email;
+            var previousBanner = existing.BannerImage;
+            var newBanner = NormalizeOptionalUrl(model.BannerImageUrl);
+            var previousGallery = existing.GalleryImages ?? [];
+            var newGallery = ValidateAndNormalizeGallery(model.GalleryImageUrls);
+
+            existing.Name = model.Name;
+            existing.Description = model.Description;
+            existing.Clubtype = ParseClubType(model.Clubtype);
+            existing.ClubImage = model.ClubImageUrl;
+            existing.BannerImage = newBanner;
+            existing.GalleryImages = newGallery;
+            existing.WebsiteUrl = NormalizeOptionalUrl(model.WebsiteUrl);
+            existing.Location = NormalizeOptionalUrl(model.Location);
+            existing.MaxMemberCount = model.MaxMemberCount ?? existing.MaxMemberCount;
+            existing.isPrivate = model.IsPrivate;
+            existing.Phone = model.Phone;
+            existing.Email = model.Email;
             existing.CurrentVersionNumber += 1;
             existing.UpdatedAt = GetUtcNow();
 
             var newSnapshot = BuildSnapshot(existing);
             var changedFields = BuildChangedFields(previousSnapshot, newSnapshot);
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
+            await ExecuteInTransactionAsync(async () =>
+            {
+                await _db.SaveChangesAsync();
 
-            await _db.SaveChangesAsync();
+                AddVersionRecord(
+                    existing,
+                    ClubVersionActions.Update,
+                    actorUserId: userId,
+                    actorRole: NormalizeActorRole(userRole),
+                    rollbackSourceVersionNumber: null,
+                    changedFields: changedFields,
+                    createdAt: existing.UpdatedAt);
+                _outboxWriter.StageUpsert(existing);
 
-            AddVersionRecord(
-                existing,
-                ClubVersionActions.Update,
-                actorUserId: userId,
-                actorRole: NormalizeActorRole(userRole),
-                rollbackSourceVersionNumber: null,
-                changedFields: changedFields,
-                createdAt: existing.UpdatedAt);
-            _outboxWriter.StageUpsert(existing);
-
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+                await _db.SaveChangesAsync();
+            });
 
             await CacheClubAsync(existing);
             await BumpClubListVersionAsync();
+
+            // The banner is not versioned, so a replaced/cleared banner leaves an orphaned blob.
+            if (!string.IsNullOrWhiteSpace(previousBanner) && previousBanner != newBanner)
+                await _blobService.DeleteBlobAsync(previousBanner);
+
+            // Gallery images are not versioned either — clean up any that were removed.
+            foreach (var removed in previousGallery.Where(url => !newGallery.Contains(url)))
+                await _blobService.DeleteBlobAsync(removed);
 
             return existing;
         }
@@ -429,6 +441,10 @@ namespace backend.main.features.clubs
             EnsureOwner(club, userId);
 
             await _blobService.DeleteBlobAsync(club.ClubImage);
+            if (!string.IsNullOrWhiteSpace(club.BannerImage))
+                await _blobService.DeleteBlobAsync(club.BannerImage);
+            foreach (var galleryUrl in club.GalleryImages ?? [])
+                await _blobService.DeleteBlobAsync(galleryUrl);
 
             _outboxWriter.StageDelete(clubId);
             _db.Clubs.Remove(club);
@@ -453,14 +469,60 @@ namespace backend.main.features.clubs
             }
         }
 
-        public async Task<IReadOnlyList<ClubStaff>> GetStaffAsync(int clubId, int userId, string userRole)
+        /// <summary>Validates the banner URL only when one is supplied; an empty value clears the banner.</summary>
+        private void ValidateOptionalBannerImageUrl(string? bannerImageUrl)
+        {
+            if (string.IsNullOrWhiteSpace(bannerImageUrl))
+                return;
+
+            ValidateClubImageUrl(bannerImageUrl);
+        }
+
+        private static string? NormalizeOptionalUrl(string? url) =>
+            string.IsNullOrWhiteSpace(url) ? null : url.Trim();
+
+        /// <summary>Trims/dedupes gallery URLs, enforces the 5-image cap, and validates each is an owned blob.</summary>
+        private List<string> ValidateAndNormalizeGallery(List<string>? urls)
+        {
+            if (urls == null || urls.Count == 0)
+                return [];
+
+            var normalized = urls
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Select(url => url.Trim())
+                .Distinct()
+                .ToList();
+
+            if (normalized.Count > 5)
+                throw new BadRequestException("A club can have at most 5 gallery images.");
+
+            foreach (var url in normalized)
+                ValidateClubImageUrl(url);
+
+            return normalized;
+        }
+
+        public async Task<IReadOnlyList<ClubStaff>> GetStaffAsync(int clubId, int userId, string userRole, string? search = null)
         {
             var club = await GetClubRecordOrThrowAsync(clubId);
             EnsureOwner(club, userId);
 
-            return await _db.ClubStaff
+            var query = _db.ClubStaff
                 .AsNoTracking()
-                .Where(staff => staff.ClubId == clubId)
+                .Where(staff => staff.ClubId == clubId);
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = $"%{search.Trim()}%";
+                query =
+                    from staff in query
+                    join u in _db.Users.AsNoTracking() on staff.UserId equals u.Id
+                    where (u.Name != null && EF.Functions.Like(u.Name, term)) ||
+                          (u.Username != null && EF.Functions.Like(u.Username, term))
+                    select staff;
+            }
+
+            return await query
                 .OrderBy(staff => staff.CreatedAt)
                 .ToListAsync();
         }
@@ -496,6 +558,45 @@ namespace backend.main.features.clubs
             await _db.SaveChangesAsync();
 
             return staff;
+        }
+
+        public async Task<ClubStaff> GrantStaffFromInvitationAsync(int clubId, int targetUserId, ClubStaffRole role, int grantedByUserId)
+        {
+            var club = await GetTrackedClubOrThrowAsync(clubId);
+
+            if (club.UserId == targetUserId)
+                throw new ConflictException("The club owner already has full access.");
+
+            _ = await _userService.GetUserByIdAsync(targetUserId);
+
+            var existing = await _db.ClubStaff
+                .FirstOrDefaultAsync(staff => staff.ClubId == clubId && staff.UserId == targetUserId);
+
+            if (existing != null)
+                return existing;
+
+            var now = GetUtcNow();
+            var staff = new ClubStaff
+            {
+                ClubId = clubId,
+                UserId = targetUserId,
+                Role = role,
+                GrantedByUserId = grantedByUserId,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            _db.ClubStaff.Add(staff);
+            await _db.SaveChangesAsync();
+
+            return staff;
+        }
+
+        public async Task<bool> IsClubStaffMemberAsync(int clubId, int targetUserId)
+        {
+            return await _db.ClubStaff
+                .AsNoTracking()
+                .AnyAsync(staff => staff.ClubId == clubId && staff.UserId == targetUserId);
         }
 
         public async Task RemoveStaffAsync(int clubId, int targetUserId, int actorUserId, string actorUserRole)
@@ -550,18 +651,39 @@ namespace backend.main.features.clubs
             var club = await _clubRepository.GetByIdAsync(clubId)
                 ?? throw new ResourceNotFoundException("Club not found");
 
+            if (club.isPrivate)
+                throw new ForbiddenException("This club is invite-only. Ask a club organiser for an invitation to join.");
+
             if (await _followService.IsMemberAsync(clubId, userId))
                 throw new ConflictException("Already a member");
 
-            await _followService.AddMembershipAsync(clubId, userId);
+            await GrantMembershipCoreAsync(club, userId);
+        }
+
+        public async Task GrantMembershipFromInvitationAsync(int clubId, int userId)
+        {
+            var club = await _clubRepository.GetByIdAsync(clubId)
+                ?? throw new ResourceNotFoundException("Club not found");
+
+            // Idempotent: accepting an invite or redeeming a link twice is a no-op, and unlike the
+            // public join path this bypasses the isPrivate gate (the invitation is the authorization).
+            if (await _followService.IsMemberAsync(clubId, userId))
+                return;
+
+            await GrantMembershipCoreAsync(club, userId);
+        }
+
+        private async Task GrantMembershipCoreAsync(Club club, int userId)
+        {
+            await _followService.AddMembershipAsync(club.Id, userId);
 
             club.MemberCount++;
-            club = await _clubRepository.UpdateAsync(clubId, club)
+            var updated = await _clubRepository.UpdateAsync(club.Id, club)
                 ?? throw new ResourceNotFoundException("Club not found");
-            _outboxWriter.StageUpsert(club);
+            _outboxWriter.StageUpsert(updated);
             await _db.SaveChangesAsync();
 
-            await CacheClubAsync(club);
+            await CacheClubAsync(updated);
             await BumpClubListVersionAsync();
         }
 
@@ -674,22 +796,22 @@ namespace backend.main.features.clubs
 
             var changedFields = BuildChangedFields(currentSnapshot, BuildSnapshot(club));
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
+            await ExecuteInTransactionAsync(async () =>
+            {
+                await _db.SaveChangesAsync();
 
-            await _db.SaveChangesAsync();
+                AddVersionRecord(
+                    club,
+                    ClubVersionActions.Rollback,
+                    actorUserId: userId,
+                    actorRole: NormalizeActorRole(userRole),
+                    rollbackSourceVersionNumber: targetVersion.VersionNumber,
+                    changedFields: changedFields,
+                    createdAt: club.UpdatedAt);
+                _outboxWriter.StageUpsert(club);
 
-            AddVersionRecord(
-                club,
-                ClubVersionActions.Rollback,
-                actorUserId: userId,
-                actorRole: NormalizeActorRole(userRole),
-                rollbackSourceVersionNumber: targetVersion.VersionNumber,
-                changedFields: changedFields,
-                createdAt: club.UpdatedAt);
-            _outboxWriter.StageUpsert(club);
-
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+                await _db.SaveChangesAsync();
+            });
 
             await CacheClubAsync(club);
             await BumpClubListVersionAsync();
@@ -774,6 +896,25 @@ namespace backend.main.features.clubs
 
                 Console.WriteLine("hot");
             }
+        }
+
+        private async Task ExecuteInTransactionAsync(Func<Task> action)
+        {
+            var strategy = _db.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+                try
+                {
+                    await action();
+                    await transaction.CommitAsync();
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
 
         private async Task<Club> GetTrackedClubOrThrowAsync(int clubId)
@@ -1015,3 +1156,5 @@ namespace backend.main.features.clubs
             string Source);
     }
 }
+
+

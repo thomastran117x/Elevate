@@ -1,0 +1,270 @@
+<div class="flex flex-col gap-6">
+  @if (error) {
+    <div class="rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger">
+      {{ error }}
+    </div>
+  }
+  @if (success) {
+    <div class="rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success">
+      {{ success }}
+    </div>
+  }
+
+  <!-- Invite a specific person -->
+  <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
+    <h2 class="text-xl font-bold">Invite a member</h2>
+    <p class="mt-1 text-sm text-subtle">
+      Invite an existing user by username or email. They'll get an email to accept.
+    </p>
+    <form class="mt-4 flex flex-col gap-3 sm:flex-row" (ngSubmit)="sendInvite()">
+      <input
+        type="text"
+        name="inviteIdentifier"
+        [(ngModel)]="inviteIdentifier"
+        placeholder="username or email"
+        class="flex-1 rounded-2xl border border-line-strong bg-surface px-4 py-2.5 text-sm text-content focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
+      />
+      <button
+        type="submit"
+        [disabled]="inviting"
+        class="rounded-2xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:opacity-60"
+      >
+        {{ inviting ? 'Sending…' : 'Send invite' }}
+      </button>
+    </form>
+
+    @if (!loadingInvitations && invitations.length > 0) {
+      <div class="mt-5">
+        <h3 class="text-sm font-semibold text-muted">Pending invitations</h3>
+        <ul class="mt-2 divide-y divide-line">
+          @for (invitation of invitations; track trackByInvitation($index, invitation)) {
+            <li class="flex items-center justify-between gap-3 py-3">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-semibold text-content">
+                  {{ invitation.recipientEmail }}
+                </p>
+                <p class="text-xs text-faint">
+                  Expires {{ invitation.expiresAtUtc | date: 'mediumDate' }}
+                </p>
+              </div>
+              <button
+                type="button"
+                (click)="revokeInvitation(invitation)"
+                [disabled]="revokingUserId === invitation.recipientUserId"
+                class="rounded-xl border border-line-strong px-3 py-1.5 text-xs font-semibold text-muted transition hover:bg-glass-strong disabled:opacity-40"
+              >
+                {{ revokingUserId === invitation.recipientUserId ? 'Revoking…' : 'Revoke' }}
+              </button>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+  </article>
+
+  <!-- Shareable invite link -->
+  <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
+    <h2 class="text-xl font-bold">Invite link</h2>
+    <p class="mt-1 text-sm text-subtle">
+      Create a shareable link anyone can use to join, until it expires or hits its limit.
+    </p>
+    <form class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" (ngSubmit)="createLink()">
+      <label class="flex flex-1 flex-col gap-1 text-xs font-semibold text-muted">
+        Expires
+        <input
+          type="datetime-local"
+          name="linkExpiresAt"
+          [(ngModel)]="linkExpiresAt"
+          class="rounded-2xl border border-line-strong bg-surface px-4 py-2.5 text-sm font-normal text-content focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
+        />
+      </label>
+      <label class="flex flex-col gap-1 text-xs font-semibold text-muted sm:w-40">
+        Max uses (optional)
+        <input
+          type="number"
+          name="linkMaxRedemptions"
+          [(ngModel)]="linkMaxRedemptions"
+          min="1"
+          placeholder="unlimited"
+          class="rounded-2xl border border-line-strong bg-surface px-4 py-2.5 text-sm font-normal text-content focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
+        />
+      </label>
+      <button
+        type="submit"
+        [disabled]="creatingLink"
+        class="rounded-2xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:opacity-60"
+      >
+        {{ creatingLink ? 'Creating…' : 'Create link' }}
+      </button>
+    </form>
+
+    @if (lastCreatedShareUrl) {
+      <div class="mt-4 rounded-2xl border border-accent/30 bg-accent/5 px-4 py-3">
+        <p class="text-xs font-semibold text-muted">Share this link (shown only once)</p>
+        <div class="mt-2 flex items-center gap-2">
+          <input
+            type="text"
+            readonly
+            [value]="lastCreatedShareUrl"
+            class="flex-1 truncate rounded-xl border border-line-strong bg-surface px-3 py-2 text-xs text-content"
+          />
+          <button
+            type="button"
+            (click)="copyShareUrl()"
+            class="rounded-xl border border-line-strong px-3 py-2 text-xs font-semibold text-muted transition hover:bg-glass-strong"
+          >
+            {{ copied ? 'Copied!' : 'Copy' }}
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (!loadingLinks && links.length > 0) {
+      <div class="mt-5">
+        <h3 class="text-sm font-semibold text-muted">Active links</h3>
+        <ul class="mt-2 divide-y divide-line">
+          @for (link of links; track trackByLink($index, link)) {
+            <li class="flex items-center justify-between gap-3 py-3">
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-content">
+                  {{ linkUsage(link) }}
+                  @if (link.isRevoked) {
+                    <span class="ml-2 text-xs font-normal text-danger">revoked</span>
+                  }
+                </p>
+                <p class="text-xs text-faint">Expires {{ link.expiresAt | date: 'medium' }}</p>
+              </div>
+              @if (!link.isRevoked) {
+                <button
+                  type="button"
+                  (click)="revokeLink(link)"
+                  [disabled]="revokingLinkId === link.id"
+                  class="rounded-xl border border-line-strong px-3 py-1.5 text-xs font-semibold text-muted transition hover:bg-glass-strong disabled:opacity-40"
+                >
+                  {{ revokingLinkId === link.id ? 'Revoking…' : 'Revoke' }}
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      </div>
+    }
+  </article>
+
+  <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
+    <div class="mb-4 flex items-end justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-bold">Members</h2>
+        <p class="text-sm text-subtle">People who have joined this club.</p>
+      </div>
+      <div class="text-right">
+        <p class="text-2xl font-bold">{{ totalCount }}</p>
+        @if (club) {
+          <p class="text-xs text-faint">of {{ club.maxMemberCount }} capacity</p>
+        }
+      </div>
+    </div>
+
+    <!-- Capacity bar -->
+    @if (club && club.maxMemberCount > 0) {
+      <div class="mb-5 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+        <div class="h-full rounded-full bg-accent" [style.width.%]="capacityPercent()"></div>
+      </div>
+    }
+
+    <input
+      type="search"
+      [ngModel]="memberSearch"
+      (ngModelChange)="onMemberSearch($event)"
+      placeholder="Search members by name or username…"
+      aria-label="Search members"
+      class="mb-4 w-full rounded-2xl border border-line-strong bg-surface px-4 py-2.5 text-sm text-content placeholder:text-faint focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
+    />
+
+    @if (loading) {
+      <ul class="divide-y divide-line">
+        @for (s of skeletons; track $index) {
+          <li class="flex items-center gap-3 py-3">
+            <div class="h-10 w-10 flex-shrink-0 animate-pulse rounded-full bg-surface-muted"></div>
+            <div class="flex-1 space-y-2">
+              <div class="h-3.5 w-1/3 animate-pulse rounded bg-surface-muted"></div>
+              <div class="h-3 w-1/2 animate-pulse rounded bg-surface-muted"></div>
+            </div>
+          </li>
+        }
+      </ul>
+    } @else if (members.length === 0) {
+      <div
+        class="rounded-2xl border border-line bg-glass px-5 py-8 text-center text-sm text-subtle"
+      >
+        No members yet. Share your club to grow your community.
+      </div>
+    } @else {
+      <ul class="divide-y divide-line">
+        @for (member of members; track member.id) {
+          <li>
+            <a
+              [routerLink]="member.username ? ['/profile', member.username] : null"
+              class="-mx-2 flex items-center justify-between gap-3 rounded-2xl px-2 py-3 transition"
+              [class.hover:bg-surface-muted]="member.username"
+              [class.cursor-default]="!member.username"
+            >
+              <div class="flex min-w-0 items-center gap-3">
+                <div class="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full bg-accent/10">
+                  @if (member.avatar) {
+                    <img
+                      [src]="member.avatar"
+                      [alt]="displayName(member)"
+                      class="h-full w-full object-cover"
+                    />
+                  } @else {
+                    <span
+                      class="flex h-full w-full items-center justify-center text-xs font-bold text-accent"
+                    >
+                      {{ initials(member) }}
+                    </span>
+                  }
+                </div>
+                <div class="min-w-0">
+                  <p class="truncate font-semibold text-content">{{ displayName(member) }}</p>
+                  <p class="truncate text-xs text-faint">
+                    @if (member.username) {
+                      &#64;{{ member.username }} ·
+                    }
+                    Joined {{ member.createdAt | date: 'mediumDate' }}
+                  </p>
+                </div>
+              </div>
+              @if (member.username) {
+                <span class="shrink-0 text-xs font-semibold text-accent">View &rarr;</span>
+              }
+            </a>
+          </li>
+        }
+      </ul>
+    }
+
+    <!-- Pagination -->
+    @if (!loading && totalPages > 1) {
+      <div class="mt-4 flex items-center justify-center gap-2">
+        <button
+          type="button"
+          (click)="goToPage(page - 1)"
+          [disabled]="page === 1"
+          class="rounded-2xl border border-line-strong px-3 py-2 text-xs font-semibold text-muted transition hover:bg-glass-strong disabled:opacity-40"
+        >
+          Previous
+        </button>
+        <span class="text-xs text-faint">Page {{ page }} of {{ totalPages }}</span>
+        <button
+          type="button"
+          (click)="goToPage(page + 1)"
+          [disabled]="page === totalPages"
+          class="rounded-2xl border border-line-strong px-3 py-2 text-xs font-semibold text-muted transition hover:bg-glass-strong disabled:opacity-40"
+        >
+          Next
+        </button>
+      </div>
+    }
+  </article>
+</div>

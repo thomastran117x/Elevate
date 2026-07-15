@@ -32,6 +32,7 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
             ? "Hi there,"
             : $"Hi {message.RecipientName!.Trim()},";
         var eventName = string.IsNullOrWhiteSpace(message.EventName) ? "a private event" : message.EventName!.Trim();
+        var clubName = string.IsNullOrWhiteSpace(message.ClubName) ? "a club" : message.ClubName!.Trim();
 
         return message.Type switch
         {
@@ -92,6 +93,26 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
                 Greeting: greeting,
                 Intro: [$"You've been invited to {eventName}. View the invitation to see the details and respond."],
                 Cta: new Cta(BuildUrl(baseUrl, "/events/invite", RequireToken(message)), "View invitation"),
+                Code: null,
+                MutedNote: "If you weren't expecting this invitation, you can safely ignore this email."),
+
+            EmailMessageType.ClubStaffInvite => new Content(
+                Subject: $"You're invited to join {clubName} as staff",
+                Preheader: $"You've been invited to help run {clubName} on EventXperience.",
+                Heading: $"You're invited to {clubName}",
+                Greeting: greeting,
+                Intro: [$"You've been invited to join the staff of {clubName}. View the invitation to accept or decline."],
+                Cta: new Cta(BuildUrl(baseUrl, "/clubs/invite", RequireToken(message)), "View invitation"),
+                Code: null,
+                MutedNote: "If you weren't expecting this invitation, you can safely ignore this email."),
+
+            EmailMessageType.ClubMemberInvite => new Content(
+                Subject: $"You're invited to join {clubName}",
+                Preheader: $"You've been invited to become a member of {clubName} on EventXperience.",
+                Heading: $"You're invited to {clubName}",
+                Greeting: greeting,
+                Intro: [$"You've been invited to join {clubName} as a member. View the invitation to accept or decline."],
+                Cta: new Cta(BuildUrl(baseUrl, "/clubs/member-invite", RequireToken(message)), "View invitation"),
                 Code: null,
                 MutedNote: "If you weren't expecting this invitation, you can safely ignore this email."),
 

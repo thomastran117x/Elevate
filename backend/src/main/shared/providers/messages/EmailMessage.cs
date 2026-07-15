@@ -30,6 +30,10 @@ namespace backend.main.shared.providers.messages
         {
             get; init;
         }
+        public string? ClubName
+        {
+            get; init;
+        }
         public string? ActorName
         {
             get; init;

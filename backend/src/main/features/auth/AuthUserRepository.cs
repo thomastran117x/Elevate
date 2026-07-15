@@ -319,6 +319,24 @@ namespace backend.main.features.auth
                 .FirstOrDefaultAsync();
         }
 
+        public async Task<UserProfileRecord?> GetProfileByEmailAsync(string email)
+        {
+            return await _context.Users
+                .AsNoTracking()
+                .Where(u => u.Email == email)
+                .Select(u => new UserProfileRecord
+                {
+                    Id = u.Id,
+                    Email = u.Email,
+                    Username = string.IsNullOrWhiteSpace(u.Username) ? u.Email : u.Username,
+                    Name = u.Name,
+                    Avatar = u.Avatar,
+                    Usertype = AuthRoles.NormalizeStored(u.Usertype),
+                    CreatedAtUtc = u.CreatedAt,
+                })
+                .FirstOrDefaultAsync();
+        }
+
         public async Task<IReadOnlyList<UserListRecord>> GetUsersAsync(
             string? role = null,
             UserReadDetailLevel detail = UserReadDetailLevel.Slim

@@ -1,0 +1,461 @@
+<!-- Create mode renders its own full-page chrome; edit mode is embedded in the manage shell. -->
+@if (isCreate) {
+  <div class="relative min-h-screen overflow-hidden bg-page text-content">
+    <div class="pointer-events-none absolute inset-0">
+      <div
+        class="absolute -left-40 -top-40 h-[520px] w-[520px] animate-pulse rounded-full bg-accent/7 dark:bg-accent/20 blur-3xl"
+      ></div>
+      <div
+        class="absolute -right-40 top-60 h-[420px] w-[420px] animate-pulse rounded-full bg-accent/5 dark:bg-accent/10 blur-3xl"
+      ></div>
+    </div>
+
+    <div class="relative z-10 mx-auto max-w-3xl px-6 py-14">
+      <div class="mb-8 space-y-3">
+        <a
+          routerLink="/clubs/manage"
+          class="text-xs font-semibold text-subtle transition hover:text-content"
+        >
+          &larr; All clubs
+        </a>
+        <p class="text-sm font-semibold uppercase tracking-[0.28em] text-accent">Club management</p>
+        <h1 class="text-4xl font-black tracking-tight">Create a club</h1>
+      </div>
+      <ng-container *ngTemplateOutlet="formCard"></ng-container>
+    </div>
+  </div>
+} @else {
+  <ng-container *ngTemplateOutlet="formCard"></ng-container>
+}
+
+<ng-template #formCard>
+  <div class="flex flex-col gap-6">
+    @if (success) {
+      <div
+        class="rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success"
+      >
+        {{ success }}
+      </div>
+    }
+    @if (error) {
+      <div class="rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger">
+        {{ error }}
+      </div>
+    }
+
+    @if (loading) {
+      <div
+        class="rounded-3xl border border-line bg-glass px-6 py-10 text-center text-sm text-faint"
+      >
+        Loading club details…
+      </div>
+    } @else {
+      <form class="grid gap-6 lg:grid-cols-5" [formGroup]="form" (ngSubmit)="save()">
+        <!-- Left column: image -->
+        <div class="space-y-5 lg:col-span-2">
+          <div class="rounded-3xl border border-line bg-glass px-5 py-5 backdrop-blur-xl">
+            <label class="text-sm font-semibold text-muted">Club image</label>
+            <!-- Drop zone -->
+            <div
+              (dragover)="onDragOver($event)"
+              (dragleave)="onDragLeave($event)"
+              (drop)="onDrop($event)"
+              (click)="imageInput.click()"
+              class="mt-3 cursor-pointer overflow-hidden rounded-2xl border-2 border-dashed transition"
+              [class]="dragActive ? 'border-accent bg-accent/10' : 'border-line bg-surface-muted'"
+            >
+              @if (imageUrl) {
+                <div class="relative">
+                  <img [src]="imageUrl" alt="Club image preview" class="h-44 w-full object-cover" />
+                  <div
+                    class="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition hover:bg-black/40 hover:opacity-100"
+                  >
+                    <span
+                      class="rounded-xl bg-white/90 px-3 py-1.5 text-xs font-semibold text-gray-900"
+                    >
+                      Change image
+                    </span>
+                  </div>
+                </div>
+              } @else {
+                <div class="flex h-44 flex-col items-center justify-center gap-2 px-4 text-center">
+                  <span class="text-2xl">🖼️</span>
+                  <span class="text-sm font-semibold text-content"
+                    >Drop an image or click to browse</span
+                  >
+                  <span class="text-xs text-faint">PNG, JPG, WEBP or GIF · up to 5MB</span>
+                </div>
+              }
+              <!-- Upload progress (indeterminate) -->
+              @if (imageUploading) {
+                <div class="h-1 w-full overflow-hidden bg-accent/20">
+                  <div class="h-full w-1/3 animate-pulse rounded-full bg-accent"></div>
+                </div>
+              }
+            </div>
+            <input
+              #imageInput
+              type="file"
+              accept="image/*"
+              class="hidden"
+              (change)="onImageSelected($event)"
+            />
+            @if (imageUploading) {
+              <p class="mt-2 text-xs text-accent">Uploading…</p>
+            }
+          </div>
+
+          <!-- Hero banner (optional) -->
+          <div class="rounded-3xl border border-line bg-glass px-5 py-5 backdrop-blur-xl">
+            <div class="flex items-center justify-between">
+              <label class="text-sm font-semibold text-muted">
+                Hero banner <span class="font-normal text-faint">(optional)</span>
+              </label>
+              @if (bannerUrl) {
+                <button
+                  type="button"
+                  (click)="removeBanner()"
+                  class="text-xs font-semibold text-danger transition hover:text-danger/80"
+                >
+                  Remove
+                </button>
+              }
+            </div>
+            <!-- Drop zone -->
+            <div
+              (dragover)="onDragOver($event, 'banner')"
+              (dragleave)="onDragLeave($event, 'banner')"
+              (drop)="onDrop($event, 'banner')"
+              (click)="bannerInput.click()"
+              class="mt-3 cursor-pointer overflow-hidden rounded-2xl border-2 border-dashed transition"
+              [class]="
+                bannerDragActive ? 'border-accent bg-accent/10' : 'border-line bg-surface-muted'
+              "
+            >
+              @if (bannerUrl) {
+                <div class="relative">
+                  <img
+                    [src]="bannerUrl"
+                    alt="Club banner preview"
+                    class="h-28 w-full object-cover"
+                  />
+                  <div
+                    class="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition hover:bg-black/40 hover:opacity-100"
+                  >
+                    <span
+                      class="rounded-xl bg-white/90 px-3 py-1.5 text-xs font-semibold text-gray-900"
+                    >
+                      Change banner
+                    </span>
+                  </div>
+                </div>
+              } @else {
+                <div class="flex h-28 flex-col items-center justify-center gap-2 px-4 text-center">
+                  <span class="text-2xl">🎞️</span>
+                  <span class="text-sm font-semibold text-content"
+                    >Drop a wide banner or click to browse</span
+                  >
+                  <span class="text-xs text-faint">Shown across the top of your public page</span>
+                </div>
+              }
+              @if (bannerUploading) {
+                <div class="h-1 w-full overflow-hidden bg-accent/20">
+                  <div class="h-full w-1/3 animate-pulse rounded-full bg-accent"></div>
+                </div>
+              }
+            </div>
+            <input
+              #bannerInput
+              type="file"
+              accept="image/*"
+              class="hidden"
+              (change)="onImageSelected($event, 'banner')"
+            />
+            @if (bannerUploading) {
+              <p class="mt-2 text-xs text-accent">Uploading…</p>
+            }
+          </div>
+
+          <!-- Photo gallery (optional) -->
+          <div class="rounded-3xl border border-line bg-glass px-5 py-5 backdrop-blur-xl">
+            <div class="flex items-center justify-between">
+              <label class="text-sm font-semibold text-muted">
+                Photos <span class="font-normal text-faint">(up to {{ maxGallery }})</span>
+              </label>
+              <span class="text-xs text-faint">{{ galleryUrls.length }}/{{ maxGallery }}</span>
+            </div>
+            <p class="mt-1 text-xs text-faint">A small gallery shown on your public page.</p>
+
+            @if (galleryUrls.length > 0) {
+              <div class="mt-3 grid grid-cols-3 gap-2">
+                @for (url of galleryUrls; track url; let i = $index) {
+                  <div
+                    class="group relative aspect-square overflow-hidden rounded-xl border border-line"
+                  >
+                    <img [src]="url" alt="Club photo" class="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      (click)="removeGalleryImage(i)"
+                      aria-label="Remove photo"
+                      class="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs font-bold text-white opacity-0 transition group-hover:opacity-100"
+                    >
+                      &#10005;
+                    </button>
+                  </div>
+                }
+              </div>
+            }
+
+            @if (canAddGallery) {
+              <div
+                (dragover)="onGalleryDragOver($event)"
+                (dragleave)="onGalleryDragLeave($event)"
+                (drop)="onGalleryDrop($event)"
+                (click)="galleryInput.click()"
+                class="mt-3 cursor-pointer overflow-hidden rounded-2xl border-2 border-dashed transition"
+                [class]="
+                  galleryDragActive ? 'border-accent bg-accent/10' : 'border-line bg-surface-muted'
+                "
+              >
+                <div class="flex h-24 flex-col items-center justify-center gap-1 px-4 text-center">
+                  <span class="text-xl">🖼️</span>
+                  <span class="text-sm font-semibold text-content">Add photos</span>
+                  <span class="text-xs text-faint">Drop images or click to browse</span>
+                </div>
+                @if (galleryUploading) {
+                  <div class="h-1 w-full overflow-hidden bg-accent/20">
+                    <div class="h-full w-1/3 animate-pulse rounded-full bg-accent"></div>
+                  </div>
+                }
+              </div>
+              <input
+                #galleryInput
+                type="file"
+                accept="image/*"
+                multiple
+                class="hidden"
+                (change)="onGallerySelected($event)"
+              />
+            }
+            @if (galleryUploading) {
+              <p class="mt-2 text-xs text-accent">Uploading…</p>
+            }
+          </div>
+        </div>
+
+        <!-- Right column: fields -->
+        <div class="space-y-5 lg:col-span-3">
+          <div class="rounded-3xl border border-line bg-glass px-5 py-5 backdrop-blur-xl">
+            <h3 class="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-subtle">
+              Basics
+            </h3>
+            <!-- Name -->
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <label class="text-sm font-semibold text-muted" for="club-name">Name</label>
+                <span
+                  class="text-xs"
+                  [class]="nameControl.value.length > nameMax ? 'text-danger' : 'text-faint'"
+                >
+                  {{ nameControl.value.length }}/{{ nameMax }}
+                </span>
+              </div>
+              <input
+                id="club-name"
+                type="text"
+                formControlName="name"
+                [maxlength]="nameMax"
+                placeholder="Chess Club"
+                class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+              />
+              @if (nameControl.invalid && nameControl.touched) {
+                <p class="text-sm text-danger">
+                  Name is required and must be {{ nameMax }} characters or fewer.
+                </p>
+              }
+            </div>
+
+            <!-- Description -->
+            <div class="mt-5 space-y-2">
+              <div class="flex items-center justify-between">
+                <label class="text-sm font-semibold text-muted" for="club-description"
+                  >Description</label
+                >
+                <span
+                  class="text-xs"
+                  [class]="
+                    descriptionControl.value.length > descriptionMax ? 'text-danger' : 'text-faint'
+                  "
+                >
+                  {{ descriptionControl.value.length }}/{{ descriptionMax }}
+                </span>
+              </div>
+              <input
+                id="club-description"
+                type="text"
+                formControlName="description"
+                [maxlength]="descriptionMax"
+                placeholder="A short tagline"
+                class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+              />
+              @if (descriptionControl.invalid && descriptionControl.touched) {
+                <p class="text-sm text-danger">
+                  Description is required and must be {{ descriptionMax }} characters or fewer.
+                </p>
+              }
+            </div>
+
+            <!-- Club type -->
+            <div class="mt-5 space-y-2">
+              <label class="text-sm font-semibold text-muted" for="club-type">Type</label>
+              <select
+                id="club-type"
+                formControlName="clubType"
+                class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+              >
+                @for (type of clubTypes; track type) {
+                  <option [value]="type">{{ type }}</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          <!-- Contact & links -->
+          <div class="rounded-3xl border border-line bg-glass px-5 py-5 backdrop-blur-xl">
+            <h3 class="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-subtle">
+              Contact &amp; links
+            </h3>
+
+            <!-- Phone + email -->
+            <div class="grid gap-5 sm:grid-cols-2">
+              <div class="space-y-2">
+                <label class="text-sm font-semibold text-muted" for="club-phone">
+                  Phone <span class="font-normal text-faint">(optional)</span>
+                </label>
+                <input
+                  id="club-phone"
+                  type="tel"
+                  formControlName="phone"
+                  placeholder="+1 416 555 0123"
+                  class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+                />
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-semibold text-muted" for="club-email">
+                  Email <span class="font-normal text-faint">(optional)</span>
+                </label>
+                <input
+                  id="club-email"
+                  type="email"
+                  formControlName="email"
+                  placeholder="club@example.com"
+                  class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+                />
+                @if (emailControl.invalid && emailControl.touched) {
+                  <p class="text-sm text-danger">Enter a valid email address.</p>
+                }
+              </div>
+            </div>
+
+            <!-- Website + location -->
+            <div class="mt-5 grid gap-5 sm:grid-cols-2">
+              <div class="space-y-2">
+                <label class="text-sm font-semibold text-muted" for="club-website">
+                  Website <span class="font-normal text-faint">(optional)</span>
+                </label>
+                <input
+                  id="club-website"
+                  type="url"
+                  formControlName="websiteUrl"
+                  placeholder="https://example.com"
+                  class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+                />
+                @if (websiteControl.invalid && websiteControl.touched) {
+                  <p class="text-sm text-danger">
+                    Enter a full URL (starting with http:// or https://).
+                  </p>
+                }
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-semibold text-muted" for="club-location">
+                  Location <span class="font-normal text-faint">(optional)</span>
+                </label>
+                <input
+                  id="club-location"
+                  type="text"
+                  formControlName="location"
+                  [maxlength]="locationMax"
+                  placeholder="Toronto, ON"
+                  class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Membership -->
+          <div class="rounded-3xl border border-line bg-glass px-5 py-5 backdrop-blur-xl">
+            <h3 class="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-subtle">
+              Membership
+            </h3>
+
+            <!-- Capacity -->
+            <div class="space-y-2">
+              <label class="text-sm font-semibold text-muted" for="club-max-members"
+                >Member capacity</label
+              >
+              <input
+                id="club-max-members"
+                type="number"
+                formControlName="maxMemberCount"
+                min="0"
+                [max]="maxMembers"
+                class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+              />
+              <p class="text-xs text-faint">Maximum number of members. Use 0 for unlimited.</p>
+              @if (maxMemberCountControl.invalid && maxMemberCountControl.touched) {
+                <p class="text-sm text-danger">Enter a number between 0 and {{ maxMembers }}.</p>
+              }
+            </div>
+
+            <!-- Visibility -->
+            <div class="mt-5">
+              <label
+                class="flex cursor-pointer items-start justify-between gap-4 rounded-2xl border border-line bg-glass-strong px-4 py-3"
+              >
+                <div>
+                  <span class="text-sm font-semibold text-muted">Private club</span>
+                  <p class="mt-0.5 text-xs text-faint">
+                    Invite-only — members can't join directly, and the club is hidden from public
+                    search.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  formControlName="isPrivate"
+                  class="mt-1 h-5 w-5 shrink-0 accent-accent"
+                />
+              </label>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="submit"
+              [disabled]="saving || imageUploading || bannerUploading || galleryUploading"
+              class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {{ saving ? 'Saving…' : isCreate ? 'Create club' : 'Save changes' }}
+            </button>
+            <a
+              routerLink="/clubs/manage"
+              class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong"
+            >
+              {{ isCreate ? 'Cancel' : 'Back to clubs' }}
+            </a>
+          </div>
+        </div>
+      </form>
+    }
+  </div>
+</ng-template>

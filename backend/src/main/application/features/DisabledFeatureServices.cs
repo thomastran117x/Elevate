@@ -11,6 +11,7 @@ using backend.main.features.events.registration.contracts.requests;
 using backend.main.features.events.registration.contracts.responses;
 using backend.main.features.events.search;
 using backend.main.features.payment;
+using backend.main.features.profile.contracts;
 using backend.main.infrastructure.elasticsearch;
 using backend.main.shared.exceptions.http;
 
@@ -28,6 +29,7 @@ public sealed class DisabledFollowService : IFollowService
     public Task<IEnumerable<FollowClub>> GetFollowsAsync(int page = 1, int pageSize = 20) => Task.FromException<IEnumerable<FollowClub>>(DisabledFeatureErrors.Create(FeatureFlagKeys.ClubsFollow));
     public Task<IEnumerable<FollowClub>> GetFollowsByUserAsync(int userId, int page = 1, int pageSize = 20) => Task.FromException<IEnumerable<FollowClub>>(DisabledFeatureErrors.Create(FeatureFlagKeys.ClubsFollow));
     public Task<IEnumerable<FollowClub>> GetFollowsByClubAsync(int clubId, int page = 1, int pageSize = 20) => Task.FromException<IEnumerable<FollowClub>>(DisabledFeatureErrors.Create(FeatureFlagKeys.ClubsFollow));
+    public Task<(IReadOnlyList<FollowClub> Members, IReadOnlyDictionary<int, UserListRecord> Users, int TotalCount)> GetClubMembersAsync(int clubId, int page = 1, int pageSize = 20, string? search = null) => Task.FromException<(IReadOnlyList<FollowClub>, IReadOnlyDictionary<int, UserListRecord>, int)>(DisabledFeatureErrors.Create(FeatureFlagKeys.ClubsFollow));
     public Task<bool> IsMemberAsync(int clubId, int userId) => Task.FromResult(false);
     public Task AddMembershipAsync(int clubId, int userId) => Task.FromException(DisabledFeatureErrors.Create(FeatureFlagKeys.ClubsFollow));
     public Task RemoveMembershipAsync(int clubId, int userId) => Task.FromException(DisabledFeatureErrors.Create(FeatureFlagKeys.ClubsFollow));

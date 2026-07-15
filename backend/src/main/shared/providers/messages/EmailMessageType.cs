@@ -12,6 +12,8 @@ namespace backend.main.shared.providers.messages
         PasswordChanged,
         InvitationAccepted,
         InvitationDeclined,
-        EventReminder
+        EventReminder,
+        ClubStaffInvite,
+        ClubMemberInvite
     }
 }

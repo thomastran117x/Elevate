@@ -156,6 +156,7 @@ export interface ManageEventsParams {
   lifecycleState?: EventLifecycleState | null;
   page?: number;
   pageSize?: number;
+  search?: string;
 }
 
 export const ALL_CATEGORIES: EventCategory[] = [

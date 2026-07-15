@@ -1,0 +1,229 @@
+<div class="flex flex-col gap-6">
+  @if (error) {
+    <div class="rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger">
+      {{ error }}
+    </div>
+  }
+
+  @if (loading) {
+    <div class="rounded-3xl border border-line bg-glass px-6 py-10 text-center text-sm text-faint">
+      Loading analytics…
+    </div>
+  } @else if (analytics; as a) {
+    <!-- Toolbar: trend window + export -->
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="inline-flex rounded-2xl border border-line bg-glass-strong p-1 text-xs">
+        @for (w of windows; track w.days) {
+          <button
+            type="button"
+            (click)="setWindow(w.days)"
+            [class]="
+              activeWindow === w.days
+                ? 'rounded-xl bg-accent px-3 py-1.5 font-semibold text-accent-contrast'
+                : 'rounded-xl px-3 py-1.5 text-subtle transition hover:text-content'
+            "
+          >
+            {{ w.label }}
+          </button>
+        }
+      </div>
+      <button
+        type="button"
+        (click)="exportCsv()"
+        class="rounded-2xl border border-line-strong px-4 py-2 text-xs font-semibold text-muted transition hover:bg-glass-strong"
+      >
+        ⭳ Export CSV
+      </button>
+    </div>
+
+    <!-- Headline stats -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="rounded-2xl border border-line bg-glass px-5 py-4">
+        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">Registrations</p>
+        <p class="mt-2 text-2xl font-bold">{{ a.totalRegistrations }}</p>
+      </div>
+      <div class="rounded-2xl border border-line bg-glass px-5 py-4">
+        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">Unique attendees</p>
+        <p class="mt-2 text-2xl font-bold">{{ a.uniqueAttendees }}</p>
+        <p class="mt-1 text-xs text-faint">{{ a.repeatAttendees }} repeat</p>
+      </div>
+      <div class="rounded-2xl border border-line bg-glass px-5 py-4">
+        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">Revenue</p>
+        <p class="mt-2 text-2xl font-bold">{{ toDollars(a.totalRevenue) | currency }}</p>
+        <p class="mt-1 text-xs text-faint">{{ toDollars(a.pendingRevenue) | currency }} pending</p>
+      </div>
+      <div class="rounded-2xl border border-line bg-glass px-5 py-4">
+        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-faint">Avg fill rate</p>
+        <p class="mt-2 text-2xl font-bold">{{ a.avgFillRate | number: '1.0-1' }}%</p>
+      </div>
+    </div>
+
+    <!-- Trend sparklines -->
+    <div class="grid gap-4 lg:grid-cols-2">
+      <!-- Registrations trend -->
+      <article class="rounded-3xl border border-line bg-glass px-5 py-5 backdrop-blur-xl">
+        <div class="flex items-baseline justify-between">
+          <h3 class="font-bold">Registrations over time</h3>
+          <span class="text-sm text-subtle">{{ registrationSpark?.total ?? 0 }} total</span>
+        </div>
+        @if (registrationSpark?.hasData) {
+          <svg
+            [attr.viewBox]="'0 0 ' + sparkW + ' ' + sparkH"
+            class="mt-4 h-16 w-full text-accent"
+            preserveAspectRatio="none"
+            role="img"
+            aria-label="Daily registrations trend"
+          >
+            <path
+              [attr.d]="registrationSpark!.area"
+              fill="currentColor"
+              fill-opacity="0.12"
+              stroke="none"
+            />
+            <path
+              [attr.d]="registrationSpark!.line"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <circle
+              [attr.cx]="registrationSpark!.points[registrationSpark!.points.length - 1].x"
+              [attr.cy]="registrationSpark!.points[registrationSpark!.points.length - 1].y"
+              r="3.5"
+              fill="currentColor"
+              stroke="var(--surface-elevated, #fff)"
+              stroke-width="2"
+            />
+          </svg>
+        } @else {
+          <p class="mt-4 py-6 text-center text-sm text-faint">Not enough data to chart yet.</p>
+        }
+      </article>
+
+      <!-- Revenue trend -->
+      <article class="rounded-3xl border border-line bg-glass px-5 py-5 backdrop-blur-xl">
+        <div class="flex items-baseline justify-between">
+          <h3 class="font-bold">Revenue over time</h3>
+          <span class="text-sm text-subtle">{{ revenueSpark?.total ?? 0 | currency }}</span>
+        </div>
+        @if (revenueSpark?.hasData) {
+          <svg
+            [attr.viewBox]="'0 0 ' + sparkW + ' ' + sparkH"
+            class="mt-4 h-16 w-full text-accent"
+            preserveAspectRatio="none"
+            role="img"
+            aria-label="Daily revenue trend"
+          >
+            <path
+              [attr.d]="revenueSpark!.area"
+              fill="currentColor"
+              fill-opacity="0.12"
+              stroke="none"
+            />
+            <path
+              [attr.d]="revenueSpark!.line"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <circle
+              [attr.cx]="revenueSpark!.points[revenueSpark!.points.length - 1].x"
+              [attr.cy]="revenueSpark!.points[revenueSpark!.points.length - 1].y"
+              r="3.5"
+              fill="currentColor"
+              stroke="var(--surface-elevated, #fff)"
+              stroke-width="2"
+            />
+          </svg>
+        } @else {
+          <p class="mt-4 py-6 text-center text-sm text-faint">Not enough data to chart yet.</p>
+        }
+      </article>
+    </div>
+
+    <!-- Event breakdown -->
+    <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
+      <h2 class="text-lg font-bold">Events</h2>
+      <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div class="rounded-2xl bg-surface-muted px-4 py-3 text-center">
+          <p class="text-xl font-bold">{{ a.totalEvents }}</p>
+          <p class="text-xs text-faint">Total</p>
+        </div>
+        <div class="rounded-2xl bg-surface-muted px-4 py-3 text-center">
+          <p class="text-xl font-bold">{{ a.publishedEvents }}</p>
+          <p class="text-xs text-faint">Published</p>
+        </div>
+        <div class="rounded-2xl bg-surface-muted px-4 py-3 text-center">
+          <p class="text-xl font-bold">{{ a.draftEvents }}</p>
+          <p class="text-xs text-faint">Drafts</p>
+        </div>
+        <div class="rounded-2xl bg-surface-muted px-4 py-3 text-center">
+          <p class="text-xl font-bold">{{ a.upcomingEvents }}</p>
+          <p class="text-xs text-faint">Upcoming</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- Fill-rate bars -->
+    @if (a.topEventsByFillRate.length > 0) {
+      <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
+        <h2 class="text-lg font-bold">Fill rate by event</h2>
+        <ul class="mt-4 space-y-3">
+          @for (event of a.topEventsByFillRate; track event.id) {
+            <li>
+              <div class="mb-1 flex items-center justify-between gap-3 text-sm">
+                <span class="truncate font-medium text-content">{{ event.name }}</span>
+                <span class="shrink-0 text-subtle">{{ event.fillRate | number: '1.0-1' }}%</span>
+              </div>
+              <div class="h-2.5 w-full overflow-hidden rounded-full bg-surface-muted">
+                <div
+                  class="h-full rounded-full bg-accent"
+                  [style.width.%]="event.fillRate > 100 ? 100 : event.fillRate"
+                ></div>
+              </div>
+            </li>
+          }
+        </ul>
+      </article>
+    }
+
+    <!-- Top events by registrations / revenue -->
+    <div class="grid gap-4 lg:grid-cols-2">
+      @if (a.topEventsByRegistrations.length > 0) {
+        <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
+          <h2 class="text-lg font-bold">Top events by registrations</h2>
+          <ul class="mt-4 divide-y divide-line">
+            @for (event of a.topEventsByRegistrations; track event.id) {
+              <li class="flex items-center justify-between gap-3 py-3">
+                <span class="truncate font-semibold text-content">{{ event.name }}</span>
+                <span class="shrink-0 text-sm text-subtle">
+                  {{ event.registrationCount }} reg · {{ event.fillRate | number: '1.0-1' }}% full
+                </span>
+              </li>
+            }
+          </ul>
+        </article>
+      }
+
+      @if (a.topEventsByRevenue.length > 0) {
+        <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
+          <h2 class="text-lg font-bold">Top events by revenue</h2>
+          <ul class="mt-4 divide-y divide-line">
+            @for (event of a.topEventsByRevenue; track event.id) {
+              <li class="flex items-center justify-between gap-3 py-3">
+                <span class="truncate font-semibold text-content">{{ event.name }}</span>
+                <span class="shrink-0 text-sm font-semibold text-content">
+                  {{ toDollars(event.revenue) | currency }}
+                </span>
+              </li>
+            }
+          </ul>
+        </article>
+      }
+    </div>
+  }
+</div>

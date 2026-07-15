@@ -25,21 +25,30 @@ namespace backend.main.features.clubs.follow
         }
 
         [HttpGet("{clubId}/members")]
-        [ProducesResponseType(typeof(ApiResponse<IEnumerable<FollowResponse>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubMemberResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubMembers(
             int clubId,
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 20)
+            [FromQuery] int pageSize = 20,
+            [FromQuery] string? search = null)
         {
-            IEnumerable<FollowClub> follows = await _followService.GetFollowsByClubAsync(clubId, page, pageSize);
+            var (members, users, totalCount) = await _followService.GetClubMembersAsync(clubId, page, pageSize, search);
 
-            IEnumerable<FollowResponse> responses = follows.Select(MapToResponse);
+            var items = members.Select(m =>
+            {
+                var user = users.GetValueOrDefault(m.UserId);
+                return new ClubMemberResponse(
+                    m.Id, m.UserId, m.ClubId, m.CreatedAt,
+                    user?.Name, user?.Username, user?.Avatar);
+            });
+
+            var paged = new PagedResponse<ClubMemberResponse>(items, totalCount, page, pageSize);
 
             return StatusCode(
                 200,
-                new ApiResponse<IEnumerable<FollowResponse>>(
+                new ApiResponse<PagedResponse<ClubMemberResponse>>(
                     $"Members for club with ID {clubId} have been fetched successfully.",
-                    responses
+                    paged
                 )
             );
         }
@@ -63,11 +72,6 @@ namespace backend.main.features.clubs.follow
                     }
                 )
             );
-        }
-
-        private static FollowResponse MapToResponse(FollowClub follow)
-        {
-            return new FollowResponse(follow.Id, follow.UserId, follow.ClubId, follow.CreatedAt);
         }
     }
 

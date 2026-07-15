@@ -19,6 +19,13 @@ export interface ClubPostsSearchParams {
   pageSize?: number;
 }
 
+export interface ClubPostPayload {
+  title: string;
+  content: string;
+  postType: string;
+  isPinned: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ClubPostsService {
   constructor(private http: HttpClient) {}
@@ -58,17 +65,44 @@ export class ClubPostsService {
       .get<ApiEnvelope<unknown>>(`${environment.backendUrl}/clubs/${clubId}/posts/${postId}`, {
         withCredentials: true,
       })
-      .pipe(
-        map((response) => {
-          const raw =
-            (response as ApiEnvelope<unknown> & { Data?: unknown }).data ??
-            (response as { Data?: unknown }).Data ??
-            null;
-          return {
-            ...response,
-            data: raw ? normalizeClubPost(raw as Parameters<typeof normalizeClubPost>[0]) : null,
-          } as ApiEnvelope<ClubPost>;
-        }),
-      );
+      .pipe(map((response) => this.mapPost(response)));
+  }
+
+  createPost(clubId: number, payload: ClubPostPayload): Observable<ApiEnvelope<ClubPost>> {
+    return this.http
+      .post<ApiEnvelope<unknown>>(`${environment.backendUrl}/clubs/${clubId}/posts`, payload, {
+        withCredentials: true,
+      })
+      .pipe(map((response) => this.mapPost(response)));
+  }
+
+  updatePost(
+    clubId: number,
+    postId: number,
+    payload: ClubPostPayload,
+  ): Observable<ApiEnvelope<ClubPost>> {
+    return this.http
+      .put<
+        ApiEnvelope<unknown>
+      >(`${environment.backendUrl}/clubs/${clubId}/posts/${postId}`, payload, { withCredentials: true })
+      .pipe(map((response) => this.mapPost(response)));
+  }
+
+  deletePost(clubId: number, postId: number): Observable<ApiEnvelope<unknown>> {
+    return this.http.delete<ApiEnvelope<unknown>>(
+      `${environment.backendUrl}/clubs/${clubId}/posts/${postId}`,
+      { withCredentials: true },
+    );
+  }
+
+  private mapPost(response: ApiEnvelope<unknown>): ApiEnvelope<ClubPost> {
+    const raw =
+      (response as ApiEnvelope<unknown> & { Data?: unknown }).data ??
+      (response as { Data?: unknown }).Data ??
+      null;
+    return {
+      ...response,
+      data: raw ? normalizeClubPost(raw as Parameters<typeof normalizeClubPost>[0]) : null,
+    } as ApiEnvelope<ClubPost>;
   }
 }
