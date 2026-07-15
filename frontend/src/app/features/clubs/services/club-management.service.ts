@@ -101,9 +101,11 @@ export class ClubManagementService {
       );
   }
 
-  getStaff(clubId: number): Observable<ClubStaffListApiResponse> {
+  getStaff(clubId: number, search?: string): Observable<ClubStaffListApiResponse> {
+    let params = new HttpParams();
+    if (search?.trim()) params = params.set('search', search.trim());
     return this.api
-      .get<ApiEnvelope<unknown>>(`${this.base}/${clubId}/staff`, { withCredentials: true })
+      .get<ApiEnvelope<unknown>>(`${this.base}/${clubId}/staff`, { params, withCredentials: true })
       .pipe(
         map((response) => {
           const raw = this.rawData(response) as unknown[] | null;

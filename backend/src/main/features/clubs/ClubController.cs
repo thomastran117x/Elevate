@@ -83,7 +83,11 @@ namespace backend.main.features.clubs
                 clubImageUrl: request.ClubImageUrl,
                 bannerImageUrl: request.BannerImageUrl,
                 phone: request.Phone,
-                email: request.Email
+                email: request.Email,
+                isPrivate: request.IsPrivate,
+                websiteUrl: request.WebsiteUrl,
+                location: request.Location,
+                maxMemberCount: request.MaxMemberCount
             );
 
             ClubResponse response = MapToResponse(club, new ClubAccessInfo
@@ -118,7 +122,11 @@ namespace backend.main.features.clubs
                 clubImageUrl: request.ClubImageUrl,
                 bannerImageUrl: request.BannerImageUrl,
                 phone: request.Phone,
-                email: request.Email
+                email: request.Email,
+                isPrivate: request.IsPrivate,
+                websiteUrl: request.WebsiteUrl,
+                location: request.Location,
+                maxMemberCount: request.MaxMemberCount
             );
 
             var access = await _clubService.GetClubAccessAsync(id, userPayload.Id, userPayload.Role);
@@ -237,10 +245,10 @@ namespace backend.main.features.clubs
         [Authorize]
         [HttpGet("{id}/staff")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<ClubStaffResponse>>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetClubStaff(int id)
+        public async Task<IActionResult> GetClubStaff(int id, [FromQuery] string? search = null)
         {
             var userPayload = User.GetUserPayload();
-            var staff = await _clubService.GetStaffAsync(id, userPayload.Id, userPayload.Role);
+            var staff = await _clubService.GetStaffAsync(id, userPayload.Id, userPayload.Role, search);
             var users = await LoadUserLookupAsync(staff.Select(member => member.UserId));
 
             return Ok(new ApiResponse<IEnumerable<ClubStaffResponse>>(

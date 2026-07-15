@@ -76,7 +76,11 @@ namespace backend.main.features.clubs
             string clubImageUrl,
             string? bannerImageUrl = null,
             string? phone = null,
-            string? email = null)
+            string? email = null,
+            bool isPrivate = false,
+            string? websiteUrl = null,
+            string? location = null,
+            int? maxMemberCount = null)
         {
             var user = await _userService.GetUserByIdAsync(userId)
                 ?? throw new ResourceNotFoundException("User not found");
@@ -94,6 +98,10 @@ namespace backend.main.features.clubs
                 BannerImage = NormalizeOptionalUrl(bannerImageUrl),
                 Phone = phone,
                 Email = email,
+                WebsiteUrl = NormalizeOptionalUrl(websiteUrl),
+                Location = NormalizeOptionalUrl(location),
+                MaxMemberCount = maxMemberCount ?? 1000,
+                isPrivate = isPrivate,
                 UserId = userId,
                 CurrentVersionNumber = 1,
                 CreatedAt = now,
@@ -383,7 +391,11 @@ namespace backend.main.features.clubs
             string clubImageUrl,
             string? bannerImageUrl = null,
             string? phone = null,
-            string? email = null)
+            string? email = null,
+            bool isPrivate = false,
+            string? websiteUrl = null,
+            string? location = null,
+            int? maxMemberCount = null)
         {
             var existing = await GetTrackedClubOrThrowAsync(clubId);
             await EnsureCanManageClubAsync(existing, userId, userRole);
@@ -401,6 +413,10 @@ namespace backend.main.features.clubs
             existing.Clubtype = ParseClubType(clubtype);
             existing.ClubImage = clubImageUrl;
             existing.BannerImage = newBanner;
+            existing.WebsiteUrl = NormalizeOptionalUrl(websiteUrl);
+            existing.Location = NormalizeOptionalUrl(location);
+            existing.MaxMemberCount = maxMemberCount ?? existing.MaxMemberCount;
+            existing.isPrivate = isPrivate;
             existing.Phone = phone;
             existing.Email = email;
             existing.CurrentVersionNumber += 1;
@@ -480,14 +496,27 @@ namespace backend.main.features.clubs
         private static string? NormalizeOptionalUrl(string? url) =>
             string.IsNullOrWhiteSpace(url) ? null : url.Trim();
 
-        public async Task<IReadOnlyList<ClubStaff>> GetStaffAsync(int clubId, int userId, string userRole)
+        public async Task<IReadOnlyList<ClubStaff>> GetStaffAsync(int clubId, int userId, string userRole, string? search = null)
         {
             var club = await GetClubRecordOrThrowAsync(clubId);
             EnsureOwner(club, userId);
 
-            return await _db.ClubStaff
+            var query = _db.ClubStaff
                 .AsNoTracking()
-                .Where(staff => staff.ClubId == clubId)
+                .Where(staff => staff.ClubId == clubId);
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = $"%{search.Trim()}%";
+                query =
+                    from staff in query
+                    join u in _db.Users.AsNoTracking() on staff.UserId equals u.Id
+                    where (u.Name != null && EF.Functions.Like(u.Name, term)) ||
+                          (u.Username != null && EF.Functions.Like(u.Username, term))
+                    select staff;
+            }
+
+            return await query
                 .OrderBy(staff => staff.CreatedAt)
                 .ToListAsync();
         }

@@ -16,6 +16,8 @@ import { ClubsService } from '../../../services/clubs.service';
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const NAME_MAX = 30;
 const DESCRIPTION_MAX = 30;
+const LOCATION_MAX = 100;
+const MAX_MEMBERS = 100000;
 
 @Component({
   selector: 'app-club-editor',
@@ -30,6 +32,8 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
   readonly clubTypes = ALL_CLUB_TYPES;
   readonly nameMax = NAME_MAX;
   readonly descriptionMax = DESCRIPTION_MAX;
+  readonly locationMax = LOCATION_MAX;
+  readonly maxMembers = MAX_MEMBERS;
 
   readonly form = this.fb.nonNullable.group({
     name: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(NAME_MAX)]),
@@ -40,6 +44,17 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
     clubType: this.fb.nonNullable.control<ClubType>('Social', [Validators.required]),
     phone: this.fb.nonNullable.control('', [Validators.maxLength(30)]),
     email: this.fb.nonNullable.control('', [Validators.email]),
+    location: this.fb.nonNullable.control('', [Validators.maxLength(LOCATION_MAX)]),
+    websiteUrl: this.fb.nonNullable.control('', [
+      Validators.pattern(/^https?:\/\/.+/i),
+      Validators.maxLength(300),
+    ]),
+    maxMemberCount: this.fb.nonNullable.control<number>(1000, [
+      Validators.required,
+      Validators.min(0),
+      Validators.max(MAX_MEMBERS),
+    ]),
+    isPrivate: this.fb.nonNullable.control(false),
   });
 
   isCreate = true;
@@ -114,6 +129,10 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
             clubType: club.clubType,
             phone: club.phone ?? '',
             email: club.email ?? '',
+            location: club.location ?? '',
+            websiteUrl: club.websiteUrl ?? '',
+            maxMemberCount: club.maxMemberCount || 1000,
+            isPrivate: club.isPrivate,
           });
           this.form.markAsPristine();
         },
@@ -205,7 +224,8 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
       return;
     }
 
-    const { name, description, clubType, phone, email } = this.form.getRawValue();
+    const { name, description, clubType, phone, email, location, websiteUrl, maxMemberCount, isPrivate } =
+      this.form.getRawValue();
     const payload = {
       name,
       description,
@@ -214,6 +234,10 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
       bannerImageUrl: this.bannerUrl || null,
       phone: phone || undefined,
       email: email || undefined,
+      location: location.trim() || null,
+      websiteUrl: websiteUrl.trim() || null,
+      maxMemberCount,
+      isPrivate,
     };
 
     this.saving = true;
@@ -255,5 +279,11 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
   }
   get emailControl() {
     return this.form.controls.email;
+  }
+  get websiteControl() {
+    return this.form.controls.websiteUrl;
+  }
+  get maxMemberCountControl() {
+    return this.form.controls.maxMemberCount;
   }
 }

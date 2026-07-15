@@ -22,11 +22,11 @@ namespace backend.main.features.clubs
         Task<bool> CanManageClubPostsAsync(int clubId, int userId, string? userRole = null);
         Task<bool> CanManageEventMediaAsync(int clubId, int userId, string? userRole = null);
         Task<bool> IsClubOwnerAsync(int clubId, int userId, string? userRole = null);
-        Task<Club> CreateClub(string name, int userId, string description, string clubtype, string clubImageUrl, string? bannerImageUrl = null, string? phone = null, string? email = null);
-        Task<Club> UpdateClub(int clubId, int userId, string userRole, string name, string description, string clubtype, string clubImageUrl, string? bannerImageUrl = null, string? phone = null, string? email = null);
+        Task<Club> CreateClub(string name, int userId, string description, string clubtype, string clubImageUrl, string? bannerImageUrl = null, string? phone = null, string? email = null, bool isPrivate = false, string? websiteUrl = null, string? location = null, int? maxMemberCount = null);
+        Task<Club> UpdateClub(int clubId, int userId, string userRole, string name, string description, string clubtype, string clubImageUrl, string? bannerImageUrl = null, string? phone = null, string? email = null, bool isPrivate = false, string? websiteUrl = null, string? location = null, int? maxMemberCount = null);
         Task<List<Club>> GetClubsByIdsAsync(IEnumerable<int> clubIds);
         Task DeleteClub(int clubId, int userId);
-        Task<IReadOnlyList<ClubStaff>> GetStaffAsync(int clubId, int userId, string userRole);
+        Task<IReadOnlyList<ClubStaff>> GetStaffAsync(int clubId, int userId, string userRole, string? search = null);
         Task<ClubStaff> AddStaffAsync(int clubId, int targetUserId, ClubStaffRole role, int actorUserId, string actorUserRole);
         /// <summary>
         /// Grants a staff role as the result of an accepted invitation. Unlike <see cref="AddStaffAsync"/>

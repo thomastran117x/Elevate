@@ -14,6 +14,10 @@ export interface ClubMutationPayload {
   bannerImageUrl?: string | null;
   phone?: string | null;
   email?: string | null;
+  websiteUrl?: string | null;
+  location?: string | null;
+  maxMemberCount?: number | null;
+  isPrivate?: boolean;
 }
 
 export function toClubtypeAlias(type: ClubType): string {

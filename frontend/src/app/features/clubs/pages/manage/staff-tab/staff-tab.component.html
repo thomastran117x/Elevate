@@ -22,9 +22,10 @@
         </p>
       </div>
       <input
-        *ngIf="!loading && staff.length > 0"
+        *ngIf="staff.length > 0 || staffSearch"
         type="search"
-        [(ngModel)]="staffSearch"
+        [ngModel]="staffSearch"
+        (ngModelChange)="onStaffSearch($event)"
         placeholder="Search staff…"
         aria-label="Search staff"
         class="w-full rounded-2xl border border-line-strong bg-surface px-4 py-2.5 text-sm text-content placeholder:text-faint focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15 sm:w-56"
@@ -39,22 +40,22 @@
     </div>
 
     <div
-      *ngIf="!loading && staff.length === 0"
+      *ngIf="!loading && staff.length === 0 && !staffSearch"
       class="rounded-2xl border border-line bg-glass px-5 py-8 text-center text-sm text-subtle"
     >
       No staff yet. Add a manager or volunteer below.
     </div>
 
     <div
-      *ngIf="!loading && staff.length > 0 && filteredStaff.length === 0"
+      *ngIf="!loading && staff.length === 0 && staffSearch"
       class="rounded-2xl border border-line bg-glass px-5 py-8 text-center text-sm text-subtle"
     >
       No staff match “{{ staffSearch }}”.
     </div>
 
-    <ul *ngIf="!loading && filteredStaff.length > 0" class="divide-y divide-line">
+    <ul *ngIf="!loading && staff.length > 0" class="divide-y divide-line">
       <li
-        *ngFor="let member of filteredStaff; trackBy: trackByUserId"
+        *ngFor="let member of staff; trackBy: trackByUserId"
         class="flex items-center justify-between gap-3 py-3"
       >
         <div class="flex min-w-0 items-center gap-3">

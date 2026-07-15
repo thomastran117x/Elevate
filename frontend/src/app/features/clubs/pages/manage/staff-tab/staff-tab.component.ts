@@ -3,6 +3,7 @@ import { Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
+import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
@@ -25,8 +26,9 @@ export class StaffTabComponent implements OnInit {
   error = '';
   success = '';
 
-  // Client-side search (staff is fully loaded)
+  // Server-side search (debounced)
   staffSearch = '';
+  private readonly searchInput$ = new Subject<string>();
 
   // Invite staff form
   addIdentifier = '';
@@ -56,25 +58,22 @@ export class StaffTabComponent implements OnInit {
     }
     this.load();
     this.loadInvitations();
+
+    this.searchInput$
+      .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.load());
   }
 
-  get filteredStaff(): ClubStaff[] {
-    const q = this.staffSearch.trim().toLowerCase();
-    if (!q) return this.staff;
-    return this.staff.filter(
-      (s) =>
-        (s.name?.toLowerCase().includes(q) ?? false) ||
-        (s.username?.toLowerCase().includes(q) ?? false) ||
-        s.role.toLowerCase().includes(q) ||
-        `#${s.userId}`.includes(q),
-    );
+  onStaffSearch(value: string): void {
+    this.staffSearch = value;
+    this.searchInput$.next(value);
   }
 
   private load(): void {
     this.loading = true;
     this.error = '';
     this.management
-      .getStaff(this.clubId)
+      .getStaff(this.clubId, this.staffSearch)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => (this.loading = false)),

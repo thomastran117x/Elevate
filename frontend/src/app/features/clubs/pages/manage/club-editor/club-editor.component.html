@@ -180,6 +180,7 @@
         <!-- Right column: fields -->
         <div class="space-y-5 lg:col-span-3">
           <div class="rounded-3xl border border-line bg-glass px-5 py-5 backdrop-blur-xl">
+            <h3 class="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-subtle">Basics</h3>
             <!-- Name -->
             <div class="space-y-2">
               <div class="flex items-center justify-between">
@@ -249,9 +250,16 @@
                 }
               </select>
             </div>
+          </div>
+
+          <!-- Contact & links -->
+          <div class="rounded-3xl border border-line bg-glass px-5 py-5 backdrop-blur-xl">
+            <h3 class="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-subtle">
+              Contact &amp; links
+            </h3>
 
             <!-- Phone + email -->
-            <div class="mt-5 grid gap-5 sm:grid-cols-2">
+            <div class="grid gap-5 sm:grid-cols-2">
               <div class="space-y-2">
                 <label class="text-sm font-semibold text-muted" for="club-phone">
                   Phone <span class="font-normal text-faint">(optional)</span>
@@ -279,6 +287,86 @@
                   <p class="text-sm text-danger">Enter a valid email address.</p>
                 }
               </div>
+            </div>
+
+            <!-- Website + location -->
+            <div class="mt-5 grid gap-5 sm:grid-cols-2">
+              <div class="space-y-2">
+                <label class="text-sm font-semibold text-muted" for="club-website">
+                  Website <span class="font-normal text-faint">(optional)</span>
+                </label>
+                <input
+                  id="club-website"
+                  type="url"
+                  formControlName="websiteUrl"
+                  placeholder="https://example.com"
+                  class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+                />
+                @if (websiteControl.invalid && websiteControl.touched) {
+                  <p class="text-sm text-danger">
+                    Enter a full URL (starting with http:// or https://).
+                  </p>
+                }
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-semibold text-muted" for="club-location">
+                  Location <span class="font-normal text-faint">(optional)</span>
+                </label>
+                <input
+                  id="club-location"
+                  type="text"
+                  formControlName="location"
+                  [maxlength]="locationMax"
+                  placeholder="Toronto, ON"
+                  class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Membership -->
+          <div class="rounded-3xl border border-line bg-glass px-5 py-5 backdrop-blur-xl">
+            <h3 class="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-subtle">
+              Membership
+            </h3>
+
+            <!-- Capacity -->
+            <div class="space-y-2">
+              <label class="text-sm font-semibold text-muted" for="club-max-members"
+                >Member capacity</label
+              >
+              <input
+                id="club-max-members"
+                type="number"
+                formControlName="maxMemberCount"
+                min="0"
+                [max]="maxMembers"
+                class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+              />
+              <p class="text-xs text-faint">Maximum number of members. Use 0 for unlimited.</p>
+              @if (maxMemberCountControl.invalid && maxMemberCountControl.touched) {
+                <p class="text-sm text-danger">Enter a number between 0 and {{ maxMembers }}.</p>
+              }
+            </div>
+
+            <!-- Visibility -->
+            <div class="mt-5">
+              <label
+                class="flex cursor-pointer items-start justify-between gap-4 rounded-2xl border border-line bg-glass-strong px-4 py-3"
+              >
+                <div>
+                  <span class="text-sm font-semibold text-muted">Private club</span>
+                  <p class="mt-0.5 text-xs text-faint">
+                    Invite-only — members can't join directly, and the club is hidden from public
+                    search.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  formControlName="isPrivate"
+                  class="mt-1 h-5 w-5 shrink-0 accent-accent"
+                />
+              </label>
             </div>
           </div>
 
