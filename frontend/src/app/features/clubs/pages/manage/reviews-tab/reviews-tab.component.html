@@ -22,7 +22,9 @@
         <p class="mt-1 text-2xl font-bold text-content">
           {{ club && club.rating != null ? (club.rating | number: '1.1-1') : '—' }}
         </p>
-        <p class="text-xs text-faint">{{ totalCount | number }} review{{ totalCount === 1 ? '' : 's' }}</p>
+        <p class="text-xs text-faint">
+          {{ totalCount | number }} review{{ totalCount === 1 ? '' : 's' }}
+        </p>
       </div>
     </div>
 
@@ -78,10 +80,7 @@
                   <p class="text-xs text-faint">{{ review.createdAt | date: 'mediumDate' }}</p>
                 </div>
               </div>
-              <span
-                class="shrink-0 text-sm text-warning"
-                aria-label="{{ review.rating }} out of 5"
-              >
+              <span class="shrink-0 text-sm text-warning" aria-label="{{ review.rating }} out of 5">
                 @for (filled of starsFor(review.rating); track $index) {
                   <span [class]="filled ? 'text-warning' : 'text-content/20'">&#9733;</span>
                 }
