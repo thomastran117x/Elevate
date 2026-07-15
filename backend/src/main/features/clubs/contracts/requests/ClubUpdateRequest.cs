@@ -35,8 +35,7 @@ namespace backend.main.features.clubs.contracts.requests
             get; set;
         }
 
-        /// <summary>Up to 5 display photos. Send the full desired list; omitted images are removed.</summary>
-        [MaxLength(5, ErrorMessage = "A club can have at most 5 gallery images.")]
+        /// <summary>Up to 5 display photos (enforced server-side). Send the full desired list; omitted images are removed.</summary>
         public List<string>? GalleryImageUrls
         {
             get; set;
