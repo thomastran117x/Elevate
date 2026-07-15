@@ -11,6 +11,7 @@ export interface ClubMutationPayload {
   // Backend accepts lowercase aliases (sport/academic/social/cultural/gaming/other).
   clubtype: string;
   clubImageUrl: string;
+  bannerImageUrl?: string | null;
   phone?: string | null;
   email?: string | null;
 }

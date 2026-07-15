@@ -38,6 +38,9 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
   joinLeaveLoading = false;
   joinError = '';
 
+  shareCopied = false;
+  private shareResetTimer: ReturnType<typeof setTimeout> | null = null;
+
   recentPosts: ClubPost[] = [];
   postsLoading = false;
 
@@ -103,6 +106,33 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
 
   get isLoggedIn(): boolean {
     return this.currentUser !== null;
+  }
+
+  /** Two-letter fallback badge for the club logo when no image is set. */
+  get clubInitials(): string {
+    const name = this.club?.name?.trim();
+    if (!name) return '?';
+    const words = name.split(/\s+/).filter(Boolean);
+    const letters = words.length > 1 ? words[0][0] + words[1][0] : name.slice(0, 2);
+    return letters.toUpperCase();
+  }
+
+  /** Copies the current club URL to the clipboard, with a transient "Copied" state. */
+  shareClub(): void {
+    if (typeof navigator === 'undefined' || !navigator.clipboard) {
+      return;
+    }
+
+    void navigator.clipboard.writeText(window.location.href).then(() => {
+      this.shareCopied = true;
+      if (this.shareResetTimer) {
+        clearTimeout(this.shareResetTimer);
+      }
+      this.shareResetTimer = setTimeout(() => {
+        this.shareCopied = false;
+        this.shareResetTimer = null;
+      }, 2000);
+    });
   }
 
   /** A public club can be joined directly; a private one is invite-only. */
@@ -190,6 +220,9 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.shareResetTimer) {
+      clearTimeout(this.shareResetTimer);
+    }
     this.destroy$.next();
     this.destroy$.complete();
   }

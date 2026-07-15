@@ -22,6 +22,11 @@ namespace backend.main.features.clubs
         {
             get; set;
         }
+        /// <summary>Optional hero/banner image, separate from the square club icon (<see cref="ClubImage"/>).</summary>
+        public string? BannerImage
+        {
+            get; set;
+        }
         public string? Phone
         {
             get; set;

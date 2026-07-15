@@ -1,70 +1,125 @@
-<div class="app-page">
-  <main class="page-section py-12 sm:py-16">
+<div class="relative min-h-screen overflow-hidden bg-page text-content">
+  <!-- Ambient blobs (matches the club management shell) -->
+  <div class="pointer-events-none absolute inset-0" aria-hidden="true">
+    <div
+      class="absolute -left-40 -top-40 h-[520px] w-[520px] animate-pulse rounded-full bg-accent/7 blur-3xl dark:bg-accent/20"
+    ></div>
+    <div
+      class="absolute -right-40 top-72 h-[420px] w-[420px] animate-pulse rounded-full bg-accent/5 blur-3xl dark:bg-accent/10"
+    ></div>
+  </div>
+
+  <main class="relative z-10 mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
     <button
       (click)="goBack()"
-      class="cta-ghost mb-8 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold"
+      class="mb-8 inline-flex items-center gap-2 text-xs font-semibold text-subtle transition hover:text-content"
     >
-      <span>&larr;</span>
-      Back to clubs
+      <span aria-hidden="true">&larr;</span>
+      All clubs
     </button>
 
     @if (loading) {
-      <div class="surface-panel animate-pulse overflow-hidden rounded-3xl">
-        <div class="h-56 bg-surface-muted"></div>
+      <div class="overflow-hidden rounded-3xl border border-line bg-glass">
+        <div class="h-48 animate-pulse bg-surface-muted sm:h-64"></div>
         <div class="space-y-4 p-8">
-          <div class="h-8 w-1/3 rounded-xl bg-surface-muted"></div>
-          <div class="h-4 w-full rounded bg-surface-muted"></div>
-          <div class="h-4 w-3/4 rounded bg-surface-muted"></div>
+          <div class="h-8 w-1/3 animate-pulse rounded-xl bg-surface-muted"></div>
+          <div class="h-4 w-full animate-pulse rounded bg-surface-muted"></div>
+          <div class="h-4 w-3/4 animate-pulse rounded bg-surface-muted"></div>
         </div>
       </div>
     }
 
     @if (error && !loading) {
-      <div class="rounded-2xl border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger">
+      <div class="rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger">
         {{ error }}
       </div>
     }
 
     @if (club && !loading) {
-      <section class="surface-panel overflow-hidden rounded-3xl">
-        <div class="h-56 bg-surface-muted sm:h-72">
-          @if (club.clubImage) {
+      <!-- Hero -->
+      <section class="overflow-hidden rounded-3xl border border-line bg-glass backdrop-blur-xl">
+        <div class="relative h-48 sm:h-64">
+          @if (club.bannerImage) {
             <div
               class="h-full w-full bg-cover bg-center"
-              [style.background-image]="'url(' + club.clubImage + ')'"
+              role="img"
+              [attr.aria-label]="club.name + ' banner'"
+              [style.background-image]="
+                'linear-gradient(180deg, rgba(15,23,42,0.05), rgba(15,23,42,0.55)), url(' +
+                club.bannerImage +
+                ')'
+              "
             ></div>
           } @else {
             <div
-              class="flex h-full items-center justify-center bg-accent/10 text-base font-semibold uppercase tracking-[0.18em] text-accent"
+              class="flex h-full w-full items-center justify-center bg-gradient-to-br from-accent/15 to-accent/5 text-sm font-semibold uppercase tracking-[0.2em] text-accent"
             >
-              Club profile
+              {{ club.clubType }} club
             </div>
           }
         </div>
 
-        <div class="p-6 sm:p-8">
-          <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <span
-                class="rounded-full border px-3 py-1 text-xs font-semibold"
-                [ngClass]="clubTypeStyles[club.clubType]"
+        <div class="px-6 pb-7 pt-6 sm:px-8 sm:pt-7">
+          <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div class="flex min-w-0 items-start gap-4">
+              <!-- Club logo (sits in the body, below the banner) -->
+              <div
+                class="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-line bg-surface-muted sm:h-20 sm:w-20"
               >
-                {{ club.clubType }}
-              </span>
-              <h1 class="mt-4 text-3xl font-extrabold tracking-tight text-content sm:text-4xl">
+                @if (club.clubImage) {
+                  <img
+                    [src]="club.clubImage"
+                    [alt]="club.name + ' logo'"
+                    class="h-full w-full object-cover"
+                  />
+                } @else {
+                  <span class="text-xl font-black text-accent sm:text-2xl">{{ clubInitials }}</span>
+                }
+              </div>
+
+              <div class="min-w-0">
+                <p class="text-xs font-semibold uppercase tracking-[0.28em] text-accent">Club</p>
+              <h1 class="mt-2 text-3xl font-black tracking-tight text-content sm:text-4xl">
                 {{ club.name }}
               </h1>
-              @if (club.location) {
-                <div class="mt-2 text-sm text-subtle">{{ club.location }}</div>
-              }
+
+              <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-subtle">
+                <span
+                  class="rounded-full border px-3 py-1 text-xs font-semibold"
+                  [ngClass]="clubTypeStyles[club.clubType]"
+                >
+                  {{ club.clubType }}
+                </span>
+                @if (club.location) {
+                  <span class="inline-flex items-center gap-1">
+                    <span aria-hidden="true">&#128205;</span>{{ club.location }}
+                  </span>
+                }
+                <span class="inline-flex items-center gap-1">
+                  @if (club.rating != null) {
+                    <span class="text-warning" aria-hidden="true">&#9733;</span>
+                    <span class="font-semibold text-content">{{ club.rating | number: '1.1-1' }}</span>
+                  } @else {
+                    <span>Not yet rated</span>
+                  }
+                </span>
+                <span>{{ club.memberCount | number }} members</span>
+                <span
+                  class="rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-subtle"
+                >
+                  {{ club.isPrivate ? 'Private' : 'Public' }}
+                </span>
+                </div>
+              </div>
             </div>
 
-            <div class="flex flex-wrap items-center gap-3">
+            <!-- Actions -->
+            <div class="flex flex-wrap gap-3">
               @if (isMember) {
                 <button
                   (click)="leaveClub()"
                   [disabled]="joinLeaveLoading"
-                  class="cta-subtle rounded-xl px-5 py-3 text-sm font-semibold disabled:opacity-60"
+                  class="cta-subtle rounded-xl px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
                 >
                   {{ joinLeaveLoading ? 'Leaving…' : 'Leave club' }}
                 </button>
@@ -72,184 +127,158 @@
                 <button
                   (click)="joinClub()"
                   [disabled]="joinLeaveLoading"
-                  class="cta-solid rounded-xl px-5 py-3 text-sm font-semibold disabled:opacity-60"
+                  class="cta-solid rounded-xl px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
                 >
                   {{ joinLeaveLoading ? 'Joining…' : 'Join club' }}
                 </button>
               } @else if (!club.canManage) {
                 <span
-                  class="rounded-xl border border-line-strong px-5 py-3 text-sm font-semibold text-subtle"
+                  class="inline-flex items-center rounded-xl border border-line-strong px-5 py-2.5 text-sm font-semibold text-subtle"
                 >
                   Private · invite only
                 </span>
               }
+              <button
+                (click)="viewPosts()"
+                class="cta-subtle rounded-xl px-5 py-2.5 text-sm font-semibold"
+              >
+                View posts
+              </button>
+              <button
+                (click)="shareClub()"
+                class="cta-subtle rounded-xl px-5 py-2.5 text-sm font-semibold"
+                [attr.aria-label]="'Copy link to ' + club.name"
+              >
+                {{ shareCopied ? 'Copied!' : 'Share' }}
+              </button>
               @if (club.canManage) {
                 <button
                   (click)="manageClub()"
-                  class="cta-subtle rounded-xl px-5 py-3 text-sm font-semibold"
+                  class="cta-solid rounded-xl px-5 py-2.5 text-sm font-semibold"
                 >
                   Manage
                 </button>
               }
-              <button
-                (click)="viewPosts()"
-                class="cta-solid rounded-xl px-5 py-3 text-sm font-semibold"
-              >
-                View posts
-              </button>
             </div>
           </div>
 
           @if (joinError) {
             <div
-              class="mt-4 rounded-2xl border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger"
+              class="mt-4 rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
             >
               {{ joinError }}
             </div>
           }
+        </div>
+      </section>
 
-          <div class="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <button
-              type="button"
-              (click)="openPanel('members')"
-              class="surface-muted rounded-2xl p-4 text-center transition hover:border-line-strong hover:-translate-y-0.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
-            >
-              <div class="text-2xl font-bold text-content">{{ club.memberCount | number }}</div>
-              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
-                Members
-              </div>
-            </button>
-            <button
-              type="button"
-              (click)="openPanel('events')"
-              class="surface-muted rounded-2xl p-4 text-center transition hover:border-line-strong hover:-translate-y-0.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
-            >
-              <div class="text-2xl font-bold text-content">{{ club.eventCount | number }}</div>
-              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
-                Events
-              </div>
-            </button>
-            <button
-              type="button"
-              (click)="openPanel('openEvents')"
-              class="surface-muted rounded-2xl p-4 text-center transition hover:border-line-strong hover:-translate-y-0.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
-            >
-              <div class="text-2xl font-bold text-content">
-                {{ club.availableEventCount | number }}
-              </div>
-              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
-                Open events
-              </div>
-            </button>
-            <button
-              type="button"
-              (click)="openPanel('reviews')"
-              class="surface-muted rounded-2xl p-4 text-center transition hover:border-line-strong hover:-translate-y-0.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-accent/15"
-            >
-              @if (club.rating != null) {
-                <div class="text-2xl font-bold text-content">
-                  {{ club.rating | number: '1.1-1' }}
-                </div>
-              } @else {
-                <div class="text-2xl font-bold text-content/30">-</div>
-              }
-              <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
-                Reviews
-              </div>
-            </button>
+      <!-- Stat tiles -->
+      <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <button
+          type="button"
+          (click)="openPanel('members')"
+          aria-label="View members"
+          class="focus-ring rounded-2xl border border-line bg-glass p-4 text-center transition hover:-translate-y-0.5 hover:border-line-strong"
+        >
+          <div class="text-2xl font-bold text-content">{{ club.memberCount | number }}</div>
+          <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+            Members
           </div>
-
-          @if (club.maxMemberCount > 0) {
-            <div class="mt-6">
-              <div
-                class="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em] text-subtle"
-              >
-                <span>Member capacity</span>
-                <span>{{ club.memberCount | number }} / {{ club.maxMemberCount | number }}</span>
-              </div>
-              <div class="h-2 w-full overflow-hidden rounded-full bg-surface-muted">
-                <div
-                  class="h-full rounded-full bg-accent"
-                  [style.width.%]="memberCapacityPercent()"
-                ></div>
-              </div>
-            </div>
+        </button>
+        <button
+          type="button"
+          (click)="openPanel('events')"
+          aria-label="View all events"
+          class="focus-ring rounded-2xl border border-line bg-glass p-4 text-center transition hover:-translate-y-0.5 hover:border-line-strong"
+        >
+          <div class="text-2xl font-bold text-content">{{ club.eventCount | number }}</div>
+          <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+            Events
+          </div>
+        </button>
+        <button
+          type="button"
+          (click)="openPanel('openEvents')"
+          aria-label="View open events"
+          class="focus-ring rounded-2xl border border-line bg-glass p-4 text-center transition hover:-translate-y-0.5 hover:border-line-strong"
+        >
+          <div class="text-2xl font-bold text-content">{{ club.availableEventCount | number }}</div>
+          <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+            Open events
+          </div>
+        </button>
+        <button
+          type="button"
+          (click)="openPanel('reviews')"
+          aria-label="View reviews"
+          class="focus-ring rounded-2xl border border-line bg-glass p-4 text-center transition hover:-translate-y-0.5 hover:border-line-strong"
+        >
+          @if (club.rating != null) {
+            <div class="text-2xl font-bold text-content">{{ club.rating | number: '1.1-1' }}</div>
+          } @else {
+            <div class="text-2xl font-bold text-content/30">–</div>
           }
+          <div class="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+            Reviews
+          </div>
+        </button>
+      </div>
 
-          <div class="mt-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <div>
-              <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">About</div>
-              <p class="mt-3 whitespace-pre-wrap text-sm leading-7 text-muted">
-                {{ club.description || 'No description provided.' }}
-              </p>
+      <!-- Body: main content + sticky sidebar -->
+      <div class="mt-6 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+        <!-- Main column -->
+        <div class="space-y-6">
+          <!-- About -->
+          <section class="rounded-3xl border border-line bg-glass p-6 sm:p-7">
+            <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">About</div>
+            <p class="mt-3 whitespace-pre-wrap text-sm leading-7 text-muted">
+              {{ club.description || 'No description provided.' }}
+            </p>
+          </section>
+
+          <!-- Upcoming events -->
+          <section class="rounded-3xl border border-line bg-glass p-6 sm:p-7">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                  Upcoming events
+                </div>
+                <h2 class="mt-1 text-xl font-semibold text-content">What this club is hosting</h2>
+              </div>
+              @if (club.eventCount > 0) {
+                <button
+                  (click)="openPanel('events')"
+                  class="shrink-0 text-sm font-semibold text-accent transition hover:text-content"
+                >
+                  View all
+                </button>
+              }
             </div>
 
-            @if (club.email || club.phone || club.websiteUrl) {
-              <div class="surface-muted rounded-2xl p-5">
-                <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
-                  Contact
+            @if (eventsLoading) {
+              @for (item of [1, 2, 3]; track item) {
+                <div class="mt-4 animate-pulse rounded-2xl border border-line bg-surface-muted p-4">
+                  <div class="h-3 w-1/4 rounded bg-surface-muted"></div>
+                  <div class="mt-3 h-4 w-3/4 rounded bg-surface-muted"></div>
+                  <div class="mt-3 h-3 w-1/2 rounded bg-surface-muted"></div>
                 </div>
-                <div class="mt-4 flex flex-col gap-3 text-sm text-muted">
-                  @if (club.email) {
-                    <a
-                      [href]="'mailto:' + club.email"
-                      class="transition hover:text-content"
-                      (click)="$event.stopPropagation()"
-                    >
-                      {{ club.email }}
-                    </a>
-                  }
-                  @if (club.phone) {
-                    <span>{{ club.phone }}</span>
-                  }
-                  @if (club.websiteUrl) {
-                    <a
-                      [href]="club.websiteUrl"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="transition hover:text-content"
-                      (click)="$event.stopPropagation()"
-                    >
-                      {{ club.websiteUrl }}
-                    </a>
-                  }
-                </div>
-              </div>
+              }
             }
-          </div>
 
-          <div class="mt-8 grid gap-6 lg:grid-cols-2">
-            <section>
-              <div class="flex items-center justify-between">
-                <div>
-                  <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
-                    Upcoming events
-                  </div>
-                  <h2 class="mt-2 text-xl font-semibold text-content">What this club is hosting</h2>
-                </div>
-              </div>
+            @if (!eventsLoading && upcomingEvents.length === 0) {
+              <p class="mt-4 text-sm text-subtle">No upcoming events.</p>
+            }
 
-              @if (eventsLoading) {
-                @for (item of [1, 2, 3]; track item) {
-                  <div class="surface-card mt-4 animate-pulse rounded-2xl p-4">
-                    <div class="h-3 w-1/4 rounded bg-surface-muted"></div>
-                    <div class="mt-3 h-4 w-3/4 rounded bg-surface-muted"></div>
-                    <div class="mt-3 h-3 w-1/2 rounded bg-surface-muted"></div>
-                  </div>
-                }
-              }
-
-              @if (!eventsLoading && upcomingEvents.length === 0) {
-                <p class="mt-4 text-sm text-subtle">No upcoming events.</p>
-              }
-
-              @if (!eventsLoading && upcomingEvents.length > 0) {
+            @if (!eventsLoading && upcomingEvents.length > 0) {
+              <div class="mt-4 space-y-3">
                 @for (event of upcomingEvents; track event.id) {
                   <article
-                    class="surface-card mt-4 cursor-pointer rounded-2xl p-4 transition hover:border-line-strong hover:bg-surface-muted"
+                    class="focus-ring cursor-pointer rounded-2xl border border-line bg-surface p-4 transition hover:-translate-y-0.5 hover:border-line-strong"
                     (click)="navigateToEvent(event)"
                     (keyup.enter)="navigateToEvent(event)"
                     tabindex="0"
+                    role="link"
+                    [attr.aria-label]="'View event ' + event.name"
                   >
                     <div class="flex items-center gap-2">
                       <span
@@ -286,46 +315,51 @@
                     </div>
                   </article>
                 }
-              }
-            </section>
-
-            <section>
-              <div class="flex items-center justify-between">
-                <div>
-                  <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
-                    Recent posts
-                  </div>
-                  <h2 class="mt-2 text-xl font-semibold text-content">Latest community updates</h2>
-                </div>
-                <button
-                  (click)="viewPosts()"
-                  class="text-sm font-semibold text-accent transition hover:text-content"
-                >
-                  View all
-                </button>
               </div>
+            }
+          </section>
 
-              @if (postsLoading) {
-                @for (item of [1, 2, 3]; track item) {
-                  <div class="surface-card mt-4 animate-pulse rounded-2xl p-4">
-                    <div class="h-3 w-1/4 rounded bg-surface-muted"></div>
-                    <div class="mt-3 h-4 w-3/4 rounded bg-surface-muted"></div>
-                    <div class="mt-3 h-3 w-full rounded bg-surface-muted"></div>
-                  </div>
-                }
+          <!-- Recent posts -->
+          <section class="rounded-3xl border border-line bg-glass p-6 sm:p-7">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                  Recent posts
+                </div>
+                <h2 class="mt-1 text-xl font-semibold text-content">Latest community updates</h2>
+              </div>
+              <button
+                (click)="viewPosts()"
+                class="shrink-0 text-sm font-semibold text-accent transition hover:text-content"
+              >
+                View all
+              </button>
+            </div>
+
+            @if (postsLoading) {
+              @for (item of [1, 2, 3]; track item) {
+                <div class="mt-4 animate-pulse rounded-2xl border border-line bg-surface-muted p-4">
+                  <div class="h-3 w-1/4 rounded bg-surface-muted"></div>
+                  <div class="mt-3 h-4 w-3/4 rounded bg-surface-muted"></div>
+                  <div class="mt-3 h-3 w-full rounded bg-surface-muted"></div>
+                </div>
               }
+            }
 
-              @if (!postsLoading && recentPosts.length === 0) {
-                <p class="mt-4 text-sm text-subtle">No posts yet.</p>
-              }
+            @if (!postsLoading && recentPosts.length === 0) {
+              <p class="mt-4 text-sm text-subtle">No posts yet.</p>
+            }
 
-              @if (!postsLoading && recentPosts.length > 0) {
+            @if (!postsLoading && recentPosts.length > 0) {
+              <div class="mt-4 space-y-3">
                 @for (post of recentPosts; track post.id) {
                   <article
-                    class="surface-card mt-4 cursor-pointer rounded-2xl p-4 transition hover:border-line-strong hover:bg-surface-muted"
+                    class="focus-ring cursor-pointer rounded-2xl border border-line bg-surface p-4 transition hover:-translate-y-0.5 hover:border-line-strong"
                     (click)="navigateToPost(post)"
                     (keyup.enter)="navigateToPost(post)"
                     tabindex="0"
+                    role="link"
+                    [attr.aria-label]="'View post ' + post.title"
                   >
                     <div class="flex items-center gap-2">
                       @if (post.isPinned) {
@@ -350,11 +384,96 @@
                     </div>
                   </article>
                 }
-              }
-            </section>
-          </div>
+              </div>
+            }
+          </section>
         </div>
-      </section>
+
+        <!-- Sticky sidebar -->
+        <aside class="space-y-6 lg:sticky lg:top-6 lg:self-start">
+          <!-- Member capacity -->
+          @if (club.maxMemberCount > 0) {
+            <section class="rounded-3xl border border-line bg-glass p-6">
+              <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                Member capacity
+              </div>
+              <div class="mt-3 flex items-baseline justify-between">
+                <span class="text-2xl font-bold text-content">{{ club.memberCount | number }}</span>
+                <span class="text-sm text-subtle">of {{ club.maxMemberCount | number }}</span>
+              </div>
+              <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-surface-muted">
+                <div
+                  class="h-full rounded-full bg-accent"
+                  [style.width.%]="memberCapacityPercent()"
+                ></div>
+              </div>
+            </section>
+          }
+
+          <!-- Quick facts -->
+          <section class="rounded-3xl border border-line bg-glass p-6">
+            <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Details</div>
+            <dl class="mt-4 space-y-3 text-sm">
+              <div class="flex items-center justify-between gap-3">
+                <dt class="text-subtle">Type</dt>
+                <dd class="font-semibold text-content">{{ club.clubType }}</dd>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <dt class="text-subtle">Access</dt>
+                <dd class="font-semibold text-content">
+                  {{ club.isPrivate ? 'Private' : 'Public' }}
+                </dd>
+              </div>
+              @if (club.location) {
+                <div class="flex items-center justify-between gap-3">
+                  <dt class="text-subtle">Location</dt>
+                  <dd class="truncate text-right font-semibold text-content">{{ club.location }}</dd>
+                </div>
+              }
+              <div class="flex items-center justify-between gap-3">
+                <dt class="text-subtle">Rating</dt>
+                <dd class="font-semibold text-content">
+                  {{ club.rating != null ? (club.rating | number: '1.1-1') : '—' }}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <!-- Contact -->
+          @if (club.email || club.phone || club.websiteUrl) {
+            <section class="rounded-3xl border border-line bg-glass p-6">
+              <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                Contact
+              </div>
+              <div class="mt-4 flex flex-col gap-3 text-sm text-muted">
+                @if (club.email) {
+                  <a
+                    [href]="'mailto:' + club.email"
+                    class="inline-flex items-center gap-2 break-all transition hover:text-content"
+                  >
+                    <span aria-hidden="true">&#9993;</span>{{ club.email }}
+                  </a>
+                }
+                @if (club.phone) {
+                  <span class="inline-flex items-center gap-2">
+                    <span aria-hidden="true">&#128222;</span>{{ club.phone }}
+                  </span>
+                }
+                @if (club.websiteUrl) {
+                  <a
+                    [href]="club.websiteUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-2 break-all transition hover:text-content"
+                  >
+                    <span aria-hidden="true">&#128279;</span>{{ club.websiteUrl }}
+                  </a>
+                }
+              </div>
+            </section>
+          }
+        </aside>
+      </div>
     }
   </main>
 
@@ -365,15 +484,16 @@
       (click)="closePanel()"
     >
       <div
-        class="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-line bg-page shadow-2xl sm:rounded-3xl"
+        class="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-line bg-surface shadow-2xl sm:rounded-3xl"
         role="dialog"
         aria-modal="true"
+        aria-labelledby="club-panel-title"
         (click)="$event.stopPropagation()"
       >
         <!-- Header -->
         <div class="flex items-center justify-between gap-3 border-b border-line px-6 py-4">
           <div>
-            <h2 class="text-lg font-bold text-content">{{ panelTitle }}</h2>
+            <h2 id="club-panel-title" class="text-lg font-bold text-content">{{ panelTitle }}</h2>
             @if (!panelLoading && !panelError) {
               <p class="text-xs text-subtle">{{ panelTotalCount | number }} total</p>
             }
@@ -403,9 +523,7 @@
                 <ul class="divide-y divide-line">
                   @for (member of panelMembers; track member.id) {
                     <li class="flex items-center gap-3 py-3">
-                      <div
-                        class="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full bg-accent/10"
-                      >
+                      <div class="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full bg-accent/10">
                         @if (member.avatar) {
                           <img
                             [src]="member.avatar"
@@ -447,6 +565,8 @@
                       (click)="navigateToEvent(event)"
                       (keyup.enter)="navigateToEvent(event)"
                       tabindex="0"
+                      role="link"
+                      [attr.aria-label]="'View event ' + event.name"
                     >
                       <div class="min-w-0">
                         <div class="flex items-center gap-2">

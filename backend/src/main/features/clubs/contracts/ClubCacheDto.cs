@@ -6,6 +6,7 @@ namespace backend.main.features.clubs.contracts
         string Description,
         string Clubtype,
         string ClubImage,
+        string? BannerImage,
         string? Phone,
         string? Email,
         double? Rating,

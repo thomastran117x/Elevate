@@ -47,6 +47,9 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
   imageUrl = '';
   imageUploading = false;
   dragActive = false;
+  bannerUrl = '';
+  bannerUploading = false;
+  bannerDragActive = false;
   loading = false;
   saving = false;
   error = '';
@@ -79,13 +82,14 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
     // A successful save marks the form pristine and clears imageDirty, so this
     // correctly allows navigation right after saving and prompts again once the
     // user makes further edits.
-    if (!this.form.dirty && !this.imageDirty) {
+    if (!this.form.dirty && !this.imageDirty && !this.bannerDirty) {
       return true;
     }
     return window.confirm('You have unsaved changes. Leave without saving?');
   }
 
   private imageDirty = false;
+  private bannerDirty = false;
 
   private loadClub(): void {
     this.loading = true;
@@ -103,6 +107,7 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
             return;
           }
           this.imageUrl = club.clubImage;
+          this.bannerUrl = club.bannerImage ?? '';
           this.form.patchValue({
             name: club.name,
             description: club.description,
@@ -118,31 +123,39 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
       });
   }
 
-  onDragOver(event: DragEvent): void {
+  onDragOver(event: DragEvent, target: 'icon' | 'banner' = 'icon'): void {
     event.preventDefault();
-    this.dragActive = true;
+    if (target === 'banner') this.bannerDragActive = true;
+    else this.dragActive = true;
   }
 
-  onDragLeave(event: DragEvent): void {
+  onDragLeave(event: DragEvent, target: 'icon' | 'banner' = 'icon'): void {
     event.preventDefault();
-    this.dragActive = false;
+    if (target === 'banner') this.bannerDragActive = false;
+    else this.dragActive = false;
   }
 
-  onDrop(event: DragEvent): void {
+  onDrop(event: DragEvent, target: 'icon' | 'banner' = 'icon'): void {
     event.preventDefault();
-    this.dragActive = false;
+    if (target === 'banner') this.bannerDragActive = false;
+    else this.dragActive = false;
     const file = event.dataTransfer?.files?.[0];
-    if (file) this.uploadFile(file);
+    if (file) this.uploadFile(file, target);
   }
 
-  onImageSelected(event: Event): void {
+  onImageSelected(event: Event, target: 'icon' | 'banner' = 'icon'): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
-    if (file) this.uploadFile(file);
+    if (file) this.uploadFile(file, target);
   }
 
-  private uploadFile(file: File): void {
+  removeBanner(): void {
+    this.bannerUrl = '';
+    this.bannerDirty = true;
+  }
+
+  private uploadFile(file: File, target: 'icon' | 'banner'): void {
     this.error = '';
     this.success = '';
 
@@ -155,18 +168,26 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
       return;
     }
 
-    this.imageUploading = true;
+    const setUploading = (value: boolean) =>
+      target === 'banner' ? (this.bannerUploading = value) : (this.imageUploading = value);
+
+    setUploading(true);
     // clubId is 0 for a not-yet-created club; the backend issues a pending upload URL.
     this.eventsManagement
       .uploadImage(this.clubId, file)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        finalize(() => (this.imageUploading = false)),
+        finalize(() => setUploading(false)),
       )
       .subscribe({
         next: (publicUrl) => {
-          this.imageUrl = publicUrl;
-          this.imageDirty = true;
+          if (target === 'banner') {
+            this.bannerUrl = publicUrl;
+            this.bannerDirty = true;
+          } else {
+            this.imageUrl = publicUrl;
+            this.imageDirty = true;
+          }
         },
         error: (err) => {
           this.error = getApiClientMessage(err, 'The image upload failed.');
@@ -190,6 +211,7 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
       description,
       clubtype: toClubtypeAlias(clubType),
       clubImageUrl: this.imageUrl,
+      bannerImageUrl: this.bannerUrl || null,
       phone: phone || undefined,
       email: email || undefined,
     };
@@ -211,6 +233,7 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
         next: (response) => {
           const club = response.data;
           this.imageDirty = false;
+          this.bannerDirty = false;
           this.form.markAsPristine();
           if (this.isCreate && club) {
             void this.router.navigate(['/clubs', club.id, 'manage']);

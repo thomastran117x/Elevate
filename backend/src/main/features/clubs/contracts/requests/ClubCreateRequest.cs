@@ -31,6 +31,13 @@ namespace backend.main.features.clubs.contracts.requests
         [Url(ErrorMessage = "Club image URL must be a valid URL.")]
         public string ClubImageUrl { get; set; } = string.Empty;
 
+        /// <summary>Optional hero/banner image URL. When omitted the public page shows a gradient placeholder.</summary>
+        [Url(ErrorMessage = "Banner image URL must be a valid URL.")]
+        public string? BannerImageUrl
+        {
+            get; set;
+        }
+
         [Phone]
         public string? Phone
         {

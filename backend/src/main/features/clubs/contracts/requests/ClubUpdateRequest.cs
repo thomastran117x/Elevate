@@ -27,6 +27,13 @@ namespace backend.main.features.clubs.contracts.requests
         [Required(ErrorMessage = "Club image URL is required.")]
         [Url(ErrorMessage = "Club image URL must be a valid URL.")]
         public string ClubImageUrl { get; set; } = string.Empty;
+
+        /// <summary>Optional hero/banner image URL. Send null/empty to clear the banner.</summary>
+        [Url(ErrorMessage = "Banner image URL must be a valid URL.")]
+        public string? BannerImageUrl
+        {
+            get; set;
+        }
         [Phone]
         public string? Phone
         {

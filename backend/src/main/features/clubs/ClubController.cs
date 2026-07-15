@@ -81,6 +81,7 @@ namespace backend.main.features.clubs
                 description: request.Description,
                 clubtype: request.Clubtype,
                 clubImageUrl: request.ClubImageUrl,
+                bannerImageUrl: request.BannerImageUrl,
                 phone: request.Phone,
                 email: request.Email
             );
@@ -115,6 +116,7 @@ namespace backend.main.features.clubs
                 description: request.Description,
                 clubtype: request.Clubtype,
                 clubImageUrl: request.ClubImageUrl,
+                bannerImageUrl: request.BannerImageUrl,
                 phone: request.Phone,
                 email: request.Email
             );
@@ -455,6 +457,7 @@ namespace backend.main.features.clubs
                 club.CurrentVersionNumber
             )
             {
+                BannerImage = club.BannerImage,
                 Phone = club.Phone,
                 Email = club.Email,
                 Rating = club.Rating,

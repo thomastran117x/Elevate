@@ -74,6 +74,7 @@ namespace backend.main.features.clubs
             string description,
             string clubtype,
             string clubImageUrl,
+            string? bannerImageUrl = null,
             string? phone = null,
             string? email = null)
         {
@@ -81,6 +82,7 @@ namespace backend.main.features.clubs
                 ?? throw new ResourceNotFoundException("User not found");
 
             ValidateClubImageUrl(clubImageUrl);
+            ValidateOptionalBannerImageUrl(bannerImageUrl);
 
             var now = GetUtcNow();
             var club = new Club
@@ -89,6 +91,7 @@ namespace backend.main.features.clubs
                 Description = description,
                 Clubtype = ParseClubType(clubtype),
                 ClubImage = clubImageUrl,
+                BannerImage = NormalizeOptionalUrl(bannerImageUrl),
                 Phone = phone,
                 Email = email,
                 UserId = userId,
@@ -378,6 +381,7 @@ namespace backend.main.features.clubs
             string description,
             string clubtype,
             string clubImageUrl,
+            string? bannerImageUrl = null,
             string? phone = null,
             string? email = null)
         {
@@ -387,11 +391,16 @@ namespace backend.main.features.clubs
             var previousSnapshot = BuildSnapshot(existing);
 
             ValidateClubImageUrl(clubImageUrl);
+            ValidateOptionalBannerImageUrl(bannerImageUrl);
+
+            var previousBanner = existing.BannerImage;
+            var newBanner = NormalizeOptionalUrl(bannerImageUrl);
 
             existing.Name = name;
             existing.Description = description;
             existing.Clubtype = ParseClubType(clubtype);
             existing.ClubImage = clubImageUrl;
+            existing.BannerImage = newBanner;
             existing.Phone = phone;
             existing.Email = email;
             existing.CurrentVersionNumber += 1;
@@ -420,6 +429,10 @@ namespace backend.main.features.clubs
             await CacheClubAsync(existing);
             await BumpClubListVersionAsync();
 
+            // The banner is not versioned, so a replaced/cleared banner leaves an orphaned blob.
+            if (!string.IsNullOrWhiteSpace(previousBanner) && previousBanner != newBanner)
+                await _blobService.DeleteBlobAsync(previousBanner);
+
             return existing;
         }
 
@@ -429,6 +442,8 @@ namespace backend.main.features.clubs
             EnsureOwner(club, userId);
 
             await _blobService.DeleteBlobAsync(club.ClubImage);
+            if (!string.IsNullOrWhiteSpace(club.BannerImage))
+                await _blobService.DeleteBlobAsync(club.BannerImage);
 
             _outboxWriter.StageDelete(clubId);
             _db.Clubs.Remove(club);
@@ -452,6 +467,18 @@ namespace backend.main.features.clubs
                     "Club images must reference uploads issued by this service.");
             }
         }
+
+        /// <summary>Validates the banner URL only when one is supplied; an empty value clears the banner.</summary>
+        private void ValidateOptionalBannerImageUrl(string? bannerImageUrl)
+        {
+            if (string.IsNullOrWhiteSpace(bannerImageUrl))
+                return;
+
+            ValidateClubImageUrl(bannerImageUrl);
+        }
+
+        private static string? NormalizeOptionalUrl(string? url) =>
+            string.IsNullOrWhiteSpace(url) ? null : url.Trim();
 
         public async Task<IReadOnlyList<ClubStaff>> GetStaffAsync(int clubId, int userId, string userRole)
         {
