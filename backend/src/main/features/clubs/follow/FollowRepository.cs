@@ -57,6 +57,44 @@ namespace backend.main.features.clubs.follow
                 .ToListAsync();
         }
 
+        public async Task<int> CountFollowsByClubAsync(int clubId)
+        {
+            return await _context.FollowClubs
+                .AsNoTracking()
+                .CountAsync(f => f.ClubId == clubId);
+        }
+
+        public async Task<(IReadOnlyList<FollowClub> Members, int TotalCount)> SearchClubMembersAsync(
+            int clubId, string? search, int page, int pageSize)
+        {
+            page = Math.Max(page, 1);
+            pageSize = Math.Clamp(pageSize, 1, 100);
+
+            var query = _context.FollowClubs
+                .AsNoTracking()
+                .Where(f => f.ClubId == clubId);
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = $"%{search.Trim()}%";
+                query =
+                    from f in query
+                    join u in _context.Users.AsNoTracking() on f.UserId equals u.Id
+                    where (u.Name != null && EF.Functions.Like(u.Name, term)) ||
+                          (u.Username != null && EF.Functions.Like(u.Username, term))
+                    select f;
+            }
+
+            var totalCount = await query.CountAsync();
+            var members = await query
+                .OrderByDescending(f => f.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (members, totalCount);
+        }
+
         public async Task<IEnumerable<FollowClub>> GetFollowsByUserAsync(int userId, int page = 1, int pageSize = 20)
         {
             page = Math.Max(page, 1);

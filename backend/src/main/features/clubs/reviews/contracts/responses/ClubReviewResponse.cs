@@ -27,8 +27,21 @@ namespace backend.main.features.clubs.reviews.contracts.responses
         {
             get; set;
         }
+        public string? Name
+        {
+            get; set;
+        }
+        public string? Username
+        {
+            get; set;
+        }
+        public string? Avatar
+        {
+            get; set;
+        }
 
-        public ClubReviewResponse(int id, int userId, int clubId, string title, int rating, string? comment, DateTime createdAt)
+        public ClubReviewResponse(int id, int userId, int clubId, string title, int rating, string? comment, DateTime createdAt,
+            string? name = null, string? username = null, string? avatar = null)
         {
             Id = id;
             UserId = userId;
@@ -37,6 +50,9 @@ namespace backend.main.features.clubs.reviews.contracts.responses
             Rating = rating;
             Comment = comment;
             CreatedAt = createdAt;
+            Name = name;
+            Username = username;
+            Avatar = avatar;
         }
     }
 }

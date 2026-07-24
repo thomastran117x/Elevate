@@ -40,7 +40,8 @@ namespace backend.main.features.events
             int clubId,
             EventStatus? status = null,
             int page = 1,
-            int pageSize = 20
+            int pageSize = 20,
+            string? search = null
         );
         Task<(List<Events> Events, int TotalCount)> GetManageableEventsByClub(
             int clubId,
@@ -48,7 +49,8 @@ namespace backend.main.features.events
             string userRole,
             EventLifecycleState? lifecycleState = null,
             int page = 1,
-            int pageSize = 20);
+            int pageSize = 20,
+            string? search = null);
         Task<Events> GetManageableEvent(int eventId, int userId, string userRole);
 
         Task<Events> UpdateEvent(

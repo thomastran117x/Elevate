@@ -5,6 +5,7 @@ using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
+using backend.main.features.clubs.follow.invitations;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
@@ -35,6 +36,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<Events> Events { get; set; } = null!;
         public DbSet<EventVersion> EventVersions { get; set; } = null!;
         public DbSet<FollowClub> FollowClubs { get; set; } = null!;
+        public DbSet<ClubInvitationLink> ClubInvitationLinks { get; set; } = null!;
         public DbSet<Payment> Payments { get; set; } = null!;
         public DbSet<ClubReview> ClubReviews { get; set; } = null!;
         public DbSet<Device> Devices { get; set; } = null!;
@@ -89,6 +91,24 @@ namespace backend.main.infrastructure.database.core
             modelBuilder.Entity<Club>()
                 .Property(c => c.Rating)
                 .HasPrecision(2, 1);
+
+            var clubGalleryComparer = new ValueComparer<List<string>>(
+                (a, b) => (a ?? new List<string>()).SequenceEqual(b ?? new List<string>()),
+                v => v.Aggregate(0, (acc, s) => HashCode.Combine(acc, s.GetHashCode())),
+                v => v.ToList());
+
+            modelBuilder.Entity<Club>()
+                .Property(c => c.GalleryImages)
+                .HasConversion(
+                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                    v => string.IsNullOrEmpty(v)
+                        ? new List<string>()
+                        : JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>())
+                .HasColumnType("json")
+                // Nullable in the DB so the column can be added to a table with existing rows
+                // (MySQL JSON columns can't take a literal default); null reads back as an empty list.
+                .IsRequired(false)
+                .Metadata.SetValueComparer(clubGalleryComparer);
 
             modelBuilder.Entity<Club>()
                 .HasIndex(c => c.UserId);
@@ -170,6 +190,31 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<FollowClub>()
                 .HasIndex(f => f.UserId);
+
+            modelBuilder.Entity<ClubInvitationLink>()
+                .HasOne(l => l.Club)
+                .WithMany()
+                .HasForeignKey(l => l.ClubId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClubInvitationLink>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(l => l.CreatedByUserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ClubInvitationLink>()
+                .Property(l => l.TokenHash)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<ClubInvitationLink>()
+                .HasIndex(l => l.ClubId);
+
+            modelBuilder.Entity<ClubInvitationLink>()
+                .HasIndex(l => l.TokenHash)
+                .IsUnique();
 
             modelBuilder.Entity<Events>()
                 .HasOne<Club>()

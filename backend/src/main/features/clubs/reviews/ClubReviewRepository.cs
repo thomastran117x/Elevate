@@ -29,6 +29,13 @@ namespace backend.main.features.clubs.reviews
                 .ToListAsync();
         }
 
+        public async Task<int> CountByClubIdAsync(int clubId)
+        {
+            return await _context.ClubReviews
+                .AsNoTracking()
+                .CountAsync(r => r.ClubId == clubId);
+        }
+
         public async Task<List<ClubReview>> GetByUserIdAsync(int userId, int page, int pageSize)
         {
             return await _context.ClubReviews

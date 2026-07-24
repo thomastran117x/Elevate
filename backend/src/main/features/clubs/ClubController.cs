@@ -5,6 +5,9 @@ using backend.main.features.clubs.contracts.responses;
 using backend.main.features.clubs.search;
 using backend.main.features.clubs.versions;
 using backend.main.features.clubs.versions.contracts.responses;
+using backend.main.features.profile;
+using backend.main.features.profile.contracts;
+using backend.main.shared.exceptions.http;
 using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Authorization;
@@ -21,10 +24,12 @@ namespace backend.main.features.clubs
     public class ClubController : ControllerBase
     {
         private readonly IClubService _clubService;
+        private readonly IUserRepository _userRepository;
 
-        public ClubController(IClubService clubService)
+        public ClubController(IClubService clubService, IUserRepository userRepository)
         {
             _clubService = clubService;
+            _userRepository = userRepository;
         }
 
         [Authorize]
@@ -70,15 +75,21 @@ namespace backend.main.features.clubs
         {
             var userPayload = User.GetUserPayload();
 
-            Club club = await _clubService.CreateClub(
-                name: request.Name,
-                userId: userPayload.Id,
-                description: request.Description,
-                clubtype: request.Clubtype,
-                clubImageUrl: request.ClubImageUrl,
-                phone: request.Phone,
-                email: request.Email
-            );
+            Club club = await _clubService.CreateClub(userPayload.Id, new ClubWriteModel
+            {
+                Name = request.Name,
+                Description = request.Description,
+                Clubtype = request.Clubtype,
+                ClubImageUrl = request.ClubImageUrl,
+                BannerImageUrl = request.BannerImageUrl,
+                GalleryImageUrls = request.GalleryImageUrls,
+                Phone = request.Phone,
+                Email = request.Email,
+                WebsiteUrl = request.WebsiteUrl,
+                Location = request.Location,
+                MaxMemberCount = request.MaxMemberCount,
+                IsPrivate = request.IsPrivate
+            });
 
             ClubResponse response = MapToResponse(club, new ClubAccessInfo
             {
@@ -102,17 +113,21 @@ namespace backend.main.features.clubs
         {
             var userPayload = User.GetUserPayload();
 
-            Club club = await _clubService.UpdateClub(
-                clubId: id,
-                userId: userPayload.Id,
-                userRole: userPayload.Role,
-                name: request.Name,
-                description: request.Description,
-                clubtype: request.Clubtype,
-                clubImageUrl: request.ClubImageUrl,
-                phone: request.Phone,
-                email: request.Email
-            );
+            Club club = await _clubService.UpdateClub(id, userPayload.Id, userPayload.Role, new ClubWriteModel
+            {
+                Name = request.Name,
+                Description = request.Description,
+                Clubtype = request.Clubtype,
+                ClubImageUrl = request.ClubImageUrl,
+                BannerImageUrl = request.BannerImageUrl,
+                GalleryImageUrls = request.GalleryImageUrls,
+                Phone = request.Phone,
+                Email = request.Email,
+                WebsiteUrl = request.WebsiteUrl,
+                Location = request.Location,
+                MaxMemberCount = request.MaxMemberCount,
+                IsPrivate = request.IsPrivate
+            });
 
             var access = await _clubService.GetClubAccessAsync(id, userPayload.Id, userPayload.Role);
             ClubResponse response = MapToResponse(club, access);
@@ -230,15 +245,36 @@ namespace backend.main.features.clubs
         [Authorize]
         [HttpGet("{id}/staff")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<ClubStaffResponse>>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetClubStaff(int id)
+        public async Task<IActionResult> GetClubStaff(int id, [FromQuery] string? search = null)
         {
             var userPayload = User.GetUserPayload();
-            var staff = await _clubService.GetStaffAsync(id, userPayload.Id, userPayload.Role);
+            var staff = await _clubService.GetStaffAsync(id, userPayload.Id, userPayload.Role, search);
+            var users = await LoadUserLookupAsync(staff.Select(member => member.UserId));
 
             return Ok(new ApiResponse<IEnumerable<ClubStaffResponse>>(
                 $"Staff for club with ID {id} has been fetched successfully.",
-                staff.Select(MapToStaffResponse)
+                staff.Select(member => MapToStaffResponse(member, users.GetValueOrDefault(member.UserId)))
             ));
+        }
+
+        private async Task<IReadOnlyDictionary<int, UserListRecord>> LoadUserLookupAsync(IEnumerable<int> userIds)
+        {
+            var ids = userIds.Distinct().ToList();
+            if (ids.Count == 0)
+                return new Dictionary<int, UserListRecord>();
+
+            return (await _userRepository.GetByIdsAsync(ids)).ToDictionary(user => user.Id);
+        }
+
+        private async Task<int> ResolveUserIdAsync(string identifier)
+        {
+            var trimmed = identifier.Trim();
+            var profile = trimmed.Contains('@')
+                ? await _userRepository.GetProfileByEmailAsync(trimmed.ToLowerInvariant())
+                : await _userRepository.GetProfileByUsernameAsync(trimmed);
+
+            return profile?.Id
+                ?? throw new ResourceNotFoundException($"No account found for '{trimmed}'.");
         }
 
         [Authorize]
@@ -254,9 +290,11 @@ namespace backend.main.features.clubs
                 userPayload.Id,
                 userPayload.Role);
 
+            var users = await LoadUserLookupAsync([staff.UserId]);
+
             return StatusCode(201, new ApiResponse<ClubStaffResponse>(
                 $"Manager has been added to club with ID {id} successfully.",
-                MapToStaffResponse(staff)
+                MapToStaffResponse(staff, users.GetValueOrDefault(staff.UserId))
             ));
         }
 
@@ -273,9 +311,11 @@ namespace backend.main.features.clubs
                 userPayload.Id,
                 userPayload.Role);
 
+            var users = await LoadUserLookupAsync([staff.UserId]);
+
             return StatusCode(201, new ApiResponse<ClubStaffResponse>(
                 $"Volunteer has been added to club with ID {id} successfully.",
-                MapToStaffResponse(staff)
+                MapToStaffResponse(staff, users.GetValueOrDefault(staff.UserId))
             ));
         }
 
@@ -298,9 +338,13 @@ namespace backend.main.features.clubs
         public async Task<IActionResult> TransferOwnership(int id, [FromBody] ClubOwnershipTransferRequest request)
         {
             var userPayload = User.GetUserPayload();
+            var newOwnerUserId = string.IsNullOrWhiteSpace(request.NewOwnerIdentifier)
+                ? request.NewOwnerUserId
+                : await ResolveUserIdAsync(request.NewOwnerIdentifier);
+
             var club = await _clubService.TransferOwnershipAsync(
                 id,
-                request.NewOwnerUserId,
+                newOwnerUserId,
                 userPayload.Id,
                 userPayload.Role);
 
@@ -336,8 +380,10 @@ namespace backend.main.features.clubs
                 effectivePage,
                 effectivePageSize);
 
+            var actors = await LoadUserLookupAsync(items.Select(item => item.ActorUserId));
+
             var paged = new PagedResponse<ClubVersionListItemResponse>(
-                items.Select(MapToVersionListItemResponse),
+                items.Select(item => MapToVersionListItemResponse(item, actors.GetValueOrDefault(item.ActorUserId))),
                 totalCount,
                 effectivePage,
                 effectivePageSize);
@@ -361,9 +407,11 @@ namespace backend.main.features.clubs
                 userPayload.Id,
                 userPayload.Role);
 
+            var actors = await LoadUserLookupAsync([version.ActorUserId]);
+
             return Ok(new ApiResponse<ClubVersionDetailResponse>(
                 $"Version {versionNumber} for club with ID {id} has been fetched successfully.",
-                MapToVersionDetailResponse(version)
+                MapToVersionDetailResponse(version, actors.GetValueOrDefault(version.ActorUserId))
             ));
         }
 
@@ -417,6 +465,8 @@ namespace backend.main.features.clubs
                 club.CurrentVersionNumber
             )
             {
+                BannerImage = club.BannerImage,
+                GalleryImages = club.GalleryImages ?? [],
                 Phone = club.Phone,
                 Email = club.Email,
                 Rating = club.Rating,
@@ -431,7 +481,9 @@ namespace backend.main.features.clubs
             return response;
         }
 
-        private static ClubStaffResponse MapToStaffResponse(backend.main.features.clubs.staff.ClubStaff staff) =>
+        private static ClubStaffResponse MapToStaffResponse(
+            backend.main.features.clubs.staff.ClubStaff staff,
+            UserListRecord? user = null) =>
             new(
                 staff.Id,
                 staff.ClubId,
@@ -439,10 +491,15 @@ namespace backend.main.features.clubs
                 staff.Role.ToString(),
                 staff.GrantedByUserId,
                 staff.CreatedAt,
-                staff.UpdatedAt
+                staff.UpdatedAt,
+                user?.Name,
+                user?.Username,
+                user?.Avatar
             );
 
-        private static ClubVersionListItemResponse MapToVersionListItemResponse(ClubVersionHistoryItem item) =>
+        private static ClubVersionListItemResponse MapToVersionListItemResponse(
+            ClubVersionHistoryItem item,
+            UserListRecord? actor = null) =>
             new(
                 item.VersionNumber,
                 item.ActionType,
@@ -452,10 +509,15 @@ namespace backend.main.features.clubs
                 item.RollbackEligible,
                 item.RollbackExpiresAt,
                 item.RollbackSourceVersionNumber,
-                item.ChangedFields.Select(MapToFieldChangeResponse).ToList()
+                item.ChangedFields.Select(MapToFieldChangeResponse).ToList(),
+                actor?.Name,
+                actor?.Username,
+                actor?.Avatar
             );
 
-        private static ClubVersionDetailResponse MapToVersionDetailResponse(ClubVersionDetail detail) =>
+        private static ClubVersionDetailResponse MapToVersionDetailResponse(
+            ClubVersionDetail detail,
+            UserListRecord? actor = null) =>
             new(
                 detail.VersionNumber,
                 detail.ActionType,
@@ -477,7 +539,10 @@ namespace backend.main.features.clubs
                     detail.Snapshot.Location,
                     detail.Snapshot.MaxMemberCount,
                     detail.Snapshot.IsPrivate
-                )
+                ),
+                actor?.Name,
+                actor?.Username,
+                actor?.Avatar
             );
 
         private static ClubVersionFieldChangeResponse MapToFieldChangeResponse(ClubVersionFieldChange change) =>

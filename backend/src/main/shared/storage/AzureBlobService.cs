@@ -103,7 +103,8 @@ namespace backend.main.shared.storage
                 BlobContainerName = container.Name,
                 BlobName = blobName,
                 Resource = "b",
-                ExpiresOn = expiresAt
+                ExpiresOn = expiresAt,
+                ContentType = normalizedContentType
             };
             sasBuilder.SetPermissions(BlobSasPermissions.Write | BlobSasPermissions.Create);
 

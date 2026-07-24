@@ -52,21 +52,29 @@ namespace backend.main.features.clubs.reviews
         }
 
         [HttpGet("{clubId}/reviews")]
-        [ProducesResponseType(typeof(ApiResponse<IEnumerable<ClubReviewResponse>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubReviewResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetReviewsByClub(
             int clubId,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
-            List<ClubReview> reviews = await _reviewService.GetReviewsByClubAsync(clubId, page, pageSize);
+            var (reviews, users, totalCount) = await _reviewService.GetClubReviewsAsync(clubId, page, pageSize);
 
-            IEnumerable<ClubReviewResponse> responses = reviews.Select(MapToResponse);
+            var items = reviews.Select(r =>
+            {
+                var user = users.GetValueOrDefault(r.UserId);
+                return new ClubReviewResponse(
+                    r.Id, r.UserId, r.ClubId, r.Title, r.Rating, r.Comment, r.CreatedAt,
+                    user?.Name, user?.Username, user?.Avatar);
+            });
+
+            var paged = new PagedResponse<ClubReviewResponse>(items, totalCount, page, pageSize);
 
             return StatusCode(
                 200,
-                new ApiResponse<IEnumerable<ClubReviewResponse>>(
+                new ApiResponse<PagedResponse<ClubReviewResponse>>(
                     $"Reviews for club with ID {clubId} have been fetched successfully.",
-                    responses
+                    paged
                 )
             );
         }

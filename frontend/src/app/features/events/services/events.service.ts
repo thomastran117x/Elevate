@@ -115,12 +115,13 @@ export class EventsService {
 
   getEventsByClub(
     clubId: number,
-    params: { status?: EventStatus; page?: number; pageSize?: number } = {},
+    params: { status?: EventStatus; page?: number; pageSize?: number; search?: string } = {},
   ): Observable<EventsApiResponse> {
     let httpParams = new HttpParams();
     if (params.status) httpParams = httpParams.set('status', params.status);
     if (params.page) httpParams = httpParams.set('page', String(params.page));
     if (params.pageSize) httpParams = httpParams.set('pageSize', String(params.pageSize));
+    if (params.search?.trim()) httpParams = httpParams.set('search', params.search.trim());
 
     return this.api
       .get<EventsApiPayload>(`${this.base}/clubs/${clubId}`, { params: httpParams })

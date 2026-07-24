@@ -73,4 +73,36 @@ export class ClubsService {
         }),
       );
   }
+
+  /** Joins (follows) a public club directly. Private clubs reject this with 403 — use an invite. */
+  joinClub(clubId: number): Observable<ApiEnvelope<unknown>> {
+    return this.api.post<ApiEnvelope<unknown>>(
+      `${environment.backendUrl}/clubs/${clubId}/join`,
+      {},
+      { withCredentials: true },
+    );
+  }
+
+  /** Leaves (unfollows) a club. */
+  leaveClub(clubId: number): Observable<ApiEnvelope<unknown>> {
+    return this.api.delete<ApiEnvelope<unknown>>(`${environment.backendUrl}/clubs/${clubId}/join`, {
+      withCredentials: true,
+    });
+  }
+
+  /** Whether the current user is a member of the club. Requires authentication. */
+  getMembershipStatus(clubId: number): Observable<boolean> {
+    return this.api
+      .get<ApiEnvelope<unknown>>(`${environment.backendUrl}/clubs/${clubId}/members/me`, {
+        withCredentials: true,
+      })
+      .pipe(
+        map((response) => {
+          const raw = ((response as ApiEnvelope<unknown> & { Data?: unknown }).data ??
+            (response as { Data?: unknown }).Data ??
+            null) as { isMember?: boolean; IsMember?: boolean } | null;
+          return raw?.isMember ?? raw?.IsMember ?? false;
+        }),
+      );
+  }
 }

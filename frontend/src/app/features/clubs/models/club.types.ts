@@ -30,6 +30,8 @@ export interface Club {
   description: string;
   clubType: ClubType;
   clubImage: string;
+  bannerImage: string | null;
+  galleryImages: string[];
   memberCount: number;
   eventCount: number;
   availableEventCount: number;
@@ -40,6 +42,11 @@ export interface Club {
   phone: string | null;
   email: string | null;
   websiteUrl: string | null;
+  currentVersionNumber: number;
+  isOwner: boolean;
+  isManager: boolean;
+  isVolunteer: boolean;
+  canManage: boolean;
 }
 
 export interface ClubsPagedData {
@@ -62,6 +69,8 @@ type ClubPayload = Partial<Club> & {
   Clubtype?: string;
   clubtype?: string;
   ClubImage?: string;
+  BannerImage?: string | null;
+  GalleryImages?: string[];
   MemberCount?: number;
   EventCount?: number;
   AvaliableEventCount?: number;
@@ -73,6 +82,12 @@ type ClubPayload = Partial<Club> & {
   Phone?: string | null;
   Email?: string | null;
   WebsiteUrl?: string | null;
+  CurrentVersionNumber?: number;
+  currentVersionNumber?: number;
+  IsOwner?: boolean;
+  IsManager?: boolean;
+  IsVolunteer?: boolean;
+  CanManage?: boolean;
 };
 
 type PagedPayload<T> = {
@@ -103,6 +118,8 @@ export function normalizeClub(raw: ClubPayload): Club {
     description: raw.description ?? raw.Description ?? '',
     clubType: normalizeClubType(raw.clubType ?? raw.Clubtype ?? raw.clubtype),
     clubImage: raw.clubImage ?? raw.ClubImage ?? '',
+    bannerImage: raw.bannerImage ?? raw.BannerImage ?? null,
+    galleryImages: raw.galleryImages ?? raw.GalleryImages ?? [],
     memberCount: raw.memberCount ?? raw.MemberCount ?? 0,
     eventCount: raw.eventCount ?? raw.EventCount ?? 0,
     availableEventCount: raw.availableEventCount ?? raw.AvaliableEventCount ?? 0,
@@ -113,6 +130,11 @@ export function normalizeClub(raw: ClubPayload): Club {
     phone: raw.phone ?? raw.Phone ?? null,
     email: raw.email ?? raw.Email ?? null,
     websiteUrl: raw.websiteUrl ?? raw.WebsiteUrl ?? null,
+    currentVersionNumber: raw.currentVersionNumber ?? raw.CurrentVersionNumber ?? 0,
+    isOwner: raw.isOwner ?? raw.IsOwner ?? false,
+    isManager: raw.isManager ?? raw.IsManager ?? false,
+    isVolunteer: raw.isVolunteer ?? raw.IsVolunteer ?? false,
+    canManage: raw.canManage ?? raw.CanManage ?? false,
   };
 }
 

@@ -251,6 +251,12 @@ body {
   box-shadow: 0 0 0 4px var(--focus-ring);
 }
 
+/* Clickable controls get the pointer cursor; disabled ones keep the default. */
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']) {
+  cursor: pointer;
+}
+
 .cta-solid {
   background: var(--accent);
   color: var(--accent-contrast);

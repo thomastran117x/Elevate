@@ -227,6 +227,7 @@ public class ClubReviewServiceTests
         public ClubReviewService Service { get; }
         public Mock<IClubReviewRepository> ReviewRepositoryMock { get; } = new();
         public Mock<IClubRepository> ClubRepositoryMock { get; } = new();
+        public Mock<IUserRepository> UserRepositoryMock { get; } = new();
         public Mock<IClubSearchOutboxWriter> OutboxWriterMock { get; } = new();
         public Mock<ICacheService> CacheMock { get; } = new();
 
@@ -250,6 +251,7 @@ public class ClubReviewServiceTests
                 db,
                 ReviewRepositoryMock.Object,
                 ClubRepositoryMock.Object,
+                UserRepositoryMock.Object,
                 OutboxWriterMock.Object,
                 CacheMock.Object);
         }

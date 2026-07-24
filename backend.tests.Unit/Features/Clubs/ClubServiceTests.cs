@@ -42,13 +42,16 @@ public class ClubServiceTests
             });
 
         var created = await harness.Service.CreateClub(
-            "Chess Club",
             harness.OwnerUserId,
-            "A focused club for competitive and casual chess players.",
-            " gaming ",
-            "https://cdn.test/clubs/new-club.png",
-            phone: "555-0100",
-            email: "chess@test.local");
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "A focused club for competitive and casual chess players.",
+                Clubtype = " gaming ",
+                ClubImageUrl = "https://cdn.test/clubs/new-club.png",
+                Phone = "555-0100",
+                Email = "chess@test.local"
+            });
 
         created.Id.Should().BeGreaterThan(0);
         created.Name.Should().Be("Chess Club");
@@ -250,12 +253,15 @@ public class ClubServiceTests
             existing.Id,
             harness.OwnerUserId,
             harness.OwnerRole,
-            "Updated Club",
-            "An updated description for the club.",
-            "music",
-            "https://cdn.test/clubs/updated.png",
-            phone: "555-0111",
-            email: "updated@test.local");
+            new ClubWriteModel
+            {
+                Name = "Updated Club",
+                Description = "An updated description for the club.",
+                Clubtype = "music",
+                ClubImageUrl = "https://cdn.test/clubs/updated.png",
+                Phone = "555-0111",
+                Email = "updated@test.local"
+            });
 
         updated.Name.Should().Be("Updated Club");
         updated.Clubtype.Should().Be(ClubType.Cultural);
@@ -327,11 +333,14 @@ public class ClubServiceTests
             });
 
         var act = () => harness.Service.CreateClub(
-            "Chess Club",
             harness.OwnerUserId,
-            "A focused club for competitive and casual chess players.",
-            "gaming",
-            "https://example.com/clubs/chess.png");
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "A focused club for competitive and casual chess players.",
+                Clubtype = "gaming",
+                ClubImageUrl = "https://example.com/clubs/chess.png"
+            });
 
         await act.Should()
             .ThrowAsync<BadRequestException>()
@@ -353,15 +362,179 @@ public class ClubServiceTests
             });
 
         var act = () => harness.Service.CreateClub(
-            "Chess Club",
             harness.OwnerUserId,
-            "A focused club for competitive and casual chess players.",
-            "gaming",
-            "http://cdn.test/clubs/chess.png");
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "A focused club for competitive and casual chess players.",
+                Clubtype = "gaming",
+                ClubImageUrl = "http://cdn.test/clubs/chess.png"
+            });
 
         await act.Should()
             .ThrowAsync<BadRequestException>()
             .WithMessage("Club images must use a valid HTTPS URL.");
+    }
+
+    [Fact]
+    public async Task CreateClub_ShouldPersistGallery_DedupingAndPreservingOrder()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        harness.UserServiceMock
+            .Setup(service => service.GetUserByIdAsync(harness.OwnerUserId))
+            .ReturnsAsync(new User
+            {
+                Id = harness.OwnerUserId,
+                Email = "owner@test.local",
+                Usertype = "Organizer"
+            });
+
+        var created = await harness.Service.CreateClub(
+            harness.OwnerUserId,
+            new ClubWriteModel
+            {
+                Name = "Photo Club",
+                Description = "Shows off its best moments.",
+                Clubtype = "social",
+                ClubImageUrl = "https://cdn.test/clubs/icon.png",
+                BannerImageUrl = "https://cdn.test/clubs/banner.png",
+                GalleryImageUrls =
+                [
+                    "https://cdn.test/clubs/g1.png",
+                    "https://cdn.test/clubs/g2.png",
+                    "https://cdn.test/clubs/g1.png"
+                ]
+            });
+
+        var persisted = await harness.Db.Clubs.SingleAsync(club => club.Id == created.Id);
+        persisted.BannerImage.Should().Be("https://cdn.test/clubs/banner.png");
+        persisted.GalleryImages.Should().Equal(
+            "https://cdn.test/clubs/g1.png",
+            "https://cdn.test/clubs/g2.png");
+    }
+
+    [Fact]
+    public async Task CreateClub_ShouldRejectMoreThanFiveGalleryImages()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        harness.UserServiceMock
+            .Setup(service => service.GetUserByIdAsync(harness.OwnerUserId))
+            .ReturnsAsync(new User
+            {
+                Id = harness.OwnerUserId,
+                Email = "owner@test.local",
+                Usertype = "Organizer"
+            });
+
+        var act = () => harness.Service.CreateClub(
+            harness.OwnerUserId,
+            new ClubWriteModel
+            {
+                Name = "Photo Club",
+                Description = "Too many photos.",
+                Clubtype = "social",
+                ClubImageUrl = "https://cdn.test/clubs/icon.png",
+                GalleryImageUrls = Enumerable
+                    .Range(1, 6)
+                    .Select(index => $"https://cdn.test/clubs/g{index}.png")
+                    .ToList()
+            });
+
+        await act.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("A club can have at most 5 gallery images.");
+    }
+
+    [Fact]
+    public async Task CreateClub_ShouldRejectUnownedGalleryImageUrls()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        harness.UserServiceMock
+            .Setup(service => service.GetUserByIdAsync(harness.OwnerUserId))
+            .ReturnsAsync(new User
+            {
+                Id = harness.OwnerUserId,
+                Email = "owner@test.local",
+                Usertype = "Organizer"
+            });
+
+        var act = () => harness.Service.CreateClub(
+            harness.OwnerUserId,
+            new ClubWriteModel
+            {
+                Name = "Photo Club",
+                Description = "Foreign gallery image.",
+                Clubtype = "social",
+                ClubImageUrl = "https://cdn.test/clubs/icon.png",
+                GalleryImageUrls = ["https://evil.example/photo.png"]
+            });
+
+        await act.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("Club images must reference uploads issued by this service.");
+    }
+
+    [Fact]
+    public async Task UpdateClub_ShouldReplaceGalleryAndBanner_AndDeleteRemovedBlobs()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        var existing = await harness.SeedPersistedClubAsync(id: 201, userId: harness.OwnerUserId);
+        existing.BannerImage = "https://cdn.test/clubs/old-banner.png";
+        existing.GalleryImages =
+        [
+            "https://cdn.test/clubs/keep.png",
+            "https://cdn.test/clubs/drop.png"
+        ];
+        await harness.Db.SaveChangesAsync();
+
+        await harness.Service.UpdateClub(
+            existing.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new ClubWriteModel
+            {
+                Name = "Updated Photo Club",
+                Description = "Refreshed gallery.",
+                Clubtype = "social",
+                ClubImageUrl = existing.ClubImage,
+                BannerImageUrl = "https://cdn.test/clubs/new-banner.png",
+                GalleryImageUrls =
+                [
+                    "https://cdn.test/clubs/keep.png",
+                    "https://cdn.test/clubs/added.png"
+                ]
+            });
+
+        var persisted = await harness.Db.Clubs.SingleAsync(club => club.Id == existing.Id);
+        persisted.BannerImage.Should().Be("https://cdn.test/clubs/new-banner.png");
+        persisted.GalleryImages.Should().Equal(
+            "https://cdn.test/clubs/keep.png",
+            "https://cdn.test/clubs/added.png");
+
+        harness.BlobServiceMock.Verify(service => service.DeleteBlobAsync("https://cdn.test/clubs/old-banner.png"), Times.Once);
+        harness.BlobServiceMock.Verify(service => service.DeleteBlobAsync("https://cdn.test/clubs/drop.png"), Times.Once);
+        harness.BlobServiceMock.Verify(service => service.DeleteBlobAsync("https://cdn.test/clubs/keep.png"), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteClub_ShouldDeleteBannerAndGalleryBlobs()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        var existing = await harness.SeedPersistedClubAsync(id: 202, userId: harness.OwnerUserId);
+        existing.BannerImage = "https://cdn.test/clubs/banner.png";
+        existing.GalleryImages =
+        [
+            "https://cdn.test/clubs/gd1.png",
+            "https://cdn.test/clubs/gd2.png"
+        ];
+        await harness.Db.SaveChangesAsync();
+
+        await harness.Service.DeleteClub(existing.Id, harness.OwnerUserId);
+
+        harness.BlobServiceMock.Verify(service => service.DeleteBlobAsync(existing.ClubImage), Times.Once);
+        harness.BlobServiceMock.Verify(service => service.DeleteBlobAsync("https://cdn.test/clubs/banner.png"), Times.Once);
+        harness.BlobServiceMock.Verify(service => service.DeleteBlobAsync("https://cdn.test/clubs/gd1.png"), Times.Once);
+        harness.BlobServiceMock.Verify(service => service.DeleteBlobAsync("https://cdn.test/clubs/gd2.png"), Times.Once);
     }
 
     [Fact]
@@ -416,6 +589,63 @@ public class ClubServiceTests
             It.IsAny<TimeSpan>(),
             It.IsAny<JsonSerializerOptions?>()),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task JoinClubAsync_PrivateClub_ThrowsForbiddenAndDoesNotGrant()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        harness.ConfigureClubPersistence();
+        var club = await harness.SeedPersistedClubAsync(id: 101, userId: harness.OtherOwnerUserId, memberCount: 2);
+        club.isPrivate = true;
+        await harness.Db.SaveChangesAsync();
+
+        var act = () => harness.Service.JoinClubAsync(club.Id, harness.MemberUserId);
+
+        await act.Should().ThrowAsync<ForbiddenException>();
+        harness.FollowServiceMock.Verify(
+            service => service.AddMembershipAsync(It.IsAny<int>(), It.IsAny<int>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task GrantMembershipFromInvitationAsync_PrivateClub_BypassesGateAndIncrementsMembers()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        harness.ConfigureClubPersistence();
+        var club = await harness.SeedPersistedClubAsync(id: 102, userId: harness.OtherOwnerUserId, memberCount: 4);
+        club.isPrivate = true;
+        await harness.Db.SaveChangesAsync();
+
+        harness.FollowServiceMock
+            .Setup(service => service.IsMemberAsync(club.Id, harness.MemberUserId))
+            .ReturnsAsync(false);
+
+        await harness.Service.GrantMembershipFromInvitationAsync(club.Id, harness.MemberUserId);
+
+        var persisted = await harness.Db.Clubs.SingleAsync(item => item.Id == club.Id);
+        persisted.MemberCount.Should().Be(5);
+        harness.FollowServiceMock.Verify(service => service.AddMembershipAsync(club.Id, harness.MemberUserId), Times.Once);
+    }
+
+    [Fact]
+    public async Task GrantMembershipFromInvitationAsync_AlreadyMember_IsNoOp()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        harness.ConfigureClubPersistence();
+        var club = await harness.SeedPersistedClubAsync(id: 103, userId: harness.OtherOwnerUserId, memberCount: 6);
+
+        harness.FollowServiceMock
+            .Setup(service => service.IsMemberAsync(club.Id, harness.MemberUserId))
+            .ReturnsAsync(true);
+
+        await harness.Service.GrantMembershipFromInvitationAsync(club.Id, harness.MemberUserId);
+
+        var persisted = await harness.Db.Clubs.SingleAsync(item => item.Id == club.Id);
+        persisted.MemberCount.Should().Be(6);
+        harness.FollowServiceMock.Verify(
+            service => service.AddMembershipAsync(It.IsAny<int>(), It.IsAny<int>()),
+            Times.Never);
     }
 
     [Fact]
@@ -496,6 +726,75 @@ public class ClubServiceTests
         var staff = await harness.Service.GetStaffAsync(club.Id, harness.OwnerUserId, harness.OwnerRole);
 
         staff.Select(item => item.UserId).Should().Equal(harness.OtherOwnerUserId, harness.MemberUserId);
+    }
+
+    [Fact]
+    public async Task GetStaffAsync_WithSearch_ShouldFilterByNameOrUsername()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        var club = await harness.SeedPersistedClubAsync(id: 210, userId: harness.OwnerUserId);
+
+        var member = await harness.Db.Users.FindAsync(harness.MemberUserId);
+        member!.Name = "Jordan Lee";
+        member.Username = "jordan";
+        harness.Db.ClubStaff.AddRange(
+            new ClubStaff
+            {
+                ClubId = club.Id,
+                UserId = harness.MemberUserId,
+                Role = ClubStaffRole.Volunteer,
+                GrantedByUserId = harness.OwnerUserId
+            },
+            new ClubStaff
+            {
+                ClubId = club.Id,
+                UserId = harness.OtherOwnerUserId,
+                Role = ClubStaffRole.Manager,
+                GrantedByUserId = harness.OwnerUserId
+            });
+        await harness.Db.SaveChangesAsync();
+
+        var matches = await harness.Service.GetStaffAsync(
+            club.Id, harness.OwnerUserId, harness.OwnerRole, "jord");
+
+        matches.Should().ContainSingle().Which.UserId.Should().Be(harness.MemberUserId);
+    }
+
+    [Fact]
+    public async Task GrantStaffFromInvitationAsync_ShouldCreateAssignment_BeIdempotent_AndRejectOwner()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        var club = await harness.SeedPersistedClubAsync(id: 211, userId: harness.OwnerUserId);
+        harness.UserServiceMock
+            .Setup(service => service.GetUserByIdAsync(harness.MemberUserId))
+            .ReturnsAsync(new User
+            {
+                Id = harness.MemberUserId,
+                Email = "member@test.local",
+                Usertype = "Participant"
+            });
+
+        (await harness.Service.IsClubStaffMemberAsync(club.Id, harness.MemberUserId)).Should().BeFalse();
+
+        var granted = await harness.Service.GrantStaffFromInvitationAsync(
+            club.Id, harness.MemberUserId, ClubStaffRole.Manager, harness.OwnerUserId);
+        granted.UserId.Should().Be(harness.MemberUserId);
+        granted.Role.Should().Be(ClubStaffRole.Manager);
+
+        // Idempotent: a second grant returns the existing assignment without duplicating it.
+        var again = await harness.Service.GrantStaffFromInvitationAsync(
+            club.Id, harness.MemberUserId, ClubStaffRole.Volunteer, harness.OwnerUserId);
+        again.Id.Should().Be(granted.Id);
+        (await harness.Db.ClubStaff.CountAsync(staff =>
+            staff.ClubId == club.Id && staff.UserId == harness.MemberUserId)).Should().Be(1);
+
+        (await harness.Service.IsClubStaffMemberAsync(club.Id, harness.MemberUserId)).Should().BeTrue();
+
+        var ownerAction = () => harness.Service.GrantStaffFromInvitationAsync(
+            club.Id, harness.OwnerUserId, ClubStaffRole.Manager, harness.OwnerUserId);
+        await ownerAction.Should()
+            .ThrowAsync<ConflictException>()
+            .WithMessage("The club owner already has full access.");
     }
 
     [Fact]

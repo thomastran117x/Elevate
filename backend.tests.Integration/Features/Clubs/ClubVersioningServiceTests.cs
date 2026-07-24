@@ -31,11 +31,14 @@ public class ClubVersioningServiceTests
         await using var harness = await ClubServiceHarness.CreateAsync();
 
         var club = await harness.Service.CreateClub(
-            "Chess Club",
             7,
-            "Weekly strategy nights",
-            "Social",
-            CreateClubImageUrl("club-v1.png"));
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "Weekly strategy nights",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v1.png")
+            });
 
         club.CurrentVersionNumber.Should().Be(1);
 
@@ -58,22 +61,28 @@ public class ClubVersioningServiceTests
         await using var harness = await ClubServiceHarness.CreateAsync();
 
         var created = await harness.Service.CreateClub(
-            "Chess Club",
             7,
-            "Weekly strategy nights",
-            "Social",
-            CreateClubImageUrl("club-v1.png"));
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "Weekly strategy nights",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v1.png")
+            });
 
         var updated = await harness.Service.UpdateClub(
             created.Id,
-            userId: 99,
-            userRole: "Admin",
-            name: "Campus Chess Club",
-            description: "Competitive ladder and casual boards",
-            clubtype: "Social",
-            clubImageUrl: CreateClubImageUrl("club-v2.png"),
-            phone: "555-111-2222",
-            email: "club@test.local");
+            99,
+            "Admin",
+            new ClubWriteModel
+            {
+                Name = "Campus Chess Club",
+                Description = "Competitive ladder and casual boards",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v2.png"),
+                Phone = "555-111-2222",
+                Email = "club@test.local"
+            });
 
         updated.UserId.Should().Be(7);
         updated.CurrentVersionNumber.Should().Be(2);
@@ -97,24 +106,30 @@ public class ClubVersioningServiceTests
         await using var harness = await ClubServiceHarness.CreateAsync();
 
         var created = await harness.Service.CreateClub(
-            "Chess Club",
             7,
-            "Weekly strategy nights",
-            "Social",
-            CreateClubImageUrl("club-v1.png"));
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "Weekly strategy nights",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v1.png")
+            });
 
         harness.TimeProvider.Advance(TimeSpan.FromDays(5));
 
         await harness.Service.UpdateClub(
             created.Id,
-            userId: 7,
-            userRole: "Organizer",
-            name: "Campus Chess Club",
-            description: "Competitive ladder and casual boards",
-            clubtype: "Social",
-            clubImageUrl: CreateClubImageUrl("club-v2.png"),
-            phone: "555-111-2222",
-            email: "club@test.local");
+            7,
+            "Organizer",
+            new ClubWriteModel
+            {
+                Name = "Campus Chess Club",
+                Description = "Competitive ladder and casual boards",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v2.png"),
+                Phone = "555-111-2222",
+                Email = "club@test.local"
+            });
 
         var liveClub = await harness.Db.Clubs.SingleAsync();
         liveClub.MemberCount = 17;
@@ -155,22 +170,28 @@ public class ClubVersioningServiceTests
         await using var harness = await ClubServiceHarness.CreateAsync();
 
         var created = await harness.Service.CreateClub(
-            "Chess Club",
             7,
-            "Weekly strategy nights",
-            "Social",
-            CreateClubImageUrl("club-v1.png"));
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "Weekly strategy nights",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v1.png")
+            });
 
         harness.TimeProvider.Advance(TimeSpan.FromDays(91));
 
         await harness.Service.UpdateClub(
             created.Id,
-            userId: 7,
-            userRole: "Organizer",
-            name: "Campus Chess Club",
-            description: "Competitive ladder and casual boards",
-            clubtype: "Social",
-            clubImageUrl: CreateClubImageUrl("club-v2.png"));
+            7,
+            "Organizer",
+            new ClubWriteModel
+            {
+                Name = "Campus Chess Club",
+                Description = "Competitive ladder and casual boards",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v2.png")
+            });
 
         var act = () => harness.Service.RollbackToVersionAsync(
             created.Id,
@@ -189,11 +210,14 @@ public class ClubVersioningServiceTests
         await using var harness = await ClubServiceHarness.CreateAsync();
 
         var created = await harness.Service.CreateClub(
-            "Chess Club",
             7,
-            "Weekly strategy nights",
-            "Social",
-            CreateClubImageUrl("club-v1.png"));
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "Weekly strategy nights",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v1.png")
+            });
 
         var act = () => harness.Service.GetVersionHistoryAsync(
             created.Id,
@@ -211,18 +235,24 @@ public class ClubVersioningServiceTests
         await using var harness = await ClubServiceHarness.CreateAsync();
 
         var first = await harness.Service.CreateClub(
-            "Chess Club",
             7,
-            "Weekly strategy nights",
-            "Social",
-            CreateClubImageUrl("club-v1.png"));
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "Weekly strategy nights",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v1.png")
+            });
 
         var second = await harness.Service.CreateClub(
-            "Robotics Club",
             7,
-            "Building and competing together.",
-            "Academic",
-            CreateClubImageUrl("club-v2.png"));
+            new ClubWriteModel
+            {
+                Name = "Robotics Club",
+                Description = "Building and competing together.",
+                Clubtype = "Academic",
+                ClubImageUrl = CreateClubImageUrl("club-v2.png")
+            });
 
         await harness.Service.AddStaffAsync(first.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
 
@@ -239,11 +269,14 @@ public class ClubVersioningServiceTests
         await using var harness = await ClubServiceHarness.CreateAsync();
 
         var created = await harness.Service.CreateClub(
-            "Chess Club",
             7,
-            "Weekly strategy nights",
-            "Social",
-            CreateClubImageUrl("club-v1.png"));
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "Weekly strategy nights",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v1.png")
+            });
 
         var manager = await harness.Service.AddStaffAsync(created.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
 
@@ -263,22 +296,28 @@ public class ClubVersioningServiceTests
         await using var harness = await ClubServiceHarness.CreateAsync();
 
         var created = await harness.Service.CreateClub(
-            "Chess Club",
             7,
-            "Weekly strategy nights",
-            "Social",
-            CreateClubImageUrl("club-v1.png"));
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "Weekly strategy nights",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v1.png")
+            });
 
         await harness.Service.AddStaffAsync(created.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
 
         var updated = await harness.Service.UpdateClub(
             created.Id,
-            userId: 55,
-            userRole: "Participant",
-            name: "Campus Chess Club",
-            description: "Manager-updated description",
-            clubtype: "Social",
-            clubImageUrl: CreateClubImageUrl("club-v2.png"));
+            55,
+            "Participant",
+            new ClubWriteModel
+            {
+                Name = "Campus Chess Club",
+                Description = "Manager-updated description",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v2.png")
+            });
 
         updated.Name.Should().Be("Campus Chess Club");
         updated.UserId.Should().Be(7);
@@ -297,11 +336,14 @@ public class ClubVersioningServiceTests
         await using var harness = await ClubServiceHarness.CreateAsync();
 
         var created = await harness.Service.CreateClub(
-            "Chess Club",
             7,
-            "Weekly strategy nights",
-            "Social",
-            CreateClubImageUrl("club-v1.png"));
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "Weekly strategy nights",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v1.png")
+            });
 
         await harness.Service.AddStaffAsync(created.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
 
@@ -318,11 +360,14 @@ public class ClubVersioningServiceTests
         await using var harness = await ClubServiceHarness.CreateAsync();
 
         var created = await harness.Service.CreateClub(
-            "Chess Club",
             7,
-            "Weekly strategy nights",
-            "Social",
-            CreateClubImageUrl("club-v1.png"));
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "Weekly strategy nights",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v1.png")
+            });
 
         await harness.Service.AddStaffAsync(
             created.Id,
@@ -333,12 +378,15 @@ public class ClubVersioningServiceTests
 
         var act = () => harness.Service.UpdateClub(
             created.Id,
-            userId: 55,
-            userRole: "Participant",
-            name: "Volunteer Edit",
-            description: "Should not be allowed",
-            clubtype: "Social",
-            clubImageUrl: CreateClubImageUrl("club-v2.png"));
+            55,
+            "Participant",
+            new ClubWriteModel
+            {
+                Name = "Volunteer Edit",
+                Description = "Should not be allowed",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v2.png")
+            });
 
         await act.Should()
             .ThrowAsync<ForbiddenException>()
@@ -351,11 +399,14 @@ public class ClubVersioningServiceTests
         await using var harness = await ClubServiceHarness.CreateAsync();
 
         var created = await harness.Service.CreateClub(
-            "Chess Club",
             7,
-            "Weekly strategy nights",
-            "Social",
-            CreateClubImageUrl("club-v1.png"));
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "Weekly strategy nights",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v1.png")
+            });
 
         await harness.Service.AddStaffAsync(created.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
 
@@ -368,12 +419,15 @@ public class ClubVersioningServiceTests
 
         var act = () => harness.Service.UpdateClub(
             created.Id,
-            userId: 7,
-            userRole: "Organizer",
-            name: "Former Owner Edit",
-            description: "Should not be allowed",
-            clubtype: "Social",
-            clubImageUrl: CreateClubImageUrl("club-v3.png"));
+            7,
+            "Organizer",
+            new ClubWriteModel
+            {
+                Name = "Former Owner Edit",
+                Description = "Should not be allowed",
+                Clubtype = "Social",
+                ClubImageUrl = CreateClubImageUrl("club-v3.png")
+            });
 
         await act.Should()
             .ThrowAsync<ForbiddenException>()

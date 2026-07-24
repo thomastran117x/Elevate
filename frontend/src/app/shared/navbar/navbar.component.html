@@ -182,6 +182,15 @@
                     >
                       Account settings
                     </a>
+                    @if (clubsEnabled) {
+                      <a
+                        routerLink="/clubs/manage"
+                        (click)="closeMenus()"
+                        class="block rounded-2xl px-4 py-3 text-sm text-muted transition hover:bg-surface-muted hover:text-content"
+                      >
+                        Manage clubs
+                      </a>
+                    }
                     @if (invitationsEnabled) {
                       <a
                         routerLink="/events/me/invited"
@@ -420,6 +429,15 @@
                 >
                   Account settings
                 </a>
+                @if (clubsEnabled) {
+                  <a
+                    routerLink="/clubs/manage"
+                    (click)="closeMenus()"
+                    class="inline-flex min-h-[48px] items-center rounded-2xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
+                  >
+                    Manage clubs
+                  </a>
+                }
                 @if (invitationsEnabled) {
                   <a
                     routerLink="/events/me/invited"

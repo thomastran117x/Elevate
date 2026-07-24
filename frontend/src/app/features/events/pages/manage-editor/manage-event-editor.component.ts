@@ -23,6 +23,8 @@ export class ManageEventEditorComponent {
   private readonly fb = new FormBuilder();
 
   readonly categories = ALL_CATEGORIES;
+  readonly inputClass =
+    'w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15';
   readonly form = this.fb.group({
     name: ['', [Validators.minLength(3), Validators.maxLength(30)]],
     description: ['', [Validators.maxLength(200)]],
@@ -50,6 +52,45 @@ export class ManageEventEditorComponent {
   error = '';
   successMessage = '';
 
+  // Wizard state
+  readonly steps = [
+    { label: 'Basics', hint: 'Name, category & description' },
+    { label: 'Schedule', hint: 'When it happens' },
+    { label: 'Location', hint: 'Where it happens' },
+    { label: 'Details', hint: 'Capacity, pricing & tags' },
+    { label: 'Images', hint: 'Optional gallery' },
+    { label: 'Review', hint: 'Confirm & submit' },
+  ];
+  currentStep = 0;
+
+  get progressPercent(): number {
+    return (this.currentStep / (this.steps.length - 1)) * 100;
+  }
+
+  get isReviewStep(): boolean {
+    return this.currentStep === this.steps.length - 1;
+  }
+
+  get reviewTags(): string[] {
+    return (this.form.controls.tags.value ?? '')
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+  }
+
+  goToStep(index: number): void {
+    if (index < 0 || index >= this.steps.length) return;
+    this.currentStep = index;
+  }
+
+  nextStep(): void {
+    if (this.currentStep < this.steps.length - 1) this.currentStep += 1;
+  }
+
+  prevStep(): void {
+    if (this.currentStep > 0) this.currentStep -= 1;
+  }
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
@@ -57,7 +98,13 @@ export class ManageEventEditorComponent {
   ) {}
 
   ngOnInit(): void {
-    const clubId = Number.parseInt(this.route.snapshot.paramMap.get('clubId') ?? '', 10);
+    // clubId lives on the parent (club shell) route when nested under /clubs/:clubId/manage/events.
+    const clubId = Number.parseInt(
+      this.route.snapshot.paramMap.get('clubId') ??
+        this.route.parent?.snapshot.paramMap.get('clubId') ??
+        '',
+      10,
+    );
     const eventId = Number.parseInt(this.route.snapshot.paramMap.get('eventId') ?? '', 10);
 
     this.clubId = Number.isFinite(clubId) && clubId > 0 ? clubId : 0;
@@ -151,7 +198,7 @@ export class ManageEventEditorComponent {
 
         if (!this.eventId) {
           this.eventId = managedEvent.id;
-          void this.router.navigate(['/events', managedEvent.id, 'manage'], {
+          void this.router.navigate(['/clubs', this.clubId, 'manage', 'events', managedEvent.id], {
             replaceUrl: true,
           });
         }
@@ -203,13 +250,13 @@ export class ManageEventEditorComponent {
   lifecycleBadge(lifecycleState: EventLifecycleState): string {
     switch (lifecycleState) {
       case 'Draft':
-        return 'bg-amber-100 text-amber-900';
+        return 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20';
       case 'Published':
-        return 'bg-emerald-100 text-emerald-900';
+        return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20';
       case 'Cancelled':
-        return 'bg-rose-100 text-rose-900';
+        return 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20';
       case 'Archived':
-        return 'bg-slate-200 text-slate-900';
+        return 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border border-slate-500/20';
     }
   }
 

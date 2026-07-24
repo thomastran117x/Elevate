@@ -1,0 +1,113 @@
+<div class="min-h-screen bg-surface text-content">
+  <main class="mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:px-8">
+    <div class="rounded-3xl border border-line bg-glass p-6 backdrop-blur">
+      @if (loading) {
+        <div class="space-y-4">
+          <div class="h-8 w-48 animate-pulse rounded-xl bg-glass-strong"></div>
+          <div class="h-40 animate-pulse rounded-3xl bg-glass-strong"></div>
+        </div>
+      }
+
+      @if (!loading && error) {
+        <div class="rounded-2xl border border-danger/20 bg-danger/10 p-4 text-danger">
+          {{ error }}
+        </div>
+      }
+
+      @if (!loading && invite) {
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p class="text-xs uppercase tracking-[0.18em] text-faint">Club staff invitation</p>
+            <h1 class="mt-2 text-3xl font-bold">{{ invite.club?.name || 'Invitation' }}</h1>
+          </div>
+          <span class="rounded-full border border-line bg-glass px-3 py-1 text-sm text-muted">
+            {{ invite.state }}
+          </span>
+        </div>
+
+        <div class="mt-6 overflow-hidden rounded-3xl border border-line bg-surface-sunken">
+          <div
+            class="h-40 bg-cover bg-center"
+            [style.background-image]="
+              invite.club?.clubImage
+                ? 'linear-gradient(180deg, rgba(15,23,42,0.12), rgba(15,23,42,0.65)), url(' +
+                  invite.club?.clubImage +
+                  ')'
+                : 'linear-gradient(135deg, rgba(14,165,233,.25), rgba(99,102,241,.25))'
+            "
+          ></div>
+          <div class="space-y-4 p-6">
+            @if (invite.role) {
+              <p class="text-sm leading-7 text-muted">
+                You've been invited to join
+                <span class="font-semibold text-content">{{
+                  invite.club?.name || 'this club'
+                }}</span>
+                as a <span class="font-semibold text-content">{{ invite.role }}</span
+                >.
+              </p>
+            }
+            @if (invite.expiresAtUtc) {
+              <p class="text-sm text-warning/90">
+                Expires {{ invite.expiresAtUtc | date: 'medium' }}
+              </p>
+            }
+
+            @if (invite.state === 'LoginRequired') {
+              <div class="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  class="rounded-xl bg-surface-raised px-4 py-2 font-medium text-content"
+                  (click)="goToAuth('login')"
+                >
+                  Sign in to continue
+                </button>
+                <button
+                  type="button"
+                  class="rounded-xl border border-line-strong bg-glass px-4 py-2 font-medium text-content"
+                  (click)="goToAuth('signup')"
+                >
+                  Create account
+                </button>
+              </div>
+            }
+
+            @if (invite.state === 'AcceptAvailable') {
+              <div class="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  class="rounded-xl bg-success px-4 py-2 font-medium text-content disabled:opacity-60"
+                  [disabled]="actionLoading"
+                  (click)="accept()"
+                >
+                  {{ actionLoading ? 'Accepting...' : 'Accept invitation' }}
+                </button>
+                <button
+                  type="button"
+                  class="rounded-xl border border-line-strong bg-glass px-4 py-2 font-medium text-content disabled:opacity-60"
+                  [disabled]="actionLoading"
+                  (click)="decline()"
+                >
+                  Decline
+                </button>
+              </div>
+            }
+
+            @if (invite.state === 'NotRecipient') {
+              <p class="text-sm text-muted">
+                This invitation was sent to a different account. Sign in with the invited account to
+                respond.
+              </p>
+            }
+
+            @if (invite.state === 'Expired' || invite.state === 'Invalid') {
+              <p class="text-sm text-muted">
+                This invitation is no longer valid. Ask a club owner to send a new one.
+              </p>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  </main>
+</div>

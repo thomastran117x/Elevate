@@ -1,0 +1,66 @@
+<div class="relative min-h-screen overflow-hidden bg-page text-content">
+  <!-- Ambient blobs -->
+  <div class="pointer-events-none absolute inset-0">
+    <div
+      class="absolute -left-40 -top-40 h-[520px] w-[520px] animate-pulse rounded-full bg-accent/7 dark:bg-accent/20 blur-3xl"
+    ></div>
+    <div
+      class="absolute -right-40 top-60 h-[420px] w-[420px] animate-pulse rounded-full bg-accent/5 dark:bg-accent/10 blur-3xl"
+    ></div>
+    <div
+      class="absolute bottom-0 left-1/2 h-[400px] w-[600px] -translate-x-1/2 rounded-full bg-accent/5 dark:bg-accent/10 blur-3xl"
+    ></div>
+  </div>
+
+  <div class="relative z-10 mx-auto max-w-5xl px-6 py-14">
+    <!-- Page header -->
+    <div class="mb-8 space-y-3">
+      <div class="flex items-center gap-3">
+        <a
+          routerLink="/clubs/manage"
+          class="text-xs font-semibold text-subtle transition hover:text-content"
+        >
+          &larr; All clubs
+        </a>
+      </div>
+      <p class="text-sm font-semibold uppercase tracking-[0.28em] text-accent">Club management</p>
+      <h1 class="text-4xl font-black tracking-tight">
+        {{ club?.name || (loading ? 'Loading…' : 'Manage club') }}
+      </h1>
+      <p *ngIf="club" class="text-sm text-subtle">
+        {{ club.memberCount }} member{{ club.memberCount === 1 ? '' : 's' }} ·
+        {{ club.eventCount }} event{{ club.eventCount === 1 ? '' : 's' }}
+        <a
+          [routerLink]="['/clubs', clubId]"
+          class="ml-2 font-semibold text-accent transition hover:text-accent"
+        >
+          View public page &rarr;
+        </a>
+      </p>
+    </div>
+
+    <!-- Load error -->
+    <div
+      *ngIf="error"
+      class="mb-6 rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
+    >
+      {{ error }}
+    </div>
+
+    <!-- Tab navigation -->
+    <nav class="mb-8 flex flex-wrap gap-1 border-b border-line pb-0">
+      <a
+        *ngFor="let tab of tabs"
+        [routerLink]="tab.path"
+        routerLinkActive="border-b-2 border-accent text-content font-semibold"
+        [routerLinkActiveOptions]="{ exact: false }"
+        class="px-4 pb-3 pt-2 text-sm font-medium text-subtle transition hover:text-content"
+      >
+        {{ tab.label }}
+      </a>
+    </nav>
+
+    <!-- Tab content -->
+    <router-outlet></router-outlet>
+  </div>
+</div>

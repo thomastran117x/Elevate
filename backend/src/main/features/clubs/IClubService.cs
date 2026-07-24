@@ -22,15 +22,30 @@ namespace backend.main.features.clubs
         Task<bool> CanManageClubPostsAsync(int clubId, int userId, string? userRole = null);
         Task<bool> CanManageEventMediaAsync(int clubId, int userId, string? userRole = null);
         Task<bool> IsClubOwnerAsync(int clubId, int userId, string? userRole = null);
-        Task<Club> CreateClub(string name, int userId, string description, string clubtype, string clubImageUrl, string? phone = null, string? email = null);
-        Task<Club> UpdateClub(int clubId, int userId, string userRole, string name, string description, string clubtype, string clubImageUrl, string? phone = null, string? email = null);
+        Task<Club> CreateClub(int userId, ClubWriteModel model);
+        Task<Club> UpdateClub(int clubId, int userId, string userRole, ClubWriteModel model);
         Task<List<Club>> GetClubsByIdsAsync(IEnumerable<int> clubIds);
         Task DeleteClub(int clubId, int userId);
-        Task<IReadOnlyList<ClubStaff>> GetStaffAsync(int clubId, int userId, string userRole);
+        Task<IReadOnlyList<ClubStaff>> GetStaffAsync(int clubId, int userId, string userRole, string? search = null);
         Task<ClubStaff> AddStaffAsync(int clubId, int targetUserId, ClubStaffRole role, int actorUserId, string actorUserRole);
+        /// <summary>
+        /// Grants a staff role as the result of an accepted invitation. Unlike <see cref="AddStaffAsync"/>
+        /// this skips the owner-actor authorization check (the invited user is the actor) but still
+        /// validates the target exists and the club owner is not re-added. Idempotent: returns the
+        /// existing assignment when the user already holds a staff role.
+        /// </summary>
+        Task<ClubStaff> GrantStaffFromInvitationAsync(int clubId, int targetUserId, ClubStaffRole role, int grantedByUserId);
+        Task<bool> IsClubStaffMemberAsync(int clubId, int targetUserId);
         Task RemoveStaffAsync(int clubId, int targetUserId, int actorUserId, string actorUserRole);
         Task<Club> TransferOwnershipAsync(int clubId, int newOwnerUserId, int actorUserId, string actorUserRole);
         Task JoinClubAsync(int clubId, int userId);
+        /// <summary>
+        /// Grants club membership as the result of an accepted member invitation or a redeemed
+        /// invite link. Unlike <see cref="JoinClubAsync"/> this bypasses the <c>isPrivate</c> gate
+        /// (the invitation is the authorization) and is idempotent: a no-op when the user is already
+        /// a member.
+        /// </summary>
+        Task GrantMembershipFromInvitationAsync(int clubId, int userId);
         Task LeaveClubAsync(int clubId, int userId);
         Task EventCreatedAsync(int clubId, int eventId);
         Task EventDeletedAsync(int clubId, int eventId);

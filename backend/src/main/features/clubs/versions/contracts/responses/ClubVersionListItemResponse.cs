@@ -9,4 +9,7 @@ public sealed record ClubVersionListItemResponse(
     bool RollbackEligible,
     DateTime RollbackExpiresAt,
     int? RollbackSourceVersionNumber,
-    IReadOnlyList<ClubVersionFieldChangeResponse> ChangedFields);
+    IReadOnlyList<ClubVersionFieldChangeResponse> ChangedFields,
+    string? ActorName = null,
+    string? ActorUsername = null,
+    string? ActorAvatar = null);

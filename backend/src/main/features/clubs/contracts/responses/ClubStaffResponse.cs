@@ -27,6 +27,18 @@ namespace backend.main.features.clubs.contracts.responses
         {
             get; set;
         }
+        public string? Name
+        {
+            get; set;
+        }
+        public string? Username
+        {
+            get; set;
+        }
+        public string? Avatar
+        {
+            get; set;
+        }
 
         public ClubStaffResponse(
             int id,
@@ -35,7 +47,10 @@ namespace backend.main.features.clubs.contracts.responses
             string role,
             int grantedByUserId,
             DateTime createdAt,
-            DateTime updatedAt)
+            DateTime updatedAt,
+            string? name = null,
+            string? username = null,
+            string? avatar = null)
         {
             Id = id;
             ClubId = clubId;
@@ -44,6 +59,9 @@ namespace backend.main.features.clubs.contracts.responses
             GrantedByUserId = grantedByUserId;
             CreatedAt = createdAt;
             UpdatedAt = updatedAt;
+            Name = name;
+            Username = username;
+            Avatar = avatar;
         }
     }
 }

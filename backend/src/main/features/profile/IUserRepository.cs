@@ -19,6 +19,7 @@ namespace backend.main.features.profile
         /// </summary>
         Task<User?> GetUserAsync(int id);
         Task<UserProfileRecord?> GetProfileByUsernameAsync(string username);
+        Task<UserProfileRecord?> GetProfileByEmailAsync(string email);
         Task<IReadOnlyList<UserListRecord>> GetUsersAsync(
             string? role = null,
             UserReadDetailLevel detail = UserReadDetailLevel.Slim

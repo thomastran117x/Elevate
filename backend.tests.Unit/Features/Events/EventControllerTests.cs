@@ -167,7 +167,7 @@ public class EventControllerTests
     public async Task GetEventsByClub_ShouldReturnPagedResults()
     {
         var service = new Mock<IEventsService>();
-        service.Setup(s => s.GetEventsByClub(4, EventStatus.Upcoming, 1, 10))
+        service.Setup(s => s.GetEventsByClub(4, EventStatus.Upcoming, 1, 10, null))
             .ReturnsAsync((
                 new List<backend.main.features.events.Events> { BuildEvent(21, clubId: 4, name: "Upcoming Night") },
                 1,

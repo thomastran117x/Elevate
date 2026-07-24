@@ -234,7 +234,7 @@ namespace backend.main.features.events
 
         [HttpGet("clubs/{clubId}")]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<EventResponse>>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetEventsByClub(int clubId, EventStatus? status = null, int page = 1, int pageSize = 20)
+        public async Task<IActionResult> GetEventsByClub(int clubId, EventStatus? status = null, int page = 1, int pageSize = 20, [FromQuery] string? search = null)
         {
             try
             {
@@ -244,7 +244,7 @@ namespace backend.main.features.events
                 if (pageSize < 1 || pageSize > 100)
                     return BadRequestResponse("pageSize must be between 1 and 100.");
 
-                var (events, totalCount, source) = await _eventService.GetEventsByClub(clubId, status: status, page: page, pageSize: pageSize);
+                var (events, totalCount, source) = await _eventService.GetEventsByClub(clubId, status: status, page: page, pageSize: pageSize, search: search);
 
                 var paged = new PagedResponse<EventResponse>(
                     events.Select(e => EventMapper.MapToResponse(e)),
@@ -276,7 +276,8 @@ namespace backend.main.features.events
             int clubId,
             EventLifecycleState? lifecycleState = null,
             int page = 1,
-            int pageSize = 20)
+            int pageSize = 20,
+            [FromQuery] string? search = null)
         {
             try
             {
@@ -293,7 +294,8 @@ namespace backend.main.features.events
                     user.Role,
                     lifecycleState,
                     page,
-                    pageSize);
+                    pageSize,
+                    search);
 
                 var paged = new PagedResponse<ManagedEventResponse>(
                     events.Select(MapManagedEvent),

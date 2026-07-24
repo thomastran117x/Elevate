@@ -94,6 +94,7 @@ export class EventsManagementService {
     }
     if (params.page) httpParams = httpParams.set('page', String(params.page));
     if (params.pageSize) httpParams = httpParams.set('pageSize', String(params.pageSize));
+    if (params.search?.trim()) httpParams = httpParams.set('search', params.search.trim());
 
     return this.http
       .get<ManagedEventsApiPayload>(`${this.base}/clubs/${clubId}/manage`, { params: httpParams })
@@ -152,6 +153,9 @@ export class EventsManagementService {
             void fetch(uploadUrl, {
               method: 'PUT',
               headers: {
+                // Azure Blob's "Put Blob" operation requires this header; without it
+                // the SAS PUT is rejected with 400 (MissingRequiredHeader).
+                'x-ms-blob-type': 'BlockBlob',
                 'Content-Type': file.type || 'application/octet-stream',
               },
               body: file,

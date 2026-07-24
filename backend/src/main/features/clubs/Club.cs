@@ -22,6 +22,13 @@ namespace backend.main.features.clubs
         {
             get; set;
         }
+        /// <summary>Optional hero/banner image, separate from the square club icon (<see cref="ClubImage"/>).</summary>
+        public string? BannerImage
+        {
+            get; set;
+        }
+        /// <summary>Ordered gallery of display photos (max 5). Stored as JSON. Non-versioned.</summary>
+        public List<string> GalleryImages { get; set; } = [];
         public string? Phone
         {
             get; set;

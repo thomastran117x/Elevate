@@ -152,7 +152,7 @@ public class EventRequestValidationTests
     {
         var request = new PresignedUrlRequest
         {
-            ClubId = 0,
+            ClubId = -1,
             EventId = 0,
             FileName = "ab",
             ContentType = new string('x', 101)
@@ -161,7 +161,7 @@ public class EventRequestValidationTests
         var results = Validate(request);
 
         results.Select(item => item.ErrorMessage).Should().Contain([
-            "ClubId must be greater than 0.",
+            "ClubId cannot be negative.",
             "EventId must be greater than 0.",
             "The field FileName must be a string with a minimum length of 3 and a maximum length of 255.",
             "The field ContentType must be a string with a maximum length of 100."

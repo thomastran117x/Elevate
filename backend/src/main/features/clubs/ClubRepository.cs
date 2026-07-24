@@ -68,6 +68,8 @@ namespace backend.main.features.clubs
             existing.Description = updatedClub.Description;
             existing.Clubtype = updatedClub.Clubtype;
             existing.ClubImage = updatedClub.ClubImage;
+            existing.BannerImage = updatedClub.BannerImage;
+            existing.GalleryImages = updatedClub.GalleryImages;
             existing.Phone = updatedClub.Phone;
             existing.Email = updatedClub.Email;
             existing.WebsiteUrl = updatedClub.WebsiteUrl;

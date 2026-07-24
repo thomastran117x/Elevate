@@ -144,6 +144,9 @@ namespace backend.Migrations
                     b.Property<int>("AvaliableEventCount")
                         .HasColumnType("int");
 
+                    b.Property<string>("BannerImage")
+                        .HasColumnType("longtext");
+
                     b.Property<string>("ClubImage")
                         .IsRequired()
                         .HasColumnType("longtext");
@@ -166,6 +169,9 @@ namespace backend.Migrations
 
                     b.Property<int>("EventCount")
                         .HasColumnType("int");
+
+                    b.Property<string>("GalleryImages")
+                        .HasColumnType("json");
 
                     b.Property<string>("Location")
                         .HasColumnType("longtext");
@@ -233,6 +239,58 @@ namespace backend.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("FollowClubs");
+                });
+
+            modelBuilder.Entity("backend.main.features.clubs.follow.invitations.ClubInvitationLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ClubId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int?>("MaxRedemptions")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RedemptionCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int?>("RevokedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClubId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("ClubInvitationLinks");
                 });
 
             modelBuilder.Entity("backend.main.features.clubs.posts.ClubPost", b =>
@@ -1118,6 +1176,23 @@ namespace backend.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("backend.main.features.clubs.follow.invitations.ClubInvitationLink", b =>
+                {
+                    b.HasOne("backend.main.features.clubs.Club", "Club")
+                        .WithMany()
+                        .HasForeignKey("ClubId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("backend.main.features.profile.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Club");
                 });
 
             modelBuilder.Entity("backend.main.features.clubs.posts.ClubPost", b =>
