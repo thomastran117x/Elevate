@@ -49,7 +49,9 @@ public class EventWaitlistPromoterTests
         var entry = await harness.Db.EventWaitlistEntries.SingleAsync(w => w.UserId == 2);
         entry.Status.Should().Be(EventWaitlistEntryStatus.Promoted);
         entry.PromotedAtUtc.Should().NotBeNull();
-        entry.PromotionEmailQueuedAtUtc.Should().NotBeNull();
+        // The email marker is set by PublishPromotionEmailsAsync, not by promotion itself —
+        // see PromoteAsync_ShouldNotSetEmailMarker_UntilThePublishSucceeds.
+        entry.PromotionEmailQueuedAtUtc.Should().BeNull();
 
         // Second in line stays queued — only one seat was free.
         var stillWaiting = await harness.Db.EventWaitlistEntries.SingleAsync(w => w.UserId == 3);
@@ -237,6 +239,75 @@ public class EventWaitlistPromoterTests
         var promoted = await harness.PromoteAsync();
 
         promoted.Select(p => p.UserId).Should().ContainInOrder(4, 3);
+    }
+
+    [Fact]
+    public async Task PromoteAsync_ShouldReachEligibleUser_BehindALongRunOfSkippedCandidates()
+    {
+        await using var harness = await WaitlistPromoterHarness.CreateAsync();
+        await harness.SetCapacityAsync(1);
+
+        // A long head of ineligible candidates. A fixed-window scan would select and skip the
+        // same rows on every trigger, starving the eligible user behind them forever.
+        const int skippedAhead = 60;
+        for (var i = 0; i < skippedAhead; i++)
+        {
+            var userId = await harness.AddUserAsync($"skipped{i}@test.local");
+            await harness.QueueAsync(userId, joinedAtUtc: DateTime.UtcNow.AddMinutes(-500 + i));
+            harness.DenyAccessFor(userId);
+        }
+
+        var eligibleUserId = await harness.AddUserAsync("eligible@test.local");
+        await harness.QueueAsync(eligibleUserId, joinedAtUtc: DateTime.UtcNow.AddMinutes(-1));
+
+        var promoted = await harness.PromoteAsync();
+
+        promoted.Should().ContainSingle();
+        promoted[0].UserId.Should().Be(eligibleUserId);
+
+        // The skipped entries stay Waiting — being skipped is reversible.
+        (await harness.Db.EventWaitlistEntries
+            .CountAsync(w => w.Status == EventWaitlistEntryStatus.Waiting))
+            .Should().Be(skippedAhead);
+    }
+
+    [Fact]
+    public async Task PromoteAsync_ShouldNotSetEmailMarker_UntilThePublishSucceeds()
+    {
+        await using var harness = await WaitlistPromoterHarness.CreateAsync();
+        await harness.SetCapacityAsync(1);
+        await harness.QueueAsync(userId: 2);
+
+        var promoted = await harness.PromoteAsync();
+        promoted.Should().ContainSingle();
+
+        // Promotion alone must not claim the email went out.
+        (await harness.Db.EventWaitlistEntries.AsNoTracking().SingleAsync(w => w.UserId == 2))
+            .PromotionEmailQueuedAtUtc.Should().BeNull();
+
+        await harness.Promoter.PublishPromotionEmailsAsync(promoted, harness.EventId, "Event", null);
+
+        harness.Db.ChangeTracker.Clear();
+        (await harness.Db.EventWaitlistEntries.AsNoTracking().SingleAsync(w => w.UserId == 2))
+            .PromotionEmailQueuedAtUtc.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task PromoteAsync_ShouldLeaveEmailMarkerNull_WhenThePublishFails()
+    {
+        await using var harness = await WaitlistPromoterHarness.CreateAsync();
+        await harness.SetCapacityAsync(1);
+        await harness.QueueAsync(userId: 2);
+
+        var promoted = await harness.PromoteAsync();
+        harness.MakePublisherThrow();
+
+        await harness.Promoter.PublishPromotionEmailsAsync(promoted, harness.EventId, "Event", null);
+
+        harness.Db.ChangeTracker.Clear();
+        var entry = await harness.Db.EventWaitlistEntries.AsNoTracking().SingleAsync(w => w.UserId == 2);
+        entry.Status.Should().Be(EventWaitlistEntryStatus.Promoted, "the promotion itself is durable");
+        entry.PromotionEmailQueuedAtUtc.Should().BeNull("this is the only signal the user was never notified");
     }
 
     [Fact]
@@ -515,6 +586,15 @@ internal sealed class WaitlistPromoterHarness : IAsyncDisposable
             UpdatedAt = joined
         });
         await Db.SaveChangesAsync();
+    }
+
+    /// <summary>Adds a participant and returns their id, for tests needing many users.</summary>
+    public async Task<int> AddUserAsync(string email)
+    {
+        var user = new User { Email = email, Name = email, Usertype = "Participant" };
+        Db.Users.Add(user);
+        await Db.SaveChangesAsync();
+        return user.Id;
     }
 
     public async Task DisableUserAsync(int userId)

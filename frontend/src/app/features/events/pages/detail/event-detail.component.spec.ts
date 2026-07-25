@@ -8,6 +8,7 @@ import { EventsService } from '../../services/events.service';
 import { EventApiResponse } from '../../models/event.types';
 import { EventRegistrationService } from '../../services/event-registration.service';
 import { EventWaitlistService } from '../../services/event-waitlist.service';
+import { FeatureFlagsService } from '../../../../core/features/feature-flags.service';
 import {
   ApiClientClientError,
   ApiClientServerError,
@@ -49,6 +50,7 @@ describe('EventDetailComponent', () => {
   // Most specs here predate auth-aware behaviour and assumed a signed-out user; the
   // waitlist states need a signed-in one, so it is overridable per test.
   let signedInUser: { Id: number } | null = null;
+  let waitlistFeatureEnabled = true;
 
   const response: EventApiResponse = {
     success: true,
@@ -130,6 +132,10 @@ describe('EventDetailComponent', () => {
         { provide: EventsService, useValue: eventsService },
         { provide: EventRegistrationService, useValue: registrationService },
         { provide: EventWaitlistService, useValue: waitlistService },
+        {
+          provide: FeatureFlagsService,
+          useValue: { isEnabled: () => waitlistFeatureEnabled },
+        },
         { provide: Router, useValue: router },
         { provide: Store, useValue: { select: () => of(signedInUser) } },
       ],
@@ -160,8 +166,14 @@ describe('EventDetailComponent', () => {
   }
 
   describe('waitlist', () => {
-    beforeEach(() => (signedInUser = { Id: 7 }));
-    afterEach(() => (signedInUser = null));
+    beforeEach(() => {
+      signedInUser = { Id: 7 };
+      waitlistFeatureEnabled = true;
+    });
+    afterEach(() => {
+      signedInUser = null;
+      waitlistFeatureEnabled = true;
+    });
 
     it('offers the waitlist when the event is full and has one enabled', () => {
       makeFullWaitlistEvent();
@@ -172,6 +184,17 @@ describe('EventDetailComponent', () => {
       expect(component.canJoinWaitlist).toBeTrue();
       // The waitlist is an additional path, not a relaxation of the capacity rule.
       expect(component.canRegister).toBeFalse();
+    });
+
+    it('does not offer the waitlist when the global feature flag is disabled', () => {
+      // The backend controller is feature-gated, so the CTA must not appear for an event that
+      // stored waitlistEnabled=true before the flag was turned off.
+      waitlistFeatureEnabled = false;
+      makeFullWaitlistEvent();
+      createComponent();
+
+      expect(component.waitlistOffered).toBeFalse();
+      expect(component.canJoinWaitlist).toBeFalse();
     });
 
     it('does not offer the waitlist when the event is full but the waitlist is off', () => {

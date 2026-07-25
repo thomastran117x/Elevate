@@ -52,8 +52,10 @@ namespace backend.main.features.events.waitlist
         }
 
         /// <summary>
-        /// Set when the promotion email was handed to the publisher. Promotion is durable
-        /// even when the publish fails, so this makes an undelivered promotion observable.
+        /// Set only once the promotion email has been successfully handed to the publisher.
+        /// Promotion is durable even when publishing fails, so a Promoted entry with a null
+        /// marker is the only record that the user was never notified — worth a reconciliation
+        /// pass, since the entry is no longer Waiting and cannot be re-driven by promotion.
         /// </summary>
         public DateTime? PromotionEmailQueuedAtUtc
         {

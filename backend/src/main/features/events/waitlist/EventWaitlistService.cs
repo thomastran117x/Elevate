@@ -1,6 +1,7 @@
 using System.Data;
 
 using backend.main.features.cache;
+using backend.main.features.events.access;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
 using backend.main.features.events.waitlist.contracts.requests;
@@ -27,6 +28,7 @@ namespace backend.main.features.events.waitlist
         private readonly IEventWaitlistRepository _waitlistRepository;
         private readonly IEventWaitlistPromoter _promoter;
         private readonly IEventsService _eventsService;
+        private readonly IEventAccessChecker _accessChecker;
         private readonly ICacheService _cache;
         private readonly IRefreshAheadCache _refreshCache;
         private readonly IEventSearchOutboxWriter _outboxWriter;
@@ -39,6 +41,7 @@ namespace backend.main.features.events.waitlist
             IEventWaitlistRepository waitlistRepository,
             IEventWaitlistPromoter promoter,
             IEventsService eventsService,
+            IEventAccessChecker accessChecker,
             ICacheService cache,
             IRefreshAheadCache refreshCache,
             IEventSearchOutboxWriter outboxWriter,
@@ -48,6 +51,7 @@ namespace backend.main.features.events.waitlist
             _waitlistRepository = waitlistRepository;
             _promoter = promoter;
             _eventsService = eventsService;
+            _accessChecker = accessChecker;
             _cache = cache;
             _refreshCache = refreshCache;
             _outboxWriter = outboxWriter;
@@ -211,8 +215,11 @@ namespace backend.main.features.events.waitlist
 
         public async Task LeaveAsync(int eventId, int userId, string userRole)
         {
-            await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
-
+            // Deliberately NOT gated on EnsureCanViewEventAsync. The promoter leaves entries
+            // Waiting when a private-event invitation is revoked, so requiring current
+            // visibility here would trap those users in the queue with their phone number and
+            // dietary notes still stored, removable only by an organizer. Owning the entry is
+            // sufficient authority to withdraw from it.
             var lockKey = EventRegistrationCacheKeys.Lock(eventId);
             var lockValue = Guid.NewGuid().ToString();
 
@@ -391,6 +398,14 @@ namespace backend.main.features.events.waitlist
             foreach (var entry in entries)
             {
                 if (!events.TryGetValue(entry.EventId, out var ev))
+                    continue;
+
+                // This response embeds full event details, so it must clear the same visibility
+                // policy as any other event read. Without it, a user whose private-event
+                // invitation was revoked after queueing would keep an open window onto that
+                // event — the promoter already treats that state as lost access. The entry
+                // itself is left Waiting so they can still leave the queue.
+                if (!await _accessChecker.CanViewEventAsync(ev, userId, userRole))
                     continue;
 
                 results.Add(new WaitlistedEventResponse

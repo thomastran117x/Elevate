@@ -321,6 +321,42 @@ public class EventWaitlistServiceTests
     }
 
     [Fact]
+    public async Task LeaveAsync_ShouldSucceed_EvenAfterEventAccessIsRevoked()
+    {
+        await using var harness = await WaitlistServiceHarness.CreateAsync();
+        await harness.FillEventAsync();
+        await harness.Service.JoinAsync(harness.EventId, harness.UserId, "Participant");
+
+        // The promoter deliberately leaves such entries Waiting, so the user must still be able
+        // to withdraw — otherwise their contact details stay stored until an organizer intervenes.
+        harness.RevokeEventVisibility();
+
+        await harness.Service.LeaveAsync(harness.EventId, harness.UserId, "Participant");
+
+        (await harness.Db.EventWaitlistEntries.AsNoTracking().SingleAsync())
+            .Status.Should().Be(EventWaitlistEntryStatus.Left);
+    }
+
+    [Fact]
+    public async Task GetMyWaitlistsAsync_ShouldOmitEventsTheUserCanNoLongerSee()
+    {
+        await using var harness = await WaitlistServiceHarness.CreateAsync();
+        await harness.FillEventAsync();
+        await harness.Service.JoinAsync(harness.EventId, harness.UserId, "Participant");
+
+        (await harness.Service.GetMyWaitlistsAsync(harness.UserId, "Participant")).Should().ContainSingle();
+
+        // A revoked private-event invitation must close the window onto the event details.
+        harness.DenyAccessFor(harness.UserId);
+
+        (await harness.Service.GetMyWaitlistsAsync(harness.UserId, "Participant")).Should().BeEmpty();
+
+        // ...but the entry survives, so they can still leave the queue.
+        (await harness.Db.EventWaitlistEntries.AsNoTracking().SingleAsync())
+            .Status.Should().Be(EventWaitlistEntryStatus.Waiting);
+    }
+
+    [Fact]
     public async Task PromoteNextAsync_ShouldThrowConflict_WhenNoSeatsAvailable()
     {
         await using var harness = await WaitlistServiceHarness.CreateAsync();
@@ -340,6 +376,8 @@ internal sealed class WaitlistServiceHarness : IAsyncDisposable
     private readonly SqliteConnection _connection;
     private readonly Mock<ICacheService> _cacheMock;
     private readonly Mock<IPublisher> _publisherMock;
+    private readonly Mock<IEventsService> _eventsServiceMock;
+    private readonly HashSet<int> _deniedUserIds = [];
 
     public AppDatabaseContext Db { get; }
     public EventWaitlistService Service { get; }
@@ -354,13 +392,15 @@ internal sealed class WaitlistServiceHarness : IAsyncDisposable
         AppDatabaseContext db,
         EventWaitlistService service,
         Mock<ICacheService> cacheMock,
-        Mock<IPublisher> publisherMock)
+        Mock<IPublisher> publisherMock,
+        Mock<IEventsService> eventsServiceMock)
     {
         _connection = connection;
         Db = db;
         Service = service;
         _cacheMock = cacheMock;
         _publisherMock = publisherMock;
+        _eventsServiceMock = eventsServiceMock;
     }
 
     public static async Task<WaitlistServiceHarness> CreateAsync(bool waitlistEnabled = true)
@@ -428,11 +468,14 @@ internal sealed class WaitlistServiceHarness : IAsyncDisposable
         var refreshCacheMock = new Mock<IRefreshAheadCache>();
         refreshCacheMock.Setup(cache => cache.RemoveAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
 
+        var harnessRef = new WaitlistServiceHarness[1];
+
         var accessCheckerMock = new Mock<IEventAccessChecker>();
         accessCheckerMock
             .Setup(checker => checker.CanViewEventAsync(
                 It.IsAny<backend.main.features.events.Events>(), It.IsAny<int?>(), It.IsAny<string?>()))
-            .ReturnsAsync(true);
+            .ReturnsAsync((backend.main.features.events.Events _, int? userId, string? _) =>
+                harnessRef[0] == null || userId == null || !harnessRef[0]._deniedUserIds.Contains(userId.Value));
 
         var publisherMock = new Mock<IPublisher>();
         var outboxWriter = Mock.Of<IEventSearchOutboxWriter>();
@@ -445,12 +488,14 @@ internal sealed class WaitlistServiceHarness : IAsyncDisposable
             new EventWaitlistRepository(db),
             promoter,
             eventsServiceMock.Object,
+            accessCheckerMock.Object,
             cacheMock.Object,
             refreshCacheMock.Object,
             outboxWriter,
             publisherMock.Object);
 
-        var harness = new WaitlistServiceHarness(connection, db, service, cacheMock, publisherMock);
+        var harness = new WaitlistServiceHarness(connection, db, service, cacheMock, publisherMock, eventsServiceMock);
+        harnessRef[0] = harness;
 
         publisherMock
             .Setup(publisher => publisher.PublishAsync(It.IsAny<string>(), It.IsAny<EmailMessage>()))
@@ -502,6 +547,14 @@ internal sealed class WaitlistServiceHarness : IAsyncDisposable
         ev.LifecycleState = state;
         await Db.SaveChangesAsync();
     }
+
+    /// <summary>Makes the events service reject reads of this event, as a revocation would.</summary>
+    public void RevokeEventVisibility() =>
+        _eventsServiceMock
+            .Setup(service => service.EnsureCanViewEventAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>()))
+            .ThrowsAsync(new ResourceNotFoundException("Event not found"));
+
+    public void DenyAccessFor(int userId) => _deniedUserIds.Add(userId);
 
     public void MakeLockUnavailable() =>
         _cacheMock

@@ -85,80 +85,97 @@ namespace backend.main.features.events.waitlist
 
             var promoted = new List<WaitlistPromotion>();
 
-            // Single bounded scan rather than paging. Entry mutations below are not flushed
-            // until the end, so a second query would re-read the same rows as still Waiting
-            // and try to register them twice. MaxScanPerRun caps the work even when most
-            // candidates are skipped; anything beyond it drains on the next trigger.
-            var candidates = await _db.EventWaitlistEntries
-                .Where(w => w.EventId == eventId && w.Status == EventWaitlistEntryStatus.Waiting)
-                .OrderBy(w => w.JoinedAtUtc)
-                .ThenBy(w => w.Id)
-                .Take(MaxScanPerRun)
-                .ToListAsync();
+            // Paged scan. Entry mutations below are NOT flushed until the end, so every query
+            // still sees the whole queue as Waiting in exactly the same (JoinedAtUtc, Id) order
+            // — which is precisely why Skip(examined) advances correctly and why re-querying
+            // without it would reprocess the same rows and double-register them.
+            //
+            // Paging (rather than one fixed Take) matters because skipped entries stay Waiting:
+            // with a fixed window, a long run of ineligible candidates at the head of the queue
+            // would be re-selected and re-skipped on every trigger, starving everyone behind
+            // them indefinitely while seats sat empty.
+            var examined = 0;
 
-            foreach (var entry in candidates)
+            while (promoted.Count < seats && examined < MaxScanPerRun)
             {
-                if (promoted.Count >= seats)
+                var batchSize = Math.Min(seats - promoted.Count + 10, MaxScanPerRun - examined);
+
+                var batch = await _db.EventWaitlistEntries
+                    .Where(w => w.EventId == eventId && w.Status == EventWaitlistEntryStatus.Waiting)
+                    .OrderBy(w => w.JoinedAtUtc)
+                    .ThenBy(w => w.Id)
+                    .Skip(examined)
+                    .Take(batchSize)
+                    .ToListAsync();
+
+                if (batch.Count == 0)
                     break;
 
-                var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == entry.UserId);
-
-                // Skip in place rather than closing the entry: both this and the visibility
-                // check below are reversible, and a removed entry could not be restored.
-                if (user == null || user.IsDisabled)
-                    continue;
-
-                // Private events: access can be revoked after joining the queue.
-                if (!await _accessChecker.CanViewEventAsync(ev, entry.UserId, user.Usertype))
-                    continue;
-
-                var existing = await _db.EventRegistrations
-                    .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == entry.UserId);
-
-                if (existing is { Status: RegistrationStatus.Active })
+                foreach (var entry in batch)
                 {
-                    // Registered directly while queued. Close the entry but do NOT consume
-                    // the seat, otherwise the freed seat is burned on a no-op.
+                    if (promoted.Count >= seats)
+                        break;
+
+                    examined++;
+
+                    var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == entry.UserId);
+
+                    // Skip in place rather than closing the entry: both this and the visibility
+                    // check below are reversible, and a removed entry could not be restored.
+                    if (user == null || user.IsDisabled)
+                        continue;
+
+                    // Private events: access can be revoked after joining the queue.
+                    if (!await _accessChecker.CanViewEventAsync(ev, entry.UserId, user.Usertype))
+                        continue;
+
+                    var existing = await _db.EventRegistrations
+                        .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == entry.UserId);
+
+                    if (existing is { Status: RegistrationStatus.Active })
+                    {
+                        // Registered directly while queued. Close the entry but do NOT consume
+                        // the seat, otherwise the freed seat is burned on a no-op.
+                        entry.Status = EventWaitlistEntryStatus.Promoted;
+                        entry.PromotedAtUtc = nowUtc;
+                        entry.UpdatedAt = nowUtc;
+                        continue;
+                    }
+
+                    if (existing != null)
+                    {
+                        // A cancelled row exists — reactivate it. Inserting would violate the
+                        // unique (EventId, UserId) index and fail the caller's transaction.
+                        existing.Status = RegistrationStatus.Active;
+                        existing.CancelledAt = null;
+                        existing.Notes = entry.Notes;
+                        existing.PhoneNumber = entry.PhoneNumber;
+                        existing.DietaryNeeds = entry.DietaryNeeds;
+                    }
+                    else
+                    {
+                        _db.EventRegistrations.Add(new EventRegistration
+                        {
+                            EventId = eventId,
+                            UserId = entry.UserId,
+                            CreatedAt = nowUtc,
+                            Status = RegistrationStatus.Active,
+                            Notes = entry.Notes,
+                            PhoneNumber = entry.PhoneNumber,
+                            DietaryNeeds = entry.DietaryNeeds
+                        });
+                    }
+
                     entry.Status = EventWaitlistEntryStatus.Promoted;
                     entry.PromotedAtUtc = nowUtc;
                     entry.UpdatedAt = nowUtc;
-                    continue;
-                }
 
-                if (existing != null)
-                {
-                    // A cancelled row exists — reactivate it. Inserting would violate the
-                    // unique (EventId, UserId) index and fail the caller's transaction.
-                    existing.Status = RegistrationStatus.Active;
-                    existing.CancelledAt = null;
-                    existing.Notes = entry.Notes;
-                    existing.PhoneNumber = entry.PhoneNumber;
-                    existing.DietaryNeeds = entry.DietaryNeeds;
+                    promoted.Add(new WaitlistPromotion(
+                        entry.Id,
+                        entry.UserId,
+                        user.Email,
+                        string.IsNullOrWhiteSpace(user.Name) ? user.Username : user.Name));
                 }
-                else
-                {
-                    _db.EventRegistrations.Add(new EventRegistration
-                    {
-                        EventId = eventId,
-                        UserId = entry.UserId,
-                        CreatedAt = nowUtc,
-                        Status = RegistrationStatus.Active,
-                        Notes = entry.Notes,
-                        PhoneNumber = entry.PhoneNumber,
-                        DietaryNeeds = entry.DietaryNeeds
-                    });
-                }
-
-                entry.Status = EventWaitlistEntryStatus.Promoted;
-                entry.PromotedAtUtc = nowUtc;
-                entry.PromotionEmailQueuedAtUtc = nowUtc;
-                entry.UpdatedAt = nowUtc;
-
-                promoted.Add(new WaitlistPromotion(
-                    entry.Id,
-                    entry.UserId,
-                    user.Email,
-                    string.IsNullOrWhiteSpace(user.Name) ? user.Username : user.Name));
             }
 
             // Flush inside the caller's transaction so its own counter recomputation is accurate.
@@ -232,6 +249,8 @@ namespace backend.main.features.events.waitlist
             if (promotions.Count == 0)
                 return;
 
+            var delivered = new List<int>(promotions.Count);
+
             foreach (var promotion in promotions)
             {
                 try
@@ -245,14 +264,37 @@ namespace backend.main.features.events.waitlist
                         EventName = eventName,
                         EventStartsAtUtc = startsAtUtc
                     });
+
+                    delivered.Add(promotion.EntryId);
                 }
                 catch (Exception e)
                 {
-                    // The promotion is already committed and the user IS registered. Failing
-                    // here would be strictly worse than a missing email; PromotionEmailQueuedAtUtc
-                    // records the attempt and the organizer's "Promote next" can re-drive it.
+                    // The promotion is already committed and the user IS registered, so failing
+                    // here would be strictly worse than a missing email. The entry keeps a null
+                    // PromotionEmailQueuedAtUtc, which is the ONLY signal that the notification
+                    // never went out: the entry is terminally Promoted, so neither automatic
+                    // promotion nor the organizer's "Promote next" (both of which scan only
+                    // Waiting entries) can re-drive it. Resending requires a reconciliation pass
+                    // over Promoted entries with a null marker.
                     Logger.Warn(e, $"[EventWaitlistPromoter] Failed to publish promotion email for entry {promotion.EntryId}");
                 }
+            }
+
+            if (delivered.Count == 0)
+                return;
+
+            try
+            {
+                // Recorded only after a successful publish, so the marker means "handed to the
+                // publisher", not merely "we intended to".
+                await _db.EventWaitlistEntries
+                    .Where(w => delivered.Contains(w.Id))
+                    .ExecuteUpdateAsync(setters =>
+                        setters.SetProperty(w => w.PromotionEmailQueuedAtUtc, DateTime.UtcNow));
+            }
+            catch (Exception e)
+            {
+                Logger.Warn(e, "[EventWaitlistPromoter] Failed to record promotion email delivery markers");
             }
         }
 

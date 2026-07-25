@@ -18,6 +18,8 @@ import {
 import { EventsService } from '../../services/events.service';
 import { EventWaitlistService } from '../../services/event-waitlist.service';
 import { MyWaitlistStatus } from '../../models/event-waitlist.types';
+import { FeatureFlagsService } from '../../../../core/features/feature-flags.service';
+import { FEATURE_KEYS } from '../../../../core/features/feature-flags.types';
 
 @Component({
   selector: 'app-event-detail',
@@ -43,6 +45,7 @@ export class EventDetailComponent implements OnInit, OnDestroy {
   waitlistStatus: MyWaitlistStatus | null = null;
   waitlistLoading = false;
   waitlistError = '';
+  readonly waitlistFeatureEnabled: boolean;
 
   registrationForm: FormGroup;
 
@@ -59,7 +62,9 @@ export class EventDetailComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private fb: FormBuilder,
+    private featureFlags: FeatureFlagsService,
   ) {
+    this.waitlistFeatureEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.eventsWaitlist);
     this.registrationForm = this.fb.group({
       notes: [''],
       phoneNumber: [''],
@@ -128,6 +133,10 @@ export class EventDetailComponent implements OnInit, OnDestroy {
    */
   get waitlistOffered(): boolean {
     if (!this.event) return false;
+    // The controller is [FeatureGate]-d, so without the global flag every click would fail.
+    // The routes and navbar entry are already flag-gated; this keeps the CTA consistent for
+    // events that stored waitlistEnabled=true before the flag was turned off.
+    if (!this.waitlistFeatureEnabled) return false;
     if (!this.event.waitlistEnabled) return false;
     if (this.event.lifecycleState !== 'Published') return false;
     if (this.isEventStarted(this.event)) return false;

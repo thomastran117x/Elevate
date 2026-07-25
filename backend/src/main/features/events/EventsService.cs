@@ -504,6 +504,18 @@ namespace backend.main.features.events
                     existing.registerCost = request.RegisterCost.Value;
                 if (request.WaitlistEnabled.HasValue)
                     existing.WaitlistEnabled = request.WaitlistEnabled.Value;
+
+                // Validate the MERGED state, not just the field pairs present in the request.
+                // This is a partial PATCH, so `{ waitlistEnabled: true }` alone against an
+                // unlimited event — or `{ maxParticipants: 0 }` alone against an event whose
+                // waitlist is already on — clears the request-level checks while persisting a
+                // combination that JoinAsync would reject outright.
+                if (existing.WaitlistEnabled && existing.maxParticipants <= 0)
+                    throw new BadRequestException("Waitlists require a capacity limit.");
+
+                if (existing.WaitlistEnabled && existing.registerCost > 0)
+                    throw new BadRequestException("Waitlists are not available for paid events.");
+
                 if (request.StartTime.HasValue)
                     existing.StartTime = request.StartTime.Value;
                 if (request.EndTime.HasValue || request.StartTime.HasValue)
@@ -2044,7 +2056,18 @@ namespace backend.main.features.events
 
             try
             {
-                await _waitlistPromoter.PromoteStandaloneAsync(eventId);
+                // A single run is capped (it holds a 10s lock), so raising capacity by more than
+                // one batch — or switching a populated event to unlimited — needs repeat passes;
+                // otherwise the surplus would sit queued against empty seats until an unrelated
+                // later trigger. Loop until a pass promotes nobody, bounded so a pathological
+                // queue cannot spin here.
+                const int maxPasses = 20;
+
+                for (var pass = 0; pass < maxPasses; pass++)
+                {
+                    if (await _waitlistPromoter.PromoteStandaloneAsync(eventId) == 0)
+                        break;
+                }
             }
             catch (Exception e)
             {
