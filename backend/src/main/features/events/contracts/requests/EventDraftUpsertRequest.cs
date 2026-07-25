@@ -48,6 +48,12 @@ namespace backend.main.features.events.contracts.requests
             get; set;
         }
 
+        /// <summary>Opt-in waitlist. Requires a capacity limit and a free event.</summary>
+        public bool? WaitlistEnabled
+        {
+            get; set;
+        }
+
         public DateTime? StartTime
         {
             get; set;
@@ -113,6 +119,20 @@ namespace backend.main.features.events.contracts.requests
                 yield return new ValidationResult(
                     "Private events cannot require a registration fee.",
                     new[] { nameof(RegisterCost), nameof(IsPrivate) });
+            }
+
+            if (WaitlistEnabled == true && MaxParticipants.HasValue && MaxParticipants.Value <= 0)
+            {
+                yield return new ValidationResult(
+                    "Waitlists require a capacity limit.",
+                    new[] { nameof(WaitlistEnabled), nameof(MaxParticipants) });
+            }
+
+            if (WaitlistEnabled == true && RegisterCost.HasValue && RegisterCost.Value > 0)
+            {
+                yield return new ValidationResult(
+                    "Waitlists are not available for paid events.",
+                    new[] { nameof(WaitlistEnabled), nameof(RegisterCost) });
             }
 
             if (Latitude.HasValue != Longitude.HasValue)

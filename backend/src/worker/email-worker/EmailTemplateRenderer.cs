@@ -160,6 +160,34 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
                 Code: null,
                 MutedNote: null),
 
+            EmailMessageType.WaitlistJoined => new Content(
+                Subject: $"You're on the waitlist for {eventName}",
+                Preheader: $"We'll email you the moment a spot opens up at {eventName}.",
+                Heading: "You're on the waitlist",
+                Greeting: greeting,
+                Intro:
+                [
+                    $"{eventName} is currently full, so we've added you to the waitlist.",
+                    "If someone cancels, the next person in line is registered automatically — we'll email you right away."
+                ],
+                Cta: new Cta(EventUrl(baseUrl, message), "View event"),
+                Code: null,
+                MutedNote: "You can leave the waitlist at any time from the event page."),
+
+            EmailMessageType.WaitlistPromoted => new Content(
+                Subject: $"You're in — a spot opened up for {eventName}",
+                Preheader: $"You've been moved off the waitlist and registered for {eventName}.",
+                Heading: "You're registered!",
+                Greeting: greeting,
+                Intro:
+                [
+                    $"Good news — a spot opened up for {eventName} and you were next in line, so we registered you automatically.",
+                    BuildReminderIntro(eventName, message.EventStartsAtUtc)
+                ],
+                Cta: new Cta(EventUrl(baseUrl, message), "View your registration"),
+                Code: null,
+                MutedNote: "Can't make it? Please unregister from the event page so the next person can take your spot."),
+
             EmailMessageType.EventReminder => new Content(
                 Subject: $"Reminder: {eventName} is coming up",
                 Preheader: $"Don't forget — {eventName} is on the way.",
@@ -199,6 +227,9 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
 
     private static string BuildUrl(string baseUrl, string path, string token) =>
         $"{baseUrl}{path}?token={Uri.EscapeDataString(token)}";
+
+    private static string EventUrl(string baseUrl, EmailMessage message) =>
+        message.EventId is int id && id > 0 ? $"{baseUrl}/events/{id}" : $"{baseUrl}/events";
 
     private static string RenderHtml(Content content)
     {

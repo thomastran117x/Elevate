@@ -43,6 +43,8 @@ type ManagedEventPayload = Partial<ManagedEvent> & {
   Longitude?: number;
   Tags?: string[];
   RegistrationCount?: number;
+  WaitlistEnabled?: boolean;
+  WaitlistCount?: number;
   PublishReady?: boolean;
   PublishIssues?: string[];
 };
@@ -235,6 +237,8 @@ export class EventsManagementService {
       longitude: item.longitude ?? item.Longitude,
       tags: item.tags ?? item.Tags ?? [],
       registrationCount: item.registrationCount ?? item.RegistrationCount ?? 0,
+      waitlistEnabled: item.waitlistEnabled ?? item.WaitlistEnabled ?? false,
+      waitlistCount: item.waitlistCount ?? item.WaitlistCount ?? 0,
       publishReady: item.publishReady ?? item.PublishReady ?? false,
       publishIssues: item.publishIssues ?? item.PublishIssues ?? [],
     };

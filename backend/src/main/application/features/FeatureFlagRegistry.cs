@@ -21,6 +21,7 @@ public sealed class FeatureFlagRegistry
             FeatureFlagKeys.EventsInvitations,
             FeatureFlagKeys.EventsRegistration,
             FeatureFlagKeys.EventsVersioning,
+            FeatureFlagKeys.EventsWaitlist,
             FeatureFlagKeys.Payment,
             FeatureFlagKeys.Profile,
             FeatureFlagKeys.ProfileAdmin,

@@ -41,6 +41,8 @@ type EventItemPayload = EventItem & {
   Longitude?: number;
   Tags?: string[];
   RegistrationCount?: number;
+  WaitlistEnabled?: boolean;
+  WaitlistCount?: number;
   DistanceKm?: number;
   Club?: EventHostClubPayload;
 };
@@ -181,6 +183,8 @@ export class EventsService {
       longitude: item.longitude ?? item.Longitude,
       tags: item.tags ?? item.Tags ?? [],
       registrationCount: item.registrationCount ?? item.RegistrationCount ?? 0,
+      waitlistEnabled: item.waitlistEnabled ?? item.WaitlistEnabled ?? false,
+      waitlistCount: item.waitlistCount ?? item.WaitlistCount ?? 0,
       distanceKm: item.distanceKm ?? item.DistanceKm,
       club: this.normalizeClub(item.club ?? item.Club),
     };

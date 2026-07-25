@@ -14,6 +14,7 @@ public static class FeatureFlagKeys
     public const string EventsInvitations = "events.invitations";
     public const string EventsRegistration = "events.registration";
     public const string EventsVersioning = "events.versioning";
+    public const string EventsWaitlist = "events.waitlist";
     public const string Payment = "payment";
     public const string Profile = "profile";
     public const string ProfileAdmin = "profile.admin";

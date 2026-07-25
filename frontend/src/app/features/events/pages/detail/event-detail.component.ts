@@ -16,6 +16,8 @@ import {
   MyRegistrationStatus,
 } from '../../services/event-registration.service';
 import { EventsService } from '../../services/events.service';
+import { EventWaitlistService } from '../../services/event-waitlist.service';
+import { MyWaitlistStatus } from '../../models/event-waitlist.types';
 
 @Component({
   selector: 'app-event-detail',
@@ -38,6 +40,10 @@ export class EventDetailComponent implements OnInit, OnDestroy {
   isEditing = false;
   registrationDetails: RegistrationDetails | null = null;
 
+  waitlistStatus: MyWaitlistStatus | null = null;
+  waitlistLoading = false;
+  waitlistError = '';
+
   registrationForm: FormGroup;
 
   readonly categoryStyles = CATEGORY_STYLES;
@@ -48,6 +54,7 @@ export class EventDetailComponent implements OnInit, OnDestroy {
   constructor(
     private eventsService: EventsService,
     private registrationService: EventRegistrationService,
+    private waitlistService: EventWaitlistService,
     private store: Store<{ user: UserState }>,
     private route: ActivatedRoute,
     private router: Router,
@@ -101,6 +108,117 @@ export class EventDetailComponent implements OnInit, OnDestroy {
     )
       return false;
     return true;
+  }
+
+  get isFull(): boolean {
+    if (!this.event) return false;
+    return (
+      this.event.maxParticipants > 0 && this.event.registrationCount >= this.event.maxParticipants
+    );
+  }
+
+  get onWaitlist(): boolean {
+    return this.waitlistStatus?.onWaitlist === true;
+  }
+
+  /**
+   * Whether a waitlist is on offer for this event. Note this is deliberately independent of
+   * `canRegister`: a full event still blocks registration, and the waitlist is an additional
+   * path rather than a relaxation of the capacity rule.
+   */
+  get waitlistOffered(): boolean {
+    if (!this.event) return false;
+    if (!this.event.waitlistEnabled) return false;
+    if (this.event.lifecycleState !== 'Published') return false;
+    if (this.isEventStarted(this.event)) return false;
+    if (this.event.registerCost > 0) return false;
+    return this.isFull;
+  }
+
+  get canJoinWaitlist(): boolean {
+    return (
+      this.waitlistOffered && this.currentUserId !== null && !this.isRegistered && !this.onWaitlist
+    );
+  }
+
+  joinWaitlist(): void {
+    if (!this.event || this.waitlistLoading) return;
+    this.waitlistLoading = true;
+    this.waitlistError = '';
+
+    this.waitlistService
+      .join(this.event.id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (entry) => {
+          this.waitlistLoading = false;
+          this.waitlistStatus = {
+            onWaitlist: true,
+            entryId: entry.id,
+            position: entry.position,
+            joinedAtUtc: entry.joinedAtUtc,
+            waitlistCount: (this.event?.waitlistCount ?? 0) + 1,
+          };
+          if (this.event) {
+            this.event = { ...this.event, waitlistCount: this.event.waitlistCount + 1 };
+          }
+        },
+        error: (response) => {
+          this.waitlistLoading = false;
+          this.waitlistError = getApiClientMessage(
+            response,
+            'We could not add you to the waitlist.',
+          );
+        },
+      });
+  }
+
+  leaveWaitlist(): void {
+    if (!this.event || this.waitlistLoading) return;
+    const eventId = this.event.id;
+    this.waitlistLoading = true;
+    this.waitlistError = '';
+
+    this.waitlistService
+      .leave(eventId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.waitlistLoading = false;
+          this.waitlistStatus = null;
+          if (this.event) {
+            this.event = {
+              ...this.event,
+              waitlistCount: Math.max(0, this.event.waitlistCount - 1),
+            };
+          }
+          // Leaving shifts everyone below us, so the remaining positions must be refetched
+          // rather than guessed.
+          this.loadWaitlistStatus(eventId);
+        },
+        error: (response) => {
+          this.waitlistLoading = false;
+          this.waitlistError = getApiClientMessage(
+            response,
+            'We could not remove you from the waitlist.',
+          );
+        },
+      });
+  }
+
+  private loadWaitlistStatus(eventId: number): void {
+    if (!this.event?.waitlistEnabled) {
+      this.waitlistStatus = null;
+      return;
+    }
+
+    this.waitlistService
+      .getMyStatus(eventId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (status) => (this.waitlistStatus = status),
+        error: () => (this.waitlistStatus = null),
+      });
   }
 
   isEventStarted(event: EventItem): boolean {
@@ -255,6 +373,12 @@ export class EventDetailComponent implements OnInit, OnDestroy {
               ...this.event,
               registrationCount: Math.max(0, this.event.registrationCount - 1),
             };
+
+            // A waitlisted user may have been promoted into the seat we just freed, in
+            // which case the optimistic decrement above is wrong. Refetch the real counts.
+            if (this.event.waitlistEnabled) {
+              this.fetch(this.event.id);
+            }
           }
         },
         error: (response) => {
@@ -272,6 +396,7 @@ export class EventDetailComponent implements OnInit, OnDestroy {
         this.currentUserId = user?.Id ?? null;
         if (!user) {
           this.isRegistered = false;
+          this.waitlistStatus = null;
           return;
         }
 
@@ -287,6 +412,8 @@ export class EventDetailComponent implements OnInit, OnDestroy {
               this.isRegistered = false;
             },
           });
+
+        this.loadWaitlistStatus(eventId);
       });
   }
 

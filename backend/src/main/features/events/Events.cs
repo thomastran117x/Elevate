@@ -69,6 +69,18 @@ public class Events
         get; set;
     } = 0;
 
+    /// <summary>
+    /// Opt-in: when the event is full, users may join a waitlist and are auto-promoted
+    /// into a registration as seats free up. Requires a capacity limit and a free event.
+    /// </summary>
+    public bool WaitlistEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Denormalized count of entries with Status == Waiting. Mirrors RegistrationCount so
+    /// the value reaches the cached event entity (and therefore EventResponse) for free.
+    /// </summary>
+    public int WaitlistCount { get; set; } = 0;
+
     // Navigation
     public ICollection<EventImage> Images { get; set; } = new List<EventImage>();
 }

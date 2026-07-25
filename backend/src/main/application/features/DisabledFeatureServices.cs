@@ -10,6 +10,9 @@ using backend.main.features.events.registration;
 using backend.main.features.events.registration.contracts.requests;
 using backend.main.features.events.registration.contracts.responses;
 using backend.main.features.events.search;
+using backend.main.features.events.waitlist;
+using backend.main.features.events.waitlist.contracts.requests;
+using backend.main.features.events.waitlist.contracts.responses;
 using backend.main.features.payment;
 using backend.main.features.profile.contracts;
 using backend.main.infrastructure.elasticsearch;
@@ -64,6 +67,30 @@ public sealed class DisabledEventRegistrationService : IEventRegistrationService
     public Task<IEnumerable<EventRegistration>> GetRegistrationsByUserAsync(int userId, int page = 1, int pageSize = 20) => Task.FromException<IEnumerable<EventRegistration>>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRegistration));
     public Task<BatchRegistrationResultResponse> BatchRegisterAsync(int userId, string userRole, IEnumerable<int> eventIds) => Task.FromException<BatchRegistrationResultResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRegistration));
     public Task<BatchRegistrationResultResponse> BatchUnregisterAsync(int userId, string userRole, IEnumerable<int> eventIds) => Task.FromException<BatchRegistrationResultResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRegistration));
+}
+
+public sealed class DisabledEventWaitlistService : IEventWaitlistService
+{
+    public Task<EventWaitlistEntryResponse> JoinAsync(int eventId, int userId, string userRole, JoinWaitlistRequest? request = null) => Task.FromException<EventWaitlistEntryResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsWaitlist));
+    public Task LeaveAsync(int eventId, int userId, string userRole) => Task.FromException(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsWaitlist));
+    public Task<MyWaitlistStatusResponse> GetMyStatusAsync(int eventId, int userId, string userRole) => Task.FromException<MyWaitlistStatusResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsWaitlist));
+    public Task<(IReadOnlyList<EventWaitlistEntryResponse> Entries, int TotalCount)> GetEventWaitlistAsync(int eventId, int actorUserId, string actorRole, int page = 1, int pageSize = 20) => Task.FromException<(IReadOnlyList<EventWaitlistEntryResponse>, int)>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsWaitlist));
+    public Task RemoveEntryAsync(int eventId, int entryId, int actorUserId, string actorRole) => Task.FromException(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsWaitlist));
+    public Task<IReadOnlyList<WaitlistedEventResponse>> GetMyWaitlistsAsync(int userId, string userRole) => Task.FromException<IReadOnlyList<WaitlistedEventResponse>>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsWaitlist));
+    public Task<WaitlistPromotionResultResponse> PromoteNextAsync(int eventId, int actorUserId, string actorRole) => Task.FromException<WaitlistPromotionResultResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsWaitlist));
+}
+
+/// <summary>
+/// Unlike every other stub in this file, this one MUST NOT throw. It is injected into
+/// EventRegistrationService.UnregisterAsync and EventsService.UpdateEvent, so throwing here
+/// would break unregistration and event editing whenever the waitlist flag is off.
+/// </summary>
+public sealed class DisabledEventWaitlistPromoter : IEventWaitlistPromoter
+{
+    public Task<IReadOnlyList<WaitlistPromotion>> PromoteWithinTransactionAsync(int eventId, DateTime nowUtc) => Task.FromResult<IReadOnlyList<WaitlistPromotion>>([]);
+    public Task<int> PromoteStandaloneAsync(int eventId) => Task.FromResult(0);
+    public Task PublishPromotionEmailsAsync(IReadOnlyList<WaitlistPromotion> promotions, int eventId, string? eventName, DateTime? startsAtUtc) => Task.CompletedTask;
+    public Task InvalidateForPromotedAsync(IReadOnlyList<WaitlistPromotion> promotions, int eventId) => Task.CompletedTask;
 }
 
 public sealed class DisabledPaymentService : IPaymentService

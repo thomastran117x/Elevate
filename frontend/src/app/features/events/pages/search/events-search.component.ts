@@ -418,6 +418,10 @@ export class EventsSearchComponent implements OnInit, OnDestroy {
     return Math.min(100, (event.registrationCount / event.maxParticipants) * 100);
   }
 
+  isFull(event: EventItem): boolean {
+    return event.maxParticipants > 0 && event.registrationCount >= event.maxParticipants;
+  }
+
   private applyRouteState(params: ParamMap): void {
     const nextState = this.readStateFromParams(params);
     const needsUrlSync = this.stateRequiresCanonicalUrl(params, nextState);

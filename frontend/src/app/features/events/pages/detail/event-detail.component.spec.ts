@@ -7,6 +7,7 @@ import { EventDetailComponent } from './event-detail.component';
 import { EventsService } from '../../services/events.service';
 import { EventApiResponse } from '../../models/event.types';
 import { EventRegistrationService } from '../../services/event-registration.service';
+import { EventWaitlistService } from '../../services/event-waitlist.service';
 import {
   ApiClientClientError,
   ApiClientServerError,
@@ -43,7 +44,11 @@ describe('EventDetailComponent', () => {
   let route: ActivatedRouteStub;
   let eventsService: jasmine.SpyObj<EventsService>;
   let registrationService: jasmine.SpyObj<EventRegistrationService>;
+  let waitlistService: jasmine.SpyObj<EventWaitlistService>;
   let router: jasmine.SpyObj<Router>;
+  // Most specs here predate auth-aware behaviour and assumed a signed-out user; the
+  // waitlist states need a signed-in one, so it is overridable per test.
+  let signedInUser: { Id: number } | null = null;
 
   const response: EventApiResponse = {
     success: true,
@@ -70,6 +75,8 @@ describe('EventDetailComponent', () => {
       longitude: -75.6972,
       tags: ['tech', 'community'],
       registrationCount: 34,
+      waitlistEnabled: false,
+      waitlistCount: 0,
       distanceKm: undefined,
       club: {
         id: 7,
@@ -105,6 +112,16 @@ describe('EventDetailComponent', () => {
     registrationService.checkRegistration.and.returnValue(
       of({ isRegistered: false, details: null }),
     );
+    waitlistService = jasmine.createSpyObj<EventWaitlistService>('EventWaitlistService', [
+      'join',
+      'leave',
+      'getMyStatus',
+      'getEventWaitlist',
+      'removeEntry',
+      'promoteNext',
+      'getMine',
+    ]);
+    waitlistService.getMyStatus.and.returnValue(of({ onWaitlist: false, waitlistCount: 0 }));
 
     await TestBed.configureTestingModule({
       imports: [EventDetailComponent],
@@ -112,8 +129,9 @@ describe('EventDetailComponent', () => {
         { provide: ActivatedRoute, useValue: route },
         { provide: EventsService, useValue: eventsService },
         { provide: EventRegistrationService, useValue: registrationService },
+        { provide: EventWaitlistService, useValue: waitlistService },
         { provide: Router, useValue: router },
-        { provide: Store, useValue: { select: () => of(null) } },
+        { provide: Store, useValue: { select: () => of(signedInUser) } },
       ],
     }).compileComponents();
   });
@@ -123,6 +141,131 @@ describe('EventDetailComponent', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
   }
+
+  /** Rebuilds the event payload as a full, waitlist-enabled event. */
+  function makeFullWaitlistEvent(overrides: Record<string, unknown> = {}) {
+    eventsService.getEvent.and.returnValue(
+      of({
+        ...response,
+        data: {
+          ...response.data!,
+          maxParticipants: 10,
+          registrationCount: 10,
+          waitlistEnabled: true,
+          waitlistCount: 2,
+          ...overrides,
+        },
+      }),
+    );
+  }
+
+  describe('waitlist', () => {
+    beforeEach(() => (signedInUser = { Id: 7 }));
+    afterEach(() => (signedInUser = null));
+
+    it('offers the waitlist when the event is full and has one enabled', () => {
+      makeFullWaitlistEvent();
+      createComponent();
+
+      expect(component.isFull).toBeTrue();
+      expect(component.waitlistOffered).toBeTrue();
+      expect(component.canJoinWaitlist).toBeTrue();
+      // The waitlist is an additional path, not a relaxation of the capacity rule.
+      expect(component.canRegister).toBeFalse();
+    });
+
+    it('does not offer the waitlist when the event is full but the waitlist is off', () => {
+      makeFullWaitlistEvent({ waitlistEnabled: false, waitlistCount: 0 });
+      createComponent();
+
+      expect(component.isFull).toBeTrue();
+      expect(component.waitlistOffered).toBeFalse();
+      expect(component.canJoinWaitlist).toBeFalse();
+    });
+
+    it('does not offer the waitlist when seats remain', () => {
+      makeFullWaitlistEvent({ registrationCount: 3 });
+      createComponent();
+
+      expect(component.waitlistOffered).toBeFalse();
+      expect(component.canRegister).toBeTrue();
+    });
+
+    it('does not offer the waitlist for paid events', () => {
+      makeFullWaitlistEvent({ registerCost: 2500 });
+      createComponent();
+
+      expect(component.waitlistOffered).toBeFalse();
+    });
+
+    it('skips the status lookup when the event has no waitlist', () => {
+      makeFullWaitlistEvent({ waitlistEnabled: false });
+      createComponent();
+
+      expect(waitlistService.getMyStatus).not.toHaveBeenCalled();
+    });
+
+    it('optimistically records the position after joining', () => {
+      makeFullWaitlistEvent();
+      waitlistService.join.and.returnValue(
+        of({
+          id: 5,
+          eventId: 42,
+          userId: 7,
+          position: 3,
+          status: 'Waiting' as const,
+          joinedAtUtc: 'now',
+        }),
+      );
+      createComponent();
+
+      component.joinWaitlist();
+
+      expect(component.onWaitlist).toBeTrue();
+      expect(component.waitlistStatus?.position).toBe(3);
+      expect(component.event?.waitlistCount).toBe(3);
+      expect(component.canJoinWaitlist).toBeFalse();
+    });
+
+    it('surfaces a join failure as an inline banner message', () => {
+      makeFullWaitlistEvent();
+      waitlistService.join.and.returnValue(
+        throwError(() => new ApiClientClientError('Seats are still available', 409)),
+      );
+      createComponent();
+
+      component.joinWaitlist();
+
+      expect(component.waitlistError).toBe('Seats are still available');
+      expect(component.onWaitlist).toBeFalse();
+    });
+
+    it('refetches the status after leaving, because positions shift for everyone', () => {
+      makeFullWaitlistEvent();
+      waitlistService.getMyStatus.and.returnValue(
+        of({ onWaitlist: true, position: 2, waitlistCount: 2 }),
+      );
+      waitlistService.leave.and.returnValue(of(void 0));
+      createComponent();
+      waitlistService.getMyStatus.calls.reset();
+
+      component.leaveWaitlist();
+
+      expect(waitlistService.leave).toHaveBeenCalledWith(42);
+      expect(waitlistService.getMyStatus).toHaveBeenCalledWith(42);
+    });
+
+    it('refetches the event after unregistering so an instant promotion is reflected', () => {
+      makeFullWaitlistEvent();
+      registrationService.unregister.and.returnValue(of(void 0));
+      createComponent();
+      eventsService.getEvent.calls.reset();
+
+      component.unregister();
+
+      expect(eventsService.getEvent).toHaveBeenCalledWith(42);
+    });
+  });
 
   it('loads the event from the route id', () => {
     createComponent();

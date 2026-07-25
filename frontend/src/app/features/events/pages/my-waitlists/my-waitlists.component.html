@@ -1,0 +1,92 @@
+<div class="app-page">
+  <main class="page-section py-10">
+    <header>
+      <span class="eyebrow">My waitlists</span>
+      <h1 class="mt-2 text-3xl font-bold text-content">Events you're waiting for</h1>
+      <p class="mt-2 text-sm text-muted">
+        If a spot opens up, we register you automatically and send you an email.
+      </p>
+    </header>
+
+    @if (error) {
+      <div class="mt-6 rounded-2xl border border-danger/25 bg-danger/10 p-4 text-sm text-danger">
+        {{ error }}
+      </div>
+    }
+
+    @if (requiresLogin) {
+      <div class="surface-panel mt-6 rounded-3xl p-6 text-center">
+        <p class="text-sm text-muted">Sign in to see the events you're waiting for.</p>
+        <button
+          type="button"
+          (click)="goToLogin()"
+          class="cta-solid mt-4 rounded-xl px-5 py-3 text-sm font-semibold"
+        >
+          Sign in
+        </button>
+      </div>
+    } @else if (loading) {
+      <div class="mt-6 space-y-3">
+        @for (placeholder of [1, 2, 3]; track placeholder) {
+          <div class="h-28 animate-pulse rounded-3xl bg-glass-strong"></div>
+        }
+      </div>
+    } @else if (items.length === 0) {
+      <div class="surface-panel mt-6 rounded-3xl p-8 text-center">
+        <p class="text-sm text-subtle">You're not on any waitlists.</p>
+        <a routerLink="/events" class="cta-subtle mt-4 inline-block rounded-xl px-5 py-3 text-sm font-semibold">
+          Browse events
+        </a>
+      </div>
+    } @else {
+      <ul class="mt-6 space-y-4">
+        @for (item of items; track item.entryId) {
+          <li class="surface-card flex flex-wrap items-center gap-5 rounded-3xl p-5">
+            @if (item.event.imageUrls?.length) {
+              <img
+                [src]="item.event.imageUrls[0]"
+                [alt]="item.event.name"
+                class="h-20 w-28 shrink-0 rounded-2xl object-cover"
+              />
+            }
+
+            <div class="min-w-0 flex-1">
+              <a
+                [routerLink]="['/events', item.event.id]"
+                class="truncate text-base font-semibold text-content transition hover:text-accent"
+              >
+                {{ item.event.name }}
+              </a>
+              <div class="mt-1 text-xs text-subtle">
+                {{ item.event.startTime | date: 'medium' }}
+              </div>
+              <div class="mt-1 text-xs text-subtle">
+                Joined {{ item.joinedAtUtc | date: 'mediumDate' }}
+              </div>
+              @if (isCancelled(item)) {
+                <div class="mt-2 text-xs font-semibold text-danger">Event cancelled</div>
+              }
+            </div>
+
+            <div class="text-center">
+              <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                Position
+              </div>
+              <div class="text-2xl font-bold text-warning">#{{ item.position }}</div>
+              <div class="text-xs text-subtle">of {{ item.event.waitlistCount }}</div>
+            </div>
+
+            <button
+              type="button"
+              [disabled]="actionLoadingId === item.entryId"
+              (click)="leave(item)"
+              class="cta-ghost rounded-xl px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Leave waitlist
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </main>
+</div>

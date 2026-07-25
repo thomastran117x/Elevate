@@ -200,6 +200,15 @@
                         My invites
                       </a>
                     }
+                    @if (waitlistEnabled) {
+                      <a
+                        routerLink="/events/me/waitlisted"
+                        (click)="closeMenus()"
+                        class="block rounded-2xl px-4 py-3 text-sm text-muted transition hover:bg-surface-muted hover:text-content"
+                      >
+                        My waitlists
+                      </a>
+                    }
                     <button
                       type="button"
                       (click)="logout()"
@@ -445,6 +454,15 @@
                     class="inline-flex min-h-[48px] items-center rounded-2xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
                   >
                     My invites
+                  </a>
+                }
+                @if (waitlistEnabled) {
+                  <a
+                    routerLink="/events/me/waitlisted"
+                    (click)="closeMenus()"
+                    class="inline-flex min-h-[48px] items-center rounded-2xl px-4 py-3 transition hover:bg-surface-muted hover:text-content"
+                  >
+                    My waitlists
                   </a>
                 }
                 <button

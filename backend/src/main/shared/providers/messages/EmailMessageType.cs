@@ -14,6 +14,8 @@ namespace backend.main.shared.providers.messages
         InvitationDeclined,
         EventReminder,
         ClubStaffInvite,
-        ClubMemberInvite
+        ClubMemberInvite,
+        WaitlistJoined,
+        WaitlistPromoted
     }
 }

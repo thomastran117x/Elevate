@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 
 using backend.main.features.cache;
 using backend.main.features.clubs;
+using backend.main.features.events.access;
 using backend.main.features.events.analytics;
 using backend.main.features.events.contracts.requests;
 using backend.main.features.events.contracts.responses;
@@ -13,6 +14,7 @@ using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
 using backend.main.features.events.versions;
+using backend.main.features.events.waitlist;
 using backend.main.features.payment;
 using backend.main.infrastructure.database.core;
 using backend.main.infrastructure.elasticsearch;
@@ -39,8 +41,8 @@ namespace backend.main.features.events
         private readonly IEventAnalyticsRepository _analyticsRepository;
         private readonly IEventSearchService _searchService;
         private readonly IEventSearchOutboxWriter _outboxWriter;
-        private readonly IEventRegistrationRepository _registrationRepository;
-        private readonly IEventInvitationService _invitationService;
+        private readonly IEventAccessChecker _accessChecker;
+        private readonly IEventWaitlistPromoter _waitlistPromoter;
         private readonly EventVersioningOptions _versioningOptions;
         private readonly TimeProvider _timeProvider;
 
@@ -74,8 +76,8 @@ namespace backend.main.features.events
             IEventAnalyticsRepository analyticsRepository,
             IEventSearchService searchService,
             IEventSearchOutboxWriter outboxWriter,
-            IEventRegistrationRepository registrationRepository,
-            IEventInvitationService invitationService,
+            IEventAccessChecker accessChecker,
+            IEventWaitlistPromoter waitlistPromoter,
             IOptions<EventVersioningOptions> versioningOptions,
             TimeProvider timeProvider)
         {
@@ -89,8 +91,8 @@ namespace backend.main.features.events
             _analyticsRepository = analyticsRepository;
             _searchService = searchService;
             _outboxWriter = outboxWriter;
-            _registrationRepository = registrationRepository;
-            _invitationService = invitationService;
+            _accessChecker = accessChecker;
+            _waitlistPromoter = waitlistPromoter;
             _versioningOptions = versioningOptions.Value;
             _timeProvider = timeProvider;
         }
@@ -398,6 +400,7 @@ namespace backend.main.features.events
                     isPrivate = request.IsPrivate ?? false,
                     maxParticipants = request.MaxParticipants ?? 0,
                     registerCost = request.RegisterCost ?? 0,
+                    WaitlistEnabled = request.WaitlistEnabled ?? false,
                     StartTime = request.StartTime,
                     EndTime = request.EndTime,
                     ClubId = clubId,
@@ -460,6 +463,8 @@ namespace backend.main.features.events
                 await EnsureCanManageEventAsync(existing, userId, userRole);
 
                 var previousSnapshot = BuildSnapshot(existing);
+                var previousMax = existing.maxParticipants;
+                var previousWaitlistEnabled = existing.WaitlistEnabled;
                 var now = GetUtcNow();
 
                 List<string>? oldUrls = null;
@@ -497,6 +502,8 @@ namespace backend.main.features.events
                     existing.maxParticipants = request.MaxParticipants.Value;
                 if (request.RegisterCost.HasValue)
                     existing.registerCost = request.RegisterCost.Value;
+                if (request.WaitlistEnabled.HasValue)
+                    existing.WaitlistEnabled = request.WaitlistEnabled.Value;
                 if (request.StartTime.HasValue)
                     existing.StartTime = request.StartTime.Value;
                 if (request.EndTime.HasValue || request.StartTime.HasValue)
@@ -548,6 +555,7 @@ namespace backend.main.features.events
 
                 await CacheEventAsync(withImages);
                 await BumpEventListVersionAsync();
+                await TryPromoteWaitlistAsync(eventId, previousMax, previousWaitlistEnabled, withImages);
 
                 return withImages;
             }
@@ -604,6 +612,8 @@ namespace backend.main.features.events
                         $"maxParticipants ({maxParticipants}) cannot be less than the current registration count ({existing.RegistrationCount}).");
 
                 var previousSnapshot = BuildSnapshot(existing);
+                var previousMax = existing.maxParticipants;
+                var previousWaitlistEnabled = existing.WaitlistEnabled;
 
                 List<string>? oldUrls = null;
                 List<string>? requestedImageUrls = null;
@@ -677,6 +687,7 @@ namespace backend.main.features.events
 
                 await CacheEventAsync(withImages);
                 await BumpEventListVersionAsync();
+                await TryPromoteWaitlistAsync(eventId, previousMax, previousWaitlistEnabled, withImages);
 
                 return withImages;
             }
@@ -1132,6 +1143,9 @@ namespace backend.main.features.events
 
                 var currentSnapshot = BuildSnapshot(ev);
                 var targetSnapshot = DeserializeSnapshot(targetVersion.SnapshotJson);
+                // A rollback can restore a higher capacity, which frees seats.
+                var previousMax = ev.maxParticipants;
+                var previousWaitlistEnabled = ev.WaitlistEnabled;
 
                 // Preserve the current lifecycle state Ã¢â‚¬â€ rollback restores field values
                 // only, not the event's published/cancelled state. Changing lifecycle
@@ -1161,6 +1175,7 @@ namespace backend.main.features.events
 
                 await CacheEventAsync(ev);
                 await BumpEventListVersionAsync();
+                await TryPromoteWaitlistAsync(eventId, previousMax, previousWaitlistEnabled, ev);
 
                 return new EventRollbackResult(ev, targetVersion.VersionNumber, ev.CurrentVersionNumber);
             }
@@ -1570,6 +1585,7 @@ namespace backend.main.features.events
             IsPrivate = ev.isPrivate,
             MaxParticipants = ev.maxParticipants,
             RegisterCost = ev.registerCost,
+            WaitlistEnabled = ev.WaitlistEnabled,
             StartTime = ev.StartTime,
             EndTime = ev.EndTime,
             ClubId = ev.ClubId,
@@ -1590,6 +1606,7 @@ namespace backend.main.features.events
             ev.isPrivate = snapshot.IsPrivate;
             ev.maxParticipants = snapshot.MaxParticipants;
             ev.registerCost = snapshot.RegisterCost;
+            ev.WaitlistEnabled = snapshot.WaitlistEnabled;
             ev.StartTime = snapshot.StartTime;
             ev.EndTime = snapshot.EndTime;
             ev.ClubId = snapshot.ClubId;
@@ -1646,6 +1663,7 @@ namespace backend.main.features.events
             AddChange(changes, "isPrivate", previous?.IsPrivate, current.IsPrivate);
             AddChange(changes, "maxParticipants", previous?.MaxParticipants, current.MaxParticipants);
             AddChange(changes, "registerCost", previous?.RegisterCost, current.RegisterCost);
+            AddChange(changes, "waitlistEnabled", previous?.WaitlistEnabled, current.WaitlistEnabled);
             AddChange(changes, "startTime", previous?.StartTime, current.StartTime);
             AddChange(changes, "endTime", previous?.EndTime, current.EndTime);
             AddChange(changes, "clubId", previous?.ClubId, current.ClubId);
@@ -1954,37 +1972,10 @@ namespace backend.main.features.events
             return $"event:image-upload:intent:{Convert.ToHexString(bytes)}";
         }
 
-        private async Task<bool> CanViewEventAsync(Events ev, int? userId, string? userRole)
-        {
-            // This is the single visibility policy for private event reads across public endpoints.
-            if (!EventLifecyclePolicy.IsVisibleInPublicDetail(ev.LifecycleState))
-                return false;
-
-            if (!ev.isPrivate)
-                return true;
-
-            if (!userId.HasValue)
-                return false;
-
-            if (await _clubService.HasClubStaffAccessAsync(ev.ClubId, userId.Value, userRole))
-                return true;
-
-            var registration = await _registrationRepository.IsRegisteredAsync(ev.Id, userId.Value);
-            if (registration != null)
-                return true;
-
-            if (await _invitationService.HasAcceptedInvitationAccessAsync(ev.Id, userId.Value))
-                return true;
-
-            var payment = await _db.Payments
-                .AsNoTracking()
-                .FirstOrDefaultAsync(p =>
-                    p.EventId == ev.Id &&
-                    p.UserId == userId.Value &&
-                    (p.Status == PaymentStatus.Pending || p.Status == PaymentStatus.Succeeded));
-
-            return payment != null;
-        }
+        // The policy itself lives in EventAccessChecker so that components which cannot
+        // depend on IEventsService (the waitlist promoter) can evaluate the same rules.
+        private Task<bool> CanViewEventAsync(Events ev, int? userId, string? userRole)
+            => _accessChecker.CanViewEventAsync(ev, userId, userRole);
 
         public async Task NotifyRegistrationChangedAsync(int eventId)
         {
@@ -2024,6 +2015,42 @@ namespace backend.main.features.events
         private async Task BumpEventListVersionAsync()
         {
             await _cache.IncrementAsync(EventListVersionKey);
+        }
+
+        /// <summary>
+        /// Drains the waitlist after an edit that may have freed seats.
+        ///
+        /// Runs POST-COMMIT rather than inside the caller's transaction: UpdateEvent uses the
+        /// default isolation level and its transaction also spans image writes and blob
+        /// validation, so nesting promotion there would either force an isolation upgrade of a
+        /// large transaction or run the capacity check at REPEATABLE READ. Correctness is
+        /// preserved because PromoteStandaloneAsync re-reads capacity and the live registration
+        /// count inside its OWN Serializable transaction while holding the event lock.
+        ///
+        /// Trade-off: a brief window where seats are free and nobody has been promoted. It is
+        /// self-healing — the next unregister, capacity change, or the organizer's
+        /// "Promote next" button drains it.
+        /// </summary>
+        private async Task TryPromoteWaitlistAsync(int eventId, int previousMax, bool previousWaitlistEnabled, Events current)
+        {
+            var capacityRaised =
+                current.maxParticipants > previousMax ||             // e.g. 10 -> 20
+                (previousMax > 0 && current.maxParticipants == 0);   // limited -> unlimited
+
+            var waitlistJustEnabled = !previousWaitlistEnabled && current.WaitlistEnabled;
+
+            if (!current.WaitlistEnabled || (!capacityRaised && !waitlistJustEnabled))
+                return;
+
+            try
+            {
+                await _waitlistPromoter.PromoteStandaloneAsync(eventId);
+            }
+            catch (Exception e)
+            {
+                // Never fail the organizer's save because promotion could not run.
+                Logger.Warn(e, $"[EventsService] Waitlist promotion failed for event {eventId}");
+            }
         }
 
         private static TimeSpan WithJitter(TimeSpan baseTtl, int percent = 20)

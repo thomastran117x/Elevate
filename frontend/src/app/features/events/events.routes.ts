@@ -18,6 +18,21 @@ export const EVENTS_ROUTES: Routes = [
       import('./pages/my-invites/my-invites.component').then((m) => m.MyInvitesComponent),
   },
   {
+    path: 'me/waitlisted',
+    canMatch: [featureCanMatch(FEATURE_KEYS.eventsWaitlist)],
+    loadComponent: () =>
+      import('./pages/my-waitlists/my-waitlists.component').then((m) => m.MyWaitlistsComponent),
+  },
+  {
+    path: ':eventId/waitlist/manage',
+    canActivate: [eventsManageAuthGuard],
+    canMatch: [featureCanMatch(FEATURE_KEYS.eventsWaitlist)],
+    loadComponent: () =>
+      import('./pages/manage-waitlist/manage-event-waitlist.component').then(
+        (m) => m.ManageEventWaitlistComponent,
+      ),
+  },
+  {
     path: ':eventId/invitations/manage',
     canActivate: [eventsManageAuthGuard],
     canMatch: [featureCanMatch(FEATURE_KEYS.eventsInvitations)],

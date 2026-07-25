@@ -88,6 +88,14 @@ namespace backend.main.features.events.contracts.responses
         {
             get; set;
         }
+        public bool WaitlistEnabled
+        {
+            get; set;
+        }
+        public int WaitlistCount
+        {
+            get; set;
+        }
         public bool PublishReady
         {
             get; set;

@@ -19,6 +19,7 @@ using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
 using backend.main.features.events.versions;
+using backend.main.features.events.waitlist;
 using backend.main.features.payment;
 using backend.main.features.profile;
 
@@ -45,6 +46,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<ClubPost> ClubPosts { get; set; } = null!;
         public DbSet<PostComment> PostComments { get; set; } = null!;
         public DbSet<EventRegistration> EventRegistrations { get; set; } = null!;
+        public DbSet<EventWaitlistEntry> EventWaitlistEntries { get; set; } = null!;
         public DbSet<EventImage> EventImages { get; set; } = null!;
         public DbSet<EventInvitation> EventInvitations { get; set; } = null!;
         public DbSet<EventInvitationLink> EventInvitationLinks { get; set; } = null!;
@@ -249,6 +251,14 @@ namespace backend.main.infrastructure.database.core
             modelBuilder.Entity<Events>()
                 .Property(e => e.LifecycleState)
                 .HasConversion<int>();
+
+            modelBuilder.Entity<Events>()
+                .Property(e => e.WaitlistEnabled)
+                .HasDefaultValue(false);
+
+            modelBuilder.Entity<Events>()
+                .Property(e => e.WaitlistCount)
+                .HasDefaultValue(0);
 
             modelBuilder.Entity<Events>()
                 .HasIndex(e => e.Category);
@@ -541,6 +551,51 @@ namespace backend.main.infrastructure.database.core
             modelBuilder.Entity<EventRegistration>()
                 .HasIndex(r => new { r.EventId, r.UserId })
                 .IsUnique();
+
+            modelBuilder.Entity<EventWaitlistEntry>()
+                .HasOne(w => w.Event)
+                .WithMany()
+                .HasForeignKey(w => w.EventId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<EventWaitlistEntry>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(w => w.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<EventWaitlistEntry>()
+                .Property(w => w.Status)
+                .HasConversion<string>()
+                .HasMaxLength(24);
+
+            modelBuilder.Entity<EventWaitlistEntry>()
+                .Property(w => w.Notes)
+                .HasMaxLength(500);
+
+            modelBuilder.Entity<EventWaitlistEntry>()
+                .Property(w => w.PhoneNumber)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<EventWaitlistEntry>()
+                .Property(w => w.DietaryNeeds)
+                .HasMaxLength(500);
+
+            // One row per (event, user) forever. MySQL has no filtered unique index, so
+            // terminal entries are reactivated in place rather than inserted again.
+            modelBuilder.Entity<EventWaitlistEntry>()
+                .HasIndex(w => new { w.EventId, w.UserId })
+                .IsUnique();
+
+            // Covers both "next in line" (ordered LIMIT) and the position COUNT.
+            modelBuilder.Entity<EventWaitlistEntry>()
+                .HasIndex(w => new { w.EventId, w.Status, w.JoinedAtUtc, w.Id });
+
+            // "My waitlists" page.
+            modelBuilder.Entity<EventWaitlistEntry>()
+                .HasIndex(w => new { w.UserId, w.Status });
 
             modelBuilder.Entity<EventSearchOutbox>()
                 .ToTable("event_search_outbox");

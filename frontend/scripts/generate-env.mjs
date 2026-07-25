@@ -16,6 +16,7 @@ const ALL_FEATURE_KEYS = [
   'events.invitations',
   'events.registration',
   'events.versioning',
+  'events.waitlist',
   'payment',
   'profile',
   'profile.admin',

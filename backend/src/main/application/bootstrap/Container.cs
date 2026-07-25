@@ -21,12 +21,14 @@ using backend.main.features.clubs.reviews;
 using backend.main.features.clubs.search;
 using backend.main.features.clubs.versions;
 using backend.main.features.events;
+using backend.main.features.events.access;
 using backend.main.features.events.analytics;
 using backend.main.features.events.images;
 using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
 using backend.main.features.events.versions;
+using backend.main.features.events.waitlist;
 using backend.main.features.payment;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.repository;
@@ -170,6 +172,7 @@ namespace backend.main.application.bootstrap
             services.AddRepositoryWithProxy<IEventRegistrationRepository, EventRegistrationRepository>();
             services.AddRepositoryWithProxy<IEventAnalyticsRepository, EventAnalyticsRepository>();
             services.AddRepositoryWithProxy<IEventImageRepository, EventImageRepository>();
+            services.AddRepositoryWithProxy<IEventWaitlistRepository, EventWaitlistRepository>();
 
             services.AddSingleton<IPublisher, Publisher>();
             services.AddScoped<IAuthNotificationService, AuthNotificationService>();
@@ -202,6 +205,9 @@ namespace backend.main.application.bootstrap
             else
                 services.AddScoped<IFollowService, DisabledFollowService>();
 
+            // Not feature-gated: EventsService depends on it for private-event visibility.
+            services.AddScoped<IEventAccessChecker, EventAccessChecker>();
+
             services.AddScoped<IEventsService, EventsService>();
 
             if (featureFlags.IsEnabled(FeatureFlagKeys.EventsInvitations))
@@ -223,6 +229,19 @@ namespace backend.main.application.bootstrap
                 services.AddScoped<IEventRegistrationService, EventRegistrationService>();
             else
                 services.AddScoped<IEventRegistrationService, DisabledEventRegistrationService>();
+
+            if (featureFlags.IsEnabled(FeatureFlagKeys.EventsWaitlist))
+            {
+                services.AddScoped<IEventWaitlistService, EventWaitlistService>();
+                services.AddScoped<IEventWaitlistPromoter, EventWaitlistPromoter>();
+            }
+            else
+            {
+                // Note the asymmetry: the service throws (its endpoints must 503), but the
+                // promoter must NOT — it sits on the unregister and event-update hot paths.
+                services.AddScoped<IEventWaitlistService, DisabledEventWaitlistService>();
+                services.AddScoped<IEventWaitlistPromoter, DisabledEventWaitlistPromoter>();
+            }
 
             services.AddScoped<IPostCommentService, PostCommentService>();
 

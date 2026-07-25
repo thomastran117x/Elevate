@@ -128,6 +128,14 @@ namespace backend.main.features.events.contracts.responses
         {
             get; set;
         }
+        public bool WaitlistEnabled
+        {
+            get; set;
+        }
+        public int WaitlistCount
+        {
+            get; set;
+        }
 
         // Populated only when a proximity search was performed.
         public double? DistanceKm

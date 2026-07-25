@@ -62,6 +62,8 @@ export interface EventItem {
   longitude?: number;
   tags: string[];
   registrationCount: number;
+  waitlistEnabled: boolean;
+  waitlistCount: number;
   distanceKm?: number;
   club?: EventHostClub;
 }
@@ -98,6 +100,8 @@ export interface ManagedEvent {
   longitude?: number;
   tags: string[];
   registrationCount: number;
+  waitlistEnabled: boolean;
+  waitlistCount: number;
   publishReady: boolean;
   publishIssues: string[];
 }
@@ -121,6 +125,7 @@ export interface EventDraftPayload {
   isPrivate?: boolean;
   maxParticipants?: number;
   registerCost?: number;
+  waitlistEnabled?: boolean;
   startTime?: string;
   endTime?: string | null;
   category?: EventCategory;

@@ -26,6 +26,11 @@ namespace backend.main.shared.providers.messages
         {
             get; init;
         }
+        /// <summary>Enables /events/{id} deep links in CTAs. Optional; falls back to /events.</summary>
+        public int? EventId
+        {
+            get; init;
+        }
         public string? EventName
         {
             get; init;

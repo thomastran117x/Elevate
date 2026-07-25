@@ -5,10 +5,14 @@ using backend.main.features.clubs;
 using backend.main.features.events;
 using backend.main.features.events.registration;
 using backend.main.features.events.registration.contracts.requests;
+using backend.main.features.events.access;
 using backend.main.features.events.search;
+using backend.main.features.events.waitlist;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
 using backend.main.shared.exceptions.http;
+using backend.main.shared.providers;
+using backend.main.shared.providers.messages;
 
 using FluentAssertions;
 
@@ -122,6 +126,127 @@ public class EventRegistrationServiceTests
         trackedEvent.RegistrationCount.Should().Be(0);
         harness.OutboxWriterMock.Verify(writer => writer.StageSync(It.IsAny<backend.main.features.events.Events>()), Times.Once);
         harness.RefreshCacheMock.Verify(cache => cache.RemoveAsync(MembershipKey(harness.ParticipantUserId, harness.EventId)), Times.Once);
+    }
+
+    [Fact]
+    public async Task UnregisterAsync_ShouldPromoteNextWaitlistedUser_KeepingRegistrationCountStable()
+    {
+        await using var harness = await EventRegistrationHarness.CreateAsync();
+        await harness.EnableWaitlistAsync(capacity: 1);
+        await harness.SeedRegistrationAsync(harness.ParticipantUserId, RegistrationStatus.Active);
+        await harness.SeedWaitlistEntryAsync(harness.SecondParticipantUserId);
+
+        await harness.Service.UnregisterAsync(harness.EventId, harness.ParticipantUserId, harness.ParticipantRole);
+
+        // The leaver is out...
+        (await harness.Db.EventRegistrations.SingleAsync(r => r.UserId == harness.ParticipantUserId))
+            .Status.Should().Be(RegistrationStatus.Cancelled);
+
+        // ...and the next in line took the seat in the same transaction.
+        var promotedRegistration = await harness.Db.EventRegistrations
+            .SingleAsync(r => r.UserId == harness.SecondParticipantUserId);
+        promotedRegistration.Status.Should().Be(RegistrationStatus.Active);
+
+        var entry = await harness.Db.EventWaitlistEntries
+            .SingleAsync(w => w.UserId == harness.SecondParticipantUserId);
+        entry.Status.Should().Be(EventWaitlistEntryStatus.Promoted);
+
+        var trackedEvent = await harness.Db.Events.SingleAsync(e => e.Id == harness.EventId);
+        trackedEvent.RegistrationCount.Should().Be(1, "the freed seat was immediately refilled");
+        trackedEvent.WaitlistCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task UnregisterAsync_ShouldPublishWaitlistPromotedEmail_ToThePromotedUser()
+    {
+        await using var harness = await EventRegistrationHarness.CreateAsync();
+        await harness.EnableWaitlistAsync(capacity: 1);
+        await harness.SeedRegistrationAsync(harness.ParticipantUserId, RegistrationStatus.Active);
+        await harness.SeedWaitlistEntryAsync(harness.SecondParticipantUserId);
+
+        await harness.Service.UnregisterAsync(harness.EventId, harness.ParticipantUserId, harness.ParticipantRole);
+
+        var email = harness.PublishedEmails.Should().ContainSingle().Subject;
+        email.Type.Should().Be(EmailMessageType.WaitlistPromoted);
+        email.Email.Should().Be("participant-two@test.local");
+        email.EventId.Should().Be(harness.EventId);
+    }
+
+    [Fact]
+    public async Task UnregisterAsync_ShouldInvalidateMembershipCache_ForThePromotedUserToo()
+    {
+        await using var harness = await EventRegistrationHarness.CreateAsync();
+        await harness.EnableWaitlistAsync(capacity: 1);
+        await harness.SeedRegistrationAsync(harness.ParticipantUserId, RegistrationStatus.Active);
+        await harness.SeedWaitlistEntryAsync(harness.SecondParticipantUserId);
+
+        await harness.Service.UnregisterAsync(harness.EventId, harness.ParticipantUserId, harness.ParticipantRole);
+
+        // Easy to miss: the promoted user is a different user from the one who unregistered.
+        harness.RefreshCacheMock.Verify(
+            cache => cache.RemoveAsync(MembershipKey(harness.SecondParticipantUserId, harness.EventId)),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task UnregisterAsync_ShouldAcquireAndReleaseEventLock()
+    {
+        await using var harness = await EventRegistrationHarness.CreateAsync();
+        await harness.SeedRegistrationAsync(harness.ParticipantUserId, RegistrationStatus.Active);
+
+        await harness.Service.UnregisterAsync(harness.EventId, harness.ParticipantUserId, harness.ParticipantRole);
+
+        // Unregister mutates capacity now that it can promote, so it must hold the same
+        // lock as RegisterAsync or the two can race into an over-filled event.
+        harness.CacheMock.Verify(
+            cache => cache.AcquireLockAsync($"evtreg:lock:{harness.EventId}", It.IsAny<string>(), It.IsAny<TimeSpan>()),
+            Times.Once);
+        harness.CacheMock.Verify(
+            cache => cache.ReleaseLockAsync($"evtreg:lock:{harness.EventId}", It.IsAny<string>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task UnregisterAsync_ShouldThrowConflict_WhenLockUnavailable()
+    {
+        await using var harness = await EventRegistrationHarness.CreateAsync();
+        await harness.SeedRegistrationAsync(harness.ParticipantUserId, RegistrationStatus.Active);
+        harness.MakeLockUnavailable();
+
+        var act = async () => await harness.Service.UnregisterAsync(
+            harness.EventId, harness.ParticipantUserId, harness.ParticipantRole);
+
+        await act.Should().ThrowAsync<ConflictException>();
+    }
+
+    [Fact]
+    public async Task UnregisterAsync_ShouldNotPromote_WhenWaitlistDisabled()
+    {
+        await using var harness = await EventRegistrationHarness.CreateAsync();
+        await harness.SeedRegistrationAsync(harness.ParticipantUserId, RegistrationStatus.Active);
+        // Waitlist is off by default on the harness event.
+        await harness.SeedWaitlistEntryAsync(harness.SecondParticipantUserId);
+
+        await harness.Service.UnregisterAsync(harness.EventId, harness.ParticipantUserId, harness.ParticipantRole);
+
+        (await harness.Db.EventRegistrations.AnyAsync(r => r.UserId == harness.SecondParticipantUserId))
+            .Should().BeFalse();
+        (await harness.Db.EventWaitlistEntries.SingleAsync(w => w.UserId == harness.SecondParticipantUserId))
+            .Status.Should().Be(EventWaitlistEntryStatus.Waiting);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_ShouldStillThrowEventIsFull_EvenWhenWaitlistEnabled()
+    {
+        await using var harness = await EventRegistrationHarness.CreateAsync();
+        await harness.EnableWaitlistAsync(capacity: 1);
+        await harness.SeedRegistrationAsync(harness.ParticipantUserId, RegistrationStatus.Active);
+
+        // The waitlist is an additional path, not a relaxation of the capacity rule.
+        var act = async () => await harness.Service.RegisterAsync(
+            harness.EventId, harness.SecondParticipantUserId, harness.ParticipantRole);
+
+        (await act.Should().ThrowAsync<ConflictException>()).WithMessage("Event is full");
     }
 
     [Fact]
@@ -258,6 +383,8 @@ public class EventRegistrationServiceTests
         public Mock<ICacheService> CacheMock { get; }
         public Mock<IRefreshAheadCache> RefreshCacheMock { get; }
         public Mock<IEventSearchOutboxWriter> OutboxWriterMock { get; }
+        public Mock<IPublisher> PublisherMock { get; }
+        public List<EmailMessage> PublishedEmails { get; }
         public int EventId { get; }
         public int ParticipantUserId => 2;
         public int SecondParticipantUserId => 3;
@@ -273,6 +400,8 @@ public class EventRegistrationServiceTests
             Mock<ICacheService> cacheMock,
             Mock<IRefreshAheadCache> refreshCacheMock,
             Mock<IEventSearchOutboxWriter> outboxWriterMock,
+            Mock<IPublisher> publisherMock,
+            List<EmailMessage> publishedEmails,
             int eventId)
         {
             _connection = connection;
@@ -282,6 +411,8 @@ public class EventRegistrationServiceTests
             CacheMock = cacheMock;
             RefreshCacheMock = refreshCacheMock;
             OutboxWriterMock = outboxWriterMock;
+            PublisherMock = publisherMock;
+            PublishedEmails = publishedEmails;
             EventId = eventId;
         }
 
@@ -375,13 +506,38 @@ public class EventRegistrationServiceTests
                     return [];
                 });
 
+            var publisherMock = new Mock<IPublisher>();
+            var publishedEmails = new List<EmailMessage>();
+            publisherMock
+                .Setup(publisher => publisher.PublishAsync(It.IsAny<string>(), It.IsAny<EmailMessage>()))
+                .Callback<string, EmailMessage>((_, message) => publishedEmails.Add(message))
+                .Returns(Task.CompletedTask);
+
+            // Permissive access checker — private-event skipping has its own dedicated tests
+            // in EventWaitlistPromoterTests.
+            var accessCheckerMock = new Mock<IEventAccessChecker>();
+            accessCheckerMock
+                .Setup(checker => checker.CanViewEventAsync(
+                    It.IsAny<backend.main.features.events.Events>(), It.IsAny<int?>(), It.IsAny<string?>()))
+                .ReturnsAsync(true);
+
+            // A REAL promoter, so unregister genuinely exercises promotion rather than a stub.
+            var promoter = new EventWaitlistPromoter(
+                db,
+                accessCheckerMock.Object,
+                cacheMock.Object,
+                refreshCacheMock.Object,
+                outboxWriterMock.Object,
+                publisherMock.Object);
+
             var service = new EventRegistrationService(
                 db,
                 new EventRegistrationRepository(db),
                 eventsServiceMock.Object,
                 cacheMock.Object,
                 refreshCacheMock.Object,
-                outboxWriterMock.Object);
+                outboxWriterMock.Object,
+                promoter);
 
             harness = new EventRegistrationHarness(
                 connection,
@@ -391,12 +547,48 @@ public class EventRegistrationServiceTests
                 cacheMock,
                 refreshCacheMock,
                 outboxWriterMock,
+                publisherMock,
+                publishedEmails,
                 1);
 
             return harness;
         }
 
-        public async Task<int> SeedEventAsync(string name, int registerCost, int maxParticipants)
+        /// <summary>Turns the harness event into a full, waitlist-enabled event.</summary>
+    public async Task EnableWaitlistAsync(int capacity)
+    {
+        var ev = await Db.Events.SingleAsync(e => e.Id == EventId);
+        ev.WaitlistEnabled = true;
+        ev.maxParticipants = capacity;
+        await Db.SaveChangesAsync();
+    }
+
+    public async Task SeedWaitlistEntryAsync(int userId)
+    {
+        var now = DateTime.UtcNow;
+        Db.EventWaitlistEntries.Add(new EventWaitlistEntry
+        {
+            EventId = EventId,
+            UserId = userId,
+            Status = EventWaitlistEntryStatus.Waiting,
+            JoinedAtUtc = now,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        await Db.SaveChangesAsync();
+
+        var ev = await Db.Events.SingleAsync(e => e.Id == EventId);
+        ev.WaitlistCount = await Db.EventWaitlistEntries
+            .CountAsync(w => w.EventId == EventId && w.Status == EventWaitlistEntryStatus.Waiting);
+        await Db.SaveChangesAsync();
+    }
+
+    public void MakeLockUnavailable() =>
+        CacheMock
+            .Setup(cache => cache.AcquireLockAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan>()))
+            .ReturnsAsync(false);
+
+    public async Task<int> SeedEventAsync(string name, int registerCost, int maxParticipants)
         {
             var ev = new backend.main.features.events.Events
             {

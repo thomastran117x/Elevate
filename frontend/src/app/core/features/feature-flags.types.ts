@@ -11,6 +11,7 @@ export const FEATURE_KEYS = {
   eventsInvitations: 'events.invitations',
   eventsRegistration: 'events.registration',
   eventsVersioning: 'events.versioning',
+  eventsWaitlist: 'events.waitlist',
   payment: 'payment',
   profile: 'profile',
   profileAdmin: 'profile.admin',
