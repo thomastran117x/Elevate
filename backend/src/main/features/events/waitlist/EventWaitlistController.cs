@@ -127,7 +127,12 @@ namespace backend.main.features.events.waitlist
                 return Ok(ApiResponse<IEnumerable<EventWaitlistEntryResponse>>.WithMeta(
                     $"Waitlist for event with ID {eventId} has been fetched successfully.",
                     entries,
-                    new { totalCount, page, pageSize }
+                    new
+                    {
+                        totalCount,
+                        page,
+                        pageSize
+                    }
                 ));
             }
             catch (Exception e)

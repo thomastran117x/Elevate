@@ -47,9 +47,18 @@ describe('EventWaitlistService', () => {
       email = entry.userEmail;
     });
 
-    httpMock.expectOne((r) => r.url.includes('/events/42/waitlist')).flush({
-      Data: { Id: 1, EventId: 42, UserId: 7, Position: 1, Status: 'Promoted', UserEmail: 'a@b.c' },
-    });
+    httpMock
+      .expectOne((r) => r.url.includes('/events/42/waitlist'))
+      .flush({
+        Data: {
+          Id: 1,
+          EventId: 42,
+          UserId: 7,
+          Position: 1,
+          Status: 'Promoted',
+          UserEmail: 'a@b.c',
+        },
+      });
 
     expect(status).toBe('Promoted');
     expect(email).toBe('a@b.c');
@@ -104,7 +113,10 @@ describe('EventWaitlistService', () => {
     expect(request.request.params.get('pageSize')).toBe('10');
 
     request.flush({
-      data: [{ id: 1, position: 11 }, { id: 2, position: 12 }],
+      data: [
+        { id: 1, position: 11 },
+        { id: 2, position: 12 },
+      ],
       meta: { totalCount: 25 },
     });
 

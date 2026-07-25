@@ -555,40 +555,40 @@ public class EventRegistrationServiceTests
         }
 
         /// <summary>Turns the harness event into a full, waitlist-enabled event.</summary>
-    public async Task EnableWaitlistAsync(int capacity)
-    {
-        var ev = await Db.Events.SingleAsync(e => e.Id == EventId);
-        ev.WaitlistEnabled = true;
-        ev.maxParticipants = capacity;
-        await Db.SaveChangesAsync();
-    }
-
-    public async Task SeedWaitlistEntryAsync(int userId)
-    {
-        var now = DateTime.UtcNow;
-        Db.EventWaitlistEntries.Add(new EventWaitlistEntry
+        public async Task EnableWaitlistAsync(int capacity)
         {
-            EventId = EventId,
-            UserId = userId,
-            Status = EventWaitlistEntryStatus.Waiting,
-            JoinedAtUtc = now,
-            CreatedAt = now,
-            UpdatedAt = now
-        });
-        await Db.SaveChangesAsync();
+            var ev = await Db.Events.SingleAsync(e => e.Id == EventId);
+            ev.WaitlistEnabled = true;
+            ev.maxParticipants = capacity;
+            await Db.SaveChangesAsync();
+        }
 
-        var ev = await Db.Events.SingleAsync(e => e.Id == EventId);
-        ev.WaitlistCount = await Db.EventWaitlistEntries
-            .CountAsync(w => w.EventId == EventId && w.Status == EventWaitlistEntryStatus.Waiting);
-        await Db.SaveChangesAsync();
-    }
+        public async Task SeedWaitlistEntryAsync(int userId)
+        {
+            var now = DateTime.UtcNow;
+            Db.EventWaitlistEntries.Add(new EventWaitlistEntry
+            {
+                EventId = EventId,
+                UserId = userId,
+                Status = EventWaitlistEntryStatus.Waiting,
+                JoinedAtUtc = now,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+            await Db.SaveChangesAsync();
 
-    public void MakeLockUnavailable() =>
-        CacheMock
-            .Setup(cache => cache.AcquireLockAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan>()))
-            .ReturnsAsync(false);
+            var ev = await Db.Events.SingleAsync(e => e.Id == EventId);
+            ev.WaitlistCount = await Db.EventWaitlistEntries
+                .CountAsync(w => w.EventId == EventId && w.Status == EventWaitlistEntryStatus.Waiting);
+            await Db.SaveChangesAsync();
+        }
 
-    public async Task<int> SeedEventAsync(string name, int registerCost, int maxParticipants)
+        public void MakeLockUnavailable() =>
+            CacheMock
+                .Setup(cache => cache.AcquireLockAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan>()))
+                .ReturnsAsync(false);
+
+        public async Task<int> SeedEventAsync(string name, int registerCost, int maxParticipants)
         {
             var ev = new backend.main.features.events.Events
             {
