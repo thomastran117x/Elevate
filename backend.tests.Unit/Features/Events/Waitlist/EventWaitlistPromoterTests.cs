@@ -242,15 +242,16 @@ public class EventWaitlistPromoterTests
     }
 
     [Fact]
-    public async Task PromoteAsync_ShouldReachEligibleUser_BehindALongRunOfSkippedCandidates()
+    public async Task PromoteAsync_ShouldReachEligibleUser_BehindAnIneligiblePrefixLargerThanTheScanBudget()
     {
         await using var harness = await WaitlistPromoterHarness.CreateAsync();
         await harness.SetCapacityAsync(1);
 
-        // A long head of ineligible candidates. A fixed-window scan would select and skip the
-        // same rows on every trigger, starving the eligible user behind them forever.
-        const int skippedAhead = 60;
-        for (var i = 0; i < skippedAhead; i++)
+        // Deliberately longer than MaxScanPerRun (200). Paging alone does not save us here:
+        // skipped entries stay Waiting, so without the persisted deferral every trigger would
+        // burn its whole budget on this same prefix and never reach the eligible user.
+        const int ineligibleAhead = 250;
+        for (var i = 0; i < ineligibleAhead; i++)
         {
             var userId = await harness.AddUserAsync($"skipped{i}@test.local");
             await harness.QueueAsync(userId, joinedAtUtc: DateTime.UtcNow.AddMinutes(-500 + i));
@@ -260,15 +261,42 @@ public class EventWaitlistPromoterTests
         var eligibleUserId = await harness.AddUserAsync("eligible@test.local");
         await harness.QueueAsync(eligibleUserId, joinedAtUtc: DateTime.UtcNow.AddMinutes(-1));
 
-        var promoted = await harness.PromoteAsync();
+        // First pass exhausts its budget on ineligible entries and promotes nobody...
+        (await harness.PromoteAsync()).Should().BeEmpty();
 
+        // ...but it defers them, so the queue in front has been cleared for the next trigger.
+        var promoted = await harness.PromoteAsync();
         promoted.Should().ContainSingle();
         promoted[0].UserId.Should().Be(eligibleUserId);
 
-        // The skipped entries stay Waiting — being skipped is reversible.
+        // Deferral is a cooldown, not a removal: the entries stay queued and keep their places.
         (await harness.Db.EventWaitlistEntries
             .CountAsync(w => w.Status == EventWaitlistEntryStatus.Waiting))
-            .Should().Be(skippedAhead);
+            .Should().Be(ineligibleAhead);
+    }
+
+    [Fact]
+    public async Task PromoteAsync_ShouldReconsiderADeferredUser_OnceTheCooldownLapses()
+    {
+        await using var harness = await WaitlistPromoterHarness.CreateAsync();
+        await harness.SetCapacityAsync(1);
+        await harness.QueueAsync(userId: 2);
+        harness.DenyAccessFor(2);
+
+        (await harness.PromoteAsync()).Should().BeEmpty();
+
+        var deferred = await harness.Db.EventWaitlistEntries.AsNoTracking().SingleAsync();
+        deferred.Status.Should().Be(EventWaitlistEntryStatus.Waiting);
+        deferred.EligibilityDeferredUntilUtc.Should().NotBeNull();
+
+        // Access is restored and the cooldown lapses — they must be picked up again, otherwise
+        // a transient revocation would sideline them permanently.
+        harness.RestoreAccessFor(2);
+        await harness.ExpireDeferralsAsync();
+
+        var promoted = await harness.PromoteAsync();
+        promoted.Should().ContainSingle();
+        promoted[0].UserId.Should().Be(2);
     }
 
     [Fact]
@@ -605,6 +633,18 @@ internal sealed class WaitlistPromoterHarness : IAsyncDisposable
     }
 
     public void DenyAccessFor(int userId) => _deniedUserIds.Add(userId);
+
+    public void RestoreAccessFor(int userId) => _deniedUserIds.Remove(userId);
+
+    /// <summary>Simulates the eligibility cooldown elapsing, without waiting for it.</summary>
+    public async Task ExpireDeferralsAsync()
+    {
+        await Db.EventWaitlistEntries
+            .Where(w => w.EligibilityDeferredUntilUtc != null)
+            .ExecuteUpdateAsync(setters =>
+                setters.SetProperty(w => w.EligibilityDeferredUntilUtc, DateTime.UtcNow.AddMinutes(-1)));
+        Db.ChangeTracker.Clear();
+    }
 
     public void MakeLockUnavailable() =>
         _cacheMock

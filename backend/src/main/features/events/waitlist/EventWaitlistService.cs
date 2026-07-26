@@ -2,6 +2,7 @@ using System.Data;
 
 using backend.main.features.cache;
 using backend.main.features.events.access;
+using backend.main.features.events.contracts.responses;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
 using backend.main.features.events.waitlist.contracts.requests;
@@ -131,6 +132,8 @@ namespace backend.main.features.events.waitlist
                     existing.RemovedAtUtc = null;
                     existing.RemovedByUserId = null;
                     existing.PromotionEmailQueuedAtUtc = null;
+                    // A rejoin is a fresh eligibility claim; don't inherit an old cooldown.
+                    existing.EligibilityDeferredUntilUtc = null;
                     existing.Notes = Sanitize(request?.Notes);
                     existing.PhoneNumber = Sanitize(request?.PhoneNumber);
                     existing.DietaryNeeds = Sanitize(request?.DietaryNeeds);
@@ -401,19 +404,22 @@ namespace backend.main.features.events.waitlist
                     continue;
 
                 // This response embeds full event details, so it must clear the same visibility
-                // policy as any other event read. Without it, a user whose private-event
-                // invitation was revoked after queueing would keep an open window onto that
-                // event — the promoter already treats that state as lost access. The entry
-                // itself is left Waiting so they can still leave the queue.
-                if (!await _accessChecker.CanViewEventAsync(ev, userId, userRole))
-                    continue;
+                // policy as any other event read — otherwise a user whose private-event
+                // invitation was revoked after queueing keeps an open window onto that event.
+                //
+                // The row is redacted rather than dropped, though: this endpoint and the event
+                // detail page are the only two places the UI can offer "leave waitlist", and the
+                // detail page rejects them under the same policy. Omitting it would leave them
+                // queued with their phone number and dietary notes stored and no way to withdraw.
+                var canView = await _accessChecker.CanViewEventAsync(ev, userId, userRole);
 
                 results.Add(new WaitlistedEventResponse
                 {
                     EntryId = entry.Id,
                     Position = await _waitlistRepository.GetPositionAsync(entry.EventId, entry.JoinedAtUtc, entry.Id),
                     JoinedAtUtc = entry.JoinedAtUtc,
-                    Event = EventMapper.MapToResponse(ev)
+                    AccessRevoked = !canView,
+                    Event = canView ? EventMapper.MapToResponse(ev) : RedactEvent(ev)
                 });
             }
 
@@ -443,6 +449,20 @@ namespace backend.main.features.events.waitlist
                 PromotedUserIds = promotedUserIds
             };
         }
+
+        /// <summary>
+        /// Everything except the id stripped: enough for the client to call leave, and nothing
+        /// that would disclose a private event the user may no longer see.
+        /// </summary>
+        private static EventResponse RedactEvent(Events ev) => new()
+        {
+            Id = ev.Id,
+            Name = string.Empty,
+            Description = string.Empty,
+            Location = string.Empty,
+            ImageUrls = [],
+            Tags = []
+        };
 
         private async Task UpdateWaitlistCountAsync(int eventId, DateTime now)
         {

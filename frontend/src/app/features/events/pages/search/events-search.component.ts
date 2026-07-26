@@ -16,6 +16,8 @@ import {
   EventStatus,
 } from '../../models/event.types';
 import { extractEnvelopeData } from '../../../../core/api/models/api-envelope.model';
+import { FeatureFlagsService } from '../../../../core/features/feature-flags.service';
+import { FEATURE_KEYS } from '../../../../core/features/feature-flags.types';
 import {
   getApiClientMessage,
   isApiClientClientError,
@@ -99,11 +101,20 @@ export class EventsSearchComponent implements OnInit, OnDestroy {
   private readonly destroy$ = new Subject<void>();
   private requestVersion = 0;
 
+  /**
+   * Search cards must not advertise a waitlist the backend won't accept: the controller is
+   * [FeatureGate]-d, and the detail CTA, routes and navbar are already gated on this flag.
+   */
+  readonly waitlistFeatureEnabled: boolean;
+
   constructor(
     private eventsService: EventsService,
     private route: ActivatedRoute,
     private router: Router,
-  ) {}
+    private featureFlags: FeatureFlagsService,
+  ) {
+    this.waitlistFeatureEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.eventsWaitlist);
+  }
 
   ngOnInit(): void {
     this.textChange$

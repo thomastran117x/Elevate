@@ -52,6 +52,20 @@ namespace backend.main.features.events.waitlist
         }
 
         /// <summary>
+        /// Set when a promotion pass found the user ineligible (disabled account, or lost access
+        /// to a private event) and stepped over them. The promotion scan excludes entries
+        /// deferred into the future, so a long run of ineligible entries at the head of the
+        /// queue cannot be re-examined on every trigger and starve everyone behind it.
+        ///
+        /// Both causes are reversible, so this is a cooldown rather than a terminal state: the
+        /// entry stays Waiting, keeps its queue position, and is re-checked once it lapses.
+        /// </summary>
+        public DateTime? EligibilityDeferredUntilUtc
+        {
+            get; set;
+        }
+
+        /// <summary>
         /// Set only once the promotion email has been successfully handed to the publisher.
         /// Promotion is durable even when publishing fails, so a Promoted entry with a null
         /// marker is the only record that the user was never notified — worth a reconciliation

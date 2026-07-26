@@ -45,7 +45,7 @@
       <ul class="mt-6 space-y-4">
         @for (item of items; track item.entryId) {
           <li class="surface-card flex flex-wrap items-center gap-5 rounded-3xl p-5">
-            @if (item.event.imageUrls?.length) {
+            @if (!item.accessRevoked && item.event.imageUrls?.length) {
               <img
                 [src]="item.event.imageUrls[0]"
                 [alt]="item.event.name"
@@ -54,19 +54,30 @@
             }
 
             <div class="min-w-0 flex-1">
-              <a
-                [routerLink]="['/events', item.event.id]"
-                class="truncate text-base font-semibold text-content transition hover:text-accent"
-              >
-                {{ item.event.name }}
-              </a>
-              <div class="mt-1 text-xs text-subtle">
-                {{ item.event.startTime | date: 'medium' }}
-              </div>
+              @if (item.accessRevoked) {
+                <!-- Details are withheld, but the row stays so the user can still withdraw. -->
+                <div class="truncate text-base font-semibold text-muted">
+                  Event no longer available to you
+                </div>
+                <div class="mt-1 text-xs text-subtle">
+                  You no longer have access to this event. Leave the waitlist to remove your
+                  details.
+                </div>
+              } @else {
+                <a
+                  [routerLink]="['/events', item.event.id]"
+                  class="truncate text-base font-semibold text-content transition hover:text-accent"
+                >
+                  {{ item.event.name }}
+                </a>
+                <div class="mt-1 text-xs text-subtle">
+                  {{ item.event.startTime | date: 'medium' }}
+                </div>
+              }
               <div class="mt-1 text-xs text-subtle">
                 Joined {{ item.joinedAtUtc | date: 'mediumDate' }}
               </div>
-              @if (isCancelled(item)) {
+              @if (!item.accessRevoked && isCancelled(item)) {
                 <div class="mt-2 text-xs font-semibold text-danger">Event cancelled</div>
               }
             </div>
@@ -76,7 +87,9 @@
                 Position
               </div>
               <div class="text-2xl font-bold text-warning">#{{ item.position }}</div>
-              <div class="text-xs text-subtle">of {{ item.event.waitlistCount }}</div>
+              @if (!item.accessRevoked) {
+                <div class="text-xs text-subtle">of {{ item.event.waitlistCount }}</div>
+              }
             </div>
 
             <button

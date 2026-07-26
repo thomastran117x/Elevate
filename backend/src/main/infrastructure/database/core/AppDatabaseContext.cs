@@ -589,7 +589,9 @@ namespace backend.main.infrastructure.database.core
                 .HasIndex(w => new { w.EventId, w.UserId })
                 .IsUnique();
 
-            // Covers both "next in line" (ordered LIMIT) and the position COUNT.
+            // Covers both "next in line" (ordered LIMIT) and the position COUNT. The promotion
+            // scan additionally filters on EligibilityDeferredUntilUtc, which is low-cardinality
+            // and mostly null, so it is left out of the index key.
             modelBuilder.Entity<EventWaitlistEntry>()
                 .HasIndex(w => new { w.EventId, w.Status, w.JoinedAtUtc, w.Id });
 

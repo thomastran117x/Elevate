@@ -338,22 +338,31 @@ public class EventWaitlistServiceTests
     }
 
     [Fact]
-    public async Task GetMyWaitlistsAsync_ShouldOmitEventsTheUserCanNoLongerSee()
+    public async Task GetMyWaitlistsAsync_ShouldRedactEventsTheUserCanNoLongerSee_ButStillReturnThem()
     {
         await using var harness = await WaitlistServiceHarness.CreateAsync();
         await harness.FillEventAsync();
         await harness.Service.JoinAsync(harness.EventId, harness.UserId, "Participant");
 
-        (await harness.Service.GetMyWaitlistsAsync(harness.UserId, "Participant")).Should().ContainSingle();
+        var visible = await harness.Service.GetMyWaitlistsAsync(harness.UserId, "Participant");
+        visible.Should().ContainSingle();
+        visible[0].AccessRevoked.Should().BeFalse();
+        visible[0].Event.Name.Should().Be("Waitlisted Event");
 
-        // A revoked private-event invitation must close the window onto the event details.
+        // A revoked private-event invitation must close the window onto the event details...
         harness.DenyAccessFor(harness.UserId);
 
-        (await harness.Service.GetMyWaitlistsAsync(harness.UserId, "Participant")).Should().BeEmpty();
+        var redacted = await harness.Service.GetMyWaitlistsAsync(harness.UserId, "Participant");
+        redacted.Should().ContainSingle();
+        redacted[0].AccessRevoked.Should().BeTrue();
+        redacted[0].Event.Name.Should().BeEmpty();
+        redacted[0].Event.Description.Should().BeEmpty();
+        redacted[0].Event.Location.Should().BeEmpty();
 
-        // ...but the entry survives, so they can still leave the queue.
-        (await harness.Db.EventWaitlistEntries.AsNoTracking().SingleAsync())
-            .Status.Should().Be(EventWaitlistEntryStatus.Waiting);
+        // ...but the row must survive, or the user has no way to withdraw and their stored
+        // contact details are stranded until an organizer intervenes.
+        redacted[0].EntryId.Should().Be(visible[0].EntryId);
+        redacted[0].Event.Id.Should().Be(harness.EventId);
     }
 
     [Fact]

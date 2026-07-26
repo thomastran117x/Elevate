@@ -36,6 +36,19 @@ namespace backend.main.features.events.waitlist
 
         private static readonly TimeSpan LockTTL = TimeSpan.FromSeconds(10);
 
+        /// <summary>
+        /// How long an ineligible entry is held out of the promotion scan. Long enough that a
+        /// large ineligible prefix is cleared from the scan after one pass, short enough that a
+        /// re-enabled account or restored invitation is picked up without operator action.
+        /// </summary>
+        private static readonly TimeSpan EligibilityDeferral = TimeSpan.FromMinutes(30);
+
+        private static void Defer(EventWaitlistEntry entry, DateTime nowUtc)
+        {
+            entry.EligibilityDeferredUntilUtc = nowUtc.Add(EligibilityDeferral);
+            entry.UpdatedAt = nowUtc;
+        }
+
         public EventWaitlistPromoter(
             AppDatabaseContext db,
             IEventAccessChecker accessChecker,
@@ -86,14 +99,15 @@ namespace backend.main.features.events.waitlist
             var promoted = new List<WaitlistPromotion>();
 
             // Paged scan. Entry mutations below are NOT flushed until the end, so every query
-            // still sees the whole queue as Waiting in exactly the same (JoinedAtUtc, Id) order
-            // — which is precisely why Skip(examined) advances correctly and why re-querying
-            // without it would reprocess the same rows and double-register them.
+            // still sees the same rows in the same (JoinedAtUtc, Id) order — which is precisely
+            // why Skip(examined) advances correctly and why re-querying without it would
+            // reprocess the same rows and double-register them.
             //
-            // Paging (rather than one fixed Take) matters because skipped entries stay Waiting:
-            // with a fixed window, a long run of ineligible candidates at the head of the queue
-            // would be re-selected and re-skipped on every trigger, starving everyone behind
-            // them indefinitely while seats sat empty.
+            // Ineligible candidates are excluded at the SQL level via EligibilityDeferredUntilUtc
+            // rather than merely stepped over. Skipped entries stay Waiting, so without that
+            // filter every trigger would re-examine the same ineligible prefix and, once the
+            // prefix outgrew MaxScanPerRun, permanently starve everyone behind it while seats
+            // sat empty. Paging alone only moves that cliff; the deferral removes it.
             var examined = 0;
 
             while (promoted.Count < seats && examined < MaxScanPerRun)
@@ -101,7 +115,10 @@ namespace backend.main.features.events.waitlist
                 var batchSize = Math.Min(seats - promoted.Count + 10, MaxScanPerRun - examined);
 
                 var batch = await _db.EventWaitlistEntries
-                    .Where(w => w.EventId == eventId && w.Status == EventWaitlistEntryStatus.Waiting)
+                    .Where(w =>
+                        w.EventId == eventId &&
+                        w.Status == EventWaitlistEntryStatus.Waiting &&
+                        (w.EligibilityDeferredUntilUtc == null || w.EligibilityDeferredUntilUtc <= nowUtc))
                     .OrderBy(w => w.JoinedAtUtc)
                     .ThenBy(w => w.Id)
                     .Skip(examined)
@@ -122,12 +139,20 @@ namespace backend.main.features.events.waitlist
 
                     // Skip in place rather than closing the entry: both this and the visibility
                     // check below are reversible, and a removed entry could not be restored.
+                    // The deferral keeps the entry Waiting (and keeps its queue position) while
+                    // taking it out of the scan until the cooldown lapses.
                     if (user == null || user.IsDisabled)
+                    {
+                        Defer(entry, nowUtc);
                         continue;
+                    }
 
                     // Private events: access can be revoked after joining the queue.
                     if (!await _accessChecker.CanViewEventAsync(ev, entry.UserId, user.Usertype))
+                    {
+                        Defer(entry, nowUtc);
                         continue;
+                    }
 
                     var existing = await _db.EventRegistrations
                         .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == entry.UserId);

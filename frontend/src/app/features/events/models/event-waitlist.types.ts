@@ -33,6 +33,11 @@ export interface WaitlistedEvent {
   entryId: number;
   position: number;
   joinedAtUtc: string;
+  /**
+   * True when the user can no longer view the event (e.g. a revoked private-event invite).
+   * `event` is then redacted to its id, but the row is still returned so they can withdraw.
+   */
+  accessRevoked: boolean;
   event: EventItem;
 }
 

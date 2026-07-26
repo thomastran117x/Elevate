@@ -47,6 +47,8 @@ type WaitlistedEventPayload = {
   Position?: number;
   joinedAtUtc?: string;
   JoinedAtUtc?: string;
+  accessRevoked?: boolean;
+  AccessRevoked?: boolean;
   event?: unknown;
   Event?: unknown;
 };
@@ -158,6 +160,7 @@ export class EventWaitlistService {
             entryId: item.entryId ?? item.EntryId ?? 0,
             position: item.position ?? item.Position ?? 0,
             joinedAtUtc: item.joinedAtUtc ?? item.JoinedAtUtc ?? '',
+            accessRevoked: item.accessRevoked ?? item.AccessRevoked ?? false,
             event: (item.event ?? item.Event) as EventItem,
           })),
         ),

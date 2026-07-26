@@ -17,6 +17,18 @@ namespace backend.main.features.events.waitlist.contracts.responses
         {
             get; set;
         }
+
+        /// <summary>
+        /// True when the user can no longer view this event (e.g. a private-event invitation was
+        /// revoked after they queued). <see cref="Event"/> is then redacted down to its id, but
+        /// the row is still returned so the user retains a way to withdraw and have their stored
+        /// contact details removed — omitting it entirely would strand them in the queue.
+        /// </summary>
+        public bool AccessRevoked
+        {
+            get; set;
+        }
+
         public EventResponse Event { get; set; } = null!;
     }
 }

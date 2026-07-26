@@ -4,6 +4,7 @@ import { BehaviorSubject, of, throwError } from 'rxjs';
 
 import { EventsSearchComponent } from './events-search.component';
 import { EventsService } from '../../services/events.service';
+import { FeatureFlagsService } from '../../../../core/features/feature-flags.service';
 import { EventsApiResponse } from '../../models/event.types';
 import {
   ApiClientClientError,
@@ -44,6 +45,8 @@ describe('EventsSearchComponent', () => {
     meta: { source: 'elasticsearch' },
   };
 
+  let waitlistFeatureEnabled = true;
+
   beforeEach(async () => {
     route = new ActivatedRouteStub();
     eventsService = jasmine.createSpyObj<EventsService>('EventsService', ['getEvents']);
@@ -57,8 +60,25 @@ describe('EventsSearchComponent', () => {
         { provide: ActivatedRoute, useValue: route },
         { provide: EventsService, useValue: eventsService },
         { provide: Router, useValue: router },
+        {
+          provide: FeatureFlagsService,
+          useValue: { isEnabled: () => waitlistFeatureEnabled },
+        },
       ],
     }).compileComponents();
+  });
+
+  afterEach(() => (waitlistFeatureEnabled = true));
+
+  it('exposes the waitlist feature flag so cards do not advertise a gated feature', () => {
+    createComponent();
+    expect(component.waitlistFeatureEnabled).toBeTrue();
+  });
+
+  it('reports the waitlist feature as unavailable when the flag is off', () => {
+    waitlistFeatureEnabled = false;
+    createComponent();
+    expect(component.waitlistFeatureEnabled).toBeFalse();
   });
 
   function createComponent() {
