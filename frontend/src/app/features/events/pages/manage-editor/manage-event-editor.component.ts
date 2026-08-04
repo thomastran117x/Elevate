@@ -32,6 +32,7 @@ export class ManageEventEditorComponent {
     isPrivate: [false],
     maxParticipants: [null as number | null],
     registerCost: [0],
+    waitlistEnabled: [false],
     startTime: [''],
     endTime: [''],
     category: ['Other'],
@@ -134,6 +135,28 @@ export class ManageEventEditorComponent {
 
   get canManageInvitations(): boolean {
     return !!this.event && this.event.lifecycleState === 'Published' && this.event.isPrivate;
+  }
+
+  get canManageWaitlist(): boolean {
+    return !!this.event && this.event.lifecycleState === 'Published' && this.event.waitlistEnabled;
+  }
+
+  /**
+   * Why the waitlist toggle is unavailable, or null when it can be enabled. A waitlist needs
+   * a capacity to be full against, and paid events enforce capacity at checkout instead.
+   */
+  get waitlistUnavailableReason(): string | null {
+    const raw = this.form.getRawValue();
+
+    if (!raw.maxParticipants || raw.maxParticipants <= 0) {
+      return 'Waitlists require a capacity limit.';
+    }
+
+    if ((raw.registerCost ?? 0) > 0) {
+      return "Waitlists aren't available for paid events.";
+    }
+
+    return null;
   }
 
   async onFilesSelected(event: Event): Promise<void> {
@@ -286,6 +309,7 @@ export class ManageEventEditorComponent {
       isPrivate: event.isPrivate,
       maxParticipants: event.maxParticipants ?? null,
       registerCost: event.registerCost,
+      waitlistEnabled: event.waitlistEnabled ?? false,
       startTime: this.toDateTimeLocal(event.startTime),
       endTime: this.toDateTimeLocal(event.endTime),
       category: event.category,
@@ -308,6 +332,7 @@ export class ManageEventEditorComponent {
       isPrivate: !!raw.isPrivate,
       maxParticipants: raw.maxParticipants ?? undefined,
       registerCost: raw.registerCost ?? 0,
+      waitlistEnabled: !!raw.waitlistEnabled,
       startTime: this.toIso(raw.startTime),
       endTime: raw.endTime ? this.toIso(raw.endTime) : null,
       category: raw.category as EventDraftPayload['category'],

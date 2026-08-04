@@ -5,6 +5,7 @@ using backend.main.features.events.registration;
 using backend.main.features.events.registration.contracts.requests;
 using backend.main.features.events.registration.contracts.responses;
 using backend.main.features.events.search;
+using backend.main.features.events.waitlist;
 using backend.main.infrastructure.database.core;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.utilities.logger;
@@ -21,6 +22,7 @@ namespace backend.main.features.events.registration
         private readonly ICacheService _cache;
         private readonly IRefreshAheadCache _refreshCache;
         private readonly IEventSearchOutboxWriter _outboxWriter;
+        private readonly IEventWaitlistPromoter _waitlistPromoter;
 
         private static readonly TimeSpan MembershipTTL = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan ListTTL = TimeSpan.FromMinutes(5);
@@ -32,7 +34,8 @@ namespace backend.main.features.events.registration
             IEventsService eventsService,
             ICacheService cache,
             IRefreshAheadCache refreshCache,
-            IEventSearchOutboxWriter outboxWriter)
+            IEventSearchOutboxWriter outboxWriter,
+            IEventWaitlistPromoter waitlistPromoter)
         {
             _db = db;
             _registrationRepository = registrationRepository;
@@ -40,6 +43,7 @@ namespace backend.main.features.events.registration
             _cache = cache;
             _refreshCache = refreshCache;
             _outboxWriter = outboxWriter;
+            _waitlistPromoter = waitlistPromoter;
         }
 
         public async Task<BatchRegistrationResultResponse> BatchRegisterAsync(int userId, string userRole, IEnumerable<int> eventIds)
@@ -111,8 +115,10 @@ namespace backend.main.features.events.registration
             return result;
         }
 
+        // Delegated to EventRegistrationCacheKeys so the waitlist promoter — which registers
+        // users on this service's behalf — provably uses the same lock and cache keys.
         private string LockKey(int eventId)
-            => $"evtreg:lock:{eventId}";
+            => EventRegistrationCacheKeys.Lock(eventId);
 
         private string UpdateLockKey(int userId, int eventId)
             => $"evtreg:update:u:{userId}:e:{eventId}";
@@ -121,7 +127,7 @@ namespace backend.main.features.events.registration
             => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
         private string MembershipKey(int userId, int eventId)
-            => $"evtreg:u:{userId}:e:{eventId}";
+            => EventRegistrationCacheKeys.Membership(userId, eventId);
 
         private string EventListKey(int eventId, int page, int size)
             => $"evtreg:list:e:{eventId}:{page}:{size}";
@@ -132,10 +138,10 @@ namespace backend.main.features.events.registration
         // Reverse index sets — track which list cache keys exist per event/user
         // so invalidation is a Set read + targeted deletes rather than a full key scan.
         private string EventIndexKey(int eventId)
-            => $"evtreg:index:e:{eventId}";
+            => EventRegistrationCacheKeys.EventIndex(eventId);
 
         private string UserIndexKey(int userId)
-            => $"evtreg:index:u:{userId}";
+            => EventRegistrationCacheKeys.UserIndex(userId);
 
         public async Task RegisterAsync(int eventId, int userId, string userRole, RegisterEventRequest? request = null)
         {
@@ -249,10 +255,25 @@ namespace backend.main.features.events.registration
 
         public async Task UnregisterAsync(int eventId, int userId, string userRole)
         {
+            await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
+
+            // Unregistering frees a seat and may immediately promote a waitlisted user, which
+            // makes this a capacity-MUTATING path. Without the lock it could race RegisterAsync
+            // (which holds it) and over-fill the event, or deadlock into a 500. Same key as
+            // RegisterAsync — never hold two of these at once.
+            var lockKey = LockKey(eventId);
+            var lockValue = Guid.NewGuid().ToString();
+            var acquired = await _cache.AcquireLockAsync(lockKey, lockValue, LockTTL);
+
+            if (!acquired)
+                throw new ConflictException("Event registration is busy, please try again");
+
+            IReadOnlyList<WaitlistPromotion> promotions = [];
+            string? eventName = null;
+            DateTime? eventStartsAtUtc = null;
+
             try
             {
-                await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
-
                 await using var transaction = await _db.Database.BeginTransactionAsync(
                     IsolationLevel.Serializable);
 
@@ -269,26 +290,34 @@ namespace backend.main.features.events.registration
                 if (registration == null)
                     throw new ResourceNotFoundException("Registration not found");
 
+                var now = DateTime.UtcNow;
                 registration.Status = RegistrationStatus.Cancelled;
-                registration.CancelledAt = DateTime.UtcNow;
+                registration.CancelledAt = now;
+
+                // MUST flush before promoting: the promoter counts active registrations, and
+                // would otherwise still see this row as Active and find no free seat — a silent
+                // failure in which the waitlist simply never advances.
+                await _db.SaveChangesAsync();
+
+                promotions = await _waitlistPromoter.PromoteWithinTransactionAsync(eventId, now);
 
                 if (trackedEvent != null)
                 {
-                    // COUNT before SaveChanges still sees this registration as Active;
-                    // the correct post-save count is activeCount - 1.
-                    var activeCount = await _db.EventRegistrations
+                    eventName = trackedEvent.Name;
+                    eventStartsAtUtc = trackedEvent.StartTime;
+
+                    // Assign from source truth rather than `activeCount - 1`: a promotion may
+                    // have added a registration inside this same transaction.
+                    trackedEvent.RegistrationCount = await _db.EventRegistrations
                         .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Active);
-                    trackedEvent.RegistrationCount = Math.Max(0, activeCount - 1);
-                    trackedEvent.UpdatedAt = DateTime.UtcNow;
+                    trackedEvent.WaitlistCount = await _db.EventWaitlistEntries
+                        .CountAsync(w => w.EventId == eventId && w.Status == EventWaitlistEntryStatus.Waiting);
+                    trackedEvent.UpdatedAt = now;
                     _outboxWriter.StageSync(trackedEvent);
                 }
 
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
-
-                await _refreshCache.RemoveAsync(MembershipKey(userId, eventId));
-                await InvalidateListsAsync(userId, eventId);
-                await _refreshCache.RemoveAsync($"event:{eventId}");
             }
             catch (Exception e)
             {
@@ -298,6 +327,19 @@ namespace backend.main.features.events.registration
                 Logger.Error($"[EventRegistrationService] UnregisterAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
+            finally
+            {
+                await _cache.ReleaseLockAsync(lockKey, lockValue);
+            }
+
+            await _refreshCache.RemoveAsync(MembershipKey(userId, eventId));
+            await InvalidateListsAsync(userId, eventId);
+            await _refreshCache.RemoveAsync($"event:{eventId}");
+
+            // Each promoted user is a DIFFERENT user; their membership and list caches are
+            // stale until invalidated, and would otherwise show "not registered" for 5 minutes.
+            await _waitlistPromoter.InvalidateForPromotedAsync(promotions, eventId);
+            await _waitlistPromoter.PublishPromotionEmailsAsync(promotions, eventId, eventName, eventStartsAtUtc);
         }
 
         public async Task<EventRegistration> UpdateRegistrationAsync(int eventId, int userId, string userRole, UpdateRegistrationRequest request)
@@ -413,19 +455,7 @@ namespace backend.main.features.events.registration
             await _cache.SetExpiryAsync(indexKey, ListTTL);
         }
 
-        private async Task InvalidateListsAsync(int userId, int eventId)
-        {
-            var eventIndexKey = EventIndexKey(eventId);
-            var userIndexKey = UserIndexKey(userId);
-
-            var eventKeys = await _cache.SetMembersAsync(eventIndexKey);
-            var userKeys = await _cache.SetMembersAsync(userIndexKey);
-
-            foreach (var key in eventKeys.Concat(userKeys))
-                await _cache.DeleteKeyAsync(key);
-
-            await _cache.DeleteKeyAsync(eventIndexKey);
-            await _cache.DeleteKeyAsync(userIndexKey);
-        }
+        private Task InvalidateListsAsync(int userId, int eventId)
+            => EventRegistrationCacheKeys.InvalidateListsAsync(_cache, userId, eventId);
     }
 }

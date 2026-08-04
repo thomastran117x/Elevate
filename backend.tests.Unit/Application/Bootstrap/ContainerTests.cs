@@ -8,9 +8,11 @@ using backend.main.features.clubs.follow.invitations;
 using backend.main.features.clubs.invitations;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.search;
+using backend.main.features.events.access;
 using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
+using backend.main.features.events.waitlist;
 using backend.main.features.payment;
 using backend.main.infrastructure.elasticsearch;
 
@@ -139,6 +141,16 @@ public class ContainerTests
         services.Should().Contain(descriptor =>
             descriptor.ServiceType == typeof(IClubMemberInvitationService)
             && descriptor.ImplementationType == typeof(ClubMemberInvitationService));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IEventWaitlistService)
+            && descriptor.ImplementationType == typeof(EventWaitlistService));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IEventWaitlistPromoter)
+            && descriptor.ImplementationType == typeof(EventWaitlistPromoter));
+        // Not feature-gated: EventsService depends on it for private-event visibility.
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IEventAccessChecker)
+            && descriptor.ImplementationType == typeof(EventAccessChecker));
         services.Should().NotContain(descriptor =>
             descriptor.ServiceType == typeof(IHostedService));
     }
@@ -152,6 +164,7 @@ public class ContainerTests
                 ["FeatureFlags:clubs.follow"] = "false",
                 ["FeatureFlags:events.invitations"] = "false",
                 ["FeatureFlags:events.registration"] = "false",
+                ["FeatureFlags:events.waitlist"] = "false",
                 ["FeatureFlags:payment"] = "false",
                 ["FeatureFlags:search.reindex"] = "false"
             })
@@ -171,6 +184,12 @@ public class ContainerTests
         services.Should().Contain(descriptor =>
             descriptor.ServiceType == typeof(IEventRegistrationService)
             && descriptor.ImplementationType == typeof(DisabledEventRegistrationService));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IEventWaitlistService)
+            && descriptor.ImplementationType == typeof(DisabledEventWaitlistService));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IEventWaitlistPromoter)
+            && descriptor.ImplementationType == typeof(DisabledEventWaitlistPromoter));
         services.Should().Contain(descriptor =>
             descriptor.ServiceType == typeof(IPaymentService)
             && descriptor.ImplementationType == typeof(DisabledPaymentService));

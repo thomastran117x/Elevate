@@ -4,6 +4,7 @@ using System.Text.Json;
 using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.events;
+using backend.main.features.events.access;
 using backend.main.features.events.analytics;
 using backend.main.features.events.contracts.responses;
 using backend.main.features.events.images;
@@ -11,6 +12,7 @@ using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
 using backend.main.features.events.versions;
+using backend.main.features.events.waitlist;
 using backend.main.features.payment;
 using backend.main.infrastructure.database.core;
 using backend.main.infrastructure.elasticsearch;
@@ -1835,6 +1837,7 @@ public class EventsServiceTests
         public Mock<IEventSearchOutboxWriter> OutboxWriterMock { get; } = new();
         public Mock<IEventRegistrationRepository> RegistrationRepositoryMock { get; } = new();
         public Mock<IEventInvitationService> InvitationServiceMock { get; } = new();
+        public Mock<IEventWaitlistPromoter> WaitlistPromoterMock { get; } = new();
 
         public int ClubId => 4;
         public int OwnerUserId => 7;
@@ -1906,8 +1909,14 @@ public class EventsServiceTests
                 AnalyticsRepositoryMock.Object,
                 SearchServiceMock.Object,
                 OutboxWriterMock.Object,
-                RegistrationRepositoryMock.Object,
-                InvitationServiceMock.Object,
+                // Real checker over the same mocks, so these tests still exercise the
+                // actual private-event visibility policy rather than a stubbed answer.
+                new EventAccessChecker(
+                    db,
+                    ClubServiceMock.Object,
+                    RegistrationRepositoryMock.Object,
+                    InvitationServiceMock.Object),
+                WaitlistPromoterMock.Object,
                 Options.Create(new EventVersioningOptions()),
                 TimeProvider.System);
         }

@@ -437,13 +437,26 @@ public class EventRegistrationServiceTests
                     return [];
                 });
 
+            var accessCheckerMock = new Mock<backend.main.features.events.access.IEventAccessChecker>();
+            accessCheckerMock
+                .Setup(checker => checker.CanViewEventAsync(
+                    It.IsAny<backend.main.features.events.Events>(), It.IsAny<int?>(), It.IsAny<string?>()))
+                .ReturnsAsync(true);
+
             var service = new EventRegistrationService(
                 db,
                 new EventRegistrationRepository(db),
                 eventsServiceMock.Object,
                 cacheMock.Object,
                 refreshCacheMock.Object,
-                outboxWriterMock.Object);
+                outboxWriterMock.Object,
+                new backend.main.features.events.waitlist.EventWaitlistPromoter(
+                    db,
+                    accessCheckerMock.Object,
+                    cacheMock.Object,
+                    refreshCacheMock.Object,
+                    outboxWriterMock.Object,
+                    Mock.Of<backend.main.shared.providers.IPublisher>()));
 
             harness = new EventRegistrationHarness(
                 database,

@@ -21,14 +21,24 @@
       </div>
     </div>
 
-    @if (canManageInvitations) {
-      <a
-        [routerLink]="['/events', eventId, 'invitations', 'manage']"
-        class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-4 py-2.5 text-sm font-semibold text-muted transition hover:bg-glass-strong"
-      >
-        Manage invitations
-      </a>
-    }
+    <div class="flex flex-wrap gap-3">
+      @if (canManageInvitations) {
+        <a
+          [routerLink]="['/events', eventId, 'invitations', 'manage']"
+          class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-4 py-2.5 text-sm font-semibold text-muted transition hover:bg-glass-strong"
+        >
+          Manage invitations
+        </a>
+      }
+      @if (canManageWaitlist) {
+        <a
+          [routerLink]="['/events', eventId, 'waitlist', 'manage']"
+          class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-4 py-2.5 text-sm font-semibold text-muted transition hover:bg-glass-strong"
+        >
+          Manage waitlist
+        </a>
+      }
+    </div>
   </div>
 
   @if (loading) {
@@ -203,6 +213,29 @@
                 <input formControlName="registerCost" type="number" [class]="inputClass" />
               </label>
             </div>
+
+            <div class="rounded-2xl border border-line bg-glass p-4">
+              <label class="flex items-start gap-3">
+                <input
+                  formControlName="waitlistEnabled"
+                  type="checkbox"
+                  [attr.disabled]="waitlistUnavailableReason ? true : null"
+                  class="mt-0.5 h-4 w-4 shrink-0 rounded border-line-strong"
+                />
+                <span>
+                  <span class="text-sm font-semibold text-content">Enable waitlist</span>
+                  <span class="mt-1 block text-xs text-subtle">
+                    When the event is full, people can join a waitlist. If someone cancels, the next
+                    person in line is registered automatically.
+                  </span>
+                  @if (waitlistUnavailableReason) {
+                    <span class="mt-1 block text-xs text-faint">
+                      {{ waitlistUnavailableReason }}
+                    </span>
+                  }
+                </span>
+              </label>
+            </div>
             <label class="block space-y-2">
               <span class="text-sm font-semibold text-muted">Tags</span>
               <input
@@ -321,6 +354,12 @@
                 <dt class="text-sm text-faint">Capacity</dt>
                 <dd class="text-right text-sm font-medium text-content">
                   {{ form.controls.maxParticipants.value || 'Unlimited' }}
+                </dd>
+              </div>
+              <div class="flex items-start justify-between gap-4 py-3">
+                <dt class="text-sm text-faint">Waitlist</dt>
+                <dd class="text-right text-sm font-medium text-content">
+                  {{ form.controls.waitlistEnabled.value ? 'Enabled' : 'Disabled' }}
                 </dd>
               </div>
               <div class="flex items-start justify-between gap-4 py-3">

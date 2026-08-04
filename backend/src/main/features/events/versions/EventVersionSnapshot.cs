@@ -26,6 +26,11 @@ public sealed class EventVersionSnapshot
     {
         get; init;
     }
+    /// <summary>Absent from older snapshots; deserializes to false, the correct default.</summary>
+    public bool WaitlistEnabled
+    {
+        get; init;
+    }
     public DateTime? StartTime
     {
         get; init;

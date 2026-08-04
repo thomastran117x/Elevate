@@ -202,6 +202,96 @@ public class EmailTemplateRendererTests
         Assert.Equal("Unsupported email type '999'.", exception.Message);
     }
 
+    [Fact]
+    public void Render_WaitlistJoined_ExplainsAutoPromotion_AndDeepLinksToTheEvent()
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Type = EmailMessageType.WaitlistJoined,
+            RecipientName = "Thomas",
+            EventId = 42,
+            EventName = "Board Game Night"
+        });
+
+        Assert.Equal("You're on the waitlist for Board Game Night", content.Subject);
+        Assert.Contains("/events/42", content.PlainText);
+        Assert.Contains("/events/42", content.Html);
+        Assert.Contains("registered automatically", content.PlainText);
+        Assert.Contains("Hi Thomas,", content.Html);
+    }
+
+    [Fact]
+    public void Render_WaitlistPromoted_AnnouncesRegistration_AndIncludesStartTime()
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Type = EmailMessageType.WaitlistPromoted,
+            RecipientName = "Thomas",
+            EventId = 42,
+            EventName = "Board Game Night",
+            EventStartsAtUtc = new DateTime(2026, 8, 1, 18, 30, 0, DateTimeKind.Utc)
+        });
+
+        Assert.Equal("You're in — a spot opened up for Board Game Night", content.Subject);
+        Assert.Contains("/events/42", content.Html);
+        Assert.Contains("Saturday, 01 Aug 2026 at 18:30 UTC", content.PlainText);
+        Assert.Contains("View your registration", content.Html);
+    }
+
+    [Fact]
+    public void Render_WaitlistEmail_FallsBackToEventsIndex_WhenEventIdMissing()
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Type = EmailMessageType.WaitlistJoined,
+            EventName = "Board Game Night"
+        });
+
+        Assert.Contains("https://frontend.example.com/events", content.PlainText);
+        Assert.DoesNotContain("/events/0", content.PlainText);
+    }
+
+    /// <summary>
+    /// The renderer's default switch arm throws on unhandled types, so adding an
+    /// EmailMessageType without a template would crash the worker on the first such
+    /// message. This pins every enum value to a rendering arm.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AllEmailMessageTypes))]
+    public void Render_ShouldSupportEveryEmailMessageType(EmailMessageType type)
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Type = type,
+            // Superset of what any arm may require.
+            Token = "sample-token",
+            Code = "123456",
+            RecipientName = "Thomas",
+            EventId = 7,
+            EventName = "Sample Event",
+            ClubName = "Sample Club",
+            ActorName = "Sample Actor",
+            EventStartsAtUtc = DateTime.UtcNow.AddDays(1)
+        });
+
+        Assert.False(string.IsNullOrWhiteSpace(content.Subject));
+        Assert.False(string.IsNullOrWhiteSpace(content.Html));
+        Assert.False(string.IsNullOrWhiteSpace(content.PlainText));
+    }
+
+    public static TheoryData<EmailMessageType> AllEmailMessageTypes()
+    {
+        var data = new TheoryData<EmailMessageType>();
+        foreach (var type in Enum.GetValues<EmailMessageType>())
+            data.Add(type);
+
+        return data;
+    }
+
     private static EmailTemplateRenderer CreateRenderer() =>
         new(new EmailWorkerOptions(
             BootstrapServers: "kafka:9092",

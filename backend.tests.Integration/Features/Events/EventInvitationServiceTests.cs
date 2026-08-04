@@ -231,8 +231,12 @@ public sealed class EventInvitationServiceTests
                 Mock.Of<backend.main.features.events.analytics.IEventAnalyticsRepository>(),
                 Mock.Of<IEventSearchService>(),
                 Mock.Of<IEventSearchOutboxWriter>(),
-                new EventRegistrationRepository(db),
-                invitationService,
+                new backend.main.features.events.access.EventAccessChecker(
+                    db,
+                    clubService.Object,
+                    new EventRegistrationRepository(db),
+                    invitationService),
+                new backend.main.application.features.DisabledEventWaitlistPromoter(),
                 Options.Create(new EventVersioningOptions()),
                 TimeProvider.System);
 

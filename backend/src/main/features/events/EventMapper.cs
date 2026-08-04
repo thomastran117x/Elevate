@@ -32,6 +32,8 @@ namespace backend.main.features.events
                 Longitude = ev.Longitude,
                 Tags = ev.Tags ?? new List<string>(),
                 RegistrationCount = ev.RegistrationCount,
+                WaitlistEnabled = ev.WaitlistEnabled,
+                WaitlistCount = ev.WaitlistCount,
                 DistanceKm = distanceKm
             };
 
@@ -80,6 +82,8 @@ namespace backend.main.features.events
                 Longitude = ev.Longitude,
                 Tags = ev.Tags ?? new List<string>(),
                 RegistrationCount = ev.RegistrationCount,
+                WaitlistEnabled = ev.WaitlistEnabled,
+                WaitlistCount = ev.WaitlistCount,
                 PublishReady = publishIssues.Count == 0,
                 PublishIssues = publishIssues.ToList()
             };

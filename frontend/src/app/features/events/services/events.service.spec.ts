@@ -148,6 +148,8 @@ describe('EventsService', () => {
           longitude: -75.6972,
           tags: ['tech', 'community'],
           registrationCount: 34,
+          waitlistEnabled: false,
+          waitlistCount: 0,
           distanceKm: 2.5,
           club: undefined,
         },
@@ -294,6 +296,8 @@ describe('EventsService', () => {
       longitude: -75.6972,
       tags: ['tech', 'community'],
       registrationCount: 34,
+      waitlistEnabled: false,
+      waitlistCount: 0,
       distanceKm: undefined,
       club: {
         id: 7,

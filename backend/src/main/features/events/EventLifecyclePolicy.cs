@@ -73,6 +73,12 @@ public static class EventLifecyclePolicy
         if (ev.registerCost is < 0 or > 50_000)
             issues.Add("Register cost must be between $0 and $50,000.");
 
+        if (ev.WaitlistEnabled && ev.maxParticipants <= 0)
+            issues.Add("Waitlists require a capacity limit.");
+
+        if (ev.WaitlistEnabled && ev.registerCost > 0)
+            issues.Add("Waitlists are not available for paid events.");
+
         if (ev.isPrivate && ev.registerCost > 0)
             issues.Add("Private events cannot require a registration fee.");
 

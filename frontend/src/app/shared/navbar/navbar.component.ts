@@ -25,6 +25,7 @@ export class NavbarComponent {
   user$: Observable<User | null>;
   readonly authEnabled: boolean;
   readonly invitationsEnabled: boolean;
+  readonly waitlistEnabled: boolean;
   readonly eventsEnabled: boolean;
   readonly clubsEnabled: boolean;
 
@@ -40,6 +41,7 @@ export class NavbarComponent {
     this.user$ = this.store.select(selectUser);
     this.authEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.auth);
     this.invitationsEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.eventsInvitations);
+    this.waitlistEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.eventsWaitlist);
     this.eventsEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.events);
     this.clubsEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.clubs);
   }

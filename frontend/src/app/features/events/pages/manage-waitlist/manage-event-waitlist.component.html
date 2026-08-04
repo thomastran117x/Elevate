@@ -1,0 +1,123 @@
+<div class="app-page">
+  <main class="page-section py-10">
+    <a
+      [routerLink]="['/events', eventId]"
+      class="text-sm font-semibold text-muted transition hover:text-content"
+    >
+      &larr; Back to event
+    </a>
+
+    <header class="mt-4">
+      <span class="eyebrow">Waitlist</span>
+      <h1 class="mt-2 text-3xl font-bold text-content">
+        {{ event?.name || 'Event waitlist' }}
+      </h1>
+      <p class="mt-2 text-sm text-muted">
+        People queued for a spot. When someone cancels, the next in line is registered
+        automatically.
+      </p>
+    </header>
+
+    @if (error) {
+      <div class="mt-6 rounded-2xl border border-danger/25 bg-danger/10 p-4 text-sm text-danger">
+        {{ error }}
+      </div>
+    }
+
+    @if (notice) {
+      <div class="mt-6 rounded-2xl border border-success/20 bg-success/10 p-4 text-sm text-success">
+        {{ notice }}
+      </div>
+    }
+
+    @if (loading) {
+      <div class="mt-6 space-y-3">
+        @for (placeholder of [1, 2, 3]; track placeholder) {
+          <div class="h-20 animate-pulse rounded-2xl bg-glass-strong"></div>
+        }
+      </div>
+    } @else {
+      <section class="surface-panel mt-6 rounded-3xl p-6">
+        <div class="grid gap-4 sm:grid-cols-3">
+          <div>
+            <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">Waiting</div>
+            <div class="mt-1 text-2xl font-bold text-content">{{ totalCount }}</div>
+          </div>
+          <div>
+            <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+              Registered
+            </div>
+            <div class="mt-1 text-2xl font-bold text-content">
+              {{ event?.registrationCount ?? 0 }}
+              @if (event && event.maxParticipants > 0) {
+                <span class="text-base font-medium text-subtle">/ {{ event.maxParticipants }}</span>
+              }
+            </div>
+          </div>
+          <div>
+            <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+              Seats free
+            </div>
+            <div class="mt-1 text-2xl font-bold text-content">{{ seatsFree }}</div>
+          </div>
+        </div>
+
+        @if (seatsFree > 0 && totalCount > 0) {
+          <button
+            type="button"
+            [disabled]="promoteLoading"
+            (click)="promoteNext()"
+            class="cta-solid mt-6 w-full rounded-xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          >
+            @if (!promoteLoading) {
+              <span>Promote next</span>
+            } @else {
+              <span>Please wait...</span>
+            }
+          </button>
+        }
+      </section>
+
+      @if (entries.length === 0) {
+        <div class="mt-6 text-sm text-subtle">Nobody is on the waitlist yet.</div>
+      } @else {
+        <ul class="mt-6 space-y-3">
+          @for (entry of entries; track entry.id) {
+            <li class="surface-card flex flex-wrap items-center gap-4 rounded-2xl p-4">
+              <div
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-muted text-sm font-bold text-content"
+              >
+                #{{ entry.position }}
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-sm font-semibold text-content">
+                  {{ entry.userName || 'Unknown user' }}
+                </div>
+                <div class="truncate text-xs text-subtle">{{ entry.userEmail }}</div>
+                @if (entryDetails(entry)) {
+                  <div class="mt-1 truncate text-xs text-faint">{{ entryDetails(entry) }}</div>
+                }
+              </div>
+              <div class="text-right">
+                <div class="text-xs font-semibold" [class]="statusClass(entry)">
+                  {{ entry.status }}
+                </div>
+                <div class="text-xs text-subtle">
+                  Joined {{ entry.joinedAtUtc | date: 'mediumDate' }}
+                </div>
+              </div>
+              <button
+                type="button"
+                [disabled]="actionLoadingId === entry.id"
+                (click)="remove(entry)"
+                class="cta-ghost rounded-xl px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Remove
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    }
+  </main>
+</div>
