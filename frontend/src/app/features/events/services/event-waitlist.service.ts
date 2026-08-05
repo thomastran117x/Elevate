@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpParams } from '@angular/common/http';
 import { map, Observable } from 'rxjs';
 import { environment } from '@environments/environment';
-import { ApiEnvelope } from '../../../core/api/models/api-envelope.model';
+import { ApiEnvelope, extractEnvelopeMeta } from '../../../core/api/models/api-envelope.model';
 import { ApiClient } from '../../../core/api/services/api-client.service';
 import {
   EventWaitlistEntry,
@@ -116,7 +116,7 @@ export class EventWaitlistService {
       .pipe(
         map((response) => {
           const entries = (this.unwrap(response) ?? []).map((entry) => this.normalizeEntry(entry));
-          const meta = response.meta ?? null;
+          const meta = extractEnvelopeMeta(response);
           return {
             entries,
             totalCount: meta?.totalCount ?? meta?.TotalCount ?? entries.length,

@@ -15,7 +15,10 @@ import {
   EventSortBy,
   EventStatus,
 } from '../../models/event.types';
-import { extractEnvelopeData } from '../../../../core/api/models/api-envelope.model';
+import {
+  extractEnvelopeData,
+  extractEnvelopeMeta,
+} from '../../../../core/api/models/api-envelope.model';
 import { FeatureFlagsService } from '../../../../core/features/feature-flags.service';
 import { FEATURE_KEYS } from '../../../../core/features/feature-flags.types';
 import {
@@ -494,7 +497,8 @@ export class EventsSearchComponent implements OnInit, OnDestroy {
           this.events = data.items;
           this.totalCount = data.totalCount;
           this.totalPages = data.totalPages;
-          this.resultSource = typeof response.meta?.source === 'string' ? response.meta.source : '';
+          const source = extractEnvelopeMeta(response)?.source;
+          this.resultSource = typeof source === 'string' ? source : '';
           this.loading = false;
         },
         error: (response) => {

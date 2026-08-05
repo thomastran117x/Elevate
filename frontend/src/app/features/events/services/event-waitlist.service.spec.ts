@@ -158,17 +158,37 @@ describe('EventWaitlistService', () => {
       const request = httpMock.expectOne((r) => r.url.includes('/events/42/waitlist'));
       expect(request.request.params.get('page')).toBe('1');
       expect(request.request.params.get('pageSize')).toBe('20');
-      // Note the envelope key stays lowercase `meta` — only the fields inside it are
-      // read in either casing.
       request.flush({
         Data: [{ Id: 1, EventId: 42, UserId: 5, Position: 1, UserName: 'Jamie' }],
-        meta: { TotalCount: 3 },
+        Meta: { TotalCount: 3 },
       });
 
       expect(total).toBe(3);
       expect(entries[0]).toEqual(
         jasmine.objectContaining({ id: 1, eventId: 42, userId: 5, userName: 'Jamie' }),
       );
+    });
+
+    it('reads the total from a lowercase meta with a PascalCase field', () => {
+      let total = 0;
+      service.getEventWaitlist(42).subscribe((page) => (total = page.totalCount));
+
+      httpMock
+        .expectOne((r) => r.url.includes('/events/42/waitlist'))
+        .flush({ data: [{ id: 1 }], meta: { TotalCount: 3 } });
+
+      expect(total).toBe(3);
+    });
+
+    it('prefers the camelCase meta key when both are present', () => {
+      let total = 0;
+      service.getEventWaitlist(42).subscribe((page) => (total = page.totalCount));
+
+      httpMock
+        .expectOne((r) => r.url.includes('/events/42/waitlist'))
+        .flush({ data: [{ id: 1 }], meta: { totalCount: 3 }, Meta: { totalCount: 99 } });
+
+      expect(total).toBe(3);
     });
 
     it('falls back to the entry count when meta carries no total', () => {

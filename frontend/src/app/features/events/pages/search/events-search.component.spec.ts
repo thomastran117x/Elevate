@@ -252,6 +252,24 @@ describe('EventsSearchComponent', () => {
       expect(component.sourceLabel).toBe('cache');
     });
 
+    it('reads the source from a legacy PascalCase Meta envelope', () => {
+      eventsService.getEvents.and.returnValue(
+        of({ ...response, meta: null, Meta: { source: 'database' } } as EventsApiResponse),
+      );
+
+      createComponent();
+
+      expect(component.sourceLabel).toBe('Fallback results');
+    });
+
+    it('blanks the source when the envelope carries no metadata', () => {
+      eventsService.getEvents.and.returnValue(of({ ...response, meta: null }));
+
+      createComponent();
+
+      expect(component.resultSource).toBe('');
+    });
+
     it('reports the envelope message when a successful response carries no data', () => {
       eventsService.getEvents.and.returnValue(
         of({ ...response, data: null, message: 'Search is temporarily unavailable.' }),

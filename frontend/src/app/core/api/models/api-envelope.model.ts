@@ -28,6 +28,25 @@ export function extractEnvelopeData<T>(response: ApiEnvelope<T> | T | null | und
   return response as T;
 }
 
+/**
+ * Reads the envelope's side-channel metadata (paging totals, result source), tolerating
+ * the legacy PascalCase key the same way {@link extractEnvelopeData} tolerates `Data`.
+ *
+ * `Meta` is read through a cast rather than declared on {@link ApiEnvelope}: the interface
+ * is generic in its meta type, and adding an optional `Meta?: M` makes the narrowed
+ * response aliases (`EventsApiResponse` and friends) stop accepting a spread of the
+ * wider payload envelope.
+ */
+export function extractEnvelopeMeta<T, M>(
+  response: ApiEnvelope<T, M> | null | undefined,
+): M | null {
+  if (response == null) {
+    return null;
+  }
+
+  return response.meta ?? (response as { Meta?: M }).Meta ?? null;
+}
+
 export function requireEnvelopeData<T>(response: ApiEnvelope<T>, fallbackMessage: string): T {
   const data = response.data ?? response.Data;
   if (data == null) {
