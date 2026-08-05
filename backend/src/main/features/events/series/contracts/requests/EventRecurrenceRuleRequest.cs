@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace backend.main.features.events.series.contracts.requests;
 
@@ -14,7 +15,12 @@ namespace backend.main.features.events.series.contracts.requests;
 /// </summary>
 public class EventRecurrenceRuleRequest : IValidatableObject
 {
+    // Every enum below is annotated so it can be posted as its string name. The browser client
+    // sends "Weekly" rather than 1, and this application registers no global
+    // JsonStringEnumConverter, so without these the request is rejected during model binding
+    // before any validation or service code runs.
     [Required]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public EventRecurrenceFrequency Frequency
     {
         get; set;
@@ -24,11 +30,13 @@ public class EventRecurrenceRuleRequest : IValidatableObject
     public int Interval { get; set; } = 1;
 
     /// <summary>Weekly only. Empty means "the same weekday as the first occurrence".</summary>
+    [JsonConverter(typeof(WeekdayListJsonConverter))]
     public List<DayOfWeek>? ByWeekdays
     {
         get; set;
     }
 
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public EventMonthlyDayPolicy MonthlyDayPolicy { get; set; } = EventMonthlyDayPolicy.ClampToMonthEnd;
 
     /// <summary>Local wall-clock start, as <c>yyyy-MM-ddTHH:mm[:ss]</c> with no offset.</summary>
@@ -48,6 +56,7 @@ public class EventRecurrenceRuleRequest : IValidatableObject
     public string TimeZoneId { get; set; } = string.Empty;
 
     [Required]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public EventRecurrenceEndMode EndMode
     {
         get; set;

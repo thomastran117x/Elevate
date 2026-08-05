@@ -875,6 +875,12 @@ public class EventSeriesService : IEventSeriesService
         occurrence.registerCost = registerCost;
         occurrence.WaitlistEnabled = waitlistEnabled;
 
+        // Captured before the start moves, so a retime that does not name a new duration can
+        // put the event back to the length it already had.
+        var existingDuration = occurrence.StartTime.HasValue && occurrence.EndTime.HasValue
+            ? occurrence.EndTime.Value - occurrence.StartTime.Value
+            : (TimeSpan?)null;
+
         // Retiming is expressed as a wall-clock time in the series' zone and re-converted per
         // occurrence, so the shifted series survives DST exactly as the original generation did.
         if (request.TryParseLocalStartTime(out var localStartTime) && occurrence.StartTime.HasValue)
@@ -890,12 +896,18 @@ public class EventSeriesService : IEventSeriesService
             retimed = true;
         }
 
-        var duration = request.DurationMinutes;
+        if (!occurrence.StartTime.HasValue)
+            return true;
 
-        if (duration.HasValue && occurrence.StartTime.HasValue)
-            occurrence.EndTime = occurrence.StartTime.Value.AddMinutes(duration.Value);
-        else if (retimed && occurrence.EndTime.HasValue && occurrence.StartTime.HasValue)
-            occurrence.EndTime = occurrence.StartTime.Value.AddMinutes(60);
+        if (request.DurationMinutes.HasValue)
+        {
+            occurrence.EndTime = occurrence.StartTime.Value.AddMinutes(request.DurationMinutes.Value);
+        }
+        else if (retimed && existingDuration.HasValue)
+        {
+            // Moving the start must not silently change how long the event runs for.
+            occurrence.EndTime = occurrence.StartTime.Value.Add(existingDuration.Value);
+        }
 
         return true;
     }

@@ -393,6 +393,50 @@ public class EventSeriesServiceTests
     }
 
     [Fact]
+    public async Task UpdateFutureOccurrencesAsync_ShouldPreserveTheExistingDuration_WhenRetimingWithoutANewOne()
+    {
+        await using var harness = await Harness.CreateAsync(
+            new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        // The template runs for two hours, and the rule carries that through to every occurrence.
+        var series = await harness.CreateSeriesAsync(occurrenceCount: 2);
+        var pivot = await harness.OccurrenceAsync(series.Id, index: 0);
+
+        (pivot.EndTime!.Value - pivot.StartTime!.Value).Should().Be(TimeSpan.FromHours(2));
+
+        await harness.Service.UpdateFutureOccurrencesAsync(
+            series.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new UpdateFutureOccurrencesRequest { FromEventId = pivot.Id, LocalStartTime = "18:00" });
+
+        var all = await harness.Db.Events.OrderBy(e => e.OccurrenceIndex).ToListAsync();
+
+        // Moving the start must not quietly turn a two-hour event into a one-hour one.
+        all.Should().OnlyContain(e => e.EndTime!.Value - e.StartTime!.Value == TimeSpan.FromHours(2));
+    }
+
+    [Fact]
+    public async Task UpdateFutureOccurrencesAsync_ShouldApplyAnExplicitDuration_WhenOneIsGiven()
+    {
+        await using var harness = await Harness.CreateAsync(
+            new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        var series = await harness.CreateSeriesAsync(occurrenceCount: 2);
+        var pivot = await harness.OccurrenceAsync(series.Id, index: 0);
+
+        await harness.Service.UpdateFutureOccurrencesAsync(
+            series.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new UpdateFutureOccurrencesRequest { FromEventId = pivot.Id, DurationMinutes = 45 });
+
+        var all = await harness.Db.Events.OrderBy(e => e.OccurrenceIndex).ToListAsync();
+
+        all.Should().OnlyContain(e => e.EndTime!.Value - e.StartTime!.Value == TimeSpan.FromMinutes(45));
+    }
+
+    [Fact]
     public async Task UpdateFutureOccurrencesAsync_ShouldThrowNotFound_WhenThePivotIsNotInTheSeries()
     {
         await using var harness = await Harness.CreateAsync();

@@ -353,6 +353,12 @@ export class ManageEventEditorComponent {
       category: raw.category as UpdateFutureOccurrencesPayload['category'],
       tags: this.parseTags(raw.tags),
       imageUrls: this.imageUrls,
+      // The Schedule step has to travel with the rest, or changing the start time appears to
+      // save while every later occurrence quietly keeps its old slot. Sent as a wall-clock
+      // time of day plus a length, so the backend can re-anchor each occurrence in the
+      // series' own zone rather than shifting them all by a fixed UTC offset.
+      localStartTime: this.toLocalTimeOfDay(raw.startTime),
+      durationMinutes: this.toDurationMinutes(raw.startTime, raw.endTime),
     };
 
     this.seriesService.updateFutureOccurrences(seriesId, payload).subscribe({
@@ -677,6 +683,39 @@ export class ManageEventEditorComponent {
           'The lifecycle action could not be completed.';
       },
     });
+  }
+
+  /**
+   * Pulls `HH:mm` straight out of the `datetime-local` string. Deliberately string slicing
+   * rather than `new Date(...)`, which would reinterpret the value in the browser's zone —
+   * the backend anchors it to the series' zone instead.
+   */
+  private toLocalTimeOfDay(value: string | null | undefined): string | undefined {
+    const time = value?.slice(11, 16);
+
+    return time && /^\d{2}:\d{2}$/.test(time) ? time : undefined;
+  }
+
+  /**
+   * Event length in minutes. Both inputs are wall-clock strings in the same zone, so the
+   * difference between them is safe to take even though neither is an instant.
+   */
+  private toDurationMinutes(
+    start: string | null | undefined,
+    end: string | null | undefined,
+  ): number | undefined {
+    if (!start || !end) {
+      return undefined;
+    }
+
+    const startMs = Date.parse(start);
+    const endMs = Date.parse(end);
+
+    if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) {
+      return undefined;
+    }
+
+    return Math.round((endMs - startMs) / 60000);
   }
 
   private optionalText(value: string | null | undefined): string | undefined {

@@ -363,7 +363,7 @@ public class EventSeriesEndpointsTests
             HttpMethod.Delete,
             $"/api/events/series/{series.Id}",
             organizer.AccessToken,
-            JsonContent.Create(new { scope = EventSeriesDeleteScope.SeriesRecordOnly })));
+            JsonContent.Create(new { scope = "SeriesRecordOnly" })));
 
         deleteResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -414,17 +414,22 @@ public class EventSeriesEndpointsTests
 
     // ------------------------------------------------------------------ fixtures
 
+    /// <summary>
+    /// Enums are sent as strings on purpose: that is what the Angular client posts, and passing
+    /// C# enum values here would serialize them as numbers and quietly exercise a different
+    /// binding path than production traffic takes.
+    /// </summary>
     private static object Recurrence(
         int occurrenceCount = 3,
         string startLocal = "2027-06-01T19:00",
         string timeZoneId = NewYork) => new
         {
-            frequency = EventRecurrenceFrequency.Weekly,
+            frequency = "Weekly",
             interval = 1,
             startLocalDateTime = startLocal,
             durationMinutes = 120,
             timeZoneId,
-            endMode = EventRecurrenceEndMode.Count,
+            endMode = "Count",
             occurrenceCount
         };
 
@@ -492,7 +497,7 @@ public class EventSeriesEndpointsTests
                 tags = new[] { "games" }
             })));
 
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        await ThrowOnUnexpectedStatusAsync(app, response, HttpStatusCode.Created);
 
         return (await app.ReadApiResponseAsync<ManagedEventResponse>(response)).Data!;
     }
@@ -514,15 +519,34 @@ public class EventSeriesEndpointsTests
             accessToken,
             JsonContent.Create(new
             {
-                name,
-                description = "A club used by the recurrence integration tests.",
-                clubtype = "Gaming",
-                clubImage = "https://cdn.test/clubs/gaming.png"
+                Name = name,
+                Description = "A club used by the recurrence integration tests.",
+                // Lowercase: ClubCreateRequest validates Clubtype against a fixed list of names.
+                Clubtype = "gaming",
+                // Must be a URL the fake blob storage owns, or the request is rejected.
+                ClubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club.png"),
+                Email = $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"
             })));
 
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        await ThrowOnUnexpectedStatusAsync(app, response, HttpStatusCode.Created);
 
         return (await app.ReadApiResponseAsync<ClubApiModel>(response)).Data!;
+    }
+
+    /// <summary>
+    /// Surfaces the server's own diagnostics when a fixture request fails. A bare status-code
+    /// assertion here says only "400" and hides which field the API objected to, which turns a
+    /// broken fixture into a guessing game.
+    /// </summary>
+    private static async Task ThrowOnUnexpectedStatusAsync(
+        AuthApiTestApp app,
+        HttpResponseMessage response,
+        HttpStatusCode expected)
+    {
+        if (response.StatusCode == expected)
+            return;
+
+        throw new Xunit.Sdk.XunitException(await app.DescribeFailureAsync(response));
     }
 
     private static async Task<PresignedUploadResponse> CreatePendingImageAsync(
@@ -541,7 +565,7 @@ public class EventSeriesEndpointsTests
                 contentType = "image/png"
             })));
 
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        await ThrowOnUnexpectedStatusAsync(app, response, HttpStatusCode.OK);
 
         return (await app.ReadApiResponseAsync<PresignedUploadResponse>(response)).Data!;
     }

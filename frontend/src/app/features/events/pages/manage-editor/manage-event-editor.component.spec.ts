@@ -227,6 +227,39 @@ describe('ManageEventEditorComponent', () => {
       expect(managementService.updateDraft).not.toHaveBeenCalled();
     });
 
+    it('propagates the schedule step to later occurrences as a wall clock and a length', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ seriesId: 3, occurrenceIndex: 1 }));
+
+      component.form.patchValue({
+        startTime: '2026-06-08T18:30',
+        endTime: '2026-06-08T20:00',
+      });
+
+      component.saveDraft();
+      component.onScopeChosen('thisAndFollowing');
+
+      const [, payload] = seriesService.updateFutureOccurrences.calls.mostRecent().args;
+
+      // A wall-clock time of day, never an instant — the backend re-anchors it per occurrence
+      // in the series' own zone.
+      expect(payload.localStartTime).toBe('18:30');
+      expect(payload.durationMinutes).toBe(90);
+    });
+
+    it('omits schedule fields when the end time is missing or invalid', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ seriesId: 3, occurrenceIndex: 1 }));
+
+      component.form.patchValue({ startTime: '2026-06-08T18:30', endTime: '' });
+
+      component.saveDraft();
+      component.onScopeChosen('thisAndFollowing');
+
+      const [, payload] = seriesService.updateFutureOccurrences.calls.mostRecent().args;
+
+      expect(payload.localStartTime).toBe('18:30');
+      expect(payload.durationMinutes).toBeUndefined();
+    });
+
     it('saves nothing when the organizer dismisses the dialog', () => {
       setup({ clubId: '4', eventId: '12' }, buildEvent({ seriesId: 3, occurrenceIndex: 1 }));
 

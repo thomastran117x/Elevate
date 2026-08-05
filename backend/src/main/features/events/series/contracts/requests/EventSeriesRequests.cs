@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace backend.main.features.events.series.contracts.requests;
 
@@ -145,6 +146,8 @@ public class UpdateFutureOccurrencesRequest : IValidatableObject
         get; set;
     }
 
+    /// <summary>Annotated so the category can be posted as its name, e.g. "Gaming".</summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public EventCategory? Category
     {
         get; set;
@@ -241,5 +244,7 @@ public class CancelEventSeriesRequest
 /// <summary>Deletes a series, choosing how much of it goes with the series row.</summary>
 public class DeleteEventSeriesRequest
 {
+    /// <summary>Annotated so the scope can be posted as its name, e.g. "AllUnregistered".</summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public EventSeriesDeleteScope Scope { get; set; } = EventSeriesDeleteScope.FutureDrafts;
 }
