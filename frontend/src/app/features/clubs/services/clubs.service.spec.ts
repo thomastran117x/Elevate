@@ -83,6 +83,8 @@ describe('ClubsService', () => {
       description: 'Build robots together',
       clubType: 'Academic',
       clubImage: 'https://example.com/club.png',
+      bannerImage: null,
+      galleryImages: [],
       memberCount: 45,
       eventCount: 8,
       availableEventCount: 3,
@@ -93,6 +95,11 @@ describe('ClubsService', () => {
       phone: '555-1111',
       email: 'robotics@example.com',
       websiteUrl: 'https://robotics.example.com',
+      currentVersionNumber: 0,
+      isOwner: false,
+      isManager: false,
+      isVolunteer: false,
+      canManage: false,
     });
   });
 
