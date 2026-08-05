@@ -332,6 +332,341 @@ describe('EventDetailComponent', () => {
     expect(component.loading).toBeFalse();
   });
 
+  describe('registration', () => {
+    beforeEach(() => {
+      signedInUser = { Id: 7 };
+    });
+    afterEach(() => {
+      signedInUser = null;
+    });
+
+    it('opens a blank form for a new registration', () => {
+      createComponent();
+
+      component.openRegistrationForm();
+
+      expect(component.showRegistrationForm).toBeTrue();
+      expect(component.isEditing).toBeFalse();
+      expect(component.registrationForm.value.notes).toBeFalsy();
+    });
+
+    it('pre-fills the form when editing an existing registration', () => {
+      registrationService.checkRegistration.and.returnValue(
+        of({
+          isRegistered: true,
+          details: { notes: 'Vegan', phoneNumber: '555', dietaryNeeds: 'None' },
+        }),
+      );
+      createComponent();
+
+      component.openEditForm();
+
+      expect(component.isEditing).toBeTrue();
+      expect(component.registrationForm.value).toEqual(
+        jasmine.objectContaining({ notes: 'Vegan', phoneNumber: '555', dietaryNeeds: 'None' }),
+      );
+    });
+
+    it('blanks the edit form when there are no stored details', () => {
+      createComponent();
+
+      component.openEditForm();
+
+      expect(component.registrationForm.value).toEqual(
+        jasmine.objectContaining({ notes: '', phoneNumber: '', dietaryNeeds: '' }),
+      );
+    });
+
+    it('closes the form', () => {
+      createComponent();
+      component.openRegistrationForm();
+
+      component.closeRegistrationForm();
+
+      expect(component.showRegistrationForm).toBeFalse();
+    });
+
+    it('registers, closes the form and bumps the count', () => {
+      registrationService.register.and.returnValue(of(undefined as void));
+      createComponent();
+      component.openRegistrationForm();
+      component.registrationForm.patchValue({ notes: 'Bringing a laptop' });
+
+      component.submitRegistration();
+
+      expect(registrationService.register).toHaveBeenCalledWith(42, {
+        notes: 'Bringing a laptop',
+        phoneNumber: undefined,
+        dietaryNeeds: undefined,
+      });
+      expect(component.isRegistered).toBeTrue();
+      expect(component.showRegistrationForm).toBeFalse();
+      expect(component.event?.registrationCount).toBe(35);
+      expect(component.registrationLoading).toBeFalse();
+    });
+
+    it('reports a failed registration and keeps the form open', () => {
+      registrationService.register.and.returnValue(
+        throwError(() => new ApiClientClientError('That event is full.', 409, 'CONFLICT')),
+      );
+      createComponent();
+      component.openRegistrationForm();
+
+      component.submitRegistration();
+
+      expect(component.registrationError).toBe('That event is full.');
+      expect(component.showRegistrationForm).toBeTrue();
+      expect(component.isRegistered).toBeFalse();
+      expect(component.registrationLoading).toBeFalse();
+    });
+
+    it('updates the stored details without changing the count', () => {
+      registrationService.updateRegistration.and.returnValue(of(undefined as void));
+      createComponent();
+      component.openEditForm();
+      component.registrationForm.patchValue({ dietaryNeeds: 'Gluten free' });
+
+      component.submitUpdate();
+
+      expect(registrationService.updateRegistration).toHaveBeenCalledWith(42, {
+        notes: undefined,
+        phoneNumber: undefined,
+        dietaryNeeds: 'Gluten free',
+      });
+      expect(component.showRegistrationForm).toBeFalse();
+      expect(component.event?.registrationCount).toBe(34);
+    });
+
+    it('reports a failed update', () => {
+      registrationService.updateRegistration.and.returnValue(
+        throwError(() => new ApiClientServerError(GENERIC_API_ERROR_MESSAGE, 500)),
+      );
+      createComponent();
+      component.openEditForm();
+
+      component.submitUpdate();
+
+      expect(component.registrationError).toBe(GENERIC_API_ERROR_MESSAGE);
+      expect(component.showRegistrationForm).toBeTrue();
+    });
+
+    it('unregisters and decrements the count', () => {
+      registrationService.unregister.and.returnValue(of(undefined as void));
+      createComponent();
+      component.isRegistered = true;
+
+      component.unregister();
+
+      expect(component.isRegistered).toBeFalse();
+      expect(component.registrationDetails).toBeNull();
+      expect(component.event?.registrationCount).toBe(33);
+    });
+
+    it('never drives the registration count below zero', () => {
+      eventsService.getEvent.and.returnValue(
+        of({ ...response, data: { ...response.data!, registrationCount: 0 } }),
+      );
+      registrationService.unregister.and.returnValue(of(undefined as void));
+      createComponent();
+
+      component.unregister();
+
+      expect(component.event?.registrationCount).toBe(0);
+    });
+
+    it('reports a failed unregistration', () => {
+      registrationService.unregister.and.returnValue(
+        throwError(() => new ApiClientClientError('Too late to withdraw.', 400, 'BAD')),
+      );
+      createComponent();
+
+      component.unregister();
+
+      expect(component.registrationError).toBe('Too late to withdraw.');
+      expect(component.registrationLoading).toBeFalse();
+    });
+
+    it('ignores repeat submissions while one is in flight', () => {
+      registrationService.register.and.returnValue(of(undefined as void));
+      createComponent();
+      component.registrationLoading = true;
+
+      component.submitRegistration();
+      component.submitUpdate();
+      component.unregister();
+
+      expect(registrationService.register).not.toHaveBeenCalled();
+      expect(registrationService.updateRegistration).not.toHaveBeenCalled();
+      expect(registrationService.unregister).not.toHaveBeenCalled();
+    });
+
+    it('adopts the stored details when the status lookup reports a registration', () => {
+      registrationService.checkRegistration.and.returnValue(
+        of({ isRegistered: true, details: { notes: 'Existing' } }),
+      );
+
+      createComponent();
+
+      expect(component.isRegistered).toBeTrue();
+      expect(component.registrationDetails).toEqual({ notes: 'Existing' });
+    });
+
+    it('treats a failed status lookup as not registered', () => {
+      registrationService.checkRegistration.and.returnValue(throwError(() => new Error('offline')));
+
+      createComponent();
+
+      expect(component.isRegistered).toBeFalse();
+    });
+  });
+
+  describe('signed-out visitors', () => {
+    it('skips the registration and waitlist lookups entirely', () => {
+      createComponent();
+
+      expect(component.currentUserId).toBeNull();
+      expect(registrationService.checkRegistration).not.toHaveBeenCalled();
+      expect(waitlistService.getMyStatus).not.toHaveBeenCalled();
+      expect(component.isRegistered).toBeFalse();
+      expect(component.waitlistStatus).toBeNull();
+    });
+
+    it('cannot join a waitlist even when one is offered', () => {
+      makeFullWaitlistEvent();
+      createComponent();
+
+      expect(component.waitlistOffered).toBeTrue();
+      expect(component.canJoinWaitlist).toBeFalse();
+    });
+  });
+
+  describe('registration eligibility', () => {
+    function withEvent(overrides: Record<string, unknown>) {
+      eventsService.getEvent.and.returnValue(
+        of({ ...response, data: { ...response.data!, ...overrides } }),
+      );
+      createComponent();
+    }
+
+    it('allows registering for a free, published, future event with seats', () => {
+      createComponent();
+
+      expect(component.canRegister).toBeTrue();
+      expect(component.isFull).toBeFalse();
+    });
+
+    it('refuses before the event has loaded', () => {
+      eventsService.getEvent.and.returnValue(of({ ...response, data: null }));
+      createComponent();
+
+      expect(component.canRegister).toBeFalse();
+      expect(component.isFull).toBeFalse();
+      expect(component.waitlistOffered).toBeFalse();
+    });
+
+    it('refuses for an unpublished event', () => {
+      withEvent({ lifecycleState: 'Draft' });
+
+      expect(component.canRegister).toBeFalse();
+    });
+
+    it('refuses once the event has started', () => {
+      withEvent({ startTime: '2020-01-01T00:00:00Z' });
+
+      expect(component.canRegister).toBeFalse();
+      expect(component.isEventStarted(component.event!)).toBeTrue();
+    });
+
+    it('refuses for a paid event', () => {
+      withEvent({ registerCost: 25 });
+
+      expect(component.canRegister).toBeFalse();
+    });
+
+    it('refuses once capacity is reached', () => {
+      withEvent({ maxParticipants: 10, registrationCount: 10 });
+
+      expect(component.canRegister).toBeFalse();
+      expect(component.isFull).toBeTrue();
+    });
+
+    it('treats an uncapped event as never full', () => {
+      withEvent({ maxParticipants: 0, registrationCount: 999 });
+
+      expect(component.isFull).toBeFalse();
+      expect(component.canRegister).toBeTrue();
+    });
+
+    it('does not offer the waitlist for an unpublished or started event', () => {
+      makeFullWaitlistEvent({ lifecycleState: 'Draft' });
+      createComponent();
+      expect(component.waitlistOffered).toBeFalse();
+
+      makeFullWaitlistEvent({ startTime: '2020-01-01T00:00:00Z' });
+      createComponent();
+      expect(component.waitlistOffered).toBeFalse();
+    });
+  });
+
+  describe('display helpers', () => {
+    beforeEach(() => createComponent());
+
+    it('selects the hero image and falls back to the first', () => {
+      expect(component.heroImage).toBe('https://example.com/poster.png');
+
+      component.selectImage(9);
+      expect(component.selectedImageIndex).toBe(9);
+      expect(component.heroImage).toBe('https://example.com/poster.png');
+    });
+
+    it('has no hero image without any', () => {
+      eventsService.getEvent.and.returnValue(
+        of({ ...response, data: { ...response.data!, imageUrls: [] } }),
+      );
+      createComponent();
+
+      expect(component.heroImage).toBeNull();
+    });
+
+    it('formats a schedule with and without an end time', () => {
+      const withEnd = component.formatSchedule(component.event!);
+      expect(withEnd).toContain(' - ');
+
+      const withoutEnd = component.formatSchedule({ ...component.event!, endTime: undefined });
+      expect(withoutEnd).not.toContain(' - ');
+    });
+
+    it('labels a zero cost as Free', () => {
+      expect(component.formatCost(0)).toBe('Free');
+      expect(component.formatCost(25)).toBe('$25');
+    });
+
+    it('reports registration as a clamped percentage', () => {
+      expect(
+        component.registrationPercent({
+          ...component.event!,
+          registrationCount: 60,
+          maxParticipants: 120,
+        }),
+      ).toBe(50);
+      expect(
+        component.registrationPercent({
+          ...component.event!,
+          registrationCount: 200,
+          maxParticipants: 120,
+        }),
+      ).toBe(100);
+      expect(component.registrationPercent({ ...component.event!, maxParticipants: 0 })).toBe(0);
+    });
+
+    it('reports whether the visitor is on the waitlist', () => {
+      expect(component.onWaitlist).toBeFalse();
+
+      component.waitlistStatus = { onWaitlist: true, waitlistCount: 1 };
+      expect(component.onWaitlist).toBeTrue();
+    });
+  });
+
   it('shows the generic adapter message for 5xx event fetch failures', () => {
     eventsService.getEvent.and.returnValue(
       throwError(() => new ApiClientServerError(GENERIC_API_ERROR_MESSAGE, 500)),

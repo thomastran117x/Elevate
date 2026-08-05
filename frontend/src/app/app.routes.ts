@@ -5,7 +5,7 @@ import { featureCanMatch } from './core/features/feature-can-match.guard';
 import { FeatureFlagsService } from './core/features/feature-flags.service';
 import { FEATURE_KEYS } from './core/features/feature-flags.types';
 import { NotFoundComponent } from './shared/not-found/not-found.component';
-import { authenticatedUserGuard } from './features/auth/guards/authenticated-user.guard';
+import { authenticatedUserGuard } from './core/guards/authenticated-user.guard';
 
 export const routes: Routes = [
   {

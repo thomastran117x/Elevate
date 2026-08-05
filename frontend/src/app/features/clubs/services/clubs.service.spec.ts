@@ -126,4 +126,161 @@ describe('ClubsService', () => {
     expect((thrown as ApiClientClientError).message).toBe('Club not found.');
     expect((thrown as ApiClientClientError).code).toBe('RESOURCE_NOT_FOUND');
   });
+
+  it('omits blank and zero filters', () => {
+    service.getClubs({ search: '   ', page: 0, pageSize: 0 }).subscribe();
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/clubs'));
+    expect(request.request.params.keys()).toEqual([]);
+    request.flush({ success: true, message: 'ok', data: null, error: null, meta: null });
+  });
+
+  it('defaults to no filters at all', () => {
+    service.getClubs().subscribe();
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/clubs'));
+    expect(request.request.params.keys()).toEqual([]);
+    request.flush({ success: true, message: 'ok', data: null, error: null, meta: null });
+  });
+
+  it('normalizes a PascalCase clubs page and applies the paging defaults', () => {
+    let data: unknown;
+    service.getClubs().subscribe((response) => (data = response.data));
+
+    httpMock
+      .expectOne((req) => req.url.endsWith('/clubs'))
+      .flush({
+        Success: true,
+        Message: 'ok',
+        Data: { Items: [{ Id: 1, Name: 'Robotics' }] },
+      });
+
+    expect(data).toEqual(
+      jasmine.objectContaining({
+        totalCount: 0,
+        page: 1,
+        pageSize: 20,
+        totalPages: 0,
+        items: [jasmine.objectContaining({ id: 1, name: 'Robotics' })],
+      }),
+    );
+  });
+
+  it('leaves data null when either endpoint returns an empty envelope', () => {
+    let list: unknown = 'untouched';
+    service.getClubs().subscribe((response) => (list = response.data));
+    httpMock
+      .expectOne((req) => req.url.endsWith('/clubs'))
+      .flush({ success: true, message: 'ok', data: null, error: null, meta: null });
+    expect(list).toBeNull();
+
+    let single: unknown = 'untouched';
+    service.getClub(7).subscribe((response) => (single = response.data));
+    httpMock
+      .expectOne((req) => req.url.endsWith('/clubs/7'))
+      .flush({ success: true, message: 'ok', data: null, error: null, meta: null });
+    expect(single).toBeNull();
+  });
+
+  it('prefers camelCase club fields and falls back to Other for an unknown type', () => {
+    let data: unknown;
+    service.getClub(7).subscribe((response) => (data = response.data));
+
+    httpMock
+      .expectOne((req) => req.url.endsWith('/clubs/7'))
+      .flush({
+        success: true,
+        message: 'ok',
+        data: {
+          id: 7,
+          Id: 99,
+          ownerId: 1,
+          name: 'Camel',
+          Name: 'Pascal',
+          description: 'd',
+          clubtype: 'Underwater Basketry',
+          clubImage: 'c.png',
+          bannerImage: 'b.png',
+          galleryImages: ['g.png'],
+          memberCount: 5,
+          eventCount: 2,
+          availableEventCount: 1,
+          maxMemberCount: 50,
+          isPrivate: true,
+          rating: 4,
+          location: 'Ottawa',
+          phone: '555',
+          email: 'c@example.com',
+          websiteUrl: 'https://c',
+          currentVersionNumber: 3,
+          isOwner: true,
+          isManager: true,
+          isVolunteer: true,
+          canManage: true,
+        },
+        error: null,
+        meta: null,
+      });
+
+    expect(data).toEqual(
+      jasmine.objectContaining({
+        id: 7,
+        name: 'Camel',
+        clubType: 'Other',
+        bannerImage: 'b.png',
+        galleryImages: ['g.png'],
+        currentVersionNumber: 3,
+        canManage: true,
+      }),
+    );
+  });
+
+  it('joins a club with an empty body', () => {
+    service.joinClub(7).subscribe();
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/clubs/7/join'));
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({});
+    expect(request.request.withCredentials).toBeTrue();
+    request.flush({ success: true, message: 'ok', data: null, error: null, meta: null });
+  });
+
+  it('leaves a club', () => {
+    service.leaveClub(7).subscribe();
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/clubs/7/join'));
+    expect(request.request.method).toBe('DELETE');
+    request.flush({ success: true, message: 'ok', data: null, error: null, meta: null });
+  });
+
+  describe('getMembershipStatus', () => {
+    function flush(body: Record<string, unknown>): boolean | undefined {
+      let result: boolean | undefined;
+      service.getMembershipStatus(7).subscribe((value) => (result = value));
+      httpMock.expectOne((req) => req.url.endsWith('/clubs/7/members/me')).flush(body);
+      return result;
+    }
+
+    it('reads the camelCase flag', () => {
+      expect(
+        flush({ success: true, message: 'ok', data: { isMember: true }, error: null, meta: null }),
+      ).toBeTrue();
+    });
+
+    it('reads the PascalCase flag', () => {
+      expect(flush({ Success: true, Message: 'ok', Data: { IsMember: true } })).toBeTrue();
+    });
+
+    it('defaults to false for an empty payload', () => {
+      expect(
+        flush({ success: true, message: 'ok', data: {}, error: null, meta: null }),
+      ).toBeFalse();
+    });
+
+    it('defaults to false when the envelope carries no data', () => {
+      expect(
+        flush({ success: true, message: 'ok', data: null, error: null, meta: null }),
+      ).toBeFalse();
+    });
+  });
 });

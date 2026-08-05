@@ -2,7 +2,7 @@ import { Routes } from '@angular/router';
 
 import { featureCanMatch } from '../../core/features/feature-can-match.guard';
 import { FEATURE_KEYS } from '../../core/features/feature-flags.types';
-import { eventsManageAuthGuard } from './guards/events-manage-auth.guard';
+import { authenticatedUserGuard } from '../../core/guards/authenticated-user.guard';
 
 export const EVENTS_ROUTES: Routes = [
   {
@@ -25,7 +25,7 @@ export const EVENTS_ROUTES: Routes = [
   },
   {
     path: ':eventId/waitlist/manage',
-    canActivate: [eventsManageAuthGuard],
+    canActivate: [authenticatedUserGuard],
     canMatch: [featureCanMatch(FEATURE_KEYS.eventsWaitlist)],
     loadComponent: () =>
       import('./pages/manage-waitlist/manage-event-waitlist.component').then(
@@ -34,7 +34,7 @@ export const EVENTS_ROUTES: Routes = [
   },
   {
     path: ':eventId/invitations/manage',
-    canActivate: [eventsManageAuthGuard],
+    canActivate: [authenticatedUserGuard],
     canMatch: [featureCanMatch(FEATURE_KEYS.eventsInvitations)],
     loadComponent: () =>
       import('./pages/manage-invitations/manage-event-invitations.component').then(

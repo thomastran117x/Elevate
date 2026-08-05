@@ -98,6 +98,51 @@ Auth integration tests use:
 
 The backend app exposes a `Testing` startup path so integration tests can boot with real infra wiring while still avoiding production-only side effects such as background email/SMS workers. A running Docker daemon is now a hard requirement for `backend.tests.Integration` locally and in CI.
 
+## Frontend Unit Tests (Karma + Jasmine)
+
+Angular unit tests live beside the code they cover as `*.spec.ts` under `frontend/src`. They run on Karma + Jasmine through the `@angular/build:karma` builder, configured by `frontend/karma.conf.js`.
+
+`npm run generate:env` must run first — it writes `src/environments/environment.ts`, which most specs import.
+
+```powershell
+cd frontend
+npm run generate:env
+npm test -- --watch=false --browsers=ChromeHeadlessCI
+```
+
+Add `--code-coverage` for an HTML report in `frontend/coverage/` plus a summary in the console. **Coverage is gated at 90%** (statements, lines, branches, functions) — with `--code-coverage` the run fails if any metric drops below its floor. See `docs/COVERAGE_ROADMAP.md`. Narrow a run with `--include`:
+
+```powershell
+npm test -- --watch=false --browsers=ChromeHeadlessCI --include="**/refresh.interceptor.spec.ts"
+```
+
+`ChromeHeadlessCI` is a custom launcher (`--no-sandbox --disable-gpu --disable-dev-shm-usage`) that also works on GitHub runners, where plain `ChromeHeadless` cannot start its sandbox. Plain `ChromeHeadless` still works locally.
+
+### Shared test helpers (`frontend/src/testing/`)
+
+Import from `@testing` rather than repeating TestBed boilerplate:
+
+| Helper | Use |
+| --- | --- |
+| `provideHttpTesting()` / `setupService(Token, extra?)` | HTTP-backed service specs; `setupService` returns `{ service, httpMock }` |
+| `envelope(data, overrides?)`, `pascalEnvelope(Data)`, `errorEnvelope(code, message)` | Response bodies in the `{ success, message, data, error, meta }` contract |
+| `provideFeatureFlags({ auth: false })` | Overrides `FeatureFlagsService` — **use this instead of mutating `environment.featureFlags`**, which is module-global and leaks between specs |
+| `provideTestStore({ user, session })`, `dispatchSpy(store)` | NgRx `MockStore` with `selectUser` / `selectSession` / `selectAccessToken` pre-overridden |
+| `fakeActivatedRoute({ params, queryParams })` | `ActivatedRoute` double whose observables and `snapshot` stay in sync |
+| `installMemoryStorage(kind, seed?)`, `installThrowingStorage(kind)` | Swap `localStorage` / `sessionStorage`; both return a restore function for `afterEach` |
+| `flushPromises()` | Drain microtasks before `httpMock.expectOne` when the service `await`s something first (e.g. CSRF bootstrap) |
+| `makeClub()`, `makeClubMember()`, `makeEventItem()`, `makeCurrentUser()`, `makeSession()` | Fully-populated fixtures with partial overrides |
+
+`src/testing/**` is excluded from `tsconfig.app.json`, so helpers may use Jasmine types and never reach the app bundle.
+
+### Conventions
+
+- New services, guards, interceptors and normalizer functions ship with a spec.
+- Assert on the request (URL, method, serialized params, body) and on the normalized result, not on internals.
+- Cover both the camelCase and PascalCase payload shapes for anything with `??` fallback chains — that is where silent regressions hide, and those chains are most of the branch count.
+- Call `httpMock.verify()` in `afterEach`.
+- A helper that reconfigures the TestBed for a second time within one spec must call `TestBed.resetTestingModule()` first.
+
 ## Frontend E2E (Playwright)
 
 Frontend end-to-end tests live in `frontend/tests/` and use Playwright (`frontend/playwright.config.ts`). Playwright auto-starts the E2E dev server (`npm run start:e2e`, served at `http://127.0.0.1:3101`, matching the config `baseURL`). The regular dev server runs at `http://localhost:3090` (`npm start`).

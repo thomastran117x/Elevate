@@ -8,15 +8,18 @@ import { EventSeriesService } from '../../services/event-series.service';
 import { ManagedEvent } from '../../models/event.types';
 
 class ActivatedRouteStub {
-  constructor(private readonly params: Record<string, string>) {}
+  readonly parent: { snapshot: { paramMap: ReturnType<typeof convertToParamMap> } } | null;
+
+  constructor(
+    private readonly params: Record<string, string>,
+    parentParams: Record<string, string> | null = { clubId: '4' },
+  ) {
+    this.parent = parentParams ? { snapshot: { paramMap: convertToParamMap(parentParams) } } : null;
+  }
 
   get snapshot() {
     return { paramMap: convertToParamMap(this.params) };
   }
-
-  readonly parent = {
-    snapshot: { paramMap: convertToParamMap({ clubId: '4' }) },
-  };
 }
 
 function buildEvent(overrides: Partial<ManagedEvent> = {}): ManagedEvent {
@@ -61,7 +64,13 @@ describe('ManageEventEditorComponent', () => {
     meta: null,
   });
 
-  function setup(params: Record<string, string>, event?: ManagedEvent) {
+  function setup(
+    params: Record<string, string>,
+    event?: ManagedEvent,
+    parentParams: Record<string, string> | null = { clubId: '4' },
+  ) {
+    TestBed.resetTestingModule();
+
     managementService = jasmine.createSpyObj<EventsManagementService>('EventsManagementService', [
       'getManageableEvent',
       'createDraft',
@@ -108,7 +117,7 @@ describe('ManageEventEditorComponent', () => {
     TestBed.configureTestingModule({
       imports: [ManageEventEditorComponent],
       providers: [
-        { provide: ActivatedRoute, useValue: new ActivatedRouteStub(params) },
+        { provide: ActivatedRoute, useValue: new ActivatedRouteStub(params, parentParams) },
         { provide: EventsManagementService, useValue: managementService },
         { provide: EventSeriesService, useValue: seriesService },
         { provide: Router, useValue: jasmine.createSpyObj<Router>('Router', ['navigate']) },
@@ -357,6 +366,658 @@ describe('ManageEventEditorComponent', () => {
       component.recurrenceForm.controls.enabled.setValue(true);
 
       expect(component.canCreateSeries).toBeFalse();
+    });
+
+    it('is not offered once the event has left Draft', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ lifecycleState: 'Published' }));
+      component.recurrenceForm.controls.enabled.setValue(true);
+
+      expect(component.canCreateSeries).toBeFalse();
+    });
+
+    it('is not offered while repeat is switched off', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent());
+
+      expect(component.isRecurring).toBeFalse();
+      expect(component.canCreateSeries).toBeFalse();
+    });
+  });
+
+  describe('route resolution', () => {
+    it('falls back to the parent route for the club id', () => {
+      setup({});
+
+      expect(component.clubId).toBe(4);
+      expect(component.eventId).toBe(0);
+      expect(component.loading).toBeFalse();
+    });
+
+    it('loads the existing event when an id is present', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent());
+
+      expect(managementService.getManageableEvent).toHaveBeenCalledOnceWith(12);
+      expect(component.event?.id).toBe(12);
+      expect(component.loading).toBeFalse();
+    });
+
+    it('refuses to start a draft without a club', () => {
+      setup({}, undefined, null);
+
+      expect(component.clubId).toBe(0);
+      expect(component.error).toBe('A valid club ID is required to create a draft.');
+      expect(component.loading).toBeFalse();
+    });
+
+    it('rejects a non-numeric event id as no event at all', () => {
+      setup({ clubId: '4', eventId: 'abc' });
+
+      expect(component.eventId).toBe(0);
+      expect(managementService.getManageableEvent).not.toHaveBeenCalled();
+    });
+
+    it('reports a failed load', () => {
+      setup({ clubId: '4', eventId: '12' });
+      managementService.getManageableEvent.and.returnValue(
+        throwError(() => ({ error: { message: 'That event is gone.' } })) as never,
+      );
+
+      component.ngOnInit();
+
+      expect(component.error).toBe('That event is gone.');
+      expect(component.loading).toBeFalse();
+    });
+
+    it('falls back to a generic load message', () => {
+      setup({ clubId: '4', eventId: '12' });
+      managementService.getManageableEvent.and.returnValue(throwError(() => ({})) as never);
+
+      component.ngOnInit();
+
+      expect(component.error).toBe('We could not load this event.');
+    });
+  });
+
+  describe('wizard navigation', () => {
+    beforeEach(() => setup({ clubId: '4' }));
+
+    it('reports progress as a percentage of the step count', () => {
+      expect(component.progressPercent).toBe(0);
+
+      component.goToStep(3);
+      expect(component.progressPercent).toBeCloseTo((3 / 6) * 100);
+    });
+
+    it('refuses to jump outside the step range', () => {
+      component.goToStep(-1);
+      expect(component.currentStep).toBe(0);
+
+      component.goToStep(component.steps.length);
+      expect(component.currentStep).toBe(0);
+    });
+
+    it('walks forward and back, stopping at each end', () => {
+      component.prevStep();
+      expect(component.currentStep).toBe(0);
+
+      component.nextStep();
+      expect(component.currentStep).toBe(1);
+
+      component.prevStep();
+      expect(component.currentStep).toBe(0);
+
+      component.goToStep(component.steps.length - 1);
+      component.nextStep();
+      expect(component.currentStep).toBe(component.steps.length - 1);
+    });
+
+    it('splits the review tags on commas, dropping blanks', () => {
+      component.form.patchValue({ tags: ' board games , , social ' });
+
+      expect(component.reviewTags).toEqual(['board games', 'social']);
+    });
+
+    it('yields no review tags for an empty field', () => {
+      component.form.patchValue({ tags: '' });
+
+      expect(component.reviewTags).toEqual([]);
+    });
+  });
+
+  describe('lifecycle state helpers', () => {
+    it('defaults to Draft with no loaded event', () => {
+      setup({ clubId: '4' });
+
+      expect(component.lifecycleState).toBe('Draft');
+      expect(component.publishIssues).toEqual([]);
+      expect(component.canManageInvitations).toBeFalse();
+      expect(component.canManageWaitlist).toBeFalse();
+    });
+
+    it('surfaces the publish blockers reported by the API', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ publishIssues: ['Add a start time.'] }));
+
+      expect(component.publishIssues).toEqual(['Add a start time.']);
+    });
+
+    it('offers invitations only for a published private event', () => {
+      setup(
+        { clubId: '4', eventId: '12' },
+        buildEvent({ lifecycleState: 'Published', isPrivate: true }),
+      );
+      expect(component.canManageInvitations).toBeTrue();
+
+      setup(
+        { clubId: '4', eventId: '12' },
+        buildEvent({ lifecycleState: 'Draft', isPrivate: true }),
+      );
+      expect(component.canManageInvitations).toBeFalse();
+
+      setup(
+        { clubId: '4', eventId: '12' },
+        buildEvent({ lifecycleState: 'Published', isPrivate: false }),
+      );
+      expect(component.canManageInvitations).toBeFalse();
+    });
+
+    it('offers the waitlist only for a published waitlisted event', () => {
+      setup(
+        { clubId: '4', eventId: '12' },
+        buildEvent({ lifecycleState: 'Published', waitlistEnabled: true }),
+      );
+      expect(component.canManageWaitlist).toBeTrue();
+
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ lifecycleState: 'Published' }));
+      expect(component.canManageWaitlist).toBeFalse();
+    });
+
+    const badges: Array<ManagedEvent['lifecycleState']> = [
+      'Draft',
+      'Published',
+      'Cancelled',
+      'Archived',
+    ];
+
+    it('gives each lifecycle state its own badge', () => {
+      setup({ clubId: '4' });
+
+      const classes = badges.map((state) => component.lifecycleBadge(state));
+      expect(new Set(classes).size).toBe(badges.length);
+      for (const value of classes) {
+        expect(value).toContain('border');
+      }
+    });
+  });
+
+  describe('waitlist availability', () => {
+    beforeEach(() => setup({ clubId: '4' }));
+
+    it('requires a capacity limit', () => {
+      component.form.patchValue({ maxParticipants: null });
+
+      expect(component.waitlistUnavailableReason).toBe('Waitlists require a capacity limit.');
+    });
+
+    it('rejects a zero capacity as well', () => {
+      component.form.patchValue({ maxParticipants: 0 });
+
+      expect(component.waitlistUnavailableReason).toBe('Waitlists require a capacity limit.');
+    });
+
+    it('rejects paid events', () => {
+      component.form.patchValue({ maxParticipants: 20, registerCost: 15 });
+
+      expect(component.waitlistUnavailableReason).toBe(
+        "Waitlists aren't available for paid events.",
+      );
+    });
+
+    it('allows a free event with a capacity', () => {
+      component.form.patchValue({ maxParticipants: 20, registerCost: 0 });
+
+      expect(component.waitlistUnavailableReason).toBeNull();
+    });
+  });
+
+  describe('image uploads', () => {
+    function fileInput(files: File[]): Event {
+      const input = document.createElement('input');
+      Object.defineProperty(input, 'files', { value: files, configurable: true });
+      return { target: input } as unknown as Event;
+    }
+
+    const file = (name: string) => new File(['bytes'], name, { type: 'image/png' });
+
+    it('appends each uploaded URL and clears the input', async () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
+      managementService.uploadImage.and.returnValues(
+        of('https://cdn/a.png'),
+        of('https://cdn/b.png'),
+      );
+      const event = fileInput([file('a.png'), file('b.png')]);
+
+      await component.onFilesSelected(event);
+
+      expect(component.imageUrls).toEqual(['https://cdn/a.png', 'https://cdn/b.png']);
+      expect(component.uploading).toBeFalse();
+      expect((event.target as HTMLInputElement).value).toBe('');
+    });
+
+    it('does nothing when no file was picked', async () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent());
+
+      await component.onFilesSelected(fileInput([]));
+
+      expect(managementService.uploadImage).not.toHaveBeenCalled();
+      expect(component.uploading).toBeFalse();
+    });
+
+    it('refuses to upload before the draft has a club', async () => {
+      setup({});
+      component.clubId = 0;
+
+      await component.onFilesSelected(fileInput([file('a.png')]));
+
+      expect(managementService.uploadImage).not.toHaveBeenCalled();
+      expect(component.error).toBe('Save the draft first so we know which club owns these images.');
+    });
+
+    it('caps the gallery at five images', async () => {
+      const existing = ['1', '2', '3', '4', '5'].map((n) => `https://cdn/${n}.png`);
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: existing }));
+      managementService.uploadImage.and.returnValue(of('https://cdn/6.png'));
+
+      await component.onFilesSelected(fileInput([file('6.png')]));
+
+      expect(component.imageUrls).toEqual(existing);
+    });
+
+    it('reports an upload failure and still stops the spinner', async () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
+      managementService.uploadImage.and.returnValue(
+        throwError(() => new Error('The image upload failed.')),
+      );
+
+      await component.onFilesSelected(fileInput([file('a.png')]));
+
+      expect(component.error).toBe('The image upload failed.');
+      expect(component.uploading).toBeFalse();
+    });
+
+    it('falls back to a generic message for a non-Error rejection', async () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
+      managementService.uploadImage.and.returnValue(throwError(() => 'nope'));
+
+      await component.onFilesSelected(fileInput([file('a.png')]));
+
+      expect(component.error).toBe('We could not upload one or more images.');
+    });
+
+    it('removes an image by index', () => {
+      setup(
+        { clubId: '4', eventId: '12' },
+        buildEvent({ imageUrls: ['https://cdn/a.png', 'https://cdn/b.png'] }),
+      );
+
+      component.removeImage(0);
+
+      expect(component.imageUrls).toEqual(['https://cdn/b.png']);
+    });
+  });
+
+  describe('persisting a draft', () => {
+    it('creates a new draft and rewrites the URL to the saved event', () => {
+      setup({ clubId: '4' });
+      managementService.createDraft.and.returnValue(of(envelope(buildEvent({ id: 99 }))) as never);
+      const router = TestBed.inject(Router) as jasmine.SpyObj<Router>;
+
+      component.form.patchValue({ name: 'New event' });
+      component.saveDraft();
+
+      expect(managementService.createDraft).toHaveBeenCalled();
+      expect(component.eventId).toBe(99);
+      expect(component.successMessage).toContain('Draft created');
+      expect(router.navigate).toHaveBeenCalledWith(['/clubs', 4, 'manage', 'events', 99], {
+        replaceUrl: true,
+      });
+      expect(component.saving).toBeFalse();
+    });
+
+    it('updates an existing draft without navigating', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent());
+      const router = TestBed.inject(Router) as jasmine.SpyObj<Router>;
+
+      component.saveDraft();
+
+      expect(managementService.updateDraft).toHaveBeenCalled();
+      expect(component.successMessage).toBe('Draft saved.');
+      expect(router.navigate).not.toHaveBeenCalled();
+    });
+
+    it('normalizes the payload it sends', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent());
+
+      component.form.patchValue({
+        name: '  Trimmed  ',
+        description: '   ',
+        maxParticipants: null,
+        registerCost: null,
+        startTime: '2026-06-08T18:30',
+        endTime: '',
+        tags: ' a , , b ',
+      });
+
+      component.saveDraft();
+
+      const [, payload] = managementService.updateDraft.calls.mostRecent().args;
+      expect(payload.name).toBe('Trimmed');
+      expect(payload.description).toBeUndefined();
+      expect(payload.maxParticipants).toBeUndefined();
+      expect(payload.registerCost).toBe(0);
+      expect(payload.endTime).toBeNull();
+      expect(payload.tags).toEqual(['a', 'b']);
+    });
+
+    it('drops an unparseable start time rather than sending Invalid Date', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent());
+
+      component.form.patchValue({ startTime: 'not-a-date', tags: '' });
+      component.saveDraft();
+
+      const [, payload] = managementService.updateDraft.calls.mostRecent().args;
+      expect(payload.startTime).toBeUndefined();
+      expect(payload.tags).toBeUndefined();
+    });
+
+    it('reports a save failure', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent());
+      managementService.updateDraft.and.returnValue(
+        throwError(() => ({ error: { Message: 'Name is required.' } })) as never,
+      );
+
+      component.saveDraft();
+
+      expect(component.error).toBe('Name is required.');
+      expect(component.saving).toBeFalse();
+    });
+
+    it('falls back to a generic save message', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent());
+      managementService.updateDraft.and.returnValue(throwError(() => ({})) as never);
+
+      component.saveDraft();
+
+      expect(component.error).toBe('We could not save the draft.');
+    });
+  });
+
+  describe('lifecycle actions', () => {
+    it('refuses to publish an unsaved draft', () => {
+      setup({ clubId: '4' });
+
+      component.publish();
+
+      expect(managementService.publishEvent).not.toHaveBeenCalled();
+      expect(component.error).toBe('Save the draft before publishing it.');
+    });
+
+    it('ignores cancel and archive on an unsaved draft', () => {
+      setup({ clubId: '4' });
+
+      component.cancel();
+      component.archive();
+
+      expect(managementService.cancelEvent).not.toHaveBeenCalled();
+      expect(managementService.archiveEvent).not.toHaveBeenCalled();
+      expect(component.error).toBe('');
+    });
+
+    const actions = [
+      ['publish', 'publishEvent', 'Published', 'Event published.'],
+      ['cancel', 'cancelEvent', 'Cancelled', 'Event cancelled.'],
+      ['archive', 'archiveEvent', 'Archived', 'Event archived.'],
+    ] as const;
+
+    for (const [method, spyName, state, message] of actions) {
+      it(`${method}es the event and applies the returned state`, () => {
+        setup({ clubId: '4', eventId: '12' }, buildEvent());
+        managementService[spyName].and.returnValue(
+          of(envelope(buildEvent({ lifecycleState: state }))) as never,
+        );
+
+        component[method]();
+
+        expect(managementService[spyName]).toHaveBeenCalledOnceWith(12);
+        expect(component.lifecycleState).toBe(state);
+        expect(component.successMessage).toBe(message);
+        expect(component.saving).toBeFalse();
+      });
+    }
+
+    it('reports a rejected lifecycle transition', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent());
+      managementService.publishEvent.and.returnValue(
+        throwError(() => ({ error: { message: 'Add a start time first.' } })) as never,
+      );
+
+      component.publish();
+
+      expect(component.error).toBe('Add a start time first.');
+      expect(component.saving).toBeFalse();
+    });
+
+    it('falls back to a generic lifecycle message', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent());
+      managementService.archiveEvent.and.returnValue(throwError(() => ({})) as never);
+
+      component.archive();
+
+      expect(component.error).toBe('The lifecycle action could not be completed.');
+    });
+  });
+
+  describe('creating a series', () => {
+    it('refuses without a repeat start date', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent());
+
+      component.createSeries();
+
+      expect(seriesService.createSeries).not.toHaveBeenCalled();
+      expect(component.error).toBe('Add a repeat start date before creating the series.');
+    });
+
+    it('creates the series and routes to it', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent());
+      seriesService.createSeries.and.returnValue(
+        of(envelope({ id: 7, occurrences: [{}, {}, {}] })) as never,
+      );
+      const router = TestBed.inject(Router) as jasmine.SpyObj<Router>;
+
+      component.recurrenceForm.patchValue({ enabled: true, startLocalDate: '2026-03-03' });
+      component.createSeries();
+
+      expect(seriesService.createSeries).toHaveBeenCalled();
+      expect(component.successMessage).toContain('Created 3 occurrences');
+      expect(router.navigate).toHaveBeenCalledWith(['/clubs', 4, 'manage', 'series', 7]);
+      expect(component.saving).toBeFalse();
+    });
+
+    it('reports a rejected series', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent());
+      seriesService.createSeries.and.returnValue(
+        throwError(() => ({ error: { message: 'That rule produces no dates.' } })) as never,
+      );
+
+      component.recurrenceForm.patchValue({ enabled: true, startLocalDate: '2026-03-03' });
+      component.createSeries();
+
+      expect(component.error).toBe('That rule produces no dates.');
+      expect(component.saving).toBeFalse();
+    });
+  });
+
+  describe('recurrence rule assembly', () => {
+    beforeEach(() => setup({ clubId: '4' }));
+
+    it('sends weekdays only for a weekly rule', fakeAsync(() => {
+      component.recurrenceForm.patchValue({
+        enabled: true,
+        startLocalDate: '2026-03-03',
+        frequency: 'Weekly',
+        byWeekdays: [1, 3],
+      });
+      tick(400);
+
+      const [, weekly] = seriesService.previewSeries.calls.mostRecent().args;
+      expect(weekly.byWeekdays).toEqual([1, 3]);
+
+      component.recurrenceForm.patchValue({ frequency: 'Monthly' });
+      tick(400);
+
+      const [, monthly] = seriesService.previewSeries.calls.mostRecent().args;
+      expect(monthly.byWeekdays).toBeUndefined();
+    }));
+
+    it('sends an end date only in UntilDate mode, and a count only in Count mode', fakeAsync(() => {
+      component.recurrenceForm.patchValue({
+        enabled: true,
+        startLocalDate: '2026-03-03',
+        endMode: 'UntilDate',
+        endLocalDate: '2026-06-01',
+        occurrenceCount: 12,
+      });
+      tick(400);
+
+      const [, untilDate] = seriesService.previewSeries.calls.mostRecent().args;
+      expect(untilDate.endLocalDate).toBe('2026-06-01');
+      expect(untilDate.occurrenceCount).toBeNull();
+
+      component.recurrenceForm.patchValue({ endMode: 'Count' });
+      tick(400);
+
+      const [, byCount] = seriesService.previewSeries.calls.mostRecent().args;
+      expect(byCount.endLocalDate).toBeNull();
+      expect(byCount.occurrenceCount).toBe(12);
+      expect(component.endsByCount).toBeTrue();
+    }));
+
+    it('never previews while repeat is switched off', fakeAsync(() => {
+      component.recurrenceForm.patchValue({ startLocalDate: '2026-03-03' });
+      tick(400);
+
+      expect(seriesService.previewSeries).not.toHaveBeenCalled();
+      expect(component.preview).toBeNull();
+      expect(component.previewError).toBe('');
+    }));
+
+    it('never previews without a start date', fakeAsync(() => {
+      component.recurrenceForm.patchValue({ enabled: true, startLocalDate: '' });
+      tick(400);
+
+      expect(seriesService.previewSeries).not.toHaveBeenCalled();
+    }));
+
+    it('falls back to a generic message for a preview error with no body', fakeAsync(() => {
+      seriesService.previewSeries.and.returnValue(throwError(() => ({})) as never);
+
+      component.recurrenceForm.patchValue({ enabled: true, startLocalDate: '2026-03-03' });
+      tick(400);
+
+      expect(component.previewError).toBe('We could not work out those repeat dates.');
+    }));
+  });
+
+  describe('series-wide save', () => {
+    it('reports how many occurrences changed, singular or plural', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ seriesId: 3, occurrenceIndex: 1 }));
+      seriesService.updateFutureOccurrences.and.returnValue(
+        of(
+          envelope({
+            seriesId: 3,
+            affectedCount: 1,
+            affectedEventIds: [12],
+            skipped: [],
+            retimedWithRegistrations: [],
+          }),
+        ) as never,
+      );
+
+      component.saveDraft();
+      component.onScopeChosen('thisAndFollowing');
+
+      expect(component.successMessage).toBe('Updated 1 occurrence.');
+    });
+
+    it('surfaces the skipped-occurrence notice', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ seriesId: 3, occurrenceIndex: 1 }));
+      seriesService.describeSkipped.and.returnValue('1 occurrence was left alone.');
+
+      component.saveDraft();
+      component.onScopeChosen('thisAndFollowing');
+
+      expect(component.seriesNotice).toBe('1 occurrence was left alone.');
+    });
+
+    it('reports a rejected series update', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ seriesId: 3, occurrenceIndex: 1 }));
+      seriesService.updateFutureOccurrences.and.returnValue(
+        throwError(() => ({ error: { Message: 'That change is not allowed.' } })) as never,
+      );
+
+      component.saveDraft();
+      component.onScopeChosen('thisAndFollowing');
+
+      expect(component.error).toBe('That change is not allowed.');
+      expect(component.saving).toBeFalse();
+    });
+
+    it('falls back to a generic series message', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ seriesId: 3, occurrenceIndex: 1 }));
+      seriesService.updateFutureOccurrences.and.returnValue(throwError(() => ({})) as never);
+
+      component.saveDraft();
+      component.onScopeChosen('thisAndFollowing');
+
+      expect(component.error).toBe('We could not update the later occurrences.');
+    });
+
+    it('labels an occurrence with no index generically', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ seriesId: 3, occurrenceIndex: null }));
+
+      expect(component.occurrenceLabel).toBe('Part of a repeating series');
+    });
+
+    it('has no occurrence label for a standalone event', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent());
+
+      expect(component.occurrenceLabel).toBe('');
+      expect(component.belongsToSeries).toBeFalse();
+    });
+  });
+
+  describe('seeding the repeat step', () => {
+    it('pre-fills the repeat date and time from the event schedule', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ startTime: '2026-06-01T09:00:00Z' }));
+
+      const raw = component.recurrenceForm.getRawValue();
+      expect(raw.startLocalDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(raw.startLocalTime).toMatch(/^\d{2}:\d{2}$/);
+    });
+
+    it('keeps the series time zone rather than the editor’s own', () => {
+      setup(
+        { clubId: '4', eventId: '12' },
+        buildEvent({ timeZoneId: 'Australia/Sydney', seriesId: 3 }),
+      );
+
+      expect(component.recurrenceForm.getRawValue().timeZoneId).toBe('Australia/Sydney');
+    });
+
+    it('defaults the repeat time when the event has no schedule yet', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ startTime: undefined }));
+
+      const raw = component.recurrenceForm.getRawValue();
+      expect(raw.startLocalDate).toBe('');
+      expect(raw.startLocalTime).toBe('19:00');
     });
   });
 });

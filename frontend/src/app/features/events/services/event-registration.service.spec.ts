@@ -175,4 +175,62 @@ describe('EventRegistrationService', () => {
     expect(thrown).toEqual(jasmine.any(ApiClientServerError));
     expect((thrown as ApiClientServerError).message).toBe(GENERIC_API_ERROR_MESSAGE);
   });
+
+  it('returns the PascalCase details when registered', () => {
+    let status: { isRegistered: boolean; details: Record<string, unknown> | null } | undefined;
+    service.checkRegistration(42).subscribe((value) => (status = value as never));
+
+    httpMock
+      .expectOne((r) => r.url.includes('/events/42/registrations/me'))
+      .flush({
+        Success: true,
+        Message: 'ok',
+        Data: {
+          IsRegistered: true,
+          Notes: 'Bringing a laptop',
+          PhoneNumber: '555-0101',
+          DietaryNeeds: 'Vegan',
+        },
+      });
+
+    expect(status?.isRegistered).toBeTrue();
+    expect(status?.details).toEqual({
+      notes: 'Bringing a laptop',
+      phoneNumber: '555-0101',
+      dietaryNeeds: 'Vegan',
+    });
+  });
+
+  it('leaves each detail undefined when the registration carries none', () => {
+    let status: { details: Record<string, unknown> | null } | undefined;
+    service.checkRegistration(42).subscribe((value) => (status = value as never));
+
+    httpMock
+      .expectOne((r) => r.url.includes('/events/42/registrations/me'))
+      .flush({
+        success: true,
+        message: 'ok',
+        data: { isRegistered: true },
+        error: null,
+        meta: null,
+      });
+
+    expect(status?.details).toEqual({
+      notes: undefined,
+      phoneNumber: undefined,
+      dietaryNeeds: undefined,
+    });
+  });
+
+  it('reports not registered when the envelope carries no data at all', () => {
+    let status: { isRegistered: boolean; details: unknown } | undefined;
+    service.checkRegistration(42).subscribe((value) => (status = value as never));
+
+    httpMock
+      .expectOne((r) => r.url.includes('/events/42/registrations/me'))
+      .flush({ success: true, message: 'ok', data: null, error: null, meta: null });
+
+    expect(status?.isRegistered).toBeFalse();
+    expect(status?.details).toBeNull();
+  });
 });
