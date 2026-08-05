@@ -260,6 +260,25 @@ describe('ClubsSearchComponent', () => {
       expect(component.sourceLabel).toBe('Fallback results');
     });
 
+    it('reads the source from a legacy PascalCase Meta envelope', () => {
+      clubsService.getClubs.and.returnValue(
+        of({ ...response({ meta: null }), Meta: { source: 'database' } } as ClubsApiResponse),
+      );
+
+      fixture.detectChanges();
+
+      expect(component.sourceLabel).toBe('Fallback results');
+    });
+
+    it('blanks the source when the envelope carries no metadata', () => {
+      clubsService.getClubs.and.returnValue(of(response({ meta: null })));
+
+      fixture.detectChanges();
+
+      expect(component.resultSource).toBe('');
+      expect(component.sourceLabel).toBe('');
+    });
+
     it('reports the envelope message when a successful response carries no data', () => {
       clubsService.getClubs.and.returnValue(
         of(response({ data: null, message: 'Search is temporarily unavailable.' })),

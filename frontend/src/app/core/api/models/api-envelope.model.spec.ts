@@ -1,4 +1,9 @@
-import { ApiEnvelope, extractEnvelopeData, requireEnvelopeData } from './api-envelope.model';
+import {
+  ApiEnvelope,
+  extractEnvelopeData,
+  extractEnvelopeMeta,
+  requireEnvelopeData,
+} from './api-envelope.model';
 
 function envelopeOf<T>(overrides: Partial<ApiEnvelope<T>>): ApiEnvelope<T> {
   return {
@@ -41,6 +46,35 @@ describe('extractEnvelopeData', () => {
 
   it('treats a primitive response as the payload itself', () => {
     expect(extractEnvelopeData('raw-string')).toBe('raw-string');
+  });
+});
+
+describe('extractEnvelopeMeta', () => {
+  /** `Meta` is a legacy shim key, so it is not on the interface — see the helper's note. */
+  function withMeta(meta: unknown, legacyMeta?: unknown): ApiEnvelope<null> {
+    return { ...envelopeOf({ meta: meta as never }), Meta: legacyMeta } as ApiEnvelope<null>;
+  }
+
+  it('reads the camelCase meta property', () => {
+    expect(extractEnvelopeMeta(withMeta({ source: 'elasticsearch' }))).toEqual({
+      source: 'elasticsearch',
+    });
+  });
+
+  it('falls back to the legacy PascalCase Meta property', () => {
+    expect(extractEnvelopeMeta(withMeta(null, { totalCount: 3 }))).toEqual({ totalCount: 3 });
+  });
+
+  it('prefers meta over Meta when both are present', () => {
+    expect(extractEnvelopeMeta(withMeta({ totalCount: 3 }, { totalCount: 99 }))).toEqual({
+      totalCount: 3,
+    });
+  });
+
+  it('returns null when the envelope carries no metadata', () => {
+    expect(extractEnvelopeMeta(envelopeOf({ meta: null }))).toBeNull();
+    expect(extractEnvelopeMeta(null)).toBeNull();
+    expect(extractEnvelopeMeta(undefined)).toBeNull();
   });
 });
 

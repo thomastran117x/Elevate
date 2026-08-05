@@ -13,7 +13,10 @@ import {
   ClubSortBy,
   ClubType,
 } from '../../models/club.types';
-import { extractEnvelopeData } from '../../../../core/api/models/api-envelope.model';
+import {
+  extractEnvelopeData,
+  extractEnvelopeMeta,
+} from '../../../../core/api/models/api-envelope.model';
 import {
   getApiClientMessage,
   isApiClientClientError,
@@ -232,10 +235,8 @@ export class ClubsSearchComponent implements OnInit, OnDestroy {
           this.clubs = data.items;
           this.totalCount = data.totalCount;
           this.totalPages = data.totalPages;
-          this.resultSource =
-            typeof (response as { meta?: { source?: string } }).meta?.source === 'string'
-              ? ((response as { meta?: { source?: string } }).meta?.source ?? '')
-              : '';
+          const source = extractEnvelopeMeta(response)?.['source'];
+          this.resultSource = typeof source === 'string' ? source : '';
           this.loading = false;
         },
         error: (response) => {
