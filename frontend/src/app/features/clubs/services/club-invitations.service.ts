@@ -23,9 +23,11 @@ export class ClubInvitationsService {
 
   resolve(token: string): Observable<ClubInvitationResolve> {
     return this.http
-      .post<
-        ApiEnvelope<unknown>
-      >(`${this.base}/invitations/resolve`, { token }, { withCredentials: true })
+      .post<ApiEnvelope<unknown>>(
+        `${this.base}/invitations/resolve`,
+        { token },
+        { withCredentials: true },
+      )
       .pipe(
         map((response) =>
           normalizeClubInvitationResolve(
@@ -37,9 +39,11 @@ export class ClubInvitationsService {
 
   accept(token: string): Observable<ClubInvitationDecision> {
     return this.http
-      .post<
-        ApiEnvelope<unknown>
-      >(`${this.base}/invitations/accept`, { token }, { withCredentials: true })
+      .post<ApiEnvelope<unknown>>(
+        `${this.base}/invitations/accept`,
+        { token },
+        { withCredentials: true },
+      )
       .pipe(
         map((response) =>
           normalizeClubInvitationDecision(
@@ -51,9 +55,11 @@ export class ClubInvitationsService {
 
   decline(token: string): Observable<ClubInvitationDecision> {
     return this.http
-      .post<
-        ApiEnvelope<unknown>
-      >(`${this.base}/invitations/decline`, { token }, { withCredentials: true })
+      .post<ApiEnvelope<unknown>>(
+        `${this.base}/invitations/decline`,
+        { token },
+        { withCredentials: true },
+      )
       .pipe(
         map((response) =>
           normalizeClubInvitationDecision(

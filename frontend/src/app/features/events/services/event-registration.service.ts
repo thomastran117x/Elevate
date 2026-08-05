@@ -34,9 +34,9 @@ export class EventRegistrationService {
 
   register(eventId: number, details?: RegistrationDetails): Observable<void> {
     return this.api
-      .post<
-        ApiEnvelope<unknown>
-      >(`${this.base}/${eventId}/register`, details ?? {}, { withCredentials: true })
+      .post<ApiEnvelope<unknown>>(`${this.base}/${eventId}/register`, details ?? {}, {
+        withCredentials: true,
+      })
       .pipe(map(() => void 0));
   }
 
@@ -50,9 +50,9 @@ export class EventRegistrationService {
 
   updateRegistration(eventId: number, details: RegistrationDetails): Observable<void> {
     return this.api
-      .patch<
-        ApiEnvelope<unknown>
-      >(`${this.base}/${eventId}/register`, details, { withCredentials: true })
+      .patch<ApiEnvelope<unknown>>(`${this.base}/${eventId}/register`, details, {
+        withCredentials: true,
+      })
       .pipe(map(() => void 0));
   }
 

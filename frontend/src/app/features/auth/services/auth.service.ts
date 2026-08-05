@@ -166,9 +166,7 @@ export interface OAuthRequiresRoleSelectionResponse {
 }
 
 export type OAuthAuthenticationResponse =
-  | OAuthAuthenticatedResponse
-  | OAuthRequiresStepUpResponse
-  | OAuthRequiresRoleSelectionResponse;
+  OAuthAuthenticatedResponse | OAuthRequiresStepUpResponse | OAuthRequiresRoleSelectionResponse;
 
 export const PendingOAuthSignupStorageKey = 'pending_oauth_signup';
 export const PendingLoginStepUpStorageKey = 'pending_login_step_up';

@@ -47,9 +47,11 @@ export class PostCommentsService {
     content: string,
   ): Observable<PostCommentApiResponse> {
     return this.http
-      .post<
-        ApiEnvelope<unknown>
-      >(this.commentsUrl(clubId, postId), { content }, { withCredentials: true })
+      .post<ApiEnvelope<unknown>>(
+        this.commentsUrl(clubId, postId),
+        { content },
+        { withCredentials: true },
+      )
       .pipe(map((response) => this.normalizeCommentResponse(response)));
   }
 
@@ -60,9 +62,11 @@ export class PostCommentsService {
     content: string,
   ): Observable<PostCommentApiResponse> {
     return this.http
-      .put<
-        ApiEnvelope<unknown>
-      >(`${this.commentsUrl(clubId, postId)}/${commentId}`, { content }, { withCredentials: true })
+      .put<ApiEnvelope<unknown>>(
+        `${this.commentsUrl(clubId, postId)}/${commentId}`,
+        { content },
+        { withCredentials: true },
+      )
       .pipe(map((response) => this.normalizeCommentResponse(response)));
   }
 

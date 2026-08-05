@@ -55,6 +55,37 @@ jobs:
       - name: Verify frontend formatting
         run: npm run format:check
 
+  frontend-audit:
+    name: Frontend Audit
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No `npm ci` here on purpose: `npm audit` resolves from package-lock.json
+      # and the registry, so installing would only add time.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      # Informational only. The dev toolchain currently carries advisories with no
+      # forward fix on Angular 21 (undici is exact-pinned by @angular/build, and
+      # @angular/cli pulls a vulnerable @modelcontextprotocol/sdk chain). Promote
+      # this to a blocking step once the Angular 22 upgrade lands.
+      - name: Report development dependency advisories
+        if: always()
+        continue-on-error: true
+        run: npm audit --audit-level=moderate
+
   frontend-build:
     name: Frontend Build
     runs-on: ubuntu-latest

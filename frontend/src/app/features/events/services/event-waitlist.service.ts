@@ -72,9 +72,9 @@ export class EventWaitlistService {
 
   join(eventId: number, details?: JoinWaitlistDetails): Observable<EventWaitlistEntry> {
     return this.api
-      .post<
-        ApiEnvelope<EntryPayload>
-      >(`${this.base}/${eventId}/waitlist`, details ?? {}, { withCredentials: true })
+      .post<ApiEnvelope<EntryPayload>>(`${this.base}/${eventId}/waitlist`, details ?? {}, {
+        withCredentials: true,
+      })
       .pipe(map((response) => this.normalizeEntry(this.unwrap(response))));
   }
 
@@ -135,9 +135,11 @@ export class EventWaitlistService {
 
   promoteNext(eventId: number): Observable<WaitlistPromotionResult> {
     return this.api
-      .post<
-        ApiEnvelope<PromotionPayload>
-      >(`${this.base}/${eventId}/waitlist/promote`, {}, { withCredentials: true })
+      .post<ApiEnvelope<PromotionPayload>>(
+        `${this.base}/${eventId}/waitlist/promote`,
+        {},
+        { withCredentials: true },
+      )
       .pipe(
         map((response) => {
           const payload = this.unwrap(response);

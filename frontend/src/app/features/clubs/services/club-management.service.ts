@@ -129,9 +129,11 @@ export class ClubManagementService {
     role: ClubStaffRole,
   ): Observable<ApiEnvelope<ClubInvitation>> {
     return this.api
-      .post<
-        ApiEnvelope<unknown>
-      >(`${this.base}/${clubId}/staff/invitations`, { identifier, role }, { withCredentials: true })
+      .post<ApiEnvelope<unknown>>(
+        `${this.base}/${clubId}/staff/invitations`,
+        { identifier, role },
+        { withCredentials: true },
+      )
       .pipe(
         map((response) => {
           const raw = this.rawData(response);
@@ -147,9 +149,9 @@ export class ClubManagementService {
 
   getStaffInvitations(clubId: number): Observable<ApiEnvelope<ClubInvitation[]>> {
     return this.api
-      .get<
-        ApiEnvelope<unknown>
-      >(`${this.base}/${clubId}/staff/invitations`, { withCredentials: true })
+      .get<ApiEnvelope<unknown>>(`${this.base}/${clubId}/staff/invitations`, {
+        withCredentials: true,
+      })
       .pipe(
         map((response) => {
           const raw = this.rawData(response) as unknown[] | null;
@@ -178,9 +180,11 @@ export class ClubManagementService {
   /** Invites an existing user (by username or email) to become a member; the backend emails them. */
   inviteMember(clubId: number, identifier: string): Observable<ApiEnvelope<ClubMemberInvitation>> {
     return this.api
-      .post<
-        ApiEnvelope<unknown>
-      >(`${this.base}/${clubId}/members/invitations`, { identifier }, { withCredentials: true })
+      .post<ApiEnvelope<unknown>>(
+        `${this.base}/${clubId}/members/invitations`,
+        { identifier },
+        { withCredentials: true },
+      )
       .pipe(
         map((response) => {
           const raw = this.rawData(response);
@@ -198,9 +202,9 @@ export class ClubManagementService {
 
   getMemberInvitations(clubId: number): Observable<ApiEnvelope<ClubMemberInvitation[]>> {
     return this.api
-      .get<
-        ApiEnvelope<unknown>
-      >(`${this.base}/${clubId}/members/invitations`, { withCredentials: true })
+      .get<ApiEnvelope<unknown>>(`${this.base}/${clubId}/members/invitations`, {
+        withCredentials: true,
+      })
       .pipe(
         map((response) => {
           const raw = this.rawData(response) as unknown[] | null;
@@ -241,17 +245,17 @@ export class ClubManagementService {
       body.maxRedemptions = maxRedemptions;
     }
     return this.api
-      .post<
-        ApiEnvelope<unknown>
-      >(`${this.base}/${clubId}/members/invitation-links`, body, { withCredentials: true })
+      .post<ApiEnvelope<unknown>>(`${this.base}/${clubId}/members/invitation-links`, body, {
+        withCredentials: true,
+      })
       .pipe(map((response) => this.mapLink(response)));
   }
 
   getMemberInviteLinks(clubId: number): Observable<ApiEnvelope<ClubInvitationLink[]>> {
     return this.api
-      .get<
-        ApiEnvelope<unknown>
-      >(`${this.base}/${clubId}/members/invitation-links`, { withCredentials: true })
+      .get<ApiEnvelope<unknown>>(`${this.base}/${clubId}/members/invitation-links`, {
+        withCredentials: true,
+      })
       .pipe(
         map((response) => {
           const raw = this.rawData(response) as unknown[] | null;
@@ -274,9 +278,11 @@ export class ClubManagementService {
     linkId: number,
   ): Observable<ApiEnvelope<ClubInvitationLink>> {
     return this.api
-      .post<
-        ApiEnvelope<unknown>
-      >(`${this.base}/${clubId}/members/invitation-links/${linkId}/revoke`, {}, { withCredentials: true })
+      .post<ApiEnvelope<unknown>>(
+        `${this.base}/${clubId}/members/invitation-links/${linkId}/revoke`,
+        {},
+        { withCredentials: true },
+      )
       .pipe(map((response) => this.mapLink(response)));
   }
 
@@ -299,9 +305,11 @@ export class ClubManagementService {
   /** Transfer ownership to an existing user identified by username or email. */
   transferOwnership(clubId: number, newOwnerIdentifier: string): Observable<ApiEnvelope<Club>> {
     return this.api
-      .post<
-        ApiEnvelope<unknown>
-      >(`${this.base}/${clubId}/transfer-ownership`, { newOwnerIdentifier }, { withCredentials: true })
+      .post<ApiEnvelope<unknown>>(
+        `${this.base}/${clubId}/transfer-ownership`,
+        { newOwnerIdentifier },
+        { withCredentials: true },
+      )
       .pipe(map((response) => this.mapClub(response)));
   }
 
@@ -353,9 +361,11 @@ export class ClubManagementService {
 
   rollback(clubId: number, versionNumber: number): Observable<ClubRollbackApiResponse> {
     return this.api
-      .post<
-        ApiEnvelope<unknown>
-      >(`${this.base}/${clubId}/versions/${versionNumber}/rollback`, {}, { withCredentials: true })
+      .post<ApiEnvelope<unknown>>(
+        `${this.base}/${clubId}/versions/${versionNumber}/rollback`,
+        {},
+        { withCredentials: true },
+      )
       .pipe(
         map((response) => {
           const raw = this.rawData(response);
