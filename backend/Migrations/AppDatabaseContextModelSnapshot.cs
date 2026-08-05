@@ -641,8 +641,19 @@ namespace backend.Migrations
                     b.Property<string>("Name")
                         .HasColumnType("longtext");
 
+                    b.Property<int?>("OccurrenceIndex")
+                        .HasColumnType("int");
+
                     b.Property<int>("RegistrationCount")
                         .HasColumnType("int");
+
+                    b.Property<int?>("SeriesId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("SeriesOverridden")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false);
 
                     b.Property<DateTime?>("StartTime")
                         .HasColumnType("datetime(6)");
@@ -650,6 +661,10 @@ namespace backend.Migrations
                     b.Property<string>("Tags")
                         .IsRequired()
                         .HasColumnType("json");
+
+                    b.Property<string>("TimeZoneId")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime(6)");
@@ -686,6 +701,11 @@ namespace backend.Migrations
                     b.HasIndex("ClubId");
 
                     b.HasIndex("Latitude", "Longitude");
+
+                    b.HasIndex("SeriesId", "OccurrenceIndex")
+                        .IsUnique();
+
+                    b.HasIndex("SeriesId", "StartTime");
 
                     b.ToTable("Events");
                 });
@@ -948,6 +968,78 @@ namespace backend.Migrations
                     b.HasIndex("CreatedAt");
 
                     b.ToTable("event_search_outbox", (string)null);
+                });
+
+            modelBuilder.Entity("backend.main.features.events.series.EventSeries", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ByWeekdayMask")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ClubId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DurationMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EndLocalDate")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("EndMode")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("FirstOccurrenceLocalStart")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Frequency")
+                        .HasColumnType("int");
+
+                    b.Property<int>("GeneratedCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Interval")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MonthlyDayPolicy")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("OccurrenceCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<int?>("TemplateEventId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClubId");
+
+                    b.HasIndex("TemplateEventId");
+
+                    b.ToTable("EventSeries");
                 });
 
             modelBuilder.Entity("backend.main.features.events.versions.EventVersion", b =>
@@ -1357,6 +1449,11 @@ namespace backend.Migrations
                         .HasForeignKey("ClubId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("backend.main.features.events.series.EventSeries", null)
+                        .WithMany()
+                        .HasForeignKey("SeriesId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("backend.main.features.events.images.EventImage", b =>
@@ -1410,6 +1507,15 @@ namespace backend.Migrations
                     b.HasOne("backend.main.features.profile.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("backend.main.features.events.series.EventSeries", b =>
+                {
+                    b.HasOne("backend.main.features.clubs.Club", null)
+                        .WithMany()
+                        .HasForeignKey("ClubId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

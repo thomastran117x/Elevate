@@ -1,0 +1,57 @@
+@if (open) {
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="occurrence-scope-title"
+  >
+    <div class="w-full max-w-md rounded-2xl border border-line-strong bg-surface p-6 shadow-xl">
+      <h3 id="occurrence-scope-title" class="text-lg font-bold tracking-tight">
+        Apply this change to&hellip;
+      </h3>
+
+      @if (occurrenceLabel) {
+        <p class="mt-1 text-xs font-semibold text-subtle">{{ occurrenceLabel }}</p>
+      }
+
+      <p class="mt-3 text-sm text-muted">
+        This event repeats. Choose whether to change only this date or every later one as well.
+      </p>
+
+      <div class="mt-6 space-y-3">
+        <button
+          type="button"
+          [disabled]="saving"
+          (click)="select('this')"
+          class="w-full rounded-2xl border border-line-strong px-4 py-3 text-left transition hover:bg-glass-strong disabled:opacity-60"
+        >
+          <span class="block text-sm font-semibold">This occurrence</span>
+          <span class="mt-0.5 block text-xs text-subtle">
+            The rest of the series keeps its current details.
+          </span>
+        </button>
+
+        <button
+          type="button"
+          [disabled]="saving"
+          (click)="select('thisAndFollowing')"
+          class="w-full rounded-2xl border border-line-strong px-4 py-3 text-left transition hover:bg-glass-strong disabled:opacity-60"
+        >
+          <span class="block text-sm font-semibold">This and all following occurrences</span>
+          <span class="mt-0.5 block text-xs text-subtle">
+            Occurrences that have already started, or that you edited on their own, are left alone.
+          </span>
+        </button>
+      </div>
+
+      <button
+        type="button"
+        [disabled]="saving"
+        (click)="dismiss()"
+        class="mt-4 w-full rounded-2xl px-4 py-2.5 text-sm font-semibold text-subtle transition hover:text-content disabled:opacity-60"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+}

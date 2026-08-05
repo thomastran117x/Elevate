@@ -104,6 +104,10 @@ export interface ManagedEvent {
   waitlistCount: number;
   publishReady: boolean;
   publishIssues: string[];
+  seriesId?: number | null;
+  occurrenceIndex?: number | null;
+  seriesOverridden?: boolean;
+  timeZoneId?: string | null;
 }
 
 export interface ManagedEventsPagedData {
@@ -254,3 +258,128 @@ export const CATEGORY_STYLES: Record<EventCategory, { badge: string; bg: string 
     bg: 'bg-zinc-500/60',
   },
 };
+
+// ── Recurrence series ────────────────────────────────────────────────────────
+
+export type RecurrenceFrequency = 'Daily' | 'Weekly' | 'Monthly';
+export type RecurrenceEndMode = 'Count' | 'UntilDate';
+export type MonthlyDayPolicy = 'ClampToMonthEnd' | 'SkipMissingMonths';
+export type EventSeriesStatus = 'Active' | 'Cancelled';
+export type EventSeriesDeleteScope = 'SeriesRecordOnly' | 'FutureDrafts' | 'AllUnregistered';
+
+/** Which occurrences an edit should apply to. */
+export type OccurrenceEditScope = 'this' | 'thisAndFollowing';
+
+export const ALL_RECURRENCE_FREQUENCIES: RecurrenceFrequency[] = ['Daily', 'Weekly', 'Monthly'];
+
+/**
+ * A repeat rule. `startLocalDateTime` is a bare wall-clock string (`2026-03-03T19:00`) paired
+ * with `timeZoneId` — never an ISO instant. Converting it through the browser's zone is exactly
+ * the bug the time zone selector exists to prevent.
+ */
+export interface RecurrenceRule {
+  frequency: RecurrenceFrequency;
+  interval: number;
+  byWeekdays?: number[];
+  monthlyDayPolicy: MonthlyDayPolicy;
+  startLocalDateTime: string;
+  durationMinutes?: number | null;
+  timeZoneId: string;
+  endMode: RecurrenceEndMode;
+  endLocalDate?: string | null;
+  occurrenceCount?: number | null;
+}
+
+export interface OccurrencePreview {
+  index: number;
+  localStart: string;
+  startTimeUtc: string;
+  endTimeUtc?: string | null;
+  utcOffset: string;
+  wasInvalidLocalTime: boolean;
+  wasAmbiguousLocalTime: boolean;
+}
+
+export interface SeriesPreview {
+  timeZoneId: string;
+  occurrenceCount: number;
+  occurrences: OccurrencePreview[];
+  warnings: string[];
+}
+
+export interface EventSeriesRule {
+  frequency: RecurrenceFrequency;
+  interval: number;
+  byWeekdays: number[];
+  monthlyDayPolicy: MonthlyDayPolicy;
+  timeZoneId: string;
+  firstOccurrenceLocalStart: string;
+  durationMinutes?: number | null;
+  endMode: RecurrenceEndMode;
+  endLocalDate?: string | null;
+  occurrenceCount?: number | null;
+}
+
+export interface EventSeries {
+  id: number;
+  clubId: number;
+  templateEventId?: number | null;
+  status: EventSeriesStatus;
+  generatedCount: number;
+  rule: EventSeriesRule;
+  createdAt: string;
+  updatedAt: string;
+  occurrences: ManagedEvent[];
+  warnings: string[];
+}
+
+export interface EventSeriesSummary {
+  id: number;
+  clubId: number;
+  templateEventId?: number | null;
+  status: EventSeriesStatus;
+  generatedCount: number;
+  rule: EventSeriesRule;
+  createdAt: string;
+  updatedAt: string;
+  name?: string | null;
+  nextOccurrenceUtc?: string | null;
+}
+
+export interface SeriesSkippedOccurrence {
+  eventId: number;
+  occurrenceIndex?: number | null;
+  reason: string;
+  details: string[];
+}
+
+/** Bulk operations report partial success rather than failing outright. */
+export interface SeriesBulkResult {
+  seriesId: number;
+  affectedCount: number;
+  affectedEventIds: number[];
+  skipped: SeriesSkippedOccurrence[];
+  retimedWithRegistrations: number[];
+}
+
+export interface UpdateFutureOccurrencesPayload {
+  fromEventId: number;
+  includeOverridden?: boolean;
+  name?: string;
+  description?: string;
+  location?: string;
+  venueName?: string;
+  city?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  maxParticipants?: number;
+  registerCost?: number;
+  isPrivate?: boolean;
+  waitlistEnabled?: boolean;
+  category?: EventCategory;
+  tags?: string[];
+  imageUrls?: string[];
+  /** Wall-clock time of day (`HH:mm`) in the series' zone. */
+  localStartTime?: string;
+  durationMinutes?: number;
+}

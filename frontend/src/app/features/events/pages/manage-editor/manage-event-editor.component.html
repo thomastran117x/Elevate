@@ -63,6 +63,21 @@
     </div>
   }
 
+  @if (!loading && seriesNotice) {
+    <div
+      class="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-sm text-amber-700 dark:text-amber-300"
+    >
+      {{ seriesNotice }}
+    </div>
+  }
+
+  <app-occurrence-scope-dialog
+    [open]="scopeDialogOpen"
+    [occurrenceLabel]="occurrenceLabel"
+    [saving]="saving"
+    (choose)="onScopeChosen($event)"
+  />
+
   @if (!loading) {
     <!-- Progress stepper -->
     <div class="mb-8">
@@ -161,8 +176,236 @@
           </div>
         }
 
-        <!-- Location -->
+        <!-- Repeat -->
         @case (2) {
+          <div class="space-y-5" [formGroup]="recurrenceForm">
+            @if (belongsToSeries) {
+              <div
+                class="rounded-2xl border border-line-strong bg-glass-strong px-4 py-3 text-sm text-muted"
+              >
+                <p class="font-semibold text-content">{{ occurrenceLabel }}</p>
+                <p class="mt-1 text-xs">
+                  Saving will ask whether the change applies to this date only or to every later
+                  one. Manage the whole series from the
+                  <a
+                    [routerLink]="['/clubs', clubId, 'manage', 'series', event?.seriesId]"
+                    class="font-semibold underline"
+                    >series page</a
+                  >.
+                </p>
+              </div>
+            } @else {
+              <label class="flex items-start gap-3">
+                <input formControlName="enabled" type="checkbox" class="mt-1 size-4" />
+                <span>
+                  <span class="block text-sm font-semibold text-muted">Repeat this event</span>
+                  <span class="mt-0.5 block text-xs text-subtle">
+                    Generates a series of draft occurrences you can publish together.
+                  </span>
+                </span>
+              </label>
+
+              @if (isRecurring) {
+                <div class="grid gap-5 sm:grid-cols-2">
+                  <label class="block space-y-2">
+                    <span class="text-sm font-semibold text-muted">Repeats</span>
+                    <select formControlName="frequency" [class]="inputClass">
+                      @for (frequency of frequencies; track frequency) {
+                        <option [value]="frequency">{{ frequency }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label class="block space-y-2">
+                    <span class="text-sm font-semibold text-muted">Every</span>
+                    <input
+                      formControlName="interval"
+                      type="number"
+                      min="1"
+                      max="52"
+                      [class]="inputClass"
+                    />
+                  </label>
+                </div>
+
+                @if (isWeekly) {
+                  <div class="space-y-2">
+                    <span class="text-sm font-semibold text-muted">On these days</span>
+                    <div class="flex flex-wrap gap-2">
+                      @for (day of weekdays; track day.value) {
+                        <button
+                          type="button"
+                          (click)="toggleWeekday(day.value)"
+                          class="rounded-full border px-3 py-1.5 text-xs font-semibold transition"
+                          [class]="
+                            isWeekdaySelected(day.value)
+                              ? 'border-accent bg-accent/10 text-accent'
+                              : 'border-line-strong text-muted hover:bg-glass-strong'
+                          "
+                        >
+                          {{ day.label }}
+                        </button>
+                      }
+                    </div>
+                    <p class="text-xs text-subtle">
+                      Leave empty to repeat on the same weekday as the first occurrence.
+                    </p>
+                  </div>
+                }
+
+                @if (isMonthly) {
+                  <label class="block space-y-2">
+                    <span class="text-sm font-semibold text-muted">Short months</span>
+                    <select formControlName="monthlyDayPolicy" [class]="inputClass">
+                      <option value="ClampToMonthEnd">Use the last day of the month</option>
+                      <option value="SkipMissingMonths">Skip that month entirely</option>
+                    </select>
+                    <span class="block text-xs text-subtle">
+                      Only matters for the 29th, 30th and 31st.
+                    </span>
+                  </label>
+                }
+
+                <div class="grid gap-5 sm:grid-cols-3">
+                  <label class="block space-y-2">
+                    <span class="text-sm font-semibold text-muted">First date</span>
+                    <input formControlName="startLocalDate" type="date" [class]="inputClass" />
+                  </label>
+                  <label class="block space-y-2">
+                    <span class="text-sm font-semibold text-muted">Start time</span>
+                    <input formControlName="startLocalTime" type="time" [class]="inputClass" />
+                  </label>
+                  <label class="block space-y-2">
+                    <span class="text-sm font-semibold text-muted">Length (minutes)</span>
+                    <input
+                      formControlName="durationMinutes"
+                      type="number"
+                      min="1"
+                      [class]="inputClass"
+                    />
+                  </label>
+                </div>
+
+                <label class="block space-y-2">
+                  <span class="text-sm font-semibold text-muted">Time zone</span>
+                  <select formControlName="timeZoneId" [class]="inputClass">
+                    @for (zone of timeZones; track zone) {
+                      <option [value]="zone">{{ zone }}</option>
+                    }
+                  </select>
+                  <span class="block text-xs text-subtle">
+                    Occurrences repeat at this local time. If the clocks change, the local time
+                    stays the same.
+                  </span>
+                </label>
+
+                <div class="grid gap-5 sm:grid-cols-2">
+                  <label class="block space-y-2">
+                    <span class="text-sm font-semibold text-muted">Ends</span>
+                    <select formControlName="endMode" [class]="inputClass">
+                      <option value="Count">After a number of occurrences</option>
+                      <option value="UntilDate">On a date</option>
+                    </select>
+                  </label>
+                  @if (endsByCount) {
+                    <label class="block space-y-2">
+                      <span class="text-sm font-semibold text-muted">Occurrences</span>
+                      <input
+                        formControlName="occurrenceCount"
+                        type="number"
+                        min="1"
+                        max="200"
+                        [class]="inputClass"
+                      />
+                    </label>
+                  } @else {
+                    <label class="block space-y-2">
+                      <span class="text-sm font-semibold text-muted">Last date</span>
+                      <input formControlName="endLocalDate" type="date" [class]="inputClass" />
+                    </label>
+                  }
+                </div>
+
+                <!-- Live preview: the one place the time zone behaviour is made visible -->
+                <div class="rounded-2xl border border-line-strong p-4">
+                  <div class="flex items-center justify-between">
+                    <h4 class="text-sm font-semibold text-content">Preview</h4>
+                    @if (previewing) {
+                      <span class="text-xs text-subtle">Working it out&hellip;</span>
+                    }
+                  </div>
+
+                  @if (previewError) {
+                    <p class="mt-2 text-sm text-rose-600 dark:text-rose-400">{{ previewError }}</p>
+                  } @else if (preview) {
+                    <p class="mt-1 text-xs text-subtle">
+                      {{ preview.occurrenceCount }} occurrences, shown in {{ preview.timeZoneId }}.
+                    </p>
+
+                    <ul class="mt-3 space-y-1.5">
+                      @for (
+                        occurrence of preview.occurrences.slice(0, 10);
+                        track occurrence.index
+                      ) {
+                        <li class="flex flex-wrap items-center gap-2 text-sm">
+                          <span class="font-medium">{{
+                            formatLocalStart(occurrence.localStart)
+                          }}</span>
+                          <span class="text-xs text-subtle">UTC{{ occurrence.utcOffset }}</span>
+                          @if (occurrence.wasInvalidLocalTime) {
+                            <span
+                              class="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300"
+                            >
+                              moved &mdash; clocks skip this time
+                            </span>
+                          }
+                          @if (occurrence.wasAmbiguousLocalTime) {
+                            <span
+                              class="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300"
+                            >
+                              happens twice &mdash; using the earlier
+                            </span>
+                          }
+                        </li>
+                      }
+                    </ul>
+
+                    @if (preview.occurrences.length > 10) {
+                      <p class="mt-2 text-xs text-subtle">
+                        &hellip;and {{ preview.occurrences.length - 10 }} more.
+                      </p>
+                    }
+
+                    @for (warning of preview.warnings; track warning) {
+                      <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ warning }}</p>
+                    }
+                  } @else {
+                    <p class="mt-2 text-sm text-subtle">
+                      Choose a first date to see the generated occurrences.
+                    </p>
+                  }
+                </div>
+
+                @if (canCreateSeries) {
+                  <button
+                    type="button"
+                    [disabled]="saving || !preview"
+                    (click)="createSeries()"
+                    class="inline-flex items-center justify-center rounded-2xl bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                  >
+                    Create series
+                  </button>
+                } @else if (isRecurring && !eventId) {
+                  <p class="text-xs text-subtle">
+                    Save the draft first, then create the series from here.
+                  </p>
+                }
+              }
+            }
+          </div>
+        }
+
+        <!-- Location -->
+        @case (3) {
           <div class="space-y-5">
             <div class="grid gap-5 sm:grid-cols-2">
               <label class="block space-y-2">
@@ -196,7 +439,7 @@
         }
 
         <!-- Details -->
-        @case (3) {
+        @case (4) {
           <div class="space-y-5">
             <div class="grid gap-5 sm:grid-cols-2">
               <label class="block space-y-2">
@@ -254,7 +497,7 @@
         }
 
         <!-- Images -->
-        @case (4) {
+        @case (5) {
           <div class="space-y-5">
             <label
               class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line bg-surface-muted px-4 py-10 text-center text-sm text-subtle transition hover:border-accent hover:text-content"
@@ -294,7 +537,7 @@
         }
 
         <!-- Review -->
-        @case (5) {
+        @case (6) {
           <div class="space-y-5">
             @if (event && !event.publishReady && publishIssues.length > 0) {
               <div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3">

@@ -1547,6 +1547,76 @@ public class EventsServiceTests
     }
 
     [Fact]
+    public async Task BatchUpdateEvents_ShouldFlagSeriesOccurrencesAsIndividuallyEdited()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var occurrence = await harness.SeedPersistedEventAsync(
+            id: 391,
+            lifecycleState: EventLifecycleState.Published,
+            imageUrls: ["https://cdn.test/events/series-batch.png"]);
+
+        // The series row has to exist for the occurrence's foreign key to hold.
+        var series = new backend.main.features.events.series.EventSeries
+        {
+            ClubId = harness.ClubId,
+            TimeZoneId = "Australia/Sydney",
+            FirstOccurrenceLocalStart = new DateTime(2026, 6, 1, 19, 0, 0, DateTimeKind.Unspecified),
+            EndMode = backend.main.features.events.series.EventRecurrenceEndMode.Count,
+            OccurrenceCount = 3,
+            CreatedByUserId = harness.OwnerUserId
+        };
+
+        harness.Db.EventSeries.Add(series);
+        await harness.Db.SaveChangesAsync();
+
+        occurrence.SeriesId = series.Id;
+        occurrence.OccurrenceIndex = 1;
+        await harness.Db.SaveChangesAsync();
+
+        await harness.Service.BatchUpdateEvents(
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            [
+                new backend.main.features.events.contracts.requests.BatchUpdateEventItem
+                {
+                    EventId = occurrence.Id,
+                    Location = "Batch Hall"
+                }
+            ]);
+
+        // Batch edit is still a one-off edit. Leaving the flag unset would let a later
+        // "update this and following occurrences" silently discard this change.
+        harness.LoadEvent(occurrence.Id)!.SeriesOverridden.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task BatchUpdateEvents_ShouldLeaveStandaloneEventsUnflagged()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var standalone = await harness.SeedPersistedEventAsync(
+            id: 392,
+            lifecycleState: EventLifecycleState.Published,
+            imageUrls: ["https://cdn.test/events/standalone-batch.png"]);
+
+        await harness.Service.BatchUpdateEvents(
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            [
+                new backend.main.features.events.contracts.requests.BatchUpdateEventItem
+                {
+                    EventId = standalone.Id,
+                    Location = "Batch Hall"
+                }
+            ]);
+
+        harness.LoadEvent(standalone.Id)!.SeriesOverridden.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task BatchUpdateEvents_ShouldRejectDraftEvents()
     {
         await using var harness = await EventsServiceHarness.CreateAsync();

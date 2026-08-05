@@ -47,6 +47,10 @@ type ManagedEventPayload = Partial<ManagedEvent> & {
   WaitlistCount?: number;
   PublishReady?: boolean;
   PublishIssues?: string[];
+  SeriesId?: number | null;
+  OccurrenceIndex?: number | null;
+  SeriesOverridden?: boolean;
+  TimeZoneId?: string | null;
 };
 
 type ManagedEventsPagedPayload = Partial<ManagedEventsPagedData> & {
@@ -241,6 +245,10 @@ export class EventsManagementService {
       waitlistCount: item.waitlistCount ?? item.WaitlistCount ?? 0,
       publishReady: item.publishReady ?? item.PublishReady ?? false,
       publishIssues: item.publishIssues ?? item.PublishIssues ?? [],
+      seriesId: item.seriesId ?? item.SeriesId ?? null,
+      occurrenceIndex: item.occurrenceIndex ?? item.OccurrenceIndex ?? null,
+      seriesOverridden: item.seriesOverridden ?? item.SeriesOverridden ?? false,
+      timeZoneId: item.timeZoneId ?? item.TimeZoneId ?? null,
     };
   }
 

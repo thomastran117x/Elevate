@@ -55,5 +55,20 @@ namespace backend.main.features.events.search
         {
             get; set;
         }
+
+        /// <summary>
+        /// Recurrence series membership, indexed so occurrences can be grouped or filtered
+        /// later. The mapping is dynamic, so existing documents backfill on the next reindex
+        /// (<c>POST /api/admin/events/reindex</c>) rather than needing a template change.
+        /// </summary>
+        public int? SeriesId
+        {
+            get; set;
+        }
+
+        public int? OccurrenceIndex
+        {
+            get; set;
+        }
     }
 }

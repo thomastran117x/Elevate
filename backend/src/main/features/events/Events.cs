@@ -81,6 +81,39 @@ public class Events
     /// </summary>
     public int WaitlistCount { get; set; } = 0;
 
+    /// <summary>
+    /// The recurrence series this event is an occurrence of, or null for a standalone event.
+    /// Held as a bare scalar FK with no navigation property: adding one would force an
+    /// Include into all five query paths in EventsRepository and enlarge the Redis payload,
+    /// for data the read path never needs joined.
+    /// </summary>
+    public int? SeriesId
+    {
+        get; set;
+    }
+
+    /// <summary>Zero-based position within <see cref="SeriesId"/>'s generated sequence.</summary>
+    public int? OccurrenceIndex
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Set once this occurrence has been edited on its own. "Update all future occurrences"
+    /// skips overridden rows by default so a deliberate one-off tweak is not silently undone.
+    /// </summary>
+    public bool SeriesOverridden { get; set; } = false;
+
+    /// <summary>
+    /// IANA time zone the event's wall-clock time is anchored to, denormalized from the series
+    /// at generation time. Null for events created before recurrence existed, which retain the
+    /// codebase's older "UTC by assumption" behaviour.
+    /// </summary>
+    public string? TimeZoneId
+    {
+        get; set;
+    }
+
     // Navigation
     public ICollection<EventImage> Images { get; set; } = new List<EventImage>();
 }

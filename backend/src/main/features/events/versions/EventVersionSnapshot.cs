@@ -68,4 +68,22 @@ public sealed class EventVersionSnapshot
         get; init;
     }
     public List<string> Tags { get; init; } = new();
+
+    /// <summary>Absent from older snapshots; deserializes to null, the correct default.</summary>
+    public int? SeriesId
+    {
+        get; init;
+    }
+
+    /// <summary>Absent from older snapshots; deserializes to null, the correct default.</summary>
+    public int? OccurrenceIndex
+    {
+        get; init;
+    }
+
+    /// <summary>Absent from older snapshots; deserializes to false, the correct default.</summary>
+    public bool SeriesOverridden
+    {
+        get; init;
+    }
 }

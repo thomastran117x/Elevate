@@ -10,6 +10,9 @@ using backend.main.features.events.registration;
 using backend.main.features.events.registration.contracts.requests;
 using backend.main.features.events.registration.contracts.responses;
 using backend.main.features.events.search;
+using backend.main.features.events.series;
+using backend.main.features.events.series.contracts.requests;
+using backend.main.features.events.series.contracts.responses;
 using backend.main.features.events.waitlist;
 using backend.main.features.events.waitlist.contracts.requests;
 using backend.main.features.events.waitlist.contracts.responses;
@@ -78,6 +81,20 @@ public sealed class DisabledEventWaitlistService : IEventWaitlistService
     public Task RemoveEntryAsync(int eventId, int entryId, int actorUserId, string actorRole) => Task.FromException(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsWaitlist));
     public Task<IReadOnlyList<WaitlistedEventResponse>> GetMyWaitlistsAsync(int userId, string userRole) => Task.FromException<IReadOnlyList<WaitlistedEventResponse>>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsWaitlist));
     public Task<WaitlistPromotionResultResponse> PromoteNextAsync(int eventId, int actorUserId, string actorRole) => Task.FromException<WaitlistPromotionResultResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsWaitlist));
+}
+
+public sealed class DisabledEventSeriesService : IEventSeriesService
+{
+    public Task<EventSeriesPreviewResponse> PreviewAsync(int clubId, int userId, string userRole, EventRecurrenceRuleRequest rule) => Task.FromException<EventSeriesPreviewResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRecurrence));
+    public Task<EventSeriesResponse> CreateFromDraftAsync(int templateEventId, int userId, string userRole, CreateEventSeriesRequest request) => Task.FromException<EventSeriesResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRecurrence));
+    public Task<EventSeriesResponse> GetAsync(int seriesId, int userId, string userRole) => Task.FromException<EventSeriesResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRecurrence));
+    public Task<(IReadOnlyList<EventSeriesSummaryResponse> Series, int TotalCount)> GetByClubAsync(int clubId, int userId, string userRole, int page, int pageSize) => Task.FromException<(IReadOnlyList<EventSeriesSummaryResponse>, int)>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRecurrence));
+    public Task<EventSeriesResponse> ExtendAsync(int seriesId, int userId, string userRole, ExtendEventSeriesRequest request) => Task.FromException<EventSeriesResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRecurrence));
+    public Task<EventSeriesBulkResultResponse> PublishAsync(int seriesId, int userId, string userRole) => Task.FromException<EventSeriesBulkResultResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRecurrence));
+    public Task<EventSeriesBulkResultResponse> UpdateFutureOccurrencesAsync(int seriesId, int userId, string userRole, UpdateFutureOccurrencesRequest request) => Task.FromException<EventSeriesBulkResultResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRecurrence));
+    public Task<EventSeriesBulkResultResponse> CancelAsync(int seriesId, int userId, string userRole, CancelEventSeriesRequest request) => Task.FromException<EventSeriesBulkResultResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRecurrence));
+    public Task<EventSeriesBulkResultResponse> DeleteAsync(int seriesId, int userId, string userRole, DeleteEventSeriesRequest request) => Task.FromException<EventSeriesBulkResultResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRecurrence));
+    public Task<Events> DetachOccurrenceAsync(int eventId, int userId, string userRole) => Task.FromException<Events>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRecurrence));
 }
 
 /// <summary>
