@@ -74,6 +74,67 @@ describe('normalizeClubInvitationLink', () => {
   });
 });
 
+describe('camelCase precedence', () => {
+  it('prefers the camelCase key on an invitation and a link', () => {
+    expect(
+      normalizeClubMemberInvitation({
+        clubId: 2,
+        ClubId: 99,
+        recipientUserId: 5,
+        recipientEmail: 'member@example.com',
+        createdAtUtc: 'a',
+        expiresAtUtc: 'b',
+      }),
+    ).toEqual(jasmine.objectContaining({ clubId: 2, recipientUserId: 5 }));
+
+    expect(
+      normalizeClubInvitationLink({
+        id: 11,
+        clubId: 2,
+        shareUrl: 'https://e/x',
+        expiresAt: 'a',
+        maxRedemptions: 25,
+        redemptionCount: 4,
+        isRevoked: true,
+        revokedAtUtc: 'b',
+        createdAt: 'c',
+        updatedAt: 'd',
+      }),
+    ).toEqual(
+      jasmine.objectContaining({
+        id: 11,
+        shareUrl: 'https://e/x',
+        maxRedemptions: 25,
+        isRevoked: true,
+      }),
+    );
+  });
+
+  it('prefers the camelCase key on a resolve payload and its nested club', () => {
+    const result = normalizeClubMemberInvitationResolve({
+      state: 'Pending',
+      source: 'DirectInvite',
+      requiresAuthentication: true,
+      canAccept: true,
+      canDecline: true,
+      expiresAtUtc: 'a',
+      club: { id: 2, name: 'Camel', clubImage: 'c.png' },
+    });
+
+    expect(result.source).toBe('DirectInvite');
+    expect(result.canDecline).toBeTrue();
+    expect(result.club).toEqual({ id: 2, name: 'Camel', clubImage: 'c.png' });
+  });
+
+  it('defaults a nested club that carries nothing', () => {
+    expect(normalizeClubMemberInvitationResolve({ Club: {} }).club).toEqual({
+      id: 0,
+      name: '',
+      clubImage: '',
+    });
+  });
+});
+
 describe('normalizeClubMemberInvitationResolve', () => {
   it('normalizes the nested club summary and carries the source through', () => {
     const result = normalizeClubMemberInvitationResolve({

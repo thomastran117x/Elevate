@@ -334,6 +334,87 @@ describe('ClubManagementService', () => {
     });
   });
 
+  describe('camelCase and empty envelopes', () => {
+    // Every method unwraps `data ?? Data ?? null`; these walk the camelCase arm and the
+    // null arm that the PascalCase specs above never reach.
+    const cases: Array<[string, () => void, string, 'list' | 'single']> = [
+      ['managed clubs', () => service.getManagedClubs().subscribe(), `${base}/managed`, 'list'],
+      ['staff', () => service.getStaff(1).subscribe(), `${base}/1/staff`, 'list'],
+      [
+        'staff invitations',
+        () => service.getStaffInvitations(1).subscribe(),
+        `${base}/1/staff/invitations`,
+        'list',
+      ],
+      [
+        'member invitations',
+        () => service.getMemberInvitations(1).subscribe(),
+        `${base}/1/members/invitations`,
+        'list',
+      ],
+      [
+        'invite links',
+        () => service.getMemberInviteLinks(1).subscribe(),
+        `${base}/1/members/invitation-links`,
+        'list',
+      ],
+      ['members page', () => service.getMembers(1).subscribe(), `${base}/1/members`, 'single'],
+      ['versions page', () => service.getVersions(1).subscribe(), `${base}/1/versions`, 'single'],
+      [
+        'version detail',
+        () => service.getVersion(1, 3).subscribe(),
+        `${base}/1/versions/3`,
+        'single',
+      ],
+      [
+        'rollback',
+        () => service.rollback(1, 3).subscribe(),
+        `${base}/1/versions/3/rollback`,
+        'single',
+      ],
+      [
+        'analytics',
+        () => service.getAnalytics(1).subscribe(),
+        `${environment.backendUrl}/events/clubs/1/analytics`,
+        'single',
+      ],
+      [
+        'invite member',
+        () => service.inviteMember(1, 'jamie').subscribe(),
+        `${base}/1/members/invitations`,
+        'single',
+      ],
+      [
+        'invite staff',
+        () => service.inviteStaff(1, 'jamie', 'Manager').subscribe(),
+        `${base}/1/staff/invitations`,
+        'single',
+      ],
+      [
+        'revoke link',
+        () => service.revokeMemberInviteLink(1, 2).subscribe(),
+        `${base}/1/members/invitation-links/2/revoke`,
+        'single',
+      ],
+    ];
+
+    for (const [label, call, url, shape] of cases) {
+      it(`reads ${label} from the camelCase data key`, () => {
+        call();
+
+        httpMock
+          .expectOne((req) => req.url === url)
+          .flush(envelope(shape === 'list' ? [{ id: 1 }] : { id: 1 }));
+      });
+
+      it(`tolerates an empty ${label} envelope`, () => {
+        call();
+
+        httpMock.expectOne((req) => req.url === url).flush(envelope(null));
+      });
+    }
+  });
+
   it('surfaces a 4xx as a typed client error', () => {
     let thrown: unknown;
     service.inviteStaff(1, 'nobody', 'Manager').subscribe({ error: (e) => (thrown = e) });

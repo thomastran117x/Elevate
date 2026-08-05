@@ -32,14 +32,15 @@ module.exports = function (config) {
       dir: require('path').join(__dirname, './coverage'),
       subdir: '.',
       reporters: [{ type: 'html' }, { type: 'text-summary' }, { type: 'lcovonly' }],
-      // Report-only for now. Raise these to a floor once the baseline is stable —
-      // see the Frontend section of docs/COVERAGE_ROADMAP.md.
+      // Enforced floor, matching the backend's gate. Karma instruments only the files a
+      // spec reaches, so covering a new area can move the ratio either way — see the
+      // Frontend section of docs/COVERAGE_ROADMAP.md before changing these.
       check: {
         global: {
-          statements: 0,
-          lines: 0,
-          branches: 0,
-          functions: 0,
+          statements: 90,
+          lines: 90,
+          branches: 90,
+          functions: 90,
         },
       },
     },

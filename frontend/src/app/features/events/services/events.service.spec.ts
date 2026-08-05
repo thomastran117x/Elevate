@@ -363,4 +363,268 @@ describe('EventsService', () => {
     expect(thrown).toEqual(jasmine.any(ApiClientServerError));
     expect((thrown as ApiClientServerError).message).toBe(GENERIC_API_ERROR_MESSAGE);
   });
+
+  describe('camelCase payloads', () => {
+    it('prefers the camelCase key wherever both casings are present', () => {
+      let data: unknown;
+      service.getEvents({}).subscribe((response) => (data = response.data));
+
+      httpMock
+        .expectOne((req) => req.url.endsWith('/events'))
+        .flush({
+          success: true,
+          message: 'ok',
+          data: {
+            items: [
+              {
+                id: 1,
+                Id: 99,
+                name: 'Camel',
+                Name: 'Pascal',
+                description: 'desc',
+                location: 'loc',
+                imageUrls: ['a.png'],
+                isPrivate: true,
+                maxParticipants: 40,
+                registerCost: 10,
+                startTime: '2026-09-01T18:00:00Z',
+                endTime: '2026-09-01T21:00:00Z',
+                clubId: 3,
+                createdAt: '2026-08-01T00:00:00Z',
+                lifecycleState: 'Published',
+                status: 'Ongoing',
+                category: 'Music',
+                venueName: 'Hall',
+                city: 'Ottawa',
+                latitude: 45,
+                longitude: -75,
+                tags: ['free'],
+                registrationCount: 5,
+                waitlistEnabled: true,
+                waitlistCount: 2,
+                distanceKm: 1.5,
+                club: {
+                  id: 3,
+                  name: 'Robotics',
+                  description: 'Build robots',
+                  clubType: 'Academic',
+                  clubImage: 'c.png',
+                  memberCount: 10,
+                  eventCount: 2,
+                  availableEventCount: 1,
+                  isPrivate: false,
+                  email: 'c@example.com',
+                  phone: '555',
+                  rating: 4.5,
+                  websiteUrl: 'https://c',
+                  location: 'Ottawa',
+                },
+              },
+            ],
+            totalCount: 1,
+            page: 2,
+            pageSize: 5,
+            totalPages: 1,
+          },
+          error: null,
+          meta: { source: 'elasticsearch' },
+        });
+
+      expect(data).toEqual(
+        jasmine.objectContaining({ totalCount: 1, page: 2, pageSize: 5, totalPages: 1 }),
+      );
+      const item = (data as { items: Record<string, unknown>[] }).items[0];
+      expect(item['id']).toBe(1);
+      expect(item['name']).toBe('Camel');
+      expect(item['distanceKm']).toBe(1.5);
+      expect(item['club']).toEqual(
+        jasmine.objectContaining({ id: 3, clubType: 'Academic', availableEventCount: 1 }),
+      );
+    });
+
+    it('reads the legacy misspelled AvaliableEventCount on the host club', () => {
+      let data: unknown;
+      service.getEvent(1).subscribe((response) => (data = response.data));
+
+      httpMock
+        .expectOne((req) => req.url.endsWith('/events/1'))
+        .flush({
+          Success: true,
+          Message: 'ok',
+          Data: { Id: 1, Club: { Id: 3, AvaliableEventCount: 7, Clubtype: 'Gaming' } },
+        });
+
+      expect((data as { club: { availableEventCount: number; clubType: string } }).club).toEqual(
+        jasmine.objectContaining({ availableEventCount: 7, clubType: 'Gaming' }),
+      );
+    });
+
+    it('defaults every field of a bare event payload', () => {
+      let data: Record<string, unknown> | null = null;
+      service.getEvent(1).subscribe((response) => (data = response.data as never));
+
+      httpMock
+        .expectOne((req) => req.url.endsWith('/events/1'))
+        .flush({
+          success: true,
+          message: 'ok',
+          data: {},
+          error: null,
+          meta: null,
+        });
+
+      expect(data).toEqual(
+        jasmine.objectContaining({
+          id: 0,
+          name: '',
+          description: '',
+          location: '',
+          imageUrls: [],
+          isPrivate: false,
+          maxParticipants: 0,
+          registerCost: 0,
+          startTime: '',
+          clubId: 0,
+          createdAt: '',
+          lifecycleState: 'Published',
+          status: 'Upcoming',
+          category: 'Other',
+          tags: [],
+          registrationCount: 0,
+          waitlistEnabled: false,
+          waitlistCount: 0,
+          club: undefined,
+        }),
+      );
+    });
+
+    it('defaults the paging metadata of a bare page payload', () => {
+      let data: unknown;
+      service.getEvents({}).subscribe((response) => (data = response.data));
+
+      httpMock
+        .expectOne((req) => req.url.endsWith('/events'))
+        .flush({
+          success: true,
+          message: 'ok',
+          data: {},
+          error: null,
+          meta: null,
+        });
+
+      expect(data).toEqual({ items: [], totalCount: 0, page: 1, pageSize: 20, totalPages: 0 });
+    });
+
+    it('leaves data null when the envelope carries none', () => {
+      let data: unknown = 'untouched';
+      service.getEvents({}).subscribe((response) => (data = response.data));
+
+      httpMock
+        .expectOne((req) => req.url.endsWith('/events'))
+        .flush({ success: true, message: 'ok', data: null, error: null, meta: null });
+
+      expect(data).toBeNull();
+    });
+
+    it('falls back for out-of-range numeric enums', () => {
+      let data: Record<string, unknown> | null = null;
+      service.getEvent(1).subscribe((response) => (data = response.data as never));
+
+      httpMock
+        .expectOne((req) => req.url.endsWith('/events/1'))
+        .flush({
+          success: true,
+          message: 'ok',
+          data: { Id: 1, Status: 99, LifecycleState: 99, Category: 99, Club: { Clubtype: 99 } },
+          error: null,
+          meta: null,
+        });
+
+      expect(data).toEqual(
+        jasmine.objectContaining({
+          status: 'Upcoming',
+          lifecycleState: 'Published',
+          category: 'Other',
+        }),
+      );
+      expect((data as unknown as { club: { clubType: string } }).club.clubType).toBe('Other');
+    });
+
+    it('falls back for unrecognized string enums', () => {
+      let data: Record<string, unknown> | null = null;
+      service.getEvent(1).subscribe((response) => (data = response.data as never));
+
+      httpMock
+        .expectOne((req) => req.url.endsWith('/events/1'))
+        .flush({
+          success: true,
+          message: 'ok',
+          data: {
+            Id: 1,
+            Status: 'Vibes',
+            LifecycleState: 'Zombie',
+            Category: 'Interpretive Dance',
+            Club: { Clubtype: 'Underwater Basketry' },
+          },
+          error: null,
+          meta: null,
+        });
+
+      expect(data).toEqual(
+        jasmine.objectContaining({
+          status: 'Upcoming',
+          lifecycleState: 'Published',
+          category: 'Other',
+        }),
+      );
+      expect((data as unknown as { club: { clubType: string } }).club.clubType).toBe('Other');
+    });
+  });
+
+  describe('getEventsByClub', () => {
+    it('serializes only the filters that are set', () => {
+      service
+        .getEventsByClub(3, { status: 'Upcoming', page: 2, pageSize: 5, search: '  robotics  ' })
+        .subscribe();
+
+      const request = httpMock.expectOne((req) => req.url.endsWith('/events/clubs/3'));
+      expect(request.request.method).toBe('GET');
+      expect(request.request.params.get('status')).toBe('Upcoming');
+      expect(request.request.params.get('page')).toBe('2');
+      expect(request.request.params.get('pageSize')).toBe('5');
+      expect(request.request.params.get('search')).toBe('robotics');
+      request.flush({ success: true, message: 'ok', data: null, error: null, meta: null });
+    });
+
+    it('omits blank, zero and absent filters', () => {
+      service.getEventsByClub(3, { page: 0, pageSize: 0, search: '   ' }).subscribe();
+
+      const request = httpMock.expectOne((req) => req.url.endsWith('/events/clubs/3'));
+      expect(request.request.params.keys()).toEqual([]);
+      request.flush({ success: true, message: 'ok', data: null, error: null, meta: null });
+    });
+
+    it('defaults to no filters at all', () => {
+      service.getEventsByClub(3).subscribe();
+
+      const request = httpMock.expectOne((req) => req.url.endsWith('/events/clubs/3'));
+      expect(request.request.params.keys()).toEqual([]);
+      request.flush({ success: true, message: 'ok', data: null, error: null, meta: null });
+    });
+
+    it('normalizes the page it gets back', () => {
+      let data: unknown;
+      service.getEventsByClub(3).subscribe((response) => (data = response.data));
+
+      httpMock
+        .expectOne((req) => req.url.endsWith('/events/clubs/3'))
+        .flush({
+          Success: true,
+          Message: 'ok',
+          Data: { Items: [{ Id: 5, Name: 'Kickoff' }], TotalCount: 1 },
+        });
+
+      expect((data as { items: { id: number }[] }).items[0].id).toBe(5);
+    });
+  });
 });

@@ -145,4 +145,159 @@ describe('EventWaitlistService', () => {
 
     expect(count).toBe(1);
   });
+
+  describe('PascalCase and empty payloads', () => {
+    it('reads a PascalCase roster and total count', () => {
+      let total = 0;
+      let entries: Record<string, unknown>[] = [];
+      service.getEventWaitlist(42).subscribe((page) => {
+        total = page.totalCount;
+        entries = page.entries as never;
+      });
+
+      const request = httpMock.expectOne((r) => r.url.includes('/events/42/waitlist'));
+      expect(request.request.params.get('page')).toBe('1');
+      expect(request.request.params.get('pageSize')).toBe('20');
+      // Note the envelope key stays lowercase `meta` — only the fields inside it are
+      // read in either casing.
+      request.flush({
+        Data: [{ Id: 1, EventId: 42, UserId: 5, Position: 1, UserName: 'Jamie' }],
+        meta: { TotalCount: 3 },
+      });
+
+      expect(total).toBe(3);
+      expect(entries[0]).toEqual(
+        jasmine.objectContaining({ id: 1, eventId: 42, userId: 5, userName: 'Jamie' }),
+      );
+    });
+
+    it('falls back to the entry count when meta carries no total', () => {
+      let total = -1;
+      service.getEventWaitlist(42).subscribe((page) => (total = page.totalCount));
+
+      httpMock
+        .expectOne((r) => r.url.includes('/events/42/waitlist'))
+        .flush({ data: [{ id: 1 }, { id: 2 }] });
+
+      expect(total).toBe(2);
+    });
+
+    it('yields an empty roster when the envelope carries no data', () => {
+      let total = -1;
+      let entries = -1;
+      service.getEventWaitlist(42).subscribe((page) => {
+        total = page.totalCount;
+        entries = page.entries.length;
+      });
+
+      httpMock.expectOne((r) => r.url.includes('/events/42/waitlist')).flush({ data: null });
+
+      expect(entries).toBe(0);
+      expect(total).toBe(0);
+    });
+
+    it('defaults every entry field for a bare payload', () => {
+      let entry: Record<string, unknown> | undefined;
+      service.getEventWaitlist(42).subscribe((page) => (entry = page.entries[0] as never));
+
+      httpMock.expectOne((r) => r.url.includes('/events/42/waitlist')).flush({ data: [{}] });
+
+      expect(entry).toEqual({
+        id: 0,
+        eventId: 0,
+        userId: 0,
+        position: 0,
+        status: 'Waiting',
+        joinedAtUtc: '',
+        promotedAtUtc: null,
+        leftAtUtc: null,
+        removedAtUtc: null,
+        userName: null,
+        userEmail: null,
+        notes: null,
+        phoneNumber: null,
+        dietaryNeeds: null,
+      });
+    });
+
+    it('reads a PascalCase promotion result', () => {
+      let result: { promotedCount: number; promotedUserIds: number[] } | undefined;
+      service.promoteNext(42).subscribe((value) => (result = value));
+
+      httpMock
+        .expectOne((r) => r.url.includes('/events/42/waitlist/promote'))
+        .flush({ Data: { PromotedCount: 3, PromotedUserIds: [1, 2, 3] } });
+
+      expect(result).toEqual({ promotedCount: 3, promotedUserIds: [1, 2, 3] });
+    });
+
+    it('defaults a promotion result with no payload', () => {
+      let result: { promotedCount: number; promotedUserIds: number[] } | undefined;
+      service.promoteNext(42).subscribe((value) => (result = value));
+
+      httpMock
+        .expectOne((r) => r.url.includes('/events/42/waitlist/promote'))
+        .flush({ data: null });
+
+      expect(result).toEqual({ promotedCount: 0, promotedUserIds: [] });
+    });
+
+    it('reads a PascalCase list of my waitlisted events', () => {
+      let items: Record<string, unknown>[] = [];
+      service.getMine().subscribe((value) => (items = value as never));
+
+      httpMock
+        .expectOne((r) => r.url.includes('/events/me/waitlisted'))
+        .flush({
+          Data: [
+            {
+              EntryId: 9,
+              Position: 3,
+              JoinedAtUtc: 'then',
+              AccessRevoked: true,
+              Event: { id: 42 },
+            },
+          ],
+        });
+
+      expect(items[0]).toEqual(
+        jasmine.objectContaining({
+          entryId: 9,
+          position: 3,
+          joinedAtUtc: 'then',
+          accessRevoked: true,
+        }),
+      );
+    });
+
+    it('defaults my waitlisted entries and tolerates an empty envelope', () => {
+      let items: Record<string, unknown>[] = [];
+      service.getMine().subscribe((value) => (items = value as never));
+      httpMock.expectOne((r) => r.url.includes('/events/me/waitlisted')).flush({ data: [{}] });
+      expect(items[0]).toEqual(
+        jasmine.objectContaining({
+          entryId: 0,
+          position: 0,
+          joinedAtUtc: '',
+          accessRevoked: false,
+        }),
+      );
+
+      service.getMine().subscribe((value) => (items = value as never));
+      httpMock.expectOne((r) => r.url.includes('/events/me/waitlisted')).flush({ data: null });
+      expect(items).toEqual([]);
+    });
+
+    it('removes an entry', () => {
+      let completed = false;
+      service.removeEntry(42, 9).subscribe(() => (completed = true));
+
+      const request = httpMock.expectOne((r) => r.url.includes('/events/42/waitlist/9'));
+      expect(request.request.method).toBe('DELETE');
+      expect(request.request.withCredentials).toBeTrue();
+      request.flush({ data: null });
+
+      expect(completed).toBeTrue();
+    });
+  });
 });

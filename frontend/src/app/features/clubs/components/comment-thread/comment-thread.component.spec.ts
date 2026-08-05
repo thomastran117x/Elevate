@@ -100,6 +100,87 @@ describe('CommentThreadComponent', () => {
       expect(component.loadError).toBe('Comments are unavailable.');
       expect(component.loading).toBeFalse();
     });
+
+    it('reads a PascalCase failure message', () => {
+      commentsService.getComments.and.returnValue(
+        throwError(() => ({ error: { Message: 'Comments are unavailable.' } })),
+      );
+
+      fixture.detectChanges();
+
+      expect(component.loadError).toBe('Comments are unavailable.');
+    });
+
+    it('falls back to a generic load message', () => {
+      commentsService.getComments.and.returnValue(throwError(() => ({})));
+
+      fixture.detectChanges();
+
+      expect(component.loadError).toBe('Failed to load comments.');
+    });
+
+    it('leaves the list untouched when the envelope carries no data', () => {
+      commentsService.getComments.and.returnValue(of(envelope<PostCommentsPagedData>(null)));
+
+      fixture.detectChanges();
+
+      expect(component.comments).toEqual([]);
+      expect(component.loading).toBeFalse();
+    });
+
+    it('ignores a created comment the API did not return', () => {
+      fixture.detectChanges();
+      commentsService.createComment.and.returnValue(of(envelope<PostComment>(null)));
+      component.newCommentText = 'Fresh';
+
+      component.submitComment();
+
+      expect(component.comments.length).toBe(1);
+      expect(component.newCommentText).toBe('');
+    });
+
+    it('ignores an edit the API did not return', () => {
+      fixture.detectChanges();
+      commentsService.updateComment.and.returnValue(of(envelope<PostComment>(null)));
+      component.startEdit(component.comments[0]);
+      component.editText = 'Edited';
+
+      component.saveEdit(component.comments[0]);
+
+      expect(component.comments[0].content).toBe('Nice one');
+      expect(component.editingId).toBeNull();
+    });
+  });
+
+  describe('generic failure messages', () => {
+    beforeEach(() => fixture.detectChanges());
+
+    it('falls back when posting fails with no body', () => {
+      commentsService.createComment.and.returnValue(throwError(() => ({})));
+      component.newCommentText = 'Fresh';
+
+      component.submitComment();
+
+      expect(component.submitError).toBe('Failed to post comment.');
+    });
+
+    it('falls back when an edit fails with no body', () => {
+      commentsService.updateComment.and.returnValue(throwError(() => ({})));
+      component.startEdit(component.comments[0]);
+      component.editText = 'Edited';
+
+      component.saveEdit(component.comments[0]);
+
+      expect(component.submitError).toBe('Failed to update comment.');
+    });
+
+    it('falls back when a delete fails with no body', () => {
+      commentsService.deleteComment.and.returnValue(throwError(() => ({})));
+
+      component.deleteComment(1);
+
+      expect(component.submitError).toBe('Failed to delete comment.');
+    });
   });
 
   describe('loadMore', () => {

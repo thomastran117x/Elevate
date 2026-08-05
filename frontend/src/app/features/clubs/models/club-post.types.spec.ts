@@ -23,6 +23,16 @@ describe('normalizeAuthor', () => {
     expect(normalizeAuthor(null)).toBeNull();
     expect(normalizeAuthor(undefined)).toBeNull();
   });
+
+  it('prefers the camelCase key when both casings are present', () => {
+    expect(
+      normalizeAuthor({ id: 1, Id: 99, name: 'Camel', Name: 'Pascal', username: 'c', avatar: 'a' }),
+    ).toEqual({ id: 1, name: 'Camel', username: 'c', avatar: 'a' });
+  });
+
+  it('defaults an author object that carries nothing', () => {
+    expect(normalizeAuthor({})).toEqual({ id: 0, name: null, username: null, avatar: null });
+  });
 });
 
 describe('normalizePostType', () => {
@@ -85,6 +95,28 @@ describe('normalizeClubPost', () => {
     expect(result.postType).toBe('General');
     expect(result.isPinned).toBeFalse();
     expect(result.author).toBeNull();
+  });
+
+  it('prefers the camelCase key when both casings are present', () => {
+    expect(
+      normalizeClubPost({
+        id: 1,
+        Id: 99,
+        clubId: 2,
+        userId: 3,
+        title: 'Camel',
+        Title: 'Pascal',
+        content: 'c',
+        postType: 'Poll',
+        likesCount: 7,
+        viewCount: 42,
+        isPinned: true,
+        createdAt: 'a',
+        updatedAt: 'b',
+      }),
+    ).toEqual(
+      jasmine.objectContaining({ id: 1, title: 'Camel', postType: 'Poll', isPinned: true }),
+    );
   });
 });
 

@@ -45,7 +45,8 @@ The filtered metric excludes:
 
 ## Current State
 
-- Enforced target: **none yet** — coverage is measured and reported, not gated
+- Enforced target: `90%` statements, lines, branches and functions
+- Enforced by `coverageReporter.check.global` in `frontend/karma.conf.js`; the build exits non-zero when any metric drops below its floor
 - Measurement command:
 
 ```powershell
@@ -54,33 +55,29 @@ npm run generate:env
 npm test -- --watch=false --browsers=ChromeHeadlessCI --code-coverage
 ```
 
-- Baseline measured when reporting was introduced (520 specs):
+- Current state (819 specs):
 
-| Metric | Baseline |
-| --- | --- |
-| Statements | `78.44%` (2257 / 2877) |
-| Branches | `77.01%` (1749 / 2271) |
-| Functions | `81.55%` (774 / 949) |
-| Lines | `78.67%` (2154 / 2738) |
+| Metric | Covered | Floor |
+| --- | --- | --- |
+| Statements | `93.04%` (2677 / 2877) | `90%` |
+| Branches | `91.67%` (2082 / 2271) | `90%` |
+| Functions | `92.83%` (881 / 949) | `90%` |
+| Lines | `92.98%` (2546 / 2738) | `90%` |
+
+For reference, the baseline when coverage reporting was first introduced was `78.67%` lines / `77.01%` branches across 520 specs.
 
 CI runs the same command and uploads `frontend/coverage/` as the `frontend-coverage` artifact; the `text-summary` reporter also prints these numbers into the job log.
 
 ## Coverage Scope
 
-Karma instruments only the files reachable from a spec, so the denominator grows as new areas gain their first test. A percentage that dips after adding specs for a previously untested area is expected and is not a regression — compare absolute covered lines as well as the ratio.
+Karma instruments only the files reachable from a spec, so **the denominator grows as new areas gain their first test**. Adding a spec for a previously untested area pulls that whole file into the count, which can push the ratio down even though absolute coverage went up. When a percentage drops, compare covered counts as well as the ratio before treating it as a regression.
 
 `src/testing/**` is excluded via `codeCoverageExclude` in `angular.json`.
-
-## Ratchet Plan
-
-`frontend/karma.conf.js` already carries a `coverageReporter.check.global` block with every threshold at `0`. Raising those values is the single change needed to turn reporting into a gate.
-
-1. Report-only (current) — establish a stable baseline across a few PRs.
-2. Set a floor comfortably below the baseline (around `70%` statements/lines) so the gate catches removals rather than blocking ordinary work.
-3. Raise the floor as untested areas gain specs, matching how the backend reached its `90.00%` gate.
 
 ## Working Guidance
 
 - new services, guards, interceptors and normalizers ship with a spec (see `docs/TESTING.md`)
 - prefer specs on pure normalizers and core infrastructure — highest coverage per line and the likeliest silent regressions
+- for anything reading the dual camelCase/PascalCase contract, cover both casings plus the empty payload; those `??` chains are most of the branch count
 - large presentational components are deliberately low priority; `should create` stubs inflate the number without catching anything
+- raise the floors when the margin above them grows comfortable, the same ratchet the backend used to reach `90.00%`

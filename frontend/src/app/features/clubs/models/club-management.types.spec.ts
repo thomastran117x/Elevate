@@ -67,6 +67,132 @@ describe('normalizeClubStaff', () => {
   });
 });
 
+describe('camelCase precedence', () => {
+  it('prefers the camelCase key on a member', () => {
+    expect(
+      normalizeClubMember({
+        id: 1,
+        Id: 99,
+        userId: 2,
+        clubId: 3,
+        createdAt: '2026-01-01T00:00:00Z',
+        name: 'Camel',
+        username: 'camel',
+        avatar: 'a.png',
+      }),
+    ).toEqual({
+      id: 1,
+      userId: 2,
+      clubId: 3,
+      createdAt: '2026-01-01T00:00:00Z',
+      name: 'Camel',
+      username: 'camel',
+      avatar: 'a.png',
+    });
+  });
+
+  it('prefers the camelCase key on a version list item', () => {
+    const result = normalizeClubVersionListItem({
+      versionNumber: 4,
+      VersionNumber: 99,
+      actionType: 'Update',
+      createdAt: '2026-02-01T00:00:00Z',
+      actorUserId: 9,
+      actorRole: 'Owner',
+      rollbackEligible: true,
+      rollbackExpiresAt: '2026-02-08T00:00:00Z',
+      rollbackSourceVersionNumber: 3,
+      changedFields: [{ field: 'name', oldValue: 'Old', newValue: 'New' }],
+      actorName: 'Jamie',
+      actorUsername: 'jrivers',
+      actorAvatar: 'a.png',
+    });
+
+    expect(result.versionNumber).toBe(4);
+    expect(result.actorName).toBe('Jamie');
+    expect(result.changedFields).toEqual([{ field: 'name', oldValue: 'Old', newValue: 'New' }]);
+  });
+
+  it('prefers the camelCase key on a snapshot and a rollback', () => {
+    const detail = normalizeClubVersionDetail({
+      snapshot: {
+        name: 'Camel',
+        description: 'd',
+        clubtype: 'Academic',
+        clubImage: 'c.png',
+        phone: '555',
+        email: 'c@example.com',
+        websiteUrl: 'https://c',
+        location: 'Ottawa',
+        maxMemberCount: 80,
+        isPrivate: true,
+      },
+    });
+
+    expect(detail.snapshot).toEqual(
+      jasmine.objectContaining({ name: 'Camel', phone: '555', location: 'Ottawa' }),
+    );
+
+    const rollback = normalizeClubRollback({
+      club: { id: 5 },
+      restoredFromVersionNumber: 2,
+      newVersionNumber: 6,
+    });
+
+    expect(rollback.club.id).toBe(5);
+    expect(rollback.restoredFromVersionNumber).toBe(2);
+    expect(rollback.newVersionNumber).toBe(6);
+  });
+
+  it('prefers the camelCase key on paged version data', () => {
+    expect(
+      normalizeClubVersionsPagedData({
+        items: [{ versionNumber: 1 }],
+        totalCount: 5,
+        page: 2,
+        pageSize: 10,
+        totalPages: 1,
+      }),
+    ).toEqual(jasmine.objectContaining({ totalCount: 5, page: 2, pageSize: 10, totalPages: 1 }));
+  });
+
+  it('prefers the camelCase key on analytics counters and lists', () => {
+    const result = normalizeClubAnalytics({
+      clubId: 3,
+      totalEvents: 12,
+      topEventsByRegistrations: [
+        { id: 1, name: 'Kickoff', registrationCount: 40, fillRate: 0.9, revenue: 100 },
+      ],
+      registrationTrend: [{ date: '2026-01-01', count: 5 }],
+      revenueTrend: [{ date: '2026-01-01', amount: 250 }],
+    });
+
+    expect(result.clubId).toBe(3);
+    expect(result.topEventsByRegistrations[0]).toEqual({
+      id: 1,
+      name: 'Kickoff',
+      registrationCount: 40,
+      fillRate: 0.9,
+      revenue: 100,
+    });
+    expect(result.registrationTrend).toEqual([{ date: '2026-01-01', value: 5 }]);
+    expect(result.revenueTrend).toEqual([{ date: '2026-01-01', value: 250 }]);
+  });
+
+  it('defaults a trend point that carries neither a date nor a value', () => {
+    const result = normalizeClubAnalytics({ registrationTrend: [{}], revenueTrend: [{}] });
+
+    expect(result.registrationTrend).toEqual([{ date: '', value: 0 }]);
+    expect(result.revenueTrend).toEqual([{ date: '', value: 0 }]);
+  });
+
+  it('defaults a top-event entry that carries nothing', () => {
+    expect(normalizeClubAnalytics({ topEventsByRevenue: [{}] }).topEventsByRevenue).toEqual([
+      { id: 0, name: '', registrationCount: 0, fillRate: 0, revenue: 0 },
+    ]);
+  });
+});
+
 describe('normalizeClubMember', () => {
   it('reads both casings', () => {
     expect(normalizeClubMember({ Id: 1, UserId: 2, ClubId: 3 })).toEqual({

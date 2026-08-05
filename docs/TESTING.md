@@ -110,7 +110,7 @@ npm run generate:env
 npm test -- --watch=false --browsers=ChromeHeadlessCI
 ```
 
-Add `--code-coverage` for an HTML report in `frontend/coverage/` plus a summary in the console. Narrow a run with `--include`:
+Add `--code-coverage` for an HTML report in `frontend/coverage/` plus a summary in the console. **Coverage is gated at 90%** (statements, lines, branches, functions) — with `--code-coverage` the run fails if any metric drops below its floor. See `docs/COVERAGE_ROADMAP.md`. Narrow a run with `--include`:
 
 ```powershell
 npm test -- --watch=false --browsers=ChromeHeadlessCI --include="**/refresh.interceptor.spec.ts"
@@ -139,8 +139,9 @@ Import from `@testing` rather than repeating TestBed boilerplate:
 
 - New services, guards, interceptors and normalizer functions ship with a spec.
 - Assert on the request (URL, method, serialized params, body) and on the normalized result, not on internals.
-- Cover both the camelCase and PascalCase payload shapes for anything with `??` fallback chains — that is where silent regressions hide.
+- Cover both the camelCase and PascalCase payload shapes for anything with `??` fallback chains — that is where silent regressions hide, and those chains are most of the branch count.
 - Call `httpMock.verify()` in `afterEach`.
+- A helper that reconfigures the TestBed for a second time within one spec must call `TestBed.resetTestingModule()` first.
 
 ## Frontend E2E (Playwright)
 
