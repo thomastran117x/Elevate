@@ -318,11 +318,19 @@ public class EventSeriesService : IEventSeriesService
                     "That change would not add any occurrences. Choose a later end date or a higher count.");
             }
 
-            var templateSource = await _db.Events
+            var candidates = await _db.Events
                 .Include(e => e.Images)
                 .Where(e => e.SeriesId == series.Id)
                 .OrderBy(e => e.OccurrenceIndex)
-                .FirstOrDefaultAsync()
+                .ToListAsync();
+
+            // Prefer an occurrence nobody has edited on its own. Cloning an overridden one would
+            // silently propagate a deliberate one-off change — a renamed single week, a moved
+            // venue — into every newly generated date, which is the opposite of what marking it
+            // as an exception is for. Falling back to the first only matters when every surviving
+            // occurrence has been individually edited, and there is nothing cleaner to copy.
+            var templateSource = candidates.FirstOrDefault(e => !e.SeriesOverridden)
+                ?? candidates.FirstOrDefault()
                 ?? throw new ConflictException("This series has no occurrences left to copy from.");
 
             var templateImageUrls = templateSource.Images
@@ -474,6 +482,28 @@ public class EventSeriesService : IEventSeriesService
             var now = GetUtcNow();
             var result = new EventSeriesBulkResultResponse { SeriesId = seriesId };
 
+            var requestedImageUrls = request.ImageUrls?.Take(5).ToList();
+
+            if (requestedImageUrls is not null)
+            {
+                // Same ownership and expiry checks a single-event update runs. Without this a
+                // club manager could attach any known blob URL — including another organizer's —
+                // to every future occurrence in one request. URLs already held by one of these
+                // occurrences are exempt, since re-submitting them is not a new upload.
+                var alreadyAttached = occurrences
+                    .SelectMany(o => o.Images.Select(i => i.ImageUrl))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                await EventImageUploadValidator.ValidateAsync(
+                    _blobService,
+                    _cache,
+                    series.ClubId,
+                    userId,
+                    requestedImageUrls,
+                    eventId: null,
+                    existingUrls: alreadyAttached);
+            }
+
             await using var transaction = await _db.Database.BeginTransactionAsync();
 
             foreach (var occurrence in occurrences)
@@ -503,14 +533,14 @@ public class EventSeriesService : IEventSeriesService
                     result.RetimedWithRegistrations.Add(occurrence.Id);
             }
 
-            if (request.ImageUrls is not null)
+            if (requestedImageUrls is not null)
             {
                 foreach (var eventId in result.AffectedEventIds)
                 {
                     await _imageRepository.DeleteAllByEventIdAsync(eventId);
 
-                    if (request.ImageUrls.Count > 0)
-                        await _imageRepository.AddImagesAsync(eventId, request.ImageUrls.Take(5));
+                    if (requestedImageUrls.Count > 0)
+                        await _imageRepository.AddImagesAsync(eventId, requestedImageUrls);
                 }
             }
 

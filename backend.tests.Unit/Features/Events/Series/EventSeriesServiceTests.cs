@@ -619,6 +619,177 @@ public class EventSeriesServiceTests
     }
 
     [Fact]
+    public async Task ExtendAsync_ShouldNotCloneAnIndividuallyEditedOccurrence()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var series = await harness.CreateSeriesAsync(occurrenceCount: 3);
+
+        // Occurrence 0 gets a one-off change and is marked as an exception.
+        var edited = await harness.OccurrenceAsync(series.Id, index: 0);
+        edited.Name = "One-off special";
+        edited.SeriesOverridden = true;
+        await harness.Db.SaveChangesAsync();
+
+        await harness.Service.ExtendAsync(
+            series.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new ExtendEventSeriesRequest { OccurrenceCount = 5 });
+
+        var generated = await harness.Db.Events
+            .Where(e => e.OccurrenceIndex >= 3)
+            .ToListAsync();
+
+        generated.Should().HaveCount(2);
+
+        // New dates must inherit the series' ordinary details, not the one-off edit.
+        generated.Should().OnlyContain(e => e.Name != "One-off special");
+    }
+
+    [Fact]
+    public async Task ExtendAsync_ShouldFallBackToTheFirstOccurrence_WhenEveryOneHasBeenEdited()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var series = await harness.CreateSeriesAsync(occurrenceCount: 2);
+
+        foreach (var occurrence in await harness.Db.Events.ToListAsync())
+            occurrence.SeriesOverridden = true;
+
+        await harness.Db.SaveChangesAsync();
+
+        var extended = await harness.Service.ExtendAsync(
+            series.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new ExtendEventSeriesRequest { OccurrenceCount = 3 });
+
+        // Nothing cleaner to copy from, but extending must still work rather than fail.
+        extended.Occurrences.Should().HaveCount(3);
+    }
+
+    // ------------------------------------------------------------------ override flag lifecycle
+
+    [Fact]
+    public void ApplySnapshot_ShouldRestoreTheOverrideFlag_SoARolledBackEditRejoinsTheSeries()
+    {
+        // Content before the one-off edit: part of the series, not overridden.
+        var before = EventVersionRecorder.BuildSnapshot(new EventEntity
+        {
+            Name = "Weekly Tabletop",
+            ClubId = 4,
+            SeriesId = 3,
+            OccurrenceIndex = 1,
+            SeriesOverridden = false,
+            Tags = []
+        });
+
+        // The occurrence has since been edited on its own and excluded from series updates.
+        var edited = new EventEntity
+        {
+            Name = "One-off special",
+            ClubId = 4,
+            SeriesId = 3,
+            OccurrenceIndex = 1,
+            SeriesOverridden = true,
+            Tags = []
+        };
+
+        EventVersionRecorder.ApplySnapshot(edited, before);
+
+        edited.Name.Should().Be("Weekly Tabletop");
+        edited.SeriesOverridden.Should().BeFalse(
+            "undoing the edit should put the occurrence back in scope for series-wide updates");
+    }
+
+    [Fact]
+    public void ApplySnapshot_ShouldStillNotRestoreSeriesMembership()
+    {
+        var snapshot = EventVersionRecorder.BuildSnapshot(new EventEntity
+        {
+            ClubId = 4,
+            SeriesId = 3,
+            OccurrenceIndex = 1,
+            Tags = []
+        });
+
+        // The organizer has since detached this occurrence on purpose.
+        var detached = new EventEntity { ClubId = 4, SeriesId = null, OccurrenceIndex = null, Tags = [] };
+
+        EventVersionRecorder.ApplySnapshot(detached, snapshot);
+
+        detached.SeriesId.Should().BeNull("a rollback must not silently re-attach a detached event");
+        detached.OccurrenceIndex.Should().BeNull();
+    }
+
+    // ------------------------------------------------------------------ image validation
+
+    [Fact]
+    public async Task UpdateFutureOccurrencesAsync_ShouldRejectImagesTheOrganizerDidNotUpload()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var series = await harness.CreateSeriesAsync(occurrenceCount: 3);
+        var pivot = await harness.OccurrenceAsync(series.Id, index: 0);
+
+        // A blob URL this service owns but that has no upload intent for this user — the shape
+        // of another organizer's image being pasted in.
+        var act = () => harness.Service.UpdateFutureOccurrencesAsync(
+            series.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new UpdateFutureOccurrencesRequest
+            {
+                FromEventId = pivot.Id,
+                ImageUrls = ["https://blob.test/events/someone-elses.png"]
+            });
+
+        await act.Should().ThrowAsync<BadRequestException>();
+
+        // The whole request is refused, so no occurrence is left half-updated.
+        harness.Db.Events.Should().OnlyContain(e => e.Name == "Weekly Tabletop Night");
+    }
+
+    [Fact]
+    public async Task UpdateFutureOccurrencesAsync_ShouldAcceptAnImageTheOrganizerJustUploaded()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var series = await harness.CreateSeriesAsync(occurrenceCount: 2);
+        var pivot = await harness.OccurrenceAsync(series.Id, index: 0);
+
+        var url = harness.RegisterUploadIntent("https://blob.test/events/mine.png");
+
+        var result = await harness.Service.UpdateFutureOccurrencesAsync(
+            series.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new UpdateFutureOccurrencesRequest { FromEventId = pivot.Id, ImageUrls = [url] });
+
+        result.AffectedCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task UpdateFutureOccurrencesAsync_ShouldAllowResubmittingImagesTheOccurrencesAlreadyHold()
+    {
+        await using var harness = await Harness.CreateAsync();
+
+        // The template's image is already attached, so its upload intent has long since expired.
+        // Re-sending it is not a new upload and must not be rejected.
+        var series = await harness.CreateSeriesAsync(occurrenceCount: 2);
+        var pivot = await harness.OccurrenceAsync(series.Id, index: 0);
+
+        var result = await harness.Service.UpdateFutureOccurrencesAsync(
+            series.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new UpdateFutureOccurrencesRequest
+            {
+                FromEventId = pivot.Id,
+                ImageUrls = ["https://cdn.test/default.png"]
+            });
+
+        result.AffectedCount.Should().Be(2);
+    }
+
+    [Fact]
     public async Task ExtendAsync_ShouldReject_WhenItWouldNotAddAnything()
     {
         await using var harness = await Harness.CreateAsync();
@@ -716,6 +887,9 @@ public class EventSeriesServiceTests
     {
         private readonly SqliteConnection _connection;
 
+        /// <summary>Upload intents keyed exactly as the presigned-URL flow stores them.</summary>
+        private readonly Dictionary<string, string?> _uploadIntents = [];
+
         public AppDatabaseContext Db
         {
             get;
@@ -788,6 +962,15 @@ public class EventSeriesServiceTests
             CacheMock
                 .Setup(cache => cache.IncrementAsync(It.IsAny<string>(), It.IsAny<long>()))
                 .ReturnsAsync(1L);
+
+            // Blob URLs this service issued are recognised, but only the ones registered through
+            // RegisterUploadIntent carry a valid intent — mirroring a real presigned upload.
+            BlobServiceMock
+                .Setup(service => service.IsOwnedBlobUrl(It.IsAny<string>()))
+                .Returns((string url) => url.StartsWith("https://blob.test/", StringComparison.Ordinal));
+            CacheMock
+                .Setup(cache => cache.GetValueAsync(It.IsAny<string>()))
+                .ReturnsAsync((string key) => _uploadIntents.GetValueOrDefault(key));
             BlobServiceMock
                 .Setup(service => service.DeleteBlobAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
@@ -922,6 +1105,27 @@ public class EventSeriesServiceTests
             }
 
             return series;
+        }
+
+        /// <summary>
+        /// Records the upload intent a presigned-URL request would have cached, so the URL
+        /// passes validation as an image this organizer genuinely uploaded for this club.
+        /// </summary>
+        public string RegisterUploadIntent(string publicUrl)
+        {
+            var intent = new
+            {
+                ClubId,
+                EventId = (int?)null,
+                UserId = OwnerUserId,
+                PublicUrl = publicUrl,
+                ContentType = "image/png"
+            };
+
+            _uploadIntents[EventImageUploadValidator.IntentKey(publicUrl)] =
+                System.Text.Json.JsonSerializer.Serialize(intent);
+
+            return publicUrl;
         }
 
         public async Task<EventEntity> OccurrenceAsync(int seriesId, int index) =>

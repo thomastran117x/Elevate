@@ -73,11 +73,16 @@ internal static class EventVersionRecorder
     /// <summary>
     /// Restores field values from a snapshot.
     /// <para>
-    /// Series membership (<c>SeriesId</c>, <c>OccurrenceIndex</c>) is deliberately NOT restored,
-    /// for the same reason <c>LifecycleState</c> isn't: a rollback would otherwise silently
-    /// re-attach an occurrence the organizer had explicitly detached from its series, or renumber
-    /// it into a slot another occurrence now owns. Membership changes only through the explicit
-    /// series endpoints.
+    /// Series <em>membership</em> (<c>SeriesId</c>, <c>OccurrenceIndex</c>) is deliberately NOT
+    /// restored, for the same reason <c>LifecycleState</c> isn't: a rollback would otherwise
+    /// silently re-attach an occurrence the organizer had explicitly detached, or renumber it into
+    /// a slot another occurrence now owns. Membership changes only through the series endpoints.
+    /// </para>
+    /// <para>
+    /// <c>SeriesOverridden</c> <em>is</em> restored, because it describes the content rather than
+    /// the membership: it means "this occurrence has been changed away from what the series
+    /// generates". Rolling that change back should put the occurrence back in scope for
+    /// series-wide updates, otherwise undoing a one-off edit would leave it excluded forever.
     /// </para>
     /// </summary>
     internal static void ApplySnapshot(Events ev, EventVersionSnapshot snapshot)
@@ -99,6 +104,7 @@ internal static class EventVersionRecorder
         ev.Latitude = snapshot.Latitude;
         ev.Longitude = snapshot.Longitude;
         ev.Tags = snapshot.Tags.ToList();
+        ev.SeriesOverridden = snapshot.SeriesOverridden;
     }
 
     internal static List<EventVersionFieldChange> BuildChangedFields(

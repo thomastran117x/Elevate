@@ -1,6 +1,6 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import { ManageEventEditorComponent } from './manage-event-editor.component';
 import { EventsManagementService } from '../../services/events-management.service';
@@ -276,6 +276,65 @@ describe('ManageEventEditorComponent', () => {
 
       expect(component.occurrenceLabel).toContain('Occurrence 3');
     });
+  });
+
+  describe('recurrence preview resilience', () => {
+    it('keeps previewing after a rejected rule', fakeAsync(() => {
+      setup({ clubId: '4' });
+
+      const goodPreview = {
+        timeZoneId: 'America/New_York',
+        occurrenceCount: 3,
+        occurrences: [],
+        warnings: [],
+      };
+
+      // First rule is rejected by the API, the next one is fine.
+      seriesService.previewSeries.and.returnValues(
+        throwError(() => ({ error: { message: 'Unknown time zone.' } })) as never,
+        of(envelope(goodPreview)) as never,
+      );
+
+      component.recurrenceForm.patchValue({ enabled: true, startLocalDate: '2026-03-03' });
+      tick(400);
+
+      expect(component.previewError).toBe('Unknown time zone.');
+      expect(component.preview).toBeNull();
+
+      // Without catchError inside switchMap the subscription would be dead by now and this
+      // second edit would never reach the service.
+      component.recurrenceForm.patchValue({ occurrenceCount: 4 });
+      tick(400);
+
+      expect(seriesService.previewSeries).toHaveBeenCalledTimes(2);
+      expect(component.previewError).toBe('');
+      expect(component.preview).toEqual(goodPreview as never);
+    }));
+
+    it('clears a stale error once a later rule succeeds', fakeAsync(() => {
+      setup({ clubId: '4' });
+
+      seriesService.previewSeries.and.returnValues(
+        throwError(() => ({ error: { Message: 'Too many occurrences.' } })) as never,
+        of(
+          envelope({
+            timeZoneId: 'UTC',
+            occurrenceCount: 1,
+            occurrences: [],
+            warnings: [],
+          }),
+        ) as never,
+      );
+
+      component.recurrenceForm.patchValue({ enabled: true, startLocalDate: '2026-03-03' });
+      tick(400);
+      expect(component.previewError).toBe('Too many occurrences.');
+
+      component.recurrenceForm.patchValue({ occurrenceCount: 1 });
+      tick(400);
+      expect(component.previewError).toBe('');
+      expect(component.previewing).toBeFalse();
+    }));
   });
 
   describe('series creation availability', () => {

@@ -49,20 +49,11 @@ namespace backend.main.features.events
         private static readonly TimeSpan EventTTL = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan EventListTTL = TimeSpan.FromSeconds(60);
         private static readonly TimeSpan NotFoundTTL = TimeSpan.FromSeconds(15);
-        private static readonly TimeSpan ImageUploadIntentTTL = TimeSpan.FromMinutes(20);
         private static readonly JsonSerializerOptions EventCacheSerializerOptions = new()
         {
             ReferenceHandler = ReferenceHandler.IgnoreCycles
         };
         private const string NullSentinel = "__null__";
-
-        private sealed record EventImageUploadIntent(
-            int ClubId,
-            int? EventId,
-            int UserId,
-            string PublicUrl,
-            string ContentType
-        );
 
         public EventsService(
             AppDatabaseContext db,
@@ -964,6 +955,13 @@ namespace backend.main.features.events
                     var previousSnapshot = BuildSnapshot(ev);
 
                     ApplyBatchPatch(ev, item);
+
+                    // Batch update is another way to edit a single event, so an occurrence
+                    // changed here has to be flagged like any other one-off edit. Without this
+                    // a later "update this and following occurrences" would silently overwrite
+                    // the change, unlike the same edit made through the single-event endpoints.
+                    MarkSeriesOverridden(ev);
+
                     ev.CurrentVersionNumber += 1;
                     ev.UpdatedAt = now;
 
@@ -1251,7 +1249,7 @@ namespace backend.main.features.events
                 var stored = await _cache.SetValueAsync(
                     GetImageUploadIntentKey(result.PublicUrl),
                     JsonSerializer.Serialize(intent),
-                    ImageUploadIntentTTL
+                    EventImageUploadValidator.IntentTtl
                 );
 
                 if (!stored)
@@ -1729,70 +1727,25 @@ namespace backend.main.features.events
             }
         }
 
-        private async Task ValidateUploadedImageUrlsAsync(
+        // Delegates to the shared validator so the recurrence series feature enforces the
+        // identical ownership and expiry checks on images it attaches to occurrences.
+        private Task ValidateUploadedImageUrlsAsync(
             int clubId,
             int userId,
             IEnumerable<string> imageUrls,
             int? eventId = null,
-            ISet<string>? existingUrls = null)
-        {
-            var urls = imageUrls.ToList();
-            foreach (var imageUrl in urls)
-            {
-                if (existingUrls?.Contains(imageUrl) == true)
-                    continue;
+            ISet<string>? existingUrls = null) =>
+            EventImageUploadValidator.ValidateAsync(
+                _blobService,
+                _cache,
+                clubId,
+                userId,
+                imageUrls,
+                eventId,
+                existingUrls);
 
-                await ValidateNewUploadedImageUrlAsync(clubId, userId, imageUrl, eventId);
-            }
-        }
-
-        private async Task ValidateNewUploadedImageUrlAsync(
-            int clubId,
-            int userId,
-            string imageUrl,
-            int? eventId = null)
-        {
-            if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri) ||
-                !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new BadRequestException("Event images must use a valid HTTPS URL.");
-            }
-
-            if (!_blobService.IsOwnedBlobUrl(imageUrl))
-            {
-                throw new BadRequestException(
-                    "Event images must reference uploads issued by this service.");
-            }
-
-            var intentPayload = await _cache.GetValueAsync(GetImageUploadIntentKey(imageUrl));
-            if (intentPayload == null)
-            {
-                throw new BadRequestException(
-                    "Image upload is invalid or expired. Please upload the image again.");
-            }
-
-            var intent = JsonSerializer.Deserialize<EventImageUploadIntent>(intentPayload);
-            if (intent == null ||
-                intent.UserId != userId ||
-                intent.ClubId != clubId ||
-                !string.Equals(intent.PublicUrl, imageUrl, StringComparison.Ordinal))
-            {
-                throw new BadRequestException(
-                    "Image upload is invalid or does not belong to this organizer.");
-            }
-
-            if (intent.EventId.HasValue && intent.EventId != eventId)
-            {
-                throw new BadRequestException(
-                    "Image upload does not belong to the specified event.");
-            }
-        }
-
-        private static string GetImageUploadIntentKey(string imageUrl)
-        {
-            var bytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(imageUrl));
-            return $"event:image-upload:intent:{Convert.ToHexString(bytes)}";
-        }
+        private static string GetImageUploadIntentKey(string imageUrl) =>
+            EventImageUploadValidator.IntentKey(imageUrl);
 
         // The policy itself lives in EventAccessChecker so that components which cannot
         // depend on IEventsService (the waitlist promoter) can evaluate the same rules.

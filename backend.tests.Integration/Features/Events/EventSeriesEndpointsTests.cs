@@ -520,7 +520,8 @@ public class EventSeriesEndpointsTests
             JsonContent.Create(new
             {
                 Name = name,
-                Description = "A club used by the recurrence integration tests.",
+                // Both Name and Description are capped at 30 characters by ClubCreateRequest.
+                Description = "Recurrence tests",
                 // Lowercase: ClubCreateRequest validates Clubtype against a fixed list of names.
                 Clubtype = "gaming",
                 // Must be a URL the fake blob storage owns, or the request is rejected.

@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { Subject, debounceTime, firstValueFrom, switchMap } from 'rxjs';
+import { Subject, catchError, debounceTime, firstValueFrom, map, of, switchMap } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { requireEnvelopeData } from '../../../../core/api/models/api-envelope.model';
@@ -159,23 +159,33 @@ export class ManageEventEditorComponent {
     this.previewRequests
       .pipe(
         debounceTime(400),
-        switchMap((rule) => this.seriesService.previewSeries(this.clubId, rule)),
+        // catchError sits INSIDE switchMap on purpose. An error escaping to the outer stream
+        // would complete this subscription for good, so one invalid rule — a bad time zone,
+        // too many occurrences — would silently kill the preview until the page was reloaded.
+        // Handling it here turns a rejected rule into an ordinary emission and keeps the
+        // stream listening for the next edit.
+        switchMap((rule) =>
+          this.seriesService.previewSeries(this.clubId, rule).pipe(
+            map((response) => ({ preview: response.data ?? null, error: '' })),
+            catchError((error: unknown) => {
+              const payload = error as { error?: { message?: string; Message?: string } };
+
+              return of({
+                preview: null,
+                error:
+                  payload?.error?.message ||
+                  payload?.error?.Message ||
+                  'We could not work out those repeat dates.',
+              });
+            }),
+          ),
+        ),
         takeUntilDestroyed(),
       )
-      .subscribe({
-        next: (response) => {
-          this.preview = response.data ?? null;
-          this.previewError = '';
-          this.previewing = false;
-        },
-        error: (error) => {
-          this.preview = null;
-          this.previewing = false;
-          this.previewError =
-            error?.error?.message ||
-            error?.error?.Message ||
-            'We could not work out those repeat dates.';
-        },
+      .subscribe(({ preview, error }) => {
+        this.preview = preview;
+        this.previewError = error;
+        this.previewing = false;
       });
 
     this.recurrenceForm.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
