@@ -7,6 +7,7 @@
     "start:e2e": "node scripts/generate-env.mjs && ng serve --host 127.0.0.1 --port 3101",
     "build": "ng build",
     "serve:ssr:frontend": "node dist/frontend/server/server.mjs",
+    "typecheck": "tsc --build --pretty false",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "test:e2e": "playwright test",
