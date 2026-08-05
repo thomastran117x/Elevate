@@ -83,9 +83,9 @@ export function normalizeAuthenticatedSessionResponse(
   return {
     AccessToken: accessToken,
     ExpiresAtUtc: expiresAtUtc,
-    RefreshToken: refreshToken,
-    SessionBindingToken: sessionBindingToken,
-    ReturnPath: returnPath ?? undefined,
+    ...(refreshToken ? { RefreshToken: refreshToken } : {}),
+    ...(sessionBindingToken ? { SessionBindingToken: sessionBindingToken } : {}),
+    ...(returnPath !== undefined ? { ReturnPath: returnPath } : {}),
   };
 }
 
