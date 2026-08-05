@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
+    "generate:env": "node scripts/generate-env.mjs",
     "start": "node scripts/generate-env.mjs && ng serve",
     "start:e2e": "node scripts/generate-env.mjs && ng serve --host 127.0.0.1 --port 3101",
     "build": "ng build",

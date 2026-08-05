@@ -53,11 +53,11 @@ const featureFlags = Object.fromEntries(
 
 const environment = {
   production: process.env.NODE_ENV === 'production',
-  backendUrl: process.env.BACKEND_URL,
-  frontendUrl: process.env.FRONTEND_URL,
-  googleClientId: process.env.GOOGLE_CLIENT_ID,
-  msalClientId: process.env.MSAL_CLIENT_ID,
-  googleSiteKey: process.env.GOOGLE_SITE_KEY,
+  backendUrl: process.env.BACKEND_URL ?? 'http://localhost:8090/api',
+  frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3090',
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
+  msalClientId: process.env.MSAL_CLIENT_ID ?? '',
+  googleSiteKey: process.env.GOOGLE_SITE_KEY ?? '',
   featureFlags,
 };
 
