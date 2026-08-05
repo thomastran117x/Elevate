@@ -82,9 +82,11 @@ export class ClubPostsService {
     payload: ClubPostPayload,
   ): Observable<ApiEnvelope<ClubPost>> {
     return this.http
-      .put<
-        ApiEnvelope<unknown>
-      >(`${environment.backendUrl}/clubs/${clubId}/posts/${postId}`, payload, { withCredentials: true })
+      .put<ApiEnvelope<unknown>>(
+        `${environment.backendUrl}/clubs/${clubId}/posts/${postId}`,
+        payload,
+        { withCredentials: true },
+      )
       .pipe(map((response) => this.mapPost(response)));
   }
 

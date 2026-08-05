@@ -86,9 +86,11 @@ export class EventInvitationsService {
 
   resolve(token: string): Observable<EventInvitationResolve> {
     return this.http
-      .post<
-        ApiEnvelope<ResolvePayload>
-      >(`${this.base}/invitations/resolve`, { token }, { withCredentials: true })
+      .post<ApiEnvelope<ResolvePayload>>(
+        `${this.base}/invitations/resolve`,
+        { token },
+        { withCredentials: true },
+      )
       .pipe(
         map((response) =>
           this.normalizeResolve(
@@ -100,9 +102,11 @@ export class EventInvitationsService {
 
   accept(token: string): Observable<EventInvitationDecision> {
     return this.http
-      .post<
-        ApiEnvelope<DecisionPayload>
-      >(`${this.base}/invitations/accept`, { token }, { withCredentials: true })
+      .post<ApiEnvelope<DecisionPayload>>(
+        `${this.base}/invitations/accept`,
+        { token },
+        { withCredentials: true },
+      )
       .pipe(
         map((response) =>
           this.normalizeDecision(
@@ -114,9 +118,11 @@ export class EventInvitationsService {
 
   decline(token: string): Observable<EventInvitationDecision> {
     return this.http
-      .post<
-        ApiEnvelope<DecisionPayload>
-      >(`${this.base}/invitations/decline`, { token }, { withCredentials: true })
+      .post<ApiEnvelope<DecisionPayload>>(
+        `${this.base}/invitations/decline`,
+        { token },
+        { withCredentials: true },
+      )
       .pipe(
         map((response) =>
           this.normalizeDecision(
@@ -128,9 +134,11 @@ export class EventInvitationsService {
 
   acceptById(invitationId: number): Observable<EventInvitationDecision> {
     return this.http
-      .post<
-        ApiEnvelope<DecisionPayload>
-      >(`${this.base}/invitations/${invitationId}/accept`, {}, { withCredentials: true })
+      .post<ApiEnvelope<DecisionPayload>>(
+        `${this.base}/invitations/${invitationId}/accept`,
+        {},
+        { withCredentials: true },
+      )
       .pipe(
         map((response) =>
           this.normalizeDecision(
@@ -142,9 +150,11 @@ export class EventInvitationsService {
 
   declineById(invitationId: number): Observable<EventInvitationDecision> {
     return this.http
-      .post<
-        ApiEnvelope<DecisionPayload>
-      >(`${this.base}/invitations/${invitationId}/decline`, {}, { withCredentials: true })
+      .post<ApiEnvelope<DecisionPayload>>(
+        `${this.base}/invitations/${invitationId}/decline`,
+        {},
+        { withCredentials: true },
+      )
       .pipe(
         map((response) =>
           this.normalizeDecision(
@@ -168,9 +178,9 @@ export class EventInvitationsService {
 
   getEventInvitations(eventId: number): Observable<EventInvitation[]> {
     return this.http
-      .get<
-        ApiEnvelope<InvitationPayload[]>
-      >(`${this.base}/${eventId}/invitations`, { withCredentials: true })
+      .get<ApiEnvelope<InvitationPayload[]>>(`${this.base}/${eventId}/invitations`, {
+        withCredentials: true,
+      })
       .pipe(
         map((response) =>
           (requireEnvelopeData(response, 'Invitations response was incomplete.') ?? []).map(
@@ -185,9 +195,9 @@ export class EventInvitationsService {
     payload: CreateEventInvitationsPayload,
   ): Observable<EventInvitation[]> {
     return this.http
-      .post<
-        ApiEnvelope<InvitationPayload[]>
-      >(`${this.base}/${eventId}/invitations`, payload, { withCredentials: true })
+      .post<ApiEnvelope<InvitationPayload[]>>(`${this.base}/${eventId}/invitations`, payload, {
+        withCredentials: true,
+      })
       .pipe(
         map((response) =>
           (requireEnvelopeData(response, 'Invitations response was incomplete.') ?? []).map(
@@ -199,9 +209,11 @@ export class EventInvitationsService {
 
   revokeInvitation(eventId: number, invitationId: number): Observable<EventInvitation> {
     return this.http
-      .post<
-        ApiEnvelope<InvitationPayload>
-      >(`${this.base}/${eventId}/invitations/${invitationId}/revoke`, {}, { withCredentials: true })
+      .post<ApiEnvelope<InvitationPayload>>(
+        `${this.base}/${eventId}/invitations/${invitationId}/revoke`,
+        {},
+        { withCredentials: true },
+      )
       .pipe(
         map((response) =>
           this.normalizeInvitation(
@@ -213,9 +225,9 @@ export class EventInvitationsService {
 
   getInvitationLinks(eventId: number): Observable<EventInvitationLink[]> {
     return this.http
-      .get<
-        ApiEnvelope<InvitationLinkPayload[]>
-      >(`${this.base}/${eventId}/invitation-links`, { withCredentials: true })
+      .get<ApiEnvelope<InvitationLinkPayload[]>>(`${this.base}/${eventId}/invitation-links`, {
+        withCredentials: true,
+      })
       .pipe(
         map((response) =>
           (requireEnvelopeData(response, 'Invitation links response was incomplete.') ?? []).map(
@@ -230,9 +242,11 @@ export class EventInvitationsService {
     payload: CreateEventInvitationLinkPayload,
   ): Observable<EventInvitationLink> {
     return this.http
-      .post<
-        ApiEnvelope<InvitationLinkPayload>
-      >(`${this.base}/${eventId}/invitation-links`, payload, { withCredentials: true })
+      .post<ApiEnvelope<InvitationLinkPayload>>(
+        `${this.base}/${eventId}/invitation-links`,
+        payload,
+        { withCredentials: true },
+      )
       .pipe(
         map((response) =>
           this.normalizeLink(
@@ -244,9 +258,11 @@ export class EventInvitationsService {
 
   revokeInvitationLink(eventId: number, linkId: number): Observable<EventInvitationLink> {
     return this.http
-      .post<
-        ApiEnvelope<InvitationLinkPayload>
-      >(`${this.base}/${eventId}/invitation-links/${linkId}/revoke`, {}, { withCredentials: true })
+      .post<ApiEnvelope<InvitationLinkPayload>>(
+        `${this.base}/${eventId}/invitation-links/${linkId}/revoke`,
+        {},
+        { withCredentials: true },
+      )
       .pipe(
         map((response) =>
           this.normalizeLink(

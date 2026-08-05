@@ -25,9 +25,11 @@ export class ClubMemberInvitationsService {
 
   resolve(token: string): Observable<ClubMemberInvitationResolve> {
     return this.http
-      .post<
-        ApiEnvelope<unknown>
-      >(`${this.base}/members/invitations/resolve`, { token }, { withCredentials: true })
+      .post<ApiEnvelope<unknown>>(
+        `${this.base}/members/invitations/resolve`,
+        { token },
+        { withCredentials: true },
+      )
       .pipe(
         map((response) =>
           normalizeClubMemberInvitationResolve(
@@ -39,9 +41,11 @@ export class ClubMemberInvitationsService {
 
   accept(token: string): Observable<ClubMemberInvitationDecision> {
     return this.http
-      .post<
-        ApiEnvelope<unknown>
-      >(`${this.base}/members/invitations/accept`, { token }, { withCredentials: true })
+      .post<ApiEnvelope<unknown>>(
+        `${this.base}/members/invitations/accept`,
+        { token },
+        { withCredentials: true },
+      )
       .pipe(
         map((response) =>
           normalizeClubMemberInvitationDecision(
@@ -53,9 +57,11 @@ export class ClubMemberInvitationsService {
 
   decline(token: string): Observable<ClubMemberInvitationDecision> {
     return this.http
-      .post<
-        ApiEnvelope<unknown>
-      >(`${this.base}/members/invitations/decline`, { token }, { withCredentials: true })
+      .post<ApiEnvelope<unknown>>(
+        `${this.base}/members/invitations/decline`,
+        { token },
+        { withCredentials: true },
+      )
       .pipe(
         map((response) =>
           normalizeClubMemberInvitationDecision(
@@ -67,9 +73,11 @@ export class ClubMemberInvitationsService {
 
   redeemLink(token: string): Observable<ClubMemberInvitationDecision> {
     return this.http
-      .post<
-        ApiEnvelope<unknown>
-      >(`${this.base}/members/invitation-links/redeem`, { token }, { withCredentials: true })
+      .post<ApiEnvelope<unknown>>(
+        `${this.base}/members/invitation-links/redeem`,
+        { token },
+        { withCredentials: true },
+      )
       .pipe(
         map((response) =>
           normalizeClubMemberInvitationDecision(

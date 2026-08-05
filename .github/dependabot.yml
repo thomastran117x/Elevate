@@ -1,0 +1,49 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    labels:
+      - dependencies
+      - frontend
+    commit-message:
+      prefix: chore(deps)
+      prefix-development: chore(deps-dev)
+    groups:
+      # Angular framework packages peer-depend on each other at EXACT versions
+      # (@angular/platform-browser@21.2.19 requires @angular/core@21.2.19, not a
+      # range), so they must be bumped together. Do not split this group -- a PR
+      # moving only some of them cannot resolve.
+      angular:
+        patterns:
+          - "@angular/*"
+          - "@angular-devkit/*"
+      ngrx:
+        patterns:
+          - "@ngrx/*"
+      frontend-dependencies:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "@angular/*"
+          - "@angular-devkit/*"
+          - "@ngrx/*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # @angular/build@21.x peer-requires typescript ">=5.9 <6.0" while TypeScript
+      # latest is already 7.x, so every major PR here is unmergeable. TypeScript
+      # moves as part of an Angular upgrade via `ng update`, never on its own.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # @types/node tracks the Node runtime major, which is pinned to 24 by
+      # .nvmrc, package.json engines, the Dockerfile and CI. It must not drift
+      # ahead of the runtime.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
