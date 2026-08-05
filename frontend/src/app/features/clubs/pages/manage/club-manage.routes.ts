@@ -31,6 +31,14 @@ export const CLUB_MANAGE_TABS: Routes = [
       ),
   },
   {
+    // Declared before 'events/:eventId' so the literal segment is not swallowed by the param.
+    path: 'series/:seriesId',
+    loadComponent: () =>
+      import('../../../events/pages/manage-series/manage-event-series.component').then(
+        (m) => m.ManageEventSeriesComponent,
+      ),
+  },
+  {
     path: 'events/:eventId',
     loadComponent: () =>
       import('../../../events/pages/manage-editor/manage-event-editor.component').then(

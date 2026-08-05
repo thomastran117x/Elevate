@@ -30,7 +30,9 @@ namespace backend.main.features.events.search
                     Lon = ev.Longitude.Value
                 })
                 : null,
-            RegistrationCount = ev.RegistrationCount
+            RegistrationCount = ev.RegistrationCount,
+            SeriesId = ev.SeriesId,
+            OccurrenceIndex = ev.OccurrenceIndex
         };
     }
 }

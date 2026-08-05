@@ -137,6 +137,26 @@ namespace backend.main.features.events.contracts.responses
             get; set;
         }
 
+        // Series membership. Null on a standalone event, which is the overwhelming majority —
+        // an occurrence is otherwise an ordinary event and needs no special handling by clients.
+        public int? SeriesId
+        {
+            get; set;
+        }
+        public int? OccurrenceIndex
+        {
+            get; set;
+        }
+
+        /// <summary>
+        /// IANA zone the event's wall-clock time is anchored to, when one is known. Lets a client
+        /// show the time at the venue rather than only in the viewer's own zone.
+        /// </summary>
+        public string? TimeZoneId
+        {
+            get; set;
+        }
+
         // Populated only when a proximity search was performed.
         public double? DistanceKm
         {

@@ -27,6 +27,7 @@ using backend.main.features.events.images;
 using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
+using backend.main.features.events.series;
 using backend.main.features.events.versions;
 using backend.main.features.events.waitlist;
 using backend.main.features.payment;
@@ -164,6 +165,7 @@ namespace backend.main.application.bootstrap
             services.AddRepositoryWithProxy<ITotpMfaEnrollmentRepository, TotpMfaEnrollmentRepository>();
             services.AddRepositoryWithProxy<IClubRepository, ClubRepository>();
             services.AddRepositoryWithProxy<IEventsRepository, EventsRepository>();
+            services.AddRepositoryWithProxy<IEventSeriesRepository, EventSeriesRepository>();
             services.AddRepositoryWithProxy<IPaymentRepository, PaymentRepository>();
             services.AddRepositoryWithProxy<IClubReviewRepository, ClubReviewRepository>();
             services.AddRepositoryWithProxy<IDeviceRepository, DeviceRepository>();
@@ -241,6 +243,19 @@ namespace backend.main.application.bootstrap
                 // promoter must NOT — it sits on the unregister and event-update hot paths.
                 services.AddScoped<IEventWaitlistService, DisabledEventWaitlistService>();
                 services.AddScoped<IEventWaitlistPromoter, DisabledEventWaitlistPromoter>();
+            }
+
+            if (featureFlags.IsEnabled(FeatureFlagKeys.EventsRecurrence))
+            {
+                // Fail at boot rather than on an organizer's first request if the runtime has
+                // no IANA time zone data — recurrence is meaningless without it.
+                EventSeriesTimeZones.EnsureRuntimeSupport();
+
+                services.AddScoped<IEventSeriesService, EventSeriesService>();
+            }
+            else
+            {
+                services.AddScoped<IEventSeriesService, DisabledEventSeriesService>();
             }
 
             services.AddScoped<IPostCommentService, PostCommentService>();

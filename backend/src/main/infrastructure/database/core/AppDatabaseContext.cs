@@ -18,6 +18,7 @@ using backend.main.features.events.images;
 using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
+using backend.main.features.events.series;
 using backend.main.features.events.versions;
 using backend.main.features.events.waitlist;
 using backend.main.features.payment;
@@ -36,6 +37,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<ClubVersion> ClubVersions { get; set; } = null!;
         public DbSet<Events> Events { get; set; } = null!;
         public DbSet<EventVersion> EventVersions { get; set; } = null!;
+        public DbSet<EventSeries> EventSeries { get; set; } = null!;
         public DbSet<FollowClub> FollowClubs { get; set; } = null!;
         public DbSet<ClubInvitationLink> ClubInvitationLinks { get; set; } = null!;
         public DbSet<Payment> Payments { get; set; } = null!;
@@ -268,6 +270,69 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<Events>()
                 .HasIndex(e => new { e.Latitude, e.Longitude });
+
+            modelBuilder.Entity<EventSeries>()
+                .HasOne<Club>()
+                .WithMany()
+                .HasForeignKey(s => s.ClubId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<EventSeries>()
+                .Property(s => s.TimeZoneId)
+                .HasMaxLength(64)
+                .IsRequired();
+
+            modelBuilder.Entity<EventSeries>()
+                .Property(s => s.Frequency)
+                .HasConversion<int>();
+
+            modelBuilder.Entity<EventSeries>()
+                .Property(s => s.EndMode)
+                .HasConversion<int>();
+
+            modelBuilder.Entity<EventSeries>()
+                .Property(s => s.MonthlyDayPolicy)
+                .HasConversion<int>();
+
+            modelBuilder.Entity<EventSeries>()
+                .Property(s => s.Status)
+                .HasConversion<int>()
+                .HasDefaultValue(EventSeriesStatus.Active);
+
+            modelBuilder.Entity<EventSeries>()
+                .HasIndex(s => s.ClubId);
+
+            modelBuilder.Entity<EventSeries>()
+                .HasIndex(s => s.TemplateEventId);
+
+            // SetNull, deliberately: deleting a series row must never be able to remove
+            // occurrences that may already have paying registrants. "Delete series" is an
+            // explicit service operation that decides what to do per occurrence; this FK
+            // only guarantees the accidental path is safe.
+            modelBuilder.Entity<Events>()
+                .HasOne<EventSeries>()
+                .WithMany()
+                .HasForeignKey(e => e.SeriesId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Events>()
+                .Property(e => e.SeriesOverridden)
+                .HasDefaultValue(false);
+
+            modelBuilder.Entity<Events>()
+                .Property(e => e.TimeZoneId)
+                .HasMaxLength(64);
+
+            // Unique per series: MySQL allows repeated NULL tuples, so every standalone
+            // event (SeriesId == null) coexists happily under this index.
+            modelBuilder.Entity<Events>()
+                .HasIndex(e => new { e.SeriesId, e.OccurrenceIndex })
+                .IsUnique();
+
+            modelBuilder.Entity<Events>()
+                .HasIndex(e => new { e.SeriesId, e.StartTime });
 
             modelBuilder.Entity<EventVersion>()
                 .HasOne<Events>()

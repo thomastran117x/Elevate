@@ -96,6 +96,29 @@ namespace backend.main.features.events.contracts.responses
         {
             get; set;
         }
+        public int? SeriesId
+        {
+            get; set;
+        }
+        public int? OccurrenceIndex
+        {
+            get; set;
+        }
+
+        /// <summary>
+        /// True once this occurrence has been edited on its own, which excludes it from
+        /// "update all future occurrences" unless the organizer opts back in.
+        /// </summary>
+        public bool SeriesOverridden
+        {
+            get; set;
+        }
+
+        public string? TimeZoneId
+        {
+            get; set;
+        }
+
         public bool PublishReady
         {
             get; set;

@@ -34,6 +34,9 @@ namespace backend.main.features.events
                 RegistrationCount = ev.RegistrationCount,
                 WaitlistEnabled = ev.WaitlistEnabled,
                 WaitlistCount = ev.WaitlistCount,
+                SeriesId = ev.SeriesId,
+                OccurrenceIndex = ev.OccurrenceIndex,
+                TimeZoneId = ev.TimeZoneId,
                 DistanceKm = distanceKm
             };
 
@@ -84,6 +87,10 @@ namespace backend.main.features.events
                 RegistrationCount = ev.RegistrationCount,
                 WaitlistEnabled = ev.WaitlistEnabled,
                 WaitlistCount = ev.WaitlistCount,
+                SeriesId = ev.SeriesId,
+                OccurrenceIndex = ev.OccurrenceIndex,
+                SeriesOverridden = ev.SeriesOverridden,
+                TimeZoneId = ev.TimeZoneId,
                 PublishReady = publishIssues.Count == 0,
                 PublishIssues = publishIssues.ToList()
             };
