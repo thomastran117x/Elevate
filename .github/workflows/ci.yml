@@ -72,8 +72,20 @@ jobs:
         run: dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-unit-coverage
 
   backend-integration-tests:
-    name: Backend Integration Tests
+    name: Backend Integration Tests (${{ matrix.shard }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: authentication
+            filter: FullyQualifiedName~backend.tests.Integration.Features.Auth
+          - shard: clubs
+            filter: FullyQualifiedName~backend.tests.Integration.Features.Clubs|FullyQualifiedName~backend.tests.Clubs
+          - shard: events
+            filter: FullyQualifiedName~backend.tests.Integration.Features.Events|FullyQualifiedName~backend.tests.Events
+          - shard: other
+            filter: FullyQualifiedName!~backend.tests.Integration.Features.Auth&FullyQualifiedName!~backend.tests.Integration.Features.Clubs&FullyQualifiedName!~backend.tests.Clubs&FullyQualifiedName!~backend.tests.Integration.Features.Events&FullyQualifiedName!~backend.tests.Events
 
     steps:
       - name: Checkout
@@ -88,7 +100,21 @@ jobs:
         run: docker version
 
       - name: Run integration tests
-        run: dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-integration-tests
+        run: dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-integration-tests --filter "${{ matrix.filter }}"
+
+  backend-integration-endpoint-coverage:
+    name: Backend Integration Endpoint Coverage
+    needs: backend-integration-tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
 
       - name: Run integration endpoint coverage audit
         run: dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-integration-endpoint-coverage --fail-on-missing
