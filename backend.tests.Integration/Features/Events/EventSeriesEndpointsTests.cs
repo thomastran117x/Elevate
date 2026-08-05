@@ -106,6 +106,11 @@ public class EventSeriesEndpointsTests
         persisted.Should().OnlyContain(e => e.LifecycleState == EventLifecycleState.Published);
 
         // ── occurrences behave as ordinary events on the public listing ───────────
+        // The public listing reads through Elasticsearch, which is fed asynchronously from the
+        // search outbox. Publishing only stages those rows, so the index has to be brought up to
+        // date before querying — exactly as the other event listing tests do.
+        await app.ReindexEventsAsync();
+
         var publicList = await app.Client.GetAsync("/api/events?page=1&pageSize=50");
         publicList.StatusCode.Should().Be(HttpStatusCode.OK);
 
