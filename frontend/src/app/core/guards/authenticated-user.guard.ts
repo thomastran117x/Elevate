@@ -3,10 +3,15 @@ import { CanActivateFn, Router } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { map, take } from 'rxjs/operators';
 
-import { AuthReturnUrlService } from '../../auth/services/auth-return-url.service';
-import { selectUser } from '../../../core/stores/user.selectors';
+import { AuthReturnUrlService } from '../../features/auth/services/auth-return-url.service';
+import { selectUser } from '../stores/user.selectors';
 
-export const eventsManageAuthGuard: CanActivateFn = (_route, state) => {
+/**
+ * Requires a signed-in visitor, remembering where they were headed so the login
+ * page can send them back. Resource-level permissions (club ownership, event
+ * management) are enforced server-side and surfaced as inline errors on the page.
+ */
+export const authenticatedUserGuard: CanActivateFn = (_route, state) => {
   const store = inject(Store);
   const router = inject(Router);
   const returnUrl = inject(AuthReturnUrlService);

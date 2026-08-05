@@ -137,7 +137,15 @@ jobs:
 
 
       - name: Run frontend unit tests
-        run: npm test -- --watch=false --browsers=ChromeHeadless
+        run: npm test -- --watch=false --browsers=ChromeHeadlessCI --code-coverage
+
+      - name: Upload frontend coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+          if-no-files-found: ignore
 
   backend-unit-tests:
     name: Backend Unit Tests

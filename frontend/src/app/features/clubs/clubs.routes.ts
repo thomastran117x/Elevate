@@ -2,7 +2,7 @@ import { Routes } from '@angular/router';
 
 import { featureCanMatch } from '../../core/features/feature-can-match.guard';
 import { FEATURE_KEYS } from '../../core/features/feature-flags.types';
-import { clubManageAuthGuard } from './guards/club-manage-auth.guard';
+import { authenticatedUserGuard } from '../../core/guards/authenticated-user.guard';
 import { unsavedChangesGuard } from './guards/unsaved-changes.guard';
 
 export const CLUBS_ROUTES: Routes = [
@@ -12,16 +12,18 @@ export const CLUBS_ROUTES: Routes = [
       import('./pages/clubs-search/clubs-search.component').then((m) => m.ClubsSearchComponent),
   },
   // Owner-side management. Literal `manage` segments must precede the `:clubId` catch-all.
+  // The guard only checks that the visitor is signed in — per-club ownership and manage
+  // permissions are enforced server-side and surfaced as inline errors on these pages.
   {
     path: 'manage/new',
-    canActivate: [clubManageAuthGuard],
+    canActivate: [authenticatedUserGuard],
     canDeactivate: [unsavedChangesGuard],
     loadComponent: () =>
       import('./pages/manage/club-editor/club-editor.component').then((m) => m.ClubEditorComponent),
   },
   {
     path: 'manage',
-    canActivate: [clubManageAuthGuard],
+    canActivate: [authenticatedUserGuard],
     loadComponent: () =>
       import('./pages/manage/managed-clubs/managed-clubs.component').then(
         (m) => m.ManagedClubsComponent,
@@ -29,7 +31,7 @@ export const CLUBS_ROUTES: Routes = [
   },
   {
     path: ':clubId/manage',
-    canActivate: [clubManageAuthGuard],
+    canActivate: [authenticatedUserGuard],
     loadComponent: () =>
       import('./pages/manage/club-manage-shell/club-manage-shell.component').then(
         (m) => m.ClubManageShellComponent,

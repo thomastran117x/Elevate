@@ -22,6 +22,8 @@
       "@stores/*": ["src/app/core/stores/*"],
       "@core/*": ["src/app/core/*"],
       "@icons/*": ["src/app/core/*"],
+      "@testing": ["src/testing/index.ts"],
+      "@testing/*": ["src/testing/*"],
       "@/*": ["src/app/*"]
     }
   },
