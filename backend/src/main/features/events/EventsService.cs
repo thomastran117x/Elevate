@@ -232,7 +232,7 @@ namespace backend.main.features.events
 
                 if (!EventSearchFallbackSupport.RequiresDatabaseFallback(effective))
                 {
-                    // Prefer ES for full-text, tag, and geo search. If ES is unavailable, fall back to MySQL
+                    // Prefer ES for full-text, tag, and geo search. If ES is unavailable, fall back to database
                     // for the subset of filters/sorts we can honor safely.
                     try
                     {
@@ -253,11 +253,11 @@ namespace backend.main.features.events
                     }
                     catch (ElasticsearchDisabledException ex)
                     {
-                        Logger.Info($"[EventsService] Elasticsearch disabled. Falling back to MySQL search. {ex.Message}");
+                        Logger.Info($"[EventsService] Elasticsearch disabled. Falling back to database search. {ex.Message}");
                     }
                     catch (ElasticsearchUnavailableException ex)
                     {
-                        Logger.Warn(ex, "[EventsService] Elasticsearch temporarily unavailable. Falling back to MySQL search.");
+                        Logger.Warn(ex, "[EventsService] Elasticsearch temporarily unavailable. Falling back to database search.");
                     }
                     catch (Exception ex)
                     {
@@ -267,7 +267,7 @@ namespace backend.main.features.events
                 }
                 else
                 {
-                    Logger.Info("[EventsService] Falling back to MySQL search for a query that requires literal wildcard matching.");
+                    Logger.Info("[EventsService] Falling back to database search for a query that requires literal wildcard matching.");
                 }
                 EventSearchFallbackSupport.EnsureSupported(effective);
                 var (events, totalCount) = await _eventsRepository.SearchAsync(effective);

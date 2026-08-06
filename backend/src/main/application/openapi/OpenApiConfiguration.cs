@@ -8,8 +8,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
-using Microsoft.OpenApi.Any;
-using Microsoft.OpenApi.Models;
 
 namespace backend.main.application.openapi
 {
@@ -49,6 +47,9 @@ namespace backend.main.application.openapi
         {
             services.AddOpenApi(OpenApiDocumentMode.DocumentName, options =>
             {
+                // Explicit rather than relying on the framework default, so a future
+                // change to that default cannot silently alter the committed artifacts.
+                options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_1;
                 options.CreateSchemaReferenceId = CreateSchemaReferenceId;
                 options.ShouldInclude = description =>
                 {
@@ -124,11 +125,10 @@ namespace backend.main.application.openapi
                 OpenApiDocumentMode.DefaultYamlRoute,
                 async Task<IResult> (IServiceProvider services) =>
                 {
-                    var json = await GenerateOpenApiJsonAsync(
+                    var yaml = await GenerateOpenApiYamlAsync(
                         services,
                         OpenApiDocumentMode.DocumentName
                     );
-                    var yaml = OpenApiYamlSerializer.ConvertJsonDocumentToYaml(json);
                     return Results.Text(yaml, "application/yaml");
                 }
             ).ExcludeFromDescription();
@@ -144,8 +144,7 @@ namespace backend.main.application.openapi
                         return Results.NotFound();
                     }
 
-                    var json = await GenerateOpenApiJsonAsync(services, documentName);
-                    var yaml = OpenApiYamlSerializer.ConvertJsonDocumentToYaml(json);
+                    var yaml = await GenerateOpenApiYamlAsync(services, documentName);
                     return Results.Text(yaml, "application/yaml");
                 }
             ).ExcludeFromDescription();
@@ -172,7 +171,7 @@ namespace backend.main.application.openapi
                 : [new OpenApiServer { Url = serverUrl }];
 
             document.Components ??= new OpenApiComponents();
-            document.Components.SecuritySchemes ??= new Dictionary<string, OpenApiSecurityScheme>();
+            document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
             document.Components.SecuritySchemes[BearerSchemeName] = new OpenApiSecurityScheme
             {
                 Type = SecuritySchemeType.Http,
@@ -182,8 +181,8 @@ namespace backend.main.application.openapi
                     "Send the access token in the Authorization header as `Bearer {token}` for protected API routes."
             };
 
-            document.Tags =
-            [
+            document.Tags = new HashSet<OpenApiTag>
+            {
                 new OpenApiTag
                 {
                     Name = "auth",
@@ -214,7 +213,7 @@ namespace backend.main.application.openapi
                     Name = "admin",
                     Description = "Administrative endpoints for moderation, user management, and reindex operations."
                 }
-            ];
+            };
 
             ApplyEnvelopeSchemaDescriptions(document);
             return Task.CompletedTask;
@@ -227,16 +226,19 @@ namespace backend.main.application.openapi
 
             foreach (var (name, schema) in document.Components.Schemas)
             {
+                if (schema is not OpenApiSchema concreteSchema)
+                    continue;
+
                 if (name.StartsWith("ApiResponseOf", StringComparison.Ordinal))
                 {
-                    schema.Description = "Standard JSON envelope returned by all API endpoints.";
-                    ApplyPropertyDescriptions(schema, ApiResponsePropertyDescriptions);
+                    concreteSchema.Description = "Standard JSON envelope returned by all API endpoints.";
+                    ApplyPropertyDescriptions(concreteSchema, ApiResponsePropertyDescriptions);
                 }
                 else if (string.Equals(name, "ApiError", StringComparison.Ordinal))
                 {
-                    schema.Description =
+                    concreteSchema.Description =
                         "Structured error payload present in the `error` field when `success` is `false`.";
-                    ApplyPropertyDescriptions(schema, ApiErrorPropertyDescriptions);
+                    ApplyPropertyDescriptions(concreteSchema, ApiErrorPropertyDescriptions);
                 }
             }
         }
@@ -254,19 +256,16 @@ namespace backend.main.application.openapi
                 if (!schema.Properties.TryGetValue(propName, out var propSchema))
                     continue;
 
-                // In OpenAPI 3.0, $ref objects may not carry sibling keywords.
-                // Wrap in allOf to attach a description alongside the reference.
-                if (propSchema.Reference is not null)
+                // OpenAPI 3.1 is JSON Schema 2020-12, where $ref may carry sibling keywords,
+                // so a description attaches directly to the reference without an allOf wrapper.
+                switch (propSchema)
                 {
-                    schema.Properties[propName] = new OpenApiSchema
-                    {
-                        AllOf = [new OpenApiSchema { Reference = propSchema.Reference }],
-                        Description = description
-                    };
-                }
-                else
-                {
-                    propSchema.Description = description;
+                    case OpenApiSchemaReference reference:
+                        reference.Description = description;
+                        break;
+                    case OpenApiSchema concrete:
+                        concrete.Description = description;
+                        break;
                 }
             }
         }
@@ -340,7 +339,7 @@ namespace backend.main.application.openapi
                 _ => controller ?? "api"
             };
 
-            operation.Tags = [new OpenApiTag { Name = tagName }];
+            operation.Tags = new HashSet<OpenApiTagReference> { new(tagName) };
         }
 
         private static void ApplyAuthorization(
@@ -362,16 +361,7 @@ namespace backend.main.application.openapi
             operation.Security.Add(
                 new OpenApiSecurityRequirement
                 {
-                    [
-                        new OpenApiSecurityScheme
-                        {
-                            Reference = new OpenApiReference
-                            {
-                                Type = ReferenceType.SecurityScheme,
-                                Id = BearerSchemeName
-                            }
-                        }
-                    ] = []
+                    [new OpenApiSecuritySchemeReference(BearerSchemeName)] = []
                 }
             );
         }
@@ -433,7 +423,7 @@ namespace backend.main.application.openapi
                         Required = true,
                         Description =
                             $"CSRF token obtained from `/api/auth/csrf`. Browser clients must send the `{CsrfConfiguration.CsrfCookieName}` cookie and mirror its value in this header.",
-                        Schema = new OpenApiSchema { Type = "string" }
+                        Schema = new OpenApiSchema { Type = JsonSchemaType.String }
                     }
                 );
             }
@@ -452,7 +442,7 @@ namespace backend.main.application.openapi
                         In = ParameterLocation.Header,
                         Required = false,
                         Description = "Optional client-generated idempotency key used to safely retry checkout session creation.",
-                        Schema = new OpenApiSchema { Type = "string" }
+                        Schema = new OpenApiSchema { Type = JsonSchemaType.String }
                     }
                 );
             }
@@ -466,7 +456,7 @@ namespace backend.main.application.openapi
                         In = ParameterLocation.Header,
                         Required = true,
                         Description = "Stripe webhook signature header used to validate the raw request payload.",
-                        Schema = new OpenApiSchema { Type = "string" }
+                        Schema = new OpenApiSchema { Type = JsonSchemaType.String }
                     }
                 );
             }
@@ -535,7 +525,7 @@ namespace backend.main.application.openapi
                     In = ParameterLocation.Header,
                     Required = false,
                     Description = description,
-                    Schema = new OpenApiSchema { Type = "string" }
+                    Schema = new OpenApiSchema { Type = JsonSchemaType.String }
                 }
             );
         }
@@ -571,15 +561,8 @@ namespace backend.main.application.openapi
             operation.Responses[statusCode] = response;
         }
 
-        private static OpenApiSchema CreateSchemaReference(Type type) =>
-            new()
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.Schema,
-                    Id = GetSchemaReferenceId(type)
-                }
-            };
+        private static IOpenApiSchema CreateSchemaReference(Type type) =>
+            new OpenApiSchemaReference(GetSchemaReferenceId(type));
 
         private static string CreateSchemaReferenceId(JsonTypeInfo jsonTypeInfo) =>
             GetSchemaReferenceId(jsonTypeInfo.Type);
@@ -666,43 +649,42 @@ namespace backend.main.application.openapi
                 StringComparison.OrdinalIgnoreCase
             );
 
+        private static async Task<OpenApiDocument> GetOpenApiDocumentAsync(
+            IServiceProvider services,
+            string documentName
+        )
+        {
+            // AddOpenApi(documentName) registers the provider keyed by document name.
+            var provider =
+                services.GetKeyedService<IOpenApiDocumentProvider>(documentName)
+                ?? throw new InvalidOperationException(
+                    $"No OpenAPI document provider is registered for document '{documentName}'."
+                );
+
+            return await provider.GetOpenApiDocumentAsync();
+        }
+
         private static async Task<string> GenerateOpenApiJsonAsync(
             IServiceProvider services,
             string documentName
         )
         {
-            var providerType =
-                Type.GetType(
-                    "Microsoft.Extensions.ApiDescriptions.IDocumentProvider, Microsoft.AspNetCore.OpenApi"
-                )
-                ?? Type.GetType(
-                    "Microsoft.Extensions.ApiDescriptions.OpenApiDocumentProvider, Microsoft.AspNetCore.OpenApi"
-                )
-                ?? throw new InvalidOperationException(
-                    "The OpenAPI document provider type could not be resolved."
-                );
-
-            var provider = services.GetService(providerType)
-                ?? throw new InvalidOperationException(
-                    "The OpenAPI document provider service is not registered."
-                );
-
-            var generateMethod = provider.GetType().GetMethod(
-                "GenerateAsync",
-                [typeof(string), typeof(TextWriter), typeof(OpenApiSpecVersion)]
-            ) ?? throw new InvalidOperationException(
-                "The OpenAPI document provider does not expose the expected GenerateAsync overload."
-            );
+            var document = await GetOpenApiDocumentAsync(services, documentName);
 
             using var writer = new StringWriter();
-            var task = generateMethod.Invoke(
-                provider,
-                [documentName, writer, OpenApiSpecVersion.OpenApi3_0]
-            ) as Task ?? throw new InvalidOperationException(
-                "The OpenAPI document provider did not return a Task."
-            );
+            document.SerializeAsV31(new OpenApiJsonWriter(writer));
+            return writer.ToString();
+        }
 
-            await task;
+        private static async Task<string> GenerateOpenApiYamlAsync(
+            IServiceProvider services,
+            string documentName
+        )
+        {
+            var document = await GetOpenApiDocumentAsync(services, documentName);
+
+            using var writer = new StringWriter();
+            document.SerializeAsV31(new OpenApiYamlWriter(writer));
             return writer.ToString();
         }
     }

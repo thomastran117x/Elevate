@@ -48,6 +48,50 @@ public class DatabaseConfigurationTests
     }
 
     [Fact]
+    public void AddAppDatabase_ShouldDefaultToPostgres_WhenNoProviderConfigured()
+    {
+        var services = new ServiceCollection();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Database:ConnectionString"] = "Host=localhost;Port=5432;Database=appdb;Username=appuser;Password=apppass"
+            })
+            .Build();
+
+        services.AddAppDatabase(config);
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+
+        db.Database.ProviderName.Should().Be("Npgsql.EntityFrameworkCore.PostgreSQL");
+    }
+
+    [Theory]
+    [InlineData("postgres")]
+    [InlineData("postgresql")]
+    [InlineData("npgsql")]
+    public void AddAppDatabase_ShouldAcceptPostgresProviderAliases(string providerName)
+    {
+        var services = new ServiceCollection();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Database:Provider"] = providerName,
+                ["Database:ConnectionString"] = "Host=localhost;Port=5432;Database=appdb;Username=appuser;Password=apppass"
+            })
+            .Build();
+
+        services.AddAppDatabase(config);
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+
+        db.Database.ProviderName.Should().Be("Npgsql.EntityFrameworkCore.PostgreSQL");
+    }
+
+    [Fact]
     public async Task VerifyDatabaseConnectionAsync_ShouldSucceed_ForConfiguredSqlite()
     {
         var services = new ServiceCollection();

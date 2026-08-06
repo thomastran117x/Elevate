@@ -321,7 +321,7 @@ public class EventRegistrationServiceTests
 
     private sealed class EventRegistrationHarness : IAsyncDisposable
     {
-        private readonly MySqlTestDatabase _database;
+        private readonly PostgresTestDatabase _database;
 
         public AppDatabaseContext Db { get; }
         public EventRegistrationService Service { get; }
@@ -337,7 +337,7 @@ public class EventRegistrationServiceTests
         public string[] UserIndexMembers { get; set; } = [];
 
         private EventRegistrationHarness(
-            MySqlTestDatabase database,
+            PostgresTestDatabase database,
             AppDatabaseContext db,
             EventRegistrationService service,
             Mock<IEventsService> eventsServiceMock,
@@ -358,7 +358,7 @@ public class EventRegistrationServiceTests
 
         public static async Task<EventRegistrationHarness> CreateAsync()
         {
-            var database = await MySqlTestDatabase.CreateAsync();
+            var database = await PostgresTestDatabase.CreateAsync();
 
             var db = database.CreateDbContext();
 

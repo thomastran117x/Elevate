@@ -437,7 +437,7 @@ public class EventVersioningServiceTests
 
     private sealed class EventServiceHarness : IAsyncDisposable
     {
-        private readonly MySqlTestDatabase _database;
+        private readonly PostgresTestDatabase _database;
         private readonly Dictionary<string, string?> _cacheStore;
 
         public AppDatabaseContext Db { get; }
@@ -445,7 +445,7 @@ public class EventVersioningServiceTests
         public TestTimeProvider TimeProvider { get; }
 
         private EventServiceHarness(
-            MySqlTestDatabase database,
+            PostgresTestDatabase database,
             AppDatabaseContext db,
             EventsService service,
             TestTimeProvider timeProvider,
@@ -460,7 +460,7 @@ public class EventVersioningServiceTests
 
         public static async Task<EventServiceHarness> CreateAsync()
         {
-            var database = await MySqlTestDatabase.CreateAsync();
+            var database = await PostgresTestDatabase.CreateAsync();
 
             var db = database.CreateDbContext();
 

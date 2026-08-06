@@ -8,8 +8,8 @@ namespace backend.main.features.events.waitlist
     /// produce wide range write-sets under IsolationLevel.Serializable, and this codebase
     /// has no deadlock retry policy. A computed position also cannot drift.
     ///
-    /// Uniqueness is (EventId, UserId) forever — MySQL has no filtered unique indexes, so
-    /// terminal entries are reactivated in place on rejoin, mirroring EventRegistration.
+    /// Uniqueness is (EventId, UserId) forever — terminal entries are reactivated in place
+    /// on rejoin, mirroring EventRegistration.
     /// </summary>
     public class EventWaitlistEntry
     {

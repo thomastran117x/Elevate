@@ -26,6 +26,7 @@ using backend.main.features.profile;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace backend.main.infrastructure.database.core
 {
@@ -57,9 +58,36 @@ namespace backend.main.infrastructure.database.core
         public DbSet<ClubPostSearchOutbox> ClubPostSearchOutbox { get; set; } = null!;
         public AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : base(options) { }
 
+        /// <summary>
+        /// Forces every mapped <see cref="DateTime"/> to UTC so Npgsql's
+        /// <c>timestamp with time zone</c> mapping never sees a non-UTC kind.
+        /// Properties that are deliberately wall-clock opt out in <see cref="OnModelCreating"/>.
+        /// </summary>
+        protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+        {
+            base.ConfigureConventions(configurationBuilder);
+
+            configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+            configurationBuilder.Properties<DateTime?>().HaveConversion<NullableUtcDateTimeConverter>();
+        }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // MySQL's utf8mb4_0900_ai_ci collation made `=` and the unique indexes below
+            // case-insensitive. PostgreSQL is case-sensitive by default, which would break
+            // login-by-email and allow case-variant duplicate accounts. citext restores the
+            // previous semantics for both equality and the unique index with no query changes.
+            modelBuilder.HasPostgresExtension("citext");
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.Email)
+                .HasColumnType("citext");
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.Username)
+                .HasColumnType("citext");
 
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Email)
@@ -109,8 +137,8 @@ namespace backend.main.infrastructure.database.core
                         ? new List<string>()
                         : JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>())
                 .HasColumnType("json")
-                // Nullable in the DB so the column can be added to a table with existing rows
-                // (MySQL JSON columns can't take a literal default); null reads back as an empty list.
+                // Nullable in the DB so the column can be added to a table with existing rows;
+                // null reads back as an empty list.
                 .IsRequired(false)
                 .Metadata.SetValueComparer(clubGalleryComparer);
 
@@ -283,6 +311,19 @@ namespace backend.main.infrastructure.database.core
                 .HasMaxLength(64)
                 .IsRequired();
 
+            // Wall-clock, not instants: a weekly 7pm series must stay at 7pm local across a DST
+            // transition, so these are stored zoneless and must keep DateTimeKind.Unspecified.
+            // They opt out of the UTC convention applied in ConfigureConventions.
+            modelBuilder.Entity<EventSeries>()
+                .Property(s => s.FirstOccurrenceLocalStart)
+                .HasColumnType("timestamp without time zone")
+                .HasConversion((ValueConverter?)null);
+
+            modelBuilder.Entity<EventSeries>()
+                .Property(s => s.EndLocalDate)
+                .HasColumnType("timestamp without time zone")
+                .HasConversion((ValueConverter?)null);
+
             modelBuilder.Entity<EventSeries>()
                 .Property(s => s.Frequency)
                 .HasConversion<int>();
@@ -325,8 +366,8 @@ namespace backend.main.infrastructure.database.core
                 .Property(e => e.TimeZoneId)
                 .HasMaxLength(64);
 
-            // Unique per series: MySQL allows repeated NULL tuples, so every standalone
-            // event (SeriesId == null) coexists happily under this index.
+            // Unique per series: both MySQL and PostgreSQL treat NULLs as distinct, so every
+            // standalone event (SeriesId == null) coexists happily under this index.
             modelBuilder.Entity<Events>()
                 .HasIndex(e => new { e.SeriesId, e.OccurrenceIndex })
                 .IsUnique();
@@ -648,8 +689,10 @@ namespace backend.main.infrastructure.database.core
                 .Property(w => w.DietaryNeeds)
                 .HasMaxLength(500);
 
-            // One row per (event, user) forever. MySQL has no filtered unique index, so
-            // terminal entries are reactivated in place rather than inserted again.
+            // One row per (event, user) forever: terminal entries are reactivated in place
+            // rather than inserted again. PostgreSQL does support partial unique indexes, so
+            // this could be narrowed to non-terminal rows, but the reactivate-in-place flow
+            // in EventWaitlistService depends on the row surviving.
             modelBuilder.Entity<EventWaitlistEntry>()
                 .HasIndex(w => new { w.EventId, w.UserId })
                 .IsUnique();

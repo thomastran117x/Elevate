@@ -11,6 +11,7 @@ using StackExchange.Redis;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Testcontainers.Kafka;
+using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
 using Xunit;
 
@@ -56,9 +57,10 @@ public sealed class IntegrationTestCollection : ICollectionFixture<IntegrationTe
 
 public sealed class IntegrationTestEnvironment : IAsyncDisposable
 {
-    private const string MySqlImage = "mysql:8.4";
+    private const string PostgresImage = "postgres:17-alpine";
     private const string ElasticsearchImage = "docker.elastic.co/elasticsearch/elasticsearch:8.16.1";
-    private const string MySqlRootPassword = "root";
+    private const string PostgresUser = "postgres";
+    private const string PostgresPassword = "postgres";
     private const string DefaultDatabase = "appdb";
     private const string EmailTopicName = "eventxperience-email";
     private const string SmsTopicName = "eventxperience-sms";
@@ -69,22 +71,22 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
 
     private readonly RedisContainer _redisContainer;
     private readonly KafkaContainer _kafkaContainer;
-    private readonly IContainer _mySqlContainer;
+    private readonly PostgreSqlContainer _postgresContainer;
     private readonly IContainer _elasticsearchContainer;
 
     private IntegrationTestEnvironment(
-        IContainer mySqlContainer,
+        PostgreSqlContainer postgresContainer,
         RedisContainer redisContainer,
         KafkaContainer kafkaContainer,
         IContainer elasticsearchContainer)
     {
-        _mySqlContainer = mySqlContainer;
+        _postgresContainer = postgresContainer;
         _redisContainer = redisContainer;
         _kafkaContainer = kafkaContainer;
         _elasticsearchContainer = elasticsearchContainer;
     }
 
-    public string MySqlServerConnectionString { get; private set; } = string.Empty;
+    public string PostgresServerConnectionString { get; private set; } = string.Empty;
 
     public string RedisConnectionString { get; private set; } = string.Empty;
 
@@ -100,12 +102,13 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
 
     public static async Task<IntegrationTestEnvironment> CreateAsync()
     {
-        var mySqlContainer = new ContainerBuilder()
-            .WithImage(MySqlImage)
-            .WithEnvironment("MYSQL_ROOT_PASSWORD", MySqlRootPassword)
-            .WithEnvironment("MYSQL_DATABASE", DefaultDatabase)
-            .WithPortBinding(3306, true)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilExternalTcpPortIsAvailable(3306))
+        // PostgreSqlBuilder supplies a pg_isready wait strategy, which replaces the
+        // hand-rolled readiness polling the MySQL container needed.
+        var postgresContainer = new PostgreSqlBuilder()
+            .WithImage(PostgresImage)
+            .WithDatabase(DefaultDatabase)
+            .WithUsername(PostgresUser)
+            .WithPassword(PostgresPassword)
             .Build();
 
         var redisContainer = new RedisBuilder()
@@ -128,7 +131,7 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
             .Build();
 
         var environment = new IntegrationTestEnvironment(
-            mySqlContainer,
+            postgresContainer,
             redisContainer,
             kafkaContainer,
             elasticsearchContainer);
@@ -141,7 +144,7 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
     {
         var builder = new DbConnectionStringBuilder
         {
-            ConnectionString = MySqlServerConnectionString
+            ConnectionString = PostgresServerConnectionString
         };
         builder["Database"] = databaseName;
         return builder.ConnectionString;
@@ -164,68 +167,36 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
         await _elasticsearchContainer.DisposeAsync();
         await _kafkaContainer.DisposeAsync();
         await _redisContainer.DisposeAsync();
-        await _mySqlContainer.DisposeAsync();
+        await _postgresContainer.DisposeAsync();
     }
 
     private async Task StartAsync()
     {
-        await _mySqlContainer.StartAsync();
+        await _postgresContainer.StartAsync();
         await _redisContainer.StartAsync();
         await _kafkaContainer.StartAsync();
         await _elasticsearchContainer.StartAsync();
 
-        MySqlServerConnectionString = BuildMySqlConnectionString(DefaultDatabase);
+        PostgresServerConnectionString = BuildPostgresConnectionString(DefaultDatabase);
         RedisConnectionString = BuildRedisConnectionString();
         KafkaBootstrapServers = _kafkaContainer.GetBootstrapAddress();
         ElasticsearchUrl =
             $"http://{_elasticsearchContainer.Hostname}:{_elasticsearchContainer.GetMappedPublicPort(9200)}";
 
         SetEnvironmentVariables();
-        await WaitForMySqlAsync();
         await EnsureKafkaTopicsExistAsync();
     }
 
-    private async Task WaitForMySqlAsync()
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(30);
-        var lastError = (Exception?)null;
-
-        while (DateTime.UtcNow < deadline)
-        {
-            try
-            {
-                await using var context = new backend.main.infrastructure.database.core.AppDatabaseContext(
-                    new DbContextOptionsBuilder<backend.main.infrastructure.database.core.AppDatabaseContext>()
-                        .UseMySql(
-                            MySqlServerConnectionString,
-                            ServerVersion.AutoDetect(MySqlServerConnectionString))
-                        .Options);
-
-                await context.Database.OpenConnectionAsync();
-                await context.Database.CloseConnectionAsync();
-                return;
-            }
-            catch (Exception ex)
-            {
-                lastError = ex;
-                await Task.Delay(500);
-            }
-        }
-
-        throw new InvalidOperationException("MySQL test container did not become ready in time.", lastError);
-    }
-
-    private string BuildMySqlConnectionString(string databaseName) =>
+    private string BuildPostgresConnectionString(string databaseName) =>
         string.Join(
             ';',
             [
-                $"Server={_mySqlContainer.Hostname}",
-                $"Port={_mySqlContainer.GetMappedPublicPort(3306)}",
-                "User ID=root",
-                $"Password={MySqlRootPassword}",
+                $"Host={_postgresContainer.Hostname}",
+                $"Port={_postgresContainer.GetMappedPublicPort(5432)}",
+                $"Username={PostgresUser}",
+                $"Password={PostgresPassword}",
                 $"Database={databaseName}",
-                "SslMode=None",
-                "AllowPublicKeyRetrieval=True",
+                "SSL Mode=Disable",
                 "Pooling=False"
             ]);
 
@@ -238,7 +209,7 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
 
     private void SetEnvironmentVariables()
     {
-        Environment.SetEnvironmentVariable("DB_CONNECTION_STRING", MySqlServerConnectionString);
+        Environment.SetEnvironmentVariable("DB_CONNECTION_STRING", PostgresServerConnectionString);
         Environment.SetEnvironmentVariable("REDIS_URL", RedisConnectionString);
         Environment.SetEnvironmentVariable("ELASTICSEARCH_URL", ElasticsearchUrl);
         Environment.SetEnvironmentVariable("KAFKA_BOOTSTRAP_SERVERS", KafkaBootstrapServers);

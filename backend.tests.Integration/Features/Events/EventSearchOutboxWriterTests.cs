@@ -18,7 +18,7 @@ public class EventSearchOutboxWriterTests
     [Fact]
     public async Task StageUpsert_ShouldPersistEventDocumentPayload()
     {
-        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         await using var context = database.CreateDbContext();
 
         var writer = new EventSearchOutboxWriter(context);
@@ -56,7 +56,7 @@ public class EventSearchOutboxWriterTests
     [Fact]
     public async Task StageDelete_ShouldPersistDeletePayload()
     {
-        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         await using var context = database.CreateDbContext();
 
         var writer = new EventSearchOutboxWriter(context);

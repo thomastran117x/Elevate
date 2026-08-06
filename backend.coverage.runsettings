@@ -2,12 +2,43 @@
 <RunSettings>
   <DataCollectionRunSettings>
     <DataCollectors>
-      <DataCollector friendlyName="XPlat Code Coverage">
+      <!--
+        First-party Microsoft collector (ships with Microsoft.NET.Test.Sdk).
+        Replaced coverlet.collector during the .NET 10 upgrade: coverlet's Mono.Cecil
+        resolver cannot resolve Microsoft.Extensions.DependencyInjection.Abstractions
+        10.0.0.0 from the ASP.NET Core shared framework, so it failed to instrument
+        backend.dll and silently dropped it from the report — the coverage gate was
+        still passing while measuring only the two worker assemblies.
+      -->
+      <DataCollector friendlyName="Code Coverage">
         <Configuration>
           <Format>cobertura</Format>
-          <IncludeTestAssembly>false</IncludeTestAssembly>
-          <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
-          <ExcludeByFile>**/Migrations/*.cs,**/src/main/seeders/**/*.cs,**/*.Designer.cs,**/*ModelSnapshot.cs</ExcludeByFile>
+          <CodeCoverage>
+            <ModulePaths>
+              <Include>
+                <ModulePath>backend\.dll$</ModulePath>
+                <ModulePath>worker\.dll$</ModulePath>
+                <ModulePath>indexer\.dll$</ModulePath>
+              </Include>
+              <Exclude>
+                <ModulePath>backend\.tests\.Unit\.dll$</ModulePath>
+              </Exclude>
+            </ModulePaths>
+            <Sources>
+              <Exclude>
+                <Source>.*Migrations.*</Source>
+                <Source>.*seeders.*</Source>
+                <Source>.*\.Designer\.cs$</Source>
+                <Source>.*ModelSnapshot\.cs$</Source>
+              </Exclude>
+            </Sources>
+            <Attributes>
+              <Exclude>
+                <Attribute>^System\.Runtime\.CompilerServices\.CompilerGeneratedAttribute$</Attribute>
+                <Attribute>^System\.CodeDom\.Compiler\.GeneratedCodeAttribute$</Attribute>
+              </Exclude>
+            </Attributes>
+          </CodeCoverage>
         </Configuration>
       </DataCollector>
     </DataCollectors>

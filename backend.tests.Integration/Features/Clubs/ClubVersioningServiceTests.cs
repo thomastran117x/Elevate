@@ -437,7 +437,7 @@ public class ClubVersioningServiceTests
     [Fact]
     public async Task CleanupRunner_ShouldDeleteOnlyImagesThatAreNoLongerRollbackableOrCurrent()
     {
-        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         await using var db = database.CreateDbContext();
 
         var now = new DateTimeOffset(2026, 5, 13, 12, 0, 0, TimeSpan.Zero);
@@ -546,14 +546,14 @@ public class ClubVersioningServiceTests
 
     private sealed class ClubServiceHarness : IAsyncDisposable
     {
-        private readonly MySqlTestDatabase _database;
+        private readonly PostgresTestDatabase _database;
 
         public AppDatabaseContext Db { get; }
         public ClubService Service { get; }
         public TestTimeProvider TimeProvider { get; }
 
         private ClubServiceHarness(
-            MySqlTestDatabase database,
+            PostgresTestDatabase database,
             AppDatabaseContext db,
             ClubService service,
             TestTimeProvider timeProvider)
@@ -566,7 +566,7 @@ public class ClubVersioningServiceTests
 
         public static async Task<ClubServiceHarness> CreateAsync()
         {
-            var database = await MySqlTestDatabase.CreateAsync();
+            var database = await PostgresTestDatabase.CreateAsync();
 
             var db = database.CreateDbContext();
             db.Users.AddRange(

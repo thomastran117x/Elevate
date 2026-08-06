@@ -6,7 +6,7 @@ Backend tests are split into two projects:
 - `backend.tests.Integration`
 
 The unit suite covers controller logic, pure helpers, token/auth logic, and worker parsers.
-The integration suite now runs the real ASP.NET app in the `Testing` environment against Docker-backed Testcontainers for MySQL, Redis, Elasticsearch, and Kafka, covering repository/service flows, seeders, search, and HTTP auth/event/club endpoints.
+The integration suite now runs the real ASP.NET app in the `Testing` environment against Docker-backed Testcontainers for PostgreSQL, Redis, Elasticsearch, and Kafka, covering repository/service flows, seeders, search, and HTTP auth/event/club endpoints.
 
 ## Commands
 
@@ -90,7 +90,7 @@ The current backend coverage improvement plan lives in:
 Auth integration tests use:
 
 - ASP.NET `WebApplicationFactory<Program>`
-- Testcontainers-backed MySQL, Redis, Elasticsearch, and Kafka
+- Testcontainers-backed PostgreSQL, Redis, Elasticsearch, and Kafka
 - fake captcha provider
 - fake OAuth provider
 - fake blob storage

@@ -35,7 +35,7 @@ PORT=8090
 # Databases
 ##############################################
 
-DB_CONNECTION_STRING="Server=localhost;Port=3306;Database=database;User=root;Password=password"
+DB_CONNECTION_STRING="Host=localhost;Port=5432;Database=database;Username=postgres;Password=password"
 REDIS_CONNECTION="localhost:6379"
 
 ##############################################

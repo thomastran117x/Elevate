@@ -79,13 +79,13 @@ public class ClubPostServiceTests
 
     private sealed class ClubPostServiceHarness : IAsyncDisposable
     {
-        private readonly MySqlTestDatabase _database;
+        private readonly PostgresTestDatabase _database;
 
         public AppDatabaseContext Db { get; }
         public ClubPostService Service { get; }
 
         private ClubPostServiceHarness(
-            MySqlTestDatabase database,
+            PostgresTestDatabase database,
             AppDatabaseContext db,
             ClubPostService service)
         {
@@ -96,7 +96,7 @@ public class ClubPostServiceTests
 
         public static async Task<ClubPostServiceHarness> CreateAsync(bool isPrivate)
         {
-            var database = await MySqlTestDatabase.CreateAsync();
+            var database = await PostgresTestDatabase.CreateAsync();
 
             var db = database.CreateDbContext();
 

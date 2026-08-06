@@ -82,7 +82,7 @@ services:
     environment:
       <<: [*common-env, *kafka-env, *elasticsearch-env, *sms-mfa-env, *feature-flags-env]
       PORT: "${BACKEND_PORT:-8090}"
-      DB_CONNECTION_STRING: "${DB_CONNECTION_STRING:-Server=mysql;Port=3306;Database=appdb;User=appuser;Password=apppass}"
+      DB_CONNECTION_STRING: "${DB_CONNECTION_STRING:-Host=postgres;Port=5432;Database=appdb;Username=appuser;Password=apppass}"
       REDIS_URL: "${REDIS_URL:-redis:6379}"
       JWT_SECRET_ACCESS: "${JWT_SECRET_ACCESS:-amazing_secret_key_yup_yes_abcdef123}"
       JWT_SECRET_VERIFICATION: "${JWT_SECRET_VERIFICATION:-amazing_verification_secret_yup_yes_abcdef123}"
@@ -124,7 +124,7 @@ services:
     ports:
       - "8090:8090"
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_started
@@ -258,27 +258,32 @@ services:
     networks:
       - event-network
 
-  mysql:
-    container_name: event-mysql
-    image: mysql:8.4
+  postgres:
+    container_name: event-postgres
+    image: postgres:17
     restart: always
     command:
-      - "--server-id=223344"
-      - "--log-bin=mysql-bin"
-      - "--binlog_format=ROW"
-      - "--binlog_row_image=FULL"
-      - "--binlog_expire_logs_seconds=86400"
+      # wal_level=logical is required for Debezium's pgoutput plugin to create a
+      # replication slot, and can only be changed with a restart.
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_wal_senders=10"
+      - "-c"
+      - "max_replication_slots=10"
     environment:
-      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-root}"
-      MYSQL_DATABASE: "${MYSQL_DATABASE:-appdb}"
-      MYSQL_USER: "${MYSQL_USER:-appuser}"
-      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-apppass}"
+      POSTGRES_USER: "${POSTGRES_USER:-appuser}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-apppass}"
+      POSTGRES_DB: "${POSTGRES_DB:-appdb}"
+      # Pinned so ORDER BY on text keeps linguistic ordering rather than byte order.
+      POSTGRES_INITDB_ARGS: "--locale=en_US.utf8"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
     ports:
-      - "3307:3306"
+      - "5433:5432"
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p$$MYSQL_ROOT_PASSWORD"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -391,7 +396,7 @@ services:
       VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
     depends_on:
       - kafka
-      - mysql
+      - postgres
     ports:
       - "8083:8083"
     healthcheck:
@@ -422,6 +427,6 @@ networks:
     driver: bridge
 
 volumes:
-  mysql_data:
+  postgres_data:
   redis_data:
   elasticsearch_data:

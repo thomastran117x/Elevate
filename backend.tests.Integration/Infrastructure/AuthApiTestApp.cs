@@ -39,7 +39,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
     };
 
     private readonly TestWebApplicationFactory _factory;
-    private readonly MySqlTestDatabase _database;
+    private readonly PostgresTestDatabase _database;
     private readonly KafkaTopicProbe _kafkaProbe;
     private readonly IntegrationTestEnvironment _environment;
 
@@ -52,7 +52,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
     private AuthApiTestApp(
         TestWebApplicationFactory factory,
         HttpClient client,
-        MySqlTestDatabase database,
+        PostgresTestDatabase database,
         KafkaTopicProbe kafkaProbe,
         IntegrationTestEnvironment environment)
     {
@@ -69,7 +69,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         IReadOnlyDictionary<string, string?>? configurationOverrides = null)
     {
         var environment = await IntegrationTestFixture.GetEnvironmentAsync();
-        var database = await MySqlTestDatabase.CreateAsync();
+        var database = await PostgresTestDatabase.CreateAsync();
         var factory = new TestWebApplicationFactory(
             environment,
             database.ConnectionString,

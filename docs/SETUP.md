@@ -4,7 +4,7 @@ This setup document will show how to get EventXperience running on your local ma
 
 ## Requirements
 
-There are two ways to run the project currently. The recommended approach is Docker as its minimal, works regardless of what environment (OS, Node version etc) that you may have, and more importantly, creates a MySQL and Redis container without local installation. You may use your own local Node, MySQL and Redis if you wish, but setup of MySQL and Redis is tedious if you do not have already installed.
+There are two ways to run the project currently. The recommended approach is Docker as its minimal, works regardless of what environment (OS, Node version etc) that you may have, and more importantly, creates a PostgreSQL and Redis container without local installation. You may use your own local Node, PostgreSQL and Redis if you wish, but setup of PostgreSQL and Redis is tedious if you do not have already installed.
 
 ### Docker (recommended)
 
@@ -22,22 +22,22 @@ Verify Docker is working with:
 ### Locally (not recommended)
 
 - [Node.js v24.x](https://nodejs.org/en/download)
-- [.NET Core 9.x](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
-- [MySQL](https://www.mysql.com/downloads/)
+- [.NET 10.x](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
+- [PostgreSQL](https://www.postgresql.org/download/)
 - [Redis](https://redis.io/downloads/)
 - [Kafka](https://kafka.apache.org/quickstart)
 
 [Installing Redis on Windows](https://redis.io/docs/latest/operate/oss_and_stack/install/archive/install-redis/install-redis-on-windows/)  
 [Installing Kafka on Windows](https://kafka.apache.org/quickstart)
 
-Alternatively, you can use a cloud instance of MySQL, Redis, Kafka, and Elasticsearch - however it is a lot for this project
+Alternatively, you can use a cloud instance of PostgreSQL, Redis, Kafka, and Elasticsearch - however it is a lot for this project
 
 Verify your local environment is working with:
 
 ```bash
   node --version
   dotnet --version
-  mysql -u root -p -e "SELECT VERSION();"
+  psql -U appuser -d appdb -c "SELECT version();"
   redis-cli ping
   kafka-topics --version
 ```
@@ -56,7 +56,7 @@ Clone EventXperience using Git.
 
 ### Setup .env
 
-Due to Prisma, a minimal .env is needed to complete setup as migrations can't be applied to MySQL without the database URL. Run the following command in the root directory
+A minimal .env is needed to complete setup, as EF Core migrations can't be applied to PostgreSQL without the connection string. Run the following command in the root directory
 
 Run 
 ```bash
@@ -68,7 +68,7 @@ These two scripts will scaffold the exact template needed for both frontend, bac
 
 ## Running with Docker (recommended)
 
-Although Docker normally works using the standard docker-compose, unfortunately, a new setup must apply the Prisma migrations before the app can run. A shell script is provided that starts the docker container, applies the migration and continues to run it to further smooth development and setup.
+Although Docker normally works using the standard docker-compose, a new setup must apply the EF Core migrations before the app can run. A shell script is provided that starts the docker container, applies the migration and continues to run it to further smooth development and setup.
 
 Start Docker with the following command at the root directory:
 
@@ -76,11 +76,19 @@ Start Docker with the following command at the root directory:
   ../app docker
 ```
 
+> **Upgrading from a MySQL-era checkout:** the database moved from MySQL to PostgreSQL, and the
+> compose volume was renamed `mysql_data` → `postgres_data`. Drop the old volumes first, otherwise
+> the backend starts against an empty Postgres while the stale MySQL volume lingers:
+>
+> ```bash
+>   docker compose down -v
+> ```
+
 ## Running locally
 
 To run the app locally, we will need to install dependencies and then apply migrations before the app can boot up succesfully. Two shell scripts are provided to automate this.
 
-setup script will install all dependencies and apply the Prisma migration to MySQL
+setup script will install all dependencies and apply the EF Core migration to PostgreSQL
 run-app will run both the frontend and backend in one terminal
 
 Paste the following scripts into the terminal:

@@ -67,7 +67,7 @@ namespace backend.main.application.environment
 
             _dbConnectionString = GetOrDefault(
                 ["DB_CONNECTION_STRING"],
-                "Server=localhost;Port=3306;Database=database;User=root;Password=password123"
+                "Host=localhost;Port=5432;Database=database;Username=postgres;Password=password123"
             );
 
             _redisConnection = GetOrDefault(

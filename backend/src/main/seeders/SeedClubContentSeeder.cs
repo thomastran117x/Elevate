@@ -766,8 +766,8 @@ public sealed class SeedClubContentSeeder : ISeeder
     private static System.Linq.Expressions.Expression<Func<Club, bool>> IsSeedClubPredicate()
     {
         return club =>
-            (club.Email != null && EF.Functions.Like(club.Email, $"%{SeedCatalogConstants.SeedEmailDomain}"))
-            || (club.WebsiteUrl != null && EF.Functions.Like(club.WebsiteUrl, $"%{SeedCatalogConstants.SeedWebsiteHost}%"));
+            (club.Email != null && EF.Functions.Like(club.Email.ToLower(), $"%{SeedCatalogConstants.SeedEmailDomain.ToLower()}"))
+            || (club.WebsiteUrl != null && EF.Functions.Like(club.WebsiteUrl.ToLower(), $"%{SeedCatalogConstants.SeedWebsiteHost.ToLower()}%"));
     }
 
     private static bool SetIfDifferent(string? currentValue, string? nextValue, Action<string?> setter)

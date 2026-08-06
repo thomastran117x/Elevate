@@ -316,11 +316,11 @@ namespace backend.main.features.clubs
             }
             catch (ElasticsearchDisabledException ex)
             {
-                Logger.Info($"[ClubService] Elasticsearch disabled. Falling back to MySQL search. {ex.Message}");
+                Logger.Info($"[ClubService] Elasticsearch disabled. Falling back to database search. {ex.Message}");
             }
             catch (ElasticsearchUnavailableException ex)
             {
-                Logger.Warn(ex, "[ClubService] Elasticsearch temporarily unavailable. Falling back to MySQL search.");
+                Logger.Warn(ex, "[ClubService] Elasticsearch temporarily unavailable. Falling back to database search.");
             }
             catch (Exception ex)
             {
@@ -517,8 +517,8 @@ namespace backend.main.features.clubs
                 query =
                     from staff in query
                     join u in _db.Users.AsNoTracking() on staff.UserId equals u.Id
-                    where (u.Name != null && EF.Functions.Like(u.Name, term)) ||
-                          (u.Username != null && EF.Functions.Like(u.Username, term))
+                    where (u.Name != null && EF.Functions.Like(u.Name.ToLower(), term.ToLower())) ||
+                          (u.Username != null && EF.Functions.Like(u.Username.ToLower(), term.ToLower()))
                     select staff;
             }
 

@@ -34,8 +34,8 @@ namespace backend.main.features.clubs.posts
             {
                 string term = search.Trim();
                 query = query.Where(p =>
-                    EF.Functions.Like(p.Title, $"%{term}%") ||
-                    EF.Functions.Like(p.Content, $"%{term}%"));
+                    EF.Functions.Like(p.Title.ToLower(), $"%{term.ToLower()}%") ||
+                    EF.Functions.Like(p.Content.ToLower(), $"%{term.ToLower()}%"));
             }
 
             query = sortBy == PostSortBy.Popular
@@ -57,8 +57,8 @@ namespace backend.main.features.clubs.posts
             {
                 string term = search.Trim();
                 query = query.Where(p =>
-                    EF.Functions.Like(p.Title, $"%{term}%") ||
-                    EF.Functions.Like(p.Content, $"%{term}%"));
+                    EF.Functions.Like(p.Title.ToLower(), $"%{term.ToLower()}%") ||
+                    EF.Functions.Like(p.Content.ToLower(), $"%{term.ToLower()}%"));
             }
 
             return await query.CountAsync();
@@ -72,8 +72,8 @@ namespace backend.main.features.clubs.posts
             {
                 string term = search.Trim();
                 query = query.Where(p =>
-                    EF.Functions.Like(p.Title, $"%{term}%") ||
-                    EF.Functions.Like(p.Content, $"%{term}%"));
+                    EF.Functions.Like(p.Title.ToLower(), $"%{term.ToLower()}%") ||
+                    EF.Functions.Like(p.Content.ToLower(), $"%{term.ToLower()}%"));
             }
 
             query = sortBy == PostSortBy.Popular
@@ -94,8 +94,8 @@ namespace backend.main.features.clubs.posts
             {
                 string term = search.Trim();
                 query = query.Where(p =>
-                    EF.Functions.Like(p.Title, $"%{term}%") ||
-                    EF.Functions.Like(p.Content, $"%{term}%"));
+                    EF.Functions.Like(p.Title.ToLower(), $"%{term.ToLower()}%") ||
+                    EF.Functions.Like(p.Content.ToLower(), $"%{term.ToLower()}%"));
             }
 
             return await query.CountAsync();
