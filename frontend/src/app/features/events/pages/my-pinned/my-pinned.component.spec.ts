@@ -1,0 +1,174 @@
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter, Router } from '@angular/router';
+import { BehaviorSubject, of, throwError } from 'rxjs';
+
+import { makeEventItem } from '@testing';
+
+import { AuthReturnUrlService } from '../../../auth/services/auth-return-url.service';
+import { PinnedEvent } from '../../models/event-favourite.types';
+import { EventFavouritesService } from '../../services/event-favourites.service';
+import { EventFavouritesStore } from '../../services/event-favourites-store.service';
+import { MyPinnedComponent } from './my-pinned.component';
+
+describe('MyPinnedComponent', () => {
+  let fixture: ComponentFixture<MyPinnedComponent>;
+  let component: MyPinnedComponent;
+  let favourites: jasmine.SpyObj<EventFavouritesService>;
+  let favouritesStore: jasmine.SpyObj<EventFavouritesStore> & { isSignedIn: boolean };
+  let navigate: jasmine.Spy;
+  let authReturnUrl: jasmine.SpyObj<AuthReturnUrlService>;
+  let ids$: BehaviorSubject<ReadonlySet<number>>;
+
+  function pinnedRow(overrides: Partial<PinnedEvent> = {}): PinnedEvent {
+    return {
+      isRegistered: false,
+      isFavourited: true,
+      favouritedAtUtc: '2026-08-01T00:00:00Z',
+      registeredAtUtc: null,
+      accessRevoked: false,
+      event: makeEventItem(),
+      ...overrides,
+    };
+  }
+
+  async function setup(rows: PinnedEvent[] = []): Promise<void> {
+    ids$ = new BehaviorSubject<ReadonlySet<number>>(
+      new Set(rows.filter((row) => row.isFavourited).map((row) => row.event.id)),
+    );
+
+    favourites = jasmine.createSpyObj<EventFavouritesService>('EventFavouritesService', [
+      'getMyPinned',
+    ]);
+    favourites.getMyPinned.and.returnValue(of(rows));
+
+    favouritesStore = jasmine.createSpyObj<EventFavouritesStore>(
+      'EventFavouritesStore',
+      ['setFavourited', 'toggle', 'ensureLoaded', 'isFavourited$'],
+      { isSignedIn: true, ids$: ids$.asObservable() },
+    ) as jasmine.SpyObj<EventFavouritesStore> & { isSignedIn: boolean };
+    favouritesStore.isFavourited$.and.callFake((eventId: number) => of(ids$.value.has(eventId)));
+    favouritesStore.toggle.and.returnValue(of(false));
+
+    authReturnUrl = jasmine.createSpyObj<AuthReturnUrlService>('AuthReturnUrlService', ['set']);
+
+    await TestBed.configureTestingModule({
+      imports: [MyPinnedComponent],
+      providers: [
+        provideRouter([]),
+        { provide: EventFavouritesService, useValue: favourites },
+        { provide: EventFavouritesStore, useValue: favouritesStore },
+        { provide: AuthReturnUrlService, useValue: authReturnUrl },
+      ],
+    }).compileComponents();
+
+    const router = TestBed.inject(Router);
+    navigate = spyOn(router, 'navigate').and.resolveTo(true);
+    spyOnProperty(router, 'url', 'get').and.returnValue('/events/me/pinned');
+
+    fixture = TestBed.createComponent(MyPinnedComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  }
+
+  it('splits the snapshot into Going and Saved', async () => {
+    await setup([
+      pinnedRow({ isRegistered: true, isFavourited: false, event: makeEventItem({ id: 9 }) }),
+      pinnedRow({ event: makeEventItem({ id: 4 }) }),
+    ]);
+
+    expect(component.loading).toBeFalse();
+    expect(component.going.map((row) => row.event.id)).toEqual([9]);
+    expect(component.saved.map((row) => row.event.id)).toEqual([4]);
+  });
+
+  it('seeds the shared star state from the loaded rows', async () => {
+    await setup([
+      pinnedRow({ isRegistered: true, isFavourited: false, event: makeEventItem({ id: 9 }) }),
+      pinnedRow({ event: makeEventItem({ id: 4 }) }),
+    ]);
+
+    expect(favouritesStore.setFavourited).toHaveBeenCalledWith(9, false);
+    expect(favouritesStore.setFavourited).toHaveBeenCalledWith(4, true);
+  });
+
+  it('keeps an unstarred row on screen and does not reload', async () => {
+    await setup([pinnedRow({ event: makeEventItem({ id: 4 }) })]);
+    expect(component.isFavourited(component.items[0])).toBeTrue();
+
+    // Simulate the toggle component writing through the shared store.
+    ids$.next(new Set<number>());
+    fixture.detectChanges();
+
+    // The row survives so the star is its own undo — this is the whole backtrack behaviour.
+    expect(component.items.length).toBe(1);
+    expect(component.saved.length).toBe(1);
+    expect(component.isFavourited(component.items[0])).toBeFalse();
+    expect(favourites.getMyPinned).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores the star when the user changes their mind', async () => {
+    await setup([pinnedRow({ event: makeEventItem({ id: 4 }) })]);
+
+    ids$.next(new Set<number>());
+    ids$.next(new Set([4]));
+    fixture.detectChanges();
+
+    expect(component.isFavourited(component.items[0])).toBeTrue();
+    expect(favourites.getMyPinned).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a Going row regardless of its star', async () => {
+    await setup([
+      pinnedRow({ isRegistered: true, isFavourited: true, event: makeEventItem({ id: 9 }) }),
+    ]);
+
+    ids$.next(new Set<number>());
+    fixture.detectChanges();
+
+    // It is on the list because of the registration, not the star.
+    expect(component.going.length).toBe(1);
+  });
+
+  it('surfaces a message when a toggle fails', async () => {
+    await setup([pinnedRow()]);
+
+    component.onFavouriteFailed({ status: 500 });
+
+    expect(component.error).toBe('We could not update this event.');
+  });
+
+  it('offers sign-in on a 401 instead of an error banner', async () => {
+    await setup();
+    favourites.getMyPinned.and.returnValue(throwError(() => ({ status: 401 })));
+
+    fixture = TestBed.createComponent(MyPinnedComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(component.requiresLogin).toBeTrue();
+    expect(component.error).toBe('');
+  });
+
+  it('shows an error banner for non-401 load failures', async () => {
+    await setup();
+    favourites.getMyPinned.and.returnValue(throwError(() => ({ status: 500 })));
+
+    fixture = TestBed.createComponent(MyPinnedComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(component.requiresLogin).toBeFalse();
+    expect(component.error).toBe('We could not load your pinned events.');
+  });
+
+  it('sends the visitor to login with a return url', async () => {
+    await setup();
+
+    component.goToLogin();
+
+    expect(authReturnUrl.set).toHaveBeenCalledWith('/events/me/pinned');
+    expect(navigate).toHaveBeenCalledWith(['/auth/login'], {
+      queryParams: { returnUrl: '/events/me/pinned' },
+    });
+  });
+});

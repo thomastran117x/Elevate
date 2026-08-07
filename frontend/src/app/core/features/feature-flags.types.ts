@@ -7,6 +7,7 @@ export const FEATURE_KEYS = {
   clubsVersioning: 'clubs.versioning',
   events: 'events',
   eventsAnalytics: 'events.analytics',
+  eventsFavourites: 'events.favourites',
   eventsImages: 'events.images',
   eventsInvitations: 'events.invitations',
   eventsRegistration: 'events.registration',

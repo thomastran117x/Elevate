@@ -1,0 +1,162 @@
+import { TestBed } from '@angular/core/testing';
+import { MockStore } from '@ngrx/store/testing';
+import { NEVER, of, throwError } from 'rxjs';
+
+import { makeCurrentUser, provideTestStore } from '@testing';
+
+import { selectUser } from '../../../core/stores/user.selectors';
+import { EventFavouritesService } from './event-favourites.service';
+import { EventFavouritesStore } from './event-favourites-store.service';
+
+describe('EventFavouritesStore', () => {
+  let favourites: jasmine.SpyObj<EventFavouritesService>;
+
+  function setup(signedIn = true): { store: EventFavouritesStore; mockStore: MockStore } {
+    favourites = jasmine.createSpyObj<EventFavouritesService>('EventFavouritesService', [
+      'getMyFavouriteIds',
+      'favourite',
+      'unfavourite',
+    ]);
+    favourites.getMyFavouriteIds.and.returnValue(of([12, 47]));
+    favourites.favourite.and.returnValue(
+      of({ eventId: 0, isFavourited: true, favouritedAtUtc: null }),
+    );
+    favourites.unfavourite.and.returnValue(of(void 0));
+
+    TestBed.configureTestingModule({
+      providers: [
+        EventFavouritesStore,
+        { provide: EventFavouritesService, useValue: favourites },
+        ...provideTestStore({ user: signedIn ? makeCurrentUser({ Id: 5 }) : null }),
+      ],
+    });
+
+    return {
+      store: TestBed.inject(EventFavouritesStore),
+      mockStore: TestBed.inject(MockStore),
+    };
+  }
+
+  it('loads the id set once and reuses it', () => {
+    const { store } = setup();
+
+    store.ensureLoaded();
+    store.ensureLoaded();
+
+    expect(favourites.getMyFavouriteIds).toHaveBeenCalledTimes(1);
+    expect(store.isFavourited(12)).toBeTrue();
+    expect(store.isFavourited(99)).toBeFalse();
+  });
+
+  it('does not call the API for anonymous visitors', () => {
+    const { store } = setup(false);
+
+    store.ensureLoaded();
+
+    expect(favourites.getMyFavouriteIds).not.toHaveBeenCalled();
+    expect(store.isSignedIn).toBeFalse();
+  });
+
+  it('leaves every star hollow when the load fails', () => {
+    const { store } = setup();
+    favourites.getMyFavouriteIds.and.returnValue(throwError(() => new Error('offline')));
+
+    store.ensureLoaded();
+
+    expect(store.isFavourited(12)).toBeFalse();
+  });
+
+  it('flips the star optimistically before the write resolves', () => {
+    const { store } = setup();
+    store.ensureLoaded();
+
+    // Never emits, so the only state change observable here is the optimistic one.
+    favourites.favourite.and.returnValue(NEVER);
+    store.toggle(99).subscribe();
+
+    expect(store.isFavourited(99)).toBeTrue();
+    expect(favourites.favourite).toHaveBeenCalledWith(99);
+  });
+
+  it('reverts the star when the write fails', () => {
+    const { store } = setup();
+    store.ensureLoaded();
+    favourites.unfavourite.and.returnValue(throwError(() => new Error('500')));
+
+    let errored = false;
+    store.toggle(12).subscribe({ error: () => (errored = true) });
+
+    expect(errored).toBeTrue();
+    expect(store.isFavourited(12)).toBeTrue();
+  });
+
+  it('unstars and restars the same event without reloading', () => {
+    const { store } = setup();
+    store.ensureLoaded();
+
+    store.toggle(12).subscribe();
+    expect(store.isFavourited(12)).toBeFalse();
+
+    // The backtrack the pinned page depends on: the row is still rendered, so the very next
+    // click must re-star it.
+    store.toggle(12).subscribe();
+    expect(store.isFavourited(12)).toBeTrue();
+
+    expect(favourites.unfavourite).toHaveBeenCalledOnceWith(12);
+    expect(favourites.favourite).toHaveBeenCalledOnceWith(12);
+    expect(favourites.getMyFavouriteIds).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the set when the signed-in user changes', () => {
+    const { store, mockStore } = setup();
+    store.ensureLoaded();
+    expect(store.isFavourited(12)).toBeTrue();
+
+    mockStore.overrideSelector(selectUser, makeCurrentUser({ Id: 6 }));
+    mockStore.refreshState();
+
+    // One user's stars must not carry into the next session in the same tab.
+    expect(store.isFavourited(12)).toBeFalse();
+
+    store.ensureLoaded();
+    expect(favourites.getMyFavouriteIds).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears the set and stops loading on sign-out', () => {
+    const { store, mockStore } = setup();
+    store.ensureLoaded();
+
+    mockStore.overrideSelector(selectUser, null);
+    mockStore.refreshState();
+
+    expect(store.isFavourited(12)).toBeFalse();
+    expect(store.isSignedIn).toBeFalse();
+
+    store.ensureLoaded();
+    expect(favourites.getMyFavouriteIds).toHaveBeenCalledTimes(1);
+  });
+
+  it('seeds a single event without touching the rest', () => {
+    const { store } = setup();
+    store.ensureLoaded();
+
+    store.setFavourited(99, true);
+    store.setFavourited(12, false);
+
+    expect(store.isFavourited(99)).toBeTrue();
+    expect(store.isFavourited(12)).toBeFalse();
+    expect(store.isFavourited(47)).toBeTrue();
+  });
+
+  it('emits per-event state through isFavourited$', () => {
+    const { store } = setup();
+    store.ensureLoaded();
+
+    const seen: boolean[] = [];
+    store.isFavourited$(12).subscribe((favourited) => seen.push(favourited));
+
+    store.toggle(12).subscribe();
+
+    expect(seen).toEqual([true, false]);
+  });
+});

@@ -62,6 +62,7 @@ describe('NavbarComponent', () => {
       expect(component.clubsEnabled).toBeTrue();
       expect(component.invitationsEnabled).toBeTrue();
       expect(component.waitlistEnabled).toBeTrue();
+      expect(component.favouritesEnabled).toBeTrue();
     });
 
     it('reads each flag independently', async () => {
@@ -71,6 +72,7 @@ describe('NavbarComponent', () => {
       expect(component.waitlistEnabled).toBeFalse();
       expect(component.eventsEnabled).toBeTrue();
       expect(component.invitationsEnabled).toBeTrue();
+      expect(component.favouritesEnabled).toBeTrue();
     });
 
     it('cascades a disabled parent to its event sub-features', async () => {
@@ -79,6 +81,7 @@ describe('NavbarComponent', () => {
       expect(component.eventsEnabled).toBeFalse();
       expect(component.invitationsEnabled).toBeFalse();
       expect(component.waitlistEnabled).toBeFalse();
+      expect(component.favouritesEnabled).toBeFalse();
     });
   });
 

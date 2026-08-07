@@ -92,6 +92,14 @@
               }
             </div>
 
+            @if (favouritesFeatureEnabled && !item.accessRevoked) {
+              <app-event-favourite-toggle
+                size="sm"
+                [eventId]="item.event.id"
+                (failed)="onFavouriteFailed($event)"
+              />
+            }
+
             <button
               type="button"
               [disabled]="actionLoadingId === item.entryId"

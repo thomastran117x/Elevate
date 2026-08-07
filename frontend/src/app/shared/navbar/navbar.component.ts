@@ -26,6 +26,7 @@ export class NavbarComponent {
   readonly authEnabled: boolean;
   readonly invitationsEnabled: boolean;
   readonly waitlistEnabled: boolean;
+  readonly favouritesEnabled: boolean;
   readonly eventsEnabled: boolean;
   readonly clubsEnabled: boolean;
 
@@ -42,6 +43,7 @@ export class NavbarComponent {
     this.authEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.auth);
     this.invitationsEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.eventsInvitations);
     this.waitlistEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.eventsWaitlist);
+    this.favouritesEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.eventsFavourites);
     this.eventsEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.events);
     this.clubsEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.clubs);
   }
