@@ -10,7 +10,7 @@ using backend.main.utilities;
 using FluentAssertions;
 
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 
 namespace backend.tests.Unit.Application.OpenApi;
 
@@ -61,8 +61,10 @@ public class OpenApiConfigurationTests
         authorizedOperation.Security.Should().NotBeNull();
         authorizedOperation.Security.Should().ContainSingle();
         authorizedOperation.Security![0].Keys.Single().Reference!.Id.Should().Be("bearerAuth");
-        anonymousOperation.Security.Should().BeEmpty();
-        noAuthOperation.Security.Should().BeEmpty();
+        // Microsoft.OpenApi 2.x leaves these collections null rather than empty when untouched.
+        // With no document-level security defined, an absent `security` is equivalent to `security: []`.
+        anonymousOperation.Security.Should().BeNullOrEmpty();
+        noAuthOperation.Security.Should().BeNullOrEmpty();
     }
 
     [Fact]
@@ -76,8 +78,9 @@ public class OpenApiConfigurationTests
             new List<object> { new AuthorizeAttribute() });
 
         operation.Responses.Should().ContainKeys("400", "401", "403", "500");
-        operation.Responses["400"].Content["application/json"].Schema.Reference!.Id
-            .Should().Be("ApiResponseOfObject");
+        operation.Responses["400"].Content["application/json"].Schema
+            .Should().BeOfType<OpenApiSchemaReference>()
+            .Which.Reference.Id.Should().Be("ApiResponseOfObject");
         operation.Responses["401"].Description.Should().Contain("Authentication is required");
         operation.Responses["403"].Description.Should().Contain("does not have permission");
     }
@@ -96,7 +99,7 @@ public class OpenApiConfigurationTests
             parameter.Name == CsrfConfiguration.CsrfHeaderName
             && parameter.In == ParameterLocation.Header
             && parameter.Required);
-        unprotectedOperation.Parameters.Should().BeEmpty();
+        unprotectedOperation.Parameters.Should().BeNullOrEmpty();
     }
 
     [Theory]
@@ -201,8 +204,9 @@ public class OpenApiConfigurationTests
 
         operation.Responses.Should().ContainSingle();
         operation.Responses["400"].Description.Should().Be("Bad request");
-        operation.Responses["400"].Content["application/json"].Schema.Reference!.Id
-            .Should().Be("ApiResponseOfObject");
+        operation.Responses["400"].Content["application/json"].Schema
+            .Should().BeOfType<OpenApiSchemaReference>()
+            .Which.Reference.Id.Should().Be("ApiResponseOfObject");
     }
 
     [Fact]
@@ -280,7 +284,7 @@ public class OpenApiConfigurationTests
 
         operation.Responses.Should().ContainKey("302");
         operation.Responses["302"].Description.Should().Be("Redirect only");
-        operation.Responses["302"].Content.Should().BeEmpty();
+        operation.Responses["302"].Content.Should().BeNullOrEmpty();
     }
 
     [Fact]
@@ -290,30 +294,23 @@ public class OpenApiConfigurationTests
         {
             Components = new OpenApiComponents
             {
-                Schemas = new Dictionary<string, OpenApiSchema>
+                Schemas = new Dictionary<string, IOpenApiSchema>
                 {
-                    ["ApiResponseOfObject"] = new()
+                    ["ApiResponseOfObject"] = new OpenApiSchema
                     {
-                        Properties = new Dictionary<string, OpenApiSchema>
+                        Properties = new Dictionary<string, IOpenApiSchema>
                         {
-                            ["success"] = new(),
-                            ["message"] = new(),
-                            ["data"] = new()
-                            {
-                                Reference = new OpenApiReference
-                                {
-                                    Id = "Object",
-                                    Type = ReferenceType.Schema
-                                }
-                            }
+                            ["success"] = new OpenApiSchema(),
+                            ["message"] = new OpenApiSchema(),
+                            ["data"] = new OpenApiSchemaReference("Object")
                         }
                     },
-                    ["ApiError"] = new()
+                    ["ApiError"] = new OpenApiSchema
                     {
-                        Properties = new Dictionary<string, OpenApiSchema>
+                        Properties = new Dictionary<string, IOpenApiSchema>
                         {
-                            ["code"] = new(),
-                            ["details"] = new()
+                            ["code"] = new OpenApiSchema(),
+                            ["details"] = new OpenApiSchema()
                         }
                     }
                 }
@@ -324,8 +321,11 @@ public class OpenApiConfigurationTests
 
         document.Components!.Schemas["ApiResponseOfObject"].Description.Should().Contain("Standard JSON envelope");
         document.Components.Schemas["ApiResponseOfObject"].Properties["success"].Description.Should().Contain("request succeeded");
-        document.Components.Schemas["ApiResponseOfObject"].Properties["data"].AllOf.Should().ContainSingle();
-        document.Components.Schemas["ApiResponseOfObject"].Properties["data"].Description.Should().Contain("Endpoint-specific response payload");
+        // OpenAPI 3.1 permits sibling keywords next to $ref, so the description attaches
+        // directly to the reference instead of being wrapped in an allOf.
+        document.Components.Schemas["ApiResponseOfObject"].Properties["data"]
+            .Should().BeOfType<OpenApiSchemaReference>()
+            .Which.Description.Should().Contain("Endpoint-specific response payload");
         document.Components.Schemas["ApiError"].Description.Should().Contain("Structured error payload");
         document.Components.Schemas["ApiError"].Properties["code"].Description.Should().Contain("Machine-readable error code");
     }

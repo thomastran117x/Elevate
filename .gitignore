@@ -40,6 +40,7 @@ artifacts/
 *.coveragexml
 coverage/
 .tmp/
+TestResults/
 
 ########################################
 # Node / Vue (Vite) frontend

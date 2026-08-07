@@ -19,11 +19,12 @@ using Microsoft.EntityFrameworkCore;
 namespace backend.tests.Integration.Features.Events;
 
 /// <summary>
-/// End-to-end coverage for recurrence series against real MySQL.
+/// End-to-end coverage for recurrence series against real PostgreSQL.
 /// <para>
 /// The time zone assertions here are the ones unit tests cannot make: they prove the UTC
-/// instants survive the round trip through a naive <c>datetime(6)</c> column without Pomelo or
-/// the MySQL session zone shifting them.
+/// instants survive the round trip through a <c>timestamp with time zone</c> column without
+/// Npgsql, the UTC value converter, or the session zone shifting them. The series' own
+/// wall-clock anchor is stored zoneless, so both halves of that split are exercised here.
 /// </para>
 /// </summary>
 public class EventSeriesEndpointsTests
@@ -156,7 +157,7 @@ public class EventSeriesEndpointsTests
 
         // Both occurrences read 7pm locally, which is a different UTC instant on each side of
         // the transition. This is the assertion that would fail if the column round trip, the
-        // connector, or the MySQL session zone shifted the value.
+        // connector, or the session zone shifted the value.
         stored[0].StartTime.Should().Be(new DateTime(2026, 3, 4, 0, 0, 0));
         stored[1].StartTime.Should().Be(new DateTime(2026, 3, 10, 23, 0, 0));
 

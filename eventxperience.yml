@@ -7,44 +7,52 @@ metadata:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mysql
+  name: postgres
   namespace: eventxperience
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: mysql
+      app: postgres
   template:
     metadata:
       labels:
-        app: mysql
+        app: postgres
     spec:
       containers:
-        - name: mysql
-          image: mysql:8.4
+        - name: postgres
+          image: postgres:17
+          args:
+            - "postgres"
+            - "-c"
+            - "wal_level=logical"
+            - "-c"
+            - "max_wal_senders=10"
+            - "-c"
+            - "max_replication_slots=10"
           ports:
-            - containerPort: 3306
+            - containerPort: 5432
           env:
-            - name: MYSQL_ROOT_PASSWORD
-              value: root
-            - name: MYSQL_DATABASE
-              value: appdb
-            - name: MYSQL_USER
+            - name: POSTGRES_USER
               value: appuser
-            - name: MYSQL_PASSWORD
+            - name: POSTGRES_PASSWORD
               value: apppass
+            - name: POSTGRES_DB
+              value: appdb
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
           volumeMounts:
-            - name: mysql-data
-              mountPath: /var/lib/mysql
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
       volumes:
-        - name: mysql-data
+        - name: postgres-data
           persistentVolumeClaim:
-            claimName: mysql-pvc
+            claimName: postgres-pvc
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: mysql-pvc
+  name: postgres-pvc
   namespace: eventxperience
 spec:
   accessModes:
@@ -56,13 +64,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: mysql
+  name: postgres
   namespace: eventxperience
 spec:
   selector:
-    app: mysql
+    app: postgres
   ports:
-    - port: 3306
+    - port: 5432
 
 ---
 apiVersion: apps/v1
@@ -225,7 +233,7 @@ spec:
             - name: ASPNETCORE_URLS
               value: "http://0.0.0.0:8090"
             - name: DB_CONNECTION_STRING
-              value: "Server=mysql;Port=3306;Database=appdb;User=appuser;Password=apppass"
+              value: "Host=postgres;Port=5432;Database=appdb;Username=appuser;Password=apppass"
             - name: REDIS_CONNECTION
               value: "redis:6379"
             - name: KAFKA_BOOTSTRAP_SERVERS

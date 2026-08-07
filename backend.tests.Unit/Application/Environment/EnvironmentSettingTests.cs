@@ -32,7 +32,7 @@ public class EnvironmentSettingTests
         using var harness = EnvironmentSettingHarness.Load();
 
         harness.GetString("DbConnectionString")
-            .Should().Be("Server=localhost;Port=3306;Database=database;User=root;Password=password123");
+            .Should().Be("Host=localhost;Port=5432;Database=database;Username=postgres;Password=password123");
         harness.GetString("RedisConnection").Should().Be("localhost:6379");
         harness.GetString("JwtSecretKeyAccess").Should().Be("unit_test_secret_12345678901234567890");
         harness.GetString("JwtSecretKeyVerification").Should().Be("unit_test_verification_secret_12345678901234567890");

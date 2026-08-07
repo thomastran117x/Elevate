@@ -12,10 +12,7 @@ public sealed class AppDatabaseContextFactory : IDesignTimeDbContextFactory<AppD
         var optionsBuilder = new DbContextOptionsBuilder<AppDatabaseContext>();
         var connectionString = EnvironmentSetting.DbConnectionString;
 
-        optionsBuilder.UseMySql(
-            connectionString,
-            new MySqlServerVersion(new Version(8, 0, 0))
-        );
+        optionsBuilder.UseNpgsql(connectionString);
 
         return new AppDatabaseContext(optionsBuilder.Options);
     }

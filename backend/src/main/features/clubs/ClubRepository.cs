@@ -106,10 +106,20 @@ namespace backend.main.features.clubs
             {
                 var term = criteria.Query.Trim();
 
+                // Lowercased on both sides: MySQL's ai_ci collation made LIKE case-insensitive,
+                // PostgreSQL is case-sensitive. lower() translates on Postgres, SQLite and MySQL,
+                // so the SQLite-backed unit tests exercise the same semantics as production.
+                //
+                // Known gap: ai_ci was also accent-insensitive, so "cafe" used to match "Café".
+                // This fallback no longer folds accents. EF.Functions.Unaccent would restore it
+                // but is Npgsql-only and would break the SQLite unit tests, and a provider-neutral
+                // fix needs normalized shadow columns (see EventInvitation.RecipientEmailNormalized
+                // for the pattern). Elasticsearch is the primary search path and folds accents in
+                // its analyzer, so this only affects degraded-mode search.
                 query = query.Where(c =>
-                    EF.Functions.Like(c.Name, $"%{term}%") ||
-                    EF.Functions.Like(c.Description, $"%{term}%") ||
-                    (c.Location != null && EF.Functions.Like(c.Location, $"%{term}%"))
+                    EF.Functions.Like(c.Name.ToLower(), $"%{term.ToLower()}%") ||
+                    EF.Functions.Like(c.Description.ToLower(), $"%{term.ToLower()}%") ||
+                    (c.Location != null && EF.Functions.Like(c.Location.ToLower(), $"%{term.ToLower()}%"))
                 );
             }
 

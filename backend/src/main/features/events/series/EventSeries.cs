@@ -26,7 +26,7 @@ public class EventSeries
     /// The draft the series was built from, which also becomes occurrence 0.
     /// <para>
     /// Intentionally carries no foreign key. <c>Events.SeriesId</c> already points the other
-    /// way, and a second FK back to <c>Events</c> would give MySQL two cascade paths between
+    /// way, and a second FK back to <c>Events</c> would create two cascade paths between
     /// the same pair of tables, which EF rejects when building the model.
     /// </para>
     /// </summary>

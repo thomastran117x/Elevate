@@ -14,7 +14,7 @@ public class ClubRepositorySearchTests
     [Fact]
     public async Task SearchAsync_ShouldExcludePrivateClubs_AndSortByMembers()
     {
-        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         await using var context = database.CreateDbContext();
 
         context.Users.AddRange(

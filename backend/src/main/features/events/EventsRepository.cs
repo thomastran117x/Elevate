@@ -208,11 +208,11 @@ namespace backend.main.features.events
                     .Replace("_", "\\_");
 
                 query = query.Where(e =>
-                    EF.Functions.Like(e.Name, $"%{term}%", "\\") ||
-                    EF.Functions.Like(e.Description, $"%{term}%", "\\") ||
-                    EF.Functions.Like(e.Location, $"%{term}%", "\\") ||
-                    (e.VenueName != null && EF.Functions.Like(e.VenueName, $"%{term}%", "\\")) ||
-                    (e.City != null && EF.Functions.Like(e.City, $"%{term}%", "\\"))
+                    EF.Functions.Like(e.Name.ToLower(), $"%{term.ToLower()}%", "\\") ||
+                    EF.Functions.Like(e.Description.ToLower(), $"%{term.ToLower()}%", "\\") ||
+                    EF.Functions.Like(e.Location.ToLower(), $"%{term.ToLower()}%", "\\") ||
+                    (e.VenueName != null && EF.Functions.Like(e.VenueName.ToLower(), $"%{term.ToLower()}%", "\\")) ||
+                    (e.City != null && EF.Functions.Like(e.City.ToLower(), $"%{term.ToLower()}%", "\\"))
                 );
             }
 

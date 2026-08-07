@@ -17,7 +17,7 @@ public class ClubPostSearchOutboxWriterTests
     [Fact]
     public async Task StageUpsert_ShouldPersistClubPostDocumentPayload()
     {
-        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         await using var context = database.CreateDbContext();
 
         var writer = new ClubPostSearchOutboxWriter(context);
@@ -52,7 +52,7 @@ public class ClubPostSearchOutboxWriterTests
     [Fact]
     public async Task StageDelete_ShouldPersistDeletePayload()
     {
-        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         await using var context = database.CreateDbContext();
 
         var writer = new ClubPostSearchOutboxWriter(context);

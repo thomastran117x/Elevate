@@ -47,7 +47,7 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
         {
             var settings = new Dictionary<string, string?>(_configurationOverrides)
             {
-                ["Database:Provider"] = "mysql",
+                ["Database:Provider"] = "postgres",
                 ["Database:ConnectionString"] = _testConnectionString
             };
 
@@ -61,9 +61,8 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
             services.RemoveAll<DbContextOptions>();
             services.RemoveAll<Microsoft.EntityFrameworkCore.Infrastructure.IDbContextOptionsConfiguration<AppDatabaseContext>>();
 
-            var serverVersion = ServerVersion.AutoDetect(_testConnectionString);
             var dbContextOptions = new DbContextOptionsBuilder<AppDatabaseContext>()
-                .UseMySql(_testConnectionString, serverVersion)
+                .UseNpgsql(_testConnectionString)
                 .Options;
 
             services.AddSingleton(dbContextOptions);

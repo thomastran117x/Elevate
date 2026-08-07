@@ -124,15 +124,18 @@ internal static partial class DevTasksCli
                 "Release",
                 "--settings",
                 runSettingsPath,
-                "--collect:XPlat Code Coverage",
+                "--collect:Code Coverage",
                 "--results-directory",
                 resultsRoot
             ],
             repoRoot
         );
 
+        // The first-party collector names the report <machine>_<timestamp>.cobertura.xml
+        // rather than the fixed coverage.cobertura.xml that coverlet emitted.
         var reportPath = Directory
-            .GetFiles(resultsRoot, "coverage.cobertura.xml", SearchOption.AllDirectories)
+            .GetFiles(resultsRoot, "*.cobertura.xml", SearchOption.AllDirectories)
+            .OrderByDescending(File.GetLastWriteTimeUtc)
             .FirstOrDefault();
 
         if (reportPath is null)

@@ -80,8 +80,8 @@ namespace backend.main.features.clubs.follow
                 query =
                     from f in query
                     join u in _context.Users.AsNoTracking() on f.UserId equals u.Id
-                    where (u.Name != null && EF.Functions.Like(u.Name, term)) ||
-                          (u.Username != null && EF.Functions.Like(u.Username, term))
+                    where (u.Name != null && EF.Functions.Like(u.Name.ToLower(), term.ToLower())) ||
+                          (u.Username != null && EF.Functions.Like(u.Username.ToLower(), term.ToLower()))
                     select f;
             }
 

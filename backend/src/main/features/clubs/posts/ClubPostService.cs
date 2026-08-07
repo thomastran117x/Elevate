@@ -139,11 +139,11 @@ namespace backend.main.features.clubs.posts
                 }
                 catch (ElasticsearchDisabledException ex)
                 {
-                    Logger.Info($"Elasticsearch disabled for club post search. Falling back to MySQL LIKE search. {ex.Message}");
+                    Logger.Info($"Elasticsearch disabled for club post search. Falling back to database LIKE search. {ex.Message}");
                 }
                 catch (ElasticsearchUnavailableException ex)
                 {
-                    Logger.Warn(ex, "Elasticsearch temporarily unavailable. Falling back to MySQL LIKE search.");
+                    Logger.Warn(ex, "Elasticsearch temporarily unavailable. Falling back to database LIKE search.");
                 }
                 catch (Exception ex)
                 {
@@ -226,11 +226,11 @@ namespace backend.main.features.clubs.posts
                 }
                 catch (ElasticsearchDisabledException ex)
                 {
-                    Logger.Info($"Elasticsearch disabled for admin club post search. Falling back to MySQL LIKE search. {ex.Message}");
+                    Logger.Info($"Elasticsearch disabled for admin club post search. Falling back to database LIKE search. {ex.Message}");
                 }
                 catch (ElasticsearchUnavailableException ex)
                 {
-                    Logger.Warn(ex, "Elasticsearch temporarily unavailable for admin club post search. Falling back to MySQL LIKE search.");
+                    Logger.Warn(ex, "Elasticsearch temporarily unavailable for admin club post search. Falling back to database LIKE search.");
                 }
                 catch (Exception ex)
                 {

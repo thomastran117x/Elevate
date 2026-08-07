@@ -92,7 +92,7 @@ public class ClubPostGetByIdTests
     [Fact]
     public async Task GetByIdAsync_ReturnsPost_WhenCacheHits()
     {
-        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         await using var db = database.CreateDbContext();
 
         var clubService = new Mock<IClubService>();
@@ -110,7 +110,7 @@ public class ClubPostGetByIdTests
     [Fact]
     public async Task GetByIdAsync_IncludesAuthorInfo_WhenUserFound()
     {
-        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         await using var db = database.CreateDbContext();
 
         var clubService = new Mock<IClubService>();
@@ -133,7 +133,7 @@ public class ClubPostGetByIdTests
     [Fact]
     public async Task GetByIdAsync_ThrowsResourceNotFound_WhenCacheReturnsNull()
     {
-        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         await using var db = database.CreateDbContext();
 
         var clubService = new Mock<IClubService>();
@@ -150,7 +150,7 @@ public class ClubPostGetByIdTests
     [Fact]
     public async Task GetByIdAsync_ThrowsResourceNotFound_WhenPostBelongsToDifferentClub()
     {
-        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         await using var db = database.CreateDbContext();
 
         var clubService = new Mock<IClubService>();
@@ -167,7 +167,7 @@ public class ClubPostGetByIdTests
     [Fact]
     public async Task GetByIdAsync_ThrowsUnauthorized_WhenPrivateClubAndAnonymous()
     {
-        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         await using var db = database.CreateDbContext();
 
         var clubService = new Mock<IClubService>();
@@ -183,7 +183,7 @@ public class ClubPostGetByIdTests
     [Fact]
     public async Task GetByIdAsync_ThrowsForbidden_WhenPrivateClubAndUserNotMember()
     {
-        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         await using var db = database.CreateDbContext();
 
         var clubService = new Mock<IClubService>();
@@ -204,7 +204,7 @@ public class ClubPostGetByIdTests
     [Fact]
     public async Task GetByIdAsync_AllowsStaff_WhenPrivateClub()
     {
-        await using var database = await MySqlTestDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         await using var db = database.CreateDbContext();
 
         var clubService = new Mock<IClubService>();

@@ -20,7 +20,7 @@ namespace backend.main.infrastructure.elasticsearch
             if (string.IsNullOrWhiteSpace(url))
             {
                 services.AddSingleton(health);
-                Logger.Warn("ELASTICSEARCH_URL not configured. Full-text search will fall back to MySQL LIKE.");
+                Logger.Warn("ELASTICSEARCH_URL not configured. Full-text search will fall back to database LIKE.");
                 return services;
             }
 
@@ -40,7 +40,7 @@ namespace backend.main.infrastructure.elasticsearch
                 health.IsAvailable = false;
                 health.Failure = ex;
                 services.AddSingleton(health);
-                Logger.Warn(ex, "Elasticsearch setup failed. Full-text search will fall back to MySQL LIKE.");
+                Logger.Warn(ex, "Elasticsearch setup failed. Full-text search will fall back to database LIKE.");
             }
 
             return services;

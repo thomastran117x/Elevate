@@ -6,11 +6,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace backend.tests.Integration.Infrastructure;
 
-public sealed class MySqlTestDatabase : IAsyncDisposable
+public sealed class PostgresTestDatabase : IAsyncDisposable
 {
     private readonly IntegrationTestEnvironment _environment;
 
-    private MySqlTestDatabase(
+    private PostgresTestDatabase(
         IntegrationTestEnvironment environment,
         string databaseName,
         string connectionString)
@@ -24,7 +24,7 @@ public sealed class MySqlTestDatabase : IAsyncDisposable
 
     public string ConnectionString { get; }
 
-    public static async Task<MySqlTestDatabase> CreateAsync()
+    public static async Task<PostgresTestDatabase> CreateAsync()
     {
         var environment = await IntegrationTestFixture.GetEnvironmentAsync();
         var databaseName = $"itest_{Guid.NewGuid():N}";
@@ -33,7 +33,9 @@ public sealed class MySqlTestDatabase : IAsyncDisposable
 
         await using (var admin = CreateAdminContext(environment))
         {
-            var createSql = $"CREATE DATABASE `{databaseName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;";
+            // Built into a local first: passing an interpolated string straight to
+            // ExecuteSqlRawAsync trips EF1002. The name is validated above.
+            var createSql = $"CREATE DATABASE \"{databaseName}\";";
             await admin.Database.ExecuteSqlRawAsync(createSql);
         }
 
@@ -42,7 +44,7 @@ public sealed class MySqlTestDatabase : IAsyncDisposable
             await db.Database.MigrateAsync();
         }
 
-        return new MySqlTestDatabase(environment, databaseName, connectionString);
+        return new PostgresTestDatabase(environment, databaseName, connectionString);
     }
 
     public AppDatabaseContext CreateDbContext() => CreateDbContext(ConnectionString);
@@ -50,7 +52,10 @@ public sealed class MySqlTestDatabase : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await using var admin = CreateAdminContext(_environment);
-        var dropSql = $"DROP DATABASE IF EXISTS `{DatabaseName}`;";
+
+        // WITH (FORCE) terminates any lingering backends. PostgreSQL refuses to drop a
+        // database that still has live connections, which makes teardown flaky otherwise.
+        var dropSql = $"DROP DATABASE IF EXISTS \"{DatabaseName}\" WITH (FORCE);";
         await admin.Database.ExecuteSqlRawAsync(dropSql);
     }
 
@@ -66,12 +71,9 @@ public sealed class MySqlTestDatabase : IAsyncDisposable
     private static AppDatabaseContext CreateDbContext(string connectionString)
     {
         var options = new DbContextOptionsBuilder<AppDatabaseContext>()
-            .UseMySql(
-                connectionString,
-                ServerVersion.AutoDetect(connectionString))
+            .UseNpgsql(connectionString)
             .Options;
 
         return new AppDatabaseContext(options);
     }
 }
-

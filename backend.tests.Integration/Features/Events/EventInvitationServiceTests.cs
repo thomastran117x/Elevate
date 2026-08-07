@@ -133,7 +133,7 @@ public sealed class EventInvitationServiceTests
 
     private sealed class InvitationHarness : IAsyncDisposable
     {
-        private readonly MySqlTestDatabase _database;
+        private readonly PostgresTestDatabase _database;
 
         public AppDatabaseContext Db { get; }
         public EventInvitationService InvitationService { get; }
@@ -143,7 +143,7 @@ public sealed class EventInvitationServiceTests
         public string UserEmail { get; }
 
         private InvitationHarness(
-            MySqlTestDatabase database,
+            PostgresTestDatabase database,
             AppDatabaseContext db,
             EventInvitationService invitationService,
             EventsService eventsService,
@@ -162,7 +162,7 @@ public sealed class EventInvitationServiceTests
 
         public static async Task<InvitationHarness> CreateAsync()
         {
-            var database = await MySqlTestDatabase.CreateAsync();
+            var database = await PostgresTestDatabase.CreateAsync();
 
             var db = database.CreateDbContext();
 

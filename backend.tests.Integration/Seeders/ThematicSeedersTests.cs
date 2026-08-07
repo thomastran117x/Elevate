@@ -483,18 +483,18 @@ public class ThematicSeedersTests
 
     private static async Task<SeedTestDatabase> CreateDbContextAsync()
     {
-        var database = await MySqlTestDatabase.CreateAsync();
+        var database = await PostgresTestDatabase.CreateAsync();
         var context = database.CreateDbContext();
         return new SeedTestDatabase(database, context);
     }
 
     private sealed class SeedTestDatabase : IAsyncDisposable
     {
-        private readonly MySqlTestDatabase _database;
+        private readonly PostgresTestDatabase _database;
 
         public AppDatabaseContext Db { get; }
 
-        public SeedTestDatabase(MySqlTestDatabase database, AppDatabaseContext db)
+        public SeedTestDatabase(PostgresTestDatabase database, AppDatabaseContext db)
         {
             _database = database;
             Db = db;

@@ -22,7 +22,7 @@ namespace backend.main.infrastructure.database.core
             var provider = (
                 config["Database:Provider"]
                 ?? config["DB_PROVIDER"]
-                ?? "mysql"
+                ?? "postgres"
             ).Trim().ToLowerInvariant();
             var connectionString = config["Database:ConnectionString"]
                 ?? config["DB_CONNECTION_STRING"]
@@ -36,15 +36,16 @@ namespace backend.main.infrastructure.database.core
                     return;
                 }
 
-                options.UseMySql(
+                // Unlike the previous MySQL provider, Npgsql needs no ServerVersion.AutoDetect,
+                // so registration no longer opens a synchronous connection before the host is built.
+                options.UseNpgsql(
                     connectionString,
-                    ServerVersion.AutoDetect(connectionString),
-                    mySqlOptions =>
+                    npgsqlOptions =>
                     {
-                        mySqlOptions.EnableRetryOnFailure(
+                        npgsqlOptions.EnableRetryOnFailure(
                             maxRetryCount: 5,
                             maxRetryDelay: TimeSpan.FromSeconds(10),
-                            errorNumbersToAdd: null
+                            errorCodesToAdd: null
                         );
                     });
             });
