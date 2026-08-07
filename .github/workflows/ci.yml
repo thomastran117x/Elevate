@@ -29,6 +29,21 @@ jobs:
 
       - name: Verify backend formatting
         run: dotnet format backend.sln --verify-no-changes --no-restore
+  backend-audit:
+    name: Backend Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Audit high and critical NuGet vulnerabilities
+        run: dotnet restore backend.sln -p:NuGetAudit=true -p:NuGetAuditLevel=high -warnaserror:NU1903,NU1904
 
   frontend-format:
     name: Frontend Format

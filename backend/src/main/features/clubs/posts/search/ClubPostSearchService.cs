@@ -152,7 +152,7 @@ namespace backend.main.features.clubs.posts.search
             try
             {
                 await _circuitBreaker.ExecuteAsync(
-                    () => client.DeleteAsync<ClubPostDocument>(IndexName, postId),
+                    () => client.DeleteAsync(IndexName, new Id(postId)),
                     $"{IndexName} document deletion");
             }
             catch (Exception ex)
