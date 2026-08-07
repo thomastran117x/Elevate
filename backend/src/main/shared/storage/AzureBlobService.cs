@@ -152,7 +152,7 @@ namespace backend.main.shared.storage
             var normalizedPrefix = NormalizeBlobPathPrefix(blobPathPrefix, string.Empty);
             var listPrefix = string.IsNullOrEmpty(normalizedPrefix) ? null : normalizedPrefix + "/";
 
-            await foreach (var blob in container.GetBlobsAsync(prefix: listPrefix, cancellationToken: cancellationToken))
+            await foreach (var blob in container.GetBlobsAsync(BlobTraits.None, BlobStates.None, listPrefix, cancellationToken))
             {
                 var url = container.GetBlobClient(blob.Name).Uri.ToString();
                 yield return new BlobListItem(url, blob.Properties.LastModified);

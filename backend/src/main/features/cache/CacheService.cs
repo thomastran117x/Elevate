@@ -11,7 +11,7 @@ namespace backend.main.features.cache
         ) : base(redisResource) { }
 
         public Task<bool> SetValueAsync(string key, string value, TimeSpan? expiry = null) =>
-            ExecuteAsync(() => _db.StringSetAsync(key, value, expiry), false);
+            ExecuteAsync(() => _db.StringSetAsync(key, value, expiry.HasValue ? new Expiration(expiry.Value) : default), false);
 
         public Task<string?> GetValueAsync(string key) =>
             ExecuteAsync(async () =>
