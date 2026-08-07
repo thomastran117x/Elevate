@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { MockStore } from '@ngrx/store/testing';
-import { NEVER, of, throwError } from 'rxjs';
+import { NEVER, of, Subject, throwError } from 'rxjs';
 
 import { makeCurrentUser, provideTestStore } from '@testing';
 
@@ -146,6 +146,93 @@ describe('EventFavouritesStore', () => {
     expect(store.isFavourited(99)).toBeTrue();
     expect(store.isFavourited(12)).toBeFalse();
     expect(store.isFavourited(47)).toBeTrue();
+  });
+
+  describe('races against an in-flight id load', () => {
+    it('keeps a toggle the user already saw succeed', () => {
+      const { store } = setup();
+      const ids$ = new Subject<number[]>();
+      favourites.getMyFavouriteIds.and.returnValue(ids$.asObservable());
+
+      store.ensureLoaded();
+      store.toggle(99).subscribe();
+      expect(store.isFavourited(99)).toBeTrue();
+
+      // The response is a snapshot from before the toggle, so it must not undo it.
+      ids$.next([12, 47]);
+      ids$.complete();
+
+      expect(store.isFavourited(99)).toBeTrue();
+      expect(store.isFavourited(12)).toBeTrue();
+    });
+
+    it('keeps an unstar the user already saw succeed', () => {
+      const { store } = setup();
+      const ids$ = new Subject<number[]>();
+      favourites.getMyFavouriteIds.and.returnValue(ids$.asObservable());
+
+      store.ensureLoaded();
+      store.setFavourited(12, true);
+      store.toggle(12).subscribe();
+      expect(store.isFavourited(12)).toBeFalse();
+
+      ids$.next([12, 47]);
+      ids$.complete();
+
+      expect(store.isFavourited(12)).toBeFalse();
+      expect(store.isFavourited(47)).toBeTrue();
+    });
+
+    it('discards a response that lands after a sign-out', () => {
+      const { store, mockStore } = setup();
+      const ids$ = new Subject<number[]>();
+      favourites.getMyFavouriteIds.and.returnValue(ids$.asObservable());
+
+      store.ensureLoaded();
+
+      mockStore.overrideSelector(selectUser, null);
+      mockStore.refreshState();
+
+      // The previous user's stars must not reappear in a signed-out session.
+      ids$.next([12, 47]);
+      ids$.complete();
+
+      expect(store.isFavourited(12)).toBeFalse();
+    });
+
+    it('still fetches for the next user when the previous response lands late', () => {
+      const { store, mockStore } = setup();
+      const ids$ = new Subject<number[]>();
+      favourites.getMyFavouriteIds.and.returnValue(ids$.asObservable());
+
+      store.ensureLoaded();
+
+      mockStore.overrideSelector(selectUser, makeCurrentUser({ Id: 6 }));
+      mockStore.refreshState();
+
+      ids$.next([12, 47]);
+      ids$.complete();
+
+      // A stale response must not mark the store loaded, or user 6 never gets their own set.
+      favourites.getMyFavouriteIds.and.returnValue(of([88]));
+      store.ensureLoaded();
+
+      expect(favourites.getMyFavouriteIds).toHaveBeenCalledTimes(2);
+      expect(store.isFavourited(88)).toBeTrue();
+      expect(store.isFavourited(12)).toBeFalse();
+    });
+
+    it('retries after a failed load', () => {
+      const { store } = setup();
+      favourites.getMyFavouriteIds.and.returnValue(throwError(() => new Error('offline')));
+
+      store.ensureLoaded();
+
+      favourites.getMyFavouriteIds.and.returnValue(of([12]));
+      store.ensureLoaded();
+
+      expect(store.isFavourited(12)).toBeTrue();
+    });
   });
 
   it('emits per-event state through isFavourited$', () => {

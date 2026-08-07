@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { BehaviorSubject, catchError, EMPTY, map, Observable, throwError } from 'rxjs';
+import { BehaviorSubject, catchError, map, Observable, throwError } from 'rxjs';
 
 import { UserState } from '../../../core/stores/user.reducer';
 import { selectUser } from '../../../core/stores/user.selectors';
@@ -21,6 +21,21 @@ export class EventFavouritesStore {
   private loaded = false;
   private loading = false;
   private currentUserId: number | null = null;
+
+  /**
+   * Bumped by every reset. An in-flight id load carries the generation it started under and
+   * throws its response away if that no longer matches — otherwise a slow GET issued for the
+   * previous user lands after a sign-out and repopulates their stars, marking the store loaded
+   * so the new user never fetches their own.
+   */
+  private generation = 0;
+
+  /**
+   * Local writes made while an id load is in flight. The response is a snapshot from before
+   * they happened, so it is overlaid with these rather than replacing them — without this a
+   * slow load silently undoes a toggle the user already saw succeed.
+   */
+  private readonly writesDuringLoad = new Map<number, boolean>();
 
   readonly ids$ = this.ids.asObservable();
 
@@ -52,21 +67,41 @@ export class EventFavouritesStore {
       return;
     }
 
+    const generation = this.generation;
     this.loading = true;
-    this.favourites
-      .getMyFavouriteIds()
-      .pipe(
-        catchError(() => {
-          // A failed load just leaves every star hollow; the toggle still works.
-          this.loading = false;
-          return EMPTY;
-        }),
-      )
-      .subscribe((ids) => {
+    this.writesDuringLoad.clear();
+
+    this.favourites.getMyFavouriteIds().subscribe({
+      next: (ids) => {
+        if (generation !== this.generation) {
+          return;
+        }
+
         this.loading = false;
         this.loaded = true;
-        this.ids.next(new Set(ids));
-      });
+
+        const next = new Set(ids);
+        for (const [eventId, favourited] of this.writesDuringLoad) {
+          if (favourited) {
+            next.add(eventId);
+          } else {
+            next.delete(eventId);
+          }
+        }
+        this.writesDuringLoad.clear();
+
+        this.ids.next(next);
+      },
+      error: () => {
+        if (generation !== this.generation) {
+          return;
+        }
+
+        // A failed load just leaves every star hollow; the toggle still works.
+        this.loading = false;
+        this.writesDuringLoad.clear();
+      },
+    });
   }
 
   isFavourited(eventId: number): boolean {
@@ -102,8 +137,10 @@ export class EventFavouritesStore {
 
   /** Drops the cached set so the next `ensureLoaded` refetches. */
   reset(): void {
+    this.generation += 1;
     this.loaded = false;
     this.loading = false;
+    this.writesDuringLoad.clear();
     this.ids.next(new Set<number>());
   }
 
@@ -113,6 +150,10 @@ export class EventFavouritesStore {
   }
 
   private apply(eventId: number, favourited: boolean): void {
+    if (this.loading) {
+      this.writesDuringLoad.set(eventId, favourited);
+    }
+
     const next = new Set(this.ids.value);
     if (favourited) {
       next.add(eventId);
