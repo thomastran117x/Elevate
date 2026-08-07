@@ -5,7 +5,7 @@ COPY . .
 RUN dotnet restore src/worker/event-indexer/event-indexer.csproj
 RUN dotnet publish src/worker/event-indexer/event-indexer.csproj -c Release -o /out /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 ENV DOTNET_RUNNING_IN_CONTAINER=true
 
