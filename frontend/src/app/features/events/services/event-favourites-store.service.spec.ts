@@ -287,6 +287,83 @@ describe('EventFavouritesStore', () => {
     });
   });
 
+  describe('seeding against an open write', () => {
+    it('does not let a stale page payload undo an in-flight toggle', () => {
+      const { store } = setup();
+      const write$ = new Subject<{
+        eventId: number;
+        isFavourited: boolean;
+        favouritedAtUtc: null;
+      }>();
+      favourites.favourite.and.returnValue(write$.asObservable());
+
+      // Starred on the search page, then straight to the pinned page whose payload was
+      // rendered before the POST landed.
+      store.toggle(99).subscribe();
+      store.setFavourited(99, false);
+
+      expect(store.isFavourited(99)).toBeTrue();
+
+      write$.next({ eventId: 99, isFavourited: true, favouritedAtUtc: null });
+      write$.complete();
+
+      expect(store.isFavourited(99)).toBeTrue();
+    });
+
+    it('accepts seeding again once the write resolves', () => {
+      const { store } = setup();
+      const write$ = new Subject<{
+        eventId: number;
+        isFavourited: boolean;
+        favouritedAtUtc: null;
+      }>();
+      favourites.favourite.and.returnValue(write$.asObservable());
+
+      store.toggle(99).subscribe();
+      write$.next({ eventId: 99, isFavourited: true, favouritedAtUtc: null });
+      write$.complete();
+
+      store.setFavourited(99, false);
+
+      expect(store.isFavourited(99)).toBeFalse();
+    });
+
+    it('accepts seeding again after a failed write', () => {
+      const { store } = setup();
+      const write$ = new Subject<never>();
+      favourites.favourite.and.returnValue(write$.asObservable());
+
+      store.toggle(99).subscribe({ error: () => undefined });
+      write$.error(new Error('500'));
+
+      store.setFavourited(99, true);
+
+      expect(store.isFavourited(99)).toBeTrue();
+    });
+
+    it('leaves other events seedable while one write is open', () => {
+      const { store } = setup();
+      favourites.favourite.and.returnValue(NEVER);
+
+      store.toggle(99).subscribe();
+      store.setFavourited(12, true);
+
+      expect(store.isFavourited(12)).toBeTrue();
+    });
+  });
+
+  it('announces a new session generation on sign-out', () => {
+    const { store, mockStore } = setup();
+    const seen: number[] = [];
+    store.session$.subscribe((generation) => seen.push(generation));
+
+    mockStore.overrideSelector(selectUser, null);
+    mockStore.refreshState();
+
+    expect(seen.length).toBe(2);
+    expect(seen[1]).not.toBe(seen[0]);
+  });
+
   it('emits per-event state through isFavourited$', () => {
     const { store } = setup();
     store.ensureLoaded();

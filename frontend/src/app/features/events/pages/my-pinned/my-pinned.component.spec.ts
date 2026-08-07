@@ -18,6 +18,8 @@ describe('MyPinnedComponent', () => {
   let navigate: jasmine.Spy;
   let authReturnUrl: jasmine.SpyObj<AuthReturnUrlService>;
   let ids$: BehaviorSubject<ReadonlySet<number>>;
+  let session$: BehaviorSubject<number>;
+  let signedIn: boolean;
 
   function pinnedRow(overrides: Partial<PinnedEvent> = {}): PinnedEvent {
     return {
@@ -35,6 +37,8 @@ describe('MyPinnedComponent', () => {
     ids$ = new BehaviorSubject<ReadonlySet<number>>(
       new Set(rows.filter((row) => row.isFavourited).map((row) => row.event.id)),
     );
+    session$ = new BehaviorSubject(0);
+    signedIn = true;
 
     favourites = jasmine.createSpyObj<EventFavouritesService>('EventFavouritesService', [
       'getMyPinned',
@@ -44,8 +48,17 @@ describe('MyPinnedComponent', () => {
     favouritesStore = jasmine.createSpyObj<EventFavouritesStore>(
       'EventFavouritesStore',
       ['setFavourited', 'toggle', 'ensureLoaded', 'isFavourited$', 'isCurrentSession'],
-      { isSignedIn: true, ids$: ids$.asObservable(), sessionGeneration: 0 },
+      {
+        ids$: ids$.asObservable(),
+        sessionGeneration: 0,
+        session$: session$.asObservable(),
+      },
     ) as jasmine.SpyObj<EventFavouritesStore> & { isSignedIn: boolean };
+    // A live getter, so a spec can end the session mid-test the way a logout does.
+    Object.defineProperty(favouritesStore, 'isSignedIn', {
+      get: () => signedIn,
+      configurable: true,
+    });
     favouritesStore.isFavourited$.and.callFake((eventId: number) => of(ids$.value.has(eventId)));
     favouritesStore.toggle.and.returnValue(of(false));
     favouritesStore.isCurrentSession.and.returnValue(true);
@@ -148,6 +161,32 @@ describe('MyPinnedComponent', () => {
 
     expect(component.items).toEqual([]);
     expect(favouritesStore.setFavourited).not.toHaveBeenCalled();
+  });
+
+  it('drops already-loaded rows when the session ends', async () => {
+    await setup([pinnedRow({ event: makeEventItem({ id: 4 }) })]);
+    expect(component.items.length).toBe(1);
+
+    // Logging out does not navigate, so without this the previous user's pinned events keep
+    // rendering in the signed-out session.
+    signedIn = false;
+    session$.next(1);
+
+    expect(component.items).toEqual([]);
+    expect(component.requiresLogin).toBeTrue();
+    expect(component.loading).toBeFalse();
+  });
+
+  it('reloads for the next user when the account switches', async () => {
+    await setup([pinnedRow({ event: makeEventItem({ id: 4 }) })]);
+    favourites.getMyPinned.calls.reset();
+    favourites.getMyPinned.and.returnValue(of([pinnedRow({ event: makeEventItem({ id: 9 }) })]));
+
+    session$.next(1);
+
+    expect(favourites.getMyPinned).toHaveBeenCalledTimes(1);
+    expect(component.items.map((row) => row.event.id)).toEqual([9]);
+    expect(component.requiresLogin).toBeFalse();
   });
 
   it('surfaces a message when a toggle fails', async () => {

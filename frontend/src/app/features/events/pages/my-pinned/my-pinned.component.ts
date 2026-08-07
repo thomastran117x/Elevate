@@ -29,6 +29,8 @@ export class MyPinnedComponent implements OnInit, OnDestroy {
   requiresLogin = false;
 
   private readonly destroy$ = new Subject<void>();
+  /** The session the rows currently in `items` belong to. */
+  private loadedGeneration = 0;
 
   constructor(
     private favourites: EventFavouritesService,
@@ -43,6 +45,26 @@ export class MyPinnedComponent implements OnInit, OnDestroy {
       .subscribe((ids) => (this.favouritedIds = ids));
 
     this.load();
+
+    // Rows already on screen belong to the session that loaded them. Signing out clears the
+    // user without navigating, so without this the previous user's pinned events keep
+    // rendering in the signed-out session. Declared after the first load so its replayed
+    // current value is a no-op.
+    this.favouritesStore.session$.pipe(takeUntil(this.destroy$)).subscribe((generation) => {
+      if (generation === this.loadedGeneration) {
+        return;
+      }
+
+      this.items = [];
+      this.error = '';
+
+      if (this.favouritesStore.isSignedIn) {
+        this.load();
+      } else {
+        this.loading = false;
+        this.requiresLogin = true;
+      }
+    });
   }
 
   ngOnDestroy(): void {
@@ -83,9 +105,11 @@ export class MyPinnedComponent implements OnInit, OnDestroy {
     // session it loaded for. Without this the response would render the previous user's rows
     // and seed their ids straight back into the store the sign-out just cleared.
     const generation = this.favouritesStore.sessionGeneration;
+    this.loadedGeneration = generation;
 
     this.loading = true;
     this.error = '';
+    this.requiresLogin = false;
 
     this.favourites
       .getMyPinned()

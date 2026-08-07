@@ -1,6 +1,14 @@
 import { Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { BehaviorSubject, catchError, map, Observable, shareReplay, throwError } from 'rxjs';
+import {
+  BehaviorSubject,
+  catchError,
+  finalize,
+  map,
+  Observable,
+  shareReplay,
+  throwError,
+} from 'rxjs';
 
 import { UserState } from '../../../core/stores/user.reducer';
 import { selectUser } from '../../../core/stores/user.selectors';
@@ -28,7 +36,7 @@ export class EventFavouritesStore {
    * previous user lands after a sign-out and repopulates their stars, marking the store loaded
    * so the new user never fetches their own.
    */
-  private generation = 0;
+  private readonly generation$ = new BehaviorSubject<number>(0);
 
   /**
    * Local writes made while an id load is in flight. The response is a snapshot from before
@@ -37,7 +45,22 @@ export class EventFavouritesStore {
    */
   private readonly writesDuringLoad = new Map<number, boolean>();
 
+  /**
+   * Toggles whose write has not resolved yet, keyed by event id with the state the user asked
+   * for. Any server snapshot that predates one of these must not overwrite it — the pinned
+   * page in particular can load a list that was rendered before a star pressed on the search
+   * page reached the server.
+   */
+  private readonly pendingWrites = new Map<number, boolean>();
+
   readonly ids$ = this.ids.asObservable();
+
+  /**
+   * Emits the current session generation, changing whenever the signed-in user does. Pages
+   * holding per-user data they already loaded should watch this and drop it — signing out
+   * clears the user without navigating, so nothing else tells them to.
+   */
+  readonly session$ = this.generation$.asObservable();
 
   constructor(
     private favourites: EventFavouritesService,
@@ -67,11 +90,11 @@ export class EventFavouritesStore {
    * result — signing out does not navigate, so a page can outlive the session it loaded for.
    */
   get sessionGeneration(): number {
-    return this.generation;
+    return this.generation$.value;
   }
 
   isCurrentSession(generation: number): boolean {
-    return generation === this.generation;
+    return generation === this.generation$.value;
   }
 
   /** Fetches the id set once per signed-in session. No-ops for anonymous users. */
@@ -80,13 +103,13 @@ export class EventFavouritesStore {
       return;
     }
 
-    const generation = this.generation;
+    const generation = this.sessionGeneration;
     this.loading = true;
     this.writesDuringLoad.clear();
 
     this.favourites.getMyFavouriteIds().subscribe({
       next: (ids) => {
-        if (generation !== this.generation) {
+        if (!this.isCurrentSession(generation)) {
           return;
         }
 
@@ -106,7 +129,7 @@ export class EventFavouritesStore {
         this.ids.next(next);
       },
       error: () => {
-        if (generation !== this.generation) {
+        if (!this.isCurrentSession(generation)) {
           return;
         }
 
@@ -131,17 +154,25 @@ export class EventFavouritesStore {
    * showing a star the server never recorded.
    */
   toggle(eventId: number): Observable<boolean> {
-    const generation = this.generation;
+    const generation = this.sessionGeneration;
     const wasFavourited = this.isFavourited(eventId);
     const next = !wasFavourited;
 
     this.apply(eventId, next);
+    this.pendingWrites.set(eventId, next);
 
     const request = (
       next
         ? this.favourites.favourite(eventId).pipe(map(() => true))
         : this.favourites.unfavourite(eventId).pipe(map(() => false))
     ).pipe(
+      finalize(() => {
+        // Only clear our own claim: a second toggle on the same event while this one was
+        // still open owns the entry now.
+        if (this.pendingWrites.get(eventId) === next) {
+          this.pendingWrites.delete(eventId);
+        }
+      }),
       catchError((error: unknown) => {
         // Roll back only into the session that asked for the change. A failure that resolves
         // after a sign-out must not restore the previous user's star.
@@ -162,18 +193,29 @@ export class EventFavouritesStore {
     return request;
   }
 
-  /** Seeds a single event's state, for pages that already know it (e.g. event detail). */
+  /**
+   * Seeds a single event's state from a server payload a page already holds.
+   *
+   * Skipped while a write for that event is still open: the payload was rendered before the
+   * write reached the server, so applying it would undo a star the user has already seen take
+   * effect and leave the store permanently opposite to the server.
+   */
   setFavourited(eventId: number, favourited: boolean): void {
+    if (this.pendingWrites.has(eventId)) {
+      return;
+    }
+
     this.apply(eventId, favourited);
   }
 
   /** Drops the cached set so the next `ensureLoaded` refetches. */
   reset(): void {
-    this.generation += 1;
     this.loaded = false;
     this.loading = false;
     this.writesDuringLoad.clear();
+    this.pendingWrites.clear();
     this.ids.next(new Set<number>());
+    this.generation$.next(this.generation$.value + 1);
   }
 
   /** Emits whether this specific event is starred. */
