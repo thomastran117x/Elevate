@@ -79,8 +79,9 @@ public class EventFavouriteEndpointsTests
 
         await FavouriteAsync(app, user.Session.AccessToken, ev.Id);
 
-        (await GetMyFavouriteStatusAsync(app, user.Session.AccessToken, ev.Id))
-            .IsFavourited.Should().BeTrue();
+        var after = await GetMyFavouriteStatusAsync(app, user.Session.AccessToken, ev.Id);
+        after.IsFavourited.Should().BeTrue();
+        after.FavouritedAtUtc.Should().NotBeNull("null is the client's signal for not favourited");
 
         // The status is per-caller, not per-event.
         (await GetMyFavouriteStatusAsync(app, bystander.Session.AccessToken, ev.Id))

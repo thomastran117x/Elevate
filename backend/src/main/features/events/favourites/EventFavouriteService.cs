@@ -128,9 +128,13 @@ namespace backend.main.features.events.favourites
             }
         }
 
-        public async Task<bool> IsFavouritedAsync(int eventId, int userId)
+        public async Task<EventFavouriteResponse> GetMyStatusAsync(int eventId, int userId)
         {
-            return await _favouriteRepository.ExistsAsync(eventId, userId);
+            var favourite = await _favouriteRepository.GetAsync(eventId, userId);
+
+            return favourite == null
+                ? new EventFavouriteResponse { EventId = eventId, IsFavourited = false }
+                : MapToResponse(favourite);
         }
 
         public async Task<IReadOnlyList<int>> GetFavouriteEventIdsAsync(int userId)

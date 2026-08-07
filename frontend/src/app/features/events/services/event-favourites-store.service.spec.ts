@@ -379,6 +379,71 @@ describe('EventFavouritesStore', () => {
     });
   });
 
+  describe('overlapping toggles for one event', () => {
+    it('holds the opposing write until the first one settles', () => {
+      const { store } = setup();
+      const first$ = new Subject<{
+        eventId: number;
+        isFavourited: boolean;
+        favouritedAtUtc: null;
+      }>();
+      favourites.favourite.and.returnValue(first$.asObservable());
+
+      store.toggle(99).subscribe();
+      store.toggle(99).subscribe();
+
+      // Letting both fly leaves the outcome to whichever the server commits last, and nothing
+      // reconciles the store afterwards.
+      expect(favourites.unfavourite).not.toHaveBeenCalled();
+
+      first$.next({ eventId: 99, isFavourited: true, favouritedAtUtc: null });
+      first$.complete();
+
+      expect(favourites.unfavourite).toHaveBeenCalledOnceWith(99);
+    });
+
+    it('runs the queued write even when its predecessor failed', () => {
+      const { store } = setup();
+      const first$ = new Subject<{
+        eventId: number;
+        isFavourited: boolean;
+        favouritedAtUtc: null;
+      }>();
+      favourites.favourite.and.returnValue(first$.asObservable());
+
+      store.toggle(99).subscribe({ error: () => undefined });
+      store.toggle(99).subscribe({ error: () => undefined });
+
+      first$.error(new Error('500'));
+
+      expect(favourites.unfavourite).toHaveBeenCalledOnceWith(99);
+    });
+
+    it('does not let a superseded failure overwrite a newer toggle', () => {
+      const { store } = setup();
+      const first$ = new Subject<{
+        eventId: number;
+        isFavourited: boolean;
+        favouritedAtUtc: null;
+      }>();
+      favourites.favourite.and.returnValue(first$.asObservable());
+      favourites.unfavourite.and.returnValue(NEVER);
+
+      // Three alternating toggles from unstarred: star, unstar, star. The last one wins the
+      // optimistic state, and its intent is the opposite of what the first would roll back to.
+      store.toggle(99).subscribe({ error: () => undefined });
+      store.toggle(99).subscribe({ error: () => undefined });
+      store.toggle(99).subscribe({ error: () => undefined });
+      expect(store.isFavourited(99)).toBeTrue();
+
+      first$.error(new Error('500'));
+
+      // The first toggle captured wasFavourited = false. Applying that now would leave the UI
+      // opposite to what the user last asked for.
+      expect(store.isFavourited(99)).toBeTrue();
+    });
+  });
+
   it('announces a new session generation on sign-out', () => {
     const { store, mockStore } = setup();
     const seen: number[] = [];

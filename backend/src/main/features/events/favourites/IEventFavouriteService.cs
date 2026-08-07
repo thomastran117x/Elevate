@@ -17,7 +17,12 @@ namespace backend.main.features.events.favourites
         /// </summary>
         Task UnfavouriteAsync(int eventId, int userId);
 
-        Task<bool> IsFavouritedAsync(int eventId, int userId);
+        /// <summary>
+        /// The caller's star on one event, carrying the same timestamp the POST and the pinned
+        /// list report. <see cref="EventFavouriteResponse.FavouritedAtUtc"/> is null only when
+        /// the event is not starred.
+        /// </summary>
+        Task<EventFavouriteResponse> GetMyStatusAsync(int eventId, int userId);
 
         Task<IReadOnlyList<int>> GetFavouriteEventIdsAsync(int userId);
 

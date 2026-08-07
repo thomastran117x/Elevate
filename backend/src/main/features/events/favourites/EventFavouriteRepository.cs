@@ -30,11 +30,11 @@ namespace backend.main.features.events.favourites
                 .ToListAsync();
         }
 
-        public async Task<bool> ExistsAsync(int eventId, int userId)
+        public async Task<EventFavourite?> GetAsync(int eventId, int userId)
         {
             return await _context.EventFavourites
                 .AsNoTracking()
-                .AnyAsync(f => f.EventId == eventId && f.UserId == userId);
+                .FirstOrDefaultAsync(f => f.EventId == eventId && f.UserId == userId);
         }
     }
 }

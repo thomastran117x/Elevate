@@ -78,7 +78,7 @@ public sealed class DisabledEventFavouriteService : IEventFavouriteService
 {
     public Task<EventFavouriteResponse> FavouriteAsync(int eventId, int userId, string userRole) => Task.FromException<EventFavouriteResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsFavourites));
     public Task UnfavouriteAsync(int eventId, int userId) => Task.FromException(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsFavourites));
-    public Task<bool> IsFavouritedAsync(int eventId, int userId) => Task.FromException<bool>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsFavourites));
+    public Task<EventFavouriteResponse> GetMyStatusAsync(int eventId, int userId) => Task.FromException<EventFavouriteResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsFavourites));
     public Task<IReadOnlyList<int>> GetFavouriteEventIdsAsync(int userId) => Task.FromException<IReadOnlyList<int>>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsFavourites));
     public Task<IReadOnlyList<PinnedEventResponse>> GetMyPinnedAsync(int userId, string userRole) => Task.FromException<IReadOnlyList<PinnedEventResponse>>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsFavourites));
 }

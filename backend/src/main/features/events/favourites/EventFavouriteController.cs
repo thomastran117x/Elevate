@@ -89,15 +89,11 @@ namespace backend.main.features.events.favourites
             {
                 var user = User.GetUserPayload();
 
-                var isFavourited = await _favouriteService.IsFavouritedAsync(eventId, user.Id);
+                var status = await _favouriteService.GetMyStatusAsync(eventId, user.Id);
 
                 return Ok(new ApiResponse<EventFavouriteResponse>(
                     $"Favourite status for event with ID {eventId} has been fetched successfully.",
-                    new EventFavouriteResponse
-                    {
-                        EventId = eventId,
-                        IsFavourited = isFavourited
-                    }
+                    status
                 ));
             }
             catch (Exception e)

@@ -3,9 +3,11 @@ import { Store } from '@ngrx/store';
 import {
   BehaviorSubject,
   catchError,
+  concatMap,
   finalize,
   map,
   Observable,
+  of,
   shareReplay,
   throwError,
 } from 'rxjs';
@@ -57,6 +59,12 @@ export class EventFavouritesStore {
    * sign-out, where the second belongs to a different user entirely.
    */
   private readonly pendingWrites = new Map<number, object>();
+
+  /**
+   * The tail of each event's write chain, so a second toggle for the same event queues behind
+   * the first instead of racing it. Entries clear once nothing is queued behind them.
+   */
+  private readonly writeQueues = new Map<number, Observable<unknown>>();
 
   readonly ids$ = this.ids.asObservable();
 
@@ -157,6 +165,12 @@ export class EventFavouritesStore {
    * immediately before navigating away, and if the only subscription belonged to the
    * destroyed view its teardown would cancel the in-flight request — leaving the store
    * showing a star the server never recorded.
+   *
+   * Writes for the same event run one after another. Firing an opposing mutation while one is
+   * still open leaves the outcome to whichever the server happens to commit last: a POST that
+   * reads an existing row before an earlier DELETE commits returns success, the DELETE wins,
+   * and both calls report success while the store keeps the optimistic star. Nothing
+   * reconciles that afterwards, so the order has to be guaranteed here instead.
    */
   toggle(eventId: number): Observable<boolean> {
     const generation = this.sessionGeneration;
@@ -168,30 +182,42 @@ export class EventFavouritesStore {
     const claim = {};
     this.pendingWrites.set(eventId, claim);
 
-    const request = (
-      next
-        ? this.favourites.favourite(eventId).pipe(map(() => true))
-        : this.favourites.unfavourite(eventId).pipe(map(() => false))
-    ).pipe(
-      finalize(() => {
-        // Only clear our own claim: a later toggle on the same event owns the entry now, and
-        // after a sign-out that later toggle belongs to somebody else.
-        if (this.pendingWrites.get(eventId) === claim) {
-          this.pendingWrites.delete(eventId);
-        }
-      }),
+    const previous = this.writeQueues.get(eventId) ?? of(undefined);
+
+    const request: Observable<boolean> = previous.pipe(
+      // A predecessor that failed has already rolled itself back; it must not also stop this
+      // write from being attempted.
+      catchError(() => of(undefined)),
+      concatMap(() =>
+        next
+          ? this.favourites.favourite(eventId).pipe(map(() => true))
+          : this.favourites.unfavourite(eventId).pipe(map(() => false)),
+      ),
       catchError((error: unknown) => {
-        // Roll back only into the session that asked for the change. A failure that resolves
-        // after a sign-out must not restore the previous user's star.
-        if (this.isCurrentSession(generation)) {
+        // Roll back only if this toggle is still the one that speaks for the event. A newer
+        // toggle supersedes it, and after a sign-out the session it captured is gone — in
+        // either case its `wasFavourited` describes a state nobody is waiting for.
+        if (this.isCurrentSession(generation) && this.pendingWrites.get(eventId) === claim) {
           this.apply(eventId, wasFavourited);
         }
 
         return throwError(() => error);
       }),
+      // Downstream of the rollback so the claim is still readable above.
+      finalize(() => {
+        if (this.pendingWrites.get(eventId) === claim) {
+          this.pendingWrites.delete(eventId);
+        }
+
+        if (this.writeQueues.get(eventId) === request) {
+          this.writeQueues.delete(eventId);
+        }
+      }),
       // refCount stays false so the request survives every caller unsubscribing.
       shareReplay({ bufferSize: 1, refCount: false }),
     );
+
+    this.writeQueues.set(eventId, request);
 
     // The subscription that keeps the write alive. Callers get an extra observer, and the
     // error is already handled here so an unobserved rejection cannot escape.
@@ -221,6 +247,7 @@ export class EventFavouritesStore {
     this.loading = false;
     this.writesDuringLoad.clear();
     this.pendingWrites.clear();
+    this.writeQueues.clear();
     this.ids.next(new Set<number>());
     this.generation$.next(this.generation$.value + 1);
   }

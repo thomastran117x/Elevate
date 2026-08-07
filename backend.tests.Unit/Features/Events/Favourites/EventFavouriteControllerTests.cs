@@ -57,8 +57,15 @@ public class EventFavouriteControllerTests
     [Fact]
     public async Task GetMyStatus_ShouldReportFavouriteState()
     {
+        var favouritedAt = new DateTime(2026, 8, 7, 12, 0, 0, DateTimeKind.Utc);
         var favouriteService = new Mock<IEventFavouriteService>();
-        favouriteService.Setup(service => service.IsFavouritedAsync(9, 7)).ReturnsAsync(true);
+        favouriteService.Setup(service => service.GetMyStatusAsync(9, 7))
+            .ReturnsAsync(new EventFavouriteResponse
+            {
+                EventId = 9,
+                IsFavourited = true,
+                FavouritedAtUtc = favouritedAt
+            });
 
         var controller = CreateController(favouriteService.Object);
 
@@ -68,13 +75,17 @@ public class EventFavouriteControllerTests
         var response = ok.Value.Should().BeOfType<ApiResponse<EventFavouriteResponse>>().Subject;
         response.Data!.EventId.Should().Be(9);
         response.Data.IsFavourited.Should().BeTrue();
+        // The same timestamp the POST and the pinned list report, not a null the client would
+        // read as "not favourited".
+        response.Data.FavouritedAtUtc.Should().Be(favouritedAt);
     }
 
     [Fact]
     public async Task GetMyStatus_ShouldOmitTheTimestamp_WhenNotFavourited()
     {
         var favouriteService = new Mock<IEventFavouriteService>();
-        favouriteService.Setup(service => service.IsFavouritedAsync(9, 7)).ReturnsAsync(false);
+        favouriteService.Setup(service => service.GetMyStatusAsync(9, 7))
+            .ReturnsAsync(new EventFavouriteResponse { EventId = 9, IsFavourited = false });
 
         var controller = CreateController(favouriteService.Object);
 

@@ -141,15 +141,20 @@ public class EventFavouriteServiceTests
     }
 
     [Fact]
-    public async Task IsFavouritedAsync_ShouldTrackTheStar()
+    public async Task GetMyStatusAsync_ShouldTrackTheStar_AndCarryItsTimestamp()
     {
         await using var harness = await FavouriteServiceHarness.CreateAsync();
 
-        (await harness.Service.IsFavouritedAsync(harness.EventId, harness.UserId)).Should().BeFalse();
+        var before = await harness.Service.GetMyStatusAsync(harness.EventId, harness.UserId);
+        before.IsFavourited.Should().BeFalse();
+        before.FavouritedAtUtc.Should().BeNull();
 
-        await harness.Service.FavouriteAsync(harness.EventId, harness.UserId, "Participant");
+        var created = await harness.Service.FavouriteAsync(harness.EventId, harness.UserId, "Participant");
 
-        (await harness.Service.IsFavouritedAsync(harness.EventId, harness.UserId)).Should().BeTrue();
+        var after = await harness.Service.GetMyStatusAsync(harness.EventId, harness.UserId);
+        after.IsFavourited.Should().BeTrue();
+        // Not null: null is the client's signal for "not favourited".
+        after.FavouritedAtUtc.Should().Be(created.FavouritedAtUtc);
     }
 
     [Fact]

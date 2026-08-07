@@ -10,6 +10,6 @@ namespace backend.main.features.events.favourites
 
         Task<IReadOnlyList<EventFavourite>> GetByUserAsync(int userId);
 
-        Task<bool> ExistsAsync(int eventId, int userId);
+        Task<EventFavourite?> GetAsync(int eventId, int userId);
     }
 }
