@@ -42,18 +42,18 @@ namespace backend.main.features.clubs.posts.comments
         {
             await ValidatePostBelongsToClub(clubId, postId);
 
-            var itemsTask = _commentRepository.GetByPostIdAsync(postId, page, pageSize);
-            var countTask = _commentRepository.CountByPostIdAsync(postId);
-            await Task.WhenAll(itemsTask, countTask);
+            // Sequential, not Task.WhenAll: both queries share the scoped AppDatabaseContext,
+            // and EF Core does not support concurrent operations on a single context.
+            var items = await _commentRepository.GetByPostIdAsync(postId, page, pageSize);
+            var totalCount = await _commentRepository.CountByPostIdAsync(postId);
 
-            var items = itemsTask.Result;
             var userIds = items.Select(c => c.UserId).Distinct().ToList();
             var users = userIds.Count > 0
                 ? await _userRepository.GetByIdsAsync(userIds)
                 : [];
             var authorLookup = users.ToDictionary(u => u.Id);
 
-            return (items, countTask.Result, authorLookup);
+            return (items, totalCount, authorLookup);
         }
 
         public async Task<PostComment> UpdateAsync(int postId, int commentId, int userId, string content)

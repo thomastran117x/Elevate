@@ -33,7 +33,10 @@ public sealed class PostgresTestDatabase : IAsyncDisposable
 
         await using (var admin = CreateAdminContext(environment))
         {
-            await admin.Database.ExecuteSqlRawAsync($"CREATE DATABASE \"{databaseName}\";");
+            // Built into a local first: passing an interpolated string straight to
+            // ExecuteSqlRawAsync trips EF1002. The name is validated above.
+            var createSql = $"CREATE DATABASE \"{databaseName}\";";
+            await admin.Database.ExecuteSqlRawAsync(createSql);
         }
 
         await using (var db = CreateDbContext(connectionString))
@@ -52,8 +55,8 @@ public sealed class PostgresTestDatabase : IAsyncDisposable
 
         // WITH (FORCE) terminates any lingering backends. PostgreSQL refuses to drop a
         // database that still has live connections, which makes teardown flaky otherwise.
-        await admin.Database.ExecuteSqlRawAsync(
-            $"DROP DATABASE IF EXISTS \"{DatabaseName}\" WITH (FORCE);");
+        var dropSql = $"DROP DATABASE IF EXISTS \"{DatabaseName}\" WITH (FORCE);";
+        await admin.Database.ExecuteSqlRawAsync(dropSql);
     }
 
     private static AppDatabaseContext CreateAdminContext(IntegrationTestEnvironment environment) =>
