@@ -79,6 +79,11 @@ export class MyPinnedComponent implements OnInit, OnDestroy {
   }
 
   private load(): void {
+    // Signing out clears the user state without navigating, so this page can outlive the
+    // session it loaded for. Without this the response would render the previous user's rows
+    // and seed their ids straight back into the store the sign-out just cleared.
+    const generation = this.favouritesStore.sessionGeneration;
+
     this.loading = true;
     this.error = '';
 
@@ -87,6 +92,13 @@ export class MyPinnedComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (items) => {
+          if (!this.favouritesStore.isCurrentSession(generation)) {
+            this.loading = false;
+            this.items = [];
+            this.requiresLogin = !this.favouritesStore.isSignedIn;
+            return;
+          }
+
           this.items = items;
           this.loading = false;
           // Seed the shared set from the rows we just loaded so the stars render correctly

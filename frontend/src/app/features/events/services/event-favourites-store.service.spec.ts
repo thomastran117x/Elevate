@@ -235,6 +235,58 @@ describe('EventFavouritesStore', () => {
     });
   });
 
+  describe('writes outliving the caller', () => {
+    it('keeps the request alive when every caller unsubscribes', () => {
+      const { store } = setup();
+      const write$ = new Subject<{
+        eventId: number;
+        isFavourited: boolean;
+        favouritedAtUtc: null;
+      }>();
+      favourites.favourite.and.returnValue(write$.asObservable());
+
+      // A star pressed just before navigating away: the view's subscription goes, the
+      // in-flight write must not.
+      const subscription = store.toggle(99).subscribe();
+      subscription.unsubscribe();
+
+      expect(write$.observed).toBeTrue();
+    });
+
+    it('still rolls back after the caller unsubscribes', () => {
+      const { store } = setup();
+      const write$ = new Subject<void>();
+      favourites.unfavourite.and.returnValue(write$.asObservable());
+      store.setFavourited(12, true);
+
+      store
+        .toggle(12)
+        .subscribe({ error: () => undefined })
+        .unsubscribe();
+      expect(store.isFavourited(12)).toBeFalse();
+
+      write$.error(new Error('500'));
+
+      expect(store.isFavourited(12)).toBeTrue();
+    });
+
+    it('does not resurrect a star when the rollback lands after sign-out', () => {
+      const { store, mockStore } = setup();
+      const write$ = new Subject<void>();
+      favourites.unfavourite.and.returnValue(write$.asObservable());
+      store.setFavourited(12, true);
+
+      store.toggle(12).subscribe({ error: () => undefined });
+
+      mockStore.overrideSelector(selectUser, null);
+      mockStore.refreshState();
+
+      write$.error(new Error('500'));
+
+      expect(store.isFavourited(12)).toBeFalse();
+    });
+  });
+
   it('emits per-event state through isFavourited$', () => {
     const { store } = setup();
     store.ensureLoaded();

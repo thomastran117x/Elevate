@@ -78,6 +78,8 @@ export class EventFavouriteToggleComponent implements OnInit, OnChanges, OnDestr
     if (this.pending) return;
     this.pending = true;
 
+    // takeUntil only detaches this component's observer: EventFavouritesStore owns the
+    // subscription that keeps the write alive, so navigating away mid-flight cannot cancel it.
     this.favouritesStore
       .toggle(this.eventId)
       .pipe(takeUntil(this.destroy$))

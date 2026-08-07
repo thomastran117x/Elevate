@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { BehaviorSubject, catchError, map, Observable, throwError } from 'rxjs';
+import { BehaviorSubject, catchError, map, Observable, shareReplay, throwError } from 'rxjs';
 
 import { UserState } from '../../../core/stores/user.reducer';
 import { selectUser } from '../../../core/stores/user.selectors';
@@ -61,6 +61,19 @@ export class EventFavouritesStore {
     return this.currentUserId !== null;
   }
 
+  /**
+   * Identifies the current signed-in session. Anything that starts an async read of per-user
+   * data should capture this first and check {@link isCurrentSession} before applying the
+   * result — signing out does not navigate, so a page can outlive the session it loaded for.
+   */
+  get sessionGeneration(): number {
+    return this.generation;
+  }
+
+  isCurrentSession(generation: number): boolean {
+    return generation === this.generation;
+  }
+
   /** Fetches the id set once per signed-in session. No-ops for anonymous users. */
   ensureLoaded(): void {
     if (this.loaded || this.loading || this.currentUserId === null) {
@@ -111,23 +124,42 @@ export class EventFavouritesStore {
   /**
    * Flips the star optimistically and writes through, reverting if the write fails.
    * Emits the state the star ended up in.
+   *
+   * The write is owned by this store, not by whoever called it. A star can be pressed
+   * immediately before navigating away, and if the only subscription belonged to the
+   * destroyed view its teardown would cancel the in-flight request — leaving the store
+   * showing a star the server never recorded.
    */
   toggle(eventId: number): Observable<boolean> {
+    const generation = this.generation;
     const wasFavourited = this.isFavourited(eventId);
     const next = !wasFavourited;
 
     this.apply(eventId, next);
 
-    const request = next
-      ? this.favourites.favourite(eventId).pipe(map(() => true))
-      : this.favourites.unfavourite(eventId).pipe(map(() => false));
-
-    return request.pipe(
+    const request = (
+      next
+        ? this.favourites.favourite(eventId).pipe(map(() => true))
+        : this.favourites.unfavourite(eventId).pipe(map(() => false))
+    ).pipe(
       catchError((error: unknown) => {
-        this.apply(eventId, wasFavourited);
+        // Roll back only into the session that asked for the change. A failure that resolves
+        // after a sign-out must not restore the previous user's star.
+        if (this.isCurrentSession(generation)) {
+          this.apply(eventId, wasFavourited);
+        }
+
         return throwError(() => error);
       }),
+      // refCount stays false so the request survives every caller unsubscribing.
+      shareReplay({ bufferSize: 1, refCount: false }),
     );
+
+    // The subscription that keeps the write alive. Callers get an extra observer, and the
+    // error is already handled here so an unobserved rejection cannot escape.
+    request.subscribe({ error: () => undefined });
+
+    return request;
   }
 
   /** Seeds a single event's state, for pages that already know it (e.g. event detail). */

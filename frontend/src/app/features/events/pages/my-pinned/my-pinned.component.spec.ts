@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
-import { BehaviorSubject, of, throwError } from 'rxjs';
+import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 
 import { makeEventItem } from '@testing';
 
@@ -43,11 +43,12 @@ describe('MyPinnedComponent', () => {
 
     favouritesStore = jasmine.createSpyObj<EventFavouritesStore>(
       'EventFavouritesStore',
-      ['setFavourited', 'toggle', 'ensureLoaded', 'isFavourited$'],
-      { isSignedIn: true, ids$: ids$.asObservable() },
+      ['setFavourited', 'toggle', 'ensureLoaded', 'isFavourited$', 'isCurrentSession'],
+      { isSignedIn: true, ids$: ids$.asObservable(), sessionGeneration: 0 },
     ) as jasmine.SpyObj<EventFavouritesStore> & { isSignedIn: boolean };
     favouritesStore.isFavourited$.and.callFake((eventId: number) => of(ids$.value.has(eventId)));
     favouritesStore.toggle.and.returnValue(of(false));
+    favouritesStore.isCurrentSession.and.returnValue(true);
 
     authReturnUrl = jasmine.createSpyObj<AuthReturnUrlService>('AuthReturnUrlService', ['set']);
 
@@ -127,6 +128,26 @@ describe('MyPinnedComponent', () => {
 
     // It is on the list because of the registration, not the star.
     expect(component.going.length).toBe(1);
+  });
+
+  it('discards a response that lands after the session changed', async () => {
+    await setup();
+
+    const pinned$ = new Subject<PinnedEvent[]>();
+    favourites.getMyPinned.and.returnValue(pinned$.asObservable());
+    // Signing out clears user state without navigating, so this page is still mounted.
+    let currentSession = true;
+    favouritesStore.isCurrentSession.and.callFake(() => currentSession);
+
+    fixture = TestBed.createComponent(MyPinnedComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    currentSession = false;
+    pinned$.next([pinnedRow({ event: makeEventItem({ id: 4 }) })]);
+
+    expect(component.items).toEqual([]);
+    expect(favouritesStore.setFavourited).not.toHaveBeenCalled();
   });
 
   it('surfaces a message when a toggle fails', async () => {
