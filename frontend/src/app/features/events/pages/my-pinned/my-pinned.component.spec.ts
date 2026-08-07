@@ -163,6 +163,63 @@ describe('MyPinnedComponent', () => {
     expect(favouritesStore.setFavourited).not.toHaveBeenCalled();
   });
 
+  it('leaves the next account rows alone when the previous response arrives late', async () => {
+    await setup();
+
+    const stale$ = new Subject<PinnedEvent[]>();
+    favourites.getMyPinned.and.returnValue(stale$.asObservable());
+    let generation = 0;
+    favouritesStore.isCurrentSession.and.callFake((captured: number) => captured === generation);
+    Object.defineProperty(favouritesStore, 'sessionGeneration', {
+      get: () => generation,
+      configurable: true,
+    });
+
+    fixture = TestBed.createComponent(MyPinnedComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    // Account switch: the new account's reload resolves first.
+    generation = 1;
+    favourites.getMyPinned.and.returnValue(of([pinnedRow({ event: makeEventItem({ id: 9 }) })]));
+    session$.next(1);
+    expect(component.items.map((row) => row.event.id)).toEqual([9]);
+
+    // The previous account's request finally lands. It must not delete the rows on screen.
+    stale$.next([pinnedRow({ event: makeEventItem({ id: 4 }) })]);
+
+    expect(component.items.map((row) => row.event.id)).toEqual([9]);
+    expect(component.loading).toBeFalse();
+  });
+
+  it('ignores a failure from a request the session already replaced', async () => {
+    await setup();
+
+    const stale$ = new Subject<PinnedEvent[]>();
+    favourites.getMyPinned.and.returnValue(stale$.asObservable());
+    let generation = 0;
+    favouritesStore.isCurrentSession.and.callFake((captured: number) => captured === generation);
+    Object.defineProperty(favouritesStore, 'sessionGeneration', {
+      get: () => generation,
+      configurable: true,
+    });
+
+    fixture = TestBed.createComponent(MyPinnedComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    generation = 1;
+    favourites.getMyPinned.and.returnValue(of([pinnedRow({ event: makeEventItem({ id: 9 }) })]));
+    session$.next(1);
+
+    // A 401 belonging to the signed-out session must not send the new one to the login prompt.
+    stale$.error({ status: 401 });
+
+    expect(component.requiresLogin).toBeFalse();
+    expect(component.error).toBe('');
+    expect(component.items.map((row) => row.event.id)).toEqual([9]);
+  });
+
   it('drops already-loaded rows when the session ends', async () => {
     await setup([pinnedRow({ event: makeEventItem({ id: 4 }) })]);
     expect(component.items.length).toBe(1);

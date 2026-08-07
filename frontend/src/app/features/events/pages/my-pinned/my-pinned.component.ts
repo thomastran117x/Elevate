@@ -116,10 +116,10 @@ export class MyPinnedComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (items) => {
+          // A response for a session that has ended touches nothing. The session$ handler
+          // already cleared the page and started whatever load replaces this one, so writing
+          // here would clobber rows the newer load may have put on screen first.
           if (!this.favouritesStore.isCurrentSession(generation)) {
-            this.loading = false;
-            this.items = [];
-            this.requiresLogin = !this.favouritesStore.isSignedIn;
             return;
           }
 
@@ -132,6 +132,12 @@ export class MyPinnedComponent implements OnInit, OnDestroy {
           }
         },
         error: (response) => {
+          // Same for a stale failure: a 401 from the previous session must not push the
+          // current one to the sign-in prompt.
+          if (!this.favouritesStore.isCurrentSession(generation)) {
+            return;
+          }
+
           this.loading = false;
           this.requiresLogin = response?.status === 401;
           if (!this.requiresLogin) {
