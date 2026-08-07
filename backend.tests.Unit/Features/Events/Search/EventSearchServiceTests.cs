@@ -192,6 +192,8 @@ public class EventSearchServiceTests
     {
         var hit = new Hit<EventDocument>
         {
+            Id = "distance-hit",
+            Index = "events",
             Sort = [(Elastic.Clients.Elasticsearch.FieldValue)1234.5]
         };
 
@@ -215,6 +217,8 @@ public class EventSearchServiceTests
     {
         var hit = new Hit<EventDocument>
         {
+            Id = "non-distance-hit",
+            Index = "events",
             Sort = [(Elastic.Clients.Elasticsearch.FieldValue)"n/a"]
         };
 

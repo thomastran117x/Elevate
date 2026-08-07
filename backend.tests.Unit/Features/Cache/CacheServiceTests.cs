@@ -60,6 +60,15 @@ public class CacheServiceTests
                 It.IsAny<CommandFlags>()))
             .ReturnsAsync(true);
 
+        harness.DatabaseMock
+            .Setup(db => db.StringSetAsync(
+                It.IsAny<RedisKey>(),
+                It.IsAny<RedisValue>(),
+                It.IsAny<Expiration>(),
+                It.IsAny<ValueCondition>(),
+                It.IsAny<CommandFlags>()))
+            .ReturnsAsync(true);
+
         var set = await harness.Service.SetValueAsync("token", "value", TimeSpan.FromMinutes(5));
         var get = await harness.Service.GetValueAsync("token");
         var increment = await harness.Service.IncrementAsync("visits", 2);
@@ -272,6 +281,15 @@ public class CacheServiceTests
         harness.DatabaseMock
             .Setup(db => db.KeyDeleteAsync("explode", CommandFlags.None))
             .ThrowsAsync(new InvalidOperationException("unexpected"));
+
+        harness.DatabaseMock
+            .Setup(db => db.StringSetAsync(
+                It.IsAny<RedisKey>(),
+                It.IsAny<RedisValue>(),
+                It.IsAny<Expiration>(),
+                It.IsAny<ValueCondition>(),
+                It.IsAny<CommandFlags>()))
+            .ThrowsAsync(new RedisTimeoutException("timed out", CommandStatus.Unknown));
 
         var timedOut = await harness.Service.SetValueAsync("timeout", "value");
         var disconnected = await harness.Service.HashSetAsync("hash", "field", "value");
