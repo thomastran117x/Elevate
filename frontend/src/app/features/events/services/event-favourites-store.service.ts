@@ -46,12 +46,17 @@ export class EventFavouritesStore {
   private readonly writesDuringLoad = new Map<number, boolean>();
 
   /**
-   * Toggles whose write has not resolved yet, keyed by event id with the state the user asked
-   * for. Any server snapshot that predates one of these must not overwrite it — the pinned
-   * page in particular can load a list that was rendered before a star pressed on the search
-   * page reached the server.
+   * Toggles whose write has not resolved yet, keyed by event id and holding a token unique to
+   * the toggle that opened it. Any server snapshot that predates one of these must not
+   * overwrite it — the pinned page in particular can load a list that was rendered before a
+   * star pressed on the search page reached the server.
+   *
+   * The value is an identity token rather than the requested state so a resolving toggle can
+   * only ever clear its own claim. Comparing states instead would let one toggle release
+   * another's entry whenever the two happened to want the same result — including across a
+   * sign-out, where the second belongs to a different user entirely.
    */
-  private readonly pendingWrites = new Map<number, boolean>();
+  private readonly pendingWrites = new Map<number, object>();
 
   readonly ids$ = this.ids.asObservable();
 
@@ -159,7 +164,9 @@ export class EventFavouritesStore {
     const next = !wasFavourited;
 
     this.apply(eventId, next);
-    this.pendingWrites.set(eventId, next);
+
+    const claim = {};
+    this.pendingWrites.set(eventId, claim);
 
     const request = (
       next
@@ -167,9 +174,9 @@ export class EventFavouritesStore {
         : this.favourites.unfavourite(eventId).pipe(map(() => false))
     ).pipe(
       finalize(() => {
-        // Only clear our own claim: a second toggle on the same event while this one was
-        // still open owns the entry now.
-        if (this.pendingWrites.get(eventId) === next) {
+        // Only clear our own claim: a later toggle on the same event owns the entry now, and
+        // after a sign-out that later toggle belongs to somebody else.
+        if (this.pendingWrites.get(eventId) === claim) {
           this.pendingWrites.delete(eventId);
         }
       }),

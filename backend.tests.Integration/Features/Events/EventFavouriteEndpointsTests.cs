@@ -75,6 +75,7 @@ public class EventFavouriteEndpointsTests
         var before = await GetMyFavouriteStatusAsync(app, user.Session.AccessToken, ev.Id);
         before.EventId.Should().Be(ev.Id);
         before.IsFavourited.Should().BeFalse();
+        before.FavouritedAtUtc.Should().BeNull("an unstarred event has no favourited-at date");
 
         await FavouriteAsync(app, user.Session.AccessToken, ev.Id);
 
@@ -146,6 +147,29 @@ public class EventFavouriteEndpointsTests
         var removedAgain = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete, $"/api/events/{ev.Id}/favourite", user.Session.AccessToken));
         removedAgain.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var rows = await app.QueryDbAsync(db => db.EventFavourites.CountAsync(f => f.EventId == ev.Id));
+        rows.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ConcurrentUnfavourites_ShouldAllSucceed()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var organizer = await CreateUserSessionAsync(app, "fav-delrace-organizer@example.com", "Organizer");
+        var club = await CreateClubAsync(app, organizer.Session.AccessToken, "Favourite Delete Race Club");
+        var ev = await CreateEventAsync(app, organizer.Session.AccessToken, club.Id);
+
+        var user = await CreateUserSessionAsync(app, "fav-delrace-user@example.com");
+        await FavouriteAsync(app, user.Session.AccessToken, ev.Id);
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => app.Client.SendAsync(
+            CreateAuthorizedRequest(
+                HttpMethod.Delete, $"/api/events/{ev.Id}/favourite", user.Session.AccessToken))));
+
+        // Only one request finds a row to delete; the losers must still report success rather
+        // than surfacing the concurrency failure on an idempotent endpoint.
+        responses.Should().OnlyContain(r => r.StatusCode == HttpStatusCode.OK);
 
         var rows = await app.QueryDbAsync(db => db.EventFavourites.CountAsync(f => f.EventId == ev.Id));
         rows.Should().Be(0);

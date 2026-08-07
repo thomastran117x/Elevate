@@ -341,6 +341,33 @@ describe('EventFavouritesStore', () => {
       expect(store.isFavourited(99)).toBeTrue();
     });
 
+    it('does not let a resolving toggle release a later one for the same event', () => {
+      const { store, mockStore } = setup();
+      const first$ = new Subject<{
+        eventId: number;
+        isFavourited: boolean;
+        favouritedAtUtc: null;
+      }>();
+      favourites.favourite.and.returnValue(first$.asObservable());
+
+      store.toggle(99).subscribe();
+
+      // A different account opens the same transition on the same event.
+      mockStore.overrideSelector(selectUser, makeCurrentUser({ Id: 6 }));
+      mockStore.refreshState();
+      favourites.favourite.and.returnValue(NEVER);
+      store.toggle(99).subscribe();
+
+      // The first account's write finally resolves. Both wanted `true`, so a state comparison
+      // would hand it the second account's claim.
+      first$.next({ eventId: 99, isFavourited: true, favouritedAtUtc: null });
+      first$.complete();
+
+      store.setFavourited(99, false);
+
+      expect(store.isFavourited(99)).toBeTrue();
+    });
+
     it('leaves other events seedable while one write is open', () => {
       const { store } = setup();
       favourites.favourite.and.returnValue(NEVER);

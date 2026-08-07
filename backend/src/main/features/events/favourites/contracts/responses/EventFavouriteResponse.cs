@@ -11,7 +11,11 @@ namespace backend.main.features.events.favourites.contracts.responses
         {
             get; set;
         }
-        public DateTime FavouritedAtUtc
+        /// <summary>
+        /// Null when <see cref="IsFavourited"/> is false. Nullable rather than defaulted so a
+        /// "not favourited" status does not serialize an impossible year-0001 timestamp.
+        /// </summary>
+        public DateTime? FavouritedAtUtc
         {
             get; set;
         }

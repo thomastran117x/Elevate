@@ -71,6 +71,24 @@ public class EventFavouriteControllerTests
     }
 
     [Fact]
+    public async Task GetMyStatus_ShouldOmitTheTimestamp_WhenNotFavourited()
+    {
+        var favouriteService = new Mock<IEventFavouriteService>();
+        favouriteService.Setup(service => service.IsFavouritedAsync(9, 7)).ReturnsAsync(false);
+
+        var controller = CreateController(favouriteService.Object);
+
+        var result = await controller.GetMyStatus(9);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<ApiResponse<EventFavouriteResponse>>().Subject;
+        response.Data!.IsFavourited.Should().BeFalse();
+        // Not DateTime.MinValue: an unstarred event has no favourited-at date, and serializing
+        // year 0001 would contradict the client's nullable contract.
+        response.Data.FavouritedAtUtc.Should().BeNull();
+    }
+
+    [Fact]
     public async Task GetMyFavouriteIds_ShouldReturnTheIdSet()
     {
         var favouriteService = new Mock<IEventFavouriteService>();

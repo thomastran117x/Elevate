@@ -82,6 +82,23 @@ public class EventFavouriteServiceTests
     }
 
     [Fact]
+    public async Task UnfavouriteAsync_ShouldStaySuccessful_WhenTheRowIsAlreadyGone()
+    {
+        await using var harness = await FavouriteServiceHarness.CreateAsync();
+        await harness.Service.FavouriteAsync(harness.EventId, harness.UserId, "Participant");
+
+        // Stands in for an overlapping retry: another request removed the row after this one
+        // would have read it. A load-then-remove would fail its SaveChanges here and 500 on an
+        // endpoint documented as idempotent.
+        await harness.DeleteFavouriteDirectlyAsync(harness.EventId, harness.UserId);
+
+        var act = async () => await harness.Service.UnfavouriteAsync(harness.EventId, harness.UserId);
+
+        await act.Should().NotThrowAsync();
+        (await harness.Db.EventFavourites.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
     public async Task UnfavouriteAsync_ShouldSucceed_WhenEventVisibilityWasRevoked()
     {
         await using var harness = await FavouriteServiceHarness.CreateAsync();
@@ -354,6 +371,14 @@ internal sealed class FavouriteServiceHarness : IAsyncDisposable
             CreatedAt = DateTime.UtcNow
         });
         await Db.SaveChangesAsync();
+    }
+
+    /// <summary>Removes the row behind the service's back, as a racing request would.</summary>
+    public async Task DeleteFavouriteDirectlyAsync(int eventId, int userId)
+    {
+        await Db.EventFavourites
+            .Where(f => f.EventId == eventId && f.UserId == userId)
+            .ExecuteDeleteAsync();
     }
 
     /// <summary>Makes the events service reject reads of the event, as a revocation would.</summary>

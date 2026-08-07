@@ -103,15 +103,18 @@ namespace backend.main.features.events.favourites
             // authority to remove it.
             try
             {
-                var favourite = await _db.EventFavourites
-                    .FirstOrDefaultAsync(f => f.EventId == eventId && f.UserId == userId);
+                // A single atomic DELETE rather than load-then-remove. Two overlapping requests
+                // for the same star — a retry, or a double-tap — would otherwise both load the
+                // row, and the loser's SaveChangesAsync would affect zero rows and throw
+                // DbUpdateConcurrencyException, turning a documented-idempotent call into a 500.
+                var removed = await _db.EventFavourites
+                    .Where(f => f.EventId == eventId && f.UserId == userId)
+                    .ExecuteDeleteAsync();
 
-                // Idempotent: unstarring something already unstarred is the state they wanted.
-                if (favourite == null)
+                // Idempotent: unstarring something already unstarred is the state they wanted,
+                // and there is nothing to invalidate.
+                if (removed == 0)
                     return;
-
-                _db.EventFavourites.Remove(favourite);
-                await _db.SaveChangesAsync();
 
                 await EventFavouriteCacheKeys.InvalidateUserAsync(_refreshCache, userId);
             }
