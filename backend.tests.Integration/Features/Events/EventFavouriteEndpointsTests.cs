@@ -62,6 +62,31 @@ public class EventFavouriteEndpointsTests
     }
 
     [Fact]
+    public async Task GetMyStatus_ShouldTrackTheStarForTheCallingUser()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var organizer = await CreateUserSessionAsync(app, "fav-status-organizer@example.com", "Organizer");
+        var club = await CreateClubAsync(app, organizer.Session.AccessToken, "Favourite Status Club");
+        var ev = await CreateEventAsync(app, organizer.Session.AccessToken, club.Id);
+
+        var user = await CreateUserSessionAsync(app, "fav-status-user@example.com");
+        var bystander = await CreateUserSessionAsync(app, "fav-status-bystander@example.com");
+
+        var before = await GetMyFavouriteStatusAsync(app, user.Session.AccessToken, ev.Id);
+        before.EventId.Should().Be(ev.Id);
+        before.IsFavourited.Should().BeFalse();
+
+        await FavouriteAsync(app, user.Session.AccessToken, ev.Id);
+
+        (await GetMyFavouriteStatusAsync(app, user.Session.AccessToken, ev.Id))
+            .IsFavourited.Should().BeTrue();
+
+        // The status is per-caller, not per-event.
+        (await GetMyFavouriteStatusAsync(app, bystander.Session.AccessToken, ev.Id))
+            .IsFavourited.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task FavouritingTwice_ShouldSucceed_AndLeaveOneRow()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
@@ -335,6 +360,15 @@ public class EventFavouriteEndpointsTests
 
         if (response.StatusCode != HttpStatusCode.Created)
             throw new Xunit.Sdk.XunitException(await app.DescribeFailureAsync(response));
+    }
+
+    private static async Task<EventFavouriteResponse> GetMyFavouriteStatusAsync(
+        AuthApiTestApp app, string accessToken, int eventId)
+    {
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get, $"/api/events/{eventId}/favourite/me", accessToken));
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        return (await app.ReadApiResponseAsync<EventFavouriteResponse>(response)).Data!;
     }
 
     private static async Task<List<int>> GetMyFavouriteIdsAsync(AuthApiTestApp app, string accessToken)
