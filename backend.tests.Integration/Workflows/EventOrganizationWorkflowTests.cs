@@ -445,10 +445,13 @@ public class EventOrganizationWorkflowTests
             .SingleAsync(item => item.EventId == published.Id && item.UserId == invitee.UserId));
         storedRegistration.Status.Should().Be(RegistrationStatus.Active);
 
-        app.Publisher.EmailMessages.Should().ContainSingle(message =>
+        var invitationEmail = app.Publisher.EmailMessages.Should().ContainSingle(message =>
             message.Type == EmailMessageType.EventInvite &&
             message.Email == "workflow-private-invitee@example.com" &&
-            message.EventId == published.Id);
+            message.EventInvitationId == invitation.Id)
+            .Subject;
+        invitationEmail.Token.Should().NotBeNullOrWhiteSpace();
+        invitationEmail.EventName.Should().Be(published.Name);
     }
 
     [Fact]
