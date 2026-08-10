@@ -10,7 +10,9 @@ using backend.main.features.auth.captcha;
 using backend.main.features.auth.oauth;
 using backend.main.features.cache;
 using backend.main.infrastructure.database.core;
+using backend.main.infrastructure.elasticsearch;
 using backend.main.infrastructure.redis;
+using backend.main.shared.providers;
 using backend.main.shared.storage;
 
 namespace backend.tests.Integration.Infrastructure;
@@ -21,6 +23,7 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
     private readonly string _testConnectionString;
     private readonly Action<IServiceCollection>? _serviceOverrides;
     private readonly IReadOnlyDictionary<string, string?> _configurationOverrides;
+    private readonly TestResourceNamespace _resources;
 
     public FakeCaptchaService Captcha { get; } = new();
     public FakeOAuthService OAuth { get; } = new();
@@ -29,11 +32,13 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
     public TestWebApplicationFactory(
         IntegrationTestEnvironment environment,
         string testConnectionString,
+        TestResourceNamespace resources,
         Action<IServiceCollection>? serviceOverrides = null,
         IReadOnlyDictionary<string, string?>? configurationOverrides = null)
     {
         _environment = environment;
         _testConnectionString = testConnectionString;
+        _resources = resources;
         _serviceOverrides = serviceOverrides;
         _configurationOverrides = configurationOverrides ?? new Dictionary<string, string?>();
     }
@@ -48,13 +53,20 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
             var settings = new Dictionary<string, string?>(_configurationOverrides)
             {
                 ["Database:Provider"] = "postgres",
-                ["Database:ConnectionString"] = _testConnectionString
+                ["Database:ConnectionString"] = _testConnectionString,
+                ["Redis:ConnectionString"] = _environment.CreateRedisConnectionString(_resources.RedisDatabase),
+                ["Elasticsearch:Url"] = _environment.ElasticsearchUrl,
+                [SearchIndexNames.EventsConfigurationKey] = _resources.EventsIndex,
+                [SearchIndexNames.ClubsConfigurationKey] = _resources.ClubsIndex,
+                [SearchIndexNames.ClubPostsConfigurationKey] = _resources.ClubPostsIndex,
+                ["RateLimiter:PermitLimit"] = "100000",
+                ["RateLimiter:AuthPermitLimit"] = "100000"
             };
 
             config.AddInMemoryCollection(settings);
         });
 
-        builder.ConfigureServices(services =>
+        builder.ConfigureServices((context, services) =>
         {
             services.RemoveAll<AppDatabaseContext>();
             services.RemoveAll<DbContextOptions<AppDatabaseContext>>();
@@ -72,7 +84,7 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
             services.RemoveAll<ICacheService>();
             services.RemoveAll<StackExchange.Redis.IConnectionMultiplexer>();
             services.RemoveAll<RedisReconnectState>();
-            services.AddAppRedis(new ConfigurationBuilder().Build());
+            services.AddAppRedis(context.Configuration);
 
             services.RemoveAll<ICaptchaService>();
             services.AddSingleton<ICaptchaService>(Captcha);
@@ -83,20 +95,19 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
             services.RemoveAll<IAzureBlobService>();
             services.AddSingleton<IAzureBlobService>(BlobStorage);
 
+            services.RemoveAll<IPublisher>();
+            services.AddSingleton<IPublisher>(_ =>
+                new NamespacedKafkaPublisher(_environment, _resources));
+
             _serviceOverrides?.Invoke(services);
         });
     }
 
-    protected override IHost CreateHost(IHostBuilder builder)
+    public void ResetTestDoubles()
     {
-        _environment.ResetSharedStateAsync().GetAwaiter().GetResult();
-        var host = base.CreateHost(builder);
-
-        using var scope = host.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
-        db.Database.Migrate();
-
-        return host;
+        Captcha.ShouldSucceed = true;
+        OAuth.Clear();
+        BlobStorage.Clear();
     }
 }
 

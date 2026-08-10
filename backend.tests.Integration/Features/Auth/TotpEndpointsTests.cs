@@ -16,6 +16,7 @@ using OtpNet;
 
 namespace backend.tests.Integration.Features.Auth;
 
+[Collection(IntegrationTestCollection.Name)]
 public class TotpEndpointsTests
 {
     [Fact]

@@ -3,6 +3,7 @@ using System.Net;
 using backend.main.features.cache;
 using backend.main.infrastructure.redis;
 using backend.main.shared.utilities.logger;
+using backend.tests.Unit.Support;
 
 using FluentAssertions;
 
@@ -12,6 +13,7 @@ using StackExchange.Redis;
 
 namespace backend.tests.Unit.Features.Cache;
 
+[Collection(GlobalLoggerTestCollection.Name)]
 public class CacheServiceTests
 {
     [Fact]

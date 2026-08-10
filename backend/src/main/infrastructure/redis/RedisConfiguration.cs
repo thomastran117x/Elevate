@@ -30,8 +30,11 @@ namespace backend.main.infrastructure.redis
 
         public static IServiceCollection AddAppRedis(
             this IServiceCollection services,
-            IConfiguration _)
+            IConfiguration configuration)
         {
+            var connectionString =
+                configuration["Redis:ConnectionString"]
+                ?? EnvironmentSetting.RedisConnection;
             var health = new RedisHealth();
             var noOp = new NoOpCacheService();
             var state = new RedisReconnectState(noOp);
@@ -41,7 +44,7 @@ namespace backend.main.infrastructure.redis
                 _retryPolicy.ExecuteAsync(async () =>
                 {
                     var mux = await ConnectionMultiplexer.ConnectAsync(
-                        EnvironmentSetting.RedisConnection);
+                        connectionString);
 
                     var db = mux.GetDatabase();
 
@@ -50,7 +53,7 @@ namespace backend.main.infrastructure.redis
                     var resource = new RedisResource(mux);
                     state.SwitchToRedis(new CacheService(resource));
 
-                    services.AddSingleton<IConnectionMultiplexer>(mux);
+                    services.AddSingleton<IConnectionMultiplexer>(_ => mux);
                     services.AddSingleton(resource);
 
                     health.IsAvailable = true;
@@ -68,7 +71,8 @@ namespace backend.main.infrastructure.redis
                     "Redis unavailable after retries. Using in-memory fallback; will retry connection in background."
                 );
 
-                services.AddHostedService<RedisReconnectBackgroundService>();
+                services.AddHostedService<RedisReconnectBackgroundService>(sp =>
+                    new RedisReconnectBackgroundService(sp, health, connectionString));
             }
 
             services.AddSingleton(health);

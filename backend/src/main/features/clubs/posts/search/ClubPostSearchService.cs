@@ -9,22 +9,25 @@ namespace backend.main.features.clubs.posts.search
 {
     public class ClubPostSearchService : IClubPostSearchService
     {
-        private const string IndexName = "club_posts";
+        private string IndexName => _indexNames.ClubPosts;
 
         private readonly ElasticsearchClient? _client;
         private readonly ElasticsearchCircuitBreaker _circuitBreaker;
         private readonly ElasticsearchHealth _health;
+        private readonly SearchIndexNames _indexNames;
         private readonly SemaphoreSlim _indexLock = new(1, 1);
         private bool _indexEnsured;
 
         public ClubPostSearchService(
             ElasticsearchCircuitBreaker circuitBreaker,
             ElasticsearchHealth health,
-            ElasticsearchClient? client = null)
+            ElasticsearchClient? client = null,
+            SearchIndexNames? indexNames = null)
         {
             _circuitBreaker = circuitBreaker;
             _health = health;
             _client = client;
+            _indexNames = indexNames ?? new SearchIndexNames();
         }
 
         public async Task EnsureIndexAsync(CancellationToken cancellationToken = default)

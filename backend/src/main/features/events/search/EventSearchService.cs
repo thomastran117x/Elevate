@@ -12,22 +12,25 @@ namespace backend.main.features.events.search
 {
     public class EventSearchService : IEventSearchService
     {
-        private const string IndexName = "events";
+        private string IndexName => _indexNames.Events;
 
         private readonly ElasticsearchClient? _client;
         private readonly ElasticsearchCircuitBreaker _circuitBreaker;
         private readonly ElasticsearchHealth _health;
+        private readonly SearchIndexNames _indexNames;
         private readonly SemaphoreSlim _indexLock = new(1, 1);
         private bool _indexEnsured;
 
         public EventSearchService(
             ElasticsearchCircuitBreaker circuitBreaker,
             ElasticsearchHealth health,
-            ElasticsearchClient? client = null)
+            ElasticsearchClient? client = null,
+            SearchIndexNames? indexNames = null)
         {
             _circuitBreaker = circuitBreaker;
             _health = health;
             _client = client;
+            _indexNames = indexNames ?? new SearchIndexNames();
         }
 
         public async Task EnsureIndexAsync(CancellationToken cancellationToken = default)
@@ -237,20 +240,29 @@ namespace backend.main.features.events.search
             var client = GetWritableClientOrNull();
             if (client == null)
                 return;
+            var documentBatch = documents.ToList();
             await EnsureIndexAsync(cancellationToken);
             try
             {
                 var response = await _circuitBreaker.ExecuteAsync(
                     () => client.BulkAsync(b => b
                         .Index(IndexName)
-                        .IndexMany(documents)
+                        .IndexMany(documentBatch)
                     ),
                     $"{IndexName} bulk indexing");
                 if (response.Errors)
-                    Logger.Warn($"Bulk index had errors: {response.ItemsWithErrors.Count()} items failed.");
+                {
+                    var failedCount = response.ItemsWithErrors.Count();
+                    throw new ElasticsearchUnavailableException(
+                        $"Bulk index failed for {failedCount} of {documentBatch.Count} event documents.");
+                }
                 await _circuitBreaker.ExecuteAsync(
                     () => client.Indices.RefreshAsync(IndexName, cancellationToken),
                     $"{IndexName} refresh");
+            }
+            catch (ElasticsearchUnavailableException)
+            {
+                throw;
             }
             catch (Exception ex)
             {

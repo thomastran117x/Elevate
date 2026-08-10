@@ -1,4 +1,3 @@
-using backend.main.application.environment;
 using backend.main.features.cache;
 using backend.main.shared.utilities.logger;
 
@@ -16,12 +15,19 @@ namespace backend.main.infrastructure.redis
 
         private readonly IServiceProvider _services;
         private readonly RedisHealth _health;
+        private readonly string _connectionString;
 
-        public RedisReconnectBackgroundService(IServiceProvider services, RedisHealth health)
+        public RedisReconnectBackgroundService(
+            IServiceProvider services,
+            RedisHealth health,
+            string connectionString)
         {
             _services = services;
             _health = health;
+            _connectionString = connectionString;
         }
+
+        internal string ConnectionString => _connectionString;
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -39,7 +45,7 @@ namespace backend.main.infrastructure.redis
                 try
                 {
                     var mux = await ConnectionMultiplexer.ConnectAsync(
-                        EnvironmentSetting.RedisConnection).ConfigureAwait(false);
+                        _connectionString).ConfigureAwait(false);
 
                     var db = mux.GetDatabase();
                     await db.PingAsync().ConfigureAwait(false);

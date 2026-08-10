@@ -1,9 +1,11 @@
 using backend.main.shared.utilities.logger;
+using backend.tests.Unit.Support;
 
 using FluentAssertions;
 
 namespace backend.tests.Unit.Shared.Utilities;
 
+[Collection(GlobalLoggerTestCollection.Name)]
 public class LoggerTests
 {
     [Fact]
