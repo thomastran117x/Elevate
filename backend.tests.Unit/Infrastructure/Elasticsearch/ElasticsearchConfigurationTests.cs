@@ -10,6 +10,29 @@ namespace backend.tests.Unit.Infrastructure.Elasticsearch;
 public class ElasticsearchConfigurationTests
 {
     [Fact]
+    public void SearchIndexNames_ShouldUseConfiguredNames_AndProductionDefaults()
+    {
+        var defaults = SearchIndexNames.FromConfiguration(new ConfigurationBuilder().Build());
+        defaults.Events.Should().Be("events");
+        defaults.Clubs.Should().Be("clubs");
+        defaults.ClubPosts.Should().Be("club_posts");
+
+        var configured = SearchIndexNames.FromConfiguration(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [SearchIndexNames.EventsConfigurationKey] = "test-events",
+                    [SearchIndexNames.ClubsConfigurationKey] = "test-clubs",
+                    [SearchIndexNames.ClubPostsConfigurationKey] = "test-club-posts"
+                })
+                .Build());
+
+        configured.Events.Should().Be("test-events");
+        configured.Clubs.Should().Be("test-clubs");
+        configured.ClubPosts.Should().Be("test-club-posts");
+    }
+
+    [Fact]
     public void AddAppElasticsearch_ShouldRegisterUnavailableHealth_WhenUrlMissing()
     {
         var services = new ServiceCollection();

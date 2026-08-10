@@ -74,7 +74,7 @@ else
 builder.Services.AddJwtAuth(builder.Configuration);
 builder.Services.AddCustomCors(builder.Configuration);
 builder.Services.AddCustomCsrf();
-builder.Services.AddInMemoryRateLimiter();
+builder.Services.AddInMemoryRateLimiter(builder.Configuration);
 builder.Services.AddCustomRequestTimeouts();
 builder.Services.AddForwardedHeaders(builder.Configuration);
 

@@ -18,8 +18,15 @@ namespace backend.main.application.security
         private const int AuthPermitLimit = 10;
         private static readonly TimeSpan AuthWindow = TimeSpan.FromMinutes(5);
 
-        public static IServiceCollection AddInMemoryRateLimiter(this IServiceCollection services)
+        public static IServiceCollection AddInMemoryRateLimiter(
+            this IServiceCollection services,
+            IConfiguration? configuration = null)
         {
+            var permitLimit = configuration?.GetValue<int?>("RateLimiter:PermitLimit")
+                ?? PermitLimit;
+            var authPermitLimit = configuration?.GetValue<int?>("RateLimiter:AuthPermitLimit")
+                ?? AuthPermitLimit;
+
             services.AddRateLimiter(options =>
             {
                 options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -44,7 +51,7 @@ namespace backend.main.application.security
                         string partitionKey = GetPartitionKey(context);
                         return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
                         {
-                            PermitLimit = PermitLimit,
+                            PermitLimit = permitLimit,
                             Window = Window,
                             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                             QueueLimit = 0
@@ -66,7 +73,7 @@ namespace backend.main.application.security
                     var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
                     return RateLimitPartition.GetFixedWindowLimiter($"auth:{ip}", _ => new FixedWindowRateLimiterOptions
                     {
-                        PermitLimit = AuthPermitLimit,
+                        PermitLimit = authPermitLimit,
                         Window = AuthWindow,
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                         QueueLimit = 0
@@ -91,4 +98,3 @@ namespace backend.main.application.security
         }
     }
 }
-

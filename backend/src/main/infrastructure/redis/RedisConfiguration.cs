@@ -30,7 +30,7 @@ namespace backend.main.infrastructure.redis
 
         public static IServiceCollection AddAppRedis(
             this IServiceCollection services,
-            IConfiguration _)
+            IConfiguration configuration)
         {
             var health = new RedisHealth();
             var noOp = new NoOpCacheService();
@@ -41,7 +41,8 @@ namespace backend.main.infrastructure.redis
                 _retryPolicy.ExecuteAsync(async () =>
                 {
                     var mux = await ConnectionMultiplexer.ConnectAsync(
-                        EnvironmentSetting.RedisConnection);
+                        configuration["Redis:ConnectionString"]
+                            ?? EnvironmentSetting.RedisConnection);
 
                     var db = mux.GetDatabase();
 
@@ -50,7 +51,7 @@ namespace backend.main.infrastructure.redis
                     var resource = new RedisResource(mux);
                     state.SwitchToRedis(new CacheService(resource));
 
-                    services.AddSingleton<IConnectionMultiplexer>(mux);
+                    services.AddSingleton<IConnectionMultiplexer>(_ => mux);
                     services.AddSingleton(resource);
 
                     health.IsAvailable = true;

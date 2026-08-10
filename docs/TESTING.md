@@ -98,6 +98,8 @@ Auth integration tests use:
 
 The backend app exposes a `Testing` startup path so integration tests can boot with real infra wiring while still avoiding production-only side effects such as background email/SMS workers. A running Docker daemon is now a hard requirement for `backend.tests.Integration` locally and in CI.
 
+Integration tests run with up to four test classes in parallel. The harness migrates one PostgreSQL template database, clones it for direct database tests, and reuses four isolated API-app slots. Each slot has its own database, Redis logical database, Elasticsearch indices, and Kafka topics; application rows and external state are cleared before the slot is leased to another test. Tests that supply custom configuration or service overrides use a transient host on the leased slot and cannot leak those overrides into the shared hosts.
+
 ## Frontend Unit Tests (Karma + Jasmine)
 
 Angular unit tests live beside the code they cover as `*.spec.ts` under `frontend/src`. They run on Karma + Jasmine through the `@angular/build:karma` builder, configured by `frontend/karma.conf.js`.

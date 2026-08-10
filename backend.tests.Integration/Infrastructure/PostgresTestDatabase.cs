@@ -8,6 +8,7 @@ namespace backend.tests.Integration.Infrastructure;
 
 public sealed class PostgresTestDatabase : IAsyncDisposable
 {
+    internal const string TemplateDatabaseName = "itest_template";
     private readonly IntegrationTestEnvironment _environment;
 
     private PostgresTestDatabase(
@@ -35,16 +36,48 @@ public sealed class PostgresTestDatabase : IAsyncDisposable
         {
             // Built into a local first: passing an interpolated string straight to
             // ExecuteSqlRawAsync trips EF1002. The name is validated above.
-            var createSql = $"CREATE DATABASE \"{databaseName}\";";
+            var createSql =
+                $"CREATE DATABASE \"{databaseName}\" WITH TEMPLATE \"{TemplateDatabaseName}\";";
             await admin.Database.ExecuteSqlRawAsync(createSql);
         }
 
-        await using (var db = CreateDbContext(connectionString))
+        return new PostgresTestDatabase(environment, databaseName, connectionString);
+    }
+
+    internal static async Task InitializeTemplateAsync(IntegrationTestEnvironment environment)
+    {
+        await using (var admin = CreateAdminContext(environment))
         {
-            await db.Database.MigrateAsync();
+            var createSql =
+                $"CREATE DATABASE \"{TemplateDatabaseName}\";";
+            await admin.Database.ExecuteSqlRawAsync(createSql);
         }
 
-        return new PostgresTestDatabase(environment, databaseName, connectionString);
+        await using var template = CreateDbContext(
+            environment.CreateDatabaseConnectionString(TemplateDatabaseName));
+        await template.Database.MigrateAsync();
+    }
+
+    public async Task ResetAsync()
+    {
+        await using var db = CreateDbContext();
+        const string resetSql = """
+            DO $$
+            DECLARE
+                table_names text;
+            BEGIN
+                SELECT string_agg(format('%I.%I', schemaname, tablename), ', ')
+                  INTO table_names
+                  FROM pg_tables
+                 WHERE schemaname = 'public'
+                   AND tablename <> '__EFMigrationsHistory';
+
+                IF table_names IS NOT NULL THEN
+                    EXECUTE 'TRUNCATE TABLE ' || table_names || ' RESTART IDENTITY CASCADE';
+                END IF;
+            END $$;
+            """;
+        await db.Database.ExecuteSqlRawAsync(resetSql);
     }
 
     public AppDatabaseContext CreateDbContext() => CreateDbContext(ConnectionString);

@@ -39,28 +39,30 @@ public sealed class AuthApiTestApp : IAsyncDisposable
     };
 
     private readonly TestWebApplicationFactory _factory;
-    private readonly PostgresTestDatabase _database;
+    private readonly AuthApiTestAppPool.Lease _lease;
     private readonly KafkaTopicProbe _kafkaProbe;
-    private readonly IntegrationTestEnvironment _environment;
+    private readonly TestResourceNamespace _resources;
 
     public HttpClient Client { get; }
     public ICacheService Cache => _factory.Services.GetRequiredService<ICacheService>();
     public KafkaBackedPublisher Publisher { get; }
+    public FakeCaptchaService Captcha => _factory.Captcha;
     public FakeOAuthService OAuth => _factory.OAuth;
     public FakeAzureBlobService BlobStorage => _factory.BlobStorage;
+    internal int ResourceSlot => _resources.Slot;
 
     private AuthApiTestApp(
         TestWebApplicationFactory factory,
         HttpClient client,
-        PostgresTestDatabase database,
+        AuthApiTestAppPool.Lease lease,
         KafkaTopicProbe kafkaProbe,
-        IntegrationTestEnvironment environment)
+        TestResourceNamespace resources)
     {
         _factory = factory;
         Client = client;
-        _database = database;
+        _lease = lease;
         _kafkaProbe = kafkaProbe;
-        _environment = environment;
+        _resources = resources;
         Publisher = new KafkaBackedPublisher(this);
     }
 
@@ -68,29 +70,33 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         Action<IServiceCollection>? serviceOverrides = null,
         IReadOnlyDictionary<string, string?>? configurationOverrides = null)
     {
-        var environment = await IntegrationTestFixture.GetEnvironmentAsync();
-        var database = await PostgresTestDatabase.CreateAsync();
-        var factory = new TestWebApplicationFactory(
-            environment,
-            database.ConnectionString,
+        var lease = await AuthApiTestAppPool.AcquireAsync(
             serviceOverrides,
             configurationOverrides);
-        var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        try
         {
-            AllowAutoRedirect = false,
-            BaseAddress = new Uri("https://localhost")
-        });
-        client.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36");
+            var client = lease.Factory.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false,
+                BaseAddress = new Uri("https://localhost")
+            });
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36");
 
-        var app = new AuthApiTestApp(
-            factory,
-            client,
-            database,
-            environment.CreateKafkaProbe(),
-            environment);
-        await app.MarkNotificationBoundaryAsync();
-        return app;
+            var app = new AuthApiTestApp(
+                lease.Factory,
+                client,
+                lease,
+                lease.Environment.CreateKafkaProbe(),
+                lease.Resources);
+            await app.MarkNotificationBoundaryAsync();
+            return app;
+        }
+        catch
+        {
+            await lease.DisposeAsync();
+            throw;
+        }
     }
 
     public async Task<User> SeedUserAsync(
@@ -347,25 +353,25 @@ public sealed class AuthApiTestApp : IAsyncDisposable
 
     public Task MarkNotificationBoundaryAsync() =>
         _kafkaProbe.MarkBoundaryAsync(
-            _environment.EmailTopic,
-            _environment.SmsTopic,
-            _environment.EmailStatusTopic);
+            _resources.EmailTopic,
+            _resources.SmsTopic,
+            _resources.EmailStatusTopic);
 
     public Task<EmailMessage> WaitForEmailAsync(
         Func<EmailMessage, bool> predicate,
         TimeSpan? timeout = null) =>
-        _kafkaProbe.WaitForAsync(_environment.EmailTopic, predicate, timeout);
+        _kafkaProbe.WaitForAsync(_resources.EmailTopic, predicate, timeout);
 
     public Task<SmsMfaMessage> WaitForSmsAsync(
         Func<SmsMfaMessage, bool> predicate,
         TimeSpan? timeout = null) =>
-        _kafkaProbe.WaitForAsync(_environment.SmsTopic, predicate, timeout);
+        _kafkaProbe.WaitForAsync(_resources.SmsTopic, predicate, timeout);
 
     public Task<IReadOnlyList<EmailMessage>> ReadNewEmailMessagesAsync(TimeSpan? timeout = null) =>
-        _kafkaProbe.ReadNewAsync<EmailMessage>(_environment.EmailTopic, timeout);
+        _kafkaProbe.ReadNewAsync<EmailMessage>(_resources.EmailTopic, timeout);
 
     public Task<IReadOnlyList<SmsMfaMessage>> ReadNewSmsMessagesAsync(TimeSpan? timeout = null) =>
-        _kafkaProbe.ReadNewAsync<SmsMfaMessage>(_environment.SmsTopic, timeout);
+        _kafkaProbe.ReadNewAsync<SmsMfaMessage>(_resources.SmsTopic, timeout);
 
     public async Task ReindexEventsAsync(CancellationToken cancellationToken = default)
     {
@@ -475,8 +481,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         Client.Dispose();
-        _factory.Dispose();
-        await _database.DisposeAsync();
+        await _lease.DisposeAsync();
     }
 
     public static string? ExtractCookie(HttpResponseMessage response, string cookieName)

@@ -10,6 +10,8 @@ public sealed class FakeAzureBlobService : IAzureBlobService
     private const string BaseUrl = "https://storage.test/event-assets";
     private readonly Dictionary<string, DateTimeOffset> _ownedUrls = [];
 
+    public void Clear() => _ownedUrls.Clear();
+
     public string CreateOwnedBlobUrl(string blobPathPrefix, string fileName)
         => CreateOwnedBlobUrl(blobPathPrefix, fileName, DateTimeOffset.UtcNow);
 

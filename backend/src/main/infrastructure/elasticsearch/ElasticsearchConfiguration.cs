@@ -3,15 +3,18 @@ using backend.main.shared.utilities.logger;
 
 using Elastic.Clients.Elasticsearch;
 
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
 namespace backend.main.infrastructure.elasticsearch
 {
     public static class ElasticsearchConfig
     {
         public static IServiceCollection AddAppElasticsearch(
             this IServiceCollection services,
-            IConfiguration _)
+            IConfiguration configuration)
         {
-            var url = EnvironmentSetting.ElasticsearchUrl;
+            var url = configuration["Elasticsearch:Url"] ?? EnvironmentSetting.ElasticsearchUrl;
+            services.TryAddSingleton(SearchIndexNames.FromConfiguration(configuration));
             var health = new ElasticsearchHealth
             {
                 IsConfigured = !string.IsNullOrWhiteSpace(url)

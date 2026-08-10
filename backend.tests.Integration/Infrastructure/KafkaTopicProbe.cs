@@ -9,7 +9,8 @@ namespace backend.tests.Integration.Infrastructure;
 public sealed class KafkaTopicProbe
 {
     private readonly string _bootstrapServers;
-    private readonly Dictionary<string, Offset> _offsets = new(StringComparer.Ordinal);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Offset> _offsets =
+        new(StringComparer.Ordinal);
 
     public KafkaTopicProbe(string bootstrapServers)
     {
@@ -28,8 +29,7 @@ public sealed class KafkaTopicProbe
 
     public async Task MarkBoundaryAsync(params string[] topics)
     {
-        foreach (var topic in topics)
-            await MarkBoundaryAsync(topic);
+        await Task.WhenAll(topics.Select(MarkBoundaryAsync));
     }
 
     public Task<T> WaitForAsync<T>(

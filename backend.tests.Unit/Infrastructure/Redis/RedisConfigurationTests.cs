@@ -15,7 +15,13 @@ public class RedisConfigurationTests
     public void AddAppRedis_ShouldRegisterFallbackServices_WhenRedisConnectionFails()
     {
         var services = new ServiceCollection();
-        var configuration = new ConfigurationBuilder().Build();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Redis:ConnectionString"] =
+                    "127.0.0.1:1,abortConnect=true,connectTimeout=50,connectRetry=0"
+            })
+            .Build();
 
         services.AddAppRedis(configuration);
 

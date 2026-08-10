@@ -18,6 +18,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace backend.tests.Integration.Features.Auth;
 
+[Collection(IntegrationTestCollection.Name)]
 public class AuthEndpointsTests
 {
     [Fact]

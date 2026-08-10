@@ -15,7 +15,7 @@ using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
 using Xunit;
 
-[assembly: CollectionBehavior(DisableTestParallelization = true, MaxParallelThreads = 1)]
+[assembly: CollectionBehavior(MaxParallelThreads = 4)]
 
 namespace backend.tests.Integration.Infrastructure;
 
@@ -36,6 +36,7 @@ public sealed class IntegrationTestFixture : IAsyncLifetime
                 return _environment;
 
             _environment = await IntegrationTestEnvironment.CreateAsync();
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => Shutdown();
             return _environment;
         }
         finally
@@ -47,6 +48,19 @@ public sealed class IntegrationTestFixture : IAsyncLifetime
     public Task InitializeAsync() => GetEnvironmentAsync();
 
     public Task DisposeAsync() => Task.CompletedTask;
+
+    private static void Shutdown()
+    {
+        try
+        {
+            AuthApiTestAppPool.DisposeIfCreatedAsync().AsTask().GetAwaiter().GetResult();
+        }
+        finally
+        {
+            _environment?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            _environment = null;
+        }
+    }
 }
 
 [CollectionDefinition(Name, DisableParallelization = true)]
@@ -65,14 +79,12 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
     private const string EmailTopicName = "eventxperience-email";
     private const string SmsTopicName = "eventxperience-sms";
     private const string EmailStatusTopicName = "eventxperience-email-status";
-    private const string ElasticsearchEventsIndex = "events";
-    private const string ElasticsearchClubsIndex = "clubs";
-    private const string ElasticsearchClubPostsIndex = "club_posts";
 
     private readonly RedisContainer _redisContainer;
     private readonly KafkaContainer _kafkaContainer;
     private readonly PostgreSqlContainer _postgresContainer;
     private readonly IContainer _elasticsearchContainer;
+    private int _disposed;
 
     private IntegrationTestEnvironment(
         PostgreSqlContainer postgresContainer,
@@ -150,32 +162,48 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
         return builder.ConnectionString;
     }
 
-    public KafkaTopicProbe CreateKafkaProbe() =>
-        new(KafkaBootstrapServers);
-
-    public async Task ResetSharedStateAsync()
+    public string CreateRedisConnectionString(int database)
     {
-        await FlushRedisAsync();
-        await DeleteElasticsearchIndexAsync(ElasticsearchEventsIndex);
-        await DeleteElasticsearchIndexAsync(ElasticsearchClubsIndex);
-        await DeleteElasticsearchIndexAsync(ElasticsearchClubPostsIndex);
-        await EnsureKafkaTopicsExistAsync();
+        var options = ConfigurationOptions.Parse(RedisConnectionString);
+        options.DefaultDatabase = database;
+        return options.ToString();
     }
+
+    public KafkaTopicProbe CreateKafkaProbe() => new(KafkaBootstrapServers);
+
+    public async Task ResetSharedStateAsync(
+        int redisDatabase,
+        params string[] elasticsearchIndices)
+    {
+        await Task.WhenAll(
+            [
+                FlushRedisAsync(redisDatabase),
+                .. elasticsearchIndices.Select(ClearElasticsearchIndexAsync)
+            ]);
+    }
+
+    public Task EnsureKafkaTopicsExistAsync(params string[] topicNames) =>
+        EnsureKafkaTopicsCoreAsync(topicNames);
 
     public async ValueTask DisposeAsync()
     {
-        await _elasticsearchContainer.DisposeAsync();
-        await _kafkaContainer.DisposeAsync();
-        await _redisContainer.DisposeAsync();
-        await _postgresContainer.DisposeAsync();
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+
+        await Task.WhenAll(
+            _elasticsearchContainer.DisposeAsync().AsTask(),
+            _kafkaContainer.DisposeAsync().AsTask(),
+            _redisContainer.DisposeAsync().AsTask(),
+            _postgresContainer.DisposeAsync().AsTask());
     }
 
     private async Task StartAsync()
     {
-        await _postgresContainer.StartAsync();
-        await _redisContainer.StartAsync();
-        await _kafkaContainer.StartAsync();
-        await _elasticsearchContainer.StartAsync();
+        await Task.WhenAll(
+            _postgresContainer.StartAsync(),
+            _redisContainer.StartAsync(),
+            _kafkaContainer.StartAsync(),
+            _elasticsearchContainer.StartAsync());
 
         PostgresServerConnectionString = BuildPostgresConnectionString(DefaultDatabase);
         RedisConnectionString = BuildRedisConnectionString();
@@ -184,7 +212,8 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
             $"http://{_elasticsearchContainer.Hostname}:{_elasticsearchContainer.GetMappedPublicPort(9200)}";
 
         SetEnvironmentVariables();
-        await EnsureKafkaTopicsExistAsync();
+        await PostgresTestDatabase.InitializeTemplateAsync(this);
+        await EnsureKafkaTopicsCoreAsync([EmailTopicName, SmsTopicName, EmailStatusTopicName]);
     }
 
     private string BuildPostgresConnectionString(string databaseName) =>
@@ -218,28 +247,30 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
         Environment.SetEnvironmentVariable("EMAIL_STATUS_TOPIC", EmailStatusTopicName);
     }
 
-    private async Task FlushRedisAsync()
+    private async Task FlushRedisAsync(int database)
     {
-        using var mux = await ConnectionMultiplexer.ConnectAsync(RedisConnectionString);
+        using var mux = await ConnectionMultiplexer.ConnectAsync(CreateRedisConnectionString(database));
         var server = mux.GetServer(mux.GetEndPoints().First());
-        await server.FlushDatabaseAsync();
+        await server.FlushDatabaseAsync(database);
     }
 
-    private async Task DeleteElasticsearchIndexAsync(string indexName)
+    private async Task ClearElasticsearchIndexAsync(string indexName)
     {
         using var httpClient = new HttpClient
         {
             BaseAddress = new Uri(ElasticsearchUrl)
         };
 
-        using var response = await httpClient.DeleteAsync($"/{indexName}");
+        using var response = await httpClient.PostAsync(
+            $"/{indexName}/_delete_by_query?refresh=true&conflicts=proceed",
+            new StringContent("{\"query\":{\"match_all\":{}}}", System.Text.Encoding.UTF8, "application/json"));
         if (response.StatusCode == HttpStatusCode.NotFound)
             return;
 
         response.EnsureSuccessStatusCode();
     }
 
-    private async Task EnsureKafkaTopicsExistAsync()
+    private async Task EnsureKafkaTopicsCoreAsync(IReadOnlyCollection<string> topicNames)
     {
         using var admin = new AdminClientBuilder(new AdminClientConfig
         {
@@ -249,11 +280,7 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
         try
         {
             await admin.CreateTopicsAsync(
-                [
-                    CreateTopicSpecification(EmailTopicName),
-                    CreateTopicSpecification(SmsTopicName),
-                    CreateTopicSpecification(EmailStatusTopicName)
-                ]);
+                topicNames.Select(CreateTopicSpecification));
         }
         catch (CreateTopicsException ex)
             when (ex.Results.All(result => result.Error.Code == ErrorCode.TopicAlreadyExists))
