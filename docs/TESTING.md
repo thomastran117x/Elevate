@@ -44,6 +44,17 @@ Run only the auth integration flow coverage:
 dotnet test backend.tests.Integration\backend.tests.Integration.csproj --filter "FullyQualifiedName~backend.tests.Integration.Features.Auth.AuthEndpointsTests"
 ```
 
+Run the cross-feature API workflow tests:
+
+```powershell
+dotnet test backend.tests.Integration\backend.tests.Integration.csproj --filter "Category=EndToEnd"
+```
+
+These end-to-end workflow tests remain part of the backend integration project, but differ from
+feature-local endpoint tests by following multiple users through complete business journeys across
+authentication, clubs, event management, discovery, registration, and analytics. They use the same
+real application host and containerized infrastructure; they do not drive the Angular UI.
+
 Run backend unit coverage with generated code and seed data excluded from the count:
 
 ```powershell
