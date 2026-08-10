@@ -365,7 +365,7 @@ public class EventOrganizationWorkflowTests
             app,
             organizer.Session.AccessToken,
             club.Id,
-            "Invitation-Only Planning Session",
+            "Invite-Only Planning Session",
             isPrivate: true);
         var published = await PublishEventAsync(app, organizer.Session.AccessToken, draft.Id);
         published.IsPrivate.Should().BeTrue();
