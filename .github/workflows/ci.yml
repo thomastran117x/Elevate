@@ -222,8 +222,10 @@ jobs:
             filter: FullyQualifiedName~backend.tests.Integration.Features.Clubs|FullyQualifiedName~backend.tests.Clubs
           - shard: events
             filter: FullyQualifiedName~backend.tests.Integration.Features.Events|FullyQualifiedName~backend.tests.Events
+          - shard: workflows
+            filter: Category=EndToEnd
           - shard: other
-            filter: FullyQualifiedName!~backend.tests.Integration.Features.Auth&FullyQualifiedName!~backend.tests.Integration.Features.Clubs&FullyQualifiedName!~backend.tests.Clubs&FullyQualifiedName!~backend.tests.Integration.Features.Events&FullyQualifiedName!~backend.tests.Events
+            filter: FullyQualifiedName!~backend.tests.Integration.Features.Auth&FullyQualifiedName!~backend.tests.Integration.Features.Clubs&FullyQualifiedName!~backend.tests.Clubs&FullyQualifiedName!~backend.tests.Integration.Features.Events&FullyQualifiedName!~backend.tests.Events&FullyQualifiedName!~backend.tests.Integration.Workflows
 
     steps:
       - name: Checkout
