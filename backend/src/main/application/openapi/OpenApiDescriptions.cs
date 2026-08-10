@@ -254,6 +254,26 @@ namespace backend.main.application.openapi
                 ["GET /api/events/{eventId}/registrations"] = new("List registrations for an event"),
                 ["GET /api/events/{eventId}/registrations/me"] = new("Check current user registration status"),
 
+                // ── Event favourites ─────────────────────────────────────────────────────
+
+                ["POST /api/events/{eventId}/favourite"] = new(
+                    "Save an event to favourites",
+                    "Stars an event without registering for it — no seat is consumed. Idempotent: starring an already-starred event succeeds rather than conflicting."
+                ),
+                ["DELETE /api/events/{eventId}/favourite"] = new(
+                    "Remove an event from favourites",
+                    "Idempotent: unstarring an event that is not starred succeeds."
+                ),
+                ["GET /api/events/{eventId}/favourite/me"] = new("Check current user favourite status"),
+                ["GET /api/events/me/favourites/ids"] = new(
+                    "List the current user's favourited event IDs",
+                    "Returns just the IDs so list views can render star state in one request without enriching every event payload."
+                ),
+                ["GET /api/events/me/pinned"] = new(
+                    "List the current user's pinned events",
+                    "The union of the events the user registered for and the events they starred, ordered registered-first then by start time. Rows the user can no longer view are returned redacted with `accessRevoked` set, so the star can still be removed."
+                ),
+
                 // ── Payments ─────────────────────────────────────────────────────────────
 
                 ["POST /api/payments/{eventId}"] = new("Create a Stripe checkout session"),

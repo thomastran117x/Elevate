@@ -23,6 +23,7 @@ using backend.main.features.clubs.versions;
 using backend.main.features.events;
 using backend.main.features.events.access;
 using backend.main.features.events.analytics;
+using backend.main.features.events.favourites;
 using backend.main.features.events.images;
 using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
@@ -175,6 +176,7 @@ namespace backend.main.application.bootstrap
             services.AddRepositoryWithProxy<IEventAnalyticsRepository, EventAnalyticsRepository>();
             services.AddRepositoryWithProxy<IEventImageRepository, EventImageRepository>();
             services.AddRepositoryWithProxy<IEventWaitlistRepository, EventWaitlistRepository>();
+            services.AddRepositoryWithProxy<IEventFavouriteRepository, EventFavouriteRepository>();
 
             services.AddSingleton<IPublisher, Publisher>();
             services.AddScoped<IAuthNotificationService, AuthNotificationService>();
@@ -231,6 +233,11 @@ namespace backend.main.application.bootstrap
                 services.AddScoped<IEventRegistrationService, EventRegistrationService>();
             else
                 services.AddScoped<IEventRegistrationService, DisabledEventRegistrationService>();
+
+            if (featureFlags.IsEnabled(FeatureFlagKeys.EventsFavourites))
+                services.AddScoped<IEventFavouriteService, EventFavouriteService>();
+            else
+                services.AddScoped<IEventFavouriteService, DisabledEventFavouriteService>();
 
             if (featureFlags.IsEnabled(FeatureFlagKeys.EventsWaitlist))
             {

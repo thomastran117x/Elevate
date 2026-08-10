@@ -20,11 +20,13 @@ import { EventWaitlistService } from '../../services/event-waitlist.service';
 import { MyWaitlistStatus } from '../../models/event-waitlist.types';
 import { FeatureFlagsService } from '../../../../core/features/feature-flags.service';
 import { FEATURE_KEYS } from '../../../../core/features/feature-flags.types';
+import { EventFavouritesStore } from '../../services/event-favourites-store.service';
+import { EventFavouriteToggleComponent } from '../../components/event-favourite-toggle/event-favourite-toggle.component';
 
 @Component({
   selector: 'app-event-detail',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, EventFavouriteToggleComponent],
   templateUrl: './event-detail.component.html',
 })
 export class EventDetailComponent implements OnInit, OnDestroy {
@@ -47,6 +49,11 @@ export class EventDetailComponent implements OnInit, OnDestroy {
   waitlistError = '';
   readonly waitlistFeatureEnabled: boolean;
 
+  /** Read-only here — the toggle component owns the write side. Drives the CTA wording. */
+  isFavourited = false;
+  favouriteError = '';
+  readonly favouritesFeatureEnabled: boolean;
+
   registrationForm: FormGroup;
 
   readonly categoryStyles = CATEGORY_STYLES;
@@ -63,8 +70,10 @@ export class EventDetailComponent implements OnInit, OnDestroy {
     private router: Router,
     private fb: FormBuilder,
     private featureFlags: FeatureFlagsService,
+    private favouritesStore: EventFavouritesStore,
   ) {
     this.waitlistFeatureEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.eventsWaitlist);
+    this.favouritesFeatureEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.eventsFavourites);
     this.registrationForm = this.fb.group({
       notes: [''],
       phoneNumber: [''],
@@ -397,6 +406,21 @@ export class EventDetailComponent implements OnInit, OnDestroy {
       });
   }
 
+  onFavouriteFailed(response: unknown): void {
+    this.favouriteError = getApiClientMessage(response, 'We could not update your saved events.');
+  }
+
+  private loadFavouriteStatus(eventId: number): void {
+    if (!this.favouritesFeatureEnabled) return;
+
+    this.favouritesStore
+      .isFavourited$(eventId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((favourited) => (this.isFavourited = favourited));
+
+    this.favouritesStore.ensureLoaded();
+  }
+
   private loadRegistrationStatus(eventId: number): void {
     this.store
       .select(selectUser)
@@ -406,8 +430,11 @@ export class EventDetailComponent implements OnInit, OnDestroy {
         if (!user) {
           this.isRegistered = false;
           this.waitlistStatus = null;
+          this.isFavourited = false;
           return;
         }
+
+        this.loadFavouriteStatus(eventId);
 
         this.registrationService
           .checkRegistration(eventId)

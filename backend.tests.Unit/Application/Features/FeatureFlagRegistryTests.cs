@@ -27,6 +27,16 @@ public class FeatureFlagRegistryTests
     }
 
     [Fact]
+    public void Registry_ShouldKnowTheFavouritesKey_AndCascadeFromEvents()
+    {
+        FeatureFlagRegistry.Instance.Contains(FeatureFlagKeys.EventsFavourites).Should().BeTrue();
+        FeatureFlagRegistry.Instance.GetLineage(FeatureFlagKeys.EventsFavourites)
+            .Should().Equal(FeatureFlagKeys.Events, FeatureFlagKeys.EventsFavourites);
+        FeatureFlagRegistry.Instance.ToEnvironmentVariableName(FeatureFlagKeys.EventsFavourites)
+            .Should().Be("FEATURE_EVENTS_FAVOURITES");
+    }
+
+    [Fact]
     public void Registry_ShouldTranslateKnownKeys_ToEnvironmentVariableNames()
     {
         FeatureFlagRegistry.Instance.ToEnvironmentVariableName(FeatureFlagKeys.ProfileAdmin)

@@ -1,0 +1,55 @@
+<li class="surface-card flex flex-wrap items-center gap-5 rounded-3xl p-5">
+  @if (!item.accessRevoked && item.event.imageUrls.length) {
+    <img
+      [src]="item.event.imageUrls[0]"
+      [alt]="item.event.name"
+      class="h-20 w-28 shrink-0 rounded-2xl object-cover"
+    />
+  }
+
+  <div class="min-w-0 flex-1">
+    @if (item.accessRevoked) {
+      <!-- Details are withheld, but the row stays so the star can still be removed. -->
+      <div class="truncate text-base font-semibold text-muted">
+        Event no longer available to you
+      </div>
+      <div class="mt-1 text-xs text-subtle">
+        You no longer have access to this event. Remove the star to clear it from this list.
+      </div>
+    } @else {
+      <a
+        [routerLink]="['/events', item.event.id]"
+        class="truncate text-base font-semibold text-content transition hover:text-accent"
+      >
+        {{ item.event.name }}
+      </a>
+      <div class="mt-1 text-xs text-subtle">
+        {{ item.event.startTime | date: 'medium' }}
+      </div>
+      <div class="mt-1 text-xs text-muted">
+        {{ item.event.venueName || item.event.location || 'Venue TBD' }}
+        @if (item.event.city) {
+          <span> &bull; {{ item.event.city }}</span>
+        }
+      </div>
+    }
+
+    @if (isPendingRemoval) {
+      <!-- The star is the undo, so no toast: just say why the row is still here. -->
+      <div class="mt-2 text-xs text-muted">Removed from saved &bull; refresh to hide</div>
+    }
+    @if (!item.accessRevoked && isCancelled) {
+      <div class="mt-2 text-xs font-semibold text-danger">Event cancelled</div>
+    }
+  </div>
+
+  @if (isGoing) {
+    <span
+      class="rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-[11px] font-semibold text-accent"
+    >
+      Going
+    </span>
+  }
+
+  <app-event-favourite-toggle [eventId]="item.event.id" (failed)="failed.emit($event)" />
+</li>

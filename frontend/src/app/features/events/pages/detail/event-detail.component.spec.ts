@@ -8,6 +8,7 @@ import { EventsService } from '../../services/events.service';
 import { EventApiResponse } from '../../models/event.types';
 import { EventRegistrationService } from '../../services/event-registration.service';
 import { EventWaitlistService } from '../../services/event-waitlist.service';
+import { EventFavouritesStore } from '../../services/event-favourites-store.service';
 import { FeatureFlagsService } from '../../../../core/features/feature-flags.service';
 import {
   ApiClientClientError,
@@ -47,6 +48,8 @@ describe('EventDetailComponent', () => {
   let registrationService: jasmine.SpyObj<EventRegistrationService>;
   let waitlistService: jasmine.SpyObj<EventWaitlistService>;
   let router: jasmine.SpyObj<Router>;
+  let favouritesStore: jasmine.SpyObj<EventFavouritesStore>;
+  let favourited$: BehaviorSubject<boolean>;
   // Most specs here predate auth-aware behaviour and assumed a signed-out user; the
   // waitlist states need a signed-in one, so it is overridable per test.
   let signedInUser: { Id: number } | null = null;
@@ -125,6 +128,15 @@ describe('EventDetailComponent', () => {
     ]);
     waitlistService.getMyStatus.and.returnValue(of({ onWaitlist: false, waitlistCount: 0 }));
 
+    favourited$ = new BehaviorSubject(false);
+    favouritesStore = jasmine.createSpyObj<EventFavouritesStore>(
+      'EventFavouritesStore',
+      ['ensureLoaded', 'toggle', 'isFavourited$'],
+      { isSignedIn: true },
+    );
+    favouritesStore.isFavourited$.and.returnValue(favourited$.asObservable());
+    favouritesStore.toggle.and.returnValue(of(true));
+
     await TestBed.configureTestingModule({
       imports: [EventDetailComponent],
       providers: [
@@ -138,6 +150,7 @@ describe('EventDetailComponent', () => {
         },
         { provide: Router, useValue: router },
         { provide: Store, useValue: { select: () => of(signedInUser) } },
+        { provide: EventFavouritesStore, useValue: favouritesStore },
       ],
     }).compileComponents();
   });
@@ -677,5 +690,44 @@ describe('EventDetailComponent', () => {
     expect(component.event).toBeNull();
     expect(component.error).toBe(GENERIC_API_ERROR_MESSAGE);
     expect(component.loading).toBeFalse();
+  });
+
+  describe('favourites', () => {
+    afterEach(() => {
+      signedInUser = null;
+    });
+
+    it('mirrors the shared star state for a signed-in visitor', () => {
+      signedInUser = { Id: 7 };
+
+      createComponent();
+
+      expect(favouritesStore.ensureLoaded).toHaveBeenCalled();
+      expect(favouritesStore.isFavourited$).toHaveBeenCalledWith(42);
+      expect(component.isFavourited).toBeFalse();
+
+      favourited$.next(true);
+      expect(component.isFavourited).toBeTrue();
+    });
+
+    it('does not track star state for a signed-out visitor', () => {
+      signedInUser = null;
+
+      createComponent();
+
+      // The star still renders — pressing it routes to login — but the page's own
+      // "Saved to your pinned events" label must not claim a state nobody has.
+      favourited$.next(true);
+      expect(component.isFavourited).toBeFalse();
+    });
+
+    it('surfaces a message when a toggle fails', () => {
+      signedInUser = { Id: 7 };
+      createComponent();
+
+      component.onFavouriteFailed(new ApiClientServerError(GENERIC_API_ERROR_MESSAGE, 500));
+
+      expect(component.favouriteError).toBe(GENERIC_API_ERROR_MESSAGE);
+    });
   });
 });

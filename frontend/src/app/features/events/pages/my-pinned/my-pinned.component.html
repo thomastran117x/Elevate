@@ -1,0 +1,80 @@
+<div class="app-page">
+  <main class="page-section py-10">
+    <header>
+      <span class="eyebrow">My pinned events</span>
+      <h1 class="mt-2 text-3xl font-bold text-content">Everything you're keeping an eye on</h1>
+      <p class="mt-2 text-sm text-muted">
+        The events you've joined, plus the ones you've saved without committing yet.
+      </p>
+    </header>
+
+    @if (error) {
+      <div class="mt-6 rounded-2xl border border-danger/25 bg-danger/10 p-4 text-sm text-danger">
+        {{ error }}
+      </div>
+    }
+
+    @if (requiresLogin) {
+      <div class="surface-panel mt-6 rounded-3xl p-6 text-center">
+        <p class="text-sm text-muted">Sign in to see the events you've pinned.</p>
+        <button
+          type="button"
+          (click)="goToLogin()"
+          class="cta-solid mt-4 rounded-xl px-5 py-3 text-sm font-semibold"
+        >
+          Sign in
+        </button>
+      </div>
+    } @else if (loading) {
+      <div class="mt-6 space-y-3">
+        @for (placeholder of [1, 2, 3]; track placeholder) {
+          <div class="h-28 animate-pulse rounded-3xl bg-glass-strong"></div>
+        }
+      </div>
+    } @else if (items.length === 0) {
+      <div class="surface-panel mt-6 rounded-3xl p-8 text-center">
+        <p class="text-sm text-subtle">You haven't joined or saved any events yet.</p>
+        <a
+          routerLink="/events"
+          class="cta-subtle mt-4 inline-block rounded-xl px-5 py-3 text-sm font-semibold"
+        >
+          Browse events
+        </a>
+      </div>
+    } @else {
+      @if (going.length > 0) {
+        <section class="mt-8">
+          <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-subtle">
+            Going &bull; {{ going.length }}
+          </h2>
+          <ul class="mt-4 space-y-4">
+            @for (item of going; track item.event.id) {
+              <app-pinned-event-row
+                [item]="item"
+                [favourited]="isFavourited(item)"
+                (failed)="onFavouriteFailed($event)"
+              />
+            }
+          </ul>
+        </section>
+      }
+
+      @if (saved.length > 0) {
+        <section class="mt-8">
+          <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-subtle">
+            Saved &bull; {{ saved.length }}
+          </h2>
+          <ul class="mt-4 space-y-4">
+            @for (item of saved; track item.event.id) {
+              <app-pinned-event-row
+                [item]="item"
+                [favourited]="isFavourited(item)"
+                (failed)="onFavouriteFailed($event)"
+              />
+            }
+          </ul>
+        </section>
+      }
+    }
+  </main>
+</div>

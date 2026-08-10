@@ -53,9 +53,18 @@
                   {{ invitation.event?.name || 'Event #' + invitation.eventId }}
                 </h2>
               </div>
-              <span class="rounded-full border border-line bg-glass px-3 py-1 text-xs text-muted">
-                {{ invitation.deliveryStatus }}
-              </span>
+              <div class="flex shrink-0 items-center gap-2">
+                <span class="rounded-full border border-line bg-glass px-3 py-1 text-xs text-muted">
+                  {{ invitation.deliveryStatus }}
+                </span>
+                @if (canFavourite(invitation) && invitation.event) {
+                  <app-event-favourite-toggle
+                    size="sm"
+                    [eventId]="invitation.event.id"
+                    (failed)="onFavouriteFailed($event)"
+                  />
+                }
+              </div>
             </div>
             <p class="mt-3 text-sm leading-7 text-muted">
               {{ invitation.event?.description || 'This invite unlocks a private event.' }}

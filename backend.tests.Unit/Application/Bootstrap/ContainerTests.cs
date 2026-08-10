@@ -9,6 +9,7 @@ using backend.main.features.clubs.invitations;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.search;
 using backend.main.features.events.access;
+using backend.main.features.events.favourites;
 using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
@@ -147,6 +148,9 @@ public class ContainerTests
         services.Should().Contain(descriptor =>
             descriptor.ServiceType == typeof(IEventWaitlistPromoter)
             && descriptor.ImplementationType == typeof(EventWaitlistPromoter));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IEventFavouriteService)
+            && descriptor.ImplementationType == typeof(EventFavouriteService));
         // Not feature-gated: EventsService depends on it for private-event visibility.
         services.Should().Contain(descriptor =>
             descriptor.ServiceType == typeof(IEventAccessChecker)
@@ -162,6 +166,7 @@ public class ContainerTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["FeatureFlags:clubs.follow"] = "false",
+                ["FeatureFlags:events.favourites"] = "false",
                 ["FeatureFlags:events.invitations"] = "false",
                 ["FeatureFlags:events.registration"] = "false",
                 ["FeatureFlags:events.waitlist"] = "false",
@@ -190,6 +195,9 @@ public class ContainerTests
         services.Should().Contain(descriptor =>
             descriptor.ServiceType == typeof(IEventWaitlistPromoter)
             && descriptor.ImplementationType == typeof(DisabledEventWaitlistPromoter));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IEventFavouriteService)
+            && descriptor.ImplementationType == typeof(DisabledEventFavouriteService));
         services.Should().Contain(descriptor =>
             descriptor.ServiceType == typeof(IPaymentService)
             && descriptor.ImplementationType == typeof(DisabledPaymentService));

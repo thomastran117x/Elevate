@@ -2,7 +2,7 @@ import { ActivatedRoute, convertToParamMap, ParamMap, Router } from '@angular/ro
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { BehaviorSubject, of, throwError } from 'rxjs';
 
-import { makeEventItem } from '@testing';
+import { makeEventItem, provideTestStore } from '@testing';
 
 import { EventsSearchComponent } from './events-search.component';
 import { EventsService } from '../../services/events.service';
@@ -66,6 +66,8 @@ describe('EventsSearchComponent', () => {
           provide: FeatureFlagsService,
           useValue: { isEnabled: () => waitlistFeatureEnabled },
         },
+        // The card's favourite star reaches EventFavouritesStore, which reads the user slice.
+        ...provideTestStore(),
       ],
     }).compileComponents();
   });

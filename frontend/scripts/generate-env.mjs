@@ -12,6 +12,7 @@ const ALL_FEATURE_KEYS = [
   'clubs.versioning',
   'events',
   'events.analytics',
+  'events.favourites',
   'events.images',
   'events.invitations',
   'events.registration',

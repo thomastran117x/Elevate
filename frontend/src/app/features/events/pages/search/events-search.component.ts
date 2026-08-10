@@ -5,6 +5,7 @@ import { ActivatedRoute, ParamMap, Router, RouterModule } from '@angular/router'
 import { Subject, debounceTime, takeUntil } from 'rxjs';
 
 import { EventsService } from '../../services/events.service';
+import { EventFavouriteToggleComponent } from '../../components/event-favourite-toggle/event-favourite-toggle.component';
 import {
   ALL_CATEGORIES,
   ALL_EVENT_SORTS,
@@ -48,7 +49,7 @@ type FilterChip = {
 @Component({
   selector: 'app-events-search',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, EventFavouriteToggleComponent],
   templateUrl: './events-search.component.html',
 })
 export class EventsSearchComponent implements OnInit, OnDestroy {
@@ -110,6 +111,9 @@ export class EventsSearchComponent implements OnInit, OnDestroy {
    */
   readonly waitlistFeatureEnabled: boolean;
 
+  /** Same reasoning as the waitlist flag: don't offer a control the backend has gated off. */
+  readonly favouritesFeatureEnabled: boolean;
+
   constructor(
     private eventsService: EventsService,
     private route: ActivatedRoute,
@@ -117,6 +121,7 @@ export class EventsSearchComponent implements OnInit, OnDestroy {
     private featureFlags: FeatureFlagsService,
   ) {
     this.waitlistFeatureEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.eventsWaitlist);
+    this.favouritesFeatureEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.eventsFavourites);
   }
 
   ngOnInit(): void {
@@ -394,6 +399,10 @@ export class EventsSearchComponent implements OnInit, OnDestroy {
     this.router.navigate(['/events', eventId], {
       queryParams: this.route.snapshot.queryParams,
     });
+  }
+
+  onFavouriteFailed(response: unknown): void {
+    this.error = getApiClientMessage(response, 'We could not update your saved events.');
   }
 
   goToPage(page: number): void {

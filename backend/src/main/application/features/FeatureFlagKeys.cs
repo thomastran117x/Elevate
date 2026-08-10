@@ -10,6 +10,7 @@ public static class FeatureFlagKeys
     public const string ClubsVersioning = "clubs.versioning";
     public const string Events = "events";
     public const string EventsAnalytics = "events.analytics";
+    public const string EventsFavourites = "events.favourites";
     public const string EventsImages = "events.images";
     public const string EventsInvitations = "events.invitations";
     public const string EventsRecurrence = "events.recurrence";

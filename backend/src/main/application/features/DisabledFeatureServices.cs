@@ -4,6 +4,8 @@ using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.search;
 using backend.main.features.events;
+using backend.main.features.events.favourites;
+using backend.main.features.events.favourites.contracts.responses;
 using backend.main.features.events.invitations;
 using backend.main.features.events.invitations.contracts.responses;
 using backend.main.features.events.registration;
@@ -70,6 +72,15 @@ public sealed class DisabledEventRegistrationService : IEventRegistrationService
     public Task<IEnumerable<EventRegistration>> GetRegistrationsByUserAsync(int userId, int page = 1, int pageSize = 20) => Task.FromException<IEnumerable<EventRegistration>>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRegistration));
     public Task<BatchRegistrationResultResponse> BatchRegisterAsync(int userId, string userRole, IEnumerable<int> eventIds) => Task.FromException<BatchRegistrationResultResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRegistration));
     public Task<BatchRegistrationResultResponse> BatchUnregisterAsync(int userId, string userRole, IEnumerable<int> eventIds) => Task.FromException<BatchRegistrationResultResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsRegistration));
+}
+
+public sealed class DisabledEventFavouriteService : IEventFavouriteService
+{
+    public Task<EventFavouriteResponse> FavouriteAsync(int eventId, int userId, string userRole) => Task.FromException<EventFavouriteResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsFavourites));
+    public Task UnfavouriteAsync(int eventId, int userId) => Task.FromException(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsFavourites));
+    public Task<EventFavouriteResponse> GetMyStatusAsync(int eventId, int userId) => Task.FromException<EventFavouriteResponse>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsFavourites));
+    public Task<IReadOnlyList<int>> GetFavouriteEventIdsAsync(int userId) => Task.FromException<IReadOnlyList<int>>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsFavourites));
+    public Task<IReadOnlyList<PinnedEventResponse>> GetMyPinnedAsync(int userId, string userRole) => Task.FromException<IReadOnlyList<PinnedEventResponse>>(DisabledFeatureErrors.Create(FeatureFlagKeys.EventsFavourites));
 }
 
 public sealed class DisabledEventWaitlistService : IEventWaitlistService

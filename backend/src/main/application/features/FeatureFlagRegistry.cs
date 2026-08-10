@@ -17,6 +17,7 @@ public sealed class FeatureFlagRegistry
             FeatureFlagKeys.ClubsVersioning,
             FeatureFlagKeys.Events,
             FeatureFlagKeys.EventsAnalytics,
+            FeatureFlagKeys.EventsFavourites,
             FeatureFlagKeys.EventsImages,
             FeatureFlagKeys.EventsInvitations,
             FeatureFlagKeys.EventsRecurrence,

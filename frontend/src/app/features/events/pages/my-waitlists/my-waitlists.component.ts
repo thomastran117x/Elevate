@@ -3,14 +3,17 @@ import { Component, OnInit } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
+import { FeatureFlagsService } from '../../../../core/features/feature-flags.service';
+import { FEATURE_KEYS } from '../../../../core/features/feature-flags.types';
 import { AuthReturnUrlService } from '../../../auth/services/auth-return-url.service';
+import { EventFavouriteToggleComponent } from '../../components/event-favourite-toggle/event-favourite-toggle.component';
 import { WaitlistedEvent } from '../../models/event-waitlist.types';
 import { EventWaitlistService } from '../../services/event-waitlist.service';
 
 @Component({
   selector: 'app-my-waitlists',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, EventFavouriteToggleComponent],
   templateUrl: './my-waitlists.component.html',
 })
 export class MyWaitlistsComponent implements OnInit {
@@ -19,12 +22,16 @@ export class MyWaitlistsComponent implements OnInit {
   actionLoadingId: number | null = null;
   error = '';
   requiresLogin = false;
+  readonly favouritesFeatureEnabled: boolean;
 
   constructor(
     private waitlistService: EventWaitlistService,
     private router: Router,
     private authReturnUrl: AuthReturnUrlService,
-  ) {}
+    private featureFlags: FeatureFlagsService,
+  ) {
+    this.favouritesFeatureEnabled = this.featureFlags.isEnabled(FEATURE_KEYS.eventsFavourites);
+  }
 
   ngOnInit(): void {
     this.load();
@@ -39,6 +46,10 @@ export class MyWaitlistsComponent implements OnInit {
 
   isCancelled(item: WaitlistedEvent): boolean {
     return item.event?.lifecycleState === 'Cancelled';
+  }
+
+  onFavouriteFailed(response: unknown): void {
+    this.error = getApiClientMessage(response, 'We could not update your saved events.');
   }
 
   leave(item: WaitlistedEvent): void {

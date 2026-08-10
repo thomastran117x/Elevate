@@ -288,6 +288,26 @@
               </div>
             }
 
+            @if (favouritesFeatureEnabled) {
+              <div class="mb-4 flex items-center gap-3">
+                <app-event-favourite-toggle
+                  [eventId]="event.id"
+                  (failed)="onFavouriteFailed($event)"
+                />
+                <span class="text-sm text-muted">
+                  {{ isFavourited ? 'Saved to your pinned events' : 'Save for later' }}
+                </span>
+              </div>
+            }
+
+            @if (favouriteError) {
+              <div
+                class="mb-4 rounded-2xl border border-danger/25 bg-danger/10 p-3 text-sm text-danger"
+              >
+                {{ favouriteError }}
+              </div>
+            }
+
             @if (registrationError) {
               <div
                 class="mb-4 rounded-2xl border border-danger/25 bg-danger/10 p-3 text-sm text-danger"

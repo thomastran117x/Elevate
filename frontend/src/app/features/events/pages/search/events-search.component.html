@@ -306,14 +306,24 @@
 
       @if (events.length > 0) {
         <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          @for (event of events; track event) {
+          @for (event of events; track event.id) {
             <article
               class="surface-card cursor-pointer overflow-hidden rounded-3xl transition hover:border-line-strong hover:bg-surface-muted"
               tabindex="0"
               (click)="viewEvent(event.id)"
               (keyup.enter)="viewEvent(event.id)"
             >
-              <div class="h-40 bg-surface-muted">
+              <div class="relative h-40 bg-surface-muted">
+                @if (favouritesFeatureEnabled) {
+                  <div class="absolute right-3 top-3 z-10">
+                    <app-event-favourite-toggle
+                      size="sm"
+                      [eventId]="event.id"
+                      (failed)="onFavouriteFailed($event)"
+                    />
+                  </div>
+                }
+
                 @if (event.imageUrls.length) {
                   <div
                     class="h-full w-full bg-cover bg-center"

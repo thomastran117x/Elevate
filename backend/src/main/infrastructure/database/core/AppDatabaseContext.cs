@@ -14,6 +14,7 @@ using backend.main.features.clubs.search;
 using backend.main.features.clubs.staff;
 using backend.main.features.clubs.versions;
 using backend.main.features.events;
+using backend.main.features.events.favourites;
 using backend.main.features.events.images;
 using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
@@ -50,6 +51,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<PostComment> PostComments { get; set; } = null!;
         public DbSet<EventRegistration> EventRegistrations { get; set; } = null!;
         public DbSet<EventWaitlistEntry> EventWaitlistEntries { get; set; } = null!;
+        public DbSet<EventFavourite> EventFavourites { get; set; } = null!;
         public DbSet<EventImage> EventImages { get; set; } = null!;
         public DbSet<EventInvitation> EventInvitations { get; set; } = null!;
         public DbSet<EventInvitationLink> EventInvitationLinks { get; set; } = null!;
@@ -656,6 +658,35 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<EventRegistration>()
                 .HasIndex(r => new { r.EventId, r.UserId })
+                .IsUnique();
+
+            modelBuilder.Entity<EventFavourite>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(f => f.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<EventFavourite>()
+                .HasOne<Events>()
+                .WithMany()
+                .HasForeignKey(f => f.EventId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<EventFavourite>()
+                .HasIndex(f => f.EventId);
+
+            // Covers the two hot reads: the user's id set and the pinned list, both of which
+            // scan by UserId and want CreatedAt for ordering without a heap lookup.
+            modelBuilder.Entity<EventFavourite>()
+                .HasIndex(f => new { f.UserId, f.CreatedAt });
+
+            // Unstarring hard-deletes, so unlike the waitlist there is no terminal row to
+            // preserve — a plain unique pair is enough, and it is what makes the star
+            // idempotent under a double-tap.
+            modelBuilder.Entity<EventFavourite>()
+                .HasIndex(f => new { f.EventId, f.UserId })
                 .IsUnique();
 
             modelBuilder.Entity<EventWaitlistEntry>()
