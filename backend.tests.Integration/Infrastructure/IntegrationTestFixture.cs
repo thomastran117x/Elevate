@@ -22,7 +22,9 @@ namespace backend.tests.Integration.Infrastructure;
 public sealed class IntegrationTestFixture : IAsyncLifetime
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
+    private static readonly object ShutdownGate = new();
     private static IntegrationTestEnvironment? _environment;
+    private static Task? _shutdownTask;
 
     public static async Task<IntegrationTestEnvironment> GetEnvironmentAsync()
     {
@@ -47,18 +49,38 @@ public sealed class IntegrationTestFixture : IAsyncLifetime
 
     public Task InitializeAsync() => GetEnvironmentAsync();
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public Task DisposeAsync() => ShutdownAsync();
 
     private static void Shutdown()
     {
         try
         {
-            AuthApiTestAppPool.DisposeIfCreatedAsync().AsTask().GetAwaiter().GetResult();
+            ShutdownAsync().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // Process shutdown is best-effort. Testcontainers' resource reaper is the
+            // fallback when the host can no longer complete asynchronous cleanup.
+        }
+    }
+
+    private static Task ShutdownAsync()
+    {
+        lock (ShutdownGate)
+            return _shutdownTask ??= ShutdownCoreAsync();
+    }
+
+    private static async Task ShutdownCoreAsync()
+    {
+        try
+        {
+            await AuthApiTestAppPool.DisposeIfCreatedAsync();
         }
         finally
         {
-            _environment?.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            _environment = null;
+            var environment = Interlocked.Exchange(ref _environment, null);
+            if (environment is not null)
+                await environment.DisposeAsync();
         }
     }
 }
@@ -118,6 +140,7 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
         // hand-rolled readiness polling the MySQL container needed.
         var postgresContainer = new PostgreSqlBuilder()
             .WithImage(PostgresImage)
+            .WithCleanUp(true)
             .WithDatabase(DefaultDatabase)
             .WithUsername(PostgresUser)
             .WithPassword(PostgresPassword)
@@ -125,12 +148,16 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
 
         var redisContainer = new RedisBuilder()
             .WithImage("redis:7-alpine")
+            .WithCleanUp(true)
             .Build();
 
-        var kafkaContainer = new KafkaBuilder().Build();
+        var kafkaContainer = new KafkaBuilder()
+            .WithCleanUp(true)
+            .Build();
 
         var elasticsearchContainer = new ContainerBuilder()
             .WithImage(ElasticsearchImage)
+            .WithCleanUp(true)
             .WithEnvironment("discovery.type", "single-node")
             .WithEnvironment("xpack.security.enabled", "false")
             .WithEnvironment("xpack.security.http.ssl.enabled", "false")
@@ -148,8 +175,25 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
             kafkaContainer,
             elasticsearchContainer);
 
-        await environment.StartAsync();
-        return environment;
+        try
+        {
+            await environment.StartAsync();
+            return environment;
+        }
+        catch
+        {
+            try
+            {
+                await environment.DisposeAsync();
+            }
+            catch
+            {
+                // Preserve the startup exception. Resource-reaper cleanup remains
+                // enabled for any container Docker could not remove immediately.
+            }
+
+            throw;
+        }
     }
 
     public string CreateDatabaseConnectionString(string databaseName)

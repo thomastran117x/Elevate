@@ -14,12 +14,13 @@ public class RedisConfigurationTests
     [Fact]
     public void AddAppRedis_ShouldRegisterFallbackServices_WhenRedisConnectionFails()
     {
+        const string configuredConnectionString =
+            "127.0.0.1:1,abortConnect=true,connectTimeout=50,connectRetry=0";
         var services = new ServiceCollection();
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Redis:ConnectionString"] =
-                    "127.0.0.1:1,abortConnect=true,connectTimeout=50,connectRetry=0"
+                ["Redis:ConnectionString"] = configuredConnectionString
             })
             .Build();
 
@@ -36,6 +37,11 @@ public class RedisConfigurationTests
         health.Failure.Should().NotBeNull();
         state.Current.Should().BeOfType<NoOpCacheService>();
         cache.Should().BeOfType<CacheServiceProxy>();
-        hostedServices.Should().ContainSingle(service => service is RedisReconnectBackgroundService);
+        var reconnectService = hostedServices.Should()
+            .ContainSingle(service => service is RedisReconnectBackgroundService)
+            .Which.Should()
+            .BeOfType<RedisReconnectBackgroundService>()
+            .Subject;
+        reconnectService.ConnectionString.Should().Be(configuredConnectionString);
     }
 }
