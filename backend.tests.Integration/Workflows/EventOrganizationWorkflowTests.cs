@@ -633,7 +633,7 @@ public class EventOrganizationWorkflowTests
             JsonContent.Create(new
             {
                 name,
-                description = "A club created by an end-to-end organization workflow.",
+                description = "End-to-end workflow club",
                 clubtype = "social",
                 clubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "workflow-club.png"),
                 email

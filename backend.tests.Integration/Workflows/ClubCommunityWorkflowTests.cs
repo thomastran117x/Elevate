@@ -394,7 +394,7 @@ public class ClubCommunityWorkflowTests
             JsonContent.Create(new
             {
                 name,
-                description = "A club created by an end-to-end community workflow.",
+                description = "End-to-end workflow club",
                 clubtype = "social",
                 clubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "community-workflow.png"),
                 email
