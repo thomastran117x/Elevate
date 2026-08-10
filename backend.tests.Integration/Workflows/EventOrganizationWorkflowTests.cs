@@ -12,6 +12,7 @@ using backend.main.features.events.invitations;
 using backend.main.features.events.invitations.contracts.responses;
 using backend.main.features.events.registration;
 using backend.main.features.events.registration.contracts.responses;
+using backend.main.features.events.series.contracts.responses;
 using backend.main.features.events.waitlist;
 using backend.main.features.events.waitlist.contracts.responses;
 using backend.main.shared.providers.messages;
@@ -505,6 +506,102 @@ public class EventOrganizationWorkflowTests
             item.EventId == published.Id &&
             item.UserId == attendee.UserId &&
             item.Status == RegistrationStatus.Active))).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RecurringEventUpdate_ShouldRetainAndReportRegistrationsOnRetimedOccurrences()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var organizer = await CreateUserAsync(app, "workflow-series-organizer@example.com", "Organizer");
+        var attendee = await CreateUserAsync(app, "workflow-series-attendee@example.com");
+
+        var club = await CreateClubAsync(
+            app,
+            organizer.Session.AccessToken,
+            "Recurring Workflow Club",
+            "workflow-series@example.com");
+        var draft = await CreateDraftEventAsync(
+            app,
+            organizer.Session.AccessToken,
+            club.Id,
+            "Weekly Community Workshop");
+
+        var localStart = DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd'T'19:00");
+        var createSeries = await app.Client.SendAsync(AuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{draft.Id}/series",
+            organizer.Session.AccessToken,
+            JsonContent.Create(new
+            {
+                recurrence = new
+                {
+                    frequency = "Weekly",
+                    interval = 1,
+                    startLocalDateTime = localStart,
+                    durationMinutes = 120,
+                    timeZoneId = "America/Toronto",
+                    endMode = "Count",
+                    occurrenceCount = 3
+                }
+            })));
+        createSeries.StatusCode.Should().Be(HttpStatusCode.Created, await app.DescribeFailureAsync(createSeries));
+        var series = (await app.ReadApiResponseAsync<EventSeriesResponse>(createSeries)).Data!;
+        series.Occurrences.Should().HaveCount(3);
+
+        var publishSeries = await app.Client.SendAsync(AuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/series/{series.Id}/publish",
+            organizer.Session.AccessToken));
+        publishSeries.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(publishSeries));
+
+        var registeredOccurrence = series.Occurrences[1];
+        var originalStart = registeredOccurrence.StartTime;
+        var registration = await app.Client.SendAsync(AuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{registeredOccurrence.Id}/register",
+            attendee.Session.AccessToken,
+            JsonContent.Create(new { notes = "Registered before the schedule change" })));
+        registration.StatusCode.Should().Be(HttpStatusCode.Created, await app.DescribeFailureAsync(registration));
+
+        var retime = await app.Client.SendAsync(AuthorizedRequest(
+            HttpMethod.Patch,
+            $"/api/events/series/{series.Id}/occurrences",
+            organizer.Session.AccessToken,
+            JsonContent.Create(new
+            {
+                fromEventId = registeredOccurrence.Id,
+                localStartTime = "20:00"
+            })));
+        retime.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(retime));
+        var retimeResult = (await app.ReadApiResponseAsync<EventSeriesBulkResultResponse>(retime)).Data!;
+        retimeResult.AffectedEventIds.Should().Contain(registeredOccurrence.Id);
+        retimeResult.RetimedWithRegistrations.Should().ContainSingle(id => id == registeredOccurrence.Id);
+        retimeResult.Skipped.Should().BeEmpty();
+
+        var attendeeRegistrations = await app.Client.SendAsync(AuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/users/{attendee.UserId}/events/registered",
+            attendee.Session.AccessToken));
+        attendeeRegistrations.StatusCode.Should().Be(HttpStatusCode.OK);
+        var attendeeRegistrationsBody = await app.ReadApiResponseAsync<IEnumerable<EventRegistrationResponse>>(
+            attendeeRegistrations);
+        attendeeRegistrationsBody.Data.Should().ContainSingle(item =>
+            item.EventId == registeredOccurrence.Id &&
+            item.Status == RegistrationStatus.Active.ToString() &&
+            item.Notes == "Registered before the schedule change");
+
+        var storedOccurrence = await app.QueryDbAsync(db => db.Events
+            .AsNoTracking()
+            .SingleAsync(item => item.Id == registeredOccurrence.Id));
+        storedOccurrence.StartTime.Should().NotBe(originalStart);
+        storedOccurrence.RegistrationCount.Should().Be(1);
+        storedOccurrence.SeriesId.Should().Be(series.Id);
+
+        var storedRegistration = await app.QueryDbAsync(db => db.EventRegistrations
+            .AsNoTracking()
+            .SingleAsync(item =>
+                item.EventId == registeredOccurrence.Id && item.UserId == attendee.UserId));
+        storedRegistration.Status.Should().Be(RegistrationStatus.Active);
     }
 
     private const int EventCapacity = 24;

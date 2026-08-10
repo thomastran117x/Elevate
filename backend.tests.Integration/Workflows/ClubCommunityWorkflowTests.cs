@@ -5,10 +5,12 @@ using System.Net.Http.Json;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
 using backend.main.features.clubs.follow.invitations.contracts.responses;
+using backend.main.features.clubs.invitations.contracts.responses;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments.contracts.responses;
 using backend.main.features.clubs.posts.contracts.responses;
 using backend.main.features.clubs.reviews.contracts.responses;
+using backend.main.features.clubs.staff;
 using backend.main.shared.providers.messages;
 using backend.main.shared.responses;
 
@@ -190,6 +192,181 @@ public class ClubCommunityWorkflowTests
             item.Id == review.Id && item.UserId == member.UserId && item.Rating == 5))).Should().BeTrue();
     }
 
+    [Fact]
+    public async Task StaffInvitation_ShouldEnableTheAcceptedManagerToPublishClubContent()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var owner = await CreateUserAsync(app, "workflow-staff-owner@example.com", "Organizer");
+        var manager = await CreateUserAsync(app, "workflow-staff-manager@example.com");
+
+        var club = await CreateClubAsync(
+            app,
+            owner.Session.AccessToken,
+            "Invited Staff Content Club",
+            "workflow-staff-content@example.com");
+
+        app.Publisher.Clear();
+
+        var inviteManager = await app.Client.SendAsync(AuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/staff/invitations",
+            owner.Session.AccessToken,
+            JsonContent.Create(new
+            {
+                identifier = "workflow-staff-manager@example.com",
+                role = "Manager"
+            })));
+        inviteManager.StatusCode.Should().Be(HttpStatusCode.Created, await app.DescribeFailureAsync(inviteManager));
+        var invitation = (await app.ReadApiResponseAsync<ClubInvitationResponse>(inviteManager)).Data!;
+        invitation.RecipientUserId.Should().Be(manager.UserId);
+        invitation.Role.Should().Be("Manager");
+
+        var invitationEmail = app.Publisher.EmailMessages.Should()
+            .ContainSingle(message =>
+                message.Type == EmailMessageType.ClubStaffInvite &&
+                message.Email == "workflow-staff-manager@example.com")
+            .Subject;
+        invitationEmail.Token.Should().NotBeNullOrWhiteSpace();
+
+        var acceptInvitation = await app.Client.SendAsync(AuthorizedRequest(
+            HttpMethod.Post,
+            "/api/clubs/invitations/accept",
+            manager.Session.AccessToken,
+            JsonContent.Create(new { token = invitationEmail.Token })));
+        acceptInvitation.StatusCode.Should().Be(
+            HttpStatusCode.OK,
+            await app.DescribeFailureAsync(acceptInvitation));
+        var accepted = (await app.ReadApiResponseAsync<ClubInvitationDecisionResponse>(acceptInvitation)).Data!;
+        accepted.Accepted.Should().BeTrue();
+        accepted.Role.Should().Be("Manager");
+
+        var managedClubs = await app.Client.SendAsync(AuthorizedRequest(
+            HttpMethod.Get,
+            "/api/clubs/managed",
+            manager.Session.AccessToken));
+        managedClubs.StatusCode.Should().Be(HttpStatusCode.OK);
+        var managedClubsBody = await app.ReadApiResponseAsync<IEnumerable<WorkflowClubResponse>>(managedClubs);
+        managedClubsBody.Data.Should().ContainSingle(item =>
+            item.Id == club.Id && item.IsManager && item.CanManage && !item.IsOwner);
+
+        var managerPost = await app.Client.SendAsync(AuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/posts",
+            manager.Session.AccessToken,
+            JsonContent.Create(new
+            {
+                title = "Manager Welcome Update",
+                content = "The newly invited manager can now publish club announcements.",
+                postType = PostType.Announcement,
+                isPinned = true
+            })));
+        managerPost.StatusCode.Should().Be(HttpStatusCode.Created, await app.DescribeFailureAsync(managerPost));
+        var post = (await app.ReadApiResponseAsync<ClubPostResponse>(managerPost)).Data!;
+        post.UserId.Should().Be(manager.UserId);
+
+        var ownerView = await app.Client.GetAsync($"/api/clubs/{club.Id}/posts/{post.Id}");
+        ownerView.StatusCode.Should().Be(HttpStatusCode.OK);
+        var ownerViewBody = await app.ReadApiResponseAsync<ClubPostResponse>(ownerView);
+        ownerViewBody.Data.Should().Match<ClubPostResponse>(item =>
+            item.UserId == manager.UserId && item.IsPinned && item.Title == "Manager Welcome Update");
+
+        (await app.QueryDbAsync(db => db.ClubStaff.AnyAsync(item =>
+            item.ClubId == club.Id &&
+            item.UserId == manager.UserId &&
+            item.Role == ClubStaffRole.Manager))).Should().BeTrue();
+        (await app.QueryDbAsync(db => db.ClubPosts.AnyAsync(item =>
+            item.Id == post.Id && item.UserId == manager.UserId))).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task OwnershipTransfer_ShouldMoveExistingContentControlToTheNewOwner()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var originalOwner = await CreateUserAsync(app, "workflow-transfer-original@example.com", "Organizer");
+        var newOwner = await CreateUserAsync(app, "workflow-transfer-new@example.com");
+
+        var club = await CreateClubAsync(
+            app,
+            originalOwner.Session.AccessToken,
+            "Ownership Handoff Club",
+            "workflow-ownership@example.com");
+
+        var originalPost = await app.Client.SendAsync(AuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/posts",
+            originalOwner.Session.AccessToken,
+            JsonContent.Create(new
+            {
+                title = "Before the Handoff",
+                content = "This announcement was created by the original owner.",
+                postType = PostType.General,
+                isPinned = false
+            })));
+        originalPost.StatusCode.Should().Be(HttpStatusCode.Created, await app.DescribeFailureAsync(originalPost));
+        var post = (await app.ReadApiResponseAsync<ClubPostResponse>(originalPost)).Data!;
+
+        var transfer = await app.Client.SendAsync(AuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/transfer-ownership",
+            originalOwner.Session.AccessToken,
+            JsonContent.Create(new { newOwnerUserId = newOwner.UserId })));
+        transfer.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(transfer));
+
+        var newOwnerUpdate = await app.Client.SendAsync(AuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/clubs/{club.Id}/posts/{post.Id}",
+            newOwner.Session.AccessToken,
+            JsonContent.Create(new
+            {
+                title = "After the Handoff",
+                content = "The new owner now controls existing club content.",
+                postType = PostType.Announcement,
+                isPinned = true
+            })));
+        newOwnerUpdate.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(newOwnerUpdate));
+
+        var formerOwnerUpdate = await app.Client.SendAsync(AuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/clubs/{club.Id}/posts/{post.Id}",
+            originalOwner.Session.AccessToken,
+            JsonContent.Create(new
+            {
+                title = "Former Owner Edit",
+                content = "This update must be rejected after ownership changes.",
+                postType = PostType.General,
+                isPinned = false
+            })));
+        formerOwnerUpdate.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var newOwnerManaged = await app.Client.SendAsync(AuthorizedRequest(
+            HttpMethod.Get,
+            "/api/clubs/managed",
+            newOwner.Session.AccessToken));
+        newOwnerManaged.StatusCode.Should().Be(HttpStatusCode.OK);
+        var newOwnerManagedBody = await app.ReadApiResponseAsync<IEnumerable<WorkflowClubResponse>>(newOwnerManaged);
+        newOwnerManagedBody.Data.Should().ContainSingle(item =>
+            item.Id == club.Id && item.IsOwner && item.CanManage);
+
+        var formerOwnerManaged = await app.Client.SendAsync(AuthorizedRequest(
+            HttpMethod.Get,
+            "/api/clubs/managed",
+            originalOwner.Session.AccessToken));
+        formerOwnerManaged.StatusCode.Should().Be(HttpStatusCode.OK);
+        var formerOwnerManagedBody = await app.ReadApiResponseAsync<IEnumerable<WorkflowClubResponse>>(
+            formerOwnerManaged);
+        formerOwnerManagedBody.Data.Should().NotContain(item => item.Id == club.Id);
+
+        (await app.QueryDbAsync(db => db.Clubs
+            .Where(item => item.Id == club.Id)
+            .Select(item => item.UserId)
+            .SingleAsync())).Should().Be(newOwner.UserId);
+        var storedPost = await app.QueryDbAsync(db => db.ClubPosts
+            .AsNoTracking()
+            .SingleAsync(item => item.Id == post.Id));
+        storedPost.Title.Should().Be("After the Handoff");
+        storedPost.IsPinned.Should().BeTrue();
+    }
+
     private static async Task<WorkflowUser> CreateUserAsync(
         AuthApiTestApp app,
         string email,
@@ -248,5 +425,8 @@ public class ClubCommunityWorkflowTests
         public int OwnerId { get; init; }
         public int MemberCount { get; init; }
         public double? Rating { get; init; }
+        public bool IsOwner { get; init; }
+        public bool IsManager { get; init; }
+        public bool CanManage { get; init; }
     }
 }
