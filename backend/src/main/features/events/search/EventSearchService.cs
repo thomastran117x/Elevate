@@ -240,20 +240,29 @@ namespace backend.main.features.events.search
             var client = GetWritableClientOrNull();
             if (client == null)
                 return;
+            var documentBatch = documents.ToList();
             await EnsureIndexAsync(cancellationToken);
             try
             {
                 var response = await _circuitBreaker.ExecuteAsync(
                     () => client.BulkAsync(b => b
                         .Index(IndexName)
-                        .IndexMany(documents)
+                        .IndexMany(documentBatch)
                     ),
                     $"{IndexName} bulk indexing");
                 if (response.Errors)
-                    Logger.Warn($"Bulk index had errors: {response.ItemsWithErrors.Count()} items failed.");
+                {
+                    var failedCount = response.ItemsWithErrors.Count();
+                    throw new ElasticsearchUnavailableException(
+                        $"Bulk index failed for {failedCount} of {documentBatch.Count} event documents.");
+                }
                 await _circuitBreaker.ExecuteAsync(
                     () => client.Indices.RefreshAsync(IndexName, cancellationToken),
                     $"{IndexName} refresh");
+            }
+            catch (ElasticsearchUnavailableException)
+            {
+                throw;
             }
             catch (Exception ex)
             {

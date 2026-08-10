@@ -1,4 +1,5 @@
 using backend.main.features.events;
+using backend.main.infrastructure.elasticsearch;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.utilities.logger;
 
@@ -7,6 +8,7 @@ namespace backend.main.features.events.search
     public class EventReindexService : IEventReindexService
     {
         private const int BatchSize = 100;
+        private const int BulkIndexMaxAttempts = 3;
         private static readonly TimeSpan ReindexTimeout = TimeSpan.FromMinutes(10);
 
         private readonly IEventsRepository _eventsRepository;
@@ -44,9 +46,11 @@ namespace backend.main.features.events.search
                     var publishable = events
                         .Where(e => EventLifecyclePolicy.IsVisibleInPublicListings(e.LifecycleState))
                         .ToList();
-                    var documents = publishable.Select(EventSearchDocumentMapper.ToDocument);
+                    var documents = publishable
+                        .Select(EventSearchDocumentMapper.ToDocument)
+                        .ToList();
 
-                    await _searchService.BulkIndexAsync(documents, token);
+                    await BulkIndexWithRetryAsync(documents, token);
                     totalIndexed += publishable.Count;
                     page++;
 
@@ -61,6 +65,29 @@ namespace backend.main.features.events.search
             {
                 Logger.Warn($"Event reindex exceeded the {ReindexTimeout.TotalMinutes:0} minute timeout.");
                 throw new GatewayTimeoutException("Event reindex timed out.");
+            }
+        }
+
+        private async Task BulkIndexWithRetryAsync(
+            IReadOnlyCollection<EventDocument> documents,
+            CancellationToken cancellationToken)
+        {
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await _searchService.BulkIndexAsync(documents, cancellationToken);
+                    return;
+                }
+                catch (ElasticsearchUnavailableException ex)
+                    when (attempt < BulkIndexMaxAttempts)
+                {
+                    var delay = TimeSpan.FromMilliseconds(200 * attempt);
+                    Logger.Warn(
+                        ex,
+                        $"Event reindex bulk attempt {attempt} failed. Retrying in {delay.TotalMilliseconds:0} ms.");
+                    await Task.Delay(delay, cancellationToken);
+                }
             }
         }
     }

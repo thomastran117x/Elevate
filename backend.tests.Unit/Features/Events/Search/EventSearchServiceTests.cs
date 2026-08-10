@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 using backend.main.features.events;
 using backend.main.features.events.search;
@@ -7,6 +8,7 @@ using backend.main.infrastructure.elasticsearch;
 
 using Elastic.Clients.Elasticsearch.Core.Search;
 using Elastic.Clients.Elasticsearch.QueryDsl;
+using Elastic.Transport;
 
 using FluentAssertions;
 
@@ -83,6 +85,52 @@ public class EventSearchServiceTests
             .Which.InnerException.Should().BeSameAs(failure);
         (await deleteIndexAction.Should().ThrowAsync<ElasticsearchConfigurationException>())
             .Which.InnerException.Should().BeSameAs(failure);
+    }
+
+    [Fact]
+    public async Task BulkIndexAsync_ShouldThrow_WhenElasticsearchReportsPartialFailures()
+    {
+        var response = Encoding.UTF8.GetBytes("""
+            {
+              "errors": true,
+              "items": [
+                {
+                  "index": {
+                    "_index": "events",
+                    "_id": "2",
+                    "status": 429,
+                    "error": {
+                      "type": "es_rejected_execution_exception",
+                      "reason": "bulk queue is full"
+                    }
+                  }
+                }
+              ]
+            }
+            """);
+        var requestInvoker = new InMemoryRequestInvoker(
+            response,
+            200,
+            null,
+            "application/json",
+            new Dictionary<string, IEnumerable<string>>
+            {
+                ["x-elastic-product"] = ["Elasticsearch"]
+            });
+        var client = new Elastic.Clients.Elasticsearch.ElasticsearchClient(
+            new Elastic.Clients.Elasticsearch.ElasticsearchClientSettings(requestInvoker));
+        var health = new ElasticsearchHealth();
+        SetHealth(health, isConfigured: true, failure: null);
+        var service = new EventSearchService(new ElasticsearchCircuitBreaker(), health, client);
+        typeof(EventSearchService).GetField("_indexEnsured", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(service, true);
+
+        var bulkAction = () => service.BulkIndexAsync(
+            [new EventDocument { Id = 1 }, new EventDocument { Id = 2 }]);
+
+        await bulkAction.Should()
+            .ThrowAsync<ElasticsearchUnavailableException>()
+            .WithMessage("*1 of 2 event documents*");
     }
 
     [Fact]
