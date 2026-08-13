@@ -37,6 +37,7 @@ export class LoginComponent {
   error = '';
   notice = '';
   showPw = false;
+  capsLockOn = false;
   submitted = false;
   siteKey = environment.googleSiteKey;
 
@@ -61,6 +62,14 @@ export class LoginComponent {
 
   togglePassword() {
     this.showPw = !this.showPw;
+  }
+
+  updateCapsLockState(event: KeyboardEvent): void {
+    this.capsLockOn = event.getModifierState('CapsLock');
+  }
+
+  clearCapsLockState(): void {
+    this.capsLockOn = false;
   }
 
   async onSubmit() {
