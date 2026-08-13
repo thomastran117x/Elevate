@@ -19,6 +19,8 @@ import { ClubMember } from '../../models/club-management.types';
 import { ClubManagementService } from '../../services/club-management.service';
 import { EventsService } from '../../../events/services/events.service';
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
+import { FeatureFlagsService } from '../../../../core/features/feature-flags.service';
+import { FEATURE_KEYS } from '../../../../core/features/feature-flags.types';
 import { CATEGORY_STYLES, EventItem } from '../../../events/models/event.types';
 
 export type DetailPanel = 'members' | 'events' | 'openEvents' | 'reviews';
@@ -49,6 +51,8 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
 
   recentDiscussions: ClubDiscussion[] = [];
   discussionsLoading = false;
+  /** Mirrors the route's `featureCanMatch` guard, so a disabled flag leaves no dead entry point. */
+  readonly discussionsEnabled: boolean;
 
   upcomingEvents: EventItem[] = [];
   eventsLoading = false;
@@ -96,7 +100,10 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
     private reviewsService: ClubReviewsService,
     private managementService: ClubManagementService,
     private store: Store,
-  ) {}
+    featureFlags: FeatureFlagsService,
+  ) {
+    this.discussionsEnabled = featureFlags.isEnabled(FEATURE_KEYS.clubsDiscussions);
+  }
 
   ngOnInit(): void {
     this.store
@@ -609,6 +616,8 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
   }
 
   private fetchRecentDiscussions(): void {
+    if (!this.discussionsEnabled) return;
+
     this.discussionsLoading = true;
 
     // Errors are swallowed on purpose: a disabled feature flag or a private-club 403

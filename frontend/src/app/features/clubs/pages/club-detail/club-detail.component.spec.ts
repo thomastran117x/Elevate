@@ -10,6 +10,7 @@ import {
   makeClubMember,
   makeCurrentUser,
   makeEventItem,
+  provideFeatureFlags,
   provideTestStore,
 } from '@testing';
 
@@ -74,7 +75,10 @@ describe('ClubDetailComponent', () => {
   let reviews: jasmine.SpyObj<ClubReviewsService>;
   let management: jasmine.SpyObj<ClubManagementService>;
 
-  async function setup(user: User | null = makeCurrentUser({ Id: 1 })): Promise<void> {
+  async function setup(
+    user: User | null = makeCurrentUser({ Id: 1 }),
+    discussionsEnabled = true,
+  ): Promise<void> {
     route = fakeActivatedRoute({ params: { clubId: '3' } });
 
     router = jasmine.createSpyObj<Router>('Router', ['navigate'], { url: '/clubs/3' });
@@ -125,6 +129,7 @@ describe('ClubDetailComponent', () => {
         { provide: ClubReviewsService, useValue: reviews },
         { provide: ClubManagementService, useValue: management },
         ...provideTestStore({ user }),
+        provideFeatureFlags({ 'clubs.discussions': discussionsEnabled }),
       ],
     }).compileComponents();
 
@@ -174,6 +179,19 @@ describe('ClubDetailComponent', () => {
       expect(discussions.getDiscussions).toHaveBeenCalledOnceWith(3, 1, 3);
       expect(component.recentDiscussions.map((d) => d.title)).toEqual(['Newer', 'Older']);
       expect(component.discussionsLoading).toBeFalse();
+    });
+
+    it('skips discussions entirely when the feature is disabled', async () => {
+      TestBed.resetTestingModule();
+      await setup(makeCurrentUser({ Id: 1 }), false);
+
+      fixture.detectChanges();
+
+      expect(component.discussionsEnabled).toBeFalse();
+      expect(discussions.getDiscussions).not.toHaveBeenCalled();
+      expect((fixture.nativeElement as HTMLElement).textContent).not.toContain(
+        'What members are discussing',
+      );
     });
 
     it('keeps the page usable when the discussions request fails', () => {

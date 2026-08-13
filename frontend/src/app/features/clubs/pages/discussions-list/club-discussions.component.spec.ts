@@ -5,6 +5,7 @@ import { of, throwError } from 'rxjs';
 import {
   envelope,
   fakeActivatedRoute,
+  makeClub,
   makeClubDiscussion,
   makeCurrentUser,
   provideTestStore,
@@ -14,6 +15,7 @@ import { ClubDiscussionsComponent } from './club-discussions.component';
 import { ClubDiscussionsService } from '../../services/club-discussions.service';
 import { ClubsService } from '../../services/clubs.service';
 import { ClubDiscussion } from '../../models/club-discussion.types';
+import { Club } from '../../models/club.types';
 import { ApiClientClientError } from '../../../../core/api/models/api-client-error.model';
 import { User } from '../../../../core/stores/user.model';
 
@@ -46,6 +48,7 @@ describe('ClubDiscussionsComponent', () => {
   async function setup(
     user: User | null = makeCurrentUser({ Id: 1 }),
     isMember = true,
+    clubOverrides: Partial<Club> = {},
   ): Promise<void> {
     route = fakeActivatedRoute({ params: { clubId: '3' } });
 
@@ -63,8 +66,9 @@ describe('ClubDiscussionsComponent', () => {
     discussions.updateDiscussion.and.returnValue(of(envelope(makeClubDiscussion())));
     discussions.deleteDiscussion.and.returnValue(of(envelope(null)));
 
-    clubs = jasmine.createSpyObj<ClubsService>('ClubsService', ['getMembershipStatus']);
+    clubs = jasmine.createSpyObj<ClubsService>('ClubsService', ['getMembershipStatus', 'getClub']);
     clubs.getMembershipStatus.and.returnValue(of(isMember));
+    clubs.getClub.and.returnValue(of(envelope(makeClub({ id: 3, ...clubOverrides }))));
 
     await TestBed.configureTestingModule({
       imports: [ClubDiscussionsComponent],
@@ -136,7 +140,7 @@ describe('ClubDiscussionsComponent', () => {
       expect(component.canStartDiscussion).toBeTrue();
     });
 
-    it('blocks a signed-in non-member', async () => {
+    it('blocks a signed-in non-member with no staff role', async () => {
       TestBed.resetTestingModule();
       await setup(makeCurrentUser({ Id: 1 }), false);
 
@@ -145,13 +149,47 @@ describe('ClubDiscussionsComponent', () => {
       expect(component.canStartDiscussion).toBeFalse();
     });
 
-    it('blocks an anonymous visitor without checking membership', async () => {
+    // Owners/staff/admins have no FollowClub row, and the owner of a private club can
+    // never join through the normal flow, so membership alone would lock them out.
+    (
+      [
+        ['owner', { isOwner: true }],
+        ['manager', { isManager: true }],
+        ['volunteer', { isVolunteer: true }],
+        ['admin', { canManage: true }],
+      ] as [string, Partial<Club>][]
+    ).forEach(([role, overrides]) => {
+      it(`allows a non-member ${role} of a private club`, async () => {
+        TestBed.resetTestingModule();
+        await setup(makeCurrentUser({ Id: 1 }), false, { isPrivate: true, ...overrides });
+
+        fixture.detectChanges();
+
+        expect(component.isMember).toBeFalse();
+        expect(component.isStaff).toBeTrue();
+        expect(component.canStartDiscussion).toBeTrue();
+      });
+    });
+
+    it('treats a failed club lookup as not staff', async () => {
+      TestBed.resetTestingModule();
+      await setup(makeCurrentUser({ Id: 1 }), false);
+      clubs.getClub.and.returnValue(throwError(() => new Error('boom')));
+
+      fixture.detectChanges();
+
+      expect(component.isStaff).toBeFalse();
+      expect(component.canStartDiscussion).toBeFalse();
+    });
+
+    it('blocks an anonymous visitor without checking access', async () => {
       TestBed.resetTestingModule();
       await setup(null);
 
       fixture.detectChanges();
 
       expect(clubs.getMembershipStatus).not.toHaveBeenCalled();
+      expect(clubs.getClub).not.toHaveBeenCalled();
       expect(component.canStartDiscussion).toBeFalse();
     });
 
@@ -298,6 +336,25 @@ describe('ClubDiscussionsComponent', () => {
 
       expect(component.error).toBe('Nope.');
       expect(component.loadingMore).toBeFalse();
+    });
+
+    it('retries the same page after a failed append instead of skipping it', () => {
+      discussions.getDiscussions.and.returnValue(of(paged([makeClubDiscussion({ id: 1 })], 3, 3)));
+      fixture.detectChanges();
+
+      discussions.getDiscussions.and.returnValue(
+        throwError(() => new ApiClientClientError('Nope.', 500)),
+      );
+      component.loadMore();
+      expect(component.currentPage).toBe(1);
+
+      discussions.getDiscussions.calls.reset();
+      discussions.getDiscussions.and.returnValue(of(paged([makeClubDiscussion({ id: 2 })], 3, 3)));
+      component.loadMore();
+
+      // Page 2 is requested again rather than being skipped for page 3.
+      expect(discussions.getDiscussions).toHaveBeenCalledOnceWith(3, 2, 20);
+      expect(component.discussions.map((d) => d.id)).toEqual([1, 2]);
     });
   });
 

@@ -11,6 +11,12 @@ import { selectUser } from '../../../../core/stores/user.selectors';
 import { ClubDiscussionsService } from '../../services/club-discussions.service';
 import { ClubsService } from '../../services/clubs.service';
 import { ClubDiscussion, discussionAuthorName } from '../../models/club-discussion.types';
+import { Club } from '../../models/club.types';
+
+/** Frontend mirror of the server's `HasClubStaffAccessAsync`: owner, staff, or admin. */
+function isClubStaff(club: Club | null): boolean {
+  return !!club && (club.isOwner || club.isManager || club.isVolunteer || club.canManage);
+}
 
 @Component({
   selector: 'app-club-discussions',
@@ -36,6 +42,7 @@ export class ClubDiscussionsComponent implements OnInit, OnDestroy {
 
   currentUser: User | null = null;
   isMember = false;
+  isStaff = false;
 
   showEditor = false;
   editingId: number | null = null;
@@ -59,13 +66,13 @@ export class ClubDiscussionsComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe((user) => {
         this.currentUser = user;
-        if (this.clubId) this.fetchMembership();
+        if (this.clubId) this.fetchAccess();
       });
 
     this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
       const id = Number(params.get('clubId'));
       this.clubId = id > 0 ? id : 0;
-      this.fetchMembership();
+      this.fetchAccess();
       this.resetAndFetch();
     });
   }
@@ -75,9 +82,14 @@ export class ClubDiscussionsComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  /** Members (and staff, who the server also lets through) may start a discussion. */
+  /**
+   * Mirrors the server's `IsMemberOrStaffAsync`: members may start a discussion, and so
+   * may owners/staff/admins. Staff are checked separately because they have no
+   * `FollowClub` row — the owner of a private club in particular can never join through
+   * the normal flow, so membership alone would hide the control from them.
+   */
   get canStartDiscussion(): boolean {
-    return !!this.currentUser && this.isMember;
+    return !!this.currentUser && (this.isMember || this.isStaff);
   }
 
   isAuthor(discussion: ClubDiscussion): boolean {
@@ -185,9 +197,10 @@ export class ClubDiscussionsComponent implements OnInit, OnDestroy {
     this.fetch(true);
   }
 
-  private fetchMembership(): void {
+  private fetchAccess(): void {
     if (!this.clubId || !this.currentUser) {
       this.isMember = false;
+      this.isStaff = false;
       return;
     }
 
@@ -197,6 +210,15 @@ export class ClubDiscussionsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (isMember) => (this.isMember = isMember),
         error: () => (this.isMember = false),
+      });
+
+    // `canManage` also covers admins, who carry no per-club owner/staff flag.
+    this.clubsService
+      .getClub(this.clubId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => (this.isStaff = isClubStaff(response.data ?? null)),
+        error: () => (this.isStaff = false),
       });
   }
 
@@ -234,6 +256,9 @@ export class ClubDiscussionsComponent implements OnInit, OnDestroy {
         },
         error: (err) => {
           if (version !== this.requestVersion) return;
+          // Roll the page back so a retry re-requests the page that failed instead of
+          // skipping it and leaving a hole in the accumulated list.
+          if (append) this.currentPage--;
           this.error = getApiClientMessage(err, 'Failed to load discussions.');
           this.loading = false;
           this.loadingMore = false;
