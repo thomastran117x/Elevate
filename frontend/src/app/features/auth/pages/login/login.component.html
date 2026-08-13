@@ -191,6 +191,10 @@
                 <input
                   [type]="showPw ? 'text' : 'password'"
                   formControlName="password"
+                  (keydown)="updateCapsLockState($event)"
+                  (keyup)="updateCapsLockState($event)"
+                  (blur)="clearCapsLockState()"
+                  [attr.aria-describedby]="capsLockOn ? 'login-caps-lock-warning' : null"
                   class="form-field w-full py-3 pl-12 pr-12 text-sm"
                   placeholder="Enter your password"
                 />
@@ -239,6 +243,16 @@
                   }
                 </button>
               </div>
+              @if (capsLockOn) {
+                <div
+                  id="login-caps-lock-warning"
+                  role="status"
+                  aria-live="polite"
+                  class="mt-2 text-sm text-warning"
+                >
+                  Caps Lock is on
+                </div>
+              }
               @if (submitted && form.controls['password'].invalid) {
                 <div class="mt-2 text-sm text-danger">Password must be at least 6 characters.</div>
               }
