@@ -6,6 +6,7 @@ dotenv.config();
 const ALL_FEATURE_KEYS = [
   'auth',
   'clubs',
+  'clubs.discussions',
   'clubs.follow',
   'clubs.posts',
   'clubs.reviews',

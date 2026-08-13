@@ -1,6 +1,7 @@
 export const FEATURE_KEYS = {
   auth: 'auth',
   clubs: 'clubs',
+  clubsDiscussions: 'clubs.discussions',
   clubsFollow: 'clubs.follow',
   clubsPosts: 'clubs.posts',
   clubsReviews: 'clubs.reviews',

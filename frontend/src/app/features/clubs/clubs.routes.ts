@@ -66,6 +66,14 @@ export const CLUBS_ROUTES: Routes = [
       import('./pages/posts-list/club-posts.component').then((m) => m.ClubPostsComponent),
   },
   {
+    path: ':clubId/discussions',
+    canMatch: [featureCanMatch(FEATURE_KEYS.clubsDiscussions)],
+    loadComponent: () =>
+      import('./pages/discussions-list/club-discussions.component').then(
+        (m) => m.ClubDiscussionsComponent,
+      ),
+  },
+  {
     path: ':clubId',
     loadComponent: () =>
       import('./pages/club-detail/club-detail.component').then((m) => m.ClubDetailComponent),

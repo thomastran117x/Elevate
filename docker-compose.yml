@@ -19,10 +19,11 @@ x-sms-mfa-env: &sms-mfa-env
   AUTH_SMS_MFA_ENFORCEMENT_ENABLED: "${AUTH_SMS_MFA_ENFORCEMENT_ENABLED:-false}"
   AUTH_SMS_MFA_STEP_UP_SMS_ENABLED: "${AUTH_SMS_MFA_STEP_UP_SMS_ENABLED:-true}"
 
-# Shared by backend + frontend (all 17 feature flags)
+# Shared by backend + frontend (all 18 feature flags)
 x-feature-flags-env: &feature-flags-env
   FEATURE_AUTH: "${FEATURE_AUTH:-true}"
   FEATURE_CLUBS: "${FEATURE_CLUBS:-true}"
+  FEATURE_CLUBS_DISCUSSIONS: "${FEATURE_CLUBS_DISCUSSIONS:-true}"
   FEATURE_CLUBS_FOLLOW: "${FEATURE_CLUBS_FOLLOW:-true}"
   FEATURE_CLUBS_POSTS: "${FEATURE_CLUBS_POSTS:-true}"
   FEATURE_CLUBS_REVIEWS: "${FEATURE_CLUBS_REVIEWS:-true}"

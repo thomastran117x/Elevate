@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using backend.main.features.clubs.contracts.requests;
+using backend.main.features.clubs.discussions.contracts.requests;
 
 using FluentAssertions;
 
@@ -45,6 +46,38 @@ public class ClubRequestValidationTests
         };
 
         Validate(request).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ClubDiscussionCreateRequest_ShouldRejectEmptyAndOverlongFields()
+    {
+        var missing = Validate(new ClubDiscussionCreateRequest());
+        missing.Should().HaveCount(2);
+
+        var overlong = Validate(new ClubDiscussionCreateRequest
+        {
+            Title = new string('T', 151),
+            Description = new string('D', 2001)
+        });
+
+        overlong.Select(item => item.MemberNames.Single())
+            .Should().BeEquivalentTo(["Title", "Description"]);
+    }
+
+    [Fact]
+    public void ClubDiscussionRequests_ShouldValidateSuccessfully_ForValidPayloads()
+    {
+        Validate(new ClubDiscussionCreateRequest
+        {
+            Title = "Weekend ride",
+            Description = "Where should we go?"
+        }).Should().BeEmpty();
+
+        Validate(new ClubDiscussionUpdateRequest
+        {
+            Title = new string('T', 150),
+            Description = new string('D', 2000)
+        }).Should().BeEmpty();
     }
 
     private static List<ValidationResult> Validate(object instance)

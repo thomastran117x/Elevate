@@ -11,6 +11,7 @@ public sealed class FeatureFlagRegistry
         [
             FeatureFlagKeys.Auth,
             FeatureFlagKeys.Clubs,
+            FeatureFlagKeys.ClubsDiscussions,
             FeatureFlagKeys.ClubsFollow,
             FeatureFlagKeys.ClubsPosts,
             FeatureFlagKeys.ClubsReviews,
