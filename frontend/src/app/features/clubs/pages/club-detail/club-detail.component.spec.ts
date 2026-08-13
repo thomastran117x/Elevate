@@ -6,6 +6,7 @@ import {
   envelope,
   fakeActivatedRoute,
   makeClub,
+  makeClubDiscussion,
   makeClubMember,
   makeCurrentUser,
   makeEventItem,
@@ -15,12 +16,14 @@ import {
 import { ClubDetailComponent } from './club-detail.component';
 import { ClubsService } from '../../services/clubs.service';
 import { ClubPostsService } from '../../services/club-posts.service';
+import { ClubDiscussionsService } from '../../services/club-discussions.service';
 import { ClubReviewsService } from '../../services/club-reviews.service';
 import { ClubManagementService } from '../../services/club-management.service';
 import { EventsService } from '../../../events/services/events.service';
 import { ClubReview } from '../../models/club-review.types';
 import { Club } from '../../models/club.types';
 import { ClubPost } from '../../models/club-post.types';
+import { ClubDiscussion } from '../../models/club-discussion.types';
 import { ClubMember } from '../../models/club-management.types';
 import { EventItem, EventsApiResponse } from '../../../events/models/event.types';
 import { ApiClientClientError } from '../../../../core/api/models/api-client-error.model';
@@ -66,6 +69,7 @@ describe('ClubDetailComponent', () => {
   let router: jasmine.SpyObj<Router>;
   let clubs: jasmine.SpyObj<ClubsService>;
   let posts: jasmine.SpyObj<ClubPostsService>;
+  let discussions: jasmine.SpyObj<ClubDiscussionsService>;
   let events: jasmine.SpyObj<EventsService>;
   let reviews: jasmine.SpyObj<ClubReviewsService>;
   let management: jasmine.SpyObj<ClubManagementService>;
@@ -87,6 +91,11 @@ describe('ClubDetailComponent', () => {
 
     posts = jasmine.createSpyObj<ClubPostsService>('ClubPostsService', ['getPosts']);
     posts.getPosts.and.returnValue(of(paged<ClubPost>([])));
+
+    discussions = jasmine.createSpyObj<ClubDiscussionsService>('ClubDiscussionsService', [
+      'getDiscussions',
+    ]);
+    discussions.getDiscussions.and.returnValue(of(paged<ClubDiscussion>([])));
 
     events = jasmine.createSpyObj<EventsService>('EventsService', ['getEventsByClub']);
     events.getEventsByClub.and.returnValue(of(pagedEvents([])));
@@ -111,6 +120,7 @@ describe('ClubDetailComponent', () => {
         { provide: Router, useValue: router },
         { provide: ClubsService, useValue: clubs },
         { provide: ClubPostsService, useValue: posts },
+        { provide: ClubDiscussionsService, useValue: discussions },
         { provide: EventsService, useValue: events },
         { provide: ClubReviewsService, useValue: reviews },
         { provide: ClubManagementService, useValue: management },
@@ -147,6 +157,35 @@ describe('ClubDetailComponent', () => {
         page: 1,
         pageSize: 3,
       });
+    });
+
+    it('loads the three newest discussions', () => {
+      discussions.getDiscussions.and.returnValue(
+        of(
+          paged<ClubDiscussion>([
+            makeClubDiscussion({ id: 2, title: 'Newer' }),
+            makeClubDiscussion({ id: 1, title: 'Older' }),
+          ]),
+        ),
+      );
+
+      fixture.detectChanges();
+
+      expect(discussions.getDiscussions).toHaveBeenCalledOnceWith(3, 1, 3);
+      expect(component.recentDiscussions.map((d) => d.title)).toEqual(['Newer', 'Older']);
+      expect(component.discussionsLoading).toBeFalse();
+    });
+
+    it('keeps the page usable when the discussions request fails', () => {
+      discussions.getDiscussions.and.returnValue(
+        throwError(() => new ApiClientClientError('Forbidden', 403)),
+      );
+
+      fixture.detectChanges();
+
+      expect(component.recentDiscussions).toEqual([]);
+      expect(component.discussionsLoading).toBeFalse();
+      expect(component.error).toBe('');
     });
 
     it('checks membership for a signed-in visitor', () => {

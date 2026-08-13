@@ -48,6 +48,7 @@ Deployments should use the flat environment variables defined in `.env.example`:
 
 - `FEATURE_AUTH`
 - `FEATURE_CLUBS`
+- `FEATURE_CLUBS_DISCUSSIONS`
 - `FEATURE_CLUBS_FOLLOW`
 - `FEATURE_CLUBS_POSTS`
 - `FEATURE_CLUBS_REVIEWS`

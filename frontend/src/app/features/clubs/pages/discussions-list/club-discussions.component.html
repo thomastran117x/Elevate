@@ -1,0 +1,216 @@
+<div class="min-h-screen bg-page text-content relative overflow-x-hidden">
+  <!-- Orb blobs -->
+  <div class="pointer-events-none absolute inset-0 overflow-hidden">
+    <div
+      class="absolute -top-40 -left-40 w-[520px] h-[520px] bg-accent/10 dark:bg-accent/20 rounded-full blur-3xl animate-pulse"
+    ></div>
+    <div
+      class="absolute top-[35%] -right-40 w-[420px] h-[420px] bg-accent/5 dark:bg-accent/10 rounded-full blur-3xl animate-pulse"
+    ></div>
+  </div>
+
+  <main class="relative z-10 mx-auto max-w-3xl px-6 py-10">
+    <!-- Back -->
+    <button
+      (click)="goBack()"
+      class="flex items-center gap-1.5 text-sm text-subtle hover:text-content transition-colors mb-8"
+    >
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+      Back to club
+    </button>
+
+    <!-- Header -->
+    <div class="mb-8 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <span
+          class="inline-flex items-center px-4 py-1.5 rounded-full bg-glass-strong text-sm mb-4 gap-2"
+        >
+          <span class="h-2 w-2 rounded-full bg-accent animate-pulse"></span>
+          Club Discussions
+        </span>
+        <h1 class="text-3xl font-extrabold tracking-tight">Discussions</h1>
+        @if (totalCount > 0) {
+          <p class="mt-1 text-sm text-subtle">
+            {{ totalCount }} {{ totalCount === 1 ? 'discussion' : 'discussions' }}, newest first
+          </p>
+        }
+      </div>
+      @if (canStartDiscussion && !showEditor) {
+        <button
+          type="button"
+          (click)="openCreate()"
+          class="shrink-0 cursor-pointer rounded-2xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover"
+        >
+          + Start a discussion
+        </button>
+      }
+    </div>
+
+    @if (success) {
+      <div
+        class="mb-4 rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success"
+      >
+        {{ success }}
+      </div>
+    }
+    @if (error) {
+      <div
+        class="mb-4 rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
+      >
+        {{ error }}
+      </div>
+    }
+
+    @if (!canStartDiscussion && !loading) {
+      <p class="mb-6 text-sm text-subtle">
+        @if (currentUser) {
+          Join this club to start a discussion.
+        } @else {
+          Sign in and join this club to start a discussion.
+        }
+      </p>
+    }
+
+    <!-- Editor -->
+    @if (showEditor) {
+      <article
+        class="mb-6 rounded-3xl border border-accent/25 bg-accent/5 px-6 py-6 backdrop-blur-xl"
+      >
+        <h2 class="text-lg font-bold">
+          {{ editingId != null ? 'Edit discussion' : 'New discussion' }}
+        </h2>
+
+        <div class="mt-4 space-y-4">
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-sm font-semibold text-muted" for="discussion-title">Title</label>
+              <span class="text-xs text-faint">{{ form.title.length }}/{{ titleMax }}</span>
+            </div>
+            <input
+              id="discussion-title"
+              type="text"
+              [(ngModel)]="form.title"
+              [maxlength]="titleMax"
+              placeholder="What would you like to discuss?"
+              class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+            />
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-sm font-semibold text-muted" for="discussion-description">
+                Description
+              </label>
+              <span class="text-xs text-faint">
+                {{ form.description.length }}/{{ descriptionMax }}
+              </span>
+            </div>
+            <textarea
+              id="discussion-description"
+              rows="6"
+              [(ngModel)]="form.description"
+              [maxlength]="descriptionMax"
+              placeholder="Add some context for the discussion…"
+              class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+            ></textarea>
+          </div>
+
+          <div class="flex flex-col gap-3 pt-1 sm:flex-row">
+            <button
+              type="button"
+              (click)="saveDiscussion()"
+              [disabled]="saving"
+              class="inline-flex cursor-pointer items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {{ saving ? 'Saving…' : editingId != null ? 'Save changes' : 'Post discussion' }}
+            </button>
+            <button
+              type="button"
+              (click)="cancelEditor()"
+              class="inline-flex cursor-pointer items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </article>
+    }
+
+    <!-- Loading skeleton -->
+    @if (loading) {
+      @for (item of [1, 2, 3]; track item) {
+        <div class="rounded-3xl border border-line bg-glass p-5 mb-4 animate-pulse">
+          <div class="h-5 bg-glass-strong rounded w-3/4 mb-3"></div>
+          <div class="h-3 bg-glass-strong rounded w-full mb-2"></div>
+          <div class="h-3 bg-glass-strong rounded w-2/3"></div>
+        </div>
+      }
+    }
+
+    <!-- Empty state -->
+    @if (!loading && !error && discussions.length === 0) {
+      <div class="rounded-3xl border border-line bg-surface-raised/[0.04] p-12 text-center">
+        <div class="text-4xl mb-4">&#128172;</div>
+        <p class="text-lg font-semibold">No discussions yet</p>
+        <p class="text-sm mt-1 text-subtle">Be the first to start one.</p>
+      </div>
+    }
+
+    <!-- Discussion cards -->
+    @if (!loading) {
+      @for (discussion of discussions; track discussion.id) {
+        <article class="rounded-3xl border border-line bg-glass p-5 mb-4">
+          <h2 class="text-base font-bold leading-snug mb-2">{{ discussion.title }}</h2>
+          <p class="text-sm text-subtle mb-4 leading-relaxed whitespace-pre-line">
+            {{ discussion.description }}
+          </p>
+
+          <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-faint">
+            <div class="flex items-center gap-3">
+              <span class="text-subtle">{{ authorDisplay(discussion) }}</span>
+              <span>{{ formatDate(discussion.createdAt) }}</span>
+            </div>
+
+            @if (isAuthor(discussion)) {
+              <div class="flex items-center gap-3">
+                <button
+                  type="button"
+                  (click)="openEdit(discussion)"
+                  class="cursor-pointer font-semibold text-accent transition hover:text-content"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  (click)="deleteDiscussion(discussion)"
+                  class="cursor-pointer font-semibold text-danger transition hover:opacity-80"
+                >
+                  Delete
+                </button>
+              </div>
+            }
+          </div>
+        </article>
+      }
+    }
+
+    <!-- Load more -->
+    @if (!loading && currentPage < totalPages) {
+      <div class="text-center mt-6">
+        <button
+          (click)="loadMore()"
+          [disabled]="loadingMore"
+          class="cursor-pointer px-8 py-2.5 rounded-full border border-line-strong bg-glass text-sm font-medium text-muted hover:bg-glass-strong hover:text-content disabled:opacity-40 transition"
+        >
+          @if (loadingMore) {
+            <span class="animate-pulse">Loading...</span>
+          } @else {
+            Load more
+          }
+        </button>
+      </div>
+    }
+  </main>
+</div>

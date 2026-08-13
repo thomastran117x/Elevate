@@ -4,6 +4,7 @@ using backend.main.features.auth.device;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.clubs;
+using backend.main.features.clubs.discussions;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.follow.invitations;
 using backend.main.features.clubs.posts;
@@ -44,6 +45,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<ClubInvitationLink> ClubInvitationLinks { get; set; } = null!;
         public DbSet<Payment> Payments { get; set; } = null!;
         public DbSet<ClubReview> ClubReviews { get; set; } = null!;
+        public DbSet<ClubDiscussion> ClubDiscussions { get; set; } = null!;
         public DbSet<Device> Devices { get; set; } = null!;
         public DbSet<SmsMfaEnrollment> SmsMfaEnrollments { get; set; } = null!;
         public DbSet<TotpMfaEnrollment> TotpMfaEnrollments { get; set; } = null!;
@@ -538,6 +540,27 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<ClubReview>()
                 .HasIndex(r => r.UserId);
+
+            modelBuilder.Entity<ClubDiscussion>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(d => d.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClubDiscussion>()
+                .HasOne<Club>()
+                .WithMany()
+                .HasForeignKey(d => d.ClubId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Serves the newest-first listing of a club's discussions.
+            modelBuilder.Entity<ClubDiscussion>()
+                .HasIndex(d => new { d.ClubId, d.CreatedAt });
+
+            modelBuilder.Entity<ClubDiscussion>()
+                .HasIndex(d => d.UserId);
 
             modelBuilder.Entity<Device>()
                 .HasOne<User>()

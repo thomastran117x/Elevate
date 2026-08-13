@@ -11,6 +11,8 @@ import { ClubsService } from '../../services/clubs.service';
 import { Club, CLUB_TYPE_STYLES } from '../../models/club.types';
 import { ClubPostsService } from '../../services/club-posts.service';
 import { ClubPost, POST_TYPE_STYLES } from '../../models/club-post.types';
+import { ClubDiscussionsService } from '../../services/club-discussions.service';
+import { ClubDiscussion, discussionAuthorName } from '../../models/club-discussion.types';
 import { ClubReview } from '../../models/club-review.types';
 import { ClubReviewsService } from '../../services/club-reviews.service';
 import { ClubMember } from '../../models/club-management.types';
@@ -44,6 +46,9 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
 
   recentPosts: ClubPost[] = [];
   postsLoading = false;
+
+  recentDiscussions: ClubDiscussion[] = [];
+  discussionsLoading = false;
 
   upcomingEvents: EventItem[] = [];
   eventsLoading = false;
@@ -86,6 +91,7 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
     private router: Router,
     private clubsService: ClubsService,
     private postsService: ClubPostsService,
+    private discussionsService: ClubDiscussionsService,
     private eventsService: EventsService,
     private reviewsService: ClubReviewsService,
     private managementService: ClubManagementService,
@@ -110,6 +116,7 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
       if (this.clubId) {
         this.fetchClub();
         this.fetchRecentPosts();
+        this.fetchRecentDiscussions();
         this.fetchUpcomingEvents();
         if (this.currentUser) {
           this.fetchMembership();
@@ -271,6 +278,14 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
 
   viewPosts(): void {
     this.router.navigate(['/clubs', this.clubId, 'posts']);
+  }
+
+  viewDiscussions(): void {
+    this.router.navigate(['/clubs', this.clubId, 'discussions']);
+  }
+
+  discussionAuthor(discussion: ClubDiscussion): string {
+    return discussionAuthorName(discussion);
   }
 
   manageClub(): void {
@@ -589,6 +604,25 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.postsLoading = false;
+        },
+      });
+  }
+
+  private fetchRecentDiscussions(): void {
+    this.discussionsLoading = true;
+
+    // Errors are swallowed on purpose: a disabled feature flag or a private-club 403
+    // should hide the section, not break the whole club page.
+    this.discussionsService
+      .getDiscussions(this.clubId, 1, 3)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          this.recentDiscussions = response.data?.items ?? [];
+          this.discussionsLoading = false;
+        },
+        error: () => {
+          this.discussionsLoading = false;
         },
       });
   }

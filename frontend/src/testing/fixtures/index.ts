@@ -2,6 +2,7 @@ import { User } from '../../app/core/stores/user.model';
 import { Session } from '../../app/core/stores/session.model';
 import { Club } from '../../app/features/clubs/models/club.types';
 import { ClubMember } from '../../app/features/clubs/models/club-management.types';
+import { ClubDiscussion } from '../../app/features/clubs/models/club-discussion.types';
 import { EventItem } from '../../app/features/events/models/event.types';
 
 /**
@@ -67,6 +68,20 @@ export function makeClubMember(overrides: Partial<ClubMember> = {}): ClubMember 
     name: 'Jamie Rivers',
     username: 'jrivers',
     avatar: null,
+    ...overrides,
+  };
+}
+
+export function makeClubDiscussion(overrides: Partial<ClubDiscussion> = {}): ClubDiscussion {
+  return {
+    id: 1,
+    clubId: 1,
+    userId: 2,
+    title: 'Weekend ride',
+    description: 'Where should we go this Saturday?',
+    author: { id: 2, name: 'Jamie Rivers', username: 'jrivers', avatar: null },
+    createdAt: '2026-08-01T00:00:00Z',
+    updatedAt: '2026-08-01T00:00:00Z',
     ...overrides,
   };
 }

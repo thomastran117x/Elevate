@@ -415,6 +415,54 @@
               </div>
             }
           </section>
+
+          <!-- Recent discussions -->
+          <section class="rounded-3xl border border-line bg-glass p-6 sm:p-7">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">
+                  Discussions
+                </div>
+                <h2 class="mt-1 text-xl font-semibold text-content">What members are discussing</h2>
+              </div>
+              <button
+                (click)="viewDiscussions()"
+                class="shrink-0 text-sm font-semibold text-accent transition hover:text-content"
+              >
+                View all
+              </button>
+            </div>
+
+            @if (discussionsLoading) {
+              @for (item of [1, 2, 3]; track item) {
+                <div class="mt-4 animate-pulse rounded-2xl border border-line bg-surface-muted p-4">
+                  <div class="h-4 w-3/4 rounded bg-surface-muted"></div>
+                  <div class="mt-3 h-3 w-full rounded bg-surface-muted"></div>
+                </div>
+              }
+            }
+
+            @if (!discussionsLoading && recentDiscussions.length === 0) {
+              <p class="mt-4 text-sm text-subtle">No discussions yet.</p>
+            }
+
+            @if (!discussionsLoading && recentDiscussions.length > 0) {
+              <div class="mt-4 space-y-3">
+                @for (discussion of recentDiscussions; track discussion.id) {
+                  <article class="rounded-2xl border border-line bg-surface p-4">
+                    <div class="text-base font-semibold text-content">{{ discussion.title }}</div>
+                    <p class="mt-2 line-clamp-2 text-sm leading-7 text-muted">
+                      {{ discussion.description }}
+                    </p>
+                    <div class="mt-3 flex items-center justify-between text-xs text-subtle">
+                      <span>{{ discussionAuthor(discussion) }}</span>
+                      <span>{{ formatDate(discussion.createdAt) }}</span>
+                    </div>
+                  </article>
+                }
+              </div>
+            }
+          </section>
         </div>
 
         <!-- Sticky sidebar -->

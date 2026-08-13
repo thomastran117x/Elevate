@@ -4,6 +4,7 @@ public static class FeatureFlagKeys
 {
     public const string Auth = "auth";
     public const string Clubs = "clubs";
+    public const string ClubsDiscussions = "clubs.discussions";
     public const string ClubsFollow = "clubs.follow";
     public const string ClubsPosts = "clubs.posts";
     public const string ClubsReviews = "clubs.reviews";

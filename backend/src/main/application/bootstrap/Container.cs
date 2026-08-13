@@ -11,6 +11,7 @@ using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.clubs;
+using backend.main.features.clubs.discussions;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.follow.invitations;
 using backend.main.features.clubs.invitations;
@@ -169,6 +170,7 @@ namespace backend.main.application.bootstrap
             services.AddRepositoryWithProxy<IEventSeriesRepository, EventSeriesRepository>();
             services.AddRepositoryWithProxy<IPaymentRepository, PaymentRepository>();
             services.AddRepositoryWithProxy<IClubReviewRepository, ClubReviewRepository>();
+            services.AddRepositoryWithProxy<IClubDiscussionRepository, ClubDiscussionRepository>();
             services.AddRepositoryWithProxy<IDeviceRepository, DeviceRepository>();
             services.AddRepositoryWithProxy<IClubPostRepository, ClubPostRepository>();
             services.AddRepositoryWithProxy<IPostCommentRepository, PostCommentRepository>();
@@ -195,6 +197,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IClubMemberInvitationService, ClubMemberInvitationService>();
             services.AddScoped<ClubVersionCleanupRunner>();
             services.AddScoped<IClubReviewService, ClubReviewService>();
+            services.AddScoped<IClubDiscussionService, ClubDiscussionService>();
             services.AddScoped<IDeviceService, DeviceService>();
             services.AddScoped<IDeviceTrustService, DeviceTrustService>();
             services.AddScoped<ILoginStepUpChallengeService, LoginStepUpChallengeService>();

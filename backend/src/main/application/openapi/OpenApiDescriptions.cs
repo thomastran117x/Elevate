@@ -139,6 +139,13 @@ namespace backend.main.application.openapi
                 ["PUT /api/clubs/{clubId}/reviews/{reviewId}"] = new("Update a club review"),
                 ["DELETE /api/clubs/{clubId}/reviews/{reviewId}"] = new("Delete a club review"),
 
+                // ── Club discussions ─────────────────────────────────────────────────────
+
+                ["POST /api/clubs/{clubId}/discussions"] = new("Start a club discussion"),
+                ["GET /api/clubs/{clubId}/discussions"] = new("List discussions for a club"),
+                ["PUT /api/clubs/{clubId}/discussions/{discussionId}"] = new("Update a club discussion"),
+                ["DELETE /api/clubs/{clubId}/discussions/{discussionId}"] = new("Delete a club discussion"),
+
                 // ── Events ───────────────────────────────────────────────────────────────
 
                 ["POST /api/events/{clubId}"] = new("Create an event"),
