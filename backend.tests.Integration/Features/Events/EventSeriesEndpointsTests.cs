@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -109,13 +110,13 @@ public class EventSeriesEndpointsTests
         // ── occurrences behave as ordinary events on the public listing ───────────
         // The public listing reads through Elasticsearch, which is fed asynchronously from the
         // search outbox. Publishing only stages those rows, so the index has to be brought up to
-        // date before querying — exactly as the other event listing tests do.
-        await app.ReindexEventsAsync();
+        // date before querying. The pooled harness shares one Elasticsearch node, so allow its
+        // refreshed index a bounded interval to become visible through the public endpoint.
+        var indexedCount = await app.ReindexEventsAsync();
+        indexedCount.Should().Be(persisted.Count);
 
-        var publicList = await app.Client.GetAsync("/api/events?page=1&pageSize=50");
-        publicList.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        var listed = (await app.ReadApiResponseAsync<PagedResponse<EventResponse>>(publicList)).Data!;
+        var expectedIds = persisted.Select(e => e.Id).ToHashSet();
+        var listed = await WaitForPublicEventsAsync(app, expectedIds);
         var listedIds = listed.Items.Select(e => e.Id).ToList();
 
         foreach (var occurrence in persisted)
@@ -506,6 +507,29 @@ public class EventSeriesEndpointsTests
         await ThrowOnUnexpectedStatusAsync(app, response, HttpStatusCode.Created);
 
         return (await app.ReadApiResponseAsync<ManagedEventResponse>(response)).Data!;
+    }
+
+    private static async Task<PagedResponse<EventResponse>> WaitForPublicEventsAsync(
+        AuthApiTestApp app,
+        IReadOnlySet<int> expectedIds)
+    {
+        var timeout = Stopwatch.StartNew();
+        PagedResponse<EventResponse>? latest = null;
+
+        do
+        {
+            using var response = await app.Client.GetAsync("/api/events?page=1&pageSize=50");
+            await ThrowOnUnexpectedStatusAsync(app, response, HttpStatusCode.OK);
+
+            latest = (await app.ReadApiResponseAsync<PagedResponse<EventResponse>>(response)).Data!;
+            if (expectedIds.IsSubsetOf(latest.Items.Select(e => e.Id).ToHashSet()))
+                return latest;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+        }
+        while (timeout.Elapsed < TimeSpan.FromSeconds(5));
+
+        return latest!;
     }
 
     private static async Task<(AuthenticatedSessionResponse Session, backend.main.features.profile.User? User)>

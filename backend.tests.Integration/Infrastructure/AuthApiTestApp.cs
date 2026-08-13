@@ -373,11 +373,11 @@ public sealed class AuthApiTestApp : IAsyncDisposable
     public Task<IReadOnlyList<SmsMfaMessage>> ReadNewSmsMessagesAsync(TimeSpan? timeout = null) =>
         _kafkaProbe.ReadNewAsync<SmsMfaMessage>(_resources.SmsTopic, timeout);
 
-    public async Task ReindexEventsAsync(CancellationToken cancellationToken = default)
+    public async Task<int> ReindexEventsAsync(CancellationToken cancellationToken = default)
     {
         await using var scope = _factory.Services.CreateAsyncScope();
         var reindexService = scope.ServiceProvider.GetRequiredService<IEventReindexService>();
-        await reindexService.ReindexAllAsync(cancellationToken);
+        return await reindexService.ReindexAllAsync(cancellationToken);
     }
 
     public async Task ReindexClubsAsync(CancellationToken cancellationToken = default)
