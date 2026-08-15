@@ -230,10 +230,25 @@ namespace backend.main.features.auth
                 .FirstOrDefaultAsync();
         }
 
+        public async Task<UserAuthRecord?> GetAuthByUsernameAsync(string username)
+        {
+            return await GetAuthRecords()
+                .Where(u => u.Username == username)
+                .Select(u => new UserAuthRecord
+                {
+                    Id = u.Id,
+                    Email = u.Email,
+                    Password = u.Password,
+                    Usertype = AuthRoles.NormalizeStored(u.Usertype),
+                    IsDisabled = u.IsDisabled,
+                    AuthVersion = u.AuthVersion,
+                })
+                .FirstOrDefaultAsync();
+        }
+
         public async Task<UserAuthRecord?> GetAuthByEmailAsync(string email)
         {
-            return await _context.Users
-                .AsNoTracking()
+            return await GetAuthRecords()
                 .Where(u => u.Email == email)
                 .Select(u => new UserAuthRecord
                 {
@@ -246,6 +261,33 @@ namespace backend.main.features.auth
                 })
                 .FirstOrDefaultAsync();
         }
+
+        public Task<UserRecoveryRecord?> GetRecoveryByUsernameAsync(string username) =>
+            GetRecoveryRecords()
+                .Where(u => u.Username == username)
+                .FirstOrDefaultAsync();
+
+        public Task<UserRecoveryRecord?> GetRecoveryByEmailAsync(string email) =>
+            GetRecoveryRecords()
+                .Where(u => u.Email == email)
+                .FirstOrDefaultAsync();
+
+        private IQueryable<UserRecoveryRecord> GetRecoveryRecords() =>
+            _context.Users
+                .AsNoTracking()
+                .Select(u => new UserRecoveryRecord
+                {
+                    Id = u.Id,
+                    Email = u.Email,
+                    Username = u.Username,
+                    RecipientName = u.Name,
+                    IsDisabled = u.IsDisabled,
+                    HasLocalPassword = u.Password != null,
+                    HasGoogleProvider = u.GoogleID != null,
+                    HasMicrosoftProvider = u.MicrosoftID != null,
+                });
+
+        private IQueryable<User> GetAuthRecords() => _context.Users.AsNoTracking();
 
         public async Task<UserOAuthRecord?> GetOAuthByEmailAsync(string email)
         {
@@ -448,4 +490,3 @@ namespace backend.main.features.auth
         }
     }
 }
-

@@ -242,6 +242,101 @@ public class TokenServiceTests
     }
 
     [Fact]
+    public async Task GenerateVerificationArtifactsAsync_ShouldRotateExistingResetState_WhenRequested()
+    {
+        var service = new TokenService(new InMemoryCacheService());
+        var user = new User
+        {
+            Email = "reset@example.com",
+            Usertype = "placeholder"
+        };
+
+        var first = await service.GenerateVerificationArtifactsAsync(
+            user,
+            VerificationPurpose.ResetPassword
+        );
+        var second = await service.GenerateVerificationArtifactsAsync(
+            user,
+            VerificationPurpose.ResetPassword,
+            replaceExisting: true
+        );
+
+        second.LinkToken.Should().NotBe(first.LinkToken);
+        second.OtpChallenge.Challenge.Should().NotBe(first.OtpChallenge.Challenge);
+        var oldToken = () => service.VerifyVerificationToken(
+            first.LinkToken,
+            VerificationPurpose.ResetPassword
+        );
+        await oldToken.Should().ThrowAsync<UnauthorizedException>();
+    }
+
+    [Fact]
+    public async Task VerificationArtifacts_ShouldPreserveSignupUsername_ForLinkAndOtp()
+    {
+        var service = new TokenService(new InMemoryCacheService());
+        var linkUser = new User
+        {
+            Email = "link@example.com",
+            Username = "link-user",
+            Password = "hashed-password",
+            Usertype = "Organizer"
+        };
+        var otpUser = new User
+        {
+            Email = "otp@example.com",
+            Username = "otp-user",
+            Password = "hashed-password",
+            Usertype = "Participant"
+        };
+
+        var linkArtifacts = await service.GenerateVerificationArtifactsAsync(
+            linkUser,
+            VerificationPurpose.SignUp
+        );
+        var otpArtifacts = await service.GenerateVerificationArtifactsAsync(
+            otpUser,
+            VerificationPurpose.SignUp
+        );
+
+        var verifiedByLink = await service.VerifyVerificationToken(
+            linkArtifacts.LinkToken,
+            VerificationPurpose.SignUp
+        );
+        var verifiedByOtp = await service.VerifyVerificationOtpAsync(
+            otpArtifacts.OtpChallenge.Code,
+            otpArtifacts.OtpChallenge.Challenge,
+            VerificationPurpose.SignUp
+        );
+
+        verifiedByLink.Username.Should().Be("link-user");
+        verifiedByOtp.Username.Should().Be("otp-user");
+    }
+
+    [Fact]
+    public async Task GenerateVerificationArtifactsAsync_ShouldReplaceSignupState_WhenUsernameChanges()
+    {
+        var service = new TokenService(new InMemoryCacheService());
+        var user = new User
+        {
+            Email = "signup@example.com",
+            Username = "first-user",
+            Password = "hashed-password",
+            Usertype = "Organizer"
+        };
+
+        var first = await service.GenerateVerificationArtifactsAsync(user, VerificationPurpose.SignUp);
+        user.Username = "second-user";
+        var second = await service.GenerateVerificationArtifactsAsync(user, VerificationPurpose.SignUp);
+
+        second.LinkToken.Should().NotBe(first.LinkToken);
+        var verified = await service.VerifyVerificationToken(
+            second.LinkToken,
+            VerificationPurpose.SignUp
+        );
+        verified.Username.Should().Be("second-user");
+    }
+
+    [Fact]
     public async Task VerifyVerificationToken_ShouldReturnUser_AndClearStoredState()
     {
         var cache = new InMemoryCacheService();

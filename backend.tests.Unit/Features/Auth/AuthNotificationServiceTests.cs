@@ -43,6 +43,59 @@ public class AuthNotificationServiceTests
     }
 
     [Fact]
+    public async Task SendUsernameReminderAsync_ShouldPublishUsernameMessage()
+    {
+        var publisher = new Mock<IPublisher>();
+        var service = new AuthNotificationService(publisher.Object);
+
+        await service.SendUsernameReminderAsync("member@example.com", "member-user", "Member");
+
+        publisher.Verify(p => p.PublishAsync(
+            NotificationTopics.Email,
+            It.Is<EmailMessage>(message =>
+                message.Type == EmailMessageType.UsernameReminder
+                && message.Email == "member@example.com"
+                && message.Username == "member-user"
+                && message.RecipientName == "Member")), Times.Once);
+    }
+
+    [Fact]
+    public async Task SendProviderSignInReminderAsync_ShouldPublishProviders()
+    {
+        var publisher = new Mock<IPublisher>();
+        var service = new AuthNotificationService(publisher.Object);
+
+        await service.SendProviderSignInReminderAsync(
+            "member@example.com",
+            ["Google", "Microsoft"]
+        );
+
+        publisher.Verify(p => p.PublishAsync(
+            NotificationTopics.Email,
+            It.Is<EmailMessage>(message =>
+                message.Type == EmailMessageType.ProviderSignInReminder
+                && message.SignInProviders != null
+                && message.SignInProviders.SequenceEqual(new[] { "Google", "Microsoft" }))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task SendPasswordChangedAsync_ShouldPublishConfirmation()
+    {
+        var publisher = new Mock<IPublisher>();
+        var service = new AuthNotificationService(publisher.Object);
+
+        await service.SendPasswordChangedAsync("member@example.com", "Member");
+
+        publisher.Verify(p => p.PublishAsync(
+            NotificationTopics.Email,
+            It.Is<EmailMessage>(message =>
+                message.Type == EmailMessageType.PasswordChanged
+                && message.Email == "member@example.com"
+                && message.RecipientName == "Member")), Times.Once);
+    }
+
+    [Fact]
     public async Task SendDeviceVerificationAsync_ShouldPublishNewDeviceMessage()
     {
         var publisher = new Mock<IPublisher>();

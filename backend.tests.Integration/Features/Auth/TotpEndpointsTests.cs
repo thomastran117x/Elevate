@@ -223,7 +223,7 @@ public class TotpEndpointsTests
 
         var login = await app.PostJsonWithCsrfAsync("/api/auth/login", new LoginRequest
         {
-            Email = "totp-stepup@example.com",
+            Username = "totp-stepup",
             Password = "Password123!",
             Captcha = "captcha",
             Transport = SessionTransportResolver.ApiValue,

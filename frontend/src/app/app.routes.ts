@@ -1,5 +1,5 @@
 import { inject } from '@angular/core';
-import { Routes } from '@angular/router';
+import { Router, Routes } from '@angular/router';
 
 import { featureCanMatch } from './core/features/feature-can-match.guard';
 import { FeatureFlagsService } from './core/features/feature-flags.service';
@@ -25,12 +25,18 @@ export const routes: Routes = [
   },
   {
     path: 'forgot-password',
-    redirectTo: 'auth/forgot-password',
+    redirectTo: (route) =>
+      inject(Router).createUrlTree(['/auth/recover-account'], {
+        queryParams: { ...route.queryParams, mode: route.queryParams['mode'] ?? 'password' },
+      }),
     pathMatch: 'full',
   },
   {
     path: 'change-password',
-    redirectTo: 'auth/change-password',
+    redirectTo: (route) =>
+      inject(Router).createUrlTree(['/auth/reset-password'], {
+        queryParams: route.queryParams,
+      }),
     pathMatch: 'full',
   },
   {

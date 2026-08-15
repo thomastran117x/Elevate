@@ -1,11 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 
-using backend.main.shared.attributes.validation;
-
 namespace backend.main.features.auth.contracts.requests
 {
-
-    public class SignUpRequest : AuthRequest
+    public class PasswordRecoveryRequest
     {
         [Required]
         [StringLength(50, MinimumLength = 1)]
@@ -15,8 +12,7 @@ namespace backend.main.features.auth.contracts.requests
         }
 
         [Required]
-        [ValidRole]
-        public required string Usertype
+        public required string Captcha
         {
             get; set;
         }

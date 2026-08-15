@@ -49,6 +49,35 @@ public class EmailTemplateRendererTests
     }
 
     [Fact]
+    public void Render_UsernameReminder_EncodesUsernameInHtml()
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Type = EmailMessageType.UsernameReminder,
+            Username = "<member&user>"
+        });
+
+        Assert.Contains("<member&user>", content.PlainText);
+        Assert.Contains("&lt;member&amp;user&gt;", content.Html);
+        Assert.DoesNotContain("<member&user>", content.Html);
+    }
+
+    [Fact]
+    public void Render_ProviderReminder_ListsConnectedProviders()
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Type = EmailMessageType.ProviderSignInReminder,
+            SignInProviders = ["Google", "Microsoft"]
+        });
+
+        Assert.Contains("Google or Microsoft", content.PlainText);
+        Assert.Contains("Go to sign in", content.Html);
+    }
+
+    [Fact]
     public void Render_EventInvite_UsesFallbackTitleWhenEventNameMissing()
     {
         var content = CreateRenderer().Render(new EmailMessage
@@ -271,6 +300,8 @@ public class EmailTemplateRendererTests
             Token = "sample-token",
             Code = "123456",
             RecipientName = "Thomas",
+            Username = "thomas-user",
+            SignInProviders = ["Google", "Microsoft"],
             EventId = 7,
             EventName = "Sample Event",
             ClubName = "Sample Club",

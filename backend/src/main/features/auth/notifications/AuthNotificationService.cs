@@ -48,6 +48,50 @@ namespace backend.main.features.auth.notifications
                 });
         }
 
+        public Task SendUsernameReminderAsync(
+            string email,
+            string username,
+            string? recipientName = null)
+        {
+            return _publisher.PublishAsync(
+                NotificationTopics.Email,
+                new EmailMessage
+                {
+                    Type = EmailMessageType.UsernameReminder,
+                    Email = email,
+                    Username = username,
+                    RecipientName = recipientName
+                });
+        }
+
+        public Task SendProviderSignInReminderAsync(
+            string email,
+            IReadOnlyList<string> providers,
+            string? recipientName = null)
+        {
+            return _publisher.PublishAsync(
+                NotificationTopics.Email,
+                new EmailMessage
+                {
+                    Type = EmailMessageType.ProviderSignInReminder,
+                    Email = email,
+                    SignInProviders = providers,
+                    RecipientName = recipientName
+                });
+        }
+
+        public Task SendPasswordChangedAsync(string email, string? recipientName = null)
+        {
+            return _publisher.PublishAsync(
+                NotificationTopics.Email,
+                new EmailMessage
+                {
+                    Type = EmailMessageType.PasswordChanged,
+                    Email = email,
+                    RecipientName = recipientName
+                });
+        }
+
         public Task SendDeviceVerificationAsync(
             string email,
             string token,

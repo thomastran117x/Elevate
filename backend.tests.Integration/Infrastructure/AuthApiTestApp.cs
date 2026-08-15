@@ -105,7 +105,8 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         string role = "Participant",
         bool disabled = false,
         string? googleId = null,
-        string? microsoftId = null)
+        string? microsoftId = null,
+        string? username = null)
     {
         await using var scope = _factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
@@ -113,6 +114,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         var user = new User
         {
             Email = email,
+            Username = username ?? email.Split('@')[0],
             Password = BCrypt.Net.BCrypt.HashPassword(password, workFactor: 4),
             Usertype = role,
             IsDisabled = disabled,
@@ -425,11 +427,14 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         string email,
         string password = "Password123!",
         string role = "Participant",
-        string? transport = null)
+        string? transport = null,
+        string? username = null)
     {
+        username ??= email.Split('@')[0];
         var signupResponse = await PostJsonWithCsrfAsync("/api/auth/signup", new SignUpRequest
         {
             Email = email,
+            Username = username,
             Password = password,
             Usertype = role,
             Captcha = "captcha"
@@ -452,7 +457,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
     }
 
     public async Task<AuthenticatedSessionResponse> LoginApiAsync(
-        string email,
+        string username,
         string password = "Password123!",
         string trustedDeviceToken = "known-device")
     {
@@ -460,7 +465,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         {
             Content = JsonContent.Create(new LoginRequest
             {
-                Email = email,
+                Username = username,
                 Password = password,
                 Captcha = "captcha",
                 Transport = SessionTransportResolver.ApiValue

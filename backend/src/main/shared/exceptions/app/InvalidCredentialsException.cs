@@ -4,7 +4,7 @@ namespace backend.main.shared.exceptions.app
 {
     public class InvalidCredentialsException : UnauthorizedException
     {
-        private const string DefaultMessage = "Invalid email or password.";
+        private const string DefaultMessage = "Invalid username or password.";
 
         public InvalidCredentialsException()
             : base(DefaultMessage) { }

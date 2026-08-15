@@ -16,6 +16,8 @@ using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
 using backend.main.shared.utilities.logger;
 
+using Microsoft.AspNetCore.WebUtilities;
+
 using Newtonsoft.Json;
 
 namespace backend.main.features.auth
@@ -67,7 +69,7 @@ namespace backend.main.features.auth
         }
 
         public async Task<LoginAuthenticationResult> LoginAsync(
-            string email,
+            string username,
             string password,
             SessionTransport transport,
             bool rememberMe = false,
@@ -76,13 +78,13 @@ namespace backend.main.features.auth
         {
             try
             {
-                UserAuthRecord? user = await _userRepository.GetAuthByEmailAsync(email);
+                UserAuthRecord? user = await _userRepository.GetAuthByUsernameAsync(username.Trim());
 
                 var hashToCheck = user?.Password ?? DummyHash;
                 bool isValidPassword = VerifyPassword(password, hashToCheck);
 
                 if (user == null || user.Password == null || !isValidPassword)
-                    throw new UnauthorizedException("Invalid email or password");
+                    throw new UnauthorizedException("Invalid username or password");
 
                 var resolvedUser = ToUser(user);
                 await EnsureUserEnabledAsync(resolvedUser);
@@ -103,12 +105,20 @@ namespace backend.main.features.auth
             }
         }
 
-        public async Task<VerificationOtpChallenge> SignUpAsync(string email, string password, string userType)
+        public async Task<VerificationOtpChallenge> SignUpAsync(
+            string email,
+            string username,
+            string password,
+            string userType)
         {
             try
             {
+                username = username.Trim();
+
                 if (await _userRepository.EmailExistsAsync(email))
                     throw new ConflictException($"An account is already registered with the email: {email}");
+                if (await _userRepository.GetAuthByUsernameAsync(username) != null)
+                    throw new ConflictException($"The username '{username}' is already taken.");
 
                 userType = AuthRoles.NormalizeOrThrow(userType);
                 string hashedPassword = HashPassword(password);
@@ -116,6 +126,7 @@ namespace backend.main.features.auth
                 User user = new User
                 {
                     Email = email,
+                    Username = username,
                     Password = hashedPassword,
                     Usertype = userType
                 };
@@ -153,6 +164,10 @@ namespace backend.main.features.auth
 
                 if (await _userRepository.EmailExistsAsync(user.Email))
                     throw new ConflictException($"An account is already registered with the email: {user.Email}");
+                if (string.IsNullOrWhiteSpace(user.Username))
+                    throw new BadRequestException("A username is required to complete signup.");
+                if (await _userRepository.GetAuthByUsernameAsync(user.Username) != null)
+                    throw new ConflictException($"The username '{user.Username}' is already taken.");
 
                 await _userRepository.CreateUserAsync(user);
 
@@ -184,6 +199,10 @@ namespace backend.main.features.auth
 
                 if (await _userRepository.EmailExistsAsync(user.Email))
                     throw new ConflictException($"An account is already registered with the email: {user.Email}");
+                if (string.IsNullOrWhiteSpace(user.Username))
+                    throw new BadRequestException("A username is required to complete signup.");
+                if (await _userRepository.GetAuthByUsernameAsync(user.Username) != null)
+                    throw new ConflictException($"The username '{user.Username}' is already taken.");
 
                 await _userRepository.CreateUserAsync(user);
 
@@ -199,29 +218,45 @@ namespace backend.main.features.auth
             }
         }
 
-        public async Task<VerificationOtpChallenge> ForgotPasswordAsync(string email)
+        public async Task<VerificationOtpChallenge> RecoverPasswordAsync(string username)
         {
             try
             {
-                var existingUser = await _userRepository.GetAuthByEmailAsync(email);
+                var existingUser = await _userRepository.GetRecoveryByUsernameAsync(username.Trim());
                 if (existingUser == null || existingUser.IsDisabled)
-                    return BuildPlaceholderForgotPasswordChallenge();
+                    return BuildPlaceholderRecoveryChallenge();
+
+                if (!existingUser.HasLocalPassword)
+                {
+                    if (existingUser.SignInProviders.Count > 0)
+                    {
+                        await _authNotificationService.SendProviderSignInReminderAsync(
+                            existingUser.Email,
+                            existingUser.SignInProviders,
+                            existingUser.RecipientName
+                        );
+                    }
+
+                    return BuildPlaceholderRecoveryChallenge();
+                }
 
                 User user = new User
                 {
-                    Email = email,
+                    Email = existingUser.Email,
                     Password = "placeholder",
                     Usertype = "placeholder"
                 };
 
                 var artifacts = await _tokenService.GenerateVerificationArtifactsAsync(
                     user,
-                    VerificationPurpose.ResetPassword
+                    VerificationPurpose.ResetPassword,
+                    replaceExisting: true
                 );
                 await _authNotificationService.SendPasswordResetAsync(
-                    email,
+                    existingUser.Email,
                     artifacts.LinkToken,
-                    artifacts.OtpChallenge.Code
+                    artifacts.OtpChallenge.Code,
+                    existingUser.RecipientName
                 );
 
                 return artifacts.OtpChallenge;
@@ -231,12 +266,50 @@ namespace backend.main.features.auth
                 if (e is AppException)
                     throw;
 
-                Logger.Error($"[AuthService] ForgotPasswordAsync failed: {e}");
+                Logger.Error($"[AuthService] RecoverPasswordAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
         }
 
-        public async Task ChangePasswordAsync(string token, string password)
+        public async Task RecoverUsernameAsync(string email)
+        {
+            try
+            {
+                var existingUser = await _userRepository.GetRecoveryByEmailAsync(email.Trim());
+                if (existingUser == null || existingUser.IsDisabled)
+                    return;
+
+                if (existingUser.HasLocalPassword
+                    && !string.IsNullOrWhiteSpace(existingUser.Username))
+                {
+                    await _authNotificationService.SendUsernameReminderAsync(
+                        existingUser.Email,
+                        existingUser.Username,
+                        existingUser.RecipientName
+                    );
+                    return;
+                }
+
+                if (existingUser.SignInProviders.Count > 0)
+                {
+                    await _authNotificationService.SendProviderSignInReminderAsync(
+                        existingUser.Email,
+                        existingUser.SignInProviders,
+                        existingUser.RecipientName
+                    );
+                }
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[AuthService] RecoverUsernameAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task ResetPasswordAsync(string token, string password)
         {
             try
             {
@@ -245,18 +318,19 @@ namespace backend.main.features.auth
                     VerificationPurpose.ResetPassword
                 );
                 await ChangePasswordInternalAsync(user.Email, password);
+                await SendPasswordChangedBestEffortAsync(user.Email);
             }
             catch (Exception e)
             {
                 if (e is AppException)
                     throw;
 
-                Logger.Error($"[AuthService] ChangePasswordAsync failed: {e}");
+                Logger.Error($"[AuthService] ResetPasswordAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
         }
 
-        public async Task ChangePasswordWithOtpAsync(string code, string challenge, string password)
+        public async Task ResetPasswordWithOtpAsync(string code, string challenge, string password)
         {
             try
             {
@@ -266,13 +340,14 @@ namespace backend.main.features.auth
                     VerificationPurpose.ResetPassword
                 );
                 await ChangePasswordInternalAsync(user.Email, password);
+                await SendPasswordChangedBestEffortAsync(user.Email);
             }
             catch (Exception e)
             {
                 if (e is AppException)
                     throw;
 
-                Logger.Error($"[AuthService] ChangePasswordWithOtpAsync failed: {e}");
+                Logger.Error($"[AuthService] ResetPasswordWithOtpAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
         }
@@ -681,6 +756,22 @@ namespace backend.main.features.auth
             await _tokenService.RevokeAllRefreshSessionsAsync(existingUser.Id);
         }
 
+        private async Task SendPasswordChangedBestEffortAsync(string email)
+        {
+            try
+            {
+                var user = await _userRepository.GetRecoveryByEmailAsync(email);
+                await _authNotificationService.SendPasswordChangedAsync(
+                    email,
+                    user?.RecipientName
+                );
+            }
+            catch (Exception e)
+            {
+                Logger.Error($"[AuthService] Password changed notification failed: {e}");
+            }
+        }
+
         private async Task<User?> ResolveGoogleUserAsync(OAuthUser oauthUser)
         {
             var providerUser = await _userRepository.GetOAuthByGoogleIdAsync(oauthUser.Id);
@@ -881,12 +972,12 @@ namespace backend.main.features.auth
             };
         }
 
-        private static VerificationOtpChallenge BuildPlaceholderForgotPasswordChallenge()
+        private static VerificationOtpChallenge BuildPlaceholderRecoveryChallenge()
         {
             return new VerificationOtpChallenge
             {
                 Code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6"),
-                Challenge = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)),
+                Challenge = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32)),
                 ExpiresAtUtc = DateTime.UtcNow.AddMinutes(30),
             };
         }
@@ -916,5 +1007,3 @@ namespace backend.main.features.auth
         }
     }
 }
-
-

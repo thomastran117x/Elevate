@@ -22,7 +22,7 @@ namespace backend.main.application.openapi
 
                 // ── Auth ─────────────────────────────────────────────────────────────────
 
-                ["POST /api/auth/login"] = new("Sign in with email and password", "Returns a session immediately for trusted devices, or a sign-in verification challenge when the device needs step-up verification."),
+                ["POST /api/auth/login"] = new("Sign in with username and password", "Returns a session immediately for trusted devices, or a sign-in verification challenge when the device needs step-up verification."),
                 ["POST /api/auth/signup"] = new(
                     "Create an account with email and password",
                     "Registers a new account and sends a verification email. The account cannot be used until the email address is confirmed."
@@ -82,8 +82,11 @@ namespace backend.main.application.openapi
                 ["POST /api/auth/mfa/totp/enable"] = new("Re-enable authenticator app MFA"),
                 ["POST /api/auth/mfa/totp/disable"] = new("Disable authenticator app MFA"),
                 ["POST /api/auth/mfa/totp/remove"] = new("Remove authenticator app MFA"),
-                ["POST /api/auth/forgot-password"] = new("Request a password reset email"),
-                ["POST /api/auth/change-password"] = new("Reset the account password"),
+                ["POST /api/auth/forgot-password"] = new("Start password recovery by username (compatibility alias)"),
+                ["POST /api/auth/change-password"] = new("Reset the account password (compatibility alias)"),
+                ["POST /api/auth/recovery/password"] = new("Start password recovery by username"),
+                ["POST /api/auth/recovery/username"] = new("Recover a username by email"),
+                ["POST /api/auth/reset-password"] = new("Reset the account password"),
 
                 // ── Clubs ────────────────────────────────────────────────────────────────
 

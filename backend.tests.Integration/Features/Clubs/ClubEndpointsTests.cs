@@ -1025,7 +1025,7 @@ public class ClubEndpointsTests
 
         var admin = await app.SeedUserAsync("user-scope-admin@example.com", role: "Admin");
         await app.SeedKnownDeviceAsync(admin.Id, "user-scope-admin-device");
-        var adminSession = await app.LoginApiAsync("user-scope-admin@example.com", trustedDeviceToken: "user-scope-admin-device");
+        var adminSession = await app.LoginApiAsync("user-scope-admin", trustedDeviceToken: "user-scope-admin-device");
 
         var club = await CreateClubAsync(app, ownerSession.AccessToken, "Scope Club");
 
@@ -1081,7 +1081,7 @@ public class ClubEndpointsTests
 
         var admin = await app.SeedUserAsync("clubs-admin@example.com", role: "Admin");
         await app.SeedKnownDeviceAsync(admin.Id, "clubs-admin-device");
-        var adminSession = await app.LoginApiAsync("clubs-admin@example.com", trustedDeviceToken: "clubs-admin-device");
+        var adminSession = await app.LoginApiAsync("clubs-admin", trustedDeviceToken: "clubs-admin-device");
 
         var (ownerSession, _) = await CreateUserSessionAsync(app, "clubs-admin-owner@example.com", "Organizer");
         var club = await CreateClubAsync(app, ownerSession.AccessToken, "Admin Posts Club");

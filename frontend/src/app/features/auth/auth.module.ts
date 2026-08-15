@@ -1,16 +1,16 @@
-import { NgModule } from '@angular/core';
+import { inject, NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule } from '@angular/forms';
-import { RouterModule } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 
-import { ChangePasswordComponent } from './pages/change-password/change-password.component';
+import { AccountRecoveryComponent } from './pages/account-recovery/account-recovery.component';
 import { DeviceVerifyComponent } from './pages/device-verify/device-verify.component';
-import { ForgotPasswordComponent } from './pages/forgot-password/forgot-password.component';
 import { GoogleCallbackComponent } from './pages/google-callback/google-callback.component';
 import { LoginComponent } from './pages/login/login.component';
 import { MicrosoftCallbackComponent } from './pages/microsoft-callback/microsoft-callback.component';
 import { OAuthRoleComponent } from './pages/oauth-role/oauth-role.component';
 import { SignupComponent } from './pages/signup/signup.component';
+import { ResetPasswordComponent } from './pages/reset-password/reset-password.component';
 import { StepUpVerifyComponent } from './pages/step-up-verify/step-up-verify.component';
 import { VerifyComponent } from './pages/verify/verify.component';
 
@@ -23,8 +23,24 @@ import { VerifyComponent } from './pages/verify/verify.component';
       { path: 'login', component: LoginComponent },
       { path: 'signup', component: SignupComponent },
       { path: 'register', redirectTo: 'signup', pathMatch: 'full' },
-      { path: 'forgot-password', component: ForgotPasswordComponent },
-      { path: 'change-password', component: ChangePasswordComponent },
+      { path: 'recover-account', component: AccountRecoveryComponent },
+      { path: 'reset-password', component: ResetPasswordComponent },
+      {
+        path: 'forgot-password',
+        pathMatch: 'full',
+        redirectTo: (route) =>
+          inject(Router).createUrlTree(['/auth/recover-account'], {
+            queryParams: { ...route.queryParams, mode: route.queryParams['mode'] ?? 'password' },
+          }),
+      },
+      {
+        path: 'change-password',
+        pathMatch: 'full',
+        redirectTo: (route) =>
+          inject(Router).createUrlTree(['/auth/reset-password'], {
+            queryParams: route.queryParams,
+          }),
+      },
       { path: 'verify', component: VerifyComponent },
       { path: 'device/verify', component: DeviceVerifyComponent },
       { path: 'mfa', component: StepUpVerifyComponent },

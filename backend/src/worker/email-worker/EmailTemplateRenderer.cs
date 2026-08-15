@@ -62,9 +62,29 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
                 Heading: "Reset your password",
                 Greeting: greeting,
                 Intro: ["We received a request to reset your password. Choose a new one using the button below."],
-                Cta: new Cta(BuildUrl(baseUrl, "/auth/change-password", RequireToken(message)), "Reset password"),
+                Cta: new Cta(BuildUrl(baseUrl, "/auth/reset-password", RequireToken(message)), "Reset password"),
                 Code: message.Code,
                 MutedNote: "If you didn't request a password reset, you can safely ignore this email — your password won't change."),
+
+            EmailMessageType.UsernameReminder => new Content(
+                Subject: "Your EventXperience username",
+                Preheader: "Here is the username associated with your account.",
+                Heading: "Your username",
+                Greeting: greeting,
+                Intro: [$"The username for your EventXperience account is: {RequireUsername(message)}"],
+                Cta: new Cta($"{baseUrl}/auth/login", "Sign in"),
+                Code: null,
+                MutedNote: "If you didn't request this reminder, you can safely ignore this email."),
+
+            EmailMessageType.ProviderSignInReminder => new Content(
+                Subject: "How to sign in to EventXperience",
+                Preheader: "Use your connected provider to access your account.",
+                Heading: "Sign in with your connected provider",
+                Greeting: greeting,
+                Intro: [$"Your account uses {ProviderLabel(message)} for sign-in. Return to EventXperience and choose that provider to continue."],
+                Cta: new Cta($"{baseUrl}/auth/login", "Go to sign in"),
+                Code: null,
+                MutedNote: "If you didn't request account recovery, you can safely ignore this email."),
 
             EmailMessageType.NewDevice => new Content(
                 Subject: "Confirm new device sign-in",
@@ -224,6 +244,28 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
         string.IsNullOrWhiteSpace(message.Token)
             ? throw new InvalidOperationException($"Email type '{message.Type}' requires a token.")
             : message.Token!;
+
+    private static string RequireUsername(EmailMessage message) =>
+        string.IsNullOrWhiteSpace(message.Username)
+            ? throw new InvalidOperationException($"Email type '{message.Type}' requires a username.")
+            : message.Username.Trim();
+
+    private static string ProviderLabel(EmailMessage message)
+    {
+        var providers = message.SignInProviders?
+            .Where(provider => !string.IsNullOrWhiteSpace(provider))
+            .Select(provider => provider.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray() ?? [];
+
+        return providers.Length switch
+        {
+            0 => "a connected provider",
+            1 => providers[0],
+            2 => $"{providers[0]} or {providers[1]}",
+            _ => $"{string.Join(", ", providers[..^1])}, or {providers[^1]}"
+        };
+    }
 
     private static string BuildUrl(string baseUrl, string path, string token) =>
         $"{baseUrl}{path}?token={Uri.EscapeDataString(token)}";
