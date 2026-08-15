@@ -6,9 +6,15 @@ namespace backend.main.features.auth.contracts.requests
     {
         [Required]
         [EmailAddress]
-        public required string Email { get; set; }
+        public required string Email
+        {
+            get; set;
+        }
 
         [Required]
-        public required string Captcha { get; set; }
+        public required string Captcha
+        {
+            get; set;
+        }
     }
 }

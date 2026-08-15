@@ -16,9 +16,9 @@ using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
 using backend.main.shared.utilities.logger;
 
-using Newtonsoft.Json;
-
 using Microsoft.AspNetCore.WebUtilities;
+
+using Newtonsoft.Json;
 
 namespace backend.main.features.auth
 {
