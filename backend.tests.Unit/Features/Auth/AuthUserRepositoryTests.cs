@@ -7,6 +7,8 @@ using FluentAssertions;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace backend.tests.Unit.Features.Auth;
 
@@ -80,6 +82,30 @@ public class AuthUserRepositoryTests
         });
 
         await act.Should().ThrowAsync<UsernameTakenException>();
+    }
+
+    [Fact]
+    public async Task ExplicitTransactions_ShouldRunInsideConfiguredRetryingExecutionStrategy()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync(
+            retryingExecutionStrategy: true);
+        var now = new DateTime(2026, 8, 15, 12, 0, 0, DateTimeKind.Utc);
+
+        var user = await harness.Repository.CreateUserAsync(new User
+        {
+            Email = "retrying-strategy@example.com",
+            Username = "strategy-user",
+            Password = "hashed-password",
+            Usertype = "participant",
+        });
+        var changed = await harness.Repository.ChangeUsernameAsync(
+            user.Id,
+            "strategy-renamed",
+            now,
+            now.AddDays(30));
+
+        changed.Status.Should().Be(UsernameChangeStatus.Changed);
+        changed.User!.Username.Should().Be("strategy-renamed");
     }
 
     [Fact]
@@ -372,16 +398,22 @@ public class AuthUserRepositoryTests
             Repository = new AuthUserRepository(db);
         }
 
-        public static async Task<AuthUserRepositoryHarness> CreateAsync()
+        public static async Task<AuthUserRepositoryHarness> CreateAsync(
+            bool retryingExecutionStrategy = false)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
 
-            var options = new DbContextOptionsBuilder<AppDatabaseContext>()
-                .UseSqlite(connection)
-                .Options;
+            var optionsBuilder = new DbContextOptionsBuilder<AppDatabaseContext>()
+                .UseSqlite(connection);
+            if (retryingExecutionStrategy)
+            {
+                optionsBuilder.ReplaceService<
+                    IExecutionStrategyFactory,
+                    RetryingExecutionStrategyFactory>();
+            }
 
-            var db = new AppDatabaseContext(options);
+            var db = new AppDatabaseContext(optionsBuilder.Options);
             await db.Database.EnsureCreatedAsync();
 
             return new AuthUserRepositoryHarness(connection, db);
@@ -423,5 +455,18 @@ public class AuthUserRepositoryTests
             await Db.DisposeAsync();
             await _connection.DisposeAsync();
         }
+    }
+
+    private sealed class RetryingExecutionStrategyFactory(
+        ExecutionStrategyDependencies dependencies) : IExecutionStrategyFactory
+    {
+        public IExecutionStrategy Create() => new RetryingExecutionStrategy(dependencies);
+    }
+
+    private sealed class RetryingExecutionStrategy(
+        ExecutionStrategyDependencies dependencies)
+        : ExecutionStrategy(dependencies, 3, TimeSpan.Zero)
+    {
+        protected override bool ShouldRetryOn(Exception exception) => false;
     }
 }

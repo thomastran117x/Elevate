@@ -6,9 +6,8 @@ using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 using backend.main.infrastructure.database.core;
 
-using Microsoft.EntityFrameworkCore;
-
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 using Npgsql;
 
@@ -26,23 +25,35 @@ namespace backend.main.features.auth
             if (!string.IsNullOrWhiteSpace(user.Username))
                 user.Username = UsernamePolicy.NormalizeAndValidate(user.Username);
 
-            await using var transaction = await _context.Database.BeginTransactionAsync(
-                IsolationLevel.Serializable);
-
-            if (user.Username != null)
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                var reservation = await _context.UsernameReservations.FindAsync(user.Username);
-                if (reservation?.ReservedUntilUtc > DateTime.UtcNow)
-                    throw new UsernameTakenException(user.Username);
+                await using var transaction = await _context.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+                try
+                {
+                    if (user.Username != null)
+                    {
+                        var reservation = await _context.UsernameReservations
+                            .FindAsync(user.Username);
+                        if (reservation?.ReservedUntilUtc > DateTime.UtcNow)
+                            throw new UsernameTakenException(user.Username);
 
-                if (reservation != null)
-                    _context.UsernameReservations.Remove(reservation);
-            }
+                        if (reservation != null)
+                            _context.UsernameReservations.Remove(reservation);
+                    }
 
-            await _context.Users.AddAsync(user);
-            await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
-            return user;
+                    await _context.Users.AddAsync(user);
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return user;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
 
         public async Task<User?> UpdateUserAsync(int id, User updated)
@@ -485,88 +496,101 @@ namespace backend.main.features.auth
             DateTime utcNow,
             DateTime reservedUntilUtc)
         {
-            await using var transaction = await _context.Database.BeginTransactionAsync(
-                IsolationLevel.Serializable);
-
-            // PostgreSQL's row lock serializes changes for the same account. The
-            // serializable transaction also protects the cross-table namespace check for
-            // usernames that do not yet have a row to lock.
-            var user = _context.Database.IsNpgsql()
-                ? await _context.Users
-                    .FromSqlInterpolated($"SELECT * FROM \"Users\" WHERE \"Id\" = {userId} FOR UPDATE")
-                    .SingleOrDefaultAsync()
-                : await _context.Users.FindAsync(userId);
-            if (user == null)
-                return new UsernameChangeRecord(UsernameChangeStatus.UserNotFound);
-
-            var currentUsername = string.IsNullOrWhiteSpace(user.Username)
-                ? null
-                : UsernamePolicy.Normalize(user.Username);
-
-            if (currentUsername == username)
-                return new UsernameChangeRecord(UsernameChangeStatus.Unchanged, user);
-
-            if (currentUsername != null
-                && user.UsernameChangeAvailableAtUtc is DateTime availableAtUtc
-                && availableAtUtc > utcNow)
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                return new UsernameChangeRecord(
-                    UsernameChangeStatus.CooldownActive,
-                    user,
-                    availableAtUtc);
-            }
-
-            if (await _context.Users
-                .AsNoTracking()
-                .AnyAsync(other => other.Id != userId && other.Username == username))
-            {
-                return new UsernameChangeRecord(UsernameChangeStatus.Unavailable, user);
-            }
-
-            var requestedReservation = await _context.UsernameReservations.FindAsync(username);
-            if (requestedReservation != null)
-            {
-                if (requestedReservation.ReservedUntilUtc > utcNow)
-                    return new UsernameChangeRecord(UsernameChangeStatus.Unavailable, user);
-
-                _context.UsernameReservations.Remove(requestedReservation);
-            }
-
-            if (currentUsername != null)
-            {
-                var oldReservation = await _context.UsernameReservations.FindAsync(currentUsername);
-                if (oldReservation == null)
+                await using var transaction = await _context.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+                try
                 {
-                    _context.UsernameReservations.Add(new UsernameReservation
+                    // PostgreSQL's row lock serializes changes for the same account. The
+                    // serializable transaction also protects the cross-table namespace check for
+                    // usernames that do not yet have a row to lock.
+                    var user = _context.Database.IsNpgsql()
+                        ? await _context.Users
+                            .FromSqlInterpolated(
+                                $"SELECT * FROM \"Users\" WHERE \"Id\" = {userId} FOR UPDATE")
+                            .SingleOrDefaultAsync()
+                        : await _context.Users.FindAsync(userId);
+                    if (user == null)
+                        return new UsernameChangeRecord(UsernameChangeStatus.UserNotFound);
+
+                    var currentUsername = string.IsNullOrWhiteSpace(user.Username)
+                        ? null
+                        : UsernamePolicy.Normalize(user.Username);
+
+                    if (currentUsername == username)
+                        return new UsernameChangeRecord(UsernameChangeStatus.Unchanged, user);
+
+                    if (currentUsername != null
+                        && user.UsernameChangeAvailableAtUtc is DateTime availableAtUtc
+                        && availableAtUtc > utcNow)
                     {
-                        Username = currentUsername,
-                        UserId = userId,
-                        ReservedUntilUtc = reservedUntilUtc,
-                    });
+                        return new UsernameChangeRecord(
+                            UsernameChangeStatus.CooldownActive,
+                            user,
+                            availableAtUtc);
+                    }
+
+                    if (await _context.Users
+                        .AsNoTracking()
+                        .AnyAsync(other => other.Id != userId && other.Username == username))
+                    {
+                        return new UsernameChangeRecord(UsernameChangeStatus.Unavailable, user);
+                    }
+
+                    var requestedReservation = await _context.UsernameReservations
+                        .FindAsync(username);
+                    if (requestedReservation != null)
+                    {
+                        if (requestedReservation.ReservedUntilUtc > utcNow)
+                            return new UsernameChangeRecord(UsernameChangeStatus.Unavailable, user);
+
+                        _context.UsernameReservations.Remove(requestedReservation);
+                    }
+
+                    if (currentUsername != null)
+                    {
+                        var oldReservation = await _context.UsernameReservations
+                            .FindAsync(currentUsername);
+                        if (oldReservation == null)
+                        {
+                            _context.UsernameReservations.Add(new UsernameReservation
+                            {
+                                Username = currentUsername,
+                                UserId = userId,
+                                ReservedUntilUtc = reservedUntilUtc,
+                            });
+                        }
+                        else
+                        {
+                            oldReservation.UserId = userId;
+                            oldReservation.ReservedUntilUtc = reservedUntilUtc;
+                        }
+                    }
+
+                    user.Username = username;
+                    user.UsernameChangeAvailableAtUtc = currentUsername == null
+                        ? null
+                        : reservedUntilUtc;
+                    user.UpdatedAt = utcNow;
+
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return new UsernameChangeRecord(UsernameChangeStatus.Changed, user);
                 }
-                else
+                catch (Exception exception) when (IsUsernameConflict(exception))
                 {
-                    oldReservation.UserId = userId;
-                    oldReservation.ReservedUntilUtc = reservedUntilUtc;
+                    await transaction.RollbackAsync();
+                    _context.ChangeTracker.Clear();
+                    return new UsernameChangeRecord(UsernameChangeStatus.Unavailable);
                 }
-            }
-
-            user.Username = username;
-            user.UsernameChangeAvailableAtUtc = currentUsername == null ? null : reservedUntilUtc;
-            user.UpdatedAt = utcNow;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
-                return new UsernameChangeRecord(UsernameChangeStatus.Changed, user);
-            }
-            catch (Exception exception) when (IsUsernameConflict(exception))
-            {
-                await transaction.RollbackAsync();
-                _context.ChangeTracker.Clear();
-                return new UsernameChangeRecord(UsernameChangeStatus.Unavailable);
-            }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
 
         private static bool IsUsernameConflict(Exception exception)
