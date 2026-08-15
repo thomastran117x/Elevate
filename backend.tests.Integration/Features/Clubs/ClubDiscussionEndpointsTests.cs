@@ -148,7 +148,7 @@ public class ClubDiscussionEndpointsTests
 
         var cleared = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete,
-            reactionPath,
+            $"/api/clubs/{clubId}/discussions/{discussion.Id}/replies/{reply.Id}/reaction",
             owner.AccessToken));
 
         cleared.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -164,7 +164,7 @@ public class ClubDiscussionEndpointsTests
 
         var repeatedClear = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete,
-            reactionPath,
+            $"/api/clubs/{clubId}/discussions/{discussion.Id}/replies/{reply.Id}/reaction",
             owner.AccessToken));
         repeatedClear.StatusCode.Should().Be(HttpStatusCode.OK);
         var repeatedData =
