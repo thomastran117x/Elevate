@@ -14,6 +14,7 @@ namespace backend.main.features.auth
         Task<UserAuthRecord?> GetAuthByEmailAsync(string email);
         Task<UserRecoveryRecord?> GetRecoveryByUsernameAsync(string username);
         Task<UserRecoveryRecord?> GetRecoveryByEmailAsync(string email);
+        Task<bool> UsernameUnavailableAsync(string username, DateTime utcNow);
         Task<UserOAuthRecord?> GetOAuthByEmailAsync(string email);
         Task<UserOAuthRecord?> GetOAuthByMicrosoftIdAsync(string microsoftId);
         Task<UserOAuthRecord?> GetOAuthByGoogleIdAsync(string googleId);

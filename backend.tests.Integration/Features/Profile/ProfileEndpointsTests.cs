@@ -35,17 +35,18 @@ public class ProfileEndpointsTests
         var initial = await app.ReadApiResponseAsync<MyProfileResponse>(getResponse);
         initial.Data!.Email.Should().Be("profile-user@example.com");
         initial.Data.Phone.Should().BeNull();
+        initial.Data.CanChangeUsername.Should().BeTrue();
         var expectedRole = initial.Data.Usertype;
 
         // PATCH /api/profile
         var patchRequest = new HttpRequestMessage(HttpMethod.Patch, "/api/profile")
         {
-            Content = JsonContent.Create(new UpdateProfileRequest
+            Content = JsonContent.Create(new
             {
-                Name = "Profile User",
-                Username = "profileuser",
-                Phone = "+1 416 555 0100",
-                Address = "1 Test Street"
+                name = "Profile User",
+                phone = "+1 416 555 0100",
+                address = "1 Test Street",
+                username = "bypass-attempt"
             })
         };
         await AddAuthAndCsrfAsync(app, patchRequest, session.AccessToken);
@@ -54,12 +55,48 @@ public class ProfileEndpointsTests
 
         var updated = await app.ReadApiResponseAsync<MyProfileResponse>(patchResponse);
         updated.Data!.Name.Should().Be("Profile User");
-        updated.Data.Username.Should().Be("profileuser");
+        // Unknown username input cannot bypass the dedicated MFA-protected route.
+        updated.Data.Username.Should().Be("profile-user");
         updated.Data.Phone.Should().Be("+1 416 555 0100");
         updated.Data.Address.Should().Be("1 Test Street");
         // Identity and role must be preserved (never mutated via a profile update).
         updated.Data.Email.Should().Be("profile-user@example.com");
         updated.Data.Usertype.Should().Be(expectedRole);
+
+        await app.CompleteSessionMfaByEmailAsync(
+            "profile-user@example.com",
+            session.AccessToken);
+        var usernameRequest = new HttpRequestMessage(HttpMethod.Patch, "/api/profile/username")
+        {
+            Content = JsonContent.Create(new ChangeUsernameRequest
+            {
+                Username = "  ProfileUser  "
+            })
+        };
+        await AddAuthAndCsrfAsync(app, usernameRequest, session.AccessToken);
+        var usernameResponse = await app.Client.SendAsync(usernameRequest);
+        usernameResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        updated = await app.ReadApiResponseAsync<MyProfileResponse>(usernameResponse);
+        updated.Data!.Username.Should().Be("profileuser");
+        updated.Data.CanChangeUsername.Should().BeFalse();
+        updated.Data.UsernameChangeAvailableAtUtc.Should().NotBeNull();
+
+        // The current session remains valid and the new username becomes the login identifier.
+        (await app.GetWithBearerAsync("/api/profile", session.AccessToken))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        await app.LoginApiAsync(
+            "PROFILEUSER",
+            trustedDeviceToken: "profile-user-device");
+
+        var oldLogin = await app.PostJsonWithCsrfAsync("/api/auth/login", new
+        {
+            username = "profile-user",
+            password = "Password123!",
+            captcha = "captcha",
+            transport = "api"
+        });
+        oldLogin.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
         // GET /api/profile/{username} (public, anonymous) — public fields only, no PII.
         var username = "profileuser";
@@ -73,6 +110,12 @@ public class ProfileEndpointsTests
         (await publicResponse.Content.ReadAsStringAsync())
             .Should().NotContain("profile-user@example.com")
             .And.NotContain("1 Test Street");
+
+        // The reserved old handle resolves to the current canonical profile during cooldown.
+        var oldPublicResponse = await app.Client.GetAsync("/api/profile/profile-user");
+        oldPublicResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var oldPublicProfile = await app.ReadApiResponseAsync<PublicProfileResponse>(oldPublicResponse);
+        oldPublicProfile.Data!.Username.Should().Be("profileuser");
     }
 
     [Fact]
@@ -228,7 +271,7 @@ public class ProfileEndpointsTests
     }
 
     [Fact]
-    public async Task UpdateProfile_WithUsernameTakenByAnother_ShouldReturnConflict()
+    public async Task ChangeUsername_ShouldRequireMfa_AndRejectTakenUsername()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
 
@@ -249,15 +292,28 @@ public class ProfileEndpointsTests
             "username-other",
             trustedDeviceToken: "other-device");
 
-        var conflict = new HttpRequestMessage(HttpMethod.Patch, "/api/profile")
+        var conflict = new HttpRequestMessage(HttpMethod.Patch, "/api/profile/username")
         {
-            Content = JsonContent.Create(new UpdateProfileRequest { Username = "takenname" })
+            Content = JsonContent.Create(new ChangeUsernameRequest { Username = "takenname" })
+        };
+        await AddAuthAndCsrfAsync(app, conflict, session.AccessToken);
+        var gatedResponse = await app.Client.SendAsync(conflict);
+        gatedResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await gatedResponse.Content.ReadAsStringAsync()).Should().Contain("MFA_REQUIRED");
+
+        await app.CompleteSessionMfaByEmailAsync(
+            "username-other@example.com",
+            session.AccessToken);
+        conflict = new HttpRequestMessage(HttpMethod.Patch, "/api/profile/username")
+        {
+            Content = JsonContent.Create(new ChangeUsernameRequest { Username = "takenname" })
         };
         await AddAuthAndCsrfAsync(app, conflict, session.AccessToken);
         var response = await app.Client.SendAsync(conflict);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
         (await response.Content.ReadAsStringAsync()).Should().Contain("already taken");
+        (await response.Content.ReadAsStringAsync()).Should().Contain("USERNAME_TAKEN");
     }
 
     private static async Task AddAuthAndCsrfAsync(

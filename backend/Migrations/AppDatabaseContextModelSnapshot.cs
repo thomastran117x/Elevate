@@ -1357,6 +1357,27 @@ namespace backend.Migrations
                     b.ToTable("Payments");
                 });
 
+            modelBuilder.Entity("backend.main.features.profile.UsernameReservation", b =>
+                {
+                    b.Property<string>("Username")
+                        .HasMaxLength(50)
+                        .HasColumnType("citext");
+
+                    b.Property<DateTime>("ReservedUntilUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Username");
+
+                    b.HasIndex("ReservedUntilUtc");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UsernameReservations");
+                });
+
             modelBuilder.Entity("backend.main.features.profile.User", b =>
                 {
                     b.Property<int>("Id")
@@ -1414,6 +1435,9 @@ namespace backend.Migrations
 
                     b.Property<string>("Username")
                         .HasColumnType("citext");
+
+                    b.Property<DateTime?>("UsernameChangeAvailableAtUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Usertype")
                         .IsRequired()
@@ -1756,6 +1780,15 @@ namespace backend.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("backend.main.features.profile.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("backend.main.features.profile.UsernameReservation", b =>
+                {
                     b.HasOne("backend.main.features.profile.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")

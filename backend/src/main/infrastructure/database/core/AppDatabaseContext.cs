@@ -36,6 +36,7 @@ namespace backend.main.infrastructure.database.core
     public class AppDatabaseContext : DbContext
     {
         public DbSet<User> Users { get; set; } = null!;
+        public DbSet<UsernameReservation> UsernameReservations { get; set; } = null!;
         public DbSet<Club> Clubs { get; set; } = null!;
         public DbSet<ClubStaff> ClubStaff { get; set; } = null!;
         public DbSet<ClubVersion> ClubVersions { get; set; } = null!;
@@ -103,6 +104,27 @@ namespace backend.main.infrastructure.database.core
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Username)
                 .IsUnique();
+
+            modelBuilder.Entity<UsernameReservation>()
+                .HasKey(reservation => reservation.Username);
+
+            modelBuilder.Entity<UsernameReservation>()
+                .Property(reservation => reservation.Username)
+                .HasColumnType("citext")
+                .HasMaxLength(UsernamePolicy.MaxLength);
+
+            modelBuilder.Entity<UsernameReservation>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(reservation => reservation.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UsernameReservation>()
+                .HasIndex(reservation => reservation.UserId);
+
+            modelBuilder.Entity<UsernameReservation>()
+                .HasIndex(reservation => reservation.ReservedUntilUtc);
 
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.GoogleID)

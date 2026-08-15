@@ -15,6 +15,8 @@ describe('ProfileService', () => {
     Id: 1,
     Email: 'member@example.com',
     Username: 'member',
+    CanChangeUsername: true,
+    UsernameChangeAvailableAtUtc: null,
     Name: 'Test Member',
     Avatar: null,
     Usertype: 'User',
@@ -85,6 +87,17 @@ describe('ProfileService', () => {
     expect(request.request.method).toBe('PATCH');
     expect(request.request.body).toEqual({ name: 'New Name', phone: '555-1111' });
     request.flush(envelope(profile));
+  }));
+
+  it('changes the username through the dedicated endpoint', fakeAsync(() => {
+    service.changeUsername('new-member').subscribe();
+    tick();
+
+    const request = httpMock.expectOne(`${base}/username`);
+    expect(request.request.method).toBe('PATCH');
+    expect(request.request.body).toEqual({ username: 'new-member' });
+    expect(request.request.withCredentials).toBeTrue();
+    request.flush(envelope({ ...profile, Username: 'new-member' }));
   }));
 
   it('uploads the avatar as multipart form data', fakeAsync(() => {

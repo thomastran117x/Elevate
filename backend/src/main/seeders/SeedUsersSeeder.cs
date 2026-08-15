@@ -29,7 +29,7 @@ public sealed class SeedUsersSeeder : ISeeder
             .Select(user => user.Email)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var desiredUsernames = desiredUsers
-            .Select(user => user.Username)
+            .Select(user => UsernamePolicy.NormalizeAndValidate(user.Username))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var existingUsers = await _dbContext.Users
@@ -52,7 +52,8 @@ public sealed class SeedUsersSeeder : ISeeder
 
         foreach (var definition in desiredUsers)
         {
-            if (existingByUsername.TryGetValue(definition.Username, out var usernameOwner)
+            var normalizedUsername = UsernamePolicy.NormalizeAndValidate(definition.Username);
+            if (existingByUsername.TryGetValue(normalizedUsername, out var usernameOwner)
                 && !string.Equals(usernameOwner.Email, definition.Email, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
@@ -93,7 +94,7 @@ public sealed class SeedUsersSeeder : ISeeder
         return new User
         {
             Email = definition.Email,
-            Username = definition.Username,
+            Username = UsernamePolicy.NormalizeAndValidate(definition.Username),
             Name = definition.Name,
             Usertype = definition.Role,
             Password = passwordHash,
@@ -120,7 +121,10 @@ public sealed class SeedUsersSeeder : ISeeder
         var changed = false;
 
         changed |= SetIfDifferent(user.Email, definition.Email, value => user.Email = value);
-        changed |= SetIfDifferent(user.Username, definition.Username, value => user.Username = value);
+        changed |= SetIfDifferent(
+            user.Username,
+            UsernamePolicy.NormalizeAndValidate(definition.Username),
+            value => user.Username = value);
         changed |= SetIfDifferent(user.Name, definition.Name, value => user.Name = value);
         changed |= SetIfDifferent(user.Usertype, definition.Role, value => user.Usertype = value);
         if (string.IsNullOrWhiteSpace(user.Password)

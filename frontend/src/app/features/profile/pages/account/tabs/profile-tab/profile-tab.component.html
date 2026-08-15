@@ -133,25 +133,6 @@
             </p>
           </div>
 
-          <!-- Username -->
-          <div class="space-y-2">
-            <label class="text-sm font-semibold text-muted" for="profile-username">Username</label>
-            <input
-              id="profile-username"
-              type="text"
-              formControlName="username"
-              autocomplete="username"
-              placeholder="username"
-              class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
-            />
-            <p
-              *ngIf="profileForm.controls.username.invalid && profileForm.controls.username.touched"
-              class="text-sm text-danger"
-            >
-              Username is required and must be 50 characters or fewer.
-            </p>
-          </div>
-
           <!-- Phone -->
           <div class="space-y-2">
             <label class="text-sm font-semibold text-muted" for="profile-phone"
@@ -213,6 +194,94 @@
             </button>
           </div>
         </form>
+      </article>
+
+      <!-- Username card -->
+      <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
+        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">Username</p>
+        <div class="mt-2 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 class="text-xl font-bold">Your sign-in username</h2>
+            <p class="mt-2 text-sm text-subtle">
+              Your username is <span class="font-semibold text-content">&#64;{{ p.Username }}</span
+              >. Usernames are saved in lowercase.
+            </p>
+            <p *ngIf="!p.CanChangeUsername" class="mt-2 text-sm text-faint">
+              You can change it again on
+              {{ p.UsernameChangeAvailableAtUtc | date: 'longDate' : 'UTC' }} UTC.
+            </p>
+            <p *ngIf="p.CanChangeUsername" class="mt-2 text-sm text-faint">
+              After changing it, your username and previous handle are locked for the configured
+              cooldown period.
+            </p>
+          </div>
+          <button
+            *ngIf="!usernameChangeRequested"
+            type="button"
+            (click)="startUsernameChange()"
+            [disabled]="!p.CanChangeUsername"
+            class="inline-flex flex-none items-center justify-center rounded-2xl border border-line-strong px-4 py-2 text-sm font-semibold text-muted transition hover:bg-glass-strong disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Change username
+          </button>
+        </div>
+
+        <div *ngIf="usernameChangeRequested" class="mt-6">
+          <app-mfa-gate
+            *ngIf="!usernameMfaVerified"
+            (verified)="usernameMfaVerified = true"
+          ></app-mfa-gate>
+
+          <form
+            *ngIf="usernameMfaVerified"
+            class="space-y-4 rounded-3xl border border-accent/25 bg-accent/10 px-5 py-5"
+            [formGroup]="usernameForm"
+            (ngSubmit)="changeUsername()"
+          >
+            <div class="space-y-2">
+              <label class="text-sm font-semibold text-muted" for="change-username">
+                New username
+              </label>
+              <input
+                id="change-username"
+                type="text"
+                formControlName="username"
+                autocomplete="username"
+                placeholder="username"
+                class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+              />
+              <p
+                *ngIf="
+                  usernameForm.controls.username.invalid && usernameForm.controls.username.touched
+                "
+                class="text-sm text-danger"
+              >
+                Username is required and must be 50 characters or fewer.
+              </p>
+            </div>
+            <p class="text-xs leading-5 text-faint">
+              You will use the new username the next time you sign in. Your old public-profile link
+              will redirect here until the cooldown ends.
+            </p>
+            <div class="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="submit"
+                [disabled]="usernameSaving"
+                class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {{ usernameSaving ? 'Saving...' : 'Save username' }}
+              </button>
+              <button
+                type="button"
+                (click)="cancelUsernameChange()"
+                [disabled]="usernameSaving"
+                class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
       </article>
 
       <!-- Account metadata card -->

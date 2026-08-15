@@ -78,7 +78,10 @@ namespace backend.main.features.auth
         {
             try
             {
-                UserAuthRecord? user = await _userRepository.GetAuthByUsernameAsync(username.Trim());
+                var normalizedUsername = UsernamePolicy.Normalize(username);
+                UserAuthRecord? user = string.IsNullOrEmpty(normalizedUsername)
+                    ? null
+                    : await _userRepository.GetAuthByUsernameAsync(normalizedUsername);
 
                 var hashToCheck = user?.Password ?? DummyHash;
                 bool isValidPassword = VerifyPassword(password, hashToCheck);
@@ -113,12 +116,12 @@ namespace backend.main.features.auth
         {
             try
             {
-                username = username.Trim();
+                username = UsernamePolicy.NormalizeAndValidate(username);
 
                 if (await _userRepository.EmailExistsAsync(email))
                     throw new ConflictException($"An account is already registered with the email: {email}");
-                if (await _userRepository.GetAuthByUsernameAsync(username) != null)
-                    throw new ConflictException($"The username '{username}' is already taken.");
+                if (await _userRepository.UsernameUnavailableAsync(username, DateTime.UtcNow))
+                    throw new UsernameTakenException(username);
 
                 userType = AuthRoles.NormalizeOrThrow(userType);
                 string hashedPassword = HashPassword(password);
@@ -166,8 +169,9 @@ namespace backend.main.features.auth
                     throw new ConflictException($"An account is already registered with the email: {user.Email}");
                 if (string.IsNullOrWhiteSpace(user.Username))
                     throw new BadRequestException("A username is required to complete signup.");
-                if (await _userRepository.GetAuthByUsernameAsync(user.Username) != null)
-                    throw new ConflictException($"The username '{user.Username}' is already taken.");
+                user.Username = UsernamePolicy.NormalizeAndValidate(user.Username);
+                if (await _userRepository.UsernameUnavailableAsync(user.Username, DateTime.UtcNow))
+                    throw new UsernameTakenException(user.Username);
 
                 await _userRepository.CreateUserAsync(user);
 
@@ -201,8 +205,9 @@ namespace backend.main.features.auth
                     throw new ConflictException($"An account is already registered with the email: {user.Email}");
                 if (string.IsNullOrWhiteSpace(user.Username))
                     throw new BadRequestException("A username is required to complete signup.");
-                if (await _userRepository.GetAuthByUsernameAsync(user.Username) != null)
-                    throw new ConflictException($"The username '{user.Username}' is already taken.");
+                user.Username = UsernamePolicy.NormalizeAndValidate(user.Username);
+                if (await _userRepository.UsernameUnavailableAsync(user.Username, DateTime.UtcNow))
+                    throw new UsernameTakenException(user.Username);
 
                 await _userRepository.CreateUserAsync(user);
 
@@ -222,7 +227,10 @@ namespace backend.main.features.auth
         {
             try
             {
-                var existingUser = await _userRepository.GetRecoveryByUsernameAsync(username.Trim());
+                var normalizedUsername = UsernamePolicy.Normalize(username);
+                var existingUser = string.IsNullOrEmpty(normalizedUsername)
+                    ? null
+                    : await _userRepository.GetRecoveryByUsernameAsync(normalizedUsername);
                 if (existingUser == null || existingUser.IsDisabled)
                     return BuildPlaceholderRecoveryChallenge();
 

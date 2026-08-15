@@ -1,9 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { EMPTY } from 'rxjs';
-import { catchError, finalize, switchMap } from 'rxjs/operators';
+import { catchError, finalize, map, switchMap } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { PublicProfile, ProfileService } from '../../services/profile.service';
@@ -23,6 +23,7 @@ export class PublicProfileComponent implements OnInit {
 
   constructor(
     private route: ActivatedRoute,
+    private router: Router,
     private profileService: ProfileService,
   ) {}
 
@@ -36,6 +37,7 @@ export class PublicProfileComponent implements OnInit {
           this.profile = null;
           const username = params.get('username') ?? '';
           return this.profileService.getPublicProfile(username).pipe(
+            map((profile) => ({ profile, requestedUsername: username })),
             finalize(() => (this.loading = false)),
             // Handle the error here so a 404 doesn't tear down the paramMap stream
             // and leave the component unresponsive to later route changes.
@@ -47,8 +49,11 @@ export class PublicProfileComponent implements OnInit {
         }),
       )
       .subscribe({
-        next: (profile) => {
+        next: ({ profile, requestedUsername }) => {
           this.profile = profile;
+          if (requestedUsername !== profile.Username) {
+            void this.router.navigate(['/profile', profile.Username], { replaceUrl: true });
+          }
         },
       });
   }

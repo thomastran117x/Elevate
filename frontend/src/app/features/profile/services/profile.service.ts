@@ -8,7 +8,6 @@ import { environment } from '../../../../environments/environment';
 
 export interface UpdateProfilePayload {
   name?: string;
-  username?: string;
   phone?: string;
   address?: string;
 }
@@ -17,6 +16,8 @@ export interface MyProfile {
   Id: number;
   Email: string;
   Username: string;
+  CanChangeUsername: boolean;
+  UsernameChangeAvailableAtUtc?: string | null;
   Name?: string | null;
   Avatar?: string | null;
   Usertype: string;
@@ -61,6 +62,12 @@ export class ProfileService {
     return this.patchWithCsrf<ApiEnvelope<MyProfile>>(this.baseUrl, payload).pipe(
       map((res) => requireEnvelopeData(res, 'Profile update response was incomplete.')),
     );
+  }
+
+  changeUsername(username: string): Observable<MyProfile> {
+    return this.patchWithCsrf<ApiEnvelope<MyProfile>>(`${this.baseUrl}/username`, {
+      username,
+    }).pipe(map((res) => requireEnvelopeData(res, 'Username change response was incomplete.')));
   }
 
   uploadAvatar(file: File): Observable<MyProfile> {

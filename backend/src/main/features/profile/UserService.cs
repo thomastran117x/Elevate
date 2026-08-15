@@ -8,6 +8,8 @@ using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.storage;
 
+using Microsoft.Extensions.Options;
+
 
 namespace backend.main.features.profile
 {
@@ -19,6 +21,8 @@ namespace backend.main.features.profile
         private readonly IFollowService _followService;
         private readonly ITokenService _tokenService;
         private readonly IRefreshAheadCache _refreshCache;
+        private readonly TimeProvider _timeProvider;
+        private readonly ProfileOptions _profileOptions;
 
         private static readonly TimeSpan UserTTL = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan NotFoundTTL = TimeSpan.FromSeconds(15);
@@ -31,7 +35,9 @@ namespace backend.main.features.profile
             IAzureBlobService blobService,
             IFollowService followService,
             ITokenService tokenService,
-            IRefreshAheadCache refreshCache
+            IRefreshAheadCache refreshCache,
+            TimeProvider timeProvider,
+            IOptions<ProfileOptions> profileOptions
         )
         {
             _userRepository = userRepository;
@@ -40,6 +46,8 @@ namespace backend.main.features.profile
             _followService = followService;
             _tokenService = tokenService;
             _refreshCache = refreshCache;
+            _timeProvider = timeProvider;
+            _profileOptions = profileOptions.Value;
         }
 
         public async Task<IReadOnlyList<UserListRecord>> GetAllUsersAsync(
@@ -66,27 +74,55 @@ namespace backend.main.features.profile
 
         public async Task<UserProfileRecord> GetPublicProfileByUsernameAsync(string username)
         {
-            var profile = await _userRepository.GetProfileByUsernameAsync(username);
+            var normalizedUsername = UsernamePolicy.NormalizeAndValidate(username);
+            var profile = await _userRepository.GetPublicProfileByUsernameOrReservationAsync(
+                normalizedUsername,
+                _timeProvider.GetUtcNow().UtcDateTime);
             if (profile == null)
-                throw new ResourceNotFoundException($"No user found with the username {username}");
+                throw new ResourceNotFoundException(
+                    $"No user found with the username {normalizedUsername}");
 
             return profile;
         }
 
         public async Task<User?> UpdateUserAsync(int id, User updatedUser)
         {
-            if (!string.IsNullOrWhiteSpace(updatedUser.Username)
-                && await _userRepository.UsernameExistsAsync(updatedUser.Username, id))
-            {
-                throw new ConflictException($"The username '{updatedUser.Username}' is already taken.");
-            }
-
             var existingUser = await _userRepository.UpdatePartialAsync(updatedUser);
             if (existingUser == null)
                 throw new ResourceNotFoundException($"User with the id {id} is not found");
 
             await _refreshCache.RemoveAsync(GetUserCacheKey(id));
             return existingUser;
+        }
+
+        public async Task<User> ChangeUsernameAsync(int id, string username)
+        {
+            var normalizedUsername = UsernamePolicy.NormalizeAndValidate(username);
+            var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
+            var reservedUntilUtc = utcNow.AddDays(_profileOptions.UsernameChangeCooldownDays);
+
+            var result = await _userRepository.ChangeUsernameAsync(
+                id,
+                normalizedUsername,
+                utcNow,
+                reservedUntilUtc);
+
+            switch (result.Status)
+            {
+                case UsernameChangeStatus.Changed when result.User != null:
+                    await _refreshCache.RemoveAsync(GetUserCacheKey(id));
+                    return result.User;
+                case UsernameChangeStatus.UserNotFound:
+                    throw new ResourceNotFoundException($"User with the id {id} is not found");
+                case UsernameChangeStatus.Unchanged:
+                    throw new BadRequestException("New username must be different from the current username.");
+                case UsernameChangeStatus.CooldownActive when result.AvailableAtUtc is DateTime availableAtUtc:
+                    throw new UsernameChangeCooldownException(availableAtUtc);
+                case UsernameChangeStatus.Unavailable:
+                    throw new UsernameTakenException(normalizedUsername);
+                default:
+                    throw new InternalServerErrorException();
+            }
         }
 
         public async Task<bool> DeleteUserAsync(int id)

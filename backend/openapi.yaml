@@ -3,12 +3,14 @@ info:
   title: EventXperience Backend API
   description: Generated API reference for the EventXperience backend. Responses use the shared ApiResponse envelope unless noted otherwise.
   version: v1
+servers:
+  - url: http://localhost:8090
 paths:
   /api/profile:
     get:
       tags:
         - profile
-      summary: Get my profile
+      summary: Get the current user's profile
       operationId: Profile_GetMyProfile_get
       responses:
         '200':
@@ -52,7 +54,8 @@ paths:
     patch:
       tags:
         - profile
-      summary: Update profile
+      summary: Update the current user's profile
+      description: Updates ordinary profile fields. Username changes use the dedicated MFA-protected endpoint.
       operationId: Profile_UpdateProfile_patch
       requestBody:
         content:
@@ -108,7 +111,7 @@ paths:
     delete:
       tags:
         - profile
-      summary: Delete account
+      summary: Delete the current user's account
       operationId: Profile_DeleteAccount_delete
       responses:
         '200':
@@ -153,7 +156,8 @@ paths:
     get:
       tags:
         - profile
-      summary: Get public profile
+      summary: Get a public profile by username
+      description: Active previous-username reservations resolve to the owning user's current profile. The response always contains the canonical current username.
       operationId: Profile_GetPublicProfile_get
       parameters:
         - name: username
@@ -186,11 +190,93 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+  /api/profile/username:
+    patch:
+      tags:
+        - profile
+      summary: Change the current user's username
+      description: Requires recent MFA verification. Usernames are trimmed and lowercased; replacing an existing username starts the configured cooldown and reserves the previous username for the same period.
+      operationId: Profile_ChangeUsername_patch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeUsernameRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/ChangeUsernameRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/ChangeUsernameRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfMyProfileResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfMyProfileResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfMyProfileResponse'
+        '400':
+          description: Bad Request
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: Forbidden
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '409':
+          description: Conflict
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
   /api/profile/avatar:
     post:
       tags:
         - profile
-      summary: Upload avatar
+      summary: Update the current user's avatar
       operationId: Profile_UploadAvatar_post
       requestBody:
         content:
@@ -244,7 +330,7 @@ paths:
     post:
       tags:
         - profile
-      summary: Change password
+      summary: Change the current user's password
       operationId: Profile_ChangePassword_post
       requestBody:
         content:
@@ -12821,6 +12907,13 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/String'
+    ChangeUsernameRequest:
+      required:
+        - username
+      type: object
+      properties:
+        username:
+          $ref: '#/components/schemas/String'
     ClubAnalyticsResponse:
       type: object
       properties:
@@ -15474,6 +15567,12 @@ components:
           $ref: '#/components/schemas/String'
         username:
           $ref: '#/components/schemas/String'
+        canChangeUsername:
+          $ref: '#/components/schemas/Boolean'
+        usernameChangeAvailableAtUtc:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/DateTime'
         name:
           oneOf:
             - type: 'null'
@@ -16316,10 +16415,6 @@ components:
       type: object
       properties:
         name:
-          oneOf:
-            - type: 'null'
-            - $ref: '#/components/schemas/String'
-        username:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/String'

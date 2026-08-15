@@ -157,6 +157,10 @@ namespace backend.main.application.bootstrap
             services.Configure<ClubVersioningOptions>(config.GetSection("ClubVersioning"));
             services.Configure<EventVersioningOptions>(config.GetSection("EventVersioning"));
             services.Configure<OrphanBlobCleanupOptions>(config.GetSection("OrphanBlobCleanup"));
+            services.AddOptions<ProfileOptions>()
+                .Bind(config.GetSection("Profile"))
+                .ValidateDataAnnotations()
+                .ValidateOnStart();
             services.AddSingleton(TimeProvider.System);
             services.AddSearchInfrastructure(config, featureFlags);
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
@@ -340,6 +344,5 @@ namespace backend.main.application.bootstrap
         }
     }
 }
-
 
 

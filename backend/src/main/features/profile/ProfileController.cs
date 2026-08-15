@@ -23,16 +23,19 @@ namespace backend.main.features.profile
         private readonly IUserService _userService;
         private readonly IAuthService _authService;
         private readonly ITokenService _tokenService;
+        private readonly TimeProvider _timeProvider;
 
         public ProfileController(
             IUserService userService,
             IAuthService authService,
-            ITokenService tokenService
+            ITokenService tokenService,
+            TimeProvider timeProvider
         )
         {
             _userService = userService;
             _authService = authService;
             _tokenService = tokenService;
+            _timeProvider = timeProvider;
         }
 
         [HttpGet]
@@ -108,7 +111,6 @@ namespace backend.main.features.profile
                         Email = userPayload.Email,
                         Usertype = userPayload.Role,
                         Name = request.Name,
-                        Username = request.Username,
                         Phone = request.Phone,
                         Address = request.Address,
                     }
@@ -128,6 +130,36 @@ namespace backend.main.features.profile
                     return HandleError.Resolve(e);
 
                 Logger.Error($"[ProfileController] UpdateProfile failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [HttpPatch("username")]
+        [RequireMfa]
+        [ProducesResponseType(typeof(ApiResponse<MyProfileResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> ChangeUsername([FromBody] ChangeUsernameRequest request)
+        {
+            try
+            {
+                var userPayload = User.GetUserPayload();
+                var updatedUser = await _userService.ChangeUsernameAsync(
+                    userPayload.Id,
+                    request.Username);
+
+                return Ok(new ApiResponse<MyProfileResponse>(
+                    "Username changed successfully.",
+                    MapToMyProfile(updatedUser)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[ProfileController] ChangeUsername failed: {e}");
                 return HandleError.Resolve(e);
             }
         }
@@ -215,13 +247,17 @@ namespace backend.main.features.profile
             }
         }
 
-        private static MyProfileResponse MapToMyProfile(User user)
+        private MyProfileResponse MapToMyProfile(User user)
         {
+            var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
             return new MyProfileResponse
             {
                 Id = user.Id,
                 Email = user.Email,
                 Username = user.Username ?? string.Empty,
+                CanChangeUsername = user.UsernameChangeAvailableAtUtc == null
+                    || user.UsernameChangeAvailableAtUtc <= utcNow,
+                UsernameChangeAvailableAtUtc = user.UsernameChangeAvailableAtUtc,
                 Name = user.Name,
                 Avatar = user.Avatar,
                 Usertype = user.Usertype,

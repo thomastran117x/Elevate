@@ -89,6 +89,7 @@ services:
       JWT_SECRET_ACCESS: "${JWT_SECRET_ACCESS:-amazing_secret_key_yup_yes_abcdef123}"
       JWT_SECRET_VERIFICATION: "${JWT_SECRET_VERIFICATION:-amazing_verification_secret_yup_yes_abcdef123}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
+      Profile__UsernameChangeCooldownDays: "${PROFILE__USERNAMECHANGECOOLDOWNDAYS:-30}"
       # Topics the backend publishes to (consumed by the workers).
       EMAIL_TOPIC: "${EMAIL_TOPIC:-eventxperience-email}"
       SMS_TOPIC: "${SMS_TOPIC:-eventxperience-sms}"
