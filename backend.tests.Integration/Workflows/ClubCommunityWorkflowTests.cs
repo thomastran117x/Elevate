@@ -169,7 +169,7 @@ public class ClubCommunityWorkflowTests
 
         var publicComments = await app.Client.GetAsync($"/api/clubs/{club.Id}/posts/{post.Id}/comments");
         publicComments.StatusCode.Should().Be(HttpStatusCode.OK);
-        var publicCommentsBody = await app.ReadApiResponseAsync<PagedResponse<PostCommentResponse>>(publicComments);
+        var publicCommentsBody = await app.ReadApiResponseAsync<PostCommentPageResponse>(publicComments);
         publicCommentsBody.Data!.Items.Should().ContainSingle(item =>
             item.Id == comment.Id && item.Content == "I can help organize the venue.");
 

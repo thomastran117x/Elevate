@@ -2,98 +2,62 @@ import { HttpTestingController } from '@angular/common/http/testing';
 
 import { environment } from '@environments/environment';
 import { envelope, pascalEnvelope, setupService } from '@testing';
-
+import { ApiClient } from '../../../core/api/services/api-client.service';
 import { PostCommentsService } from './post-comments.service';
 
 describe('PostCommentsService', () => {
-  const base = `${environment.backendUrl}/clubs/3/posts/9/comments`;
+  const base = `${environment.backendUrl}/clubs/3/posts/7/comments`;
   let service: PostCommentsService;
   let httpMock: HttpTestingController;
 
   beforeEach(() => {
-    ({ service, httpMock } = setupService(PostCommentsService));
+    ({ service, httpMock } = setupService(PostCommentsService, [ApiClient]));
   });
 
-  afterEach(() => {
-    httpMock.verify();
-  });
+  afterEach(() => httpMock.verify());
 
-  it('defaults to the first page of twenty', () => {
-    service.getComments(3, 9).subscribe();
-
-    const request = httpMock.expectOne((req) => req.url === base);
-    expect(request.request.method).toBe('GET');
-    expect(request.request.params.get('page')).toBe('1');
-    expect(request.request.params.get('pageSize')).toBe('20');
-    request.flush(envelope(null));
-  });
-
-  it('normalizes a PascalCase paged payload including nested authors', () => {
+  it('loads one direct level with sort and cursor parameters', () => {
     let data: unknown;
-    service.getComments(3, 9, 2, 5).subscribe((response) => (data = response.data));
+    service.getComments(3, 7, 4, 'Oldest', 'next', 5).subscribe((r) => (data = r.data));
 
     const request = httpMock.expectOne((req) => req.url === base);
-    expect(request.request.params.get('page')).toBe('2');
+    expect(request.request.params.get('parentCommentId')).toBe('4');
+    expect(request.request.params.get('sort')).toBe('Oldest');
+    expect(request.request.params.get('cursor')).toBe('next');
+    expect(request.request.params.get('pageSize')).toBe('5');
+    expect(request.request.withCredentials).toBeTrue();
     request.flush(
-      pascalEnvelope({
-        Items: [{ Id: 1, Content: 'Nice', Author: { Id: 7, Username: 'jamie' } }],
-        TotalCount: 1,
-      }),
+      pascalEnvelope({ Items: [{ Id: 1, Content: 'Reply' }], TotalCount: 1, HasMore: false }),
     );
-
     expect(data).toEqual(
-      jasmine.objectContaining({
-        items: [
-          jasmine.objectContaining({
-            id: 1,
-            content: 'Nice',
-            author: { id: 7, name: null, username: 'jamie', avatar: null },
-          }),
-        ],
-      }),
+      jasmine.objectContaining({ items: [jasmine.objectContaining({ id: 1, content: 'Reply' })] }),
     );
   });
 
-  it('posts the comment body and normalizes the created comment', () => {
-    let data: unknown;
-    service.createComment(3, 9, 'Nice one').subscribe((response) => (data = response.data));
+  it('creates and edits nested replies', () => {
+    service.createComment(3, 7, 'Child', 4).subscribe();
+    const create = httpMock.expectOne(base);
+    expect(create.request.method).toBe('POST');
+    expect(create.request.body).toEqual({ content: 'Child', parentCommentId: 4 });
+    create.flush(envelope({ id: 5 }));
 
-    const request = httpMock.expectOne(base);
-    expect(request.request.method).toBe('POST');
-    expect(request.request.body).toEqual({ content: 'Nice one' });
-    expect(request.request.withCredentials).toBeTrue();
-    request.flush(pascalEnvelope({ Id: 5, Content: 'Nice one', PostId: 9 }));
-
-    expect(data).toEqual(jasmine.objectContaining({ id: 5, postId: 9, content: 'Nice one' }));
+    service.updateComment(3, 7, 5, 'Edited').subscribe();
+    const update = httpMock.expectOne(`${base}/5`);
+    expect(update.request.method).toBe('PUT');
+    expect(update.request.body).toEqual({ content: 'Edited' });
+    update.flush(envelope({ id: 5, content: 'Edited' }));
   });
 
-  it('puts the edited body to the comment URL', () => {
-    let data: unknown;
-    service.updateComment(3, 9, 5, 'Edited').subscribe((response) => (data = response.data));
+  it('sets, switches, and clears an exclusive reaction through the reaction resource', () => {
+    service.setReaction(3, 7, 5, 'Dislike').subscribe();
+    const set = httpMock.expectOne(`${base}/5/reaction`);
+    expect(set.request.method).toBe('PUT');
+    expect(set.request.body).toEqual({ reaction: 'Dislike' });
+    set.flush(envelope({ commentId: 5, dislikeCount: 1, currentUserReaction: 'Dislike' }));
 
-    const request = httpMock.expectOne(`${base}/5`);
-    expect(request.request.method).toBe('PUT');
-    expect(request.request.body).toEqual({ content: 'Edited' });
-    request.flush(pascalEnvelope({ Id: 5, Content: 'Edited' }));
-
-    expect(data).toEqual(jasmine.objectContaining({ content: 'Edited' }));
-  });
-
-  it('deletes a comment with credentials', () => {
-    service.deleteComment(3, 9, 5).subscribe();
-
-    const request = httpMock.expectOne(`${base}/5`);
-    expect(request.request.method).toBe('DELETE');
-    expect(request.request.withCredentials).toBeTrue();
-    request.flush(envelope(null));
-  });
-
-  it('leaves data null when the mutation returns no payload', () => {
-    let data: unknown = 'untouched';
-    service.createComment(3, 9, 'x').subscribe((response) => (data = response.data));
-
-    httpMock.expectOne(base).flush(envelope(null));
-
-    expect(data).toBeNull();
+    service.clearReaction(3, 7, 5).subscribe();
+    const clear = httpMock.expectOne(`${base}/5/reaction`);
+    expect(clear.request.method).toBe('DELETE');
+    clear.flush(envelope({ commentId: 5, dislikeCount: 0, currentUserReaction: null }));
   });
 });

@@ -315,7 +315,7 @@ public class ClubEndpointsTests
 
         var comments = await app.Client.GetAsync($"/api/clubs/{club.Id}/posts/{post.Id}/comments");
         comments.StatusCode.Should().Be(HttpStatusCode.OK);
-        var commentsBody = await app.ReadApiResponseAsync<PagedResponse<PostCommentResponse>>(comments);
+        var commentsBody = await app.ReadApiResponseAsync<PostCommentPageResponse>(comments);
         commentsBody.Data!.Items.Should().ContainSingle(entry => entry.Content == "Count me in.");
 
         var updatedPost = await app.Client.SendAsync(CreateAuthorizedRequest(
@@ -343,7 +343,9 @@ public class ClubEndpointsTests
             commenterSession.AccessToken));
         deletedComment.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        (await app.QueryDbAsync(db => db.PostComments.AnyAsync(c => c.Id == comment.Id))).Should().BeFalse();
+        var softDeleted = await app.QueryDbAsync(db => db.PostComments.SingleAsync(c => c.Id == comment.Id));
+        softDeleted.IsDeleted.Should().BeTrue();
+        softDeleted.Content.Should().BeEmpty();
 
         var deletedPost = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete,
@@ -352,6 +354,104 @@ public class ClubEndpointsTests
         deletedPost.StatusCode.Should().Be(HttpStatusCode.OK);
 
         (await app.QueryDbAsync(db => db.ClubPosts.AnyAsync(p => p.Id == post.Id))).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task PostCommentThreads_ShouldSupportNestingReactionsSoftDeletionAndCounts()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, _) = await CreateUserSessionAsync(
+            app, "post-thread-owner@example.com", "Organizer");
+        var (participantSession, _) = await CreateUserSessionAsync(
+            app, "post-thread-participant@example.com");
+        var club = await CreateClubAsync(app, ownerSession.AccessToken, "Threaded Post Club");
+
+        var postResponse = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/posts",
+            ownerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                title = "Live thread",
+                content = "Discuss this update.",
+                postType = PostType.General,
+                isPinned = false
+            })));
+        var post = (await app.ReadApiResponseAsync<ClubPostResponse>(postResponse)).Data!;
+
+        var rootResponse = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/posts/{post.Id}/comments",
+            participantSession.AccessToken,
+            JsonContent.Create(new { content = " Root comment ", parentCommentId = (int?)null })));
+        rootResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var root = (await app.ReadApiResponseAsync<PostCommentResponse>(rootResponse)).Data!;
+        root.Content.Should().Be("Root comment");
+
+        var childResponse = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/posts/{post.Id}/comments",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { content = "Nested reply", parentCommentId = root.Id })));
+        var child = (await app.ReadApiResponseAsync<PostCommentResponse>(childResponse)).Data!;
+
+        var grandchildResponse = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/posts/{post.Id}/comments",
+            participantSession.AccessToken,
+            JsonContent.Create(new { content = "Unlimited depth", parentCommentId = child.Id })));
+        grandchildResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var reactionPath = $"/api/clubs/{club.Id}/posts/{post.Id}/comments/{root.Id}/reaction";
+        var liked = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            reactionPath,
+            ownerSession.AccessToken,
+            JsonContent.Create(new { reaction = "Like" })));
+        var likedData = (await app.ReadApiResponseAsync<PostCommentReactionResponse>(liked)).Data!;
+        likedData.LikeCount.Should().Be(1);
+        likedData.CurrentUserReaction.Should().Be("Like");
+
+        var switched = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            reactionPath,
+            ownerSession.AccessToken,
+            JsonContent.Create(new { reaction = "Dislike" })));
+        var switchedData = (await app.ReadApiResponseAsync<PostCommentReactionResponse>(switched)).Data!;
+        switchedData.LikeCount.Should().Be(0);
+        switchedData.DislikeCount.Should().Be(1);
+
+        var cleared = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            reactionPath,
+            ownerSession.AccessToken));
+        var clearedData = (await app.ReadApiResponseAsync<PostCommentReactionResponse>(cleared)).Data!;
+        clearedData.DislikeCount.Should().Be(0);
+        clearedData.CurrentUserReaction.Should().BeNull();
+
+        var deleted = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/clubs/{club.Id}/posts/{post.Id}/comments/{root.Id}",
+            participantSession.AccessToken));
+        var placeholder = (await app.ReadApiResponseAsync<PostCommentResponse>(deleted)).Data!;
+        placeholder.IsDeleted.Should().BeTrue();
+        placeholder.Content.Should().BeNull();
+        placeholder.Author.Should().BeNull();
+
+        var children = await app.Client.GetAsync(
+            $"/api/clubs/{club.Id}/posts/{post.Id}/comments?parentCommentId={root.Id}&sort=Oldest");
+        var childrenData = (await app.ReadApiResponseAsync<PostCommentPageResponse>(children)).Data!;
+        childrenData.Items.Should().ContainSingle(comment => comment.Id == child.Id);
+
+        var replyToDeleted = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/posts/{post.Id}/comments",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { content = "Not allowed", parentCommentId = root.Id })));
+        replyToDeleted.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var detail = await app.Client.GetAsync($"/api/clubs/{club.Id}/posts/{post.Id}");
+        (await app.ReadApiResponseAsync<ClubPostResponse>(detail)).Data!.CommentCount.Should().Be(3);
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts;
+using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
@@ -28,6 +29,7 @@ public class ClubPostGetByIdTests
         return new ClubPostService(
             db,
             Mock.Of<IClubPostRepository>(),
+            new PostCommentRepository(db),
             clubService ?? Mock.Of<IClubService>(),
             followRepository ?? Mock.Of<IFollowRepository>(),
             Mock.Of<IClubPostSearchService>(),

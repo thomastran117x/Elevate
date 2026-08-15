@@ -126,14 +126,16 @@ namespace backend.main.application.openapi
 
                 // ── Post comments ────────────────────────────────────────────────────────
 
-                ["POST /api/clubs/{clubId}/posts/{postId}/comments"] = new("Add a comment to a post"),
-                ["GET /api/clubs/{clubId}/posts/{postId}/comments"] = new("List comments on a post"),
+                ["POST /api/clubs/{clubId}/posts/{postId}/comments"] = new("Add a post comment or nested reply"),
+                ["GET /api/clubs/{clubId}/posts/{postId}/comments"] = new("List one level of post comments"),
                 ["GET /api/clubs/{clubId}/posts/{postId}/comments/events"] = new(
                     "Stream live comment events",
-                    "Opens a Server-Sent Events (SSE) stream that pushes new and updated comments on the post in real time."
+                    "Opens a post-scoped Server-Sent Events stream for comment creation, editing, deletion, and reaction counts."
                 ),
                 ["PUT /api/clubs/{clubId}/posts/{postId}/comments/{commentId}"] = new("Update a comment"),
-                ["DELETE /api/clubs/{clubId}/posts/{postId}/comments/{commentId}"] = new("Delete a comment"),
+                ["DELETE /api/clubs/{clubId}/posts/{postId}/comments/{commentId}"] = new("Soft-delete a comment"),
+                ["PUT /api/clubs/{clubId}/posts/{postId}/comments/{commentId}/reaction"] = new("Set a comment reaction"),
+                ["DELETE /api/clubs/{clubId}/posts/{postId}/comments/{commentId}/reaction"] = new("Clear a comment reaction"),
 
                 // ── Club reviews ─────────────────────────────────────────────────────────
 

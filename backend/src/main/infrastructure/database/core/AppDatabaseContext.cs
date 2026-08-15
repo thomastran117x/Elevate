@@ -55,6 +55,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<TotpMfaEnrollment> TotpMfaEnrollments { get; set; } = null!;
         public DbSet<ClubPost> ClubPosts { get; set; } = null!;
         public DbSet<PostComment> PostComments { get; set; } = null!;
+        public DbSet<PostCommentReaction> PostCommentReactions { get; set; } = null!;
         public DbSet<EventRegistration> EventRegistrations { get; set; } = null!;
         public DbSet<EventWaitlistEntry> EventWaitlistEntries { get; set; } = null!;
         public DbSet<EventFavourite> EventFavourites { get; set; } = null!;
@@ -731,10 +732,42 @@ namespace backend.main.infrastructure.database.core
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<PostComment>()
-                .HasIndex(c => c.PostId);
+                .HasOne<PostComment>()
+                .WithMany()
+                .HasForeignKey(c => c.ParentCommentId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<PostComment>()
+                .HasIndex(c => new { c.PostId, c.ParentCommentId, c.CreatedAt, c.Id });
 
             modelBuilder.Entity<PostComment>()
                 .HasIndex(c => c.UserId);
+
+            modelBuilder.Entity<PostCommentReaction>()
+                .HasKey(r => new { r.CommentId, r.UserId });
+
+            modelBuilder.Entity<PostCommentReaction>()
+                .HasOne<PostComment>()
+                .WithMany()
+                .HasForeignKey(r => r.CommentId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PostCommentReaction>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(r => r.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PostCommentReaction>()
+                .Property(r => r.Reaction)
+                .HasConversion<string>()
+                .HasMaxLength(16);
+
+            modelBuilder.Entity<PostCommentReaction>()
+                .HasIndex(r => r.UserId);
 
             modelBuilder.Entity<EventRegistration>()
                 .HasOne<User>()
