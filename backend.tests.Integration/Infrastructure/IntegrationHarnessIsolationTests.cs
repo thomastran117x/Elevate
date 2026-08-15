@@ -1,5 +1,6 @@
 using System.Net;
 
+using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.oauth;
 using backend.main.infrastructure.database.core;
 
@@ -35,12 +36,13 @@ public sealed class IntegrationHarnessIsolationTests
 
             foreach (var app in firstLeases)
             {
-                var signup = await app.PostJsonWithCsrfAsync("/api/auth/signup", new
+                var signup = await app.PostJsonWithCsrfAsync("/api/auth/signup", new SignUpRequest
                 {
-                    email = "old-notification@example.com",
-                    password = "Password123!",
-                    usertype = "Participant",
-                    captcha = "captcha"
+                    Email = "old-notification@example.com",
+                    Username = "old-notification",
+                    Password = "Password123!",
+                    Usertype = "Participant",
+                    Captcha = "captcha"
                 });
                 signup.StatusCode.Should().Be(HttpStatusCode.OK);
                 await app.SeedUserAsync("same-address@example.com");
