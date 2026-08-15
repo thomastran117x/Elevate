@@ -62,9 +62,13 @@ export class SignupComponent {
 
     try {
       const captcha = await this.recaptcha.execute(this.siteKey, 'signup');
+      const values = this.form.getRawValue();
+      const username = values.username.trim().toLowerCase();
+      this.form.controls.username.setValue(username);
       this.auth
         .signup({
-          ...this.form.getRawValue(),
+          ...values,
+          username,
           captcha,
         })
         .pipe(finalize(() => (this.loading = false)))

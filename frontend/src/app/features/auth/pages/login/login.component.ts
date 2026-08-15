@@ -82,8 +82,12 @@ export class LoginComponent {
 
     try {
       const token = await this.recaptcha.execute(this.siteKey, 'login');
+      const values = this.form.getRawValue();
+      const username = values.username.trim().toLowerCase();
+      this.form.controls['username'].setValue(username);
       const payload = {
-        ...this.form.getRawValue(),
+        ...values,
+        username,
         captcha: token,
         returnUrl: this.authReturnUrl.peek() ?? undefined,
       };

@@ -11,6 +11,14 @@ namespace backend.main.features.profile.contracts.responses
         }
         public string Email { get; set; } = null!;
         public string Username { get; set; } = null!;
+        public bool CanChangeUsername
+        {
+            get; set;
+        }
+        public DateTime? UsernameChangeAvailableAtUtc
+        {
+            get; set;
+        }
         public string? Name
         {
             get; set;

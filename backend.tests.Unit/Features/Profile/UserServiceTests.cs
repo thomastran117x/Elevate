@@ -4,6 +4,7 @@ using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.clubs.follow;
 using backend.main.features.profile;
+using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.storage;
 
@@ -12,6 +13,7 @@ using backend.tests.Unit.Support;
 using FluentAssertions;
 
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 
 using Moq;
 
@@ -129,6 +131,61 @@ public class UserServiceTests
     }
 
     [Fact]
+    public async Task ChangeUsernameAsync_ShouldNormalize_PersistCooldown_AndInvalidateCache()
+    {
+        var now = new DateTimeOffset(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
+        var changedUser = new TestUserBuilder().WithId(3).Build();
+        changedUser.Username = "new-name";
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.ChangeUsernameAsync(
+                3,
+                "new-name",
+                now.UtcDateTime,
+                now.UtcDateTime.AddDays(30)))
+            .ReturnsAsync(new UsernameChangeRecord(
+                UsernameChangeStatus.Changed,
+                changedUser));
+        var refreshCache = new Mock<IRefreshAheadCache>();
+        var service = CreateService(
+            userRepository: repository,
+            refreshCache: refreshCache,
+            timeProvider: new FixedTimeProvider(now));
+
+        var result = await service.ChangeUsernameAsync(3, "  NEW-NAME  ");
+
+        result.Username.Should().Be("new-name");
+        refreshCache.Verify(cache => cache.RemoveAsync("user:3"), Times.Once);
+    }
+
+    [Fact]
+    public async Task ChangeUsernameAsync_ShouldReturnStructuredCooldownError()
+    {
+        var now = new DateTimeOffset(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
+        var availableAt = now.UtcDateTime.AddDays(12);
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.ChangeUsernameAsync(
+                4,
+                "new-name",
+                now.UtcDateTime,
+                now.UtcDateTime.AddDays(30)))
+            .ReturnsAsync(new UsernameChangeRecord(
+                UsernameChangeStatus.CooldownActive,
+                AvailableAtUtc: availableAt));
+        var service = CreateService(
+            userRepository: repository,
+            timeProvider: new FixedTimeProvider(now));
+
+        var act = () => service.ChangeUsernameAsync(4, "new-name");
+
+        var exception = await act.Should().ThrowAsync<UsernameChangeCooldownException>();
+        exception.Which.ErrorCode.Should().Be("USERNAME_CHANGE_COOLDOWN");
+        exception.Which.Details.Should().BeEquivalentTo(new Dictionary<string, object?>
+        {
+            ["usernameChangeAvailableAtUtc"] = availableAt,
+        });
+    }
+
+    [Fact]
     public async Task DeleteUserAsync_ShouldDeleteOrphanedBlobsAndInvalidateCache()
     {
         var repository = new Mock<IUserRepository>();
@@ -197,7 +254,9 @@ public class UserServiceTests
         Mock<IAzureBlobService>? blobService = null,
         Mock<IFollowService>? followService = null,
         Mock<ITokenService>? tokenService = null,
-        Mock<IRefreshAheadCache>? refreshCache = null)
+        Mock<IRefreshAheadCache>? refreshCache = null,
+        TimeProvider? timeProvider = null,
+        ProfileOptions? profileOptions = null)
     {
         userRepository ??= new Mock<IUserRepository>();
         authRepository ??= new Mock<IAuthUserRepository>();
@@ -212,6 +271,13 @@ public class UserServiceTests
             blobService.Object,
             followService.Object,
             tokenService.Object,
-            refreshCache.Object);
+            refreshCache.Object,
+            timeProvider ?? TimeProvider.System,
+            Options.Create(profileOptions ?? new ProfileOptions()));
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 }

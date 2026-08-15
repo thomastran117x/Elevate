@@ -61,7 +61,7 @@ export class AccountRecoveryComponent implements OnInit {
   async submitPasswordRecovery(): Promise<void> {
     this.error = '';
     this.success = '';
-    const username = this.passwordForm.getRawValue().username.trim();
+    const username = this.passwordForm.getRawValue().username.trim().toLowerCase();
     this.passwordForm.controls.username.setValue(username);
     if (this.passwordForm.invalid) return;
 

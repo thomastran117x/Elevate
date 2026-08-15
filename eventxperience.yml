@@ -248,6 +248,8 @@ spec:
               value: "false"
             - name: AUTH_SMS_MFA_STEP_UP_SMS_ENABLED
               value: "true"
+            - name: Profile__UsernameChangeCooldownDays
+              value: "30"
             - name: ELASTICSEARCH_URL
               value: "http://elasticsearch:9200"
             - name: JWT_SECRET_KEY

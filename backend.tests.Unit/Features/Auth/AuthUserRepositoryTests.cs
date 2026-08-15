@@ -34,6 +34,55 @@ public class AuthUserRepositoryTests
     }
 
     [Fact]
+    public async Task CreateUserAsync_ShouldRemoveExpiredReservation_WhenUsernameIsClaimed()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        var ownerId = await harness.SeedUserAsync();
+        harness.Db.UsernameReservations.Add(new UsernameReservation
+        {
+            Username = "available-name",
+            UserId = ownerId,
+            ReservedUntilUtc = DateTime.UtcNow.AddMinutes(-1),
+        });
+        await harness.Db.SaveChangesAsync();
+
+        var created = await harness.Repository.CreateUserAsync(new User
+        {
+            Email = "claimant@example.com",
+            Username = "  AVAILABLE-NAME  ",
+            Password = "hashed-password",
+            Usertype = "participant",
+        });
+
+        created.Username.Should().Be("available-name");
+        (await harness.Db.UsernameReservations.FindAsync("available-name")).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateUserAsync_ShouldRejectActiveReservation()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        var ownerId = await harness.SeedUserAsync();
+        harness.Db.UsernameReservations.Add(new UsernameReservation
+        {
+            Username = "reserved-name",
+            UserId = ownerId,
+            ReservedUntilUtc = DateTime.UtcNow.AddMinutes(1),
+        });
+        await harness.Db.SaveChangesAsync();
+
+        var act = () => harness.Repository.CreateUserAsync(new User
+        {
+            Email = "claimant@example.com",
+            Username = "reserved-name",
+            Password = "hashed-password",
+            Usertype = "participant",
+        });
+
+        await act.Should().ThrowAsync<UsernameTakenException>();
+    }
+
+    [Fact]
     public async Task UpdateUserAsync_ShouldUpdateKnownFields_AndNormalizeRole()
     {
         await using var harness = await AuthUserRepositoryHarness.CreateAsync();
@@ -55,7 +104,7 @@ public class AuthUserRepositoryTests
         updated!.Password.Should().Be("new-hash");
         updated.Usertype.Should().Be("Admin");
         updated.Name.Should().Be("Updated Name");
-        updated.Username.Should().Be("updated-user");
+        updated.Username.Should().Be("seed-user");
         updated.Avatar.Should().Be("/avatars/updated.png");
         updated.Address.Should().Be("123 Updated Street");
         updated.Phone.Should().Be("555-0100");
@@ -192,6 +241,90 @@ public class AuthUserRepositoryTests
         profile.Should().NotBeNull();
         profile!.Username.Should().Be("seed@example.com");
         profile.Usertype.Should().Be("Participant");
+    }
+
+    [Fact]
+    public async Task ChangeUsernameAsync_ShouldReserveOldUsername_AndResolvePublicAlias()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync(username: "old-name");
+        var now = new DateTime(2026, 8, 15, 12, 0, 0, DateTimeKind.Utc);
+        var availableAt = now.AddDays(30);
+
+        var result = await harness.Repository.ChangeUsernameAsync(
+            userId,
+            "new-name",
+            now,
+            availableAt);
+
+        result.Status.Should().Be(UsernameChangeStatus.Changed);
+        result.User!.Username.Should().Be("new-name");
+        result.User.UsernameChangeAvailableAtUtc.Should().Be(availableAt);
+        (await harness.Repository.UsernameUnavailableAsync("old-name", now)).Should().BeTrue();
+
+        var alias = await harness.Repository.GetPublicProfileByUsernameOrReservationAsync(
+            "old-name",
+            now);
+        alias!.Username.Should().Be("new-name");
+
+        (await harness.Repository.GetPublicProfileByUsernameOrReservationAsync(
+            "old-name",
+            availableAt)).Should().BeNull();
+        (await harness.Repository.UsernameUnavailableAsync("old-name", availableAt)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ChangeUsernameAsync_ShouldEnforceCooldown_AtAnExclusiveBoundary()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync(username: "first-name");
+        var now = new DateTime(2026, 8, 15, 12, 0, 0, DateTimeKind.Utc);
+        var availableAt = now.AddDays(30);
+
+        (await harness.Repository.ChangeUsernameAsync(
+            userId,
+            "second-name",
+            now,
+            availableAt)).Status.Should().Be(UsernameChangeStatus.Changed);
+
+        var blocked = await harness.Repository.ChangeUsernameAsync(
+            userId,
+            "third-name",
+            availableAt.AddTicks(-1),
+            availableAt.AddDays(30));
+        blocked.Status.Should().Be(UsernameChangeStatus.CooldownActive);
+        blocked.AvailableAtUtc.Should().Be(availableAt);
+
+        var allowed = await harness.Repository.ChangeUsernameAsync(
+            userId,
+            "third-name",
+            availableAt,
+            availableAt.AddDays(30));
+        allowed.Status.Should().Be(UsernameChangeStatus.Changed);
+    }
+
+    [Fact]
+    public async Task ChangeUsernameAsync_FirstAssignment_ShouldNotStartCooldown()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync(username: "");
+        var now = new DateTime(2026, 8, 15, 12, 0, 0, DateTimeKind.Utc);
+
+        var first = await harness.Repository.ChangeUsernameAsync(
+            userId,
+            "first-name",
+            now,
+            now.AddDays(30));
+
+        first.Status.Should().Be(UsernameChangeStatus.Changed);
+        first.User!.UsernameChangeAvailableAtUtc.Should().BeNull();
+
+        var second = await harness.Repository.ChangeUsernameAsync(
+            userId,
+            "second-name",
+            now.AddMinutes(1),
+            now.AddDays(30).AddMinutes(1));
+        second.Status.Should().Be(UsernameChangeStatus.Changed);
     }
 
     [Fact]

@@ -6,17 +6,22 @@ import { RouterLink } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { finalize } from 'rxjs/operators';
 
-import { getApiClientMessage } from '../../../../../../core/api/models/api-client-error.model';
+import {
+  getApiClientMessage,
+  isApiClientErrorCode,
+} from '../../../../../../core/api/models/api-client-error.model';
 import { setUser } from '../../../../../../core/stores/user.actions';
 import { User } from '../../../../../../core/stores/user.model';
 import { MyProfile, ProfileService } from '../../../../services/profile.service';
+import { MfaGateComponent } from '../../mfa-gate/mfa-gate.component';
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
 
 @Component({
   selector: 'app-profile-tab',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, MfaGateComponent],
   templateUrl: './profile-tab.component.html',
 })
 export class ProfileTabComponent implements OnInit {
@@ -25,9 +30,12 @@ export class ProfileTabComponent implements OnInit {
 
   readonly profileForm = this.fb.nonNullable.group({
     name: this.fb.nonNullable.control('', [Validators.maxLength(100)]),
-    username: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(50)]),
     phone: this.fb.nonNullable.control('', [Validators.maxLength(30)]),
     address: this.fb.nonNullable.control('', [Validators.maxLength(200)]),
+  });
+
+  readonly usernameForm = this.fb.nonNullable.group({
+    username: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(50)]),
   });
 
   profile: MyProfile | null = null;
@@ -35,6 +43,9 @@ export class ProfileTabComponent implements OnInit {
   editing = false;
   saving = false;
   avatarUploading = false;
+  usernameChangeRequested = false;
+  usernameMfaVerified = false;
+  usernameSaving = false;
   error = '';
   success = '';
 
@@ -80,10 +91,10 @@ export class ProfileTabComponent implements OnInit {
     if (!this.profile) return;
     this.profileForm.patchValue({
       name: this.profile.Name ?? '',
-      username: this.profile.Username,
       phone: this.profile.Phone ?? '',
       address: this.profile.Address ?? '',
     });
+    this.usernameForm.setValue({ username: this.profile.Username });
   }
 
   startEditing(): void {
@@ -104,7 +115,7 @@ export class ProfileTabComponent implements OnInit {
       return;
     }
 
-    const { name, username, phone, address } = this.profileForm.getRawValue();
+    const { name, phone, address } = this.profileForm.getRawValue();
     this.saving = true;
     this.error = '';
     this.success = '';
@@ -112,7 +123,6 @@ export class ProfileTabComponent implements OnInit {
     this.profileService
       .updateProfile({
         name: name || undefined,
-        username: username || undefined,
         phone: phone || undefined,
         address: address || undefined,
       })
@@ -129,6 +139,64 @@ export class ProfileTabComponent implements OnInit {
         },
         error: (err) => {
           this.error = getApiClientMessage(err, 'Unable to update profile.');
+        },
+      });
+  }
+
+  startUsernameChange(): void {
+    if (!this.profile?.CanChangeUsername) return;
+    this.usernameChangeRequested = true;
+    this.usernameMfaVerified = false;
+    this.usernameForm.setValue({ username: this.profile.Username });
+    this.error = '';
+    this.success = '';
+  }
+
+  cancelUsernameChange(): void {
+    this.usernameChangeRequested = false;
+    this.usernameMfaVerified = false;
+    this.error = '';
+    if (this.profile) {
+      this.usernameForm.setValue({ username: this.profile.Username });
+    }
+  }
+
+  changeUsername(): void {
+    if (!this.usernameMfaVerified) {
+      return;
+    }
+
+    const username = this.usernameForm.getRawValue().username.trim().toLowerCase();
+    this.usernameForm.controls.username.setValue(username);
+    if (this.usernameForm.invalid) {
+      this.usernameForm.markAllAsTouched();
+      return;
+    }
+
+    this.usernameSaving = true;
+    this.error = '';
+    this.success = '';
+
+    this.profileService
+      .changeUsername(username)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => (this.usernameSaving = false)),
+      )
+      .subscribe({
+        next: (updated) => {
+          this.profile = updated;
+          this.syncStore(updated);
+          this.usernameChangeRequested = false;
+          this.usernameMfaVerified = false;
+          this.usernameForm.setValue({ username: updated.Username });
+          this.success = `Username changed to @${updated.Username}.`;
+        },
+        error: (err) => {
+          if (isApiClientErrorCode(err, MFA_REQUIRED_ERROR_CODE)) {
+            this.usernameMfaVerified = false;
+          }
+          this.error = getApiClientMessage(err, 'Unable to change username.');
         },
       });
   }

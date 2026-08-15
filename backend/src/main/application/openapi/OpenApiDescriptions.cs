@@ -305,6 +305,25 @@ namespace backend.main.application.openapi
                 ),
                 ["POST /api/payments/{paymentId}/refund"] = new("Refund a payment"),
 
+                // ── Profile ───────────────────────────────────────────────────────────────
+
+                ["GET /api/profile"] = new("Get the current user's profile"),
+                ["GET /api/profile/{username}"] = new(
+                    "Get a public profile by username",
+                    "Active previous-username reservations resolve to the owning user's current profile. The response always contains the canonical current username."
+                ),
+                ["PATCH /api/profile"] = new(
+                    "Update the current user's profile",
+                    "Updates ordinary profile fields. Username changes use the dedicated MFA-protected endpoint."
+                ),
+                ["PATCH /api/profile/username"] = new(
+                    "Change the current user's username",
+                    "Requires recent MFA verification. Usernames are trimmed and lowercased; replacing an existing username starts the configured cooldown and reserves the previous username for the same period."
+                ),
+                ["POST /api/profile/avatar"] = new("Update the current user's avatar"),
+                ["POST /api/profile/change-password"] = new("Change the current user's password"),
+                ["DELETE /api/profile"] = new("Delete the current user's account"),
+
                 // ── Users ────────────────────────────────────────────────────────────────
 
                 ["GET /api/users/{userId}/clubs/following"] = new("List clubs followed by a user"),
