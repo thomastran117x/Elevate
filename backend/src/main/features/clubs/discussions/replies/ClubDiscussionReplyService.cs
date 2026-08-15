@@ -30,7 +30,8 @@ public sealed class ClubDiscussionReplyService : IClubDiscussionReplyService
     public async Task EnsureCanReadClubAsync(int clubId, int? userId, string? userRole)
     {
         var club = await _clubService.GetClub(clubId);
-        if (!club.isPrivate) return;
+        if (!club.isPrivate)
+            return;
         if (!userId.HasValue)
             throw new UnauthorizedException("Authentication is required to view discussions for a private club.");
         if (!await IsMemberOrStaffAsync(clubId, userId.Value, userRole))
@@ -139,14 +140,16 @@ public sealed class ClubDiscussionReplyService : IClubDiscussionReplyService
     private async Task EnsureCanParticipateAsync(int clubId, int userId, string? userRole)
     {
         var club = await _clubService.GetClub(clubId);
-        if (!club.isPrivate) return;
+        if (!club.isPrivate)
+            return;
         if (!await IsMemberOrStaffAsync(clubId, userId, userRole))
             throw new ForbiddenException("You must be a member of this club to participate in its discussions.");
     }
 
     private async Task<bool> IsMemberOrStaffAsync(int clubId, int userId, string? userRole)
     {
-        if (await _clubService.HasClubStaffAccessAsync(clubId, userId, userRole)) return true;
+        if (await _clubService.HasClubStaffAccessAsync(clubId, userId, userRole))
+            return true;
         return await _followRepository.IsFollowingClubAsync(clubId, userId) is not null;
     }
 
@@ -187,7 +190,8 @@ public sealed class ClubDiscussionReplyService : IClubDiscussionReplyService
     private async Task<IReadOnlyList<DiscussionReplyView>> BuildViewsAsync(
         IReadOnlyList<ClubDiscussionReply> replies, int? currentUserId)
     {
-        if (replies.Count == 0) return [];
+        if (replies.Count == 0)
+            return [];
         var ids = replies.Select(r => r.Id).ToList();
         var childCounts = await _replyRepository.GetDirectReplyCountsAsync(ids);
         var reactions = await _replyRepository.GetReactionSummariesAsync(ids, currentUserId);

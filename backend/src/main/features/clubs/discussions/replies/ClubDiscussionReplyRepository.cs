@@ -54,7 +54,8 @@ public sealed class ClubDiscussionReplyRepository : IClubDiscussionReplyReposito
     public async Task<Dictionary<int, int>> CountByDiscussionIdsAsync(IEnumerable<int> discussionIds)
     {
         var ids = discussionIds.Distinct().ToList();
-        if (ids.Count == 0) return [];
+        if (ids.Count == 0)
+            return [];
         return await _context.ClubDiscussionReplies.AsNoTracking()
             .Where(r => ids.Contains(r.DiscussionId))
             .GroupBy(r => r.DiscussionId)
@@ -65,7 +66,8 @@ public sealed class ClubDiscussionReplyRepository : IClubDiscussionReplyReposito
     public async Task<Dictionary<int, int>> GetDirectReplyCountsAsync(IEnumerable<int> replyIds)
     {
         var ids = replyIds.Distinct().ToList();
-        if (ids.Count == 0) return [];
+        if (ids.Count == 0)
+            return [];
         return await _context.ClubDiscussionReplies.AsNoTracking()
             .Where(r => r.ParentReplyId.HasValue && ids.Contains(r.ParentReplyId.Value))
             .GroupBy(r => r.ParentReplyId!.Value)
@@ -77,7 +79,8 @@ public sealed class ClubDiscussionReplyRepository : IClubDiscussionReplyReposito
         IEnumerable<int> replyIds, int? currentUserId)
     {
         var ids = replyIds.Distinct().ToList();
-        if (ids.Count == 0) return [];
+        if (ids.Count == 0)
+            return [];
 
         var counts = await _context.ClubDiscussionReplyReactions.AsNoTracking()
             .Where(r => ids.Contains(r.ReplyId))
@@ -109,7 +112,8 @@ public sealed class ClubDiscussionReplyRepository : IClubDiscussionReplyReposito
     public async Task<ClubDiscussionReply?> UpdateAsync(int id, string content)
     {
         var reply = await _context.ClubDiscussionReplies.FindAsync(id);
-        if (reply is null) return null;
+        if (reply is null)
+            return null;
         reply.Content = content;
         reply.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
@@ -120,7 +124,8 @@ public sealed class ClubDiscussionReplyRepository : IClubDiscussionReplyReposito
     {
         await using var transaction = await _context.Database.BeginTransactionAsync();
         var reply = await _context.ClubDiscussionReplies.FindAsync(id);
-        if (reply is null) return null;
+        if (reply is null)
+            return null;
         if (!reply.IsDeleted)
         {
             reply.IsDeleted = true;

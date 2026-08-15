@@ -15,7 +15,8 @@ internal static class DiscussionReplyCursorCodec
 
     public static DiscussionReplyCursor? Decode(string? cursor)
     {
-        if (string.IsNullOrWhiteSpace(cursor)) return null;
+        if (string.IsNullOrWhiteSpace(cursor))
+            return null;
         try
         {
             var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(cursor));

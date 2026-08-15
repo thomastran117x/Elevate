@@ -8,9 +8,18 @@ public enum DiscussionReplyReactionType
 
 public class ClubDiscussionReplyReaction
 {
-    public int ReplyId { get; set; }
-    public int UserId { get; set; }
-    public DiscussionReplyReactionType Reaction { get; set; }
+    public int ReplyId
+    {
+        get; set;
+    }
+    public int UserId
+    {
+        get; set;
+    }
+    public DiscussionReplyReactionType Reaction
+    {
+        get; set;
+    }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

@@ -22,6 +22,9 @@ namespace backend.main.features.clubs.discussions
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         [NotMapped]
-        public int ReplyCount { get; set; }
+        public int ReplyCount
+        {
+            get; set;
+        }
     }
 }

@@ -5,7 +5,10 @@ namespace backend.main.features.clubs.discussions.replies.contracts.requests;
 
 public sealed class DiscussionReplyCreateRequest
 {
-    public int? ParentReplyId { get; set; }
+    public int? ParentReplyId
+    {
+        get; set;
+    }
 
     [Required]
     [StringLength(1000)]
@@ -23,5 +26,8 @@ public sealed class DiscussionReplyReactionRequest
 {
     [Required]
     [JsonConverter(typeof(JsonStringEnumConverter))]
-    public DiscussionReplyReactionType? Reaction { get; set; }
+    public DiscussionReplyReactionType? Reaction
+    {
+        get; set;
+    }
 }

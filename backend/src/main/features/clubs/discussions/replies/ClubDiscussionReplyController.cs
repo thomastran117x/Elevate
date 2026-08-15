@@ -153,7 +153,8 @@ public sealed class ClubDiscussionReplyController : ControllerBase
                     continue;
                 }
 
-                if (!await available) break;
+                if (!await available)
+                    break;
                 while (channel.Reader.TryRead(out var evt))
                 {
                     var json = JsonSerializer.Serialize(evt.Payload, EventJsonOptions);
@@ -195,7 +196,8 @@ public sealed class ClubDiscussionReplyController : ControllerBase
 
     private (int? UserId, string? UserRole) GetOptionalUser()
     {
-        if (User.Identity?.IsAuthenticated != true) return (null, null);
+        if (User.Identity?.IsAuthenticated != true)
+            return (null, null);
         var user = User.GetUserPayload();
         return (user.Id, user.Role);
     }

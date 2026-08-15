@@ -14,14 +14,18 @@ public sealed class DiscussionReplyEventBroker
 
     public void Unsubscribe(int clubId, Guid id)
     {
-        if (!_streams.TryGetValue(clubId, out var subscribers)) return;
+        if (!_streams.TryGetValue(clubId, out var subscribers))
+            return;
         subscribers.TryRemove(id, out _);
-        if (subscribers.IsEmpty) _streams.TryRemove(clubId, out _);
+        if (subscribers.IsEmpty)
+            _streams.TryRemove(clubId, out _);
     }
 
     public void Publish(int clubId, DiscussionReplyEvent evt)
     {
-        if (!_streams.TryGetValue(clubId, out var subscribers)) return;
-        foreach (var writer in subscribers.Values) writer.TryWrite(evt);
+        if (!_streams.TryGetValue(clubId, out var subscribers))
+            return;
+        foreach (var writer in subscribers.Values)
+            writer.TryWrite(evt);
     }
 }
