@@ -143,6 +143,7 @@ namespace backend.main.features.clubs.discussions
                 discussion.UpdatedAt
             )
             {
+                ReplyCount = discussion.ReplyCount,
                 Author = new AuthorInfo
                 {
                     Id = discussion.UserId,

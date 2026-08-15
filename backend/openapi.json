@@ -6967,6 +6967,408 @@
         ]
       }
     },
+    "/api/events/{eventId}/favourite": {
+      "post": {
+        "tags": [
+          "events"
+        ],
+        "summary": "Save an event to favourites",
+        "description": "Stars an event without registering for it — no seat is consumed. Idempotent: starring an already-starred event succeeds rather than conflicting.",
+        "operationId": "EventFavourite_Favourite_post",
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfEventFavouriteResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfEventFavouriteResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfEventFavouriteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "events"
+        ],
+        "summary": "Remove an event from favourites",
+        "description": "Idempotent: unstarring an event that is not starred succeeds.",
+        "operationId": "EventFavourite_Unfavourite_delete",
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/events/{eventId}/favourite/me": {
+      "get": {
+        "tags": [
+          "events"
+        ],
+        "summary": "Check current user favourite status",
+        "operationId": "EventFavourite_GetMyStatus_get",
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfEventFavouriteResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfEventFavouriteResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfEventFavouriteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/events/me/favourites/ids": {
+      "get": {
+        "tags": [
+          "events"
+        ],
+        "summary": "List the current user's favourited event IDs",
+        "description": "Returns just the IDs so list views can render star state in one request without enriching every event payload.",
+        "operationId": "EventFavourite_GetMyFavouriteIds_get",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfIEnumerableOfInt32"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfIEnumerableOfInt32"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfIEnumerableOfInt32"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/events/me/pinned": {
+      "get": {
+        "tags": [
+          "events"
+        ],
+        "summary": "List the current user's pinned events",
+        "description": "The union of the events the user registered for and the events they starred, ordered registered-first then by start time. Rows the user can no longer view are returned redacted with `accessRevoked` set, so the star can still be removed.",
+        "operationId": "EventFavourite_GetMyPinned_get",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfIEnumerableOfPinnedEventResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfIEnumerableOfPinnedEventResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfIEnumerableOfPinnedEventResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
     "/api/clubs/{clubId}/join": {
       "post": {
         "tags": [
@@ -11866,6 +12268,1077 @@
         ]
       }
     },
+    "/api/clubs/{clubId}/discussions": {
+      "post": {
+        "tags": [
+          "clubs"
+        ],
+        "summary": "Start a club discussion",
+        "operationId": "ClubDiscussion_CreateDiscussion_post",
+        "parameters": [
+          {
+            "name": "clubId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClubDiscussionCreateRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClubDiscussionCreateRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClubDiscussionCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfClubDiscussionResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfClubDiscussionResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfClubDiscussionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "get": {
+        "tags": [
+          "clubs"
+        ],
+        "summary": "List discussions for a club",
+        "operationId": "ClubDiscussion_GetDiscussionsByClub_get",
+        "parameters": [
+          {
+            "name": "clubId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPagedResponseOfClubDiscussionResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPagedResponseOfClubDiscussionResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPagedResponseOfClubDiscussionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/clubs/{clubId}/discussions/{discussionId}": {
+      "put": {
+        "tags": [
+          "clubs"
+        ],
+        "summary": "Update a club discussion",
+        "operationId": "ClubDiscussion_UpdateDiscussion_put",
+        "parameters": [
+          {
+            "name": "clubId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "discussionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClubDiscussionUpdateRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClubDiscussionUpdateRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClubDiscussionUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfClubDiscussionResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfClubDiscussionResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfClubDiscussionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "clubs"
+        ],
+        "summary": "Delete a club discussion",
+        "operationId": "ClubDiscussion_DeleteDiscussion_delete",
+        "parameters": [
+          {
+            "name": "clubId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "discussionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/clubs/{clubId}/discussions/{discussionId}/replies": {
+      "get": {
+        "tags": [
+          "clubs"
+        ],
+        "summary": "List one level of discussion replies",
+        "operationId": "ClubDiscussionReply_GetReplies_get",
+        "parameters": [
+          {
+            "name": "clubId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "discussionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "parentReplyId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "default": 0,
+              "$ref": "#/components/schemas/DiscussionReplySort"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/String"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyPageResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyPageResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "clubs"
+        ],
+        "summary": "Add a discussion reply",
+        "operationId": "ClubDiscussionReply_CreateReply_post",
+        "parameters": [
+          {
+            "name": "clubId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "discussionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionReplyCreateRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionReplyCreateRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionReplyCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/clubs/{clubId}/discussions/{discussionId}/replies/{replyId}": {
+      "put": {
+        "tags": [
+          "clubs"
+        ],
+        "summary": "Edit a discussion reply",
+        "operationId": "ClubDiscussionReply_UpdateReply_put",
+        "parameters": [
+          {
+            "name": "clubId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "discussionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "replyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionReplyUpdateRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionReplyUpdateRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionReplyUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "clubs"
+        ],
+        "summary": "Soft-delete a discussion reply",
+        "operationId": "ClubDiscussionReply_DeleteReply_delete",
+        "parameters": [
+          {
+            "name": "clubId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "discussionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "replyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/clubs/{clubId}/discussions/{discussionId}/replies/{replyId}/reaction": {
+      "put": {
+        "tags": [
+          "clubs"
+        ],
+        "summary": "Set a reply reaction",
+        "operationId": "ClubDiscussionReply_SetReaction_put",
+        "parameters": [
+          {
+            "name": "clubId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "discussionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "replyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionReplyReactionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionReplyReactionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionReplyReactionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyReactionResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyReactionResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyReactionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "clubs"
+        ],
+        "summary": "Clear a reply reaction",
+        "operationId": "ClubDiscussionReply_ClearReaction_delete",
+        "parameters": [
+          {
+            "name": "clubId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "discussionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "replyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyReactionResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyReactionResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfDiscussionReplyReactionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/clubs/{clubId}/discussions/replies/events": {
+      "get": {
+        "tags": [
+          "clubs"
+        ],
+        "summary": "Stream live discussion reply events",
+        "description": "Opens a club-wide Server-Sent Events stream for reply creation, editing, deletion, and reaction counts.",
+        "operationId": "ClubDiscussionReply_StreamReplyEvents_get",
+        "parameters": [
+          {
+            "name": "clubId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/login": {
       "post": {
         "tags": [
@@ -15831,6 +17304,48 @@
         },
         "description": "Standard JSON envelope returned by all API endpoints."
       },
+      "ApiResponseOfClubDiscussionResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/ClubDiscussionResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
       "ApiResponseOfClubInvitationDecisionResponse": {
         "type": "object",
         "properties": {
@@ -16419,6 +17934,132 @@
         },
         "description": "Standard JSON envelope returned by all API endpoints."
       },
+      "ApiResponseOfDiscussionReplyPageResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/DiscussionReplyPageResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
+      "ApiResponseOfDiscussionReplyReactionResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/DiscussionReplyReactionResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
+      "ApiResponseOfDiscussionReplyResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/DiscussionReplyResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
       "ApiResponseOfEventAnalyticsResponse": {
         "type": "object",
         "properties": {
@@ -16438,6 +18079,48 @@
               {
                 "description": "Endpoint-specific response payload.",
                 "$ref": "#/components/schemas/EventAnalyticsResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
+      "ApiResponseOfEventFavouriteResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/EventFavouriteResponse"
               }
             ],
             "description": "Endpoint-specific response payload. `null` on error responses."
@@ -17469,6 +19152,48 @@
         },
         "description": "Standard JSON envelope returned by all API endpoints."
       },
+      "ApiResponseOfIEnumerableOfInt32": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/IEnumerableOfInt32"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
       "ApiResponseOfIEnumerableOfPaymentResponse": {
         "type": "object",
         "properties": {
@@ -17488,6 +19213,48 @@
               {
                 "description": "Endpoint-specific response payload.",
                 "$ref": "#/components/schemas/IEnumerableOfPaymentResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
+      "ApiResponseOfIEnumerableOfPinnedEventResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/IEnumerableOfPinnedEventResponse"
               }
             ],
             "description": "Endpoint-specific response payload. `null` on error responses."
@@ -17861,6 +19628,48 @@
           "data": {
             "description": "Endpoint-specific response payload. `null` on error responses.",
             "$ref": "#/components/schemas/Object"
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
+      "ApiResponseOfPagedResponseOfClubDiscussionResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/PagedResponseOfClubDiscussionResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
           },
           "error": {
             "oneOf": [
@@ -19411,6 +21220,84 @@
         },
         "description": "JSON payload used to create a club."
       },
+      "ClubDiscussionCreateRequest": {
+        "required": [
+          "title",
+          "description"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "$ref": "#/components/schemas/String"
+          },
+          "description": {
+            "$ref": "#/components/schemas/String"
+          }
+        }
+      },
+      "ClubDiscussionResponse": {
+        "required": [
+          "id",
+          "clubId",
+          "userId",
+          "title",
+          "description",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "clubId": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "userId": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "title": {
+            "$ref": "#/components/schemas/String"
+          },
+          "description": {
+            "$ref": "#/components/schemas/String"
+          },
+          "author": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AuthorInfo"
+              }
+            ]
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "replyCount": {
+            "$ref": "#/components/schemas/Int32"
+          }
+        }
+      },
+      "ClubDiscussionUpdateRequest": {
+        "required": [
+          "title",
+          "description"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "$ref": "#/components/schemas/String"
+          },
+          "description": {
+            "$ref": "#/components/schemas/String"
+          }
+        }
+      },
       "ClubInvitationClubSummaryResponse": {
         "type": "object",
         "properties": {
@@ -20869,6 +22756,193 @@
         },
         "description": "Deletes a series, choosing how much of it goes with the series row."
       },
+      "DiscussionReplyCreateRequest": {
+        "required": [
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "parentReplyId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Int32"
+              }
+            ]
+          },
+          "content": {
+            "$ref": "#/components/schemas/String"
+          }
+        }
+      },
+      "DiscussionReplyPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "$ref": "#/components/schemas/IEnumerableOfDiscussionReplyResponse"
+          },
+          "totalCount": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          },
+          "hasMore": {
+            "$ref": "#/components/schemas/Boolean"
+          }
+        }
+      },
+      "DiscussionReplyReactionRequest": {
+        "required": [
+          "reaction"
+        ],
+        "type": "object",
+        "properties": {
+          "reaction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DiscussionReplyReactionType"
+              }
+            ]
+          }
+        }
+      },
+      "DiscussionReplyReactionResponse": {
+        "type": "object",
+        "properties": {
+          "replyId": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "likeCount": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "dislikeCount": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "currentUserReaction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          }
+        }
+      },
+      "DiscussionReplyReactionType": {
+        "enum": [
+          "Like",
+          "Dislike",
+          null
+        ]
+      },
+      "DiscussionReplyResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "discussionId": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "parentReplyId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Int32"
+              }
+            ]
+          },
+          "userId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Int32"
+              }
+            ]
+          },
+          "content": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          },
+          "author": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AuthorInfo"
+              }
+            ]
+          },
+          "isDeleted": {
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "likeCount": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "dislikeCount": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "currentUserReaction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          },
+          "directReplyCount": {
+            "$ref": "#/components/schemas/Int32"
+          }
+        }
+      },
+      "DiscussionReplySort": {
+        "type": "integer"
+      },
+      "DiscussionReplyUpdateRequest": {
+        "required": [
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/String"
+          }
+        }
+      },
       "Double": {
         "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
         "type": [
@@ -21208,6 +23282,29 @@
           }
         },
         "description": "Partial event payload used when creating or updating drafts."
+      },
+      "EventFavouriteResponse": {
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "isFavourited": {
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "favouritedAtUtc": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Null when bool EventFavouriteResponse.IsFavourited is false. Nullable rather than defaulted so a\r\n\"not favourited\" status does not serialize an impossible year-0001 timestamp.",
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ]
+          }
+        },
+        "description": "The current user's star on an event."
       },
       "EventGeoFilter": {
         "type": "object",
@@ -22955,6 +25052,12 @@
           }
         }
       },
+      "IEnumerableOfClubDiscussionResponse": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ClubDiscussionResponse"
+        }
+      },
       "IEnumerableOfClubInvitationLinkResponse": {
         "type": "array",
         "items": {
@@ -23009,6 +25112,12 @@
           "$ref": "#/components/schemas/ClubVersionListItemResponse"
         }
       },
+      "IEnumerableOfDiscussionReplyResponse": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/DiscussionReplyResponse"
+        }
+      },
       "IEnumerableOfEventInvitationLinkResponse": {
         "type": "array",
         "items": {
@@ -23057,6 +25166,12 @@
           "$ref": "#/components/schemas/FollowResponse"
         }
       },
+      "IEnumerableOfInt32": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Int32"
+        }
+      },
       "IEnumerableOfManagedEventResponse": {
         "type": "array",
         "items": {
@@ -23067,6 +25182,12 @@
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/PaymentResponse"
+        }
+      },
+      "IEnumerableOfPinnedEventResponse": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/PinnedEventResponse"
         }
       },
       "IEnumerableOfPostCommentResponse": {
@@ -23889,6 +26010,38 @@
           }
         }
       },
+      "PagedResponseOfClubDiscussionResponse": {
+        "required": [
+          "items",
+          "totalCount",
+          "page",
+          "pageSize"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Items for the current page.",
+            "$ref": "#/components/schemas/IEnumerableOfClubDiscussionResponse"
+          },
+          "totalCount": {
+            "description": "Total number of matching records.",
+            "$ref": "#/components/schemas/Int32"
+          },
+          "page": {
+            "description": "Current 1-based page number.",
+            "$ref": "#/components/schemas/Int32"
+          },
+          "pageSize": {
+            "description": "Requested page size.",
+            "$ref": "#/components/schemas/Int32"
+          },
+          "totalPages": {
+            "description": "Total number of available pages.",
+            "$ref": "#/components/schemas/Int32"
+          }
+        },
+        "description": "Standard pagination payload used inside API response envelopes."
+      },
       "PagedResponseOfClubMemberResponse": {
         "required": [
           "items",
@@ -24244,6 +26397,45 @@
             "$ref": "#/components/schemas/DateTime"
           }
         }
+      },
+      "PinnedEventResponse": {
+        "type": "object",
+        "properties": {
+          "isRegistered": {
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "isFavourited": {
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "favouritedAtUtc": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ]
+          },
+          "registeredAtUtc": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ]
+          },
+          "accessRevoked": {
+            "description": "True when the user can no longer view this event (e.g. a private-event invitation was\r\nrevoked after they starred it). EventResponse PinnedEventResponse.Event is then redacted down to its id,\r\nbut the row is still returned so the user retains a way to unstar it — this page is\r\nthe only place the UI offers that, so omitting the row would strand the star forever.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "event": {
+            "$ref": "#/components/schemas/EventResponse"
+          }
+        },
+        "description": "One row of the user's pinned list — the union of the events they registered for and the\r\nevents they starred. bool PinnedEventResponse.IsRegistered and bool PinnedEventResponse.IsFavourited say which\r\nsignal (or both) put it here; the client groups on bool PinnedEventResponse.IsRegistered."
       },
       "PostCommentCreateRequest": {
         "required": [

@@ -5,6 +5,7 @@ using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.clubs;
 using backend.main.features.clubs.discussions;
+using backend.main.features.clubs.discussions.replies;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.follow.invitations;
 using backend.main.features.clubs.posts;
@@ -46,6 +47,8 @@ namespace backend.main.infrastructure.database.core
         public DbSet<Payment> Payments { get; set; } = null!;
         public DbSet<ClubReview> ClubReviews { get; set; } = null!;
         public DbSet<ClubDiscussion> ClubDiscussions { get; set; } = null!;
+        public DbSet<ClubDiscussionReply> ClubDiscussionReplies { get; set; } = null!;
+        public DbSet<ClubDiscussionReplyReaction> ClubDiscussionReplyReactions { get; set; } = null!;
         public DbSet<Device> Devices { get; set; } = null!;
         public DbSet<SmsMfaEnrollment> SmsMfaEnrollments { get; set; } = null!;
         public DbSet<TotpMfaEnrollment> TotpMfaEnrollments { get; set; } = null!;
@@ -561,6 +564,58 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<ClubDiscussion>()
                 .HasIndex(d => d.UserId);
+
+            modelBuilder.Entity<ClubDiscussionReply>()
+                .HasOne<ClubDiscussion>()
+                .WithMany()
+                .HasForeignKey(r => r.DiscussionId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClubDiscussionReply>()
+                .HasOne<ClubDiscussionReply>()
+                .WithMany()
+                .HasForeignKey(r => r.ParentReplyId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<ClubDiscussionReply>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(r => r.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClubDiscussionReply>()
+                .HasIndex(r => new { r.DiscussionId, r.ParentReplyId, r.CreatedAt, r.Id });
+
+            modelBuilder.Entity<ClubDiscussionReply>()
+                .HasIndex(r => r.UserId);
+
+            modelBuilder.Entity<ClubDiscussionReplyReaction>()
+                .HasKey(r => new { r.ReplyId, r.UserId });
+
+            modelBuilder.Entity<ClubDiscussionReplyReaction>()
+                .HasOne<ClubDiscussionReply>()
+                .WithMany()
+                .HasForeignKey(r => r.ReplyId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClubDiscussionReplyReaction>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(r => r.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ClubDiscussionReplyReaction>()
+                .Property(r => r.Reaction)
+                .HasConversion<string>()
+                .HasMaxLength(16);
+
+            modelBuilder.Entity<ClubDiscussionReplyReaction>()
+                .HasIndex(r => r.UserId);
 
             modelBuilder.Entity<Device>()
                 .HasOne<User>()

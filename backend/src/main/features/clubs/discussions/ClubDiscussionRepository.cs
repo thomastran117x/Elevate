@@ -27,6 +27,17 @@ namespace backend.main.features.clubs.discussions
                 .ThenByDescending(d => d.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
+                .Select(d => new ClubDiscussion
+                {
+                    Id = d.Id,
+                    ClubId = d.ClubId,
+                    UserId = d.UserId,
+                    Title = d.Title,
+                    Description = d.Description,
+                    CreatedAt = d.CreatedAt,
+                    UpdatedAt = d.UpdatedAt,
+                    ReplyCount = _context.ClubDiscussionReplies.Count(r => r.DiscussionId == d.Id)
+                })
                 .ToListAsync();
         }
 

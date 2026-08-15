@@ -12,6 +12,7 @@ import { ClubDiscussionsService } from '../../services/club-discussions.service'
 import { ClubsService } from '../../services/clubs.service';
 import { ClubDiscussion, discussionAuthorName } from '../../models/club-discussion.types';
 import { Club } from '../../models/club.types';
+import { DiscussionReplyThreadComponent } from '../../components/discussion-reply-thread/discussion-reply-thread.component';
 
 /** Frontend mirror of the server's `HasClubStaffAccessAsync`: owner, staff, or admin. */
 function isClubStaff(club: Club | null): boolean {
@@ -21,7 +22,7 @@ function isClubStaff(club: Club | null): boolean {
 @Component({
   selector: 'app-club-discussions',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, DiscussionReplyThreadComponent],
   templateUrl: './club-discussions.component.html',
 })
 export class ClubDiscussionsComponent implements OnInit, OnDestroy {
@@ -48,6 +49,7 @@ export class ClubDiscussionsComponent implements OnInit, OnDestroy {
   editingId: number | null = null;
   saving = false;
   form = { title: '', description: '' };
+  readonly expandedDiscussionIds = new Set<number>();
 
   private readonly destroy$ = new Subject<void>();
   private requestVersion = 0;
@@ -189,6 +191,22 @@ export class ClubDiscussionsComponent implements OnInit, OnDestroy {
           this.error = getApiClientMessage(err, 'Unable to delete the discussion.');
         },
       });
+  }
+
+  toggleReplies(discussionId: number): void {
+    if (this.expandedDiscussionIds.has(discussionId)) {
+      this.expandedDiscussionIds.delete(discussionId);
+    } else {
+      this.expandedDiscussionIds.add(discussionId);
+    }
+  }
+
+  repliesExpanded(discussionId: number): boolean {
+    return this.expandedDiscussionIds.has(discussionId);
+  }
+
+  updateReplyCount(discussion: ClubDiscussion, count: number): void {
+    discussion.replyCount = count;
   }
 
   loadMore(): void {

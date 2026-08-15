@@ -30,6 +30,10 @@ namespace backend.main.features.clubs.discussions.contracts.responses
         {
             get; set;
         }
+        public int ReplyCount
+        {
+            get; set;
+        }
 
         public ClubDiscussionResponse(int id, int clubId, int userId, string title, string description,
             DateTime createdAt, DateTime updatedAt)
