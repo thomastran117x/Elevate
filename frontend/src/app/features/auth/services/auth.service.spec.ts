@@ -613,6 +613,61 @@ describe('AuthService', () => {
     expect((thrown as ApiClientClientError).code).toBe('VALIDATION_ERROR');
   }));
 
+  it('posts password recovery by username', fakeAsync(() => {
+    service.recoverPassword({ username: 'member-user', captcha: 'captcha-token' }).subscribe();
+    tick();
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/auth/recovery/password'));
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      username: 'member-user',
+      captcha: 'captcha-token',
+    });
+    request.flush({
+      success: true,
+      message: 'ok',
+      data: { Challenge: 'challenge', ExpiresAtUtc: '2026-08-15T12:00:00Z' },
+    });
+  }));
+
+  it('posts username recovery by email', fakeAsync(() => {
+    service.recoverUsername({ email: 'member@example.com', captcha: 'captcha-token' }).subscribe();
+    tick();
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/auth/recovery/username'));
+    expect(request.request.body).toEqual({
+      email: 'member@example.com',
+      captcha: 'captcha-token',
+    });
+    request.flush({ message: 'Recovery instructions sent.' });
+  }));
+
+  it('posts token and otp password reset proofs', fakeAsync(() => {
+    service.resetPassword({ password: 'Password123!' }, 'reset token').subscribe();
+    tick();
+    const tokenRequest = httpMock.expectOne((req) =>
+      req.url.endsWith('/auth/reset-password?token=reset%20token'),
+    );
+    expect(tokenRequest.request.body).toEqual({ password: 'Password123!' });
+    tokenRequest.flush({ message: 'ok' });
+
+    service
+      .resetPassword({
+        password: 'Password456!',
+        code: '123456',
+        challenge: 'otp-challenge',
+      })
+      .subscribe();
+    tick();
+    const otpRequest = httpMock.expectOne((req) => req.url.endsWith('/auth/reset-password'));
+    expect(otpRequest.request.body).toEqual({
+      password: 'Password456!',
+      code: '123456',
+      challenge: 'otp-challenge',
+    });
+    otpRequest.flush({ message: 'ok' });
+  }));
+
   it('propagates normalized csrf bootstrap failures before the request is sent', fakeAsync(() => {
     let thrown: unknown;
     authToken.ensureCsrfToken.and.rejectWith(

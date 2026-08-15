@@ -1,0 +1,94 @@
+<div class="min-h-screen bg-surface text-content flex items-center justify-center p-6">
+  <div class="w-full max-w-md rounded-3xl border border-line bg-glass p-8 backdrop-blur">
+    <h1 class="text-3xl font-bold">Account recovery</h1>
+    <p class="mt-2 text-sm text-muted">Choose what you need help recovering.</p>
+
+    <div class="mt-6 grid grid-cols-2 rounded-xl bg-surface-sunken p-1" role="tablist">
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="mode === 'password'"
+        (click)="setMode('password')"
+        class="rounded-lg px-3 py-2 text-sm font-semibold"
+        [class.bg-surface]="mode === 'password'"
+      >
+        Password
+      </button>
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="mode === 'username'"
+        (click)="setMode('username')"
+        class="rounded-lg px-3 py-2 text-sm font-semibold"
+        [class.bg-surface]="mode === 'username'"
+      >
+        Username
+      </button>
+    </div>
+
+    @if (mode === 'password') {
+      <form [formGroup]="passwordForm" (ngSubmit)="submitPasswordRecovery()" class="mt-6 space-y-4">
+        <p class="text-sm text-muted">
+          Enter your username. We’ll email a reset link and a six-digit code if the account can use
+          a password.
+        </p>
+        <div>
+          <label for="recovery-username" class="mb-1 block text-sm font-medium text-muted"
+            >Username</label
+          >
+          <input
+            id="recovery-username"
+            type="text"
+            formControlName="username"
+            autocomplete="username"
+            class="w-full rounded-xl border border-line bg-surface-sunken px-4 py-3 outline-none"
+          />
+        </div>
+        <button
+          type="submit"
+          [disabled]="loading"
+          class="w-full rounded-xl bg-inverse px-4 py-3 font-semibold text-inverse-content disabled:opacity-60"
+        >
+          {{ loading ? 'Sending instructions...' : 'Continue' }}
+        </button>
+      </form>
+    } @else {
+      <form [formGroup]="usernameForm" (ngSubmit)="submitUsernameRecovery()" class="mt-6 space-y-4">
+        <p class="text-sm text-muted">
+          Enter your email. We’ll send your username or guidance for your connected sign-in
+          provider.
+        </p>
+        <div>
+          <label for="recovery-email" class="mb-1 block text-sm font-medium text-muted"
+            >Email</label
+          >
+          <input
+            id="recovery-email"
+            type="email"
+            formControlName="email"
+            autocomplete="email"
+            class="w-full rounded-xl border border-line bg-surface-sunken px-4 py-3 outline-none"
+          />
+        </div>
+        <button
+          type="submit"
+          [disabled]="loading"
+          class="w-full rounded-xl bg-inverse px-4 py-3 font-semibold text-inverse-content disabled:opacity-60"
+        >
+          {{ loading ? 'Sending instructions...' : 'Recover username' }}
+        </button>
+      </form>
+    }
+
+    @if (error) {
+      <div class="mt-4 text-sm text-danger" role="alert">{{ error }}</div>
+    }
+    @if (success) {
+      <div class="mt-4 text-sm text-success" role="status">{{ success }}</div>
+    }
+
+    <p class="mt-5 text-sm text-subtle">
+      Back to <a routerLink="/auth/login" class="text-content underline">sign in</a>
+    </p>
+  </div>
+</div>

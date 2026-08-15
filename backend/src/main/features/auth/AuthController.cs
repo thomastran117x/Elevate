@@ -650,24 +650,36 @@ namespace backend.main.features.auth
             }
         }
 
+        [HttpPost("recovery/password")]
+        [ValidateAntiForgeryToken]
+        [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<VerificationChallengeResponse>), StatusCodes.Status200OK)]
+        public Task<IActionResult> RecoverPassword([FromBody] PasswordRecoveryRequest request) =>
+            RecoverPasswordInternalAsync(request);
+
         [HttpPost("forgot-password")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<VerificationChallengeResponse>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+        public Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request) =>
+            RecoverPasswordInternalAsync(request);
+
+        private async Task<IActionResult> RecoverPasswordInternalAsync(
+            PasswordRecoveryRequest request
+        )
         {
             try
             {
-                if (!_seedBypass.IsBypassEnabledFor(request.Email)
+                if (!_seedBypass.IsBypassEnabledForUsername(request.Username)
                     && !await _captchaService.VerifyCaptchaAsync(request.Captcha))
                     throw new BadRequestException("Invalid captcha.");
 
-                var challenge = await _authService.ForgotPasswordAsync(request.Email);
+                var challenge = await _authService.RecoverPasswordAsync(request.Username);
 
                 return StatusCode(
                     200,
                     new ApiResponse<VerificationChallengeResponse>(
-                        "If the account exist, we send a reset email",
+                        "If the account exists, recovery instructions have been sent.",
                         new VerificationChallengeResponse
                         {
                             Challenge = challenge.Challenge,
@@ -681,27 +693,71 @@ namespace backend.main.features.auth
                 if (e is AppException)
                     return HandleError.Resolve(e);
 
-                Logger.Error($"[AuthController] ForgotPassword failed: {e}");
+                Logger.Error($"[AuthController] RecoverPassword failed: {e}");
                 return HandleError.Resolve(e);
             }
         }
+
+        [HttpPost("recovery/username")]
+        [ValidateAntiForgeryToken]
+        [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
+        public async Task<IActionResult> RecoverUsername([FromBody] UsernameRecoveryRequest request)
+        {
+            try
+            {
+                if (!_seedBypass.IsBypassEnabledFor(request.Email)
+                    && !await _captchaService.VerifyCaptchaAsync(request.Captcha))
+                    throw new BadRequestException("Invalid captcha.");
+
+                await _authService.RecoverUsernameAsync(request.Email);
+                return Ok(new MessageResponse(
+                    "If the account exists, recovery instructions have been sent."
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[AuthController] RecoverUsername failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [HttpPost("reset-password")]
+        [ValidateAntiForgeryToken]
+        [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
+        public Task<IActionResult> ResetPassword(
+            [FromBody] ResetPasswordRequest request,
+            [FromQuery] string? token
+        ) => ResetPasswordInternalAsync(request, token);
 
         [HttpPost("change-password")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, [FromQuery] string? token)
+        public Task<IActionResult> ChangePassword(
+            [FromBody] ChangePasswordRequest request,
+            [FromQuery] string? token
+        ) => ResetPasswordInternalAsync(request, token);
+
+        private async Task<IActionResult> ResetPasswordInternalAsync(
+            ResetPasswordRequest request,
+            string? token
+        )
         {
             try
             {
                 if (!string.IsNullOrWhiteSpace(token))
                 {
-                    await _authService.ChangePasswordAsync(token, request.Password);
+                    await _authService.ResetPasswordAsync(token, request.Password);
                 }
                 else if (!string.IsNullOrWhiteSpace(request.Code)
                     && !string.IsNullOrWhiteSpace(request.Challenge))
                 {
-                    await _authService.ChangePasswordWithOtpAsync(
+                    await _authService.ResetPasswordWithOtpAsync(
                         request.Code,
                         request.Challenge,
                         request.Password
@@ -712,14 +768,14 @@ namespace backend.main.features.auth
                     throw new BadRequestException("Missing password reset token or OTP challenge.");
                 }
 
-                return StatusCode(200, new MessageResponse("Password reset successful. Please login"));
+                return Ok(new MessageResponse("Password reset successful. Please sign in."));
             }
             catch (Exception e)
             {
                 if (e is AppException)
                     return HandleError.Resolve(e);
 
-                Logger.Error($"[AuthController] ChangePassword failed: {e}");
+                Logger.Error($"[AuthController] ResetPassword failed: {e}");
                 return HandleError.Resolve(e);
             }
         }
@@ -836,5 +892,4 @@ namespace backend.main.features.auth
         }
     }
 }
-
 

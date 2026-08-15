@@ -499,7 +499,7 @@ public class AuthControllerTests
 
         var result = await controller.ForgotPassword(new ForgotPasswordRequest
         {
-            Email = "forgot@example.com",
+            Username = "forgot-user",
             Captcha = "bad-captcha"
         });
 
@@ -510,7 +510,7 @@ public class AuthControllerTests
     public async Task ForgotPassword_ShouldReturnVerificationChallenge_WhenCaptchaIsValid()
     {
         var authService = new Mock<IAuthService>();
-        authService.Setup(service => service.ForgotPasswordAsync("forgot@example.com"))
+        authService.Setup(service => service.RecoverPasswordAsync("forgot-user"))
             .ReturnsAsync(new VerificationOtpChallenge
             {
                 Code = "123456",
@@ -521,20 +521,39 @@ public class AuthControllerTests
 
         var result = await controller.ForgotPassword(new ForgotPasswordRequest
         {
-            Email = "forgot@example.com",
+            Username = "forgot-user",
             Captcha = "captcha"
         });
 
         var response = ExtractApiResponse<VerificationChallengeResponse>(result, 200);
-        response.Message.Should().Be("If the account exist, we send a reset email");
+        response.Message.Should().Be("If the account exists, recovery instructions have been sent.");
         response.Data!.Challenge.Should().Be("forgot-challenge");
+    }
+
+    [Fact]
+    public async Task RecoverUsername_ShouldReturnGenericMessage_WhenCaptchaIsValid()
+    {
+        var authService = new Mock<IAuthService>();
+        authService.Setup(service => service.RecoverUsernameAsync("member@example.com"))
+            .Returns(Task.CompletedTask);
+        var controller = CreateController(authService: authService);
+
+        var result = await controller.RecoverUsername(new UsernameRecoveryRequest
+        {
+            Email = "member@example.com",
+            Captcha = "captcha"
+        });
+
+        var response = ExtractMessageResponse(result, 200);
+        response.Message.Should().Be("If the account exists, recovery instructions have been sent.");
+        authService.Verify(service => service.RecoverUsernameAsync("member@example.com"), Times.Once);
     }
 
     [Fact]
     public async Task ChangePassword_ShouldUseTokenFlow_WhenQueryTokenIsPresent()
     {
         var authService = new Mock<IAuthService>();
-        authService.Setup(service => service.ChangePasswordAsync("reset-token", "Password123!"))
+        authService.Setup(service => service.ResetPasswordAsync("reset-token", "Password123!"))
             .Returns(Task.CompletedTask);
         var controller = CreateController(authService: authService);
 
@@ -543,15 +562,15 @@ public class AuthControllerTests
             "reset-token");
 
         var response = ExtractMessageResponse(result, 200);
-        response.Message.Should().Be("Password reset successful. Please login");
-        authService.Verify(service => service.ChangePasswordAsync("reset-token", "Password123!"), Times.Once);
+        response.Message.Should().Be("Password reset successful. Please sign in.");
+        authService.Verify(service => service.ResetPasswordAsync("reset-token", "Password123!"), Times.Once);
     }
 
     [Fact]
     public async Task ChangePassword_ShouldUseOtpFlow_WhenChallengeAndCodeArePresent()
     {
         var authService = new Mock<IAuthService>();
-        authService.Setup(service => service.ChangePasswordWithOtpAsync("123456", "challenge", "Password123!"))
+        authService.Setup(service => service.ResetPasswordWithOtpAsync("123456", "challenge", "Password123!"))
             .Returns(Task.CompletedTask);
         var controller = CreateController(authService: authService);
 
@@ -565,8 +584,8 @@ public class AuthControllerTests
             null);
 
         var response = ExtractMessageResponse(result, 200);
-        response.Message.Should().Be("Password reset successful. Please login");
-        authService.Verify(service => service.ChangePasswordWithOtpAsync("123456", "challenge", "Password123!"), Times.Once);
+        response.Message.Should().Be("Password reset successful. Please sign in.");
+        authService.Verify(service => service.ResetPasswordWithOtpAsync("123456", "challenge", "Password123!"), Times.Once);
     }
 
     [Fact]

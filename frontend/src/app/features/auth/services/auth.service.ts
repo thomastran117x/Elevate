@@ -32,9 +32,20 @@ export interface SignupRequest {
   captcha: string;
 }
 
-export interface ForgotPasswordRequest {
+export interface PasswordRecoveryRequest {
+  username: string;
+  captcha: string;
+}
+
+export interface UsernameRecoveryRequest {
   email: string;
   captcha: string;
+}
+
+export interface ResetPasswordRequest {
+  password: string;
+  code?: string;
+  challenge?: string;
 }
 
 export interface VerificationChallengeResponse {
@@ -500,20 +511,22 @@ export class AuthService {
     return this.postWithCsrf<void>(`${this.baseUrl}/logout`, {});
   }
 
-  forgotPassword(
-    payload: ForgotPasswordRequest,
+  recoverPassword(
+    payload: PasswordRecoveryRequest,
   ): Observable<ApiEnvelope<VerificationChallengeResponse>> {
     return this.postWithCsrf<ApiEnvelope<VerificationChallengeResponse>>(
-      `${this.baseUrl}/forgot-password`,
+      `${this.baseUrl}/recovery/password`,
       payload,
     );
   }
 
-  changePassword(password: string, token?: string): Observable<void> {
+  recoverUsername(payload: UsernameRecoveryRequest): Observable<void> {
+    return this.postWithCsrf<void>(`${this.baseUrl}/recovery/username`, payload);
+  }
+
+  resetPassword(payload: ResetPasswordRequest, token?: string): Observable<void> {
     const query = token ? `?token=${encodeURIComponent(token)}` : '';
-    return this.postWithCsrf<void>(`${this.baseUrl}/change-password${query}`, {
-      password,
-    });
+    return this.postWithCsrf<void>(`${this.baseUrl}/reset-password${query}`, payload);
   }
 
   get googleOAuthUrl(): string {

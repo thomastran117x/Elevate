@@ -269,10 +269,11 @@
                 Remember me
               </label>
               <a
-                routerLink="/auth/forgot-password"
+                routerLink="/auth/recover-account"
+                [queryParams]="{ mode: 'password' }"
                 class="font-semibold text-accent transition hover:text-content"
               >
-                Forgot password?
+                Need help signing in?
               </a>
             </div>
 

@@ -81,6 +81,29 @@ public class AuthRequestValidationTests
         ]);
     }
 
+    [Fact]
+    public void RecoveryRequests_ShouldRequireCorrectIdentifierTypes()
+    {
+        var passwordResults = Validate(new PasswordRecoveryRequest
+        {
+            Username = "",
+            Captcha = ""
+        });
+        var usernameResults = Validate(new UsernameRecoveryRequest
+        {
+            Email = "not-an-email",
+            Captcha = "captcha"
+        });
+
+        passwordResults.Select(item => item.ErrorMessage).Should().Contain([
+            "The Username field is required.",
+            "The Captcha field is required."
+        ]);
+        usernameResults.Select(item => item.ErrorMessage).Should().Contain(
+            "The Email field is not a valid e-mail address."
+        );
+    }
+
     private static List<ValidationResult> Validate(object instance)
     {
         var results = new List<ValidationResult>();

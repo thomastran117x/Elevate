@@ -322,13 +322,21 @@ namespace backend.main.features.auth.token
 
         public async Task<VerificationArtifacts> GenerateVerificationArtifactsAsync(
             User user,
-            VerificationPurpose purpose
+            VerificationPurpose purpose,
+            bool replaceExisting = false
         )
         {
             try
             {
                 var existingState = await GetVerificationStateAsync(user.Email, purpose);
-                if (existingState != null)
+                var usernameMatches = purpose != VerificationPurpose.SignUp
+                    || string.Equals(
+                        existingState?.Username,
+                        user.Username,
+                        StringComparison.Ordinal
+                    );
+
+                if (existingState != null && !replaceExisting && usernameMatches)
                 {
                     return new VerificationArtifacts
                     {
@@ -343,6 +351,14 @@ namespace backend.main.features.auth.token
                     };
                 }
 
+                if (existingState != null)
+                {
+                    _ = await _cacheService.DeleteKeyAsync(
+                        VerificationTokenKey(existingState.LinkToken)
+                    );
+                    await DeleteVerificationStateAsync(existingState);
+                }
+
                 string linkToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
                 string otpCode = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
                 DateTime expiresAtUtc = DateTime.UtcNow.Add(VERIFY_TTL);
@@ -353,6 +369,7 @@ namespace backend.main.features.auth.token
                     payload.Email,
                     payload.Password,
                     payload.Usertype,
+                    payload.Username,
                     expiresAtUtc,
                     challenge,
                     otpCode
@@ -374,6 +391,7 @@ namespace backend.main.features.auth.token
                     OtpProof = otpProof,
                     Password = payload.Password,
                     Usertype = payload.Usertype,
+                    Username = payload.Username,
                     ExpiresAtUtc = expiresAtUtc,
                 };
 
@@ -472,6 +490,7 @@ namespace backend.main.features.auth.token
                     state.Email,
                     state.Password,
                     state.Usertype,
+                    state.Username,
                     state.ExpiresAtUtc,
                     challenge,
                     code
@@ -501,6 +520,7 @@ namespace backend.main.features.auth.token
                     Email = state.Email,
                     Password = state.Password,
                     Usertype = state.Usertype,
+                    Username = state.Username,
                     Purpose = state.Purpose,
                 });
             }
@@ -601,6 +621,7 @@ namespace backend.main.features.auth.token
             {
                 Email = user.Email,
                 Password = purpose == VerificationPurpose.SignUp ? user.Password : null,
+                Username = purpose == VerificationPurpose.SignUp ? user.Username : null,
                 Usertype = purpose == VerificationPurpose.SignUp
                     ? AuthRoles.NormalizeStored(user.Usertype)
                     : "placeholder",
@@ -644,6 +665,7 @@ namespace backend.main.features.auth.token
             {
                 Email = payload.Email,
                 Password = payload.Password,
+                Username = payload.Username,
                 Usertype = AuthRoles.NormalizeStored(payload.Usertype),
             };
         }
@@ -655,21 +677,26 @@ namespace backend.main.features.auth.token
             string email,
             string? password,
             string? usertype,
+            string? username,
             DateTime expiresAtUtc,
             string challenge,
             string otpCode
         )
         {
-            var material = string.Join(
-                "|",
+            var fields = new List<object?>
+            {
                 purpose,
                 email,
                 password ?? string.Empty,
                 usertype ?? string.Empty,
-                expiresAtUtc.ToUniversalTime().Ticks,
-                challenge,
-                otpCode
-            );
+            };
+            if (username != null)
+                fields.Add(username);
+            fields.Add(expiresAtUtc.ToUniversalTime().Ticks);
+            fields.Add(challenge);
+            fields.Add(otpCode);
+
+            var material = string.Join("|", fields);
 
             using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(JWT_VERIFICATION_SECRET));
             return Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(material)));
@@ -771,6 +798,10 @@ namespace backend.main.features.auth.token
             {
                 get; set;
             }
+            public string? Username
+            {
+                get; set;
+            }
             public required string Usertype
             {
                 get; set;
@@ -811,6 +842,10 @@ namespace backend.main.features.auth.token
             {
                 get; set;
             }
+            public string? Username
+            {
+                get; set;
+            }
             public required string Usertype
             {
                 get; set;
@@ -822,5 +857,4 @@ namespace backend.main.features.auth.token
         }
     }
 }
-
 

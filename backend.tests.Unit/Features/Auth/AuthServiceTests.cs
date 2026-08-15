@@ -64,7 +64,12 @@ public class AuthServiceTests
                 Transport = SessionTransport.BrowserCookie
             });
 
-        var service = CreateService(userRepository: userRepository, tokenService: tokenService);
+        var notifications = new Mock<IAuthNotificationService>();
+        var service = CreateService(
+            userRepository: userRepository,
+            tokenService: tokenService,
+            authNotificationService: notifications
+        );
 
         var act = () => service.HandleTokensAsync(
             "refresh-token",
@@ -91,7 +96,9 @@ public class AuthServiceTests
         tokenService.Setup(service => service.GenerateVerificationArtifactsAsync(
                 It.IsAny<backend.main.features.profile.User>(),
                 VerificationPurpose.SignUp))
-            .Callback<backend.main.features.profile.User, VerificationPurpose>((user, _) => capturedUser = user)
+            .Callback<backend.main.features.profile.User, VerificationPurpose, bool>(
+                (user, _, _) => capturedUser = user
+            )
             .ReturnsAsync(new VerificationArtifacts
             {
                 LinkToken = "verify-link",
@@ -125,23 +132,108 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task ForgotPasswordAsync_ShouldReturnPlaceholderWithoutPublishingForUnknownUsers()
+    public async Task RecoverPasswordAsync_ShouldReturnPlaceholderWithoutPublishingForUnknownUsers()
     {
         var userRepository = new Mock<IAuthUserRepository>();
-        userRepository.Setup(repository => repository.GetAuthByEmailAsync("unknown@example.com"))
-            .ReturnsAsync((UserAuthRecord?)null);
+        userRepository.Setup(repository => repository.GetRecoveryByUsernameAsync("unknown-user"))
+            .ReturnsAsync((UserRecoveryRecord?)null);
 
         var notifications = new Mock<IAuthNotificationService>();
         var service = CreateService(userRepository: userRepository, authNotificationService: notifications);
 
-        var challenge = await service.ForgotPasswordAsync("unknown@example.com");
+        var challenge = await service.RecoverPasswordAsync("unknown-user");
 
         challenge.Challenge.Should().NotBeNullOrWhiteSpace();
+        challenge.Challenge.Should().MatchRegex("^[A-Za-z0-9_-]{43}$");
         challenge.Code.Should().HaveLength(6);
         challenge.ExpiresAtUtc.Should().BeAfter(DateTime.UtcNow);
         notifications.Verify(
             service => service.SendPasswordResetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()),
             Times.Never);
+    }
+
+    [Fact]
+    public async Task RecoverPasswordAsync_ShouldSendProviderGuidance_ForProviderOnlyAccount()
+    {
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetRecoveryByUsernameAsync("social-user"))
+            .ReturnsAsync(new UserRecoveryRecord
+            {
+                Id = 9,
+                Email = "social@example.com",
+                Username = "social-user",
+                HasLocalPassword = false,
+                HasGoogleProvider = true
+            });
+        var notifications = new Mock<IAuthNotificationService>();
+        var tokenService = new Mock<ITokenService>();
+        var service = CreateService(
+            userRepository: userRepository,
+            tokenService: tokenService,
+            authNotificationService: notifications
+        );
+
+        var challenge = await service.RecoverPasswordAsync("social-user");
+
+        challenge.Challenge.Should().MatchRegex("^[A-Za-z0-9_-]{43}$");
+        notifications.Verify(service => service.SendProviderSignInReminderAsync(
+            "social@example.com",
+            It.Is<IReadOnlyList<string>>(providers => providers.SequenceEqual(new[] { "Google" })),
+            null
+        ), Times.Once);
+        tokenService.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task RecoverUsernameAsync_ShouldSendUsername_ForLocalAccount()
+    {
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetRecoveryByEmailAsync("member@example.com"))
+            .ReturnsAsync(new UserRecoveryRecord
+            {
+                Id = 10,
+                Email = "member@example.com",
+                Username = "member-user",
+                RecipientName = "Member",
+                HasLocalPassword = true
+            });
+        var notifications = new Mock<IAuthNotificationService>();
+        var service = CreateService(
+            userRepository: userRepository,
+            authNotificationService: notifications
+        );
+
+        await service.RecoverUsernameAsync("member@example.com");
+
+        notifications.Verify(service => service.SendUsernameReminderAsync(
+            "member@example.com",
+            "member-user",
+            "Member"
+        ), Times.Once);
+    }
+
+    [Fact]
+    public async Task RecoverUsernameAsync_ShouldNotPublish_ForDisabledAccount()
+    {
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetRecoveryByEmailAsync("disabled@example.com"))
+            .ReturnsAsync(new UserRecoveryRecord
+            {
+                Id = 11,
+                Email = "disabled@example.com",
+                Username = "disabled-user",
+                HasLocalPassword = true,
+                IsDisabled = true
+            });
+        var notifications = new Mock<IAuthNotificationService>();
+        var service = CreateService(
+            userRepository: userRepository,
+            authNotificationService: notifications
+        );
+
+        await service.RecoverUsernameAsync("disabled@example.com");
+
+        notifications.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -375,24 +467,23 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task ForgotPasswordAsync_ShouldPublishResetMessage_ForActiveUser()
+    public async Task RecoverPasswordAsync_ShouldPublishResetMessage_ForActiveUser()
     {
         var userRepository = new Mock<IAuthUserRepository>();
-        userRepository.Setup(repository => repository.GetAuthByEmailAsync("active@example.com"))
-            .ReturnsAsync(new UserAuthRecord
+        userRepository.Setup(repository => repository.GetRecoveryByUsernameAsync("active-user"))
+            .ReturnsAsync(new UserRecoveryRecord
             {
                 Id = 8,
                 Email = "active@example.com",
-                Password = "hash",
-                Usertype = "Participant",
                 IsDisabled = false,
-                AuthVersion = 1
+                HasLocalPassword = true
             });
 
         var tokenService = new Mock<ITokenService>();
         tokenService.Setup(service => service.GenerateVerificationArtifactsAsync(
                 It.IsAny<backend.main.features.profile.User>(),
-                VerificationPurpose.ResetPassword))
+                VerificationPurpose.ResetPassword,
+                true))
             .ReturnsAsync(new VerificationArtifacts
             {
                 LinkToken = "reset-link",
@@ -408,7 +499,7 @@ public class AuthServiceTests
         var notifications = new Mock<IAuthNotificationService>();
         var service = CreateService(userRepository: userRepository, tokenService: tokenService, authNotificationService: notifications);
 
-        var result = await service.ForgotPasswordAsync("active@example.com");
+        var result = await service.RecoverPasswordAsync("active-user");
 
         result.Code.Should().Be("654321");
         notifications.Verify(service => service.SendPasswordResetAsync(
@@ -419,7 +510,7 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task ChangePasswordAsync_ShouldUpdatePassword_IncrementAuthVersion_AndRevokeSessions()
+    public async Task ResetPasswordAsync_ShouldUpdatePassword_IncrementAuthVersion_AndRevokeSessions()
     {
         var userRepository = new Mock<IAuthUserRepository>();
         userRepository.Setup(repository => repository.GetAuthByEmailAsync("reset@example.com"))
@@ -452,18 +543,27 @@ public class AuthServiceTests
         tokenService.Setup(service => service.RevokeAllRefreshSessionsAsync(21))
             .Returns(Task.CompletedTask);
 
-        var service = CreateService(userRepository: userRepository, tokenService: tokenService);
+        var notifications = new Mock<IAuthNotificationService>();
+        var service = CreateService(
+            userRepository: userRepository,
+            tokenService: tokenService,
+            authNotificationService: notifications
+        );
 
-        await service.ChangePasswordAsync("reset-token", "Password123!");
+        await service.ResetPasswordAsync("reset-token", "Password123!");
 
         userRepository.Verify(repository => repository.UpdateUserAsync(21, It.Is<backend.main.features.profile.User>(u =>
             u.Email == "reset@example.com" && !string.IsNullOrWhiteSpace(u.Password))), Times.Once);
         userRepository.Verify(repository => repository.IncrementAuthVersionAsync(21), Times.Once);
         tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(21), Times.Once);
+        notifications.Verify(service => service.SendPasswordChangedAsync(
+            "reset@example.com",
+            null
+        ), Times.Once);
     }
 
     [Fact]
-    public async Task ChangePasswordWithOtpAsync_ShouldUpdatePassword_IncrementAuthVersion_AndRevokeSessions()
+    public async Task ResetPasswordWithOtpAsync_ShouldUpdatePassword_IncrementAuthVersion_AndRevokeSessions()
     {
         var userRepository = new Mock<IAuthUserRepository>();
         userRepository.Setup(repository => repository.GetAuthByEmailAsync("reset-otp@example.com"))
@@ -496,14 +596,23 @@ public class AuthServiceTests
         tokenService.Setup(service => service.RevokeAllRefreshSessionsAsync(22))
             .Returns(Task.CompletedTask);
 
-        var service = CreateService(userRepository: userRepository, tokenService: tokenService);
+        var notifications = new Mock<IAuthNotificationService>();
+        var service = CreateService(
+            userRepository: userRepository,
+            tokenService: tokenService,
+            authNotificationService: notifications
+        );
 
-        await service.ChangePasswordWithOtpAsync("123456", "otp-challenge", "Password123!");
+        await service.ResetPasswordWithOtpAsync("123456", "otp-challenge", "Password123!");
 
         userRepository.Verify(repository => repository.UpdateUserAsync(22, It.Is<backend.main.features.profile.User>(u =>
             u.Email == "reset-otp@example.com" && !string.IsNullOrWhiteSpace(u.Password))), Times.Once);
         userRepository.Verify(repository => repository.IncrementAuthVersionAsync(22), Times.Once);
         tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(22), Times.Once);
+        notifications.Verify(service => service.SendPasswordChangedAsync(
+            "reset-otp@example.com",
+            null
+        ), Times.Once);
     }
 
     [Fact]

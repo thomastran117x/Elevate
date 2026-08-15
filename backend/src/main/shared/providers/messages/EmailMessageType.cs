@@ -16,6 +16,8 @@ namespace backend.main.shared.providers.messages
         ClubStaffInvite,
         ClubMemberInvite,
         WaitlistJoined,
-        WaitlistPromoted
+        WaitlistPromoted,
+        UsernameReminder,
+        ProviderSignInReminder
     }
 }

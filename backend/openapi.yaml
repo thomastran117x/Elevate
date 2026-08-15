@@ -3,8 +3,6 @@ info:
   title: EventXperience Backend API
   description: Generated API reference for the EventXperience backend. Responses use the shared ApiResponse envelope unless noted otherwise.
   version: v1
-servers:
-  - url: http://localhost:8090
 paths:
   /api/profile:
     get:
@@ -9082,11 +9080,61 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+  /api/auth/recovery/password:
+    post:
+      tags:
+        - auth
+      summary: Start password recovery by username
+      operationId: Auth_RecoverPassword_post
+      parameters:
+        - name: X-CSRF-TOKEN
+          in: header
+          description: CSRF token obtained from `/api/auth/csrf`. Browser clients must send the `XSRF-TOKEN` cookie and mirror its value in this header.
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordRecoveryRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/PasswordRecoveryRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/PasswordRecoveryRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfVerificationChallengeResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfVerificationChallengeResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfVerificationChallengeResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
   /api/auth/forgot-password:
     post:
       tags:
         - auth
-      summary: Request a password reset email
+      summary: Start password recovery by username (compatibility alias)
       operationId: Auth_ForgotPassword_post
       parameters:
         - name: X-CSRF-TOKEN
@@ -9132,11 +9180,115 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
-  /api/auth/change-password:
+  /api/auth/recovery/username:
+    post:
+      tags:
+        - auth
+      summary: Recover a username by email
+      operationId: Auth_RecoverUsername_post
+      parameters:
+        - name: X-CSRF-TOKEN
+          in: header
+          description: CSRF token obtained from `/api/auth/csrf`. Browser clients must send the `XSRF-TOKEN` cookie and mirror its value in this header.
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsernameRecoveryRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/UsernameRecoveryRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/UsernameRecoveryRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+  /api/auth/reset-password:
     post:
       tags:
         - auth
       summary: Reset the account password
+      operationId: Auth_ResetPassword_post
+      parameters:
+        - name: token
+          in: query
+          schema:
+            $ref: '#/components/schemas/String'
+        - name: X-CSRF-TOKEN
+          in: header
+          description: CSRF token obtained from `/api/auth/csrf`. Browser clients must send the `XSRF-TOKEN` cookie and mirror its value in this header.
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+  /api/auth/change-password:
+    post:
+      tags:
+        - auth
+      summary: Reset the account password (compatibility alias)
       operationId: Auth_ChangePassword_post
       parameters:
         - name: token
@@ -14823,11 +14975,11 @@ components:
           $ref: '#/components/schemas/DateTime'
     ForgotPasswordRequest:
       required:
-        - email
+        - username
         - captcha
       type: object
       properties:
-        email:
+        username:
           $ref: '#/components/schemas/String'
         captcha:
           $ref: '#/components/schemas/String'
@@ -15684,6 +15836,16 @@ components:
           description: Total number of available pages.
           $ref: '#/components/schemas/Int32'
       description: Standard pagination payload used inside API response envelopes.
+    PasswordRecoveryRequest:
+      required:
+        - username
+        - captcha
+      type: object
+      properties:
+        username:
+          $ref: '#/components/schemas/String'
+        captcha:
+          $ref: '#/components/schemas/String'
     PaymentResponse:
       type: object
       properties:
@@ -15848,6 +16010,21 @@ components:
             - type: 'null'
             - $ref: '#/components/schemas/String'
         dietaryNeeds:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/String'
+    ResetPasswordRequest:
+      required:
+        - password
+      type: object
+      properties:
+        password:
+          $ref: '#/components/schemas/String'
+        code:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/String'
+        challenge:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/String'
@@ -16178,6 +16355,16 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/String'
+    UsernameRecoveryRequest:
+      required:
+        - email
+        - captcha
+      type: object
+      properties:
+        email:
+          $ref: '#/components/schemas/String'
+        captcha:
+          $ref: '#/components/schemas/String'
     UserStatusResponse:
       type: object
       properties:

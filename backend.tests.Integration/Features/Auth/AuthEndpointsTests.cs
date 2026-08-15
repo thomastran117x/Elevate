@@ -110,9 +110,9 @@ public class AuthEndpointsTests
         await using var app = await AuthApiTestApp.CreateAsync();
         await app.SeedUserAsync("forgot@example.com");
 
-        var existing = await app.PostJsonWithCsrfAsync("/api/auth/forgot-password", new ForgotPasswordRequest
+        var existing = await app.PostJsonWithCsrfAsync("/api/auth/recovery/password", new PasswordRecoveryRequest
         {
-            Email = "forgot@example.com",
+            Username = "forgot",
             Captcha = "captcha"
         });
         existing.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -123,7 +123,7 @@ public class AuthEndpointsTests
 
         var missing = await app.PostJsonWithCsrfAsync("/api/auth/forgot-password", new ForgotPasswordRequest
         {
-            Email = "missing@example.com",
+            Username = "missing",
             Captcha = "captcha"
         });
         missing.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -140,9 +140,9 @@ public class AuthEndpointsTests
         await app.SeedKnownDeviceAsync(user.Id, "trusted-reset-device");
         var originalHash = user.Password;
 
-        var forgotByToken = await app.PostJsonWithCsrfAsync("/api/auth/forgot-password", new ForgotPasswordRequest
+        var forgotByToken = await app.PostJsonWithCsrfAsync("/api/auth/recovery/password", new PasswordRecoveryRequest
         {
-            Email = "reset@example.com",
+            Username = "reset",
             Captcha = "captcha"
         });
         forgotByToken.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -151,12 +151,15 @@ public class AuthEndpointsTests
             message.Type == EmailMessageType.ResetPassword && message.Email == "reset@example.com");
 
         var resetByToken = await app.PostJsonWithCsrfAsync(
-            $"/api/auth/change-password?token={Uri.EscapeDataString(tokenEmail.Token)}",
-            new ChangePasswordRequest
+            $"/api/auth/reset-password?token={Uri.EscapeDataString(tokenEmail.Token)}",
+            new ResetPasswordRequest
             {
                 Password = "NewPassword123!"
             });
         resetByToken.StatusCode.Should().Be(HttpStatusCode.OK);
+        app.Publisher.EmailMessages.Should().Contain(message =>
+            message.Type == EmailMessageType.PasswordChanged
+            && message.Email == "reset@example.com");
 
         var hashAfterTokenReset = await app.QueryDbAsync(db =>
             db.Users.Where(u => u.Id == user.Id).Select(u => u.Password).SingleAsync());
@@ -181,7 +184,7 @@ public class AuthEndpointsTests
 
         var forgotByOtp = await app.PostJsonWithCsrfAsync("/api/auth/forgot-password", new ForgotPasswordRequest
         {
-            Email = "reset@example.com",
+            Username = "reset",
             Captcha = "captcha"
         });
         var forgotBody = await app.ReadApiResponseAsync<VerificationChallengeResponse>(forgotByOtp);
@@ -215,6 +218,41 @@ public class AuthEndpointsTests
 
         var otpLogin = await app.Client.SendAsync(loginAfterOtpReset);
         otpLogin.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task RecoverUsername_ShouldSendUsernameAndRemainGenericForUnknownEmail()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        await app.SeedUserAsync("member@example.com");
+
+        var existing = await app.PostJsonWithCsrfAsync(
+            "/api/auth/recovery/username",
+            new UsernameRecoveryRequest
+            {
+                Email = "member@example.com",
+                Captcha = "captcha"
+            }
+        );
+
+        existing.StatusCode.Should().Be(HttpStatusCode.OK);
+        app.Publisher.EmailMessages.Should().ContainSingle(message =>
+            message.Type == EmailMessageType.UsernameReminder
+            && message.Email == "member@example.com"
+            && message.Username == "member");
+
+        app.Publisher.Clear();
+        var missing = await app.PostJsonWithCsrfAsync(
+            "/api/auth/recovery/username",
+            new UsernameRecoveryRequest
+            {
+                Email = "missing@example.com",
+                Captcha = "captcha"
+            }
+        );
+
+        missing.StatusCode.Should().Be(HttpStatusCode.OK);
+        app.Publisher.EmailMessages.Should().BeEmpty();
     }
 
     [Fact]

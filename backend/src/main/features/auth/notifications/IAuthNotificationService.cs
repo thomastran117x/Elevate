@@ -14,6 +14,18 @@ namespace backend.main.features.auth.notifications
             string code,
             string? recipientName = null);
 
+        Task SendUsernameReminderAsync(
+            string email,
+            string username,
+            string? recipientName = null);
+
+        Task SendProviderSignInReminderAsync(
+            string email,
+            IReadOnlyList<string> providers,
+            string? recipientName = null);
+
+        Task SendPasswordChangedAsync(string email, string? recipientName = null);
+
         Task SendDeviceVerificationAsync(
             string email,
             string token,

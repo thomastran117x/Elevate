@@ -82,8 +82,11 @@ namespace backend.main.application.openapi
                 ["POST /api/auth/mfa/totp/enable"] = new("Re-enable authenticator app MFA"),
                 ["POST /api/auth/mfa/totp/disable"] = new("Disable authenticator app MFA"),
                 ["POST /api/auth/mfa/totp/remove"] = new("Remove authenticator app MFA"),
-                ["POST /api/auth/forgot-password"] = new("Request a password reset email"),
-                ["POST /api/auth/change-password"] = new("Reset the account password"),
+                ["POST /api/auth/forgot-password"] = new("Start password recovery by username (compatibility alias)"),
+                ["POST /api/auth/change-password"] = new("Reset the account password (compatibility alias)"),
+                ["POST /api/auth/recovery/password"] = new("Start password recovery by username"),
+                ["POST /api/auth/recovery/username"] = new("Recover a username by email"),
+                ["POST /api/auth/reset-password"] = new("Reset the account password"),
 
                 // ── Clubs ────────────────────────────────────────────────────────────────
 

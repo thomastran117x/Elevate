@@ -57,9 +57,10 @@ namespace backend.main.features.auth
             string? sessionBindingToken,
             SessionTransport transport
         );
-        Task<VerificationOtpChallenge> ForgotPasswordAsync(string email);
-        Task ChangePasswordAsync(string token, string password);
-        Task ChangePasswordWithOtpAsync(string code, string challenge, string password);
+        Task<VerificationOtpChallenge> RecoverPasswordAsync(string username);
+        Task RecoverUsernameAsync(string email);
+        Task ResetPasswordAsync(string token, string password);
+        Task ResetPasswordWithOtpAsync(string code, string challenge, string password);
         Task ChangePasswordForAuthenticatedUserAsync(string email, string currentPassword, string newPassword);
     }
 }

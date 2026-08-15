@@ -22,6 +22,14 @@ namespace backend.main.shared.providers.messages
         {
             get; init;
         }
+        public string? Username
+        {
+            get; init;
+        }
+        public IReadOnlyList<string>? SignInProviders
+        {
+            get; init;
+        }
         public int? EventInvitationId
         {
             get; init;

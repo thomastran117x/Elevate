@@ -26,7 +26,8 @@ namespace backend.main.features.auth.token
         );
         public Task<VerificationArtifacts> GenerateVerificationArtifactsAsync(
             User user,
-            VerificationPurpose purpose
+            VerificationPurpose purpose,
+            bool replaceExisting = false
         );
         public Task<RefreshTokenValidationResult> ValidateRefreshToken(
             string refreshToken,
@@ -40,5 +41,4 @@ namespace backend.main.features.auth.token
         public Task<string?> VerificationTokenExist(string email, VerificationPurpose purpose);
     }
 }
-
 
