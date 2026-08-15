@@ -1,3 +1,4 @@
+using backend.main.features.auth;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts;
@@ -49,9 +50,35 @@ public class ThematicSeedersTests
 
         users.Should().HaveCount(42);
         users.Select(user => user.Email).Should().OnlyHaveUniqueItems();
+        users.Should().OnlyContain(user => !string.IsNullOrWhiteSpace(user.Username));
+        users.Select(user => user.Username).Should().OnlyHaveUniqueItems();
         users.Count(user => user.Usertype == "Organizer").Should().Be(20);
         users.Count(user => user.Usertype == "Volunteer").Should().Be(10);
         users.Count(user => user.Usertype == "Participant").Should().Be(12);
+
+        var login = await new AuthUserRepository(db).GetAuthByUsernameAsync("HARBOUROWNER");
+        login.Should().NotBeNull();
+        login!.Email.Should().Be($"harbour.owner{SeedCatalogConstants.SeedEmailDomain}");
+        BCrypt.Net.BCrypt.Verify("Password123!", login.Password).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SeedUsersSeeder_ShouldRejectUsernameOwnedByAnotherAccount()
+    {
+        await using var scope = await CreateDbContextAsync();
+        var db = scope.Db;
+        db.Users.Add(new User
+        {
+            Email = "unrelated@example.com",
+            Username = UserSeedCatalog.Staff[0].Username,
+            Usertype = "Participant"
+        });
+        await db.SaveChangesAsync();
+
+        var act = () => CreateUsersSeeder(db).SeedAsync();
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*username*already assigned*");
     }
 
     [Fact]

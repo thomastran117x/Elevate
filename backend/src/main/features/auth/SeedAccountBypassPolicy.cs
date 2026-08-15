@@ -8,14 +8,14 @@ namespace backend.main.features.auth
     /// bypassed for a seed account. A bypass is permitted only when ALL of:
     /// the opt-in flag is enabled, the environment is affirmatively non-production
     /// (see <see cref="BypassEnvironment"/>, which defaults to production when
-    /// unset so this can never fail open in production), and the account's email
-    /// is under <see cref="SeedCatalogConstants.SeedEmailDomain"/>.
+    /// unset so this can never fail open in production), and the supplied identity
+    /// is either an email under <see cref="SeedCatalogConstants.SeedEmailDomain"/>
+    /// or a username in <see cref="UserSeedCatalog"/>.
     ///
-    /// Trust boundary: the seed check is an email-suffix match, not a lookup against
-    /// the accounts the seeder actually created. In a non-production environment with
-    /// the flag enabled, anyone who registers an address under that domain gains the
-    /// bypass. This is acceptable only because it is gated to dev/test with an explicit
-    /// opt-in; do not repurpose this policy for production trust decisions.
+    /// Trust boundary: the email check is a suffix match, while the username check is
+    /// restricted to the static seed catalog. This is acceptable only because both are
+    /// gated to dev/test with an explicit opt-in; do not repurpose this policy for
+    /// production trust decisions.
     /// </summary>
     public sealed class SeedAccountBypassPolicy
     {

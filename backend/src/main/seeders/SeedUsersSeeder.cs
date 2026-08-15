@@ -28,11 +28,19 @@ public sealed class SeedUsersSeeder : ISeeder
         var desiredEmails = desiredUsers
             .Select(user => user.Email)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var desiredUsernames = desiredUsers
+            .Select(user => user.Username)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var existingUsers = await _dbContext.Users
-            .Where(user => desiredEmails.Contains(user.Email))
+            .Where(user =>
+                desiredEmails.Contains(user.Email)
+                || (user.Username != null && desiredUsernames.Contains(user.Username)))
             .ToListAsync(cancellationToken);
         var existingByEmail = existingUsers.ToDictionary(user => user.Email, StringComparer.OrdinalIgnoreCase);
+        var existingByUsername = existingUsers
+            .Where(user => !string.IsNullOrWhiteSpace(user.Username))
+            .ToDictionary(user => user.Username!, StringComparer.OrdinalIgnoreCase);
 
         var defaultPassword = ResolveDefaultUserPassword();
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(
@@ -44,6 +52,14 @@ public sealed class SeedUsersSeeder : ISeeder
 
         foreach (var definition in desiredUsers)
         {
+            if (existingByUsername.TryGetValue(definition.Username, out var usernameOwner)
+                && !string.Equals(usernameOwner.Email, definition.Email, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot seed '{definition.Email}': username '{definition.Username}' "
+                    + $"is already assigned to '{usernameOwner.Email}'.");
+            }
+
             if (existingByEmail.TryGetValue(definition.Email, out var existing))
             {
                 if (ApplyDefinition(existing, definition, defaultPassword, passwordHash))
