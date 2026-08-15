@@ -402,10 +402,9 @@ public class ClubEndpointsTests
             JsonContent.Create(new { content = "Unlimited depth", parentCommentId = child.Id })));
         grandchildResponse.StatusCode.Should().Be(HttpStatusCode.Created);
 
-        var reactionPath = $"/api/clubs/{club.Id}/posts/{post.Id}/comments/{root.Id}/reaction";
         var liked = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Put,
-            reactionPath,
+            $"/api/clubs/{club.Id}/posts/{post.Id}/comments/{root.Id}/reaction",
             ownerSession.AccessToken,
             JsonContent.Create(new { reaction = "Like" })));
         var likedData = (await app.ReadApiResponseAsync<PostCommentReactionResponse>(liked)).Data!;
@@ -414,7 +413,7 @@ public class ClubEndpointsTests
 
         var switched = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Put,
-            reactionPath,
+            $"/api/clubs/{club.Id}/posts/{post.Id}/comments/{root.Id}/reaction",
             ownerSession.AccessToken,
             JsonContent.Create(new { reaction = "Dislike" })));
         var switchedData = (await app.ReadApiResponseAsync<PostCommentReactionResponse>(switched)).Data!;
@@ -423,7 +422,7 @@ public class ClubEndpointsTests
 
         var cleared = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete,
-            reactionPath,
+            $"/api/clubs/{club.Id}/posts/{post.Id}/comments/{root.Id}/reaction",
             ownerSession.AccessToken));
         var clearedData = (await app.ReadApiResponseAsync<PostCommentReactionResponse>(cleared)).Data!;
         clearedData.DislikeCount.Should().Be(0);
