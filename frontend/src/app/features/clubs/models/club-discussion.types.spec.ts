@@ -2,6 +2,8 @@ import {
   discussionAuthorName,
   normalizeClubDiscussion,
   normalizeClubDiscussionsPagedData,
+  normalizeDiscussionReply,
+  normalizeDiscussionReplyPage,
 } from './club-discussion.types';
 
 describe('club-discussion.types', () => {
@@ -16,6 +18,7 @@ describe('club-discussion.types', () => {
         author: { id: 9, name: 'Jamie', username: 'jrivers', avatar: 'a.png' },
         createdAt: '2026-08-01T00:00:00Z',
         updatedAt: '2026-08-02T00:00:00Z',
+        replyCount: 0,
       });
 
       expect(result).toEqual({
@@ -27,6 +30,7 @@ describe('club-discussion.types', () => {
         author: { id: 9, name: 'Jamie', username: 'jrivers', avatar: 'a.png' },
         createdAt: '2026-08-01T00:00:00Z',
         updatedAt: '2026-08-02T00:00:00Z',
+        replyCount: 0,
       });
     });
 
@@ -60,6 +64,7 @@ describe('club-discussion.types', () => {
         author: null,
         createdAt: '',
         updatedAt: '',
+        replyCount: 0,
       });
     });
   });
@@ -123,6 +128,52 @@ describe('club-discussion.types', () => {
       ).toBe('jrivers');
 
       expect(discussionAuthorName({ ...base, author: null })).toBe('User #9');
+    });
+  });
+
+  describe('discussion reply normalization', () => {
+    it('normalizes nested reply state and reactions', () => {
+      const reply = normalizeDiscussionReply({
+        Id: 8,
+        DiscussionId: 3,
+        ParentReplyId: 4,
+        UserId: 9,
+        Content: 'Nested',
+        IsDeleted: false,
+        LikeCount: 2,
+        DislikeCount: 1,
+        CurrentUserReaction: 'Like',
+        DirectReplyCount: 5,
+      });
+
+      expect(reply).toEqual(
+        jasmine.objectContaining({
+          id: 8,
+          discussionId: 3,
+          parentReplyId: 4,
+          content: 'Nested',
+          likeCount: 2,
+          dislikeCount: 1,
+          currentUserReaction: 'Like',
+          directReplyCount: 5,
+        }),
+      );
+    });
+
+    it('normalizes a cursor page and deleted placeholder', () => {
+      const page = normalizeDiscussionReplyPage({
+        Items: [{ Id: 8, IsDeleted: true, Content: null, UserId: null }],
+        TotalCount: 1,
+        NextCursor: 'cursor',
+        HasMore: true,
+      });
+
+      expect(page.totalCount).toBe(1);
+      expect(page.nextCursor).toBe('cursor');
+      expect(page.hasMore).toBeTrue();
+      expect(page.items[0]).toEqual(
+        jasmine.objectContaining({ isDeleted: true, content: null, userId: null }),
+      );
     });
   });
 });

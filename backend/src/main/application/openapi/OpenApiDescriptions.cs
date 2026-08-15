@@ -145,6 +145,16 @@ namespace backend.main.application.openapi
                 ["GET /api/clubs/{clubId}/discussions"] = new("List discussions for a club"),
                 ["PUT /api/clubs/{clubId}/discussions/{discussionId}"] = new("Update a club discussion"),
                 ["DELETE /api/clubs/{clubId}/discussions/{discussionId}"] = new("Delete a club discussion"),
+                ["GET /api/clubs/{clubId}/discussions/{discussionId}/replies"] = new("List one level of discussion replies"),
+                ["POST /api/clubs/{clubId}/discussions/{discussionId}/replies"] = new("Add a discussion reply"),
+                ["PUT /api/clubs/{clubId}/discussions/{discussionId}/replies/{replyId}"] = new("Edit a discussion reply"),
+                ["DELETE /api/clubs/{clubId}/discussions/{discussionId}/replies/{replyId}"] = new("Soft-delete a discussion reply"),
+                ["PUT /api/clubs/{clubId}/discussions/{discussionId}/replies/{replyId}/reaction"] = new("Set a reply reaction"),
+                ["DELETE /api/clubs/{clubId}/discussions/{discussionId}/replies/{replyId}/reaction"] = new("Clear a reply reaction"),
+                ["GET /api/clubs/{clubId}/discussions/replies/events"] = new(
+                    "Stream live discussion reply events",
+                    "Opens a club-wide Server-Sent Events stream for reply creation, editing, deletion, and reaction counts."
+                ),
 
                 // ── Events ───────────────────────────────────────────────────────────────
 

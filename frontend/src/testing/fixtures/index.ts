@@ -82,6 +82,7 @@ export function makeClubDiscussion(overrides: Partial<ClubDiscussion> = {}): Clu
     author: { id: 2, name: 'Jamie Rivers', username: 'jrivers', avatar: null },
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-01T00:00:00Z',
+    replyCount: 0,
     ...overrides,
   };
 }
