@@ -2,6 +2,7 @@ using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts;
+using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.staff;
 using backend.main.features.profile;
@@ -172,6 +173,7 @@ public class ClubPostServiceTests
             var service = new ClubPostService(
                 db,
                 new ClubPostRepository(db),
+                new PostCommentRepository(db),
                 clubService.Object,
                 new FollowRepository(db),
                 Mock.Of<IClubPostSearchService>(),

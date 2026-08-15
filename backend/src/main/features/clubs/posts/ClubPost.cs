@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace backend.main.features.clubs.posts
 {
     public class ClubPost
@@ -19,10 +21,11 @@ namespace backend.main.features.clubs.posts
         public PostType PostType { get; set; } = PostType.General;
         public int LikesCount { get; set; } = 0;
         public int ViewCount { get; set; } = 0;
+        [NotMapped]
+        public int CommentCount { get; set; } = 0;
         public bool IsPinned { get; set; } = false;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
 }
-
 

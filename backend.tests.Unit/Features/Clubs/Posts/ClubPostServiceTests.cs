@@ -4,6 +4,7 @@ using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts;
+using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
@@ -461,6 +462,7 @@ public class ClubPostServiceTests
 
         public AppDatabaseContext Db { get; }
         public Mock<IClubPostRepository> PostRepositoryMock { get; } = new();
+        public Mock<IPostCommentRepository> CommentRepositoryMock { get; } = new();
         public Mock<IClubService> ClubServiceMock { get; } = new();
         public Mock<IFollowRepository> FollowRepositoryMock { get; } = new();
         public Mock<IClubPostSearchService> SearchServiceMock { get; } = new();
@@ -523,9 +525,14 @@ public class ClubPostServiceTests
                 .ReturnsAsync((IEnumerable<int> ids, UserReadDetailLevel _) =>
                     ids.Where(_users.ContainsKey).Select(id => _users[id]).ToList());
 
+            CommentRepositoryMock
+                .Setup(repo => repo.CountByPostIdsAsync(It.IsAny<IEnumerable<int>>()))
+                .ReturnsAsync((IEnumerable<int> ids) => ids.Distinct().ToDictionary(id => id, _ => 0));
+
             Service = new ClubPostService(
                 db,
                 PostRepositoryMock.Object,
+                CommentRepositoryMock.Object,
                 ClubServiceMock.Object,
                 FollowRepositoryMock.Object,
                 SearchServiceMock.Object,

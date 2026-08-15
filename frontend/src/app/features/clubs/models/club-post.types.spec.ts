@@ -3,6 +3,7 @@ import {
   normalizeClubPost,
   normalizeClubPostsPagedData,
   normalizePostComment,
+  normalizePostCommentReaction,
   normalizePostCommentsPagedData,
   normalizePostType,
 } from './club-post.types';
@@ -66,6 +67,7 @@ describe('normalizeClubPost', () => {
         PostType: 1,
         LikesCount: 7,
         ViewCount: 42,
+        CommentCount: 5,
         IsPinned: true,
         Author: { Id: 3, Name: 'Jamie' },
         CreatedAt: '2026-01-01T00:00:00Z',
@@ -80,6 +82,7 @@ describe('normalizeClubPost', () => {
       postType: 'Announcement',
       likesCount: 7,
       viewCount: 42,
+      commentCount: 5,
       isPinned: true,
       author: { id: 3, name: 'Jamie', username: null, avatar: null },
       createdAt: '2026-01-01T00:00:00Z',
@@ -135,11 +138,17 @@ describe('normalizePostComment', () => {
     ).toEqual({
       id: 5,
       postId: 6,
+      parentCommentId: null,
       userId: 7,
       content: 'Nice',
       author: { id: 7, name: null, username: 'jamie', avatar: null },
+      isDeleted: false,
       createdAt: '2026-01-03T00:00:00Z',
       updatedAt: '2026-01-03T00:00:00Z',
+      likeCount: 0,
+      dislikeCount: 0,
+      currentUserReaction: null,
+      directReplyCount: 0,
     });
   });
 });
@@ -155,19 +164,29 @@ describe('paged post normalizers', () => {
     expect(result.totalPages).toBe(0);
   });
 
-  it('maps comments and honours explicit paging metadata', () => {
+  it('maps comments and honours cursor metadata', () => {
     const result = normalizePostCommentsPagedData({
       items: [{ id: 9 }],
-      page: 2,
-      pageSize: 5,
-      totalPages: 3,
       totalCount: 11,
+      nextCursor: 'next',
+      hasMore: true,
     });
 
     expect(result.items[0].id).toBe(9);
     expect(result).toEqual(
-      jasmine.objectContaining({ page: 2, pageSize: 5, totalPages: 3, totalCount: 11 }),
+      jasmine.objectContaining({ nextCursor: 'next', hasMore: true, totalCount: 11 }),
     );
+  });
+
+  it('normalizes the current viewer reaction', () => {
+    expect(
+      normalizePostCommentReaction({
+        CommentId: 9,
+        LikeCount: 3,
+        DislikeCount: 1,
+        CurrentUserReaction: 'Like',
+      }),
+    ).toEqual({ commentId: 9, likeCount: 3, dislikeCount: 1, currentUserReaction: 'Like' });
   });
 
   it('returns an empty list when neither items key is present', () => {

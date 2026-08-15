@@ -31,6 +31,10 @@ namespace backend.main.features.clubs.posts.contracts.responses
         {
             get; set;
         }
+        public int CommentCount
+        {
+            get; set;
+        }
         public bool IsPinned
         {
             get; set;

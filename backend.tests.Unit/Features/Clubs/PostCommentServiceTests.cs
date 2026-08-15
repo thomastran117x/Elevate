@@ -1,8 +1,8 @@
 using backend.main.features.clubs;
+using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.profile;
-using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
 
 using FluentAssertions;
@@ -14,140 +14,147 @@ namespace backend.tests.Unit.Features.Clubs;
 public class PostCommentServiceTests
 {
     [Fact]
-    public async Task CreateAsync_ShouldRejectWhenPostBelongsToDifferentClub()
+    public async Task CreateAsync_ShouldAllowAnyAuthenticatedUserInAPublicClub()
     {
-        var comments = new Mock<IPostCommentRepository>();
-        var posts = new Mock<IClubPostRepository>();
-        var clubs = new Mock<IClubRepository>();
+        var harness = new Harness(isPrivate: false);
+        harness.Comments.Setup(repository => repository.CreateAsync(It.IsAny<PostComment>()))
+            .ReturnsAsync((PostComment comment) => { comment.Id = 10; return comment; });
+        harness.SetupEmptyViewData(10);
 
-        clubs.Setup(repo => repo.GetByIdAsync(4))
-            .ReturnsAsync(new Club
-            {
-                Id = 4,
-                UserId = 7,
-                Name = "Chess Club",
-                Description = "Strategy",
-                Clubtype = ClubType.Social,
-                ClubImage = "https://cdn.test/chess.png"
-            });
-        posts.Setup(repo => repo.GetByIdAsync(11))
-            .ReturnsAsync(new ClubPost
-            {
-                Id = 11,
-                ClubId = 99,
-                UserId = 7,
-                Title = "News",
-                Content = "Hello"
-            });
+        var created = await harness.Service.CreateAsync(
+            harness.ClubId, harness.PostId, null, harness.UserId, "Participant", "  Hello  ");
 
-        var service = new PostCommentService(comments.Object, posts.Object, clubs.Object, Mock.Of<IUserRepository>());
-
-        var act = () => service.CreateAsync(4, 11, 20, "Nice update");
-
-        await act.Should().ThrowAsync<ResourceNotFoundException>()
-            .WithMessage("Post with ID 11 was not found.");
+        created.Comment.Content.Should().Be("Hello");
+        harness.Follows.Verify(
+            repository => repository.IsFollowingClubAsync(It.IsAny<int>(), It.IsAny<int>()),
+            Times.Never);
     }
 
     [Fact]
-    public async Task GetByPostIdAsync_ShouldReturnItemsAndTotalCount()
+    public async Task CreateAsync_ShouldRejectAPrivateClubOutsider()
     {
-        var comments = new Mock<IPostCommentRepository>();
-        var posts = new Mock<IClubPostRepository>();
-        var clubs = new Mock<IClubRepository>();
+        var harness = new Harness(isPrivate: true);
+        harness.Clubs.Setup(service => service.HasClubStaffAccessAsync(
+            harness.ClubId, harness.UserId, It.IsAny<string?>())).ReturnsAsync(false);
+        harness.Follows.Setup(repository => repository.IsFollowingClubAsync(
+            harness.ClubId, harness.UserId)).ReturnsAsync((FollowClub?)null);
 
-        clubs.Setup(repo => repo.GetByIdAsync(4))
-            .ReturnsAsync(new Club
-            {
-                Id = 4,
-                UserId = 7,
-                Name = "Chess Club",
-                Description = "Strategy",
-                Clubtype = ClubType.Social,
-                ClubImage = "https://cdn.test/chess.png"
-            });
-        posts.Setup(repo => repo.GetByIdAsync(11))
-            .ReturnsAsync(new ClubPost
-            {
-                Id = 11,
-                ClubId = 4,
-                UserId = 7,
-                Title = "News",
-                Content = "Hello"
-            });
-        comments.Setup(repo => repo.GetByPostIdAsync(11, 2, 5))
-            .ReturnsAsync([
-                new PostComment
-                {
-                    Id = 9,
-                    PostId = 11,
-                    UserId = 20,
-                    Content = "First"
-                }
-            ]);
-        comments.Setup(repo => repo.CountByPostIdAsync(11))
-            .ReturnsAsync(6);
-
-        var userRepository = new Mock<IUserRepository>();
-        userRepository
-            .Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), It.IsAny<UserReadDetailLevel>()))
-            .ReturnsAsync([]);
-
-        var service = new PostCommentService(comments.Object, posts.Object, clubs.Object, userRepository.Object);
-
-        var result = await service.GetByPostIdAsync(4, 11, 2, 5);
-
-        result.TotalCount.Should().Be(6);
-        result.Items.Should().ContainSingle();
-        result.Items[0].Content.Should().Be("First");
-    }
-
-    [Fact]
-    public async Task UpdateAsync_ShouldRejectWhenCommentBelongsToAnotherUser()
-    {
-        var comments = new Mock<IPostCommentRepository>();
-        comments.Setup(repo => repo.GetByIdAsync(15))
-            .ReturnsAsync(new PostComment
-            {
-                Id = 15,
-                PostId = 11,
-                UserId = 99,
-                Content = "Original"
-            });
-
-        var service = new PostCommentService(
-            comments.Object,
-            Mock.Of<IClubPostRepository>(),
-            Mock.Of<IClubRepository>(),
-            Mock.Of<IUserRepository>());
-
-        var act = () => service.UpdateAsync(11, 15, 20, "Updated");
+        var act = () => harness.Service.CreateAsync(
+            harness.ClubId, harness.PostId, null, harness.UserId, "Participant", "Hello");
 
         await act.Should().ThrowAsync<ForbiddenException>()
-            .WithMessage("You are not allowed to update this comment.");
+            .WithMessage("You must be a member of this club to participate in its comments.");
     }
 
     [Fact]
-    public async Task DeleteAsync_ShouldRejectWhenCommentDoesNotBelongToPost()
+    public async Task CreateAsync_ShouldRejectADeletedParentAtAnyDepth()
     {
-        var comments = new Mock<IPostCommentRepository>();
-        comments.Setup(repo => repo.GetByIdAsync(15))
-            .ReturnsAsync(new PostComment
-            {
-                Id = 15,
-                PostId = 44,
-                UserId = 20,
-                Content = "Original"
-            });
+        var harness = new Harness(isPrivate: false);
+        harness.Comments.Setup(repository => repository.GetByIdAsync(20)).ReturnsAsync(new PostComment
+        {
+            Id = 20,
+            PostId = harness.PostId,
+            UserId = 2,
+            IsDeleted = true
+        });
 
-        var service = new PostCommentService(
-            comments.Object,
-            Mock.Of<IClubPostRepository>(),
-            Mock.Of<IClubRepository>(),
-            Mock.Of<IUserRepository>());
+        var act = () => harness.Service.CreateAsync(
+            harness.ClubId, harness.PostId, 20, harness.UserId, "Participant", "Child");
 
-        var act = () => service.DeleteAsync(11, 15, 20);
+        await act.Should().ThrowAsync<BadRequestException>()
+            .WithMessage("Deleted comments cannot receive new replies.");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldRejectANonAuthorAndDeletedCommentReactions()
+    {
+        var harness = new Harness(isPrivate: false);
+        harness.Comments.Setup(repository => repository.GetByIdAsync(30)).ReturnsAsync(new PostComment
+        {
+            Id = 30,
+            PostId = harness.PostId,
+            UserId = 999
+        });
+        var edit = () => harness.Service.UpdateAsync(
+            harness.ClubId, harness.PostId, 30, harness.UserId, "Participant", "Edit");
+        await edit.Should().ThrowAsync<ForbiddenException>();
+
+        harness.Comments.Setup(repository => repository.GetByIdAsync(31)).ReturnsAsync(new PostComment
+        {
+            Id = 31,
+            PostId = harness.PostId,
+            UserId = harness.UserId,
+            IsDeleted = true
+        });
+        var react = () => harness.Service.SetReactionAsync(
+            harness.ClubId, harness.PostId, 31, harness.UserId, "Participant",
+            PostCommentReactionType.Like);
+        await react.Should().ThrowAsync<BadRequestException>()
+            .WithMessage("Deleted comments cannot be reacted to.");
+    }
+
+    [Fact]
+    public async Task GetPageAsync_ShouldRejectAPostFromAnotherClub()
+    {
+        var harness = new Harness(isPrivate: false, postClubId: 99);
+
+        var act = () => harness.Service.GetPageAsync(
+            harness.ClubId, harness.PostId, null, PostCommentSort.Newest,
+            null, 20, null, null);
 
         await act.Should().ThrowAsync<ResourceNotFoundException>()
-            .WithMessage("Comment with ID 15 was not found.");
+            .WithMessage($"Post with ID {harness.PostId} was not found.");
+    }
+
+    private sealed class Harness
+    {
+        public Mock<IPostCommentRepository> Comments { get; } = new();
+        public Mock<IClubPostRepository> Posts { get; } = new();
+        public Mock<IClubService> Clubs { get; } = new();
+        public Mock<IFollowRepository> Follows { get; } = new();
+        public Mock<IUserRepository> Users { get; } = new();
+        public PostCommentService Service { get; }
+        public int ClubId => 7;
+        public int PostId => 8;
+        public int UserId => 9;
+
+        public Harness(bool isPrivate, int? postClubId = null)
+        {
+            Clubs.Setup(service => service.GetClub(ClubId)).ReturnsAsync(new Club
+            {
+                Id = ClubId,
+                UserId = 1,
+                Name = "Club",
+                Description = "Description",
+                Clubtype = ClubType.Gaming,
+                ClubImage = "image.png",
+                isPrivate = isPrivate
+            });
+            Posts.Setup(repository => repository.GetByIdAsync(PostId)).ReturnsAsync(new ClubPost
+            {
+                Id = PostId,
+                ClubId = postClubId ?? ClubId,
+                UserId = 1,
+                Title = "Post",
+                Content = "Body"
+            });
+            Service = new PostCommentService(
+                Comments.Object, Posts.Object, Clubs.Object, Follows.Object, Users.Object);
+        }
+
+        public void SetupEmptyViewData(int commentId)
+        {
+            Comments.Setup(repository => repository.GetDirectReplyCountsAsync(
+                It.Is<IEnumerable<int>>(ids => ids.Single() == commentId)))
+                .ReturnsAsync([]);
+            Comments.Setup(repository => repository.GetReactionSummariesAsync(
+                It.Is<IEnumerable<int>>(ids => ids.Single() == commentId), UserId))
+                .ReturnsAsync(new Dictionary<int, PostCommentReactionSummary>
+                {
+                    [commentId] = new(0, 0, null)
+                });
+            Users.Setup(repository => repository.GetByIdsAsync(It.IsAny<IEnumerable<int>>()))
+                .ReturnsAsync([]);
+        }
     }
 }

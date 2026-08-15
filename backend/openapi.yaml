@@ -6193,10 +6193,69 @@ paths:
       security:
         - { }
   '/api/clubs/{clubId}/posts/{postId}/comments':
+    get:
+      tags:
+        - clubs
+      summary: List one level of post comments
+      operationId: PostComment_GetComments_get
+      parameters:
+        - name: clubId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+        - name: postId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+        - name: parentCommentId
+          in: query
+          schema:
+            $ref: '#/components/schemas/Int32'
+        - name: sort
+          in: query
+          schema:
+            default: 0
+            $ref: '#/components/schemas/PostCommentSort'
+        - name: cursor
+          in: query
+          schema:
+            $ref: '#/components/schemas/String'
+        - name: pageSize
+          in: query
+          schema:
+            default: 20
+            $ref: '#/components/schemas/Int32'
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfPostCommentPageResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfPostCommentPageResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfPostCommentPageResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
     post:
       tags:
         - clubs
-      summary: Add a comment to a post
+      summary: Add a post comment or nested reply
       operationId: PostComment_CreateComment_post
       parameters:
         - name: clubId
@@ -6260,90 +6319,6 @@ paths:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
         - { }
-    get:
-      tags:
-        - clubs
-      summary: List comments on a post
-      operationId: PostComment_GetComments_get
-      parameters:
-        - name: clubId
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/Int32'
-        - name: postId
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/Int32'
-        - name: page
-          in: query
-          schema:
-            default: 1
-            $ref: '#/components/schemas/Int32'
-        - name: pageSize
-          in: query
-          schema:
-            default: 20
-            $ref: '#/components/schemas/Int32'
-      responses:
-        '200':
-          description: OK
-          content:
-            text/plain:
-              schema:
-                $ref: '#/components/schemas/ApiResponseOfPagedResponseOfPostCommentResponse'
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponseOfPagedResponseOfPostCommentResponse'
-            text/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponseOfPagedResponseOfPostCommentResponse'
-        '400':
-          description: 'Bad request, validation failure, or CSRF failure.'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponseOfObject'
-        '500':
-          description: Unexpected server error.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponseOfObject'
-  '/api/clubs/{clubId}/posts/{postId}/comments/events':
-    get:
-      tags:
-        - clubs
-      summary: Stream live comment events
-      description: Opens a Server-Sent Events (SSE) stream that pushes new and updated comments on the post in real time.
-      operationId: PostComment_StreamComments_get
-      parameters:
-        - name: clubId
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/Int32'
-        - name: postId
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/Int32'
-      responses:
-        '200':
-          description: OK
-        '400':
-          description: 'Bad request, validation failure, or CSRF failure.'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponseOfObject'
-        '500':
-          description: Unexpected server error.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponseOfObject'
   '/api/clubs/{clubId}/posts/{postId}/comments/{commentId}':
     put:
       tags:
@@ -6420,7 +6395,7 @@ paths:
     delete:
       tags:
         - clubs
-      summary: Delete a comment
+      summary: Soft-delete a comment
       operationId: PostComment_DeleteComment_delete
       parameters:
         - name: clubId
@@ -6444,13 +6419,13 @@ paths:
           content:
             text/plain:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
+                $ref: '#/components/schemas/ApiResponseOfPostCommentResponse'
             application/json:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
+                $ref: '#/components/schemas/ApiResponseOfPostCommentResponse'
             text/json:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
+                $ref: '#/components/schemas/ApiResponseOfPostCommentResponse'
         '400':
           description: 'Bad request, validation failure, or CSRF failure.'
           content:
@@ -6477,6 +6452,172 @@ paths:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
         - { }
+  '/api/clubs/{clubId}/posts/{postId}/comments/{commentId}/reaction':
+    put:
+      tags:
+        - clubs
+      summary: Set a comment reaction
+      operationId: PostComment_SetReaction_put
+      parameters:
+        - name: clubId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+        - name: postId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostCommentReactionRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/PostCommentReactionRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/PostCommentReactionRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfPostCommentReactionResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfPostCommentReactionResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfPostCommentReactionResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
+    delete:
+      tags:
+        - clubs
+      summary: Clear a comment reaction
+      operationId: PostComment_ClearReaction_delete
+      parameters:
+        - name: clubId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+        - name: postId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfPostCommentReactionResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfPostCommentReactionResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfPostCommentReactionResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
+  '/api/clubs/{clubId}/posts/{postId}/comments/events':
+    get:
+      tags:
+        - clubs
+      summary: Stream live comment events
+      description: 'Opens a post-scoped Server-Sent Events stream for comment creation, editing, deletion, and reaction counts.'
+      operationId: PostComment_StreamComments_get
+      parameters:
+        - name: clubId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+        - name: postId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
   '/api/clubs/{clubId}/staff/invitations':
     post:
       tags:
@@ -12364,31 +12505,6 @@ components:
           description: Optional metadata such as pagination or response source details.
           $ref: '#/components/schemas/Object'
       description: Standard JSON envelope returned by all API endpoints.
-    ApiResponseOfPagedResponseOfPostCommentResponse:
-      type: object
-      properties:
-        success:
-          description: Indicates whether the request succeeded.
-          $ref: '#/components/schemas/Boolean'
-        message:
-          description: Human-readable message summarizing the outcome.
-          $ref: '#/components/schemas/String'
-        data:
-          oneOf:
-            - type: 'null'
-            - description: Endpoint-specific response payload.
-              $ref: '#/components/schemas/PagedResponseOfPostCommentResponse'
-          description: Endpoint-specific response payload. `null` on error responses.
-        error:
-          oneOf:
-            - type: 'null'
-            - description: Structured error details when the request fails.
-              $ref: '#/components/schemas/ApiError'
-          description: Structured error details. Present only when `success` is `false`.
-        meta:
-          description: Optional metadata such as pagination or response source details.
-          $ref: '#/components/schemas/Object'
-      description: Standard JSON envelope returned by all API endpoints.
     ApiResponseOfPaymentResponse:
       type: object
       properties:
@@ -12403,6 +12519,56 @@ components:
             - type: 'null'
             - description: Endpoint-specific response payload.
               $ref: '#/components/schemas/PaymentResponse'
+          description: Endpoint-specific response payload. `null` on error responses.
+        error:
+          oneOf:
+            - type: 'null'
+            - description: Structured error details when the request fails.
+              $ref: '#/components/schemas/ApiError'
+          description: Structured error details. Present only when `success` is `false`.
+        meta:
+          description: Optional metadata such as pagination or response source details.
+          $ref: '#/components/schemas/Object'
+      description: Standard JSON envelope returned by all API endpoints.
+    ApiResponseOfPostCommentPageResponse:
+      type: object
+      properties:
+        success:
+          description: Indicates whether the request succeeded.
+          $ref: '#/components/schemas/Boolean'
+        message:
+          description: Human-readable message summarizing the outcome.
+          $ref: '#/components/schemas/String'
+        data:
+          oneOf:
+            - type: 'null'
+            - description: Endpoint-specific response payload.
+              $ref: '#/components/schemas/PostCommentPageResponse'
+          description: Endpoint-specific response payload. `null` on error responses.
+        error:
+          oneOf:
+            - type: 'null'
+            - description: Structured error details when the request fails.
+              $ref: '#/components/schemas/ApiError'
+          description: Structured error details. Present only when `success` is `false`.
+        meta:
+          description: Optional metadata such as pagination or response source details.
+          $ref: '#/components/schemas/Object'
+      description: Standard JSON envelope returned by all API endpoints.
+    ApiResponseOfPostCommentReactionResponse:
+      type: object
+      properties:
+        success:
+          description: Indicates whether the request succeeded.
+          $ref: '#/components/schemas/Boolean'
+        message:
+          description: Human-readable message summarizing the outcome.
+          $ref: '#/components/schemas/String'
+        data:
+          oneOf:
+            - type: 'null'
+            - description: Endpoint-specific response payload.
+              $ref: '#/components/schemas/PostCommentReactionResponse'
           description: Endpoint-specific response payload. `null` on error responses.
         error:
           oneOf:
@@ -13309,6 +13475,8 @@ components:
         likesCount:
           $ref: '#/components/schemas/Int32'
         viewCount:
+          $ref: '#/components/schemas/Int32'
+        commentCount:
           $ref: '#/components/schemas/Int32'
         isPinned:
           $ref: '#/components/schemas/Boolean'
@@ -15911,30 +16079,6 @@ components:
           description: Total number of available pages.
           $ref: '#/components/schemas/Int32'
       description: Standard pagination payload used inside API response envelopes.
-    PagedResponseOfPostCommentResponse:
-      required:
-        - items
-        - totalCount
-        - page
-        - pageSize
-      type: object
-      properties:
-        items:
-          description: Items for the current page.
-          $ref: '#/components/schemas/IEnumerableOfPostCommentResponse'
-        totalCount:
-          description: Total number of matching records.
-          $ref: '#/components/schemas/Int32'
-        page:
-          description: Current 1-based page number.
-          $ref: '#/components/schemas/Int32'
-        pageSize:
-          description: Requested page size.
-          $ref: '#/components/schemas/Int32'
-        totalPages:
-          description: Total number of available pages.
-          $ref: '#/components/schemas/Int32'
-      description: Standard pagination payload used inside API response envelopes.
     PasswordRecoveryRequest:
       required:
         - username
@@ -15992,12 +16136,57 @@ components:
         - content
       type: object
       properties:
+        parentCommentId:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/Int32'
         content:
           $ref: '#/components/schemas/String'
+    PostCommentPageResponse:
+      type: object
+      properties:
+        items:
+          $ref: '#/components/schemas/IEnumerableOfPostCommentResponse'
+        totalCount:
+          $ref: '#/components/schemas/Int32'
+        nextCursor:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/String'
+        hasMore:
+          $ref: '#/components/schemas/Boolean'
+    PostCommentReactionRequest:
+      required:
+        - reaction
+      type: object
+      properties:
+        reaction:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/PostCommentReactionType'
+    PostCommentReactionResponse:
+      type: object
+      properties:
+        commentId:
+          $ref: '#/components/schemas/Int32'
+        likeCount:
+          $ref: '#/components/schemas/Int32'
+        dislikeCount:
+          $ref: '#/components/schemas/Int32'
+        currentUserReaction:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/String'
+    PostCommentReactionType:
+      enum:
+        - Like
+        - Dislike
+        - null
     PostCommentResponse:
       required:
         - id
         - postId
+        - parentCommentId
         - userId
         - content
         - createdAt
@@ -16008,10 +16197,18 @@ components:
           $ref: '#/components/schemas/Int32'
         postId:
           $ref: '#/components/schemas/Int32'
+        parentCommentId:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/Int32'
         userId:
-          $ref: '#/components/schemas/Int32'
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/Int32'
         content:
-          $ref: '#/components/schemas/String'
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/String'
         author:
           oneOf:
             - type: 'null'
@@ -16020,6 +16217,20 @@ components:
           $ref: '#/components/schemas/DateTime'
         updatedAt:
           $ref: '#/components/schemas/DateTime'
+        isDeleted:
+          $ref: '#/components/schemas/Boolean'
+        likeCount:
+          $ref: '#/components/schemas/Int32'
+        dislikeCount:
+          $ref: '#/components/schemas/Int32'
+        currentUserReaction:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/String'
+        directReplyCount:
+          $ref: '#/components/schemas/Int32'
+    PostCommentSort:
+      type: integer
     PostCommentUpdateRequest:
       required:
         - content

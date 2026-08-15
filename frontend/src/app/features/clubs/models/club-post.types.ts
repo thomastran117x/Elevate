@@ -35,6 +35,7 @@ export interface ClubPost {
   postType: PostType;
   likesCount: number;
   viewCount: number;
+  commentCount: number;
   isPinned: boolean;
   author: AuthorInfo | null;
   createdAt: string;
@@ -54,23 +55,39 @@ export type ClubPostsApiResponse = ApiEnvelope<ClubPostsPagedData>;
 export interface PostComment {
   id: number;
   postId: number;
-  userId: number;
-  content: string;
+  parentCommentId: number | null;
+  userId: number | null;
+  content: string | null;
   author: AuthorInfo | null;
+  isDeleted: boolean;
   createdAt: string;
   updatedAt: string;
+  likeCount: number;
+  dislikeCount: number;
+  currentUserReaction: PostCommentReaction | null;
+  directReplyCount: number;
 }
 
-export interface PostCommentsPagedData {
+export type PostCommentSort = 'Newest' | 'Oldest';
+export type PostCommentReaction = 'Like' | 'Dislike';
+
+export interface PostCommentsPageData {
   items: PostComment[];
   totalCount: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
+  nextCursor: string | null;
+  hasMore: boolean;
 }
 
-export type PostCommentsApiResponse = ApiEnvelope<PostCommentsPagedData>;
+export interface PostCommentReactionData {
+  commentId: number;
+  likeCount: number;
+  dislikeCount: number;
+  currentUserReaction: PostCommentReaction | null;
+}
+
+export type PostCommentsApiResponse = ApiEnvelope<PostCommentsPageData>;
 export type PostCommentApiResponse = ApiEnvelope<PostComment>;
+export type PostCommentReactionApiResponse = ApiEnvelope<PostCommentReactionData>;
 
 // Raw payload types to handle PascalCase from backend
 type AuthorInfoPayload = Partial<AuthorInfo> & {
@@ -89,6 +106,7 @@ type ClubPostPayload = Partial<ClubPost> & {
   PostType?: string | number;
   LikesCount?: number;
   ViewCount?: number;
+  CommentCount?: number;
   IsPinned?: boolean;
   Author?: AuthorInfoPayload | null;
   CreatedAt?: string;
@@ -111,11 +129,35 @@ type PagedPayload<T> = {
 type PostCommentPayload = Partial<PostComment> & {
   Id?: number;
   PostId?: number;
-  UserId?: number;
-  Content?: string;
+  ParentCommentId?: number | null;
+  UserId?: number | null;
+  Content?: string | null;
   Author?: AuthorInfoPayload | null;
+  IsDeleted?: boolean;
   CreatedAt?: string;
   UpdatedAt?: string;
+  LikeCount?: number;
+  DislikeCount?: number;
+  CurrentUserReaction?: PostCommentReaction | null;
+  DirectReplyCount?: number;
+};
+
+type PostCommentPagePayload = {
+  items?: PostCommentPayload[];
+  Items?: PostCommentPayload[];
+  totalCount?: number;
+  TotalCount?: number;
+  nextCursor?: string | null;
+  NextCursor?: string | null;
+  hasMore?: boolean;
+  HasMore?: boolean;
+};
+
+type PostCommentReactionPayload = Partial<PostCommentReactionData> & {
+  CommentId?: number;
+  LikeCount?: number;
+  DislikeCount?: number;
+  CurrentUserReaction?: PostCommentReaction | null;
 };
 
 const POST_TYPES: PostType[] = ['General', 'Announcement', 'Event', 'Poll'];
@@ -145,6 +187,7 @@ export function normalizeClubPost(raw: ClubPostPayload): ClubPost {
     postType: normalizePostType(raw.postType ?? raw.PostType),
     likesCount: raw.likesCount ?? raw.LikesCount ?? 0,
     viewCount: raw.viewCount ?? raw.ViewCount ?? 0,
+    commentCount: raw.commentCount ?? raw.CommentCount ?? 0,
     isPinned: raw.isPinned ?? raw.IsPinned ?? false,
     author: normalizeAuthor(raw.author ?? raw.Author),
     createdAt: raw.createdAt ?? raw.CreatedAt ?? '',
@@ -153,14 +196,21 @@ export function normalizeClubPost(raw: ClubPostPayload): ClubPost {
 }
 
 export function normalizePostComment(raw: PostCommentPayload): PostComment {
+  const reaction = raw.currentUserReaction ?? raw.CurrentUserReaction ?? null;
   return {
     id: raw.id ?? raw.Id ?? 0,
     postId: raw.postId ?? raw.PostId ?? 0,
-    userId: raw.userId ?? raw.UserId ?? 0,
-    content: raw.content ?? raw.Content ?? '',
+    parentCommentId: raw.parentCommentId ?? raw.ParentCommentId ?? null,
+    userId: raw.userId ?? raw.UserId ?? null,
+    content: raw.content ?? raw.Content ?? null,
     author: normalizeAuthor(raw.author ?? raw.Author),
+    isDeleted: raw.isDeleted ?? raw.IsDeleted ?? false,
     createdAt: raw.createdAt ?? raw.CreatedAt ?? '',
     updatedAt: raw.updatedAt ?? raw.UpdatedAt ?? '',
+    likeCount: raw.likeCount ?? raw.LikeCount ?? 0,
+    dislikeCount: raw.dislikeCount ?? raw.DislikeCount ?? 0,
+    currentUserReaction: reaction === 'Like' || reaction === 'Dislike' ? reaction : null,
+    directReplyCount: raw.directReplyCount ?? raw.DirectReplyCount ?? 0,
   };
 }
 
@@ -176,14 +226,23 @@ export function normalizeClubPostsPagedData(
   };
 }
 
-export function normalizePostCommentsPagedData(
-  raw: PagedPayload<PostCommentPayload>,
-): PostCommentsPagedData {
+export function normalizePostCommentsPagedData(raw: PostCommentPagePayload): PostCommentsPageData {
   return {
     items: (raw.items ?? raw.Items ?? []).map(normalizePostComment),
     totalCount: raw.totalCount ?? raw.TotalCount ?? 0,
-    page: raw.page ?? raw.Page ?? 1,
-    pageSize: raw.pageSize ?? raw.PageSize ?? 20,
-    totalPages: raw.totalPages ?? raw.TotalPages ?? 0,
+    nextCursor: raw.nextCursor ?? raw.NextCursor ?? null,
+    hasMore: raw.hasMore ?? raw.HasMore ?? false,
+  };
+}
+
+export function normalizePostCommentReaction(
+  raw: PostCommentReactionPayload,
+): PostCommentReactionData {
+  const reaction = raw.currentUserReaction ?? raw.CurrentUserReaction ?? null;
+  return {
+    commentId: raw.commentId ?? raw.CommentId ?? 0,
+    likeCount: raw.likeCount ?? raw.LikeCount ?? 0,
+    dislikeCount: raw.dislikeCount ?? raw.DislikeCount ?? 0,
+    currentUserReaction: reaction === 'Like' || reaction === 'Dislike' ? reaction : null,
   };
 }

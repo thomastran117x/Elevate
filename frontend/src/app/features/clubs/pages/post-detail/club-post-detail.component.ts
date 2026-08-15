@@ -2,10 +2,13 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
+import { Store } from '@ngrx/store';
 
 import { ClubPostsService } from '../../services/club-posts.service';
 import { ClubPost, POST_TYPE_STYLES } from '../../models/club-post.types';
 import { CommentThreadComponent } from '../../components/comment-thread/comment-thread.component';
+import { User } from '../../../../core/stores/user.model';
+import { selectUser } from '../../../../core/stores/user.selectors';
 
 @Component({
   selector: 'app-club-post-detail',
@@ -19,6 +22,7 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
   post: ClubPost | null = null;
   loading = true;
   error = '';
+  currentUser: User | null = null;
 
   readonly postTypeStyles = POST_TYPE_STYLES;
 
@@ -28,9 +32,15 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private postsService: ClubPostsService,
+    private store: Store,
   ) {}
 
   ngOnInit(): void {
+    this.store
+      .select(selectUser)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((user) => (this.currentUser = user));
+
     this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
       this.clubId = Number(params.get('clubId')) || 0;
       this.postId = Number(params.get('postId')) || 0;
@@ -63,6 +73,10 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
       day: 'numeric',
       year: 'numeric',
     });
+  }
+
+  updateCommentCount(count: number): void {
+    if (this.post) this.post.commentCount = count;
   }
 
   private fetch(): void {

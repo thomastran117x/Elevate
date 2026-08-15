@@ -1,58 +1,70 @@
+import { HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
 import { map, Observable } from 'rxjs';
+
 import { environment } from '@environments/environment';
 import { ApiEnvelope } from '../../../core/api/models/api-envelope.model';
+import { ApiClient } from '../../../core/api/services/api-client.service';
 import {
-  PostComment,
-  PostCommentApiResponse,
-  PostCommentsApiResponse,
   normalizePostComment,
+  normalizePostCommentReaction,
   normalizePostCommentsPagedData,
+  PostCommentApiResponse,
+  PostCommentReaction,
+  PostCommentReactionApiResponse,
+  PostCommentsApiResponse,
+  PostCommentSort,
 } from '../models/club-post.types';
 
 @Injectable({ providedIn: 'root' })
 export class PostCommentsService {
-  constructor(private http: HttpClient) {}
+  private readonly base = `${environment.backendUrl}/clubs`;
+
+  constructor(private api: ApiClient) {}
 
   getComments(
     clubId: number,
     postId: number,
-    page = 1,
+    parentCommentId: number | null,
+    sort: PostCommentSort,
+    cursor: string | null = null,
     pageSize = 20,
   ): Observable<PostCommentsApiResponse> {
-    const params = new HttpParams().set('page', String(page)).set('pageSize', String(pageSize));
-
-    return this.http.get<ApiEnvelope<unknown>>(this.commentsUrl(clubId, postId), { params }).pipe(
-      map((response) => {
-        const raw =
-          (response as ApiEnvelope<unknown> & { Data?: unknown }).data ??
-          (response as { Data?: unknown }).Data ??
-          null;
-        return {
+    let params = new HttpParams().set('sort', sort).set('pageSize', String(pageSize));
+    if (parentCommentId !== null) {
+      params = params.set('parentCommentId', String(parentCommentId));
+    }
+    if (cursor) params = params.set('cursor', cursor);
+    return this.api
+      .get<ApiEnvelope<unknown>>(this.commentsUrl(clubId, postId), {
+        params,
+        withCredentials: true,
+      })
+      .pipe(
+        map((response) => ({
           ...response,
-          data: raw
+          data: this.rawData(response)
             ? normalizePostCommentsPagedData(
-                raw as Parameters<typeof normalizePostCommentsPagedData>[0],
+                this.rawData(response) as Parameters<typeof normalizePostCommentsPagedData>[0],
               )
             : null,
-        } as PostCommentsApiResponse;
-      }),
-    );
+        })),
+      ) as Observable<PostCommentsApiResponse>;
   }
 
   createComment(
     clubId: number,
     postId: number,
     content: string,
+    parentCommentId: number | null,
   ): Observable<PostCommentApiResponse> {
-    return this.http
+    return this.api
       .post<ApiEnvelope<unknown>>(
         this.commentsUrl(clubId, postId),
-        { content },
+        { content, parentCommentId },
         { withCredentials: true },
       )
-      .pipe(map((response) => this.normalizeCommentResponse(response)));
+      .pipe(map((response) => this.mapComment(response)));
   }
 
   updateComment(
@@ -61,33 +73,81 @@ export class PostCommentsService {
     commentId: number,
     content: string,
   ): Observable<PostCommentApiResponse> {
-    return this.http
+    return this.api
       .put<ApiEnvelope<unknown>>(
         `${this.commentsUrl(clubId, postId)}/${commentId}`,
         { content },
         { withCredentials: true },
       )
-      .pipe(map((response) => this.normalizeCommentResponse(response)));
+      .pipe(map((response) => this.mapComment(response)));
   }
 
-  deleteComment(clubId: number, postId: number, commentId: number): Observable<ApiEnvelope<null>> {
-    return this.http.delete<ApiEnvelope<null>>(`${this.commentsUrl(clubId, postId)}/${commentId}`, {
-      withCredentials: true,
-    });
+  deleteComment(
+    clubId: number,
+    postId: number,
+    commentId: number,
+  ): Observable<PostCommentApiResponse> {
+    return this.api
+      .delete<ApiEnvelope<unknown>>(`${this.commentsUrl(clubId, postId)}/${commentId}`, {
+        withCredentials: true,
+      })
+      .pipe(map((response) => this.mapComment(response)));
+  }
+
+  setReaction(
+    clubId: number,
+    postId: number,
+    commentId: number,
+    reaction: PostCommentReaction,
+  ): Observable<PostCommentReactionApiResponse> {
+    return this.api
+      .put<ApiEnvelope<unknown>>(
+        `${this.commentsUrl(clubId, postId)}/${commentId}/reaction`,
+        { reaction },
+        { withCredentials: true },
+      )
+      .pipe(map((response) => this.mapReaction(response)));
+  }
+
+  clearReaction(
+    clubId: number,
+    postId: number,
+    commentId: number,
+  ): Observable<PostCommentReactionApiResponse> {
+    return this.api
+      .delete<ApiEnvelope<unknown>>(`${this.commentsUrl(clubId, postId)}/${commentId}/reaction`, {
+        withCredentials: true,
+      })
+      .pipe(map((response) => this.mapReaction(response)));
   }
 
   private commentsUrl(clubId: number, postId: number): string {
-    return `${environment.backendUrl}/clubs/${clubId}/posts/${postId}/comments`;
+    return `${this.base}/${clubId}/posts/${postId}/comments`;
   }
 
-  private normalizeCommentResponse(response: ApiEnvelope<unknown>): PostCommentApiResponse {
-    const raw =
-      (response as ApiEnvelope<unknown> & { Data?: unknown }).data ??
-      (response as { Data?: unknown }).Data ??
-      null;
+  private mapComment(response: ApiEnvelope<unknown>): PostCommentApiResponse {
+    const raw = this.rawData(response);
     return {
       ...response,
       data: raw ? normalizePostComment(raw as Parameters<typeof normalizePostComment>[0]) : null,
     } as PostCommentApiResponse;
+  }
+
+  private mapReaction(response: ApiEnvelope<unknown>): PostCommentReactionApiResponse {
+    const raw = this.rawData(response);
+    return {
+      ...response,
+      data: raw
+        ? normalizePostCommentReaction(raw as Parameters<typeof normalizePostCommentReaction>[0])
+        : null,
+    } as PostCommentReactionApiResponse;
+  }
+
+  private rawData(response: ApiEnvelope<unknown>): unknown {
+    return (
+      (response as ApiEnvelope<unknown> & { Data?: unknown }).data ??
+      (response as { Data?: unknown }).Data ??
+      null
+    );
   }
 }

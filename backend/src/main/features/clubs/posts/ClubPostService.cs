@@ -1,5 +1,6 @@
 using backend.main.features.cache;
 using backend.main.features.clubs.follow;
+using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
@@ -20,6 +21,7 @@ namespace backend.main.features.clubs.posts
 
         private readonly AppDatabaseContext _db;
         private readonly IClubPostRepository _postRepository;
+        private readonly IPostCommentRepository _commentRepository;
         private readonly IClubService _clubService;
         private readonly IFollowRepository _followRepository;
         private readonly IClubPostSearchService _searchService;
@@ -30,6 +32,7 @@ namespace backend.main.features.clubs.posts
         public ClubPostService(
             AppDatabaseContext db,
             IClubPostRepository postRepository,
+            IPostCommentRepository commentRepository,
             IClubService clubService,
             IFollowRepository followRepository,
             IClubPostSearchService searchService,
@@ -39,6 +42,7 @@ namespace backend.main.features.clubs.posts
         {
             _db = db;
             _postRepository = postRepository;
+            _commentRepository = commentRepository;
             _clubService = clubService;
             _followRepository = followRepository;
             _searchService = searchService;
@@ -102,6 +106,7 @@ namespace backend.main.features.clubs.posts
             if (post == null || post.ClubId != clubId)
                 throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
 
+            await PopulateCommentCountsAsync([post]);
             var users = await _userRepository.GetByIdsAsync([post.UserId]);
             return (post, users.Count > 0 ? users[0] : null);
         }
@@ -135,6 +140,7 @@ namespace backend.main.features.clubs.posts
                         : [];
                     if (posts.Count > 0)
                         await _postRepository.IncrementViewCountAsync(posts.Select(p => p.Id));
+                    await PopulateCommentCountsAsync(posts);
                     return (posts, total, ResponseSource.Elasticsearch, await FetchAuthorLookupAsync(posts));
                 }
                 catch (ElasticsearchDisabledException ex)
@@ -156,6 +162,7 @@ namespace backend.main.features.clubs.posts
             var totalCount = await _postRepository.CountByClubIdAsync(clubId, search);
             if (resultPosts.Count > 0)
                 await _postRepository.IncrementViewCountAsync(resultPosts.Select(p => p.Id));
+            await PopulateCommentCountsAsync(resultPosts);
 
             return (resultPosts, totalCount, ResponseSource.Database, await FetchAuthorLookupAsync(resultPosts));
         }
@@ -186,6 +193,8 @@ namespace backend.main.features.clubs.posts
             await transaction.CommitAsync();
 
             await _cache.RemoveAsync(PostCacheKey(postId));
+
+            await PopulateCommentCountsAsync([updated]);
 
             return updated;
         }
@@ -222,6 +231,7 @@ namespace backend.main.features.clubs.posts
                     var posts = ids.Count > 0
                         ? await _postRepository.GetByIdsAsync(ids)
                         : [];
+                    await PopulateCommentCountsAsync(posts);
                     return (posts, total, ResponseSource.Elasticsearch);
                 }
                 catch (ElasticsearchDisabledException ex)
@@ -241,6 +251,7 @@ namespace backend.main.features.clubs.posts
 
             var items = await _postRepository.GetAllAsync(search, sortBy, page, pageSize);
             var totalCount = await _postRepository.CountAllAsync(search);
+            await PopulateCommentCountsAsync(items);
 
             return (items, totalCount, ResponseSource.Database);
         }
@@ -252,6 +263,15 @@ namespace backend.main.features.clubs.posts
                 return [];
             var users = await _userRepository.GetByIdsAsync(userIds);
             return users.ToDictionary(u => u.Id);
+        }
+
+        private async Task PopulateCommentCountsAsync(IReadOnlyList<ClubPost> posts)
+        {
+            if (posts.Count == 0)
+                return;
+            var counts = await _commentRepository.CountByPostIdsAsync(posts.Select(post => post.Id));
+            foreach (var post in posts)
+                post.CommentCount = counts.GetValueOrDefault(post.Id);
         }
     }
 }

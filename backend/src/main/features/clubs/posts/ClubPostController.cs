@@ -149,6 +149,7 @@ namespace backend.main.features.clubs.posts
         private static ClubPostResponse MapToResponse(ClubPost p, UserListRecord? user = null) =>
             new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt)
             {
+                CommentCount = p.CommentCount,
                 Author = new AuthorInfo { Id = p.UserId, Name = user?.Name, Username = user?.Username, Avatar = user?.Avatar }
             };
     }
@@ -213,11 +214,11 @@ namespace backend.main.features.clubs.posts
         private static ClubPostResponse MapToResponse(ClubPost p, UserListRecord? user = null) =>
             new(p.Id, p.ClubId, p.UserId, p.Title, p.Content, p.PostType, p.LikesCount, p.ViewCount, p.IsPinned, p.CreatedAt, p.UpdatedAt)
             {
+                CommentCount = p.CommentCount,
                 Author = new AuthorInfo { Id = p.UserId, Name = user?.Name, Username = user?.Username, Avatar = user?.Avatar }
             };
     }
 }
-
 
 
 

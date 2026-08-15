@@ -97,13 +97,23 @@
               </svg>
               {{ post.viewCount }}
             </span>
+            <span class="flex items-center gap-1" aria-label="Comments">
+              <span aria-hidden="true">&#128172;</span>
+              {{ post.commentCount }}
+            </span>
           </div>
           <span>{{ formatDate(post.createdAt) }}</span>
         </div>
       </article>
 
       <!-- Comment thread -->
-      <app-comment-thread [clubId]="clubId" [postId]="postId"></app-comment-thread>
+      <app-comment-thread
+        [clubId]="clubId"
+        [postId]="postId"
+        [currentUser]="currentUser"
+        [initialCommentCount]="post.commentCount"
+        (commentCountChange)="updateCommentCount($event)"
+      ></app-comment-thread>
     }
   </div>
 </div>

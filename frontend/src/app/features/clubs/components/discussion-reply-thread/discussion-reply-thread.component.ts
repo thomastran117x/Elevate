@@ -16,21 +16,17 @@ import {
   DiscussionReplySseService,
 } from '../../services/discussion-reply-sse.service';
 import { DiscussionReplyNodeComponent } from '../discussion-reply-node/discussion-reply-node.component';
+import {
+  applyThreadItem,
+  createThreadNode,
+  findThreadNode,
+  insertThreadNode,
+  mergeThreadNodes,
+  mergeUniqueThreadNodes,
+  ThreadNode,
+} from '../thread-tree/thread-tree-state';
 
-export interface DiscussionReplyNode extends DiscussionReply {
-  children: DiscussionReplyNode[];
-  childrenLoaded: boolean;
-  loadingChildren: boolean;
-  nextCursor: string | null;
-  hasMoreChildren: boolean;
-  replyOpen: boolean;
-  replyText: string;
-  editOpen: boolean;
-  editText: string;
-  deleteConfirm: boolean;
-  busy: boolean;
-  error: string;
-}
+export type DiscussionReplyNode = ThreadNode<DiscussionReply>;
 
 export type ReplyNodeAction =
   | { type: 'loadChildren'; node: DiscussionReplyNode; append: boolean }
@@ -108,11 +104,11 @@ export class DiscussionReplyThreadComponent implements OnInit, OnDestroy {
         next: (response) => {
           const page = response.data;
           if (page) {
-            const incoming = page.items.map((reply) => this.toNode(reply));
+            const incoming = page.items.map(createThreadNode);
             incoming.forEach((node) => this.seenIds.add(node.id));
             this.roots = append
-              ? this.mergeUnique(this.roots, incoming)
-              : this.mergeNodes(this.roots, incoming, reconcile);
+              ? mergeUniqueThreadNodes(this.roots, incoming, this.sort)
+              : mergeThreadNodes(this.roots, incoming, this.sort, reconcile);
             this.totalRoots = page.totalCount;
             if (reconcile) this.adjustTotalReplies(page.totalCount - previousTotalRoots);
             if (!preservePaging) {
@@ -176,11 +172,11 @@ export class DiscussionReplyThreadComponent implements OnInit, OnDestroy {
         next: (response) => {
           const page = response.data;
           if (page) {
-            const incoming = page.items.map((reply) => this.toNode(reply));
+            const incoming = page.items.map(createThreadNode);
             incoming.forEach((child) => this.seenIds.add(child.id));
             node.children = append
-              ? this.mergeUnique(node.children, incoming)
-              : this.mergeNodes(node.children, incoming, refresh);
+              ? mergeUniqueThreadNodes(node.children, incoming, this.sort)
+              : mergeThreadNodes(node.children, incoming, this.sort, refresh);
             node.childrenLoaded = true;
             node.directReplyCount = page.totalCount;
             if (refresh) {
@@ -305,7 +301,7 @@ export class DiscussionReplyThreadComponent implements OnInit, OnDestroy {
     }
     if (event.type === 'ReplyReactionChanged') {
       if (event.discussionId !== this.discussionId) return;
-      const node = this.findNode(event.replyId);
+      const node = findThreadNode(this.roots, event.replyId);
       if (node) {
         node.likeCount = event.likeCount;
         node.dislikeCount = event.dislikeCount;
@@ -322,38 +318,24 @@ export class DiscussionReplyThreadComponent implements OnInit, OnDestroy {
     this.seenIds.add(reply.id);
     this.totalReplies++;
     this.replyCountChange.emit(this.totalReplies);
-    const node = this.toNode(reply);
+    const node = createThreadNode(reply);
     if (reply.parentReplyId === null) {
-      this.roots = this.insertBySort(this.roots, node);
+      this.roots = insertThreadNode(this.roots, node, this.sort);
       this.totalRoots++;
       return;
     }
-    const parent = this.findNode(reply.parentReplyId);
+    const parent = findThreadNode(this.roots, reply.parentReplyId);
     if (!parent) return;
     parent.directReplyCount++;
-    if (parent.childrenLoaded) parent.children = this.insertBySort(parent.children, node);
+    if (parent.childrenLoaded) {
+      parent.children = insertThreadNode(parent.children, node, this.sort);
+    }
   }
 
   private applyReply(reply: DiscussionReply, preserveViewerReaction = false): void {
-    const node = this.findNode(reply.id);
+    const node = findThreadNode(this.roots, reply.id);
     if (!node) return;
-    const currentUserReaction = node.currentUserReaction;
-    const state = {
-      children: node.children,
-      childrenLoaded: node.childrenLoaded,
-      loadingChildren: node.loadingChildren,
-      nextCursor: node.nextCursor,
-      hasMoreChildren: node.hasMoreChildren,
-      replyOpen: node.replyOpen,
-      replyText: node.replyText,
-      editOpen: node.editOpen,
-      editText: node.editText,
-      deleteConfirm: node.deleteConfirm,
-      busy: node.busy,
-      error: node.error,
-    };
-    Object.assign(node, reply, state);
-    if (preserveViewerReaction) node.currentUserReaction = currentUserReaction;
+    applyThreadItem(node, reply, preserveViewerReaction);
   }
 
   private refreshLoadedBranches(nodes: DiscussionReplyNode[]): void {
@@ -379,89 +361,5 @@ export class DiscussionReplyThreadComponent implements OnInit, OnDestroy {
     if (change === 0) return;
     this.totalReplies = Math.max(0, this.totalReplies + change);
     this.replyCountChange.emit(this.totalReplies);
-  }
-
-  private findNode(id: number, nodes = this.roots): DiscussionReplyNode | null {
-    for (const node of nodes) {
-      if (node.id === id) return node;
-      const found = this.findNode(id, node.children);
-      if (found) return found;
-    }
-    return null;
-  }
-
-  private mergeNodes(
-    existing: DiscussionReplyNode[],
-    incoming: DiscussionReplyNode[],
-    preserveExisting = false,
-  ): DiscussionReplyNode[] {
-    const byId = new Map(existing.map((node) => [node.id, node]));
-    const merged = incoming.map((node) => {
-      const prior = byId.get(node.id);
-      if (!prior) return node;
-      const state = {
-        children: prior.children,
-        childrenLoaded: prior.childrenLoaded,
-        loadingChildren: prior.loadingChildren,
-        nextCursor: prior.nextCursor,
-        hasMoreChildren: prior.hasMoreChildren,
-        replyOpen: prior.replyOpen,
-        replyText: prior.replyText,
-        editOpen: prior.editOpen,
-        editText: prior.editText,
-        deleteConfirm: prior.deleteConfirm,
-        busy: prior.busy,
-        error: prior.error,
-      };
-      return Object.assign(prior, node, state);
-    });
-    if (!preserveExisting) return merged;
-    const incomingIds = new Set(incoming.map((node) => node.id));
-    return [...merged, ...existing.filter((node) => !incomingIds.has(node.id))].sort(
-      (left, right) => this.compareBySort(left, right),
-    );
-  }
-
-  private mergeUnique(
-    current: DiscussionReplyNode[],
-    incoming: DiscussionReplyNode[],
-  ): DiscussionReplyNode[] {
-    const byId = new Map(current.map((node) => [node.id, node]));
-    for (const node of incoming) {
-      if (!byId.has(node.id)) byId.set(node.id, node);
-    }
-    return [...byId.values()].sort((left, right) => this.compareBySort(left, right));
-  }
-
-  private insertBySort(
-    current: DiscussionReplyNode[],
-    node: DiscussionReplyNode,
-  ): DiscussionReplyNode[] {
-    return this.mergeUnique(current, [node]);
-  }
-
-  private compareBySort(left: DiscussionReplyNode, right: DiscussionReplyNode): number {
-    const createdAtDifference =
-      new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
-    const ascending = createdAtDifference || left.id - right.id;
-    return this.sort === 'Newest' ? -ascending : ascending;
-  }
-
-  private toNode(reply: DiscussionReply): DiscussionReplyNode {
-    return {
-      ...reply,
-      children: [],
-      childrenLoaded: false,
-      loadingChildren: false,
-      nextCursor: null,
-      hasMoreChildren: false,
-      replyOpen: false,
-      replyText: '',
-      editOpen: false,
-      editText: '',
-      deleteConfirm: false,
-      busy: false,
-      error: '',
-    };
   }
 }

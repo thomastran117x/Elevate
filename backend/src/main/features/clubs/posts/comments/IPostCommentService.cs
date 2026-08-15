@@ -1,13 +1,20 @@
-using backend.main.features.clubs.posts.comments;
-using backend.main.features.profile.contracts;
+namespace backend.main.features.clubs.posts.comments;
 
-namespace backend.main.features.clubs.posts.comments
+public interface IPostCommentService
 {
-    public interface IPostCommentService
-    {
-        Task<PostComment> CreateAsync(int clubId, int postId, int userId, string content);
-        Task<(List<PostComment> Items, int TotalCount, Dictionary<int, UserListRecord> Authors)> GetByPostIdAsync(int clubId, int postId, int page, int pageSize);
-        Task<PostComment> UpdateAsync(int postId, int commentId, int userId, string content);
-        Task DeleteAsync(int postId, int commentId, int userId);
-    }
+    Task EnsureCanReadPostAsync(int clubId, int postId, int? userId, string? userRole);
+    Task<PostCommentPage> GetPageAsync(
+        int clubId, int postId, int? parentCommentId, PostCommentSort sort,
+        string? cursor, int pageSize, int? currentUserId, string? currentUserRole);
+    Task<PostCommentView> CreateAsync(
+        int clubId, int postId, int? parentCommentId, int userId, string? userRole, string content);
+    Task<PostCommentView> UpdateAsync(
+        int clubId, int postId, int commentId, int userId, string? userRole, string content);
+    Task<PostCommentView> DeleteAsync(
+        int clubId, int postId, int commentId, int userId, string? userRole);
+    Task<PostCommentReactionSummary> SetReactionAsync(
+        int clubId, int postId, int commentId, int userId, string? userRole,
+        PostCommentReactionType reaction);
+    Task<PostCommentReactionSummary> ClearReactionAsync(
+        int clubId, int postId, int commentId, int userId, string? userRole);
 }
