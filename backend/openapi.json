@@ -13344,7 +13344,7 @@
         "tags": [
           "auth"
         ],
-        "summary": "Sign in with email and password",
+        "summary": "Sign in with username and password",
         "description": "Returns a session immediately for trusted devices, or a sign-in verification challenge when the device needs step-up verification.",
         "operationId": "Auth_LocalAuthenticate_post",
         "parameters": [
@@ -25393,13 +25393,13 @@
       },
       "LoginRequest": {
         "required": [
-          "email",
+          "username",
           "password",
           "captcha"
         ],
         "type": "object",
         "properties": {
-          "email": {
+          "username": {
             "$ref": "#/components/schemas/String"
           },
           "password": {
@@ -26744,6 +26744,7 @@
       },
       "SignUpRequest": {
         "required": [
+          "username",
           "usertype",
           "email",
           "password",
@@ -26751,6 +26752,9 @@
         ],
         "type": "object",
         "properties": {
+          "username": {
+            "$ref": "#/components/schemas/String"
+          },
           "usertype": {
             "$ref": "#/components/schemas/String"
           },

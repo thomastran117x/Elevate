@@ -54,7 +54,7 @@ export class LoginComponent {
   ngOnInit() {
     this.authReturnUrl.captureFromRoute(this.route);
     this.form = this.fb.nonNullable.group({
-      email: this.fb.nonNullable.control('', [Validators.required, Validators.email]),
+      username: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(50)]),
       password: this.fb.nonNullable.control('', [Validators.required, Validators.minLength(6)]),
       rememberMe: this.fb.nonNullable.control(false),
     });

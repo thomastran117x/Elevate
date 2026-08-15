@@ -10,6 +10,7 @@ namespace backend.main.features.auth
         Task<UserStatusRecord?> UpdateUserStatusAsync(int id, bool isDisabled, string? disabledReason);
         Task<bool> IncrementAuthVersionAsync(int id);
         Task<User?> GetUserAsync(int id);
+        Task<UserAuthRecord?> GetAuthByUsernameAsync(string username);
         Task<UserAuthRecord?> GetAuthByEmailAsync(string email);
         Task<UserOAuthRecord?> GetOAuthByEmailAsync(string email);
         Task<UserOAuthRecord?> GetOAuthByMicrosoftIdAsync(string microsoftId);
@@ -18,4 +19,3 @@ namespace backend.main.features.auth
         Task<bool> EmailExistsAsync(string email);
     }
 }
-

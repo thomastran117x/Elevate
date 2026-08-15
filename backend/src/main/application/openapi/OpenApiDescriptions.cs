@@ -22,7 +22,7 @@ namespace backend.main.application.openapi
 
                 // ── Auth ─────────────────────────────────────────────────────────────────
 
-                ["POST /api/auth/login"] = new("Sign in with email and password", "Returns a session immediately for trusted devices, or a sign-in verification challenge when the device needs step-up verification."),
+                ["POST /api/auth/login"] = new("Sign in with username and password", "Returns a session immediately for trusted devices, or a sign-in verification challenge when the device needs step-up verification."),
                 ["POST /api/auth/signup"] = new(
                     "Create an account with email and password",
                     "Registers a new account and sends a verification email. The account cannot be used until the email address is confirmed."

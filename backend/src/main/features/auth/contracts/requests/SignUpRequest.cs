@@ -8,6 +8,13 @@ namespace backend.main.features.auth.contracts.requests
     public class SignUpRequest : AuthRequest
     {
         [Required]
+        [StringLength(50, MinimumLength = 1)]
+        public required string Username
+        {
+            get; set;
+        }
+
+        [Required]
         [ValidRole]
         public required string Usertype
         {

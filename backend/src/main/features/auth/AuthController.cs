@@ -62,12 +62,12 @@ namespace backend.main.features.auth
         {
             try
             {
-                if (!_seedBypass.IsBypassEnabledFor(request.Email)
+                if (!_seedBypass.IsBypassEnabledForUsername(request.Username)
                     && !await _captchaService.VerifyCaptchaAsync(request.Captcha))
                     throw new BadRequestException("Invalid captcha.");
 
                 var result = await _authService.LoginAsync(
-                    request.Email,
+                    request.Username,
                     request.Password,
                     SessionTransportResolver.ResolveOrDefault(request.Transport),
                     request.RememberMe,
@@ -104,6 +104,7 @@ namespace backend.main.features.auth
 
                 var challenge = await _authService.SignUpAsync(
                     request.Email,
+                    request.Username,
                     request.Password,
                     request.Usertype
                 );
@@ -835,6 +836,5 @@ namespace backend.main.features.auth
         }
     }
 }
-
 
 

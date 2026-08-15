@@ -40,7 +40,7 @@ public class AuthControllerTests
     {
         var authService = new Mock<IAuthService>();
         authService.Setup(service => service.LoginAsync(
-                "browser@example.com",
+                "browser-user",
                 "Password123!",
                 SessionTransport.BrowserCookie,
                 false,
@@ -58,7 +58,7 @@ public class AuthControllerTests
 
         var result = await controller.LocalAuthenticate(new LoginRequest
         {
-            Email = "browser@example.com",
+            Username = "browser-user",
             Password = "Password123!",
             Captcha = "captcha"
         });
@@ -78,7 +78,7 @@ public class AuthControllerTests
     {
         var authService = new Mock<IAuthService>();
         authService.Setup(service => service.LoginAsync(
-                "api@example.com",
+                "api-user",
                 "Password123!",
                 SessionTransport.ApiToken,
                 false,
@@ -96,7 +96,7 @@ public class AuthControllerTests
 
         var result = await controller.LocalAuthenticate(new LoginRequest
         {
-            Email = "api@example.com",
+            Username = "api-user",
             Password = "Password123!",
             Captcha = "captcha",
             Transport = SessionTransportResolver.ApiValue
@@ -121,7 +121,7 @@ public class AuthControllerTests
 
         var result = await controller.LocalAuthenticate(new LoginRequest
         {
-            Email = "user@example.com",
+            Username = "user",
             Password = "Password123!",
             Captcha = "bad-captcha"
         });
@@ -133,7 +133,8 @@ public class AuthControllerTests
     public async Task LocalSignup_ShouldReturnVerificationChallenge()
     {
         var authService = new Mock<IAuthService>();
-        authService.Setup(service => service.SignUpAsync("new@example.com", "Password123!", "Organizer"))
+        authService.Setup(service => service.SignUpAsync(
+                "new@example.com", "new-user", "Password123!", "Organizer"))
             .ReturnsAsync(new VerificationOtpChallenge
             {
                 Code = "123456",
@@ -146,6 +147,7 @@ public class AuthControllerTests
         var result = await controller.LocalSignup(new SignUpRequest
         {
             Email = "new@example.com",
+            Username = "new-user",
             Password = "Password123!",
             Usertype = "Organizer",
             Captcha = "captcha"

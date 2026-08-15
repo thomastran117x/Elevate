@@ -43,6 +43,7 @@ public class AuthEndpointsTests
         var signup = await app.PostJsonWithCsrfAsync("/api/auth/signup", new SignUpRequest
         {
             Email = "verify-otp@example.com",
+            Username = "verify-otp",
             Password = "Password123!",
             Usertype = "Organizer",
             Captcha = "captcha"
@@ -74,7 +75,7 @@ public class AuthEndpointsTests
 
         var badLogin = await app.PostJsonWithCsrfAsync("/api/auth/login", new LoginRequest
         {
-            Email = "login@example.com",
+            Username = "login",
             Password = "WrongPassword123!",
             Captcha = "captcha"
         });
@@ -85,7 +86,7 @@ public class AuthEndpointsTests
         {
             Content = JsonContent.Create(new LoginRequest
             {
-                Email = "login@example.com",
+                Username = "login",
                 Password = "Password123!",
                 Captcha = "captcha"
             })
@@ -165,7 +166,7 @@ public class AuthEndpointsTests
         {
             Content = JsonContent.Create(new LoginRequest
             {
-                Email = "reset@example.com",
+                Username = "reset",
                 Password = "NewPassword123!",
                 Captcha = "captcha"
             })
@@ -204,7 +205,7 @@ public class AuthEndpointsTests
         {
             Content = JsonContent.Create(new LoginRequest
             {
-                Email = "reset@example.com",
+                Username = "reset",
                 Password = "OtpReset123!",
                 Captcha = "captcha"
             })
@@ -377,6 +378,7 @@ public class AuthEndpointsTests
         var signup = await app.PostJsonWithCsrfAsync("/api/auth/signup", new SignUpRequest
         {
             Email = "browser-logout@example.com",
+            Username = "browser-logout",
             Password = "Password123!",
             Usertype = "Participant",
             Captcha = "captcha"
@@ -421,7 +423,7 @@ public class AuthEndpointsTests
 
         var login = await app.PostJsonWithCsrfAsync("/api/auth/login", new LoginRequest
         {
-            Email = "new-device@example.com",
+            Username = "new-device",
             Password = "Password123!",
             Captcha = "captcha",
             Transport = SessionTransportResolver.ApiValue
@@ -574,7 +576,7 @@ public class AuthEndpointsTests
         statusAfter.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // A separate fresh session (new sid) must verify again.
-        var secondSession = await app.LoginApiAsync("mfa-gate@example.com");
+        var secondSession = await app.LoginApiAsync("mfa-gate");
         var secondGated = await app.GetWithBearerAsync("/api/auth/mfa", secondSession.AccessToken);
         secondGated.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -831,7 +833,7 @@ public class AuthEndpointsTests
 
             var login = await app.PostJsonWithCsrfAsync("/api/auth/login", new LoginRequest
             {
-                Email = "stepup@example.com",
+                Username = "stepup",
                 Password = "Password123!",
                 Captcha = "captcha",
                 Transport = SessionTransportResolver.ApiValue,

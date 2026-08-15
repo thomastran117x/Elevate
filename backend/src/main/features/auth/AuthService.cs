@@ -67,7 +67,7 @@ namespace backend.main.features.auth
         }
 
         public async Task<LoginAuthenticationResult> LoginAsync(
-            string email,
+            string username,
             string password,
             SessionTransport transport,
             bool rememberMe = false,
@@ -76,13 +76,13 @@ namespace backend.main.features.auth
         {
             try
             {
-                UserAuthRecord? user = await _userRepository.GetAuthByEmailAsync(email);
+                UserAuthRecord? user = await _userRepository.GetAuthByUsernameAsync(username.Trim());
 
                 var hashToCheck = user?.Password ?? DummyHash;
                 bool isValidPassword = VerifyPassword(password, hashToCheck);
 
                 if (user == null || user.Password == null || !isValidPassword)
-                    throw new UnauthorizedException("Invalid email or password");
+                    throw new UnauthorizedException("Invalid username or password");
 
                 var resolvedUser = ToUser(user);
                 await EnsureUserEnabledAsync(resolvedUser);
@@ -103,12 +103,20 @@ namespace backend.main.features.auth
             }
         }
 
-        public async Task<VerificationOtpChallenge> SignUpAsync(string email, string password, string userType)
+        public async Task<VerificationOtpChallenge> SignUpAsync(
+            string email,
+            string username,
+            string password,
+            string userType)
         {
             try
             {
+                username = username.Trim();
+
                 if (await _userRepository.EmailExistsAsync(email))
                     throw new ConflictException($"An account is already registered with the email: {email}");
+                if (await _userRepository.GetAuthByUsernameAsync(username) != null)
+                    throw new ConflictException($"The username '{username}' is already taken.");
 
                 userType = AuthRoles.NormalizeOrThrow(userType);
                 string hashedPassword = HashPassword(password);
@@ -116,6 +124,7 @@ namespace backend.main.features.auth
                 User user = new User
                 {
                     Email = email,
+                    Username = username,
                     Password = hashedPassword,
                     Usertype = userType
                 };
@@ -153,6 +162,10 @@ namespace backend.main.features.auth
 
                 if (await _userRepository.EmailExistsAsync(user.Email))
                     throw new ConflictException($"An account is already registered with the email: {user.Email}");
+                if (string.IsNullOrWhiteSpace(user.Username))
+                    throw new BadRequestException("A username is required to complete signup.");
+                if (await _userRepository.GetAuthByUsernameAsync(user.Username) != null)
+                    throw new ConflictException($"The username '{user.Username}' is already taken.");
 
                 await _userRepository.CreateUserAsync(user);
 
@@ -184,6 +197,10 @@ namespace backend.main.features.auth
 
                 if (await _userRepository.EmailExistsAsync(user.Email))
                     throw new ConflictException($"An account is already registered with the email: {user.Email}");
+                if (string.IsNullOrWhiteSpace(user.Username))
+                    throw new BadRequestException("A username is required to complete signup.");
+                if (await _userRepository.GetAuthByUsernameAsync(user.Username) != null)
+                    throw new ConflictException($"The username '{user.Username}' is already taken.");
 
                 await _userRepository.CreateUserAsync(user);
 
@@ -916,5 +933,4 @@ namespace backend.main.features.auth
         }
     }
 }
-
 

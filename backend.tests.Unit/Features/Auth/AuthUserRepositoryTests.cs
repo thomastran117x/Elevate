@@ -141,12 +141,13 @@ public class AuthUserRepositoryTests
     }
 
     [Fact]
-    public async Task GetUserAsync_AndGetAuthByEmailAsync_ShouldProjectSanitizedAndAuthViews()
+    public async Task GetUserAsync_AndCredentialLookups_ShouldProjectSanitizedAndAuthViews()
     {
         await using var harness = await AuthUserRepositoryHarness.CreateAsync();
         var userId = await harness.SeedUserAsync();
 
         var user = await harness.Repository.GetUserAsync(userId);
+        var authByUsername = await harness.Repository.GetAuthByUsernameAsync("seed-user");
         var auth = await harness.Repository.GetAuthByEmailAsync("seed@example.com");
 
         user.Should().NotBeNull();
@@ -155,6 +156,7 @@ public class AuthUserRepositoryTests
         user.Username.Should().Be("seed-user");
 
         auth.Should().NotBeNull();
+        authByUsername.Should().BeEquivalentTo(auth);
         auth!.Password.Should().Be("seed-password");
         auth.Usertype.Should().Be("Participant");
         auth.IsDisabled.Should().BeFalse();

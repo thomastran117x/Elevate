@@ -92,6 +92,15 @@ public class SeedAccountBypassPolicyTests
         policy.IsBypassEnabledFor("Organizer@Seed.EventXperience.Test").Should().BeTrue();
     }
 
+    [Fact]
+    public void IsBypassEnabledForUsername_ShouldOnlyMatchCataloguedSeedUsers()
+    {
+        var policy = CreatePolicy(allowBypass: "true", environment: "development");
+
+        policy.IsBypassEnabledForUsername(" HARBOUROWNER ").Should().BeTrue();
+        policy.IsBypassEnabledForUsername("not-a-seed-user").Should().BeFalse();
+    }
+
     private static SeedAccountBypassPolicy CreatePolicy(string? allowBypass, string environment)
     {
         var values = new Dictionary<string, string?>

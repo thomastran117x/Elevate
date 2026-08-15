@@ -18,7 +18,7 @@ public class ProfileAdminEndpointsTests
 
         var admin = await app.SeedUserAsync("profile-admin@example.com", role: "Admin");
         await app.SeedKnownDeviceAsync(admin.Id, "profile-admin-device");
-        var adminSession = await app.LoginApiAsync("profile-admin@example.com", trustedDeviceToken: "profile-admin-device");
+        var adminSession = await app.LoginApiAsync("profile-admin", trustedDeviceToken: "profile-admin-device");
 
         var target = await app.SeedUserAsync("profile-target@example.com", role: "Participant");
 

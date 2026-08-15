@@ -39,5 +39,12 @@ namespace backend.main.features.auth
             && IsNonProduction
             && !string.IsNullOrWhiteSpace(email)
             && email.Trim().EndsWith(SeedCatalogConstants.SeedEmailDomain, StringComparison.OrdinalIgnoreCase);
+
+        public bool IsBypassEnabledForUsername(string? username) =>
+            _allowBypass
+            && IsNonProduction
+            && !string.IsNullOrWhiteSpace(username)
+            && UserSeedCatalog.All.Any(user =>
+                string.Equals(user.Username, username.Trim(), StringComparison.OrdinalIgnoreCase));
     }
 }

@@ -44,7 +44,7 @@ describe('AuthService', () => {
 
     service
       .login({
-        email: 'user@example.com',
+        username: 'event-user',
         password: 'secret123',
         rememberMe: true,
         captcha: 'captcha-token',
@@ -61,7 +61,7 @@ describe('AuthService', () => {
     expect(request.request.method).toBe('POST');
     expect(request.request.withCredentials).toBeTrue();
     expect(request.request.body).toEqual({
-      email: 'user@example.com',
+      username: 'event-user',
       password: 'secret123',
       rememberMe: true,
       captcha: 'captcha-token',
@@ -582,7 +582,7 @@ describe('AuthService', () => {
 
     service
       .login({
-        email: 'user@example.com',
+        username: 'event-user',
         password: 'secret123',
         rememberMe: false,
         captcha: 'captcha-token',
@@ -602,7 +602,7 @@ describe('AuthService', () => {
         message: 'Validation failed.',
         error: {
           code: 'VALIDATION_ERROR',
-          details: { email: ['is required'] },
+          details: { username: ['is required'] },
         },
       },
       { status: 422, statusText: 'Unprocessable Entity' },
@@ -621,7 +621,7 @@ describe('AuthService', () => {
 
     service
       .login({
-        email: 'user@example.com',
+        username: 'event-user',
         password: 'secret123',
         rememberMe: false,
         captcha: 'captcha-token',

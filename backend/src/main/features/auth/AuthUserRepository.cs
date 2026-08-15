@@ -230,10 +230,25 @@ namespace backend.main.features.auth
                 .FirstOrDefaultAsync();
         }
 
+        public async Task<UserAuthRecord?> GetAuthByUsernameAsync(string username)
+        {
+            return await GetAuthRecords()
+                .Where(u => u.Username == username)
+                .Select(u => new UserAuthRecord
+                {
+                    Id = u.Id,
+                    Email = u.Email,
+                    Password = u.Password,
+                    Usertype = AuthRoles.NormalizeStored(u.Usertype),
+                    IsDisabled = u.IsDisabled,
+                    AuthVersion = u.AuthVersion,
+                })
+                .FirstOrDefaultAsync();
+        }
+
         public async Task<UserAuthRecord?> GetAuthByEmailAsync(string email)
         {
-            return await _context.Users
-                .AsNoTracking()
+            return await GetAuthRecords()
                 .Where(u => u.Email == email)
                 .Select(u => new UserAuthRecord
                 {
@@ -246,6 +261,8 @@ namespace backend.main.features.auth
                 })
                 .FirstOrDefaultAsync();
         }
+
+        private IQueryable<User> GetAuthRecords() => _context.Users.AsNoTracking();
 
         public async Task<UserOAuthRecord?> GetOAuthByEmailAsync(string email)
         {
@@ -448,4 +465,3 @@ namespace backend.main.features.auth
         }
     }
 }
-

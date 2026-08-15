@@ -8091,7 +8091,7 @@ paths:
     post:
       tags:
         - auth
-      summary: Sign in with email and password
+      summary: Sign in with username and password
       description: 'Returns a session immediately for trusted devices, or a sign-in verification challenge when the device needs step-up verification.'
       operationId: Auth_LocalAuthenticate_post
       parameters:
@@ -15091,12 +15091,12 @@ components:
             - $ref: '#/components/schemas/LoginStepUpChallengeResponse'
     LoginRequest:
       required:
-        - email
+        - username
         - password
         - captcha
       type: object
       properties:
-        email:
+        username:
           $ref: '#/components/schemas/String'
         password:
           $ref: '#/components/schemas/String'
@@ -15905,12 +15905,15 @@ components:
           $ref: '#/components/schemas/String'
     SignUpRequest:
       required:
+        - username
         - usertype
         - email
         - password
         - captcha
       type: object
       properties:
+        username:
+          $ref: '#/components/schemas/String'
         usertype:
           $ref: '#/components/schemas/String'
         email:

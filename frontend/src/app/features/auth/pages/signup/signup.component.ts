@@ -28,6 +28,7 @@ export class SignupComponent {
 
   readonly form = this.fb.nonNullable.group({
     email: this.fb.nonNullable.control('', [Validators.required, Validators.email]),
+    username: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(50)]),
     password: this.fb.nonNullable.control('', [Validators.required, Validators.minLength(8)]),
     usertype: this.fb.nonNullable.control<SignupRole>('participant', [Validators.required]),
   });

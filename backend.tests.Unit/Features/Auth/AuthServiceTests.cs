@@ -30,18 +30,18 @@ public class AuthServiceTests
     public async Task LoginAsync_ShouldRejectUnknownUser()
     {
         var userRepository = new Mock<IAuthUserRepository>();
-        userRepository.Setup(repository => repository.GetAuthByEmailAsync("missing@example.com"))
+        userRepository.Setup(repository => repository.GetAuthByUsernameAsync("missing-user"))
             .ReturnsAsync((UserAuthRecord?)null);
 
         var service = CreateService(userRepository: userRepository);
 
         var act = () => service.LoginAsync(
-            "missing@example.com",
+            "missing-user",
             "Password123!",
             SessionTransport.BrowserCookie);
 
         await act.Should().ThrowAsync<UnauthorizedException>()
-            .WithMessage("Invalid email or password");
+            .WithMessage("Invalid username or password");
     }
 
     [Fact]
@@ -83,6 +83,8 @@ public class AuthServiceTests
         var userRepository = new Mock<IAuthUserRepository>();
         userRepository.Setup(repository => repository.EmailExistsAsync("new@example.com"))
             .ReturnsAsync(false);
+        userRepository.Setup(repository => repository.GetAuthByUsernameAsync("new-user"))
+            .ReturnsAsync((UserAuthRecord?)null);
 
         User? capturedUser = null;
         var tokenService = new Mock<ITokenService>();
@@ -108,11 +110,13 @@ public class AuthServiceTests
             tokenService: tokenService,
             authNotificationService: notifications);
 
-        var result = await service.SignUpAsync("new@example.com", "Password123!", "organizer");
+        var result = await service.SignUpAsync(
+            "new@example.com", "new-user", "Password123!", "organizer");
 
         result.Code.Should().Be("123456");
         capturedUser.Should().NotBeNull();
         capturedUser!.Usertype.Should().Be("Organizer");
+        capturedUser.Username.Should().Be("new-user");
         notifications.Verify(service => service.SendSignupVerificationAsync(
             "new@example.com",
             "verify-link",
@@ -150,7 +154,7 @@ public class AuthServiceTests
         });
 
         var userRepository = new Mock<IAuthUserRepository>();
-        userRepository.Setup(repository => repository.GetAuthByEmailAsync("totp@example.com"))
+        userRepository.Setup(repository => repository.GetAuthByUsernameAsync("totp-user"))
             .ReturnsAsync(new UserAuthRecord
             {
                 Id = 27,
@@ -192,7 +196,7 @@ public class AuthServiceTests
             totpMfaEnrollmentService: totpService);
 
         var result = await service.LoginAsync(
-            "totp@example.com",
+            "totp-user",
             "Password123!",
             SessionTransport.BrowserCookie,
             returnUrl: "/security");
@@ -315,6 +319,7 @@ public class AuthServiceTests
         {
             Id = 12,
             Email = "verify@example.com",
+            Username = "verify-user",
             Usertype = "Participant",
             AuthVersion = 1
         };
@@ -345,6 +350,7 @@ public class AuthServiceTests
         {
             Id = 13,
             Email = "verify-otp@example.com",
+            Username = "verify-otp-user",
             Usertype = "Organizer",
             AuthVersion = 1
         };

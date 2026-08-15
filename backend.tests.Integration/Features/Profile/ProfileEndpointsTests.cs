@@ -26,7 +26,7 @@ public class ProfileEndpointsTests
         var user = await app.SeedUserAsync("profile-user@example.com", role: "Organizer");
         await app.SeedKnownDeviceAsync(user.Id, "profile-user-device");
         var session = await app.LoginApiAsync(
-            "profile-user@example.com",
+            "profile-user",
             trustedDeviceToken: "profile-user-device");
 
         // GET /api/profile
@@ -82,7 +82,7 @@ public class ProfileEndpointsTests
         var user = await app.SeedUserAsync("avatar-user@example.com");
         await app.SeedKnownDeviceAsync(user.Id, "avatar-device");
         var session = await app.LoginApiAsync(
-            "avatar-user@example.com",
+            "avatar-user",
             trustedDeviceToken: "avatar-device");
 
         var multipart = new MultipartFormDataContent();
@@ -110,7 +110,7 @@ public class ProfileEndpointsTests
         var user = await app.SeedUserAsync("pw-user@example.com");
         await app.SeedKnownDeviceAsync(user.Id, "pw-device");
         var session = await app.LoginApiAsync(
-            "pw-user@example.com",
+            "pw-user",
             trustedDeviceToken: "pw-device");
         await app.CompleteSessionMfaByEmailAsync("pw-user@example.com", session.AccessToken);
 
@@ -128,7 +128,7 @@ public class ProfileEndpointsTests
 
         // The new password is now in effect.
         var newSession = await app.LoginApiAsync(
-            "pw-user@example.com",
+            "pw-user",
             password: "NewPassword456!",
             trustedDeviceToken: "pw-device");
         newSession.AccessToken.Should().NotBeNullOrWhiteSpace();
@@ -141,7 +141,7 @@ public class ProfileEndpointsTests
         var user = await app.SeedUserAsync("delete-user@example.com");
         await app.SeedKnownDeviceAsync(user.Id, "delete-device");
         var session = await app.LoginApiAsync(
-            "delete-user@example.com",
+            "delete-user",
             trustedDeviceToken: "delete-device");
         await app.CompleteSessionMfaByEmailAsync("delete-user@example.com", session.AccessToken);
 
@@ -208,7 +208,7 @@ public class ProfileEndpointsTests
         });
 
         var session = await app.LoginApiAsync(
-            "blob-delete@example.com",
+            "blob-delete",
             trustedDeviceToken: "blob-delete-device");
         await app.CompleteSessionMfaByEmailAsync("blob-delete@example.com", session.AccessToken);
 
@@ -246,7 +246,7 @@ public class ProfileEndpointsTests
         var actor = await app.SeedUserAsync("username-other@example.com");
         await app.SeedKnownDeviceAsync(actor.Id, "other-device");
         var session = await app.LoginApiAsync(
-            "username-other@example.com",
+            "username-other",
             trustedDeviceToken: "other-device");
 
         var conflict = new HttpRequestMessage(HttpMethod.Patch, "/api/profile")

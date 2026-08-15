@@ -84,7 +84,7 @@ namespace backend.main.infrastructure.database.core
 
             // MySQL's utf8mb4_0900_ai_ci collation made `=` and the unique indexes below
             // case-insensitive. PostgreSQL is case-sensitive by default, which would break
-            // login-by-email and allow case-variant duplicate accounts. citext restores the
+            // login by username/email and allow case-variant duplicate accounts. citext restores the
             // previous semantics for both equality and the unique index with no query changes.
             modelBuilder.HasPostgresExtension("citext");
 

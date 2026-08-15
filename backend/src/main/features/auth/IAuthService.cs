@@ -8,13 +8,13 @@ namespace backend.main.features.auth
     public interface IAuthService
     {
         Task<LoginAuthenticationResult> LoginAsync(
-            string email,
+            string username,
             string password,
             SessionTransport transport,
             bool rememberMe = false,
             string? returnUrl = null
         );
-        Task<VerificationOtpChallenge> SignUpAsync(string email, string password, string usertype);
+        Task<VerificationOtpChallenge> SignUpAsync(string email, string username, string password, string usertype);
         Task<UserToken> VerifyAsync(string token, SessionTransport transport);
         Task<UserToken> VerifyOtpAsync(string code, string challenge, SessionTransport transport);
         Task<AuthenticatedSessionResult> VerifyDeviceLoginAsync(string token, SessionTransport transport);

@@ -32,7 +32,7 @@ public class PaymentEndpointsTests
 
         var owner = await app.SeedUserAsync("payment-owner@example.com", role: "Participant");
         await app.SeedKnownDeviceAsync(owner.Id, "payment-owner-device");
-        var ownerSession = await app.LoginApiAsync("payment-owner@example.com", trustedDeviceToken: "payment-owner-device");
+        var ownerSession = await app.LoginApiAsync("payment-owner", trustedDeviceToken: "payment-owner-device");
 
         var other = await app.SeedUserAsync("payment-other@example.com", role: "Participant");
 

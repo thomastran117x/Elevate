@@ -16,7 +16,7 @@ export type SignupRole = 'participant' | 'organizer' | 'volunteer';
 export type LoginStepUpMethod = 'sms' | 'email' | 'totp';
 
 export interface LoginRequest {
-  email: string;
+  username: string;
   password: string;
   rememberMe: boolean;
   captcha: string;
@@ -26,6 +26,7 @@ export interface LoginRequest {
 
 export interface SignupRequest {
   email: string;
+  username: string;
   password: string;
   usertype: SignupRole;
   captcha: string;

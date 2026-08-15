@@ -14,6 +14,7 @@ public class AuthRequestValidationTests
         var request = new SignUpRequest
         {
             Email = "not-an-email",
+            Username = "",
             Password = "weak",
             Captcha = "",
             Usertype = "guest"
@@ -23,6 +24,7 @@ public class AuthRequestValidationTests
 
         results.Select(item => item.ErrorMessage).Should().Contain([
             "The Email field is not a valid e-mail address.",
+            "The Username field is required.",
             "Password must be at least 8 characters long.",
             "The Captcha field is required.",
             "Role must be one of: 'Participant', 'Organizer', 'Volunteer'."
@@ -35,6 +37,7 @@ public class AuthRequestValidationTests
         var request = new SignUpRequest
         {
             Email = "member@test.local",
+            Username = "member",
             Password = "StrongPass1!",
             Captcha = "captcha-token",
             Usertype = " organizer "
@@ -44,11 +47,11 @@ public class AuthRequestValidationTests
     }
 
     [Fact]
-    public void LoginRequest_ShouldRequireEmailPasswordAndCaptcha()
+    public void LoginRequest_ShouldRequireUsernamePasswordAndCaptcha()
     {
         var request = new LoginRequest
         {
-            Email = "bad-email",
+            Username = "",
             Password = "",
             Captcha = ""
         };
@@ -56,7 +59,7 @@ public class AuthRequestValidationTests
         var results = Validate(request);
 
         results.Select(item => item.ErrorMessage).Should().Contain([
-            "The Email field is not a valid e-mail address.",
+            "The Username field is required.",
             "The Captcha field is required."
         ]);
     }

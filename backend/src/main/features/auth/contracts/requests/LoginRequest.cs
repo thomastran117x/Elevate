@@ -8,8 +8,8 @@ namespace backend.main.features.auth.contracts.requests
     public class LoginRequest
     {
         [Required]
-        [EmailAddress]
-        public required string Email
+        [StringLength(50, MinimumLength = 1)]
+        public required string Username
         {
             get; set;
         }
