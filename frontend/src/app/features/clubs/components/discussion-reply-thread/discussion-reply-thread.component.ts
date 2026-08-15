@@ -66,6 +66,7 @@ export class DiscussionReplyThreadComponent implements OnInit, OnDestroy {
 
   private readonly seenIds = new Set<number>();
   private readonly destroy$ = new Subject<void>();
+  private reconciliationPending = false;
 
   constructor(
     private repliesService: DiscussionRepliesService,
@@ -96,7 +97,9 @@ export class DiscussionReplyThreadComponent implements OnInit, OnDestroy {
     this.loadRoots(false);
   }
 
-  loadRoots(append: boolean): void {
+  loadRoots(append: boolean, reconcile = false): void {
+    const previousTotalRoots = this.totalRoots;
+    const preservePaging = reconcile && this.roots.length > 0;
     append ? (this.loadingMore = true) : (this.loading = true);
     this.repliesService
       .getReplies(this.clubId, this.discussionId, null, this.sort, append ? this.nextCursor : null)
@@ -109,18 +112,19 @@ export class DiscussionReplyThreadComponent implements OnInit, OnDestroy {
             incoming.forEach((node) => this.seenIds.add(node.id));
             this.roots = append
               ? this.mergeUnique(this.roots, incoming)
-              : this.mergeNodes(this.roots, incoming);
+              : this.mergeNodes(this.roots, incoming, reconcile);
             this.totalRoots = page.totalCount;
-            this.nextCursor = page.nextCursor;
-            this.hasMore = page.hasMore;
+            if (reconcile) this.adjustTotalReplies(page.totalCount - previousTotalRoots);
+            if (!preservePaging) {
+              this.nextCursor = page.nextCursor;
+              this.hasMore = page.hasMore;
+            }
           }
-          this.loading = false;
-          this.loadingMore = false;
+          this.finishRootLoad();
         },
         error: (err) => {
           this.error = getApiClientMessage(err, 'Unable to load replies.');
-          this.loading = false;
-          this.loadingMore = false;
+          this.finishRootLoad();
         },
       });
   }
@@ -155,6 +159,8 @@ export class DiscussionReplyThreadComponent implements OnInit, OnDestroy {
   }
 
   private loadChildren(node: DiscussionReplyNode, append: boolean, refresh = false): void {
+    const previousDirectReplyCount = node.directReplyCount;
+    const preservePaging = refresh && node.children.length > 0;
     node.loadingChildren = true;
     node.error = '';
     this.repliesService
@@ -174,11 +180,16 @@ export class DiscussionReplyThreadComponent implements OnInit, OnDestroy {
             incoming.forEach((child) => this.seenIds.add(child.id));
             node.children = append
               ? this.mergeUnique(node.children, incoming)
-              : this.mergeNodes(node.children, incoming);
+              : this.mergeNodes(node.children, incoming, refresh);
             node.childrenLoaded = true;
             node.directReplyCount = page.totalCount;
-            node.nextCursor = page.nextCursor;
-            node.hasMoreChildren = page.hasMore;
+            if (refresh) {
+              this.adjustTotalReplies(page.totalCount - previousDirectReplyCount);
+            }
+            if (!preservePaging) {
+              node.nextCursor = page.nextCursor;
+              node.hasMoreChildren = page.hasMore;
+            }
             if (refresh) this.refreshLoadedBranches(node.children);
           }
           node.loadingChildren = false;
@@ -285,9 +296,10 @@ export class DiscussionReplyThreadComponent implements OnInit, OnDestroy {
 
   private handleLiveEvent(event: DiscussionReplyLiveEvent): void {
     if (event.type === 'Connected') {
-      if (!this.loading && this.roots.length > 0) {
-        this.loadRoots(false);
-        this.refreshLoadedBranches(this.roots);
+      if (this.loading || this.loadingMore) {
+        this.reconciliationPending = true;
+      } else {
+        this.reconcileLoadedThread();
       }
       return;
     }
@@ -350,6 +362,25 @@ export class DiscussionReplyThreadComponent implements OnInit, OnDestroy {
     }
   }
 
+  private reconcileLoadedThread(): void {
+    this.loadRoots(false, true);
+    this.refreshLoadedBranches(this.roots);
+  }
+
+  private finishRootLoad(): void {
+    this.loading = false;
+    this.loadingMore = false;
+    if (!this.reconciliationPending) return;
+    this.reconciliationPending = false;
+    this.reconcileLoadedThread();
+  }
+
+  private adjustTotalReplies(change: number): void {
+    if (change === 0) return;
+    this.totalReplies = Math.max(0, this.totalReplies + change);
+    this.replyCountChange.emit(this.totalReplies);
+  }
+
   private findNode(id: number, nodes = this.roots): DiscussionReplyNode | null {
     for (const node of nodes) {
       if (node.id === id) return node;
@@ -362,9 +393,10 @@ export class DiscussionReplyThreadComponent implements OnInit, OnDestroy {
   private mergeNodes(
     existing: DiscussionReplyNode[],
     incoming: DiscussionReplyNode[],
+    preserveExisting = false,
   ): DiscussionReplyNode[] {
     const byId = new Map(existing.map((node) => [node.id, node]));
-    return incoming.map((node) => {
+    const merged = incoming.map((node) => {
       const prior = byId.get(node.id);
       if (!prior) return node;
       const state = {
@@ -383,6 +415,11 @@ export class DiscussionReplyThreadComponent implements OnInit, OnDestroy {
       };
       return Object.assign(prior, node, state);
     });
+    if (!preserveExisting) return merged;
+    const incomingIds = new Set(incoming.map((node) => node.id));
+    return [...merged, ...existing.filter((node) => !incomingIds.has(node.id))].sort(
+      (left, right) => this.compareBySort(left, right),
+    );
   }
 
   private mergeUnique(

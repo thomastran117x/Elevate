@@ -83,6 +83,64 @@ describe('DiscussionReplyThreadComponent', () => {
     expect(replies.getReplies.calls.allArgs()).toContain([4, 9, 1, 'Newest', null]);
   });
 
+  it('reconciles an initially empty thread after a connection arrives during loading', () => {
+    const initial = new Subject<DiscussionReplyPageApiResponse>();
+    replies.getReplies.and.returnValues(initial.asObservable(), of(page([reply(1)])));
+    const counts: number[] = [];
+    component.replyCountChange.subscribe((count) => counts.push(count));
+    component.ngOnInit();
+
+    live.next({ type: 'Connected' });
+    expect(replies.getReplies).toHaveBeenCalledTimes(1);
+
+    initial.next(page([]));
+    initial.complete();
+
+    expect(replies.getReplies).toHaveBeenCalledTimes(2);
+    expect(component.roots.map((item) => item.id)).toEqual([1]);
+    expect(component.totalReplies).toBe(1);
+    expect(counts).toEqual([1]);
+  });
+
+  it('reconciles after the initial empty request has already completed', () => {
+    replies.getReplies.and.returnValues(of(page([])), of(page([reply(1)])));
+    component.ngOnInit();
+
+    live.next({ type: 'Connected' });
+
+    expect(replies.getReplies).toHaveBeenCalledTimes(2);
+    expect(component.roots.map((item) => item.id)).toEqual([1]);
+    expect(component.totalReplies).toBe(1);
+  });
+
+  it('preserves paginated roots and children during reconnect reconciliation', () => {
+    const root = reply(1, null, 2);
+    replies.getReplies.and.returnValues(
+      of(page([root], true, 'root-next', 3)),
+      of(page([reply(4)], true, 'root-later', 3)),
+      of(page([reply(2, 1)], true, 'child-next', 2)),
+      of(page([reply(3, 1)], false, null, 2)),
+      of(page([root], true, 'first-root-cursor', 3)),
+      of(page([reply(2, 1)], true, 'first-child-cursor', 2)),
+    );
+    component.initialReplyCount = 5;
+    component.ngOnInit();
+    component.loadRoots(true);
+    const node = component.roots.find((item) => item.id === 1)!;
+    component.handleNodeAction({ type: 'loadChildren', node, append: false });
+    component.handleNodeAction({ type: 'loadChildren', node, append: true });
+
+    live.next({ type: 'Connected' });
+
+    expect(component.roots.map((item) => item.id)).toEqual([4, 1]);
+    expect(node.children.map((item) => item.id)).toEqual([3, 2]);
+    expect(node.nextCursor).toBeNull();
+    expect(node.hasMoreChildren).toBeFalse();
+    expect(component.nextCursor).toBe('root-later');
+    expect(component.hasMore).toBeTrue();
+    expect(component.totalReplies).toBe(5);
+  });
+
   it('rolls back an optimistic reaction when the API request fails', () => {
     const root = reply(1);
     replies.getReplies.and.returnValue(of(page([root])));
@@ -323,11 +381,12 @@ function page(
   items: DiscussionReply[],
   hasMore = false,
   nextCursor: string | null = null,
+  totalCount = items.length,
 ): DiscussionReplyPageApiResponse {
   return {
     success: true,
     message: 'ok',
-    data: { items, totalCount: items.length, nextCursor, hasMore },
+    data: { items, totalCount, nextCursor, hasMore },
     error: null,
     meta: null,
   };

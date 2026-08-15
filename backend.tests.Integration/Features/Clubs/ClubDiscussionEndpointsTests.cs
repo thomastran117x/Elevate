@@ -113,6 +113,67 @@ public class ClubDiscussionEndpointsTests
     }
 
     [Fact]
+    public async Task ClearReaction_ShouldReturnNeutralStateAndRemoveOnlyTheCurrentUsersReaction()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var owner = await CreateUserSessionAsync(app, "clear-reaction-owner@example.com", "Organizer");
+        var participant = await CreateUserSessionAsync(app, "clear-reaction-participant@example.com");
+        var clubId = await CreateClubAsync(app, owner.AccessToken, "Clear Reaction Club");
+
+        var discussionResponse = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{clubId}/discussions",
+            owner.AccessToken,
+            JsonContent.Create(new { title = "Reaction topic", description = "Test clearing reactions." })));
+        var discussion = (await app.ReadApiResponseAsync<ClubDiscussionResponse>(discussionResponse)).Data!;
+
+        var replyResponse = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{clubId}/discussions/{discussion.Id}/replies",
+            owner.AccessToken,
+            JsonContent.Create(new { content = "React to this reply" })));
+        var reply = (await app.ReadApiResponseAsync<DiscussionReplyResponse>(replyResponse)).Data!;
+        var reactionPath =
+            $"/api/clubs/{clubId}/discussions/{discussion.Id}/replies/{reply.Id}/reaction";
+
+        foreach (var accessToken in new[] { owner.AccessToken, participant.AccessToken })
+        {
+            var setReaction = await app.Client.SendAsync(CreateAuthorizedRequest(
+                HttpMethod.Put,
+                reactionPath,
+                accessToken,
+                JsonContent.Create(new { reaction = "Like" })));
+            setReaction.StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        var cleared = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            reactionPath,
+            owner.AccessToken));
+
+        cleared.StatusCode.Should().Be(HttpStatusCode.OK);
+        var clearedData = (await app.ReadApiResponseAsync<DiscussionReplyReactionResponse>(cleared)).Data!;
+        clearedData.ReplyId.Should().Be(reply.Id);
+        clearedData.LikeCount.Should().Be(1);
+        clearedData.DislikeCount.Should().Be(0);
+        clearedData.CurrentUserReaction.Should().BeNull();
+
+        (await app.QueryDbAsync(db => db.ClubDiscussionReplyReactions
+            .CountAsync(reaction => reaction.ReplyId == reply.Id)))
+            .Should().Be(1);
+
+        var repeatedClear = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            reactionPath,
+            owner.AccessToken));
+        repeatedClear.StatusCode.Should().Be(HttpStatusCode.OK);
+        var repeatedData =
+            (await app.ReadApiResponseAsync<DiscussionReplyReactionResponse>(repeatedClear)).Data!;
+        repeatedData.LikeCount.Should().Be(1);
+        repeatedData.CurrentUserReaction.Should().BeNull();
+    }
+
+    [Fact]
     public async Task DiscussionEndpoints_ShouldSupportCrudAndListNewestFirst()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
