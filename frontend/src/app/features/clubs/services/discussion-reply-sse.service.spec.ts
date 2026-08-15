@@ -114,4 +114,72 @@ describe('DiscussionReplySseService', () => {
     expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer jwt-token');
     expect(options?.credentials).toBe('include');
   });
+
+  it('refreshes once after 401 and parses chunked authenticated events', async () => {
+    authToken.accessToken = 'expired-token';
+    authToken.refreshAccessToken.and.resolveTo(undefined);
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode('event: ReplyUpdated\r\ndata: {"Id":5,"DiscussionId":7,'),
+        );
+        controller.enqueue(encoder.encode('"Content":"Updated"}\r\n\r\n'));
+        controller.close();
+      },
+    });
+    const fetchSpy = spyOn(window, 'fetch').and.returnValues(
+      Promise.resolve(new Response(null, { status: 401 })),
+      Promise.resolve(new Response(body, { status: 200 })),
+    );
+    const events: DiscussionReplyLiveEvent[] = [];
+
+    const subscription = service.connect(5).subscribe((event) => events.push(event));
+    subscriptions.push(subscription);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(authToken.refreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(events).toContain(jasmine.objectContaining({ type: 'Connected' }));
+    expect(events).toContain(
+      jasmine.objectContaining({
+        type: 'ReplyUpdated',
+        reply: jasmine.objectContaining({ id: 5, content: 'Updated' }),
+      }),
+    );
+  });
+
+  it('normalizes PascalCase reactions and ignores malformed events', () => {
+    const events: DiscussionReplyLiveEvent[] = [];
+    subscriptions.push(service.connect(6).subscribe((event) => events.push(event)));
+    const source = FakeEventSource.instances[0];
+
+    source.emit(
+      'ReplyReactionChanged',
+      JSON.stringify({ DiscussionId: 7, ReplyId: 5, LikeCount: 4, DislikeCount: 3 }),
+    );
+    source.emit('ReplyDeleted', '{not-json');
+
+    expect(events).toEqual([
+      {
+        type: 'ReplyReactionChanged',
+        discussionId: 7,
+        replyId: 5,
+        likeCount: 4,
+        dislikeCount: 3,
+      },
+    ]);
+  });
+
+  it('closes the anonymous EventSource after the final subscriber leaves', () => {
+    const first = service.connect(8).subscribe();
+    const second = service.connect(8).subscribe();
+    const source = FakeEventSource.instances[0];
+
+    first.unsubscribe();
+    expect(source.closed).toBeFalse();
+    second.unsubscribe();
+
+    expect(source.closed).toBeTrue();
+  });
 });

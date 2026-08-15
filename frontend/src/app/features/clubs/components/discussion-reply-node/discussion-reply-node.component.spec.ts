@@ -29,6 +29,69 @@ describe('DiscussionReplyNodeComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Reply deleted');
     expect(fixture.nativeElement.textContent).not.toContain('Reply 1');
   });
+
+  it('derives ownership, author fallbacks, and initials', () => {
+    const component = new DiscussionReplyNodeComponent();
+    component.node = nestedNode(1);
+
+    expect(component.isOwnReply).toBeFalse();
+    component.currentUser = { Id: 7 } as never;
+    expect(component.isOwnReply).toBeTrue();
+    expect(component.authorName).toBe('Taylor');
+    expect(component.initials).toBe('T');
+
+    component.node.author = { id: 7, name: null, username: 'taylor', avatar: null };
+    expect(component.authorName).toBe('taylor');
+    component.node.author = null;
+    expect(component.authorName).toBe('User #7');
+    component.node.isDeleted = true;
+    expect(component.authorName).toBe('Deleted reply');
+  });
+
+  it('formats recent and older reply dates', () => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-08-15T12:00:00Z'));
+    const component = new DiscussionReplyNodeComponent();
+
+    expect(component.formatDate('2026-08-15T11:59:30Z')).toBe('just now');
+    expect(component.formatDate('2026-08-15T11:45:00Z')).toBe('15m ago');
+    expect(component.formatDate('2026-08-15T09:00:00Z')).toBe('3h ago');
+    expect(component.formatDate('2026-08-13T12:00:00Z')).toBe('2d ago');
+    expect(component.formatDate('2026-08-01T12:00:00Z')).toContain('Aug');
+    jasmine.clock().uninstall();
+  });
+
+  it('opens controls and emits only valid create, edit, and reaction actions', () => {
+    const component = new DiscussionReplyNodeComponent();
+    component.node = nestedNode(1);
+    const actions: unknown[] = [];
+    component.action.subscribe((action) => actions.push(action));
+
+    component.node.error = 'old error';
+    component.toggleReply();
+    expect(component.node.replyOpen).toBeTrue();
+    expect(component.node.error).toBe('');
+
+    component.node.replyText = '   ';
+    component.submitChild();
+    component.node.replyText = '  Child reply  ';
+    component.submitChild();
+
+    component.node.content = 'Existing';
+    component.startEdit();
+    expect(component.node.editText).toBe('Existing');
+    component.node.editText = '   ';
+    component.saveEdit();
+    component.node.editText = '  Edited reply  ';
+    component.saveEdit();
+    component.react('Dislike');
+
+    expect(actions).toEqual([
+      { type: 'create', node: component.node, content: 'Child reply' },
+      { type: 'edit', node: component.node, content: 'Edited reply' },
+      { type: 'react', node: component.node, reaction: 'Dislike' },
+    ]);
+  });
 });
 
 function nestedNode(depth: number, id = 1): DiscussionReplyNode {
