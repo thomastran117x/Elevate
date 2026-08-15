@@ -8,6 +8,7 @@ using backend.main.features.clubs.discussions.replies.contracts.responses;
 using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.Timeouts;
 using Microsoft.AspNetCore.Mvc;
 
 namespace backend.main.features.clubs.discussions.replies;
@@ -122,6 +123,7 @@ public sealed class ClubDiscussionReplyController : ControllerBase
     }
 
     [AllowAnonymous]
+    [DisableRequestTimeout]
     [HttpGet("{clubId}/discussions/replies/events")]
     public async Task StreamReplyEvents(int clubId, CancellationToken cancellationToken)
     {
@@ -159,6 +161,10 @@ public sealed class ClubDiscussionReplyController : ControllerBase
                 }
                 await Response.Body.FlushAsync(cancellationToken);
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // A disconnected browser or proxy is the normal end of an SSE subscription.
         }
         finally
         {

@@ -46,6 +46,10 @@ async function readRequestBody(req: express.Request): Promise<Uint8Array | undef
 app.use('/api', async (req, res) => {
   const targetUrl = new URL(req.originalUrl, apiProxyTarget);
   const headers = new Headers();
+  const controller = new AbortController();
+  const abortUpstream = () => controller.abort();
+  res.once('close', abortUpstream);
+  res.once('finish', () => res.removeListener('close', abortUpstream));
 
   for (const [key, value] of Object.entries(req.headers)) {
     if (!value || hopByHopHeaders.has(key.toLowerCase()) || key.toLowerCase() === 'host') {
@@ -62,6 +66,7 @@ app.use('/api', async (req, res) => {
       headers,
       body: body as unknown as BodyInit | undefined,
       redirect: 'manual',
+      signal: controller.signal,
     });
 
     const setCookies = upstream.headers.getSetCookie();
@@ -84,8 +89,18 @@ app.use('/api', async (req, res) => {
       return;
     }
 
-    Readable.fromWeb(upstream.body as any).pipe(res);
+    const upstreamBody = Readable.fromWeb(upstream.body as any);
+    upstreamBody.once('error', (error) => {
+      if (!controller.signal.aborted && !res.destroyed) {
+        res.destroy(error);
+      }
+    });
+    res.once('close', () => upstreamBody.destroy());
+    upstreamBody.pipe(res);
   } catch (error) {
+    if (controller.signal.aborted || res.destroyed) {
+      return;
+    }
     const message = error instanceof Error ? error.message : 'Unknown proxy error';
     res.status(502).json({
       success: false,
