@@ -770,6 +770,38 @@ describe('ThreadComponent', () => {
     expect(realtime.setTyping).not.toHaveBeenCalledWith(1, 'discussion', 9, true);
   });
 
+  it('restores the root typing indicator when a post fails and the draft survives', () => {
+    component.ngOnInit();
+    source.create.and.returnValue(throwError(() => new Error('nope')));
+    component.newText = 'kept draft';
+    component.onComposerInput();
+    (realtime.setTyping as jasmine.Spy).calls.reset();
+
+    component.submitRoot();
+
+    // Cleared for the attempt, then restored because the text is still in the box.
+    expect(realtime.setTyping).toHaveBeenCalledWith(1, 'discussion', 9, false);
+    expect(realtime.setTyping).toHaveBeenCalledWith(1, 'discussion', 9, true);
+  });
+
+  it('stops typing when a deletion hides an open nested composer', () => {
+    source.list.and.returnValue(of(makePage([makeItem({ id: 1 })])));
+    component.ngOnInit();
+    const node = component.roots[0];
+    node.replyOpen = true;
+    node.replyText = 'half written';
+    component.handleNodeAction({ type: 'typing', node, active: true });
+    (realtime.setTyping as jasmine.Spy).calls.reset();
+
+    const deleted = makeItem({ id: 1, isDeleted: true, content: null, author: null });
+    source.matchLiveEvent.and.returnValue({ kind: 'deleted', item: deleted });
+    events$.next({ type: 'ReplyDeleted', reply: deleted as never });
+
+    expect(node.replyOpen).toBeFalse();
+    expect(node.replyText).toBe('');
+    expect(realtime.setTyping).toHaveBeenCalledWith(1, 'discussion', 9, false);
+  });
+
   it('leaves the realtime thread and stops typing on destroy', () => {
     component.ngOnInit();
     component.newText = 'a';

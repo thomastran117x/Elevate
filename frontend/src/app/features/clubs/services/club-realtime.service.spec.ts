@@ -915,6 +915,23 @@ describe('ClubRealtimeService', () => {
     expect(hub.methodsInvoked('Typing').length).toBe(1);
   });
 
+  it('does not record a refusal for a thread that was left mid-join', async () => {
+    setup();
+    hub.invokeRejectsFor = 'JoinPost';
+    const leave = service.joinThread(1, 'post', 4);
+    leave();
+    await settle();
+
+    // Reopening must attempt a join rather than trusting a refusal recorded after the leave.
+    hub.invokeRejectsFor = null;
+    service.joinThread(1, 'post', 4);
+    await settle();
+
+    service.setTyping(1, 'post', 4, true);
+    await settle();
+    expect(hub.methodsInvoked('Typing').length).toBe(1);
+  });
+
   it('leaves the thread when the caller tears down', async () => {
     setup();
     const leave = service.joinThread(1, 'post', 4);

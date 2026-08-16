@@ -210,6 +210,8 @@ export class ThreadComponent implements OnInit, OnChanges, OnDestroy {
             `Unable to post your ${this.source.labels.singular}.`,
           );
           this.submitting = false;
+          // The draft survives a failed post, so the typing indicator has to come back with it.
+          this.markComposing('root', this.newText.trim().length > 0);
         },
       });
   }
@@ -515,6 +517,15 @@ export class ThreadComponent implements OnInit, OnChanges, OnDestroy {
     const node = findThreadNode(this.roots, item.id);
     if (!node) return;
     applyThreadItem(node, item, preserveViewerReaction);
+
+    // A deleted node hides its composer, but applyThreadItem preserves the draft state, so
+    // the heartbeat would keep running with no visible way to stop it.
+    if (node.isDeleted) {
+      node.replyOpen = false;
+      node.replyText = '';
+      node.editOpen = false;
+      this.markComposing(node.id, false);
+    }
   }
 
   private refreshLoadedBranches(nodes: ThreadDisplayNode[]): void {

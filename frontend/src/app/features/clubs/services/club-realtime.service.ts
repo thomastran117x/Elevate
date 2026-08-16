@@ -366,7 +366,9 @@ class ClubConnection {
       if (this.desiredThreads.has(key)) this.activeThreads.add(key);
       this.refusedThreads.delete(key);
     } catch {
-      this.refusedThreads.add(key);
+      // Guarded like the success path: a leave that landed during the await already cleared
+      // this key, and re-recording it would make a later reopen skip its join.
+      if (this.desiredThreads.has(key)) this.refusedThreads.add(key);
 
       // Only the confirmation is dropped, never the intent. A refusal is not reliably
       // authoritative: a reconnect that lands on an expired token is Connected but anonymous,
