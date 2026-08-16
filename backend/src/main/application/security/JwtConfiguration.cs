@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text;
 
+using backend.main.application.bootstrap;
 using backend.main.application.environment;
 using backend.main.features.auth;
 using backend.main.features.auth.token;
@@ -39,6 +40,22 @@ namespace backend.main.application.security
 
                     options.Events = new JwtBearerEvents
                     {
+                        // Browsers cannot set an Authorization header on a WebSocket handshake,
+                        // so SignalR sends the token as a query parameter instead. Accept it only
+                        // for hub paths, never for the regular API surface.
+                        OnMessageReceived = context =>
+                        {
+                            if (string.IsNullOrEmpty(context.Token)
+                                && context.Request.Path.StartsWithSegments(RoutePaths.ApiHubsPath))
+                            {
+                                var queryToken = context.Request.Query["access_token"].ToString();
+                                if (!string.IsNullOrEmpty(queryToken))
+                                    context.Token = queryToken;
+                            }
+
+                            return Task.CompletedTask;
+                        },
+
                         OnChallenge = async context =>
                         {
                             context.HandleResponse();

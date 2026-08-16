@@ -26,6 +26,7 @@ using backend.main.utilities;
 using FluentAssertions;
 
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -193,6 +194,35 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         await using var scope = _factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
         return await db.SmsMfaEnrollments.SingleOrDefaultAsync(enrollment => enrollment.UserId == userId);
+    }
+
+    /// <summary>
+    /// Builds a SignalR client bound to the in-memory test server.
+    /// </summary>
+    /// <remarks>
+    /// The token is passed as an <c>access_token</c> query parameter rather than an
+    /// Authorization header on purpose: that is what a browser does on a WebSocket
+    /// handshake, so this exercises the query-string branch of the JWT bearer events.
+    /// </remarks>
+    public HubConnection CreateHubConnection(string hubPath, string? accessToken = null)
+    {
+        var server = _factory.Server;
+        var url = string.IsNullOrEmpty(accessToken)
+            ? hubPath
+            : $"{hubPath}?access_token={Uri.EscapeDataString(accessToken)}";
+
+        return new HubConnectionBuilder()
+            .WithUrl(new Uri(Client.BaseAddress!, url), options =>
+            {
+                options.HttpMessageHandlerFactory = _ => server.CreateHandler();
+                options.WebSocketFactory = async (context, cancellationToken) =>
+                {
+                    var socketClient = server.CreateWebSocketClient();
+                    var socketUri = new UriBuilder(context.Uri) { Scheme = "http" }.Uri;
+                    return await socketClient.ConnectAsync(socketUri, cancellationToken);
+                };
+            })
+            .Build();
     }
 
     public async Task<HttpResponseMessage> GetWithBearerAsync(string path, string accessToken)

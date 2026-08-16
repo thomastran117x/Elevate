@@ -2,16 +2,21 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
+using backend.main.application.bootstrap;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
 using backend.main.features.clubs.discussions.contracts.responses;
 using backend.main.features.clubs.discussions.replies.contracts.responses;
+using backend.main.features.clubs.realtime;
+using backend.main.features.clubs.realtime.contracts.responses;
 using backend.main.shared.responses;
 
 using backend.tests.Integration.Infrastructure;
 
 using FluentAssertions;
 
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 
 namespace backend.tests.Integration.Features.Clubs;
@@ -362,16 +367,146 @@ public class ClubDiscussionEndpointsTests
             JsonContent.Create(new { content = "Not a member" })));
         outsiderReply.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        using var streamResponse = await app.Client.SendAsync(
-            CreateAuthorizedRequest(
-                HttpMethod.Get,
-                $"/api/clubs/{clubId}/discussions/replies/events",
-                ownerSession.AccessToken),
-            HttpCompletionOption.ResponseHeadersRead,
-            cts.Token);
-        streamResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        streamResponse.Content.Headers.ContentType!.MediaType.Should().Be("text/event-stream");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
+        // The owner can subscribe to the private club over the realtime hub...
+        await using var ownerHub = app.CreateHubConnection(
+            RoutePaths.ClubRealtimeHubPath, ownerSession.AccessToken);
+        await ownerHub.StartAsync(cts.Token);
+        await ownerHub.InvokeAsync(nameof(ClubRealtimeHub.JoinClub), clubId, cts.Token);
+
+        // ...while a non-member is refused by the same gate the REST endpoints use.
+        await using var outsiderHub = app.CreateHubConnection(
+            RoutePaths.ClubRealtimeHubPath, outsiderSession.AccessToken);
+        await outsiderHub.StartAsync(cts.Token);
+        var outsiderJoin = async () =>
+            await outsiderHub.InvokeAsync(nameof(ClubRealtimeHub.JoinClub), clubId, cts.Token);
+        (await outsiderJoin.Should().ThrowAsync<HubException>())
+            .Which.Message.Should().Contain("member of this club");
+    }
+
+    [Fact]
+    public async Task RealtimeHub_ShouldReportPresenceAndTypingToOtherMembers()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var owner = await CreateUserSessionAsync(app, "presence-owner@example.com", "Organizer");
+        var member = await CreateUserSessionAsync(app, "presence-member@example.com");
+        var clubId = await CreateClubAsync(app, owner.AccessToken, "Presence Club");
+
+        var discussionResponse = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{clubId}/discussions",
+            owner.AccessToken,
+            JsonContent.Create(new { title = "Presence topic", description = "Who is here?" })));
+        var discussion = (await app.ReadApiResponseAsync<ClubDiscussionResponse>(discussionResponse)).Data!;
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+        await using var ownerHub = app.CreateHubConnection(
+            RoutePaths.ClubRealtimeHubPath, owner.AccessToken);
+        var presenceChanges = new List<PresenceDiff>();
+        var presenceSignal = new SemaphoreSlim(0);
+        ownerHub.On<PresenceDiff>(ClubRealtimeEvents.PresenceChanged, diff =>
+        {
+            lock (presenceChanges)
+                presenceChanges.Add(diff);
+            presenceSignal.Release();
+        });
+
+        var typingSnapshots = new List<ThreadTypingSnapshot>();
+        var typingSignal = new SemaphoreSlim(0);
+        ownerHub.On<ThreadTypingSnapshot>(ClubRealtimeEvents.TypingChanged, snapshot =>
+        {
+            lock (typingSnapshots)
+                typingSnapshots.Add(snapshot);
+            typingSignal.Release();
+        });
+
+        await ownerHub.StartAsync(cts.Token);
+        await ownerHub.InvokeAsync(nameof(ClubRealtimeHub.JoinClub), clubId, cts.Token);
+        await ownerHub.InvokeAsync(
+            nameof(ClubRealtimeHub.JoinDiscussion), clubId, discussion.Id, cts.Token);
+
+        // The owner's own JoinDiscussion replies with an initial (empty) typing snapshot.
+        (await typingSignal.WaitAsync(TimeSpan.FromSeconds(10), cts.Token)).Should().BeTrue();
+
+        await using var memberHub = app.CreateHubConnection(
+            RoutePaths.ClubRealtimeHubPath, member.AccessToken);
+        await memberHub.StartAsync(cts.Token);
+        await memberHub.InvokeAsync(nameof(ClubRealtimeHub.JoinClub), clubId, cts.Token);
+
+        (await presenceSignal.WaitAsync(TimeSpan.FromSeconds(10), cts.Token)).Should().BeTrue();
+        lock (presenceChanges)
+        {
+            var joined = presenceChanges.Should().ContainSingle().Subject;
+            joined.Joined.Should().NotBeNull();
+            joined.Joined!.Username.Should().NotBeNullOrEmpty();
+            joined.LeftUserId.Should().BeNull();
+            joined.TotalOnline.Should().Be(2);
+        }
+
+        await memberHub.InvokeAsync(
+            nameof(ClubRealtimeHub.JoinDiscussion), clubId, discussion.Id, cts.Token);
+        await memberHub.InvokeAsync(
+            nameof(ClubRealtimeHub.Typing), ClubRealtimeGroups.DiscussionKind, discussion.Id, true, cts.Token);
+
+        (await typingSignal.WaitAsync(TimeSpan.FromSeconds(10), cts.Token)).Should().BeTrue();
+        lock (typingSnapshots)
+        {
+            typingSnapshots[^1].Users.Should().ContainSingle()
+                .Which.Username.Should().NotBeNullOrEmpty();
+        }
+
+        // Disconnecting the member takes them out of the roster.
+        await memberHub.StopAsync(cts.Token);
+
+        (await presenceSignal.WaitAsync(TimeSpan.FromSeconds(10), cts.Token)).Should().BeTrue();
+        lock (presenceChanges)
+        {
+            var left = presenceChanges[^1];
+            left.Joined.Should().BeNull();
+            left.LeftUserId.Should().NotBeNull();
+            left.TotalOnline.Should().Be(1);
+        }
+    }
+
+    [Fact]
+    public async Task RealtimeHub_ShouldRejectTypingFromAnonymousCallersAndUnjoinedThreads()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var owner = await CreateUserSessionAsync(app, "typing-owner@example.com", "Organizer");
+        var clubId = await CreateClubAsync(app, owner.AccessToken, "Typing Club");
+
+        var discussionResponse = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{clubId}/discussions",
+            owner.AccessToken,
+            JsonContent.Create(new { title = "Typing topic", description = "Rules." })));
+        var discussion = (await app.ReadApiResponseAsync<ClubDiscussionResponse>(discussionResponse)).Data!;
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
+        // Anonymous callers may read a public club but must not broadcast typing.
+        await using var anonymousHub = app.CreateHubConnection(RoutePaths.ClubRealtimeHubPath);
+        await anonymousHub.StartAsync(cts.Token);
+        await anonymousHub.InvokeAsync(nameof(ClubRealtimeHub.JoinClub), clubId, cts.Token);
+        await anonymousHub.InvokeAsync(
+            nameof(ClubRealtimeHub.JoinDiscussion), clubId, discussion.Id, cts.Token);
+
+        var anonymousTyping = async () => await anonymousHub.InvokeAsync(
+            nameof(ClubRealtimeHub.Typing), ClubRealtimeGroups.DiscussionKind, discussion.Id, true, cts.Token);
+        (await anonymousTyping.Should().ThrowAsync<HubException>())
+            .Which.Message.Should().Contain("Authentication is required");
+
+        // An authenticated caller still has to join the thread first.
+        await using var ownerHub = app.CreateHubConnection(
+            RoutePaths.ClubRealtimeHubPath, owner.AccessToken);
+        await ownerHub.StartAsync(cts.Token);
+
+        var unjoinedTyping = async () => await ownerHub.InvokeAsync(
+            nameof(ClubRealtimeHub.Typing), ClubRealtimeGroups.DiscussionKind, discussion.Id, true, cts.Token);
+        (await unjoinedTyping.Should().ThrowAsync<HubException>())
+            .Which.Message.Should().Contain("Join the thread");
     }
 
     private static async Task<AuthenticatedSessionResponse> CreateUserSessionAsync(

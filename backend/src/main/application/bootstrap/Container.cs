@@ -19,6 +19,7 @@ using backend.main.features.clubs.invitations;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
+using backend.main.features.clubs.realtime;
 using backend.main.features.clubs.reviews;
 using backend.main.features.clubs.search;
 using backend.main.features.clubs.versions;
@@ -209,8 +210,8 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IDeviceTrustService, DeviceTrustService>();
             services.AddScoped<ILoginStepUpChallengeService, LoginStepUpChallengeService>();
             services.AddScoped<IClubPostService, ClubPostService>();
-            services.AddSingleton<CommentEventBroker>();
-            services.AddSingleton<DiscussionReplyEventBroker>();
+            services.AddSingleton<IClubPresenceStore, ClubPresenceStore>();
+            services.AddSingleton<IClubRealtimeNotifier, ClubRealtimeNotifier>();
             services.AddSingleton<IRefreshAheadCache, RefreshAheadCache>();
             services.AddScoped<IAzureBlobService, AzureBlobService>();
             services.AddScoped<OrphanBlobCleanupRunner>();
@@ -291,6 +292,9 @@ namespace backend.main.application.bootstrap
 
                 if (featureFlags.IsEnabled(FeatureFlagKeys.StorageOrphanCleanup))
                     services.AddHostedService<OrphanBlobCleanupService>();
+
+                if (featureFlags.IsEnabled(FeatureFlagKeys.Clubs))
+                    services.AddHostedService<TypingExpirySweeper>();
             }
 
             services.AddSingleton<ICustomLogger, FileLogger>();

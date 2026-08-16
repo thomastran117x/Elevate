@@ -1,19 +1,19 @@
-using System.Text.Json;
-using System.Threading.Channels;
-
 using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.clubs.discussions.replies.contracts.requests;
 using backend.main.features.clubs.discussions.replies.contracts.responses;
+using backend.main.features.clubs.realtime;
 using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http.Timeouts;
 using Microsoft.AspNetCore.Mvc;
 
 namespace backend.main.features.clubs.discussions.replies;
 
-/// <summary>Nested replies, reactions, and live updates for club discussions.</summary>
+/// <summary>
+/// Nested replies and reactions for club discussions. Live delivery of these changes is
+/// handled by <see cref="ClubRealtimeHub"/>.
+/// </summary>
 [ApiController]
 [FeatureGate(FeatureFlagKeys.ClubsDiscussions)]
 [Route("clubs")]
@@ -21,17 +21,16 @@ public sealed class ClubDiscussionReplyController : ControllerBase
 {
     private const int DefaultPageSize = 20;
     private const int MaxPageSize = 100;
-    private static readonly JsonSerializerOptions EventJsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IClubDiscussionReplyService _replyService;
-    private readonly DiscussionReplyEventBroker _broker;
+    private readonly IClubRealtimeNotifier _notifier;
 
     public ClubDiscussionReplyController(
         IClubDiscussionReplyService replyService,
-        DiscussionReplyEventBroker broker)
+        IClubRealtimeNotifier notifier)
     {
         _replyService = replyService;
-        _broker = broker;
+        _notifier = notifier;
     }
 
     [AllowAnonymous]
@@ -69,7 +68,7 @@ public sealed class ClubDiscussionReplyController : ControllerBase
         var view = await _replyService.CreateAsync(
             clubId, discussionId, request.ParentReplyId, user.Id, user.Role, request.Content);
         var response = MapReply(view);
-        _broker.Publish(clubId, new DiscussionReplyEvent("ReplyCreated", response));
+        await _notifier.ReplyCreatedAsync(clubId, response);
         return StatusCode(201, new ApiResponse<DiscussionReplyResponse>("Reply created successfully.", response));
     }
 
@@ -83,7 +82,9 @@ public sealed class ClubDiscussionReplyController : ControllerBase
         var view = await _replyService.UpdateAsync(
             clubId, discussionId, replyId, user.Id, user.Role, request.Content);
         var response = MapReply(view);
-        _broker.Publish(clubId, new DiscussionReplyEvent("ReplyUpdated", MapReply(view, false)));
+        // The broadcast deliberately strips the editor's own reaction so other viewers do
+        // not inherit it; the caller's own 200 body keeps it.
+        await _notifier.ReplyUpdatedAsync(clubId, MapReply(view, false));
         return Ok(new ApiResponse<DiscussionReplyResponse>("Reply updated successfully.", response));
     }
 
@@ -95,7 +96,7 @@ public sealed class ClubDiscussionReplyController : ControllerBase
         var user = User.GetUserPayload();
         var view = await _replyService.DeleteAsync(clubId, discussionId, replyId, user.Id, user.Role);
         var response = MapReply(view);
-        _broker.Publish(clubId, new DiscussionReplyEvent("ReplyDeleted", response));
+        await _notifier.ReplyDeletedAsync(clubId, response);
         return Ok(new ApiResponse<DiscussionReplyResponse>("Reply deleted successfully.", response));
     }
 
@@ -108,7 +109,7 @@ public sealed class ClubDiscussionReplyController : ControllerBase
         var user = User.GetUserPayload();
         var summary = await _replyService.SetReactionAsync(
             clubId, discussionId, replyId, user.Id, user.Role, request.Reaction!.Value);
-        return PublishReaction(clubId, discussionId, replyId, summary);
+        return await PublishReactionAsync(clubId, discussionId, replyId, summary);
     }
 
     [Authorize]
@@ -119,62 +120,10 @@ public sealed class ClubDiscussionReplyController : ControllerBase
         var user = User.GetUserPayload();
         var summary = await _replyService.ClearReactionAsync(
             clubId, discussionId, replyId, user.Id, user.Role);
-        return PublishReaction(clubId, discussionId, replyId, summary);
+        return await PublishReactionAsync(clubId, discussionId, replyId, summary);
     }
 
-    [AllowAnonymous]
-    [DisableRequestTimeout]
-    [HttpGet("{clubId}/discussions/replies/events")]
-    public async Task StreamReplyEvents(int clubId, CancellationToken cancellationToken)
-    {
-        var (userId, userRole) = GetOptionalUser();
-        await _replyService.EnsureCanReadClubAsync(clubId, userId, userRole);
-
-        Response.Headers.ContentType = "text/event-stream";
-        Response.Headers.CacheControl = "no-cache";
-        Response.Headers["X-Accel-Buffering"] = "no";
-
-        var subscriptionId = Guid.NewGuid();
-        var channel = Channel.CreateUnbounded<DiscussionReplyEvent>();
-        _broker.Subscribe(clubId, subscriptionId, channel.Writer);
-        try
-        {
-            await Response.WriteAsync(": keepalive\n\n", cancellationToken);
-            await Response.Body.FlushAsync(cancellationToken);
-            var heartbeat = Task.Delay(TimeSpan.FromSeconds(15), cancellationToken);
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                var available = channel.Reader.WaitToReadAsync(cancellationToken).AsTask();
-                if (await Task.WhenAny(available, heartbeat) == heartbeat)
-                {
-                    await Response.WriteAsync(": keepalive\n\n", cancellationToken);
-                    await Response.Body.FlushAsync(cancellationToken);
-                    heartbeat = Task.Delay(TimeSpan.FromSeconds(15), cancellationToken);
-                    continue;
-                }
-
-                if (!await available)
-                    break;
-                while (channel.Reader.TryRead(out var evt))
-                {
-                    var json = JsonSerializer.Serialize(evt.Payload, EventJsonOptions);
-                    await Response.WriteAsync($"event: {evt.Type}\ndata: {json}\n\n", cancellationToken);
-                }
-                await Response.Body.FlushAsync(cancellationToken);
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // A disconnected browser or proxy is the normal end of an SSE subscription.
-        }
-        finally
-        {
-            _broker.Unsubscribe(clubId, subscriptionId);
-            channel.Writer.TryComplete();
-        }
-    }
-
-    private IActionResult PublishReaction(
+    private async Task<IActionResult> PublishReactionAsync(
         int clubId, int discussionId, int replyId, DiscussionReplyReactionSummary summary)
     {
         var response = new DiscussionReplyReactionResponse
@@ -184,13 +133,8 @@ public sealed class ClubDiscussionReplyController : ControllerBase
             DislikeCount = summary.DislikeCount,
             CurrentUserReaction = summary.CurrentUserReaction?.ToString()
         };
-        _broker.Publish(clubId, new DiscussionReplyEvent("ReplyReactionChanged", new
-        {
-            discussionId,
-            replyId,
-            likeCount = summary.LikeCount,
-            dislikeCount = summary.DislikeCount
-        }));
+        await _notifier.ReplyReactionChangedAsync(
+            clubId, discussionId, replyId, summary.LikeCount, summary.DislikeCount);
         return Ok(new ApiResponse<DiscussionReplyReactionResponse>("Reply reaction updated successfully.", response));
     }
 

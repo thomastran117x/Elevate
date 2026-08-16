@@ -5,10 +5,13 @@ using backend.main.application.handlers;
 using backend.main.application.openapi;
 using backend.main.application.security;
 using backend.main.features.cache;
+using backend.main.features.clubs.realtime;
 using backend.main.infrastructure.database.core;
 using backend.main.infrastructure.redis;
 using backend.main.seeders;
 using backend.main.shared.utilities.logger;
+
+using Microsoft.AspNetCore.SignalR;
 
 using Serilog;
 
@@ -49,6 +52,11 @@ builder.Services.AddControllersWithViews(options =>
 });
 builder.Services.AddApiResponseConventions();
 builder.Services.AddAppOpenApi();
+builder.Services.AddSignalR(options =>
+{
+    options.AddFilter<ClubRealtimeExceptionFilter>();
+});
+builder.Services.AddSingleton<ClubRealtimeExceptionFilter>();
 
 builder.Services.AddApplicationServices(
     builder.Configuration,
@@ -129,6 +137,8 @@ app.UseClientRequestInspection();
 app.MapAppOpenApi();
 
 app.MapControllers();
+
+app.MapHub<ClubRealtimeHub>(RoutePaths.ClubRealtimeHubPath);
 
 app.UseJsonNotFound();
 

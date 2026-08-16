@@ -7,6 +7,16 @@ namespace backend.main.application.bootstrap
         public const string ApiPrefix = "api";
         public const string AuthPrefix = "auth";
         public const string ApiAuthPath = "/" + ApiPrefix + "/" + AuthPrefix;
+
+        /// <summary>
+        /// Root for SignalR hubs. Spelled out with the api prefix because
+        /// <see cref="RoutePrefixConvention"/> only rewrites MVC controllers, and because the
+        /// SSR proxy only forwards paths under <c>/api</c>.
+        /// </summary>
+        public const string ApiHubsPath = "/" + ApiPrefix + "/hubs";
+
+        /// <summary>Path of the club realtime hub (comments, presence, typing).</summary>
+        public const string ClubRealtimeHubPath = ApiHubsPath + "/clubs";
     }
 
     public class RoutePrefixConvention : IApplicationModelConvention

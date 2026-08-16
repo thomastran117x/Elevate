@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
+using backend.main.application.bootstrap;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
 using backend.main.features.clubs;
@@ -13,6 +14,7 @@ using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.comments.contracts.responses;
 using backend.main.features.clubs.posts.contracts.responses;
 using backend.main.features.clubs.posts.search;
+using backend.main.features.clubs.realtime;
 using backend.main.features.clubs.reviews;
 using backend.main.features.clubs.reviews.contracts.responses;
 using backend.main.features.clubs.search;
@@ -27,6 +29,7 @@ using backend.tests.Integration.Infrastructure;
 
 using FluentAssertions;
 
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -481,23 +484,29 @@ public class ClubEndpointsTests
         detailBody.Data!.Id.Should().Be(post.Id);
         detailBody.Data.Title.Should().Be("Detailed Post");
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var streamRequest = new HttpRequestMessage(
-            HttpMethod.Get,
-            $"/api/clubs/{club.Id}/posts/{post.Id}/comments/events");
-        using var streamResponse = await app.Client.SendAsync(
-            streamRequest,
-            HttpCompletionOption.ResponseHeadersRead,
-            cts.Token);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
-        streamResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        streamResponse.Content.Headers.ContentType.Should().NotBeNull();
-        streamResponse.Content.Headers.ContentType!.MediaType.Should().Be("text/event-stream");
+        // A comment posted over REST is delivered live to everyone subscribed to the post.
+        await using var hub = app.CreateHubConnection(
+            RoutePaths.ClubRealtimeHubPath, ownerSession.AccessToken);
+        var received = new TaskCompletionSource<PostCommentResponse>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        hub.On<PostCommentResponse>(
+            ClubRealtimeEvents.CommentCreated, comment => received.TrySetResult(comment));
 
-        await using var stream = await streamResponse.Content.ReadAsStreamAsync(cts.Token);
-        using var reader = new StreamReader(stream);
-        var firstLine = await reader.ReadLineAsync();
-        firstLine.Should().Be(": keepalive");
+        await hub.StartAsync(cts.Token);
+        await hub.InvokeAsync(nameof(ClubRealtimeHub.JoinPost), club.Id, post.Id, cts.Token);
+
+        var commentResponse = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{club.Id}/posts/{post.Id}/comments",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { content = "Live comment over the hub." })));
+        commentResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var broadcast = await received.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
+        broadcast.PostId.Should().Be(post.Id);
+        broadcast.Content.Should().Be("Live comment over the hub.");
     }
 
     [Fact]

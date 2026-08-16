@@ -1,0 +1,432 @@
+import { isPlatformBrowser } from '@angular/common';
+import { Inject, Injectable, NgZone, PLATFORM_ID } from '@angular/core';
+import {
+  HttpTransportType,
+  HubConnection,
+  HubConnectionBuilder,
+  HubConnectionState,
+  LogLevel,
+} from '@microsoft/signalr';
+import { BehaviorSubject, EMPTY, Observable, Subject } from 'rxjs';
+import { filter, map } from 'rxjs/operators';
+
+import { environment } from '@environments/environment';
+import { AuthTokenService } from '../../../core/api/services/auth-token.service';
+import { DiscussionReply, normalizeDiscussionReply } from '../models/club-discussion.types';
+import { PostComment, normalizePostComment } from '../models/club-post.types';
+
+/** What the connection pill renders. */
+export type RealtimeConnectionState = 'connecting' | 'live' | 'reconnecting' | 'offline';
+
+/** Someone visible in a club roster or a typing indicator. */
+export interface RealtimePresenceUser {
+  userId: number;
+  name: string | null;
+  username: string | null;
+  avatar: string | null;
+}
+
+export interface RealtimePresence {
+  users: RealtimePresenceUser[];
+  totalOnline: number;
+}
+
+export type ThreadKind = 'discussion' | 'post';
+
+export type ClubRealtimeEvent =
+  /** Emitted after every (re)connect so a thread can reconcile what it missed. */
+  | { type: 'Connected' }
+  | { type: 'ReplyCreated'; reply: DiscussionReply }
+  | { type: 'ReplyUpdated'; reply: DiscussionReply }
+  | { type: 'ReplyDeleted'; reply: DiscussionReply }
+  | {
+      type: 'ReplyReactionChanged';
+      discussionId: number;
+      replyId: number;
+      likeCount: number;
+      dislikeCount: number;
+    }
+  | { type: 'CommentCreated'; comment: PostComment }
+  | { type: 'CommentUpdated'; comment: PostComment }
+  | { type: 'CommentDeleted'; comment: PostComment }
+  | {
+      type: 'CommentReactionChanged';
+      postId: number;
+      commentId: number;
+      likeCount: number;
+      dislikeCount: number;
+    };
+
+type RawRecord = Record<string, unknown>;
+
+/** Reads a value that the backend may send in either camelCase or PascalCase. */
+function pick<T>(raw: RawRecord, key: string, fallback: T): T {
+  const camel = raw[key];
+  if (camel !== undefined && camel !== null) return camel as T;
+  const pascal = raw[key.charAt(0).toUpperCase() + key.slice(1)];
+  return pascal === undefined || pascal === null ? fallback : (pascal as T);
+}
+
+function normalizePresenceUser(raw: RawRecord): RealtimePresenceUser {
+  return {
+    userId: pick(raw, 'userId', 0),
+    name: pick<string | null>(raw, 'name', null),
+    username: pick<string | null>(raw, 'username', null),
+    avatar: pick<string | null>(raw, 'avatar', null),
+  };
+}
+
+/**
+ * The single realtime connection for club content: discussion replies, post comments,
+ * club-wide presence, and per-thread typing.
+ *
+ * Replaces the two hand-rolled SSE clients. SignalR negotiates WebSockets first and falls
+ * back to Server-Sent Events and then long polling on its own, so restrictive networks are
+ * still covered without a second code path.
+ */
+@Injectable({ providedIn: 'root' })
+export class ClubRealtimeService {
+  /** Matches the server-side typing TTL of 5s with room for one missed refresh. */
+  private static readonly TypingRefreshMs = 2000;
+
+  private readonly connections = new Map<number, ClubConnection>();
+
+  constructor(
+    private zone: NgZone,
+    private authToken: AuthTokenService,
+    @Inject(PLATFORM_ID) private platformId: object,
+  ) {}
+
+  /** Club-wide events: discussion replies plus the `Connected` reconciliation signal. */
+  events(clubId: number): Observable<ClubRealtimeEvent> {
+    const connection = this.acquire(clubId);
+    return connection ? connection.events$ : EMPTY;
+  }
+
+  connectionState(clubId: number): Observable<RealtimeConnectionState> {
+    const connection = this.acquire(clubId);
+    return connection ? connection.state$ : EMPTY;
+  }
+
+  presence(clubId: number): Observable<RealtimePresence> {
+    const connection = this.acquire(clubId);
+    return connection ? connection.presence$ : EMPTY;
+  }
+
+  /** Everyone currently typing in one thread. Emits an empty list to clear the indicator. */
+  typing(clubId: number, kind: ThreadKind, threadId: number): Observable<RealtimePresenceUser[]> {
+    const connection = this.acquire(clubId);
+    if (!connection) return EMPTY;
+    const threadKey = `thread:${kind}:${threadId}`;
+    return connection.typing$.pipe(
+      filter((entry) => entry.threadKey === threadKey),
+      map((entry) => entry.users),
+    );
+  }
+
+  /**
+   * Subscribes to a thread. Returns a teardown that leaves the thread and releases the
+   * connection when the last subscriber goes away.
+   */
+  joinThread(clubId: number, kind: ThreadKind, threadId: number): () => void {
+    const connection = this.acquire(clubId);
+    if (!connection) return () => undefined;
+    connection.retain();
+    void connection.joinThread(kind, threadId);
+    return () => {
+      void connection.leaveThread(kind, threadId);
+      connection.release();
+    };
+  }
+
+  /**
+   * Marks the current user as typing. Refreshes on a timer while `true` so the server-side
+   * TTL never expires mid-compose, and sends a single explicit stop on `false`.
+   */
+  setTyping(clubId: number, kind: ThreadKind, threadId: number, isTyping: boolean): void {
+    this.connections.get(clubId)?.setTyping(kind, threadId, isTyping);
+  }
+
+  private acquire(clubId: number): ClubConnection | null {
+    if (!isPlatformBrowser(this.platformId)) return null;
+
+    let connection = this.connections.get(clubId);
+    if (!connection) {
+      connection = new ClubConnection(
+        clubId,
+        this.zone,
+        this.authToken,
+        ClubRealtimeService.TypingRefreshMs,
+      );
+      this.connections.set(clubId, connection);
+    }
+    return connection;
+  }
+}
+
+/** One hub connection, shared by every thread open for the same club. */
+class ClubConnection {
+  private readonly eventsSubject = new Subject<ClubRealtimeEvent>();
+  private readonly presenceSubject = new BehaviorSubject<RealtimePresence>({
+    users: [],
+    totalOnline: 0,
+  });
+  private readonly typingSubject = new Subject<{
+    threadKey: string;
+    users: RealtimePresenceUser[];
+  }>();
+  private readonly stateSubject = new BehaviorSubject<RealtimeConnectionState>('connecting');
+
+  private readonly hub: HubConnection;
+  private readonly joinedThreads = new Set<string>();
+  private readonly typingTimers = new Map<string, ReturnType<typeof setInterval>>();
+
+  private refCount = 0;
+  private started: Promise<void> | null = null;
+
+  readonly events$ = this.eventsSubject.asObservable();
+  readonly presence$ = this.presenceSubject.asObservable();
+  readonly typing$ = this.typingSubject.asObservable();
+  readonly state$ = this.stateSubject.asObservable();
+
+  constructor(
+    private readonly clubId: number,
+    private readonly zone: NgZone,
+    private readonly authToken: AuthTokenService,
+    private readonly typingRefreshMs: number,
+  ) {
+    this.hub = this.build();
+    this.registerHandlers();
+  }
+
+  retain(): void {
+    this.refCount += 1;
+    void this.ensureStarted();
+  }
+
+  release(): void {
+    this.refCount = Math.max(0, this.refCount - 1);
+  }
+
+  async joinThread(kind: ThreadKind, threadId: number): Promise<void> {
+    await this.ensureStarted();
+    if (this.hub.state !== HubConnectionState.Connected) return;
+
+    const method = kind === 'discussion' ? 'JoinDiscussion' : 'JoinPost';
+    try {
+      await this.hub.invoke(method, this.clubId, threadId);
+      this.joinedThreads.add(`${kind}:${threadId}`);
+    } catch {
+      // A refused join (private club, disabled feature) leaves the thread on REST data only.
+    }
+  }
+
+  async leaveThread(kind: ThreadKind, threadId: number): Promise<void> {
+    this.stopTypingTimer(`${kind}:${threadId}`);
+    this.joinedThreads.delete(`${kind}:${threadId}`);
+    if (this.hub.state !== HubConnectionState.Connected) return;
+
+    const method = kind === 'discussion' ? 'LeaveDiscussion' : 'LeavePost';
+    try {
+      await (kind === 'discussion'
+        ? this.hub.invoke(method, threadId)
+        : this.hub.invoke(method, this.clubId, threadId));
+    } catch {
+      // Leaving is best-effort; a dropped connection cleans up server-side anyway.
+    }
+  }
+
+  setTyping(kind: ThreadKind, threadId: number, isTyping: boolean): void {
+    const key = `${kind}:${threadId}`;
+    if (!isTyping) {
+      this.stopTypingTimer(key);
+      void this.sendTyping(kind, threadId, false);
+      return;
+    }
+
+    if (this.typingTimers.has(key)) return;
+
+    void this.sendTyping(kind, threadId, true);
+    // Outside Angular's zone: a 2s heartbeat must not schedule change detection.
+    this.zone.runOutsideAngular(() => {
+      this.typingTimers.set(
+        key,
+        setInterval(() => void this.sendTyping(kind, threadId, true), this.typingRefreshMs),
+      );
+    });
+  }
+
+  private async sendTyping(kind: ThreadKind, threadId: number, isTyping: boolean): Promise<void> {
+    if (this.hub.state !== HubConnectionState.Connected) return;
+    if (!this.joinedThreads.has(`${kind}:${threadId}`)) return;
+    try {
+      await this.hub.invoke('Typing', kind, threadId, isTyping);
+    } catch {
+      // Anonymous viewers are refused by the server; nothing to surface in the UI.
+    }
+  }
+
+  private stopTypingTimer(key: string): void {
+    const timer = this.typingTimers.get(key);
+    if (timer === undefined) return;
+    clearInterval(timer);
+    this.typingTimers.delete(key);
+  }
+
+  private build(): HubConnection {
+    // environment.backendUrl already ends in `/api`, which is also where the hub lives.
+    const url = `${environment.backendUrl}/hubs/clubs`;
+
+    return new HubConnectionBuilder()
+      .withUrl(url, {
+        // Re-read on every (re)connect, so signing in mid-session upgrades the connection
+        // instead of leaving it stuck as anonymous.
+        accessTokenFactory: () => this.authToken.accessToken ?? '',
+        withCredentials: true,
+        transport:
+          HttpTransportType.WebSockets |
+          HttpTransportType.ServerSentEvents |
+          HttpTransportType.LongPolling,
+      })
+      .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+      .configureLogging(environment.production ? LogLevel.Error : LogLevel.Warning)
+      .build();
+  }
+
+  private registerHandlers(): void {
+    this.hub.on('ReplyCreated', (raw: RawRecord) =>
+      this.emit({ type: 'ReplyCreated', reply: normalizeDiscussionReply(raw as never) }),
+    );
+    this.hub.on('ReplyUpdated', (raw: RawRecord) =>
+      this.emit({ type: 'ReplyUpdated', reply: normalizeDiscussionReply(raw as never) }),
+    );
+    this.hub.on('ReplyDeleted', (raw: RawRecord) =>
+      this.emit({ type: 'ReplyDeleted', reply: normalizeDiscussionReply(raw as never) }),
+    );
+    this.hub.on('ReplyReactionChanged', (raw: RawRecord) =>
+      this.emit({
+        type: 'ReplyReactionChanged',
+        discussionId: pick(raw, 'discussionId', 0),
+        replyId: pick(raw, 'replyId', 0),
+        likeCount: pick(raw, 'likeCount', 0),
+        dislikeCount: pick(raw, 'dislikeCount', 0),
+      }),
+    );
+
+    this.hub.on('CommentCreated', (raw: RawRecord) =>
+      this.emit({ type: 'CommentCreated', comment: normalizePostComment(raw as never) }),
+    );
+    this.hub.on('CommentUpdated', (raw: RawRecord) =>
+      this.emit({ type: 'CommentUpdated', comment: normalizePostComment(raw as never) }),
+    );
+    this.hub.on('CommentDeleted', (raw: RawRecord) =>
+      this.emit({ type: 'CommentDeleted', comment: normalizePostComment(raw as never) }),
+    );
+    this.hub.on('CommentReactionChanged', (raw: RawRecord) =>
+      this.emit({
+        type: 'CommentReactionChanged',
+        postId: pick(raw, 'postId', 0),
+        commentId: pick(raw, 'commentId', 0),
+        likeCount: pick(raw, 'likeCount', 0),
+        dislikeCount: pick(raw, 'dislikeCount', 0),
+      }),
+    );
+
+    this.hub.on('PresenceSnapshot', (raw: RawRecord) =>
+      this.zone.run(() =>
+        this.presenceSubject.next({
+          users: pick<RawRecord[]>(raw, 'users', []).map(normalizePresenceUser),
+          totalOnline: pick(raw, 'totalOnline', 0),
+        }),
+      ),
+    );
+
+    this.hub.on('PresenceChanged', (raw: RawRecord) => this.applyPresenceDiff(raw));
+
+    this.hub.on('TypingChanged', (raw: RawRecord) =>
+      this.zone.run(() =>
+        this.typingSubject.next({
+          threadKey: pick(raw, 'threadKey', ''),
+          users: pick<RawRecord[]>(raw, 'users', []).map(normalizePresenceUser),
+        }),
+      ),
+    );
+
+    this.hub.onreconnecting(() => this.zone.run(() => this.stateSubject.next('reconnecting')));
+    this.hub.onreconnected(() => void this.afterConnect());
+    this.hub.onclose(() => this.zone.run(() => this.stateSubject.next('offline')));
+  }
+
+  private applyPresenceDiff(raw: RawRecord): void {
+    const joined = pick<RawRecord | null>(raw, 'joined', null);
+    const leftUserId = pick<number | null>(raw, 'leftUserId', null);
+    const totalOnline = pick(raw, 'totalOnline', 0);
+
+    this.zone.run(() => {
+      const current = this.presenceSubject.value.users;
+      let users = current;
+
+      if (joined) {
+        const user = normalizePresenceUser(joined);
+        users = current.some((existing) => existing.userId === user.userId)
+          ? current
+          : [...current, user];
+      } else if (leftUserId !== null) {
+        users = current.filter((existing) => existing.userId !== leftUserId);
+      }
+
+      this.presenceSubject.next({ users, totalOnline });
+    });
+  }
+
+  private emit(event: ClubRealtimeEvent): void {
+    this.zone.run(() => this.eventsSubject.next(event));
+  }
+
+  private ensureStarted(): Promise<void> {
+    if (this.started) return this.started;
+
+    this.stateSubject.next('connecting');
+    // SignalR's own timers and transport callbacks do not need to churn change detection.
+    this.started = this.zone
+      .runOutsideAngular(() => this.hub.start())
+      .then(() => this.afterConnect())
+      .catch(() => {
+        this.zone.run(() => this.stateSubject.next('offline'));
+        // Allow a later retain() to try again rather than latching offline forever.
+        this.started = null;
+      });
+
+    return this.started;
+  }
+
+  /**
+   * Runs after both the first connect and every automatic reconnect: re-join the club and
+   * every thread this connection had open, then tell subscribers to reconcile.
+   */
+  private async afterConnect(): Promise<void> {
+    try {
+      await this.hub.invoke('JoinClub', this.clubId);
+    } catch {
+      // A private club the viewer cannot read still leaves the REST data usable.
+    }
+
+    for (const key of [...this.joinedThreads]) {
+      const [kind, id] = key.split(':');
+      try {
+        await this.hub.invoke(
+          kind === 'discussion' ? 'JoinDiscussion' : 'JoinPost',
+          this.clubId,
+          Number(id),
+        );
+      } catch {
+        this.joinedThreads.delete(key);
+      }
+    }
+
+    this.zone.run(() => {
+      this.stateSubject.next('live');
+      this.eventsSubject.next({ type: 'Connected' });
+    });
+  }
+}

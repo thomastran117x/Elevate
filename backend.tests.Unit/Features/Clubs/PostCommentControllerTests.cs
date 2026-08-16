@@ -1,18 +1,15 @@
 using System.Security.Claims;
-using System.Reflection;
-using System.Text.Json;
-using System.Threading.Channels;
 
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.comments.contracts.requests;
 using backend.main.features.clubs.posts.comments.contracts.responses;
+using backend.main.features.clubs.realtime;
 using backend.main.features.profile.contracts;
 using backend.main.shared.responses;
 
 using FluentAssertions;
 
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Timeouts;
 using Microsoft.AspNetCore.Mvc;
 
 using Moq;
@@ -29,7 +26,8 @@ public class PostCommentControllerTests
         service.Setup(s => s.GetPageAsync(
                 4, 8, null, PostCommentSort.Newest, "cursor", 100, null, null))
             .ReturnsAsync(new PostCommentPage([view], 3, "next", true));
-        var controller = CreateController(service.Object, new CommentEventBroker(), authenticated: false);
+        var controller = CreateController(
+            service.Object, new Mock<IClubRealtimeNotifier>().Object, authenticated: false);
 
         var result = await controller.GetComments(4, 8, null, PostCommentSort.Newest, "cursor", 500);
 
@@ -46,19 +44,17 @@ public class PostCommentControllerTests
     }
 
     [Fact]
-    public async Task CreateAndUpdate_ShouldReturnCompleteCommentsAndPublishEvents()
+    public async Task CreateAndUpdate_ShouldReturnCompleteCommentsAndBroadcastThem()
     {
         var service = new Mock<IPostCommentService>();
-        var broker = new CommentEventBroker();
-        var events = Channel.CreateUnbounded<CommentEvent>();
-        broker.Subscribe(8, Guid.NewGuid(), events.Writer);
+        var notifier = new Mock<IClubRealtimeNotifier>();
         var createdView = CreateView(parentCommentId: 5);
         var updatedView = CreateView(content: "Updated comment");
         service.Setup(s => s.CreateAsync(4, 8, 5, 7, "Participant", "New comment"))
             .ReturnsAsync(createdView);
         service.Setup(s => s.UpdateAsync(4, 8, 12, 7, "Participant", "Updated comment"))
             .ReturnsAsync(updatedView);
-        var controller = CreateController(service.Object, broker);
+        var controller = CreateController(service.Object, notifier.Object);
 
         var createResult = await controller.CreateComment(4, 8, new PostCommentCreateRequest
         {
@@ -69,8 +65,9 @@ public class PostCommentControllerTests
         created.StatusCode.Should().Be(StatusCodes.Status201Created);
         created.Value.Should().BeOfType<ApiResponse<PostCommentResponse>>()
             .Which.Data!.ParentCommentId.Should().Be(5);
-        events.Reader.TryRead(out var createdEvent).Should().BeTrue();
-        createdEvent!.Type.Should().Be("CommentCreated");
+        notifier.Verify(
+            n => n.CommentCreatedAsync(4, 8, It.Is<PostCommentResponse>(c => c.ParentCommentId == 5)),
+            Times.Once);
 
         var updateResult = await controller.UpdateComment(4, 8, 12, new PostCommentUpdateRequest
         {
@@ -79,22 +76,21 @@ public class PostCommentControllerTests
         var updated = updateResult.Should().BeOfType<OkObjectResult>().Subject;
         updated.Value.Should().BeOfType<ApiResponse<PostCommentResponse>>()
             .Which.Data!.Content.Should().Be("Updated comment");
-        events.Reader.TryRead(out var updatedEvent).Should().BeTrue();
-        updatedEvent!.Type.Should().Be("CommentUpdated");
-        updatedEvent.Payload.Should().BeOfType<PostCommentResponse>()
-            .Which.CurrentUserReaction.Should().BeNull();
+
+        // The broadcast strips the editor's own reaction; the caller's own body keeps it.
+        notifier.Verify(
+            n => n.CommentUpdatedAsync(4, 8, It.Is<PostCommentResponse>(c => c.CurrentUserReaction == null)),
+            Times.Once);
     }
 
     [Fact]
     public async Task DeleteComment_ShouldReturnAndBroadcastADeletedPlaceholder()
     {
         var service = new Mock<IPostCommentService>();
-        var broker = new CommentEventBroker();
-        var events = Channel.CreateUnbounded<CommentEvent>();
-        broker.Subscribe(8, Guid.NewGuid(), events.Writer);
+        var notifier = new Mock<IClubRealtimeNotifier>();
         service.Setup(s => s.DeleteAsync(4, 8, 12, 7, "Participant"))
             .ReturnsAsync(CreateView(isDeleted: true));
-        var controller = CreateController(service.Object, broker);
+        var controller = CreateController(service.Object, notifier.Object);
 
         var result = await controller.DeleteComment(4, 8, 12);
 
@@ -104,23 +100,22 @@ public class PostCommentControllerTests
         response.Data.UserId.Should().BeNull();
         response.Data.Content.Should().BeNull();
         response.Data.Author.Should().BeNull();
-        events.Reader.TryRead(out var deletedEvent).Should().BeTrue();
-        deletedEvent!.Type.Should().Be("CommentDeleted");
+        notifier.Verify(
+            n => n.CommentDeletedAsync(4, 8, It.Is<PostCommentResponse>(c => c.IsDeleted)),
+            Times.Once);
     }
 
     [Fact]
     public async Task ReactionEndpoints_ShouldReturnViewerStateAndBroadcastAggregates()
     {
         var service = new Mock<IPostCommentService>();
-        var broker = new CommentEventBroker();
-        var events = Channel.CreateUnbounded<CommentEvent>();
-        broker.Subscribe(8, Guid.NewGuid(), events.Writer);
+        var notifier = new Mock<IClubRealtimeNotifier>();
         service.Setup(s => s.SetReactionAsync(
                 4, 8, 12, 7, "Participant", PostCommentReactionType.Dislike))
             .ReturnsAsync(new PostCommentReactionSummary(2, 3, PostCommentReactionType.Dislike));
         service.Setup(s => s.ClearReactionAsync(4, 8, 12, 7, "Participant"))
             .ReturnsAsync(new PostCommentReactionSummary(2, 2, null));
-        var controller = CreateController(service.Object, broker);
+        var controller = CreateController(service.Object, notifier.Object);
 
         var setResult = await controller.SetReaction(4, 8, 12, new PostCommentReactionRequest
         {
@@ -130,32 +125,19 @@ public class PostCommentControllerTests
             .Should().BeOfType<ApiResponse<PostCommentReactionResponse>>().Subject;
         setResponse.Data!.CurrentUserReaction.Should().Be("Dislike");
         setResponse.Data.DislikeCount.Should().Be(3);
-        events.Reader.TryRead(out var setEvent).Should().BeTrue();
-        setEvent!.Type.Should().Be("CommentReactionChanged");
-        JsonSerializer.Serialize(setEvent.Payload).Should().Contain("\"dislikeCount\":3");
+        notifier.Verify(n => n.CommentReactionChangedAsync(4, 8, 12, 2, 3), Times.Once);
 
         var clearResult = await controller.ClearReaction(4, 8, 12);
         var clearResponse = clearResult.Should().BeOfType<OkObjectResult>().Subject.Value
             .Should().BeOfType<ApiResponse<PostCommentReactionResponse>>().Subject;
         clearResponse.Data!.CurrentUserReaction.Should().BeNull();
         clearResponse.Data.DislikeCount.Should().Be(2);
-        events.Reader.TryRead(out var clearEvent).Should().BeTrue();
-        clearEvent!.Type.Should().Be("CommentReactionChanged");
-    }
-
-    [Fact]
-    public void StreamComments_ShouldDisableTheGlobalRequestTimeout()
-    {
-        var action = typeof(PostCommentController)
-            .GetMethod(nameof(PostCommentController.StreamComments));
-
-        action.Should().NotBeNull();
-        action!.GetCustomAttribute<DisableRequestTimeoutAttribute>().Should().NotBeNull();
+        notifier.Verify(n => n.CommentReactionChangedAsync(4, 8, 12, 2, 2), Times.Once);
     }
 
     private static PostCommentController CreateController(
         IPostCommentService service,
-        CommentEventBroker broker,
+        IClubRealtimeNotifier notifier,
         bool authenticated = true)
     {
         var identity = authenticated
@@ -167,7 +149,7 @@ public class PostCommentControllerTests
                 ], "TestAuth")
             : new ClaimsIdentity();
 
-        return new PostCommentController(service, broker)
+        return new PostCommentController(service, notifier)
         {
             ControllerContext = new ControllerContext
             {

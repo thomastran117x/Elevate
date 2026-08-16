@@ -1,0 +1,24 @@
+<div class="flex items-center gap-2" [title]="summary">
+  @if (visible.length > 0) {
+    <div class="flex -space-x-2">
+      @for (user of visible; track trackByUserId($index, user)) {
+        <app-avatar
+          [src]="user.avatar"
+          [name]="displayName(user)"
+          size="xs"
+          className="ring-2 ring-surface"
+        />
+      }
+      @if (overflow > 0) {
+        <span
+          class="inline-flex h-6 items-center justify-center rounded-full border border-line bg-surface-sunken px-1.5 text-[10px] font-bold text-subtle ring-2 ring-surface"
+          >+{{ overflow }}</span
+        >
+      }
+    </div>
+  }
+  <span class="text-xs font-medium text-faint">
+    <span class="sr-only">{{ summary }}</span>
+    <span aria-hidden="true">{{ totalOnline }} online</span>
+  </span>
+</div>

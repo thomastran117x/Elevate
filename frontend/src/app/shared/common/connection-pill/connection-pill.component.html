@@ -1,0 +1,9 @@
+<span
+  role="status"
+  [attr.aria-label]="'Live updates: ' + label"
+  class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+  [class]="classes"
+>
+  <span class="h-1.5 w-1.5 rounded-full" [class]="dotClasses" aria-hidden="true"></span>
+  {{ label }}
+</span>

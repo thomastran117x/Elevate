@@ -5,7 +5,9 @@ import {
   writeResponseToNodeResponse,
 } from '@angular/ssr/node';
 import express from 'express';
+import { request as httpRequest } from 'node:http';
 import { join } from 'node:path';
+import type { Duplex } from 'node:stream';
 import { Readable } from 'node:stream';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
@@ -124,15 +126,76 @@ app.use((req, res, next) => {
     .catch(next);
 });
 
+/**
+ * Tunnels a WebSocket upgrade through to the API.
+ *
+ * The `/api` handler above cannot carry this: it proxies with `fetch`, and `upgrade` and
+ * `connection` are stripped as hop-by-hop headers. Without this, SignalR would fall back to
+ * long polling whenever the browser reaches the backend through this server (Docker and
+ * Kubernetes both do).
+ */
+function proxyWebSocketUpgrade(req: express.Request, socket: Duplex, head: Buffer): void {
+  const target = new URL(req.url ?? '/', apiProxyTarget);
+
+  const upstream = httpRequest({
+    protocol: target.protocol,
+    hostname: target.hostname,
+    port: target.port,
+    path: target.pathname + target.search,
+    method: 'GET',
+    headers: { ...req.headers, host: target.host },
+  });
+
+  const destroyBoth = (): void => {
+    socket.destroy();
+    upstream.destroy();
+  };
+
+  upstream.on('upgrade', (upstreamRes, upstreamSocket, upstreamHead) => {
+    const headers = Object.entries(upstreamRes.headers)
+      .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+      .join('\r\n');
+
+    socket.write(
+      `HTTP/1.1 101 ${upstreamRes.statusMessage ?? 'Switching Protocols'}\r\n${headers}\r\n\r\n`,
+    );
+
+    if (upstreamHead?.length) upstreamSocket.unshift(upstreamHead);
+
+    upstreamSocket.on('error', destroyBoth);
+    socket.on('error', destroyBoth);
+    upstreamSocket.pipe(socket).pipe(upstreamSocket);
+  });
+
+  // The backend answered with a normal response, i.e. it refused the upgrade.
+  upstream.on('response', destroyBoth);
+  upstream.on('error', destroyBoth);
+  socket.on('error', destroyBoth);
+
+  // Bytes already read past the request headers belong to the client stream; put them
+  // back so the pipe set up on upgrade forwards them.
+  if (head?.length) socket.unshift(head);
+  upstream.end();
+}
+
 if (isMainModule(import.meta.url) || process.env['pm_id']) {
   const port = process.env['PORT'] || 3090;
-  app.listen(port, (error) => {
+  const server = app.listen(port, (error) => {
     if (error) {
       throw error;
     }
 
     console.log(`Node Express server listening on http://localhost:${port}`);
     console.log(`Proxying /api requests to ${apiProxyTarget}`);
+  });
+
+  server.on('upgrade', (req, socket, head) => {
+    if (!req.url?.startsWith('/api/')) {
+      socket.destroy();
+      return;
+    }
+
+    proxyWebSocketUpgrade(req as express.Request, socket, head);
   });
 }
 
