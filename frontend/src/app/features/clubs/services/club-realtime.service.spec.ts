@@ -1,6 +1,7 @@
 import { NgZone, PLATFORM_ID } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { HubConnectionBuilder, HubConnectionState } from '@microsoft/signalr';
+import { BehaviorSubject } from 'rxjs';
 
 import { AuthTokenService } from '../../../core/api/services/auth-token.service';
 import {
@@ -41,8 +42,16 @@ class FakeHubConnection {
     this.state = HubConnectionState.Connected;
   }
 
+  stopCalls = 0;
+
   async stop(): Promise<void> {
+    this.stopCalls += 1;
     this.state = HubConnectionState.Disconnected;
+  }
+
+  /** The service re-registers handlers whenever it rebuilds; drop the previous set. */
+  resetHandlers(): void {
+    this.handlers.clear();
   }
 
   async invoke(method: string, ...args: unknown[]): Promise<void> {
@@ -86,13 +95,13 @@ class FakeHubConnection {
 describe('ClubRealtimeService', () => {
   let hub: FakeHubConnection;
   let service: ClubRealtimeService;
-  let authToken: { accessToken: string | null };
+  let authToken: { accessToken: string | null; isAuthenticated$: BehaviorSubject<boolean> };
   let withUrlOptions: { accessTokenFactory?: () => string } | undefined;
 
   function setup(platformId: string = 'browser'): void {
     hub = new FakeHubConnection();
     withUrlOptions = undefined;
-    authToken = { accessToken: 'token-1' };
+    authToken = { accessToken: 'token-1', isAuthenticated$: new BehaviorSubject<boolean>(true) };
 
     spyOn(HubConnectionBuilder.prototype, 'withUrl').and.callFake(function (
       this: HubConnectionBuilder,
@@ -112,7 +121,12 @@ describe('ClubRealtimeService', () => {
     ) {
       return this;
     } as never);
-    spyOn(HubConnectionBuilder.prototype, 'build').and.returnValue(hub as never);
+    spyOn(HubConnectionBuilder.prototype, 'build').and.callFake(function () {
+      // One fake stands in for every rebuild, so clear the handlers the previous
+      // registration left behind rather than stacking duplicates.
+      hub.resetHandlers();
+      return hub as never;
+    } as never);
 
     TestBed.configureTestingModule({
       providers: [
@@ -476,6 +490,119 @@ describe('ClubRealtimeService', () => {
     service.setTyping(1, 'discussion', 9, false);
 
     expect(hub.methodsInvoked('Typing').length).toBe(0);
+  });
+
+  it('stops the socket once the last thread releases it', async () => {
+    jasmine.clock().install();
+    try {
+      setup();
+      const leave = service.joinThread(1, 'discussion', 9);
+      await settle();
+      expect(hub.stopCalls).toBe(0);
+
+      leave();
+      await settle();
+
+      // Held briefly, so swapping threads inside a club does not churn the socket.
+      jasmine.clock().tick(1000);
+      await settle();
+      expect(hub.stopCalls).toBe(0);
+
+      jasmine.clock().tick(3000);
+      await settle();
+      expect(hub.stopCalls).toBe(1);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
+  it('keeps the socket when another thread is retained during the idle window', async () => {
+    jasmine.clock().install();
+    try {
+      setup();
+      const leave = service.joinThread(1, 'discussion', 9);
+      await settle();
+
+      leave();
+      service.joinThread(1, 'discussion', 10);
+      await settle();
+
+      jasmine.clock().tick(10000);
+      await settle();
+
+      expect(hub.stopCalls).toBe(0);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
+  it('clears presence once the connection goes idle', async () => {
+    jasmine.clock().install();
+    try {
+      setup();
+      const seen: RealtimePresence[] = [];
+      service.presence(1).subscribe((presence) => seen.push(presence));
+      const leave = service.joinThread(1, 'discussion', 9);
+      await settle();
+
+      hub.emit('PresenceSnapshot', {
+        clubId: 1,
+        users: [{ userId: 7, name: 'Taylor', username: 'taylor', avatar: null }],
+        totalOnline: 1,
+      });
+      expect(seen[seen.length - 1].totalOnline).toBe(1);
+
+      leave();
+      jasmine.clock().tick(4000);
+      await settle();
+
+      expect(seen[seen.length - 1].totalOnline).toBe(0);
+      expect(seen[seen.length - 1].users).toEqual([]);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
+  it('rebuilds a live connection when the caller signs in or out', async () => {
+    setup();
+    service.joinThread(1, 'discussion', 9);
+    await settle();
+    const startsBefore = hub.startCalls;
+
+    authToken.accessToken = null;
+    authToken.isAuthenticated$.next(false);
+    await settle();
+
+    expect(hub.stopCalls).toBe(1);
+    expect(hub.startCalls).toBe(startsBefore + 1);
+    // The open thread is re-joined under the new principal.
+    expect(hub.methodsInvoked('JoinDiscussion').length).toBe(2);
+  });
+
+  it('does not churn the socket on an ordinary token refresh', async () => {
+    setup();
+    service.joinThread(1, 'discussion', 9);
+    await settle();
+
+    // Same identity, new token: isAuthenticated$ is distinct-until-changed upstream.
+    authToken.accessToken = 'token-refreshed';
+    await settle();
+
+    expect(hub.stopCalls).toBe(0);
+    expect(withUrlOptions?.accessTokenFactory?.()).toBe('token-refreshed');
+  });
+
+  it('picks the new identity up on the next start when nothing is connected', async () => {
+    setup();
+
+    authToken.isAuthenticated$.next(false);
+    await settle();
+    expect(hub.startCalls).toBe(0);
+
+    service.joinThread(1, 'discussion', 9);
+    await settle();
+
+    expect(hub.startCalls).toBe(1);
   });
 
   it('leaves the thread when the caller tears down', async () => {

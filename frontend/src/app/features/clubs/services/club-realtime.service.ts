@@ -89,13 +89,29 @@ export class ClubRealtimeService {
   /** Matches the server-side typing TTL of 5s with room for one missed refresh. */
   private static readonly TypingRefreshMs = 2000;
 
+  /**
+   * How long an unused connection lingers before it is stopped. Swapping between two threads
+   * in the same club releases and re-retains synchronously, so tearing the socket down the
+   * instant the count hits zero would rebuild it immediately.
+   */
+  private static readonly IdleShutdownMs = 3000;
+
   private readonly connections = new Map<number, ClubConnection>();
 
   constructor(
     private zone: NgZone,
     private authToken: AuthTokenService,
     @Inject(PLATFORM_ID) private platformId: object,
-  ) {}
+  ) {
+    if (!isPlatformBrowser(this.platformId)) return;
+
+    // A hub fixes its principal at handshake time, so signing in or out has to rebuild every
+    // live connection; otherwise a socket opened while anonymous keeps being refused for
+    // typing, and one opened while signed in keeps that identity in the roster after logout.
+    this.authToken.isAuthenticated$.subscribe(() => {
+      for (const connection of this.connections.values()) connection.reauthenticate();
+    });
+  }
 
   /** Club-wide events: discussion replies plus the `Connected` reconciliation signal. */
   events(clubId: number): Observable<ClubRealtimeEvent> {
@@ -157,6 +173,7 @@ export class ClubRealtimeService {
         this.zone,
         this.authToken,
         ClubRealtimeService.TypingRefreshMs,
+        ClubRealtimeService.IdleShutdownMs,
       );
       this.connections.set(clubId, connection);
     }
@@ -177,12 +194,13 @@ class ClubConnection {
   }>();
   private readonly stateSubject = new BehaviorSubject<RealtimeConnectionState>('connecting');
 
-  private readonly hub: HubConnection;
+  private hub: HubConnection;
   private readonly joinedThreads = new Set<string>();
   private readonly typingTimers = new Map<string, ReturnType<typeof setInterval>>();
 
   private refCount = 0;
   private started: Promise<void> | null = null;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly events$ = this.eventsSubject.asObservable();
   readonly presence$ = this.presenceSubject.asObservable();
@@ -194,18 +212,83 @@ class ClubConnection {
     private readonly zone: NgZone,
     private readonly authToken: AuthTokenService,
     private readonly typingRefreshMs: number,
+    private readonly idleShutdownMs: number,
   ) {
     this.hub = this.build();
     this.registerHandlers();
   }
 
   retain(): void {
+    this.cancelIdleShutdown();
     this.refCount += 1;
     void this.ensureStarted();
   }
 
+  /**
+   * Releases one thread's hold. The socket is stopped once nothing is using it, so browsing
+   * through clubs does not leave the viewer listed as online in every club they visited.
+   */
   release(): void {
     this.refCount = Math.max(0, this.refCount - 1);
+    if (this.refCount > 0) return;
+
+    this.cancelIdleShutdown();
+    this.zone.runOutsideAngular(() => {
+      this.idleTimer = setTimeout(() => {
+        this.idleTimer = null;
+        if (this.refCount === 0) void this.shutdown();
+      }, this.idleShutdownMs);
+    });
+  }
+
+  /**
+   * Rebuilds the socket under a new identity. The subjects are deliberately kept, so existing
+   * subscribers stay attached across the swap.
+   */
+  reauthenticate(): void {
+    if (this.started === null) {
+      // Nothing is connected; the next start picks the new token up on its own.
+      this.hub = this.build();
+      this.registerHandlers();
+      return;
+    }
+
+    void this.restart();
+  }
+
+  private async restart(): Promise<void> {
+    const openThreads = [...this.joinedThreads];
+    await this.stopHub();
+
+    this.hub = this.build();
+    this.registerHandlers();
+    for (const key of openThreads) this.joinedThreads.add(key);
+
+    if (this.refCount > 0) void this.ensureStarted();
+  }
+
+  private async shutdown(): Promise<void> {
+    await this.stopHub();
+    // Stopping triggers OnDisconnectedAsync server-side, which drops presence and typing.
+    this.presenceSubject.next({ users: [], totalOnline: 0 });
+  }
+
+  private async stopHub(): Promise<void> {
+    for (const key of [...this.typingTimers.keys()]) this.stopTypingTimer(key);
+    this.joinedThreads.clear();
+    this.started = null;
+
+    try {
+      await this.hub.stop();
+    } catch {
+      // Already closed, or closing while the transport was mid-flight.
+    }
+  }
+
+  private cancelIdleShutdown(): void {
+    if (this.idleTimer === null) return;
+    clearTimeout(this.idleTimer);
+    this.idleTimer = null;
   }
 
   async joinThread(kind: ThreadKind, threadId: number): Promise<void> {

@@ -38,6 +38,13 @@ public sealed class ClubDiscussionReplyService : IClubDiscussionReplyService
             throw new ForbiddenException("You must be a member of this club to view its discussions.");
     }
 
+    public async Task EnsureCanReadDiscussionAsync(
+        int clubId, int discussionId, int? userId, string? userRole)
+    {
+        await EnsureCanReadClubAsync(clubId, userId, userRole);
+        await GetDiscussionAsync(clubId, discussionId);
+    }
+
     public async Task<DiscussionReplyPage> GetPageAsync(
         int clubId, int discussionId, int? parentReplyId, DiscussionReplySort sort,
         string? cursor, int pageSize, int? currentUserId, string? currentUserRole)

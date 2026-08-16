@@ -471,6 +471,49 @@ public class ClubDiscussionEndpointsTests
     }
 
     [Fact]
+    public async Task RealtimeHub_ShouldRefuseADiscussionThatBelongsToAnotherClub()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var owner = await CreateUserSessionAsync(app, "cross-club-owner@example.com", "Organizer");
+        var outsider = await CreateUserSessionAsync(app, "cross-club-outsider@example.com");
+
+        var publicClubId = await CreateClubAsync(app, owner.AccessToken, "Cross Public Club");
+        var privateClubId = await CreateClubAsync(
+            app, owner.AccessToken, "Cross Private Club", isPrivate: true);
+
+        var privateDiscussionResponse = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/clubs/{privateClubId}/discussions",
+            owner.AccessToken,
+            JsonContent.Create(new { title = "Private topic", description = "Members only." })));
+        var privateDiscussion =
+            (await app.ReadApiResponseAsync<ClubDiscussionResponse>(privateDiscussionResponse)).Data!;
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
+        await using var hub = app.CreateHubConnection(
+            RoutePaths.ClubRealtimeHubPath, outsider.AccessToken);
+        await hub.StartAsync(cts.Token);
+
+        // The typing group is keyed on the discussion alone, so pairing a readable club with a
+        // discussion from a private one must not get the caller into that group.
+        var crossClubJoin = async () => await hub.InvokeAsync(
+            nameof(ClubRealtimeHub.JoinDiscussion), publicClubId, privateDiscussion.Id, cts.Token);
+
+        await crossClubJoin.Should().ThrowAsync<HubException>();
+
+        var crossClubTyping = async () => await hub.InvokeAsync(
+            nameof(ClubRealtimeHub.Typing),
+            ClubRealtimeGroups.DiscussionKind,
+            privateDiscussion.Id,
+            true,
+            cts.Token);
+
+        (await crossClubTyping.Should().ThrowAsync<HubException>())
+            .Which.Message.Should().Contain("Join the thread");
+    }
+
+    [Fact]
     public async Task RealtimeHub_ShouldRejectTypingFromAnonymousCallersAndUnjoinedThreads()
     {
         await using var app = await AuthApiTestApp.CreateAsync();

@@ -83,7 +83,11 @@ public sealed class ClubRealtimeHub : Hub
     {
         EnsureFeature(FeatureFlagKeys.ClubsDiscussions);
         var (userId, userRole) = GetOptionalUser();
-        await _replyService.EnsureCanReadClubAsync(clubId, userId, userRole);
+
+        // The typing group is keyed on the discussion alone, so authorizing only the
+        // caller-supplied club would let someone pair a club they can read with a discussion
+        // from a private one. This proves the discussion actually belongs to that club.
+        await _replyService.EnsureCanReadDiscussionAsync(clubId, discussionId, userId, userRole);
 
         var threadKey = ClubRealtimeGroups.DiscussionThread(discussionId);
         await Groups.AddToGroupAsync(Context.ConnectionId, threadKey);

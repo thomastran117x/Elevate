@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { firstValueFrom } from 'rxjs';
+import { Observable, distinctUntilChanged, firstValueFrom, map } from 'rxjs';
 import { ApiEnvelope, extractEnvelopeData } from '../models/api-envelope.model';
 import { ApiClient } from './api-client.service';
 import { environment } from '../../../../environments/environment';
@@ -20,15 +20,31 @@ export class AuthTokenService {
   accessToken: string | null = null;
   csrfToken: string | null = null;
 
+  /**
+   * Emits when the caller switches between anonymous and signed-in.
+   *
+   * Long-lived connections (the realtime hub) fix their principal at handshake time, so they
+   * have to rebuild when this changes. It deliberately reports presence rather than the token
+   * itself: an ordinary token refresh keeps the same identity and must not churn the socket.
+   */
+  readonly isAuthenticated$: Observable<boolean>;
+
   private csrfPromise: Promise<void> | null = null;
 
   constructor(
     private api: ApiClient,
     private store: Store<{ session: SessionState }>,
   ) {
-    this.store.select(selectAccessToken).subscribe((token) => {
+    const token$ = this.store.select(selectAccessToken);
+
+    token$.subscribe((token) => {
       this.accessToken = token || null;
     });
+
+    this.isAuthenticated$ = token$.pipe(
+      map((token) => !!token),
+      distinctUntilChanged(),
+    );
   }
 
   async ensureCsrfToken(): Promise<void> {
