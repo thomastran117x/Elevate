@@ -122,23 +122,34 @@ public sealed class ClubDiscussionReplyRepository : IClubDiscussionReplyReposito
 
     public async Task<ClubDiscussionReply?> SoftDeleteAsync(int id)
     {
-        await using var transaction = await _context.Database.BeginTransactionAsync();
-        var reply = await _context.ClubDiscussionReplies.FindAsync(id);
-        if (reply is null)
-            return null;
-        if (!reply.IsDeleted)
+        // The context is configured with EnableRetryOnFailure, and that execution strategy
+        // refuses a user-initiated transaction unless the whole unit runs through it.
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync<ClubDiscussionReply?>(async () =>
         {
-            reply.IsDeleted = true;
-            reply.DeletedAt = DateTime.UtcNow;
-            reply.UpdatedAt = reply.DeletedAt.Value;
-            reply.Content = string.Empty;
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            var reply = await _context.ClubDiscussionReplies.FindAsync(id);
+            if (reply is null)
+                return null;
+
+            if (!reply.IsDeleted)
+            {
+                reply.IsDeleted = true;
+                reply.DeletedAt = DateTime.UtcNow;
+                reply.UpdatedAt = reply.DeletedAt.Value;
+                reply.Content = string.Empty;
+            }
+
+            // Outside the guard on purpose: a retried attempt finds the entity already
+            // mutated in the change tracker, and this delete is idempotent either way.
             await _context.ClubDiscussionReplyReactions
                 .Where(r => r.ReplyId == id)
                 .ExecuteDeleteAsync();
             await _context.SaveChangesAsync();
-        }
-        await transaction.CommitAsync();
-        return reply;
+
+            await transaction.CommitAsync();
+            return reply;
+        });
     }
 
     public async Task<DiscussionReplyReactionSummary> SetReactionAsync(
