@@ -23,6 +23,8 @@ class FakeHubConnection {
   startCalls = 0;
   startRejects = false;
   invokeRejectsFor: string | null = null;
+  /** Set from withUrl, and called on start exactly as the real client does. */
+  accessTokenFactory: (() => string) | null = null;
 
   private reconnectingCallbacks: (() => void)[] = [];
   private reconnectedCallbacks: (() => void)[] = [];
@@ -36,6 +38,7 @@ class FakeHubConnection {
 
   async start(): Promise<void> {
     this.startCalls += 1;
+    this.accessTokenFactory?.();
     if (this.startRejects) {
       throw new Error('connect failed');
     }
@@ -96,13 +99,19 @@ class FakeHubConnection {
 describe('ClubRealtimeService', () => {
   let hub: FakeHubConnection;
   let service: ClubRealtimeService;
-  let authToken: { accessToken: string | null; isAuthenticated$: BehaviorSubject<boolean> };
+  let authToken: {
+    accessToken: string | null;
+    accessToken$: BehaviorSubject<string | null>;
+  };
   let withUrlOptions: { accessTokenFactory?: () => string } | undefined;
 
   function setup(platformId: string = 'browser'): void {
     hub = new FakeHubConnection();
     withUrlOptions = undefined;
-    authToken = { accessToken: 'token-1', isAuthenticated$: new BehaviorSubject<boolean>(true) };
+    authToken = {
+      accessToken: 'token-1',
+      accessToken$: new BehaviorSubject<string | null>('token-1'),
+    };
 
     spyOn(HubConnectionBuilder.prototype, 'withUrl').and.callFake(function (
       this: HubConnectionBuilder,
@@ -110,6 +119,7 @@ describe('ClubRealtimeService', () => {
       options: unknown,
     ) {
       withUrlOptions = options as { accessTokenFactory?: () => string };
+      hub.accessTokenFactory = withUrlOptions.accessTokenFactory ?? null;
       return this;
     } as never);
     spyOn(HubConnectionBuilder.prototype, 'withAutomaticReconnect').and.callFake(function (
@@ -571,7 +581,7 @@ describe('ClubRealtimeService', () => {
     const startsBefore = hub.startCalls;
 
     authToken.accessToken = null;
-    authToken.isAuthenticated$.next(false);
+    authToken.accessToken$.next(null);
     await settle();
 
     expect(hub.stopCalls).toBe(1);
@@ -580,23 +590,36 @@ describe('ClubRealtimeService', () => {
     expect(hub.methodsInvoked('JoinDiscussion').length).toBe(2);
   });
 
-  it('does not churn the socket on an ordinary token refresh', async () => {
+  it('rebuilds when an expired token is refreshed, so the socket stops being anonymous', async () => {
     setup();
     service.joinThread(1, 'discussion', 9);
     await settle();
 
-    // Same identity, new token: isAuthenticated$ is distinct-until-changed upstream.
+    // A reconnect that landed on an expired token comes back anonymous; the refresh that
+    // follows keeps the user signed in, so presence alone would hide this.
     authToken.accessToken = 'token-refreshed';
+    authToken.accessToken$.next('token-refreshed');
+    await settle();
+
+    expect(hub.stopCalls).toBe(1);
+    expect(withUrlOptions?.accessTokenFactory?.()).toBe('token-refreshed');
+  });
+
+  it('ignores a token emission the live socket already carries', async () => {
+    setup();
+    service.joinThread(1, 'discussion', 9);
+    await settle();
+
+    authToken.accessToken$.next('token-1');
     await settle();
 
     expect(hub.stopCalls).toBe(0);
-    expect(withUrlOptions?.accessTokenFactory?.()).toBe('token-refreshed');
   });
 
   it('picks the new identity up on the next start when nothing is connected', async () => {
     setup();
 
-    authToken.isAuthenticated$.next(false);
+    authToken.accessToken$.next(null);
     await settle();
     expect(hub.startCalls).toBe(0);
 
@@ -683,7 +706,8 @@ describe('ClubRealtimeService', () => {
 
     // Swap threads and flip authentication in the same tick, so the rebuild races the swap.
     const leave = service.joinThread(1, 'post', 5);
-    authToken.isAuthenticated$.next(false);
+    authToken.accessToken = null;
+    authToken.accessToken$.next(null);
     void leave;
     await settle();
 
@@ -826,6 +850,25 @@ describe('ClubRealtimeService', () => {
     } finally {
       jasmine.clock().uninstall();
     }
+  });
+
+  it('keeps a thread whose join failed because the transport dropped', async () => {
+    setup();
+    service.joinThread(1, 'discussion', 9);
+    await settle();
+
+    // The socket drops while a join for a second thread is in flight.
+    hub.invokeRejectsFor = 'JoinPost';
+    hub.state = HubConnectionState.Disconnected;
+    service.joinThread(1, 'post', 4);
+    await settle();
+
+    // Intent survives, so the next successful connect replays it.
+    hub.invokeRejectsFor = null;
+    hub.state = HubConnectionState.Connected;
+    await hub.fireReconnected();
+
+    expect(hub.methodsInvoked('JoinPost').some((entry) => entry.args[1] === 4)).toBeTrue();
   });
 
   it('leaves the thread when the caller tears down', async () => {

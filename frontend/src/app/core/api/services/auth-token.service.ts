@@ -21,13 +21,15 @@ export class AuthTokenService {
   csrfToken: string | null = null;
 
   /**
-   * Emits when the caller switches between anonymous and signed-in.
+   * Emits the current access token whenever it changes, including a refresh that replaces an
+   * expired token with a new one for the same user.
    *
-   * Long-lived connections (the realtime hub) fix their principal at handshake time, so they
-   * have to rebuild when this changes. It deliberately reports presence rather than the token
-   * itself: an ordinary token refresh keeps the same identity and must not churn the socket.
+   * Long-lived connections (the realtime hub) fix their principal at handshake time. A
+   * reconnect that lands while the token is expired comes back anonymous, and the refresh
+   * that follows would be invisible to them if this only reported signed-in versus anonymous
+   * — so it reports the token itself, and consumers compare against what they connected with.
    */
-  readonly isAuthenticated$: Observable<boolean>;
+  readonly accessToken$: Observable<string | null>;
 
   private csrfPromise: Promise<void> | null = null;
 
@@ -41,8 +43,8 @@ export class AuthTokenService {
       this.accessToken = token || null;
     });
 
-    this.isAuthenticated$ = token$.pipe(
-      map((token) => !!token),
+    this.accessToken$ = token$.pipe(
+      map((token) => token || null),
       distinctUntilChanged(),
     );
   }

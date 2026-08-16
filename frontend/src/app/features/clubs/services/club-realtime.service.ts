@@ -105,11 +105,13 @@ export class ClubRealtimeService {
   ) {
     if (!isPlatformBrowser(this.platformId)) return;
 
-    // A hub fixes its principal at handshake time, so signing in or out has to rebuild every
-    // live connection; otherwise a socket opened while anonymous keeps being refused for
-    // typing, and one opened while signed in keeps that identity in the roster after logout.
-    this.authToken.isAuthenticated$.subscribe(() => {
-      for (const connection of this.connections.values()) connection.reauthenticate();
+    // A hub fixes its principal at handshake time, so any change of token has to rebuild the
+    // live connections: signing out leaves the old identity in the roster, signing in leaves
+    // typing refused, and a reconnect that landed on an expired token comes back anonymous
+    // and stays that way once the refresh arrives. Each connection compares against the token
+    // it actually handshook with, so this costs one rebuild per real change.
+    this.authToken.accessToken$.subscribe((token) => {
+      for (const connection of this.connections.values()) connection.reauthenticate(token);
     });
   }
 
@@ -213,6 +215,8 @@ class ClubConnection {
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private retryAttempt = 0;
   private presenceRefreshPending = false;
+  /** The token the live socket handshook with, so a stale principal can be detected. */
+  private connectedToken: string | null = null;
 
   readonly events$ = this.eventsSubject.asObservable();
   readonly presence$ = this.presenceSubject.asObservable();
@@ -257,7 +261,11 @@ class ClubConnection {
    * Rebuilds the socket under a new identity. The subjects are deliberately kept, so existing
    * subscribers stay attached across the swap.
    */
-  reauthenticate(): void {
+  reauthenticate(token: string | null): void {
+    // The live socket already carries this token, so there is nothing to re-do. This is what
+    // keeps an unrelated store emission from churning the connection.
+    if (this.started !== null && token === this.connectedToken) return;
+
     if (this.started === null) {
       // Nothing is connected; the next start picks the new token up on its own.
       this.hub = this.build();
@@ -341,9 +349,15 @@ class ClubConnection {
       await this.hub.invoke(method, this.clubId, threadId);
       this.activeThreads.add(key);
     } catch {
-      // A refused join (private club, disabled feature) leaves the thread on REST data only.
-      this.desiredThreads.delete(key);
       this.activeThreads.delete(key);
+
+      // Only a refusal from a still-healthy connection means the caller genuinely may not
+      // have this thread (private club, disabled feature), and leaves it on REST data only.
+      // A rejection because the transport dropped or the hub was stopped mid-invoke is
+      // transient, so the intent has to survive for the next connect to replay.
+      if (this.hub.state === HubConnectionState.Connected) {
+        this.desiredThreads.delete(key);
+      }
     }
   }
 
@@ -411,7 +425,11 @@ class ClubConnection {
       .withUrl(url, {
         // Re-read on every (re)connect, so signing in mid-session upgrades the connection
         // instead of leaving it stuck as anonymous.
-        accessTokenFactory: () => this.authToken.accessToken ?? '',
+        accessTokenFactory: () => {
+          // Recorded so a later token change can be compared against what this socket used.
+          this.connectedToken = this.authToken.accessToken ?? null;
+          return this.connectedToken ?? '';
+        },
         withCredentials: true,
         transport:
           HttpTransportType.WebSockets |
