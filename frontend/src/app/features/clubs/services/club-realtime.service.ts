@@ -194,13 +194,25 @@ class ClubConnection {
   }>();
   private readonly stateSubject = new BehaviorSubject<RealtimeConnectionState>('connecting');
 
+  /** Backoff for a failed *initial* connect; automatic reconnect only covers later drops. */
+  private static readonly RetryDelaysMs = [1000, 2000, 5000, 10000, 30000];
+
+  /** Mirrors the server-side roster cap in ClubPresenceStore. */
+  private static readonly MaxRosterUsers = 50;
+
   private hub: HubConnection;
-  private readonly joinedThreads = new Set<string>();
+  /** Threads the UI wants joined. Survives restarts. */
+  private readonly desiredThreads = new Set<string>();
+  /** Threads the server has confirmed. Cleared whenever the socket stops. */
+  private readonly activeThreads = new Set<string>();
   private readonly typingTimers = new Map<string, ReturnType<typeof setInterval>>();
 
   private refCount = 0;
   private started: Promise<void> | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryAttempt = 0;
+  private presenceRefreshPending = false;
 
   readonly events$ = this.eventsSubject.asObservable();
   readonly presence$ = this.presenceSubject.asObservable();
@@ -257,25 +269,29 @@ class ClubConnection {
   }
 
   private async restart(): Promise<void> {
-    const openThreads = [...this.joinedThreads];
+    // `desiredThreads` is intentionally not snapshotted: a thread swap that lands while the
+    // stop below is still pending has to survive the rebuild, and a snapshot taken here would
+    // overwrite it with the pre-swap set.
     await this.stopHub();
 
     this.hub = this.build();
     this.registerHandlers();
-    for (const key of openThreads) this.joinedThreads.add(key);
 
     if (this.refCount > 0) void this.ensureStarted();
   }
 
   private async shutdown(): Promise<void> {
     await this.stopHub();
+    this.desiredThreads.clear();
     // Stopping triggers OnDisconnectedAsync server-side, which drops presence and typing.
     this.presenceSubject.next({ users: [], totalOnline: 0 });
   }
 
   private async stopHub(): Promise<void> {
+    this.cancelRetry();
     for (const key of [...this.typingTimers.keys()]) this.stopTypingTimer(key);
-    this.joinedThreads.clear();
+    // Only the server-confirmed set is cleared; the intent survives so a rebuild restores it.
+    this.activeThreads.clear();
     this.started = null;
 
     try {
@@ -291,22 +307,45 @@ class ClubConnection {
     this.idleTimer = null;
   }
 
+  private cancelRetry(): void {
+    if (this.retryTimer === null) return;
+    clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+  }
+
   async joinThread(kind: ThreadKind, threadId: number): Promise<void> {
+    const key = `${kind}:${threadId}`;
+    // Recorded before the round trip, so a join issued while the socket is down or rebuilding
+    // is still replayed by afterConnect.
+    this.desiredThreads.add(key);
+
     await this.ensureStarted();
     if (this.hub.state !== HubConnectionState.Connected) return;
+    // afterConnect replays the desired set, so a join that raced the handshake is already
+    // settled: either confirmed, or refused and dropped from the desired set.
+    if (this.activeThreads.has(key) || !this.desiredThreads.has(key)) return;
 
+    await this.invokeJoin(kind, threadId);
+  }
+
+  private async invokeJoin(kind: ThreadKind, threadId: number): Promise<void> {
+    const key = `${kind}:${threadId}`;
     const method = kind === 'discussion' ? 'JoinDiscussion' : 'JoinPost';
     try {
       await this.hub.invoke(method, this.clubId, threadId);
-      this.joinedThreads.add(`${kind}:${threadId}`);
+      this.activeThreads.add(key);
     } catch {
       // A refused join (private club, disabled feature) leaves the thread on REST data only.
+      this.desiredThreads.delete(key);
+      this.activeThreads.delete(key);
     }
   }
 
   async leaveThread(kind: ThreadKind, threadId: number): Promise<void> {
-    this.stopTypingTimer(`${kind}:${threadId}`);
-    this.joinedThreads.delete(`${kind}:${threadId}`);
+    const key = `${kind}:${threadId}`;
+    this.stopTypingTimer(key);
+    this.desiredThreads.delete(key);
+    this.activeThreads.delete(key);
     if (this.hub.state !== HubConnectionState.Connected) return;
 
     const method = kind === 'discussion' ? 'LeaveDiscussion' : 'LeavePost';
@@ -341,7 +380,9 @@ class ClubConnection {
 
   private async sendTyping(kind: ThreadKind, threadId: number, isTyping: boolean): Promise<void> {
     if (this.hub.state !== HubConnectionState.Connected) return;
-    if (!this.joinedThreads.has(`${kind}:${threadId}`)) return;
+    // The server rejects typing for a thread it has not seen joined, so gate on the
+    // confirmed set rather than on intent.
+    if (!this.activeThreads.has(`${kind}:${threadId}`)) return;
     try {
       await this.hub.invoke('Typing', kind, threadId, isTyping);
     } catch {
@@ -453,13 +494,34 @@ class ClubConnection {
         const user = normalizePresenceUser(joined);
         users = current.some((existing) => existing.userId === user.userId)
           ? current
-          : [...current, user];
+          : // Diffs are uncapped, so hold the client list to the same limit the snapshot uses.
+            [...current, user].slice(0, ClubConnection.MaxRosterUsers);
       } else if (leftUserId !== null) {
         users = current.filter((existing) => existing.userId !== leftUserId);
       }
 
       this.presenceSubject.next({ users, totalOnline });
+      this.replenishRosterIfDrained(users.length, totalOnline);
     });
+  }
+
+  /**
+   * Members beyond the roster cap are never named by a diff, so once enough visible members
+   * leave, the list can drain while the count stays high. Ask for a fresh snapshot instead.
+   */
+  private replenishRosterIfDrained(visible: number, totalOnline: number): void {
+    const expected = Math.min(totalOnline, ClubConnection.MaxRosterUsers);
+    if (visible >= expected) return;
+    if (this.hub.state !== HubConnectionState.Connected) return;
+    if (this.presenceRefreshPending) return;
+
+    this.presenceRefreshPending = true;
+    void this.hub
+      .invoke('RequestPresence', this.clubId)
+      .catch(() => undefined)
+      .finally(() => {
+        this.presenceRefreshPending = false;
+      });
   }
 
   private emit(event: ClubRealtimeEvent): void {
@@ -469,23 +531,45 @@ class ClubConnection {
   private ensureStarted(): Promise<void> {
     if (this.started) return this.started;
 
+    this.cancelRetry();
     this.stateSubject.next('connecting');
     // SignalR's own timers and transport callbacks do not need to churn change detection.
     this.started = this.zone
       .runOutsideAngular(() => this.hub.start())
-      .then(() => this.afterConnect())
+      .then(() => {
+        this.retryAttempt = 0;
+        return this.afterConnect();
+      })
       .catch(() => {
         this.zone.run(() => this.stateSubject.next('offline'));
-        // Allow a later retain() to try again rather than latching offline forever.
         this.started = null;
+        // withAutomaticReconnect only covers drops after a successful handshake, so a failed
+        // first connect has to be retried here. The mounted thread already retained this
+        // connection and will not retain it again.
+        this.scheduleRetry();
       });
 
     return this.started;
   }
 
+  private scheduleRetry(): void {
+    if (this.refCount === 0 || this.retryTimer !== null) return;
+
+    const delays = ClubConnection.RetryDelaysMs;
+    const delay = delays[Math.min(this.retryAttempt, delays.length - 1)];
+    this.retryAttempt += 1;
+
+    this.zone.runOutsideAngular(() => {
+      this.retryTimer = setTimeout(() => {
+        this.retryTimer = null;
+        if (this.refCount > 0 && this.started === null) void this.ensureStarted();
+      }, delay);
+    });
+  }
+
   /**
    * Runs after both the first connect and every automatic reconnect: re-join the club and
-   * every thread this connection had open, then tell subscribers to reconcile.
+   * every thread the UI still wants open, then tell subscribers to reconcile.
    */
   private async afterConnect(): Promise<void> {
     try {
@@ -494,17 +578,9 @@ class ClubConnection {
       // A private club the viewer cannot read still leaves the REST data usable.
     }
 
-    for (const key of [...this.joinedThreads]) {
+    for (const key of [...this.desiredThreads]) {
       const [kind, id] = key.split(':');
-      try {
-        await this.hub.invoke(
-          kind === 'discussion' ? 'JoinDiscussion' : 'JoinPost',
-          this.clubId,
-          Number(id),
-        );
-      } catch {
-        this.joinedThreads.delete(key);
-      }
+      await this.invokeJoin(kind as ThreadKind, Number(id));
     }
 
     this.zone.run(() => {

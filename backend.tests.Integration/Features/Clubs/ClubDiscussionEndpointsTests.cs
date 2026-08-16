@@ -457,6 +457,18 @@ public class ClubDiscussionEndpointsTests
                 .Which.Username.Should().NotBeNullOrEmpty();
         }
 
+        // A client whose roster has drained can ask for the full list again.
+        var resent = new TaskCompletionSource<PresenceSnapshot>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        ownerHub.On<PresenceSnapshot>(
+            ClubRealtimeEvents.PresenceSnapshot, snapshot => resent.TrySetResult(snapshot));
+
+        await ownerHub.InvokeAsync(nameof(ClubRealtimeHub.RequestPresence), clubId, cts.Token);
+
+        var snapshotAgain = await resent.Task.WaitAsync(TimeSpan.FromSeconds(10), cts.Token);
+        snapshotAgain.TotalOnline.Should().Be(2);
+        snapshotAgain.Users.Should().HaveCount(2);
+
         // Disconnecting the member takes them out of the roster.
         await memberHub.StopAsync(cts.Token);
 

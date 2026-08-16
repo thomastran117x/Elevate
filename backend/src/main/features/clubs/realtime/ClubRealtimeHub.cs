@@ -71,6 +71,24 @@ public sealed class ClubRealtimeHub : Hub
         }
     }
 
+    /// <summary>
+    /// Re-sends the full roster to the caller.
+    /// </summary>
+    /// <remarks>
+    /// Presence is broadcast as diffs, and the roster on the wire is capped. In a club with
+    /// more online members than the cap, members outside it are never named by a diff, so a
+    /// client whose visible list has drained needs a way to refill it.
+    /// </remarks>
+    public async Task RequestPresence(int clubId)
+    {
+        EnsureFeature(FeatureFlagKeys.Clubs);
+        var (userId, userRole) = GetOptionalUser();
+        await _replyService.EnsureCanReadClubAsync(clubId, userId, userRole);
+
+        await Clients.Caller.SendAsync(
+            ClubRealtimeEvents.PresenceSnapshot, _presence.Snapshot(clubId));
+    }
+
     public async Task LeaveClub(int clubId)
     {
         var group = ClubRealtimeGroups.Club(clubId);

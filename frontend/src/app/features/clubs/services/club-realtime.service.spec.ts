@@ -55,8 +55,9 @@ class FakeHubConnection {
   }
 
   async invoke(method: string, ...args: unknown[]): Promise<void> {
-    if (this.invokeRejectsFor === method) throw new Error(`${method} refused`);
+    // Recorded even when refused: the call was still made on the wire.
     this.invocations.push({ method, args });
+    if (this.invokeRejectsFor === method) throw new Error(`${method} refused`);
   }
 
   onreconnecting(callback: () => void): void {
@@ -603,6 +604,156 @@ describe('ClubRealtimeService', () => {
     await settle();
 
     expect(hub.startCalls).toBe(1);
+  });
+
+  it('retries a failed initial connect without waiting for another retain', async () => {
+    jasmine.clock().install();
+    try {
+      setup();
+      hub.startRejects = true;
+      const states: RealtimeConnectionState[] = [];
+      service.connectionState(1).subscribe((state) => states.push(state));
+
+      service.joinThread(1, 'discussion', 9);
+      await settle();
+      expect(states[states.length - 1]).toBe('offline');
+      expect(hub.startCalls).toBe(1);
+
+      // Backs off rather than latching offline for the life of the component.
+      hub.startRejects = false;
+      jasmine.clock().tick(1100);
+      await settle();
+
+      expect(hub.startCalls).toBe(2);
+      expect(states[states.length - 1]).toBe('live');
+      expect(hub.methodsInvoked('JoinDiscussion').length).toBe(1);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
+  it('backs off further on repeated connect failures', async () => {
+    jasmine.clock().install();
+    try {
+      setup();
+      hub.startRejects = true;
+      service.joinThread(1, 'discussion', 9);
+      await settle();
+      expect(hub.startCalls).toBe(1);
+
+      jasmine.clock().tick(1100);
+      await settle();
+      expect(hub.startCalls).toBe(2);
+
+      // The second delay is longer, so the first tick is not enough on its own.
+      jasmine.clock().tick(1100);
+      await settle();
+      expect(hub.startCalls).toBe(2);
+
+      jasmine.clock().tick(1000);
+      await settle();
+      expect(hub.startCalls).toBe(3);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
+  it('stops retrying once nothing holds the connection', async () => {
+    jasmine.clock().install();
+    try {
+      setup();
+      hub.startRejects = true;
+      const leave = service.joinThread(1, 'discussion', 9);
+      await settle();
+
+      leave();
+      jasmine.clock().tick(10000);
+      await settle();
+
+      expect(hub.startCalls).toBe(1);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
+  it('keeps a thread joined mid-rebuild instead of restoring a stale set', async () => {
+    setup();
+    service.joinThread(1, 'post', 4);
+    await settle();
+
+    // Swap threads and flip authentication in the same tick, so the rebuild races the swap.
+    const leave = service.joinThread(1, 'post', 5);
+    authToken.isAuthenticated$.next(false);
+    void leave;
+    await settle();
+
+    const joinedPosts = hub.methodsInvoked('JoinPost').map((entry) => entry.args[1] as number);
+
+    expect(joinedPosts).toContain(5);
+  });
+
+  it('drops a thread the server refuses so it is not replayed on reconnect', async () => {
+    setup();
+    hub.invokeRejectsFor = 'JoinDiscussion';
+    service.joinThread(1, 'discussion', 9);
+    await settle();
+    expect(hub.methodsInvoked('JoinDiscussion').length).toBe(1);
+
+    await hub.fireReconnected();
+
+    expect(hub.methodsInvoked('JoinDiscussion').length).toBe(1);
+  });
+
+  it('caps the roster as joins arrive and refills it when it drains', async () => {
+    setup();
+    const seen: RealtimePresence[] = [];
+    service.presence(1).subscribe((presence) => seen.push(presence));
+    service.joinThread(1, 'discussion', 9);
+    await settle();
+
+    const roster = Array.from({ length: 50 }, (_, index) => ({
+      userId: index + 1,
+      name: `User ${index + 1}`,
+      username: `user${index + 1}`,
+      avatar: null,
+    }));
+    hub.emit('PresenceSnapshot', { clubId: 1, users: roster, totalOnline: 60 });
+
+    hub.emit('PresenceChanged', {
+      clubId: 1,
+      joined: { userId: 999, name: 'Overflow', username: 'overflow', avatar: null },
+      leftUserId: null,
+      totalOnline: 61,
+    });
+
+    expect(seen[seen.length - 1].users.length).toBe(50);
+    expect(seen[seen.length - 1].totalOnline).toBe(61);
+
+    // A visible member leaving drains the list below the cap, so a fresh snapshot is fetched.
+    hub.emit('PresenceChanged', { clubId: 1, joined: null, leftUserId: 1, totalOnline: 60 });
+    await settle();
+
+    expect(hub.methodsInvoked('RequestPresence').length).toBe(1);
+  });
+
+  it('does not ask for a snapshot while the roster is complete', async () => {
+    setup();
+    service.presence(1).subscribe();
+    service.joinThread(1, 'discussion', 9);
+    await settle();
+
+    hub.emit('PresenceSnapshot', {
+      clubId: 1,
+      users: [
+        { userId: 1, name: 'A', username: 'a', avatar: null },
+        { userId: 2, name: 'B', username: 'b', avatar: null },
+      ],
+      totalOnline: 2,
+    });
+    hub.emit('PresenceChanged', { clubId: 1, joined: null, leftUserId: 1, totalOnline: 1 });
+    await settle();
+
+    expect(hub.methodsInvoked('RequestPresence').length).toBe(0);
   });
 
   it('leaves the thread when the caller tears down', async () => {
