@@ -281,8 +281,14 @@ class ClubConnection {
   }
 
   private async shutdown(): Promise<void> {
-    await this.stopHub();
+    // Cleared before the await, not after: a thread reopened while the stop is still in
+    // flight records its intent during that window and must not be wiped by this teardown.
     this.desiredThreads.clear();
+    await this.stopHub();
+
+    // A retain landing mid-stop revives the connection, so leave its state alone.
+    if (this.refCount > 0) return;
+
     // Stopping triggers OnDisconnectedAsync server-side, which drops presence and typing.
     this.presenceSubject.next({ users: [], totalOnline: 0 });
   }
@@ -478,7 +484,17 @@ class ClubConnection {
 
     this.hub.onreconnecting(() => this.zone.run(() => this.stateSubject.next('reconnecting')));
     this.hub.onreconnected(() => void this.afterConnect());
-    this.hub.onclose(() => this.zone.run(() => this.stateSubject.next('offline')));
+    this.hub.onclose(() => {
+      this.zone.run(() => this.stateSubject.next('offline'));
+
+      // Reached either because we stopped the socket ourselves, or because automatic
+      // reconnect exhausted its delays. In the latter case the resolved start promise would
+      // otherwise keep ensureStarted() short-circuiting, stranding the thread offline for
+      // good, so clear it and fall back to the same retry path a failed first connect uses.
+      this.started = null;
+      this.activeThreads.clear();
+      if (this.refCount > 0) this.scheduleRetry();
+    });
   }
 
   private applyPresenceDiff(raw: RawRecord): void {

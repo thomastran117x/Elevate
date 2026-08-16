@@ -756,6 +756,78 @@ describe('ClubRealtimeService', () => {
     expect(hub.methodsInvoked('RequestPresence').length).toBe(0);
   });
 
+  it('reconnects after automatic reconnect gives up', async () => {
+    jasmine.clock().install();
+    try {
+      setup();
+      const states: RealtimeConnectionState[] = [];
+      service.connectionState(1).subscribe((state) => states.push(state));
+      service.joinThread(1, 'discussion', 9);
+      await settle();
+      expect(states[states.length - 1]).toBe('live');
+
+      // SignalR exhausted its delays and closed the connection for good.
+      hub.state = HubConnectionState.Disconnected;
+      hub.fireClose();
+      await settle();
+      expect(states[states.length - 1]).toBe('offline');
+
+      jasmine.clock().tick(1100);
+      await settle();
+
+      expect(hub.startCalls).toBe(2);
+      expect(states[states.length - 1]).toBe('live');
+      expect(hub.methodsInvoked('JoinDiscussion').length).toBe(2);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
+  it('does not retry a close once nothing holds the connection', async () => {
+    jasmine.clock().install();
+    try {
+      setup();
+      const leave = service.joinThread(1, 'discussion', 9);
+      await settle();
+
+      leave();
+      jasmine.clock().tick(4000);
+      await settle();
+      const startsAfterShutdown = hub.startCalls;
+
+      hub.fireClose();
+      jasmine.clock().tick(10000);
+      await settle();
+
+      expect(hub.startCalls).toBe(startsAfterShutdown);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
+  it('keeps a thread reopened while the idle shutdown is still in flight', async () => {
+    jasmine.clock().install();
+    try {
+      setup();
+      const leave = service.joinThread(1, 'discussion', 9);
+      await settle();
+
+      leave();
+      jasmine.clock().tick(4000);
+
+      // Reopened in the same tick the shutdown began, before its stop resolves.
+      service.joinThread(1, 'discussion', 9);
+      await settle();
+
+      expect(hub.methodsInvoked('JoinDiscussion').length).toBeGreaterThan(1);
+      service.setTyping(1, 'discussion', 9, true);
+      await settle();
+      expect(hub.methodsInvoked('Typing').length).toBe(1);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
   it('leaves the thread when the caller tears down', async () => {
     setup();
     const leave = service.joinThread(1, 'post', 4);
