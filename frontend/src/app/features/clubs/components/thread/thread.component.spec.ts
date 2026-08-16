@@ -702,6 +702,51 @@ describe('ThreadComponent', () => {
     expect(counts[counts.length - 1]).toBe(6);
   });
 
+  it('reports typing from a nested composer as well as the root one', () => {
+    source.list.and.returnValue(of(makePage([makeItem({ id: 1 })])));
+    component.ngOnInit();
+    const node = component.roots[0];
+
+    component.handleNodeAction({ type: 'typing', node, active: true });
+    expect(realtime.setTyping).toHaveBeenCalledWith(1, 'discussion', 9, true);
+
+    (realtime.setTyping as jasmine.Spy).calls.reset();
+    component.handleNodeAction({ type: 'typing', node, active: false });
+    expect(realtime.setTyping).toHaveBeenCalledWith(1, 'discussion', 9, false);
+  });
+
+  it('keeps reporting typing while any composer still holds content', () => {
+    source.list.and.returnValue(of(makePage([makeItem({ id: 1 })])));
+    component.ngOnInit();
+    const node = component.roots[0];
+
+    component.newText = 'draft';
+    component.onComposerInput();
+    component.handleNodeAction({ type: 'typing', node, active: true });
+    (realtime.setTyping as jasmine.Spy).calls.reset();
+
+    // The nested composer emptying must not cancel typing while the root still has content.
+    component.handleNodeAction({ type: 'typing', node, active: false });
+    expect(realtime.setTyping).not.toHaveBeenCalledWith(1, 'discussion', 9, false);
+
+    component.newText = '';
+    component.onComposerInput();
+    expect(realtime.setTyping).toHaveBeenCalledWith(1, 'discussion', 9, false);
+  });
+
+  it('clears the nested composer typing flag once its post lands', () => {
+    source.list.and.returnValue(of(makePage([makeItem({ id: 1 })])));
+    component.ngOnInit();
+    const parent = component.roots[0];
+    component.handleNodeAction({ type: 'typing', node: parent, active: true });
+    (realtime.setTyping as jasmine.Spy).calls.reset();
+
+    source.create.and.returnValue(of(makeItem({ id: 61 })));
+    component.handleNodeAction({ type: 'create', node: parent, content: 'Nested' });
+
+    expect(realtime.setTyping).toHaveBeenCalledWith(1, 'discussion', 9, false);
+  });
+
   it('leaves the realtime thread and stops typing on destroy', () => {
     component.ngOnInit();
     component.newText = 'a';

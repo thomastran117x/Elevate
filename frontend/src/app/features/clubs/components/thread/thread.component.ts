@@ -87,6 +87,8 @@ export class ThreadComponent implements OnInit, OnChanges, OnDestroy {
   private readonly seenIds = new Set<number>();
   private destroy$ = new Subject<void>();
   private reconciliationPending = false;
+  /** Composers currently holding content: 'root' plus the id of any open nested reply. */
+  private readonly composing = new Set<'root' | number>();
   private leaveThread: (() => void) | null = null;
   private typingActive = false;
 
@@ -133,7 +135,7 @@ export class ThreadComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   onComposerInput(): void {
-    this.setTyping(this.newText.trim().length > 0);
+    this.markComposing('root', this.newText.trim().length > 0);
   }
 
   onComposerKeydown(event: KeyboardEvent): void {
@@ -191,7 +193,7 @@ export class ThreadComponent implements OnInit, OnChanges, OnDestroy {
     if (!content || this.submitting) return;
     this.submitting = true;
     this.error = '';
-    this.setTyping(false);
+    this.markComposing('root', false);
 
     this.source
       .create(content, null)
@@ -222,6 +224,18 @@ export class ThreadComponent implements OnInit, OnChanges, OnDestroy {
     if (action.type === 'edit') this.editItem(action.node, action.content);
     if (action.type === 'delete') this.deleteItem(action.node);
     if (action.type === 'react') this.toggleReaction(action.node, action.reaction);
+    if (action.type === 'typing') this.markComposing(action.node.id, action.active);
+  }
+
+  /**
+   * Typing is thread-wide, but any of the composers (root or a nested reply) can drive it, so
+   * the viewer counts as typing while at least one of them holds content.
+   */
+  private markComposing(source: 'root' | number, active: boolean): void {
+    if (active) this.composing.add(source);
+    else this.composing.delete(source);
+
+    this.setTyping(this.composing.size > 0);
   }
 
   // ── Mutations ──────────────────────────────────────────────────────────────
@@ -276,6 +290,7 @@ export class ThreadComponent implements OnInit, OnChanges, OnDestroy {
           parent.replyText = '';
           parent.replyOpen = false;
           parent.busy = false;
+          this.markComposing(parent.id, false);
         },
         error: (err) => {
           parent.error = getApiClientMessage(
@@ -425,6 +440,7 @@ export class ThreadComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private teardown(): void {
+    this.composing.clear();
     this.setTyping(false);
     this.leaveThread?.();
     this.leaveThread = null;
@@ -443,6 +459,7 @@ export class ThreadComponent implements OnInit, OnChanges, OnDestroy {
     this.newText = '';
     this.typingUsers = [];
     this.reconciliationPending = false;
+    this.composing.clear();
   }
 
   private setTyping(isTyping: boolean): void {

@@ -164,6 +164,7 @@
           <div class="mt-2">
             <textarea
               [(ngModel)]="node.replyText"
+              (ngModelChange)="onReplyInput()"
               rows="2"
               maxlength="1000"
               [placeholder]="labels.replyPlaceholder"

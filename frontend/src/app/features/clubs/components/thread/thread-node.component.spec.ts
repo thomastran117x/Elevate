@@ -125,6 +125,35 @@ describe('ThreadNodeComponent', () => {
     expect(emitted).toEqual([{ type: 'edit', node: component.node, content: 'Edited' }]);
   });
 
+  it('refuses to submit a child while one is already in flight', () => {
+    component.node.replyText = 'Nested';
+    component.node.busy = true;
+
+    component.submitChild();
+
+    expect(emitted).toEqual([]);
+  });
+
+  it('refuses to save an edit while one is already in flight', () => {
+    component.node.editText = 'Edited';
+    component.node.busy = true;
+
+    component.saveEdit();
+
+    expect(emitted).toEqual([]);
+  });
+
+  it('reports nested composer content upward for the typing indicator', () => {
+    component.node.replyText = '  ';
+    component.onReplyInput();
+    expect(emitted).toEqual([{ type: 'typing', node: component.node, active: false }]);
+
+    emitted.length = 0;
+    component.node.replyText = 'Drafting';
+    component.onReplyInput();
+    expect(emitted).toEqual([{ type: 'typing', node: component.node, active: true }]);
+  });
+
   it('emits reactions upward', () => {
     component.react('Like');
     component.react('Dislike');

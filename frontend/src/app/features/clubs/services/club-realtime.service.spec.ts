@@ -871,6 +871,23 @@ describe('ClubRealtimeService', () => {
     expect(hub.methodsInvoked('JoinPost').some((entry) => entry.args[1] === 4)).toBeTrue();
   });
 
+  it('leaves a thread reopenable after a leave lands while its join is pending', async () => {
+    setup();
+    const leave = service.joinThread(1, 'post', 4);
+    // Leave before the join round trip settles, so the completing join must not record a
+    // stale active key that a later reopen would trust.
+    leave();
+    await settle();
+
+    service.joinThread(1, 'post', 4);
+    await settle();
+
+    // The reopened thread is genuinely joined: typing is gated on the confirmed set.
+    service.setTyping(1, 'post', 4, true);
+    await settle();
+    expect(hub.methodsInvoked('Typing').length).toBe(1);
+  });
+
   it('leaves the thread when the caller tears down', async () => {
     setup();
     const leave = service.joinThread(1, 'post', 4);

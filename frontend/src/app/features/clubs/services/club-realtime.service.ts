@@ -347,7 +347,11 @@ class ClubConnection {
     const method = kind === 'discussion' ? 'JoinDiscussion' : 'JoinPost';
     try {
       await this.hub.invoke(method, this.clubId, threadId);
-      this.activeThreads.add(key);
+
+      // A leave that landed while this was pending already dropped the intent and queued the
+      // server-side leave, so recording it active here would leave a stale key that makes a
+      // later reopen skip its join.
+      if (this.desiredThreads.has(key)) this.activeThreads.add(key);
     } catch {
       this.activeThreads.delete(key);
 

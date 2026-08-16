@@ -25,7 +25,9 @@ export type ThreadNodeAction =
   | { type: 'create'; node: ThreadDisplayNode; content: string }
   | { type: 'edit'; node: ThreadDisplayNode; content: string }
   | { type: 'delete'; node: ThreadDisplayNode }
-  | { type: 'react'; node: ThreadDisplayNode; reaction: ThreadReaction };
+  | { type: 'react'; node: ThreadDisplayNode; reaction: ThreadReaction }
+  /** A nested composer gained or lost content; feeds the thread-wide typing indicator. */
+  | { type: 'typing'; node: ThreadDisplayNode; active: boolean };
 
 /** Consecutive messages from one author inside this window render as a single group. */
 const GROUPING_WINDOW_MS = 5 * 60 * 1000;

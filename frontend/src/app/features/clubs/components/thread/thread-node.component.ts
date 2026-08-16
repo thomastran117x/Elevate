@@ -78,8 +78,20 @@ export class ThreadNodeComponent {
   }
 
   submitChild(): void {
+    // Guarded on `busy` as well as content: only the button is disabled while a post is in
+    // flight, so Enter could otherwise fire a second create and persist a duplicate.
+    if (this.node.busy) return;
     const content = this.node.replyText.trim();
     if (content) this.action.emit({ type: 'create', node: this.node, content });
+  }
+
+  /** Nested composers feed the same thread-wide typing indicator as the root one. */
+  onReplyInput(): void {
+    this.action.emit({
+      type: 'typing',
+      node: this.node,
+      active: this.node.replyText.trim().length > 0,
+    });
   }
 
   startEdit(): void {
@@ -89,6 +101,7 @@ export class ThreadNodeComponent {
   }
 
   saveEdit(): void {
+    if (this.node.busy) return;
     const content = this.node.editText.trim();
     if (content) this.action.emit({ type: 'edit', node: this.node, content });
   }
