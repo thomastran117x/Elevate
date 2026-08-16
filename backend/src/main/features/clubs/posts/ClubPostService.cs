@@ -10,6 +10,8 @@ using backend.main.shared.exceptions.http;
 using backend.main.shared.responses;
 using backend.main.shared.utilities.logger;
 
+using Microsoft.EntityFrameworkCore;
+
 namespace backend.main.features.clubs.posts
 {
     public class ClubPostService : IClubPostService
@@ -68,14 +70,13 @@ namespace backend.main.features.clubs.posts
                 IsPinned = isPinned
             };
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
-
-            post = await _postRepository.CreateAsync(post);
-            _outboxWriter.StageUpsert(post);
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
-
-            return post;
+            return await ExecuteInTransactionAsync(async () =>
+            {
+                post = await _postRepository.CreateAsync(post);
+                _outboxWriter.StageUpsert(post);
+                await _db.SaveChangesAsync();
+                return post;
+            });
         }
 
         public async Task<(ClubPost Post, UserListRecord? Author)> GetByIdAsync(
@@ -178,19 +179,20 @@ namespace backend.main.features.clubs.posts
             if (!await _clubService.CanManageClubPostsAsync(clubId, userId, userRole))
                 throw new ForbiddenException("You are not allowed to update this post.");
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
-
-            var updated = await _postRepository.UpdateAsync(postId, new ClubPost
+            var updated = await ExecuteInTransactionAsync(async () =>
             {
-                Title = title,
-                Content = content,
-                PostType = postType,
-                IsPinned = isPinned
-            }) ?? throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
+                var post = await _postRepository.UpdateAsync(postId, new ClubPost
+                {
+                    Title = title,
+                    Content = content,
+                    PostType = postType,
+                    IsPinned = isPinned
+                }) ?? throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
 
-            _outboxWriter.StageUpsert(updated);
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+                _outboxWriter.StageUpsert(post);
+                await _db.SaveChangesAsync();
+                return post;
+            });
 
             await _cache.RemoveAsync(PostCacheKey(postId));
 
@@ -210,12 +212,13 @@ namespace backend.main.features.clubs.posts
             if (!await _clubService.CanManageClubPostsAsync(clubId, userId, userRole))
                 throw new ForbiddenException("You are not allowed to delete this post.");
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
-
-            await _postRepository.DeleteAsync(postId);
-            _outboxWriter.StageDelete(postId);
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+            await ExecuteInTransactionAsync(async () =>
+            {
+                await _postRepository.DeleteAsync(postId);
+                _outboxWriter.StageDelete(postId);
+                await _db.SaveChangesAsync();
+                return true;
+            });
 
             await _cache.RemoveAsync(PostCacheKey(postId));
         }
@@ -254,6 +257,33 @@ namespace backend.main.features.clubs.posts
             await PopulateCommentCountsAsync(items);
 
             return (items, totalCount, ResponseSource.Database);
+        }
+
+        /// <summary>
+        /// Runs a unit of work in a transaction through the context's execution strategy.
+        /// </summary>
+        /// <remarks>
+        /// The context enables retry-on-failure, and that strategy rejects a user-initiated
+        /// transaction unless the whole unit runs through it. Mirrors ClubService's helper.
+        /// </remarks>
+        private async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action)
+        {
+            var strategy = _db.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+                try
+                {
+                    var result = await action();
+                    await transaction.CommitAsync();
+                    return result;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
 
         private async Task<Dictionary<int, UserListRecord>> FetchAuthorLookupAsync(List<ClubPost> posts)

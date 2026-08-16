@@ -122,23 +122,34 @@ public sealed class PostCommentRepository : IPostCommentRepository
 
     public async Task<PostComment?> SoftDeleteAsync(int id)
     {
-        await using var transaction = await _context.Database.BeginTransactionAsync();
-        var comment = await _context.PostComments.FindAsync(id);
-        if (comment is null)
-            return null;
-        if (!comment.IsDeleted)
+        // The context is configured with EnableRetryOnFailure, and that execution strategy
+        // refuses a user-initiated transaction unless the whole unit runs through it.
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync<PostComment?>(async () =>
         {
-            comment.IsDeleted = true;
-            comment.DeletedAt = DateTime.UtcNow;
-            comment.UpdatedAt = comment.DeletedAt.Value;
-            comment.Content = string.Empty;
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            var comment = await _context.PostComments.FindAsync(id);
+            if (comment is null)
+                return null;
+
+            if (!comment.IsDeleted)
+            {
+                comment.IsDeleted = true;
+                comment.DeletedAt = DateTime.UtcNow;
+                comment.UpdatedAt = comment.DeletedAt.Value;
+                comment.Content = string.Empty;
+            }
+
+            // Outside the guard on purpose: a retried attempt finds the entity already
+            // mutated in the change tracker, and this delete is idempotent either way.
             await _context.PostCommentReactions
                 .Where(reaction => reaction.CommentId == id)
                 .ExecuteDeleteAsync();
             await _context.SaveChangesAsync();
-        }
-        await transaction.CommitAsync();
-        return comment;
+
+            await transaction.CommitAsync();
+            return comment;
+        });
     }
 
     public async Task<PostCommentReactionSummary> SetReactionAsync(

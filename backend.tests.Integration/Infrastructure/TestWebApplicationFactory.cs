@@ -73,6 +73,13 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
             services.RemoveAll<DbContextOptions>();
             services.RemoveAll<Microsoft.EntityFrameworkCore.Infrastructure.IDbContextOptionsConfiguration<AppDatabaseContext>>();
 
+            // NOTE: this deliberately omits the EnableRetryOnFailure that
+            // DatabaseConfiguration applies in production. Without the retrying execution
+            // strategy, EF permits user-initiated transactions that production rejects, so
+            // code calling BeginTransactionAsync outside CreateExecutionStrategy passes here
+            // and then throws a 500 for real. Aligning the two is the right fix, but 26 call
+            // sites across events, series, registration, waitlist, invitations and payments
+            // still need wrapping first — see the follow-up issue.
             var dbContextOptions = new DbContextOptionsBuilder<AppDatabaseContext>()
                 .UseNpgsql(_testConnectionString)
                 .Options;
