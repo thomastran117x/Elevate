@@ -138,25 +138,32 @@ namespace backend.main.features.events
                     UpdatedAt = now
                 };
 
-                await using var transaction = await _db.Database.BeginTransactionAsync();
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                var created = await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                var created = await _eventsRepository.CreateAsync(ev);
-                await _db.SaveChangesAsync();
+                    var draft = await _eventsRepository.CreateAsync(ev);
+                    await _db.SaveChangesAsync();
 
-                AddVersionRecord(
-                    created,
-                    EventVersionActions.Create,
-                    actorUserId: userId,
-                    actorRole: NormalizeActorRole(userRole),
-                    rollbackSourceVersionNumber: null,
-                    changedFields: BuildChangedFields(null, BuildSnapshot(created)),
-                    createdAt: now);
+                    AddVersionRecord(
+                        draft,
+                        EventVersionActions.Create,
+                        actorUserId: userId,
+                        actorRole: NormalizeActorRole(userRole),
+                        rollbackSourceVersionNumber: null,
+                        changedFields: BuildChangedFields(null, BuildSnapshot(draft)),
+                        createdAt: now);
 
-                await _imageRepository.AddImagesAsync(created.Id, requestedImageUrls);
-                _outboxWriter.StageSync(created);
+                    await _imageRepository.AddImagesAsync(draft.Id, requestedImageUrls);
+                    _outboxWriter.StageSync(draft);
 
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return draft;
+                });
 
                 var withImages = await _eventsRepository.GetByIdAsync(created.Id)
                     ?? throw new InternalServerErrorException("Failed to reload created event");
