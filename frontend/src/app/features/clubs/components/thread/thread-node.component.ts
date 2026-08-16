@@ -92,6 +92,27 @@ export class ThreadNodeComponent {
     this.action.emit({ type: 'typing', node: this.node, active: false });
   }
 
+  /**
+   * Collapsing unmounts every descendant, including any open composer, so their drafts are
+   * discarded and reported the same way an explicit Cancel is.
+   */
+  toggleCollapsed(): void {
+    this.collapsed = !this.collapsed;
+    if (this.collapsed) this.discardComposers(this.node.children);
+  }
+
+  private discardComposers(nodes: ThreadDisplayNode[]): void {
+    for (const child of nodes) {
+      if (child.replyOpen || child.replyText) {
+        child.replyOpen = false;
+        child.replyText = '';
+        this.action.emit({ type: 'typing', node: child, active: false });
+      }
+      child.editOpen = false;
+      this.discardComposers(child.children);
+    }
+  }
+
   submitChild(): void {
     // Guarded on `busy` as well as content: only the button is disabled while a post is in
     // flight, so Enter could otherwise fire a second create and persist a duplicate.

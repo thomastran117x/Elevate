@@ -26,6 +26,7 @@ using backend.main.utilities;
 using FluentAssertions;
 
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -46,6 +47,9 @@ public sealed class AuthApiTestApp : IAsyncDisposable
 
     public HttpClient Client { get; }
     public ICacheService Cache => _factory.Services.GetRequiredService<ICacheService>();
+    /// <summary>Routing metadata for the running app, for asserting endpoint configuration.</summary>
+    public EndpointDataSource Endpoints =>
+        _factory.Services.GetRequiredService<EndpointDataSource>();
     public KafkaBackedPublisher Publisher { get; }
     public FakeCaptchaService Captcha => _factory.Captcha;
     public FakeOAuthService OAuth => _factory.OAuth;

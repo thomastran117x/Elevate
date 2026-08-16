@@ -176,6 +176,9 @@ export class ClubRealtimeService {
         this.authToken,
         ClubRealtimeService.TypingRefreshMs,
         ClubRealtimeService.IdleShutdownMs,
+        // Dropped once idle, so a session that browses many clubs does not accumulate a
+        // connection (and its handlers) per club to rebuild on every token change.
+        () => this.connections.delete(clubId),
       );
       this.connections.set(clubId, connection);
     }
@@ -234,6 +237,7 @@ class ClubConnection {
     private readonly authToken: AuthTokenService,
     private readonly typingRefreshMs: number,
     private readonly idleShutdownMs: number,
+    private readonly onIdle: () => void,
   ) {
     this.hub = this.build();
     this.registerHandlers();
@@ -304,6 +308,7 @@ class ClubConnection {
 
     // Stopping triggers OnDisconnectedAsync server-side, which drops presence and typing.
     this.presenceSubject.next({ users: [], totalOnline: 0 });
+    this.onIdle();
   }
 
   private async stopHub(): Promise<void> {
@@ -586,7 +591,9 @@ class ClubConnection {
     if (this.started) return this.started;
 
     this.cancelRetry();
-    this.stateSubject.next('connecting');
+    // Reached from the retry timer, which runs outside Angular, so this needs the zone or
+    // the pill stays on its previous value for the whole retry cycle.
+    this.zone.run(() => this.stateSubject.next('connecting'));
     // SignalR's own timers and transport callbacks do not need to churn change detection.
     this.started = this.zone
       .runOutsideAngular(() => this.hub.start())

@@ -6,6 +6,7 @@ import {
 } from '@angular/ssr/node';
 import express from 'express';
 import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { Readable } from 'node:stream';
@@ -137,10 +138,15 @@ app.use((req, res, next) => {
 function proxyWebSocketUpgrade(req: express.Request, socket: Duplex, head: Buffer): void {
   const target = new URL(req.url ?? '/', apiProxyTarget);
 
-  const upstream = httpRequest({
+  // node:http throws ERR_INVALID_PROTOCOL synchronously on an https target, and this runs
+  // inside the 'upgrade' listener where that would take the process down.
+  const secure = target.protocol === 'https:';
+  const request = secure ? httpsRequest : httpRequest;
+
+  const upstream = request({
     protocol: target.protocol,
     hostname: target.hostname,
-    port: target.port,
+    port: target.port || (secure ? 443 : 80),
     path: target.pathname + target.search,
     method: 'GET',
     headers: { ...req.headers, host: target.host },
@@ -195,7 +201,14 @@ if (isMainModule(import.meta.url) || process.env['pm_id']) {
       return;
     }
 
-    proxyWebSocketUpgrade(req as express.Request, socket, head);
+    try {
+      proxyWebSocketUpgrade(req as express.Request, socket, head);
+    } catch (error) {
+      // Nothing has attached an error handler this early, so a synchronous throw here would
+      // otherwise take the whole SSR process down on a single bad handshake.
+      console.error('WebSocket proxy failed:', error);
+      socket.destroy();
+    }
   });
 }
 

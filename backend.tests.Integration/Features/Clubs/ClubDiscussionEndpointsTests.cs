@@ -15,6 +15,8 @@ using backend.tests.Integration.Infrastructure;
 
 using FluentAssertions;
 
+using Microsoft.AspNetCore.Http.Timeouts;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
@@ -479,6 +481,29 @@ public class ClubDiscussionEndpointsTests
             left.Joined.Should().BeNull();
             left.LeftUserId.Should().NotBeNull();
             left.TotalOnline.Should().Be(1);
+        }
+    }
+
+    [Fact]
+    public async Task RealtimeHub_ShouldBeExemptFromTheGlobalRequestTimeout()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+
+        var hubEndpoints = app.Endpoints.Endpoints
+            .Where(endpoint =>
+                (endpoint as RouteEndpoint)?.RoutePattern.RawText?.StartsWith(
+                    RoutePaths.ClubRealtimeHubPath, StringComparison.Ordinal) == true)
+            .ToList();
+
+        hubEndpoints.Should().NotBeEmpty("the club realtime hub must be mapped");
+
+        // The default policy aborts a request after 30s. A hub holds its transport open far
+        // longer than that — a WebSocket indefinitely, long polling for ~90s — so without this
+        // exemption every connection is killed on a 30-second loop.
+        foreach (var endpoint in hubEndpoints)
+        {
+            endpoint.Metadata.GetMetadata<DisableRequestTimeoutAttribute>()
+                .Should().NotBeNull($"'{endpoint.DisplayName}' must opt out of the request timeout");
         }
     }
 

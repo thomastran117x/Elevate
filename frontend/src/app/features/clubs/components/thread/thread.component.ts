@@ -459,6 +459,11 @@ export class ThreadComponent implements OnInit, OnChanges, OnDestroy {
     this.totalItems = 0;
     this.error = '';
     this.newText = '';
+    // teardown() cancels an in-flight create before its handlers run, so without this the
+    // composer on the newly opened thread stays stuck on "Posting...".
+    this.submitting = false;
+    this.loading = false;
+    this.loadingMore = false;
     this.typingUsers = [];
     this.reconciliationPending = false;
     this.composing.clear();

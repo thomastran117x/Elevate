@@ -802,6 +802,27 @@ describe('ThreadComponent', () => {
     expect(realtime.setTyping).toHaveBeenCalledWith(1, 'discussion', 9, false);
   });
 
+  it('re-enables the composer when the host swaps threads mid-post', () => {
+    const pending = new Subject<ThreadDisplayItem | null>();
+    source.list.and.returnValue(of(makePage([])));
+    component.ngOnInit();
+    source.create.and.returnValue(pending);
+    component.newText = 'in flight';
+    component.submitRoot();
+    expect(component.submitting).toBeTrue();
+
+    // teardown cancels the request before its handlers run, so nothing else clears the flag.
+    const nextSource = { ...source, threadId: 10 } as ThreadDataSource<ThreadDisplayItem>;
+    nextSource.list = jasmine.createSpy('list').and.returnValue(of(makePage([])));
+    component.source = nextSource;
+    component.ngOnChanges({
+      source: { firstChange: false, previousValue: source, currentValue: nextSource } as never,
+    });
+
+    expect(component.submitting).toBeFalse();
+    expect(component.loading).toBeFalse();
+  });
+
   it('leaves the realtime thread and stops typing on destroy', () => {
     component.ngOnInit();
     component.newText = 'a';

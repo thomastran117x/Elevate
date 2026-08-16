@@ -138,7 +138,10 @@ app.MapAppOpenApi();
 
 app.MapControllers();
 
-app.MapHub<ClubRealtimeHub>(RoutePaths.ClubRealtimeHubPath);
+// Hub connections are long-lived by design: a WebSocket stays open, and the long-polling
+// fallback holds a request for ~90s. The global 30s default request timeout would abort all
+// of them on a loop, so the hub opts out exactly as the SSE endpoints it replaced did.
+app.MapHub<ClubRealtimeHub>(RoutePaths.ClubRealtimeHubPath).DisableRequestTimeout();
 
 app.UseJsonNotFound();
 

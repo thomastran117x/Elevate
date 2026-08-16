@@ -178,6 +178,42 @@ describe('ThreadNodeComponent', () => {
     expect(emitted).toEqual([{ type: 'typing', node: component.node, active: true }]);
   });
 
+  it('discards descendant composers when the subtree is collapsed', () => {
+    const grandchild = makeNode({ id: 4 });
+    grandchild.replyOpen = true;
+    grandchild.replyText = 'deep draft';
+    const child = makeNode({ id: 3 });
+    child.replyOpen = true;
+    child.replyText = 'child draft';
+    child.children = [grandchild];
+    component.node.children = [child];
+    component.node.childrenLoaded = true;
+    emitted.length = 0;
+
+    component.toggleCollapsed();
+
+    expect(component.collapsed).toBeTrue();
+    expect(child.replyOpen).toBeFalse();
+    expect(child.replyText).toBe('');
+    expect(grandchild.replyOpen).toBeFalse();
+    // Both hidden composers report themselves, so neither heartbeat keeps running.
+    expect(emitted).toEqual([
+      { type: 'typing', node: child, active: false },
+      { type: 'typing', node: grandchild, active: false },
+    ]);
+  });
+
+  it('leaves descendants alone when expanding again', () => {
+    component.node.children = [makeNode({ id: 3 })];
+    component.toggleCollapsed();
+    emitted.length = 0;
+
+    component.toggleCollapsed();
+
+    expect(component.collapsed).toBeFalse();
+    expect(emitted).toEqual([]);
+  });
+
   it('emits reactions upward', () => {
     component.react('Like');
     component.react('Dislike');

@@ -206,7 +206,7 @@
       @if (node.childrenLoaded) {
         <button
           type="button"
-          (click)="collapsed = !collapsed"
+          (click)="toggleCollapsed()"
           [attr.aria-expanded]="!collapsed"
           class="mt-2 cursor-pointer text-xs font-semibold text-subtle"
         >

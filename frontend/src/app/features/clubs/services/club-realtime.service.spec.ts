@@ -932,6 +932,33 @@ describe('ClubRealtimeService', () => {
     expect(hub.methodsInvoked('Typing').length).toBe(1);
   });
 
+  it('evicts an idle connection so it is not rebuilt on every token change', async () => {
+    jasmine.clock().install();
+    try {
+      setup();
+      const leave = service.joinThread(1, 'discussion', 9);
+      await settle();
+
+      leave();
+      jasmine.clock().tick(4000);
+      await settle();
+      expect(hub.stopCalls).toBe(1);
+
+      // Evicted, so a token change has nothing left to rebuild.
+      authToken.accessToken = 'token-2';
+      authToken.accessToken$.next('token-2');
+      await settle();
+      expect(hub.stopCalls).toBe(1);
+
+      // A later thread builds a fresh connection rather than reusing the dead one.
+      service.joinThread(1, 'discussion', 9);
+      await settle();
+      expect(hub.startCalls).toBe(2);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
   it('leaves the thread when the caller tears down', async () => {
     setup();
     const leave = service.joinThread(1, 'post', 4);
