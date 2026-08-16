@@ -96,6 +96,30 @@ describe('ThreadNodeComponent', () => {
     expect(component.node.error).toBe('');
   });
 
+  it('discards the draft and reports it when the composer is cancelled', () => {
+    component.toggleReply();
+    component.node.replyText = 'half written';
+    emitted.length = 0;
+
+    component.cancelReply();
+
+    expect(component.node.replyOpen).toBeFalse();
+    expect(component.node.replyText).toBe('');
+    expect(emitted).toEqual([{ type: 'typing', node: component.node, active: false }]);
+  });
+
+  it('cancels rather than reopening when toggled closed', () => {
+    component.toggleReply();
+    component.node.replyText = 'half written';
+    emitted.length = 0;
+
+    component.toggleReply();
+
+    expect(component.node.replyOpen).toBeFalse();
+    expect(component.node.replyText).toBe('');
+    expect(emitted).toEqual([{ type: 'typing', node: component.node, active: false }]);
+  });
+
   it('emits a create only when the reply box has content', () => {
     component.node.replyText = '   ';
     component.submitChild();

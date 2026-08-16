@@ -474,6 +474,11 @@ export class ThreadComponent implements OnInit, OnChanges, OnDestroy {
    * in-memory tree. Deferred while a load is already in flight to avoid duplicate pages.
    */
   private onReconnected(): void {
+    // A rebuilt socket dropped its typing heartbeat, and the local flag would otherwise
+    // short-circuit every later keystroke, so re-assert what the composers actually hold.
+    this.typingActive = false;
+    this.setTyping(this.composing.size > 0);
+
     if (this.loading || this.loadingMore) {
       this.reconciliationPending = true;
       return;

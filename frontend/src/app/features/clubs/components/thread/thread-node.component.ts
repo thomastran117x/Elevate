@@ -73,8 +73,23 @@ export class ThreadNodeComponent {
   }
 
   toggleReply(): void {
-    this.node.replyOpen = !this.node.replyOpen;
+    if (this.node.replyOpen) {
+      this.cancelReply();
+      return;
+    }
+    this.node.replyOpen = true;
     this.node.error = '';
+  }
+
+  /**
+   * Closes the nested composer and discards its draft. Without clearing the draft and
+   * reporting it, the typing heartbeat would keep running for a composer nobody can see.
+   */
+  cancelReply(): void {
+    this.node.replyOpen = false;
+    this.node.replyText = '';
+    this.node.error = '';
+    this.action.emit({ type: 'typing', node: this.node, active: false });
   }
 
   submitChild(): void {

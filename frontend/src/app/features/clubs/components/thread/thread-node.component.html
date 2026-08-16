@@ -180,11 +180,7 @@
               >
                 {{ node.busy ? 'Posting...' : 'Post' }}
               </button>
-              <button
-                type="button"
-                (click)="node.replyOpen = false"
-                class="cursor-pointer text-faint"
-              >
+              <button type="button" (click)="cancelReply()" class="cursor-pointer text-faint">
                 Cancel
               </button>
             </div>

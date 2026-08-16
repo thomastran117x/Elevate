@@ -716,16 +716,22 @@ describe('ClubRealtimeService', () => {
     expect(joinedPosts).toContain(5);
   });
 
-  it('drops a thread the server refuses so it is not replayed on reconnect', async () => {
+  it('retries a refused thread on reconnect rather than giving up on it', async () => {
     setup();
     hub.invokeRejectsFor = 'JoinDiscussion';
     service.joinThread(1, 'discussion', 9);
     await settle();
     expect(hub.methodsInvoked('JoinDiscussion').length).toBe(1);
 
+    // A refusal is never authoritative enough to discard intent, so the reconnect tries
+    // again; a genuinely forbidden thread just costs one wasted invoke.
     await hub.fireReconnected();
 
-    expect(hub.methodsInvoked('JoinDiscussion').length).toBe(1);
+    expect(hub.methodsInvoked('JoinDiscussion').length).toBe(2);
+    // Still not confirmed, so typing stays suppressed.
+    service.setTyping(1, 'discussion', 9, true);
+    await settle();
+    expect(hub.methodsInvoked('Typing').length).toBe(0);
   });
 
   it('caps the roster as joins arrive and refills it when it drains', async () => {
@@ -869,6 +875,27 @@ describe('ClubRealtimeService', () => {
     await hub.fireReconnected();
 
     expect(hub.methodsInvoked('JoinPost').some((entry) => entry.args[1] === 4)).toBeTrue();
+  });
+
+  it('replays a thread refused on a connected but stale principal', async () => {
+    setup();
+    // A reconnect that landed on an expired token is Connected yet anonymous, so a private
+    // thread is refused under a principal the pending refresh is about to replace.
+    hub.invokeRejectsFor = 'JoinDiscussion';
+    service.joinThread(1, 'discussion', 9);
+    await settle();
+    expect(hub.methodsInvoked('JoinDiscussion').length).toBe(1);
+
+    hub.invokeRejectsFor = null;
+    authToken.accessToken = 'token-refreshed';
+    authToken.accessToken$.next('token-refreshed');
+    await settle();
+
+    // The rebuilt socket still knows the thread was wanted.
+    expect(hub.methodsInvoked('JoinDiscussion').length).toBe(2);
+    service.setTyping(1, 'discussion', 9, true);
+    await settle();
+    expect(hub.methodsInvoked('Typing').length).toBe(1);
   });
 
   it('leaves a thread reopenable after a leave lands while its join is pending', async () => {

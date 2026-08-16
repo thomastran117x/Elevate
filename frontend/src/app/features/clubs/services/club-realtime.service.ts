@@ -207,6 +207,11 @@ class ClubConnection {
   private readonly desiredThreads = new Set<string>();
   /** Threads the server has confirmed. Cleared whenever the socket stops. */
   private readonly activeThreads = new Set<string>();
+  /**
+   * Threads this connection already tried and had refused. Keeps a refusal from being retried
+   * within the same connection, while still letting the next one try again.
+   */
+  private readonly refusedThreads = new Set<string>();
   private readonly typingTimers = new Map<string, ReturnType<typeof setInterval>>();
 
   private refCount = 0;
@@ -304,8 +309,9 @@ class ClubConnection {
   private async stopHub(): Promise<void> {
     this.cancelRetry();
     for (const key of [...this.typingTimers.keys()]) this.stopTypingTimer(key);
-    // Only the server-confirmed set is cleared; the intent survives so a rebuild restores it.
+    // Only per-connection state is cleared; the intent survives so a rebuild restores it.
     this.activeThreads.clear();
+    this.refusedThreads.clear();
     this.started = null;
 
     try {
@@ -336,8 +342,14 @@ class ClubConnection {
     await this.ensureStarted();
     if (this.hub.state !== HubConnectionState.Connected) return;
     // afterConnect replays the desired set, so a join that raced the handshake is already
-    // settled: either confirmed, or refused and dropped from the desired set.
-    if (this.activeThreads.has(key) || !this.desiredThreads.has(key)) return;
+    // settled: confirmed, refused by this connection, or dropped by a leave in that window.
+    if (
+      this.activeThreads.has(key) ||
+      this.refusedThreads.has(key) ||
+      !this.desiredThreads.has(key)
+    ) {
+      return;
+    }
 
     await this.invokeJoin(kind, threadId);
   }
@@ -352,16 +364,16 @@ class ClubConnection {
       // server-side leave, so recording it active here would leave a stale key that makes a
       // later reopen skip its join.
       if (this.desiredThreads.has(key)) this.activeThreads.add(key);
+      this.refusedThreads.delete(key);
     } catch {
-      this.activeThreads.delete(key);
+      this.refusedThreads.add(key);
 
-      // Only a refusal from a still-healthy connection means the caller genuinely may not
-      // have this thread (private club, disabled feature), and leaves it on REST data only.
-      // A rejection because the transport dropped or the hub was stopped mid-invoke is
-      // transient, so the intent has to survive for the next connect to replay.
-      if (this.hub.state === HubConnectionState.Connected) {
-        this.desiredThreads.delete(key);
-      }
+      // Only the confirmation is dropped, never the intent. A refusal is not reliably
+      // authoritative: a reconnect that lands on an expired token is Connected but anonymous,
+      // so a private thread is refused under a principal that the pending refresh is about to
+      // replace. Intent belongs to the UI and is cleared only by leaveThread or shutdown, so
+      // the worst case here is one wasted invoke per reconnect on a genuinely forbidden thread.
+      this.activeThreads.delete(key);
     }
   }
 
@@ -370,6 +382,7 @@ class ClubConnection {
     this.stopTypingTimer(key);
     this.desiredThreads.delete(key);
     this.activeThreads.delete(key);
+    this.refusedThreads.delete(key);
     if (this.hub.state !== HubConnectionState.Connected) return;
 
     const method = kind === 'discussion' ? 'LeaveDiscussion' : 'LeavePost';
@@ -515,6 +528,7 @@ class ClubConnection {
       // good, so clear it and fall back to the same retry path a failed first connect uses.
       this.started = null;
       this.activeThreads.clear();
+      this.refusedThreads.clear();
       if (this.refCount > 0) this.scheduleRetry();
     });
   }
@@ -610,6 +624,9 @@ class ClubConnection {
    * every thread the UI still wants open, then tell subscribers to reconcile.
    */
   private async afterConnect(): Promise<void> {
+    // A fresh connection may carry a different principal, so past refusals do not bind it.
+    this.refusedThreads.clear();
+
     try {
       await this.hub.invoke('JoinClub', this.clubId);
     } catch {

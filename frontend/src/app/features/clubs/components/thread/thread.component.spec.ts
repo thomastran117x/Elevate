@@ -747,6 +747,29 @@ describe('ThreadComponent', () => {
     expect(realtime.setTyping).toHaveBeenCalledWith(1, 'discussion', 9, false);
   });
 
+  it('re-asserts typing after a reconnect rebuilds the socket', () => {
+    source.list.and.returnValue(of(makePage([makeItem({ id: 1 })])));
+    component.ngOnInit();
+    component.newText = 'still drafting';
+    component.onComposerInput();
+    (realtime.setTyping as jasmine.Spy).calls.reset();
+
+    events$.next({ type: 'Connected' });
+
+    // The rebuilt socket dropped its heartbeat, so the composer's state has to be re-sent.
+    expect(realtime.setTyping).toHaveBeenCalledWith(1, 'discussion', 9, true);
+  });
+
+  it('does not re-assert typing after a reconnect when every composer is empty', () => {
+    source.list.and.returnValue(of(makePage([makeItem({ id: 1 })])));
+    component.ngOnInit();
+    (realtime.setTyping as jasmine.Spy).calls.reset();
+
+    events$.next({ type: 'Connected' });
+
+    expect(realtime.setTyping).not.toHaveBeenCalledWith(1, 'discussion', 9, true);
+  });
+
   it('leaves the realtime thread and stops typing on destroy', () => {
     component.ngOnInit();
     component.newText = 'a';
