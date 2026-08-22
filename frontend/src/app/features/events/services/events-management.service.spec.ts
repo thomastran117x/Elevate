@@ -108,6 +108,59 @@ describe('EventsManagementService', () => {
       expect(event.category).toBe('Other');
     });
 
+    it('decodes the Paused ordinal, which only works while it stays last', () => {
+      // The API has no string-enum converter, so lifecycle states arrive as integers and are
+      // decoded by index. Paused must sit at 4 or every stored event shifts meaning.
+      expect(readEvent({ Id: 1, LifecycleState: 4 }).lifecycleState).toBe('Paused');
+      expect(readEvent({ Id: 1, LifecycleState: 'Paused' }).lifecycleState).toBe('Paused');
+    });
+
+    it('normalizes the lifecycle transitions the server advertises', () => {
+      const event = readEvent({
+        Id: 1,
+        LifecycleState: 1,
+        AvailableTransitions: [
+          {
+            Key: 'pause',
+            Target: 4,
+            Label: 'Pause event',
+            Title: 'Pause this event?',
+            IsReversible: true,
+            ReversibleNote: 'Reversible — resume any time.',
+            IsDestructive: false,
+            Impacts: ['It is removed from public search and listings.'],
+          },
+        ],
+      });
+
+      expect(event.availableTransitions).toEqual([
+        {
+          key: 'pause',
+          target: 'Paused',
+          label: 'Pause event',
+          title: 'Pause this event?',
+          isReversible: true,
+          reversibleNote: 'Reversible — resume any time.',
+          isDestructive: false,
+          impacts: ['It is removed from public search and listings.'],
+        },
+      ]);
+    });
+
+    it('keeps a missing previous state null rather than defaulting it to Draft', () => {
+      // An event that has never changed state has no previous state, which is a different
+      // thing from being a draft.
+      const event = readEvent({ Id: 1, LifecycleState: 1 });
+
+      expect(event.previousLifecycleState).toBeNull();
+      expect(event.revertAvailableUntil).toBeNull();
+      expect(event.availableTransitions).toEqual([]);
+
+      expect(readEvent({ Id: 1, PreviousLifecycleState: 1 }).previousLifecycleState).toBe(
+        'Published',
+      );
+    });
+
     it('leaves status undefined when the payload omits it', () => {
       expect(readEvent({ Id: 1 }).status).toBeUndefined();
     });
@@ -150,6 +203,11 @@ describe('EventsManagementService', () => {
       ['publishEvent', 'publish'],
       ['cancelEvent', 'cancel'],
       ['archiveEvent', 'archive'],
+      ['pauseEvent', 'pause'],
+      ['resumeEvent', 'resume'],
+      ['reinstateEvent', 'reinstate'],
+      ['unarchiveEvent', 'unarchive'],
+      ['revertLifecycle', 'lifecycle/revert'],
     ] as const) {
       it(`posts an empty body to ${path}`, () => {
         service[method](7).subscribe();
@@ -160,6 +218,27 @@ describe('EventsManagementService', () => {
         request.flush(pascalEnvelope({ Id: 7 }));
       });
     }
+  });
+
+  describe('runTransition', () => {
+    it('posts to the key the server supplied, so no switch has to track the states', () => {
+      service.runTransition(7, 'reinstate').subscribe();
+
+      const request = httpMock.expectOne(`${base}/7/reinstate`);
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toEqual({});
+      request.flush(pascalEnvelope({ Id: 7 }));
+    });
+  });
+
+  describe('deleteEvent', () => {
+    it('issues a DELETE for the event', () => {
+      service.deleteEvent(7).subscribe();
+
+      const request = httpMock.expectOne(`${base}/7`);
+      expect(request.request.method).toBe('DELETE');
+      request.flush({});
+    });
   });
 
   describe('uploadImage', () => {

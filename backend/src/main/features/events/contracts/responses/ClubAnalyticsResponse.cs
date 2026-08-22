@@ -18,6 +18,10 @@ namespace backend.main.features.events.contracts.responses
         {
             get; set;
         }
+        public int PausedEvents
+        {
+            get; set;
+        }
         public int CancelledEvents
         {
             get; set;

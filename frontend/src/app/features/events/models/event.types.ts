@@ -18,7 +18,7 @@ export type EventCategory =
   | 'Other';
 
 export type EventStatus = 'Upcoming' | 'Ongoing' | 'Closed';
-export type EventLifecycleState = 'Draft' | 'Published' | 'Cancelled' | 'Archived';
+export type EventLifecycleState = 'Draft' | 'Published' | 'Cancelled' | 'Archived' | 'Paused';
 
 export type EventSortBy = 'Relevance' | 'Date' | 'Distance' | 'Popularity';
 export type ClubType = 'Sports' | 'Academic' | 'Social' | 'Cultural' | 'Gaming' | 'Other';
@@ -108,6 +108,11 @@ export interface ManagedEvent {
   occurrenceIndex?: number | null;
   seriesOverridden?: boolean;
   timeZoneId?: string | null;
+  lifecycleChangedAt?: string | null;
+  previousLifecycleState?: EventLifecycleState | null;
+  /** Deadline for undoing the last lifecycle change; absent when there is nothing to undo. */
+  revertAvailableUntil?: string | null;
+  availableTransitions: EventLifecycleTransition[];
 }
 
 export interface ManagedEventsPagedData {
@@ -187,12 +192,34 @@ export const ALL_CATEGORIES: EventCategory[] = [
 ];
 
 export const ALL_STATUSES: EventStatus[] = ['Upcoming', 'Ongoing', 'Closed'];
+/**
+ * Order is load-bearing. The API has no string-enum converter, so lifecycle states arrive as
+ * integers and are decoded by index against this array. Only ever append.
+ */
 export const ALL_LIFECYCLE_STATES: EventLifecycleState[] = [
   'Draft',
   'Published',
   'Cancelled',
   'Archived',
+  'Paused',
 ];
+
+/**
+ * A lifecycle move the server says is currently available, with the copy for its confirmation
+ * prompt already resolved against the event's real numbers. Rendering straight from these keeps
+ * the state machine in one place, on the server.
+ */
+export interface EventLifecycleTransition {
+  /** Endpoint segment for the action, e.g. `pause`. */
+  key: string;
+  target: EventLifecycleState;
+  label: string;
+  title: string;
+  isReversible: boolean;
+  reversibleNote?: string | null;
+  isDestructive: boolean;
+  impacts: string[];
+}
 
 export const ALL_EVENT_SORTS: EventSortBy[] = ['Relevance', 'Date', 'Distance', 'Popularity'];
 

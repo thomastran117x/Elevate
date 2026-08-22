@@ -1,4 +1,7 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
+
+using backend.main.features.events.versions;
 
 namespace backend.main.features.events;
 
@@ -10,20 +13,71 @@ public static class EventLifecyclePolicy
         (from, to) switch
         {
             (EventLifecycleState.Draft, EventLifecycleState.Published) => true,
+
+            // Pausing withdraws an event without ending it; resuming puts it back on sale.
+            (EventLifecycleState.Published, EventLifecycleState.Paused) => true,
+            (EventLifecycleState.Paused, EventLifecycleState.Published) => true,
+
             (EventLifecycleState.Published, EventLifecycleState.Cancelled) => true,
+            (EventLifecycleState.Paused, EventLifecycleState.Cancelled) => true,
+
+            // Cancelling used to be a dead end. Reinstating re-runs the publish checks, so an
+            // event whose start time has since passed cannot sneak back into listings.
+            (EventLifecycleState.Cancelled, EventLifecycleState.Published) => true,
+
             (EventLifecycleState.Published, EventLifecycleState.Archived) => true,
+            (EventLifecycleState.Paused, EventLifecycleState.Archived) => true,
             (EventLifecycleState.Cancelled, EventLifecycleState.Archived) => true,
+
+            // Unarchiving lands in Paused rather than Published on purpose: recovering an event
+            // should never silently re-expose it to the public or reopen registration.
+            (EventLifecycleState.Archived, EventLifecycleState.Paused) => true,
+
             _ => false,
         };
 
     public static bool IsVisibleInPublicListings(EventLifecycleState lifecycleState) =>
         lifecycleState == EventLifecycleState.Published;
 
+    /// <summary>
+    /// Paused events keep their detail page so people who already registered do not lose the
+    /// link; the page itself explains that registration is on hold.
+    /// </summary>
     public static bool IsVisibleInPublicDetail(EventLifecycleState lifecycleState) =>
-        lifecycleState is EventLifecycleState.Published or EventLifecycleState.Cancelled;
+        lifecycleState is EventLifecycleState.Published
+            or EventLifecycleState.Cancelled
+            or EventLifecycleState.Paused;
 
     public static bool AllowsRegistration(EventLifecycleState lifecycleState) =>
         lifecycleState == EventLifecycleState.Published;
+
+    /// <summary>
+    /// Cancelled and archived events are frozen. Paused events stay editable — reworking an
+    /// event while it is off sale is the main reason to pause one.
+    /// </summary>
+    public static bool AllowsEditing(EventLifecycleState lifecycleState) =>
+        lifecycleState is not (EventLifecycleState.Cancelled or EventLifecycleState.Archived);
+
+    /// <summary>
+    /// Hard deletion is limited to states that cannot have a live audience: a draft that was
+    /// never published, or an event already archived out of sight. Anything else must be
+    /// archived first, which is reversible.
+    /// </summary>
+    public static bool AllowsHardDelete(EventLifecycleState lifecycleState) =>
+        lifecycleState is EventLifecycleState.Draft or EventLifecycleState.Archived;
+
+    /// <summary>
+    /// Deadline for undoing the most recent lifecycle change, or null when there is nothing to
+    /// undo or the window has already lapsed.
+    /// </summary>
+    public static DateTime? GetRevertAvailableUntil(Events ev, DateTime utcNow, int windowHours)
+    {
+        if (ev.PreviousLifecycleState is null || ev.LifecycleChangedAt is null)
+            return null;
+
+        var expiresAt = ev.LifecycleChangedAt.Value.AddHours(windowHours);
+        return expiresAt > utcNow ? expiresAt : null;
+    }
 
     public static bool AllowsInvitations(Events ev) =>
         ev.LifecycleState == EventLifecycleState.Published && ev.isPrivate;
@@ -41,6 +95,149 @@ public static class EventLifecyclePolicy
 
         return EventStatus.Closed;
     }
+
+    /// <summary>
+    /// Every move the organizer may make from the event's current state, with the consequences
+    /// spelled out against this event's real numbers.
+    /// <para>
+    /// The client renders its buttons and confirmation prompts straight from this list rather
+    /// than reimplementing <see cref="CanTransition"/>, so a future state needs no UI change.
+    /// </para>
+    /// </summary>
+    public static IReadOnlyList<EventLifecycleTransition> GetAvailableTransitions(Events ev) =>
+        ev.LifecycleState switch
+        {
+            EventLifecycleState.Draft => [Publish(ev)],
+            EventLifecycleState.Published => [Pause(ev), Cancel(ev), Archive(ev)],
+            EventLifecycleState.Paused => [Resume(ev), Cancel(ev), Archive(ev)],
+            EventLifecycleState.Cancelled => [Reinstate(ev), Archive(ev)],
+            EventLifecycleState.Archived => [Unarchive(ev)],
+            _ => [],
+        };
+
+    private static EventLifecycleTransition Publish(Events ev) => new(
+        EventVersionActions.Publish,
+        EventLifecycleState.Published,
+        "Publish event",
+        "Publish this event?",
+        IsReversible: true,
+        "Reversible — you can pause or undo this afterwards.",
+        IsDestructive: false,
+        [
+            ev.isPrivate
+                ? "Only people you invite will be able to see it."
+                : "It becomes visible publicly and appears in search.",
+            "Registration opens immediately.",
+        ]);
+
+    private static EventLifecycleTransition Pause(Events ev) => new(
+        EventVersionActions.Pause,
+        EventLifecycleState.Paused,
+        "Pause event",
+        "Pause this event?",
+        IsReversible: true,
+        "Reversible — resume any time to put it back on sale.",
+        IsDestructive: false,
+        [
+            "It is removed from public search and listings.",
+            "New registrations are blocked while it is paused.",
+            .. Audience(ev, "They keep their place and are not notified."),
+            "The event stays editable, and its page still works for people who already registered.",
+        ]);
+
+    private static EventLifecycleTransition Resume(Events ev) => new(
+        EventVersionActions.Resume,
+        EventLifecycleState.Published,
+        "Resume event",
+        "Resume this event?",
+        IsReversible: true,
+        "Reversible — you can pause it again at any time.",
+        IsDestructive: false,
+        [
+            ev.isPrivate
+                ? "It becomes visible again to people you invited."
+                : "It returns to public search and listings.",
+            "Registration reopens.",
+        ]);
+
+    private static EventLifecycleTransition Cancel(Events ev) => new(
+        EventVersionActions.Cancel,
+        EventLifecycleState.Cancelled,
+        "Cancel event",
+        "Cancel this event?",
+        IsReversible: true,
+        "Reversible — you can reinstate this event afterwards.",
+        IsDestructive: true,
+        [
+            .. Audience(ev, "Their registrations stay on record, but the event page will show as cancelled."),
+            "It is removed from public search and listings.",
+            "New registrations are blocked.",
+            "The event can no longer be edited until it is reinstated.",
+            "If you only need to take it off sale for a while, pause it instead.",
+        ]);
+
+    private static EventLifecycleTransition Reinstate(Events ev) => new(
+        EventVersionActions.Reinstate,
+        EventLifecycleState.Published,
+        "Reinstate event",
+        "Reinstate this event?",
+        IsReversible: true,
+        "Reversible — you can cancel or pause it again afterwards.",
+        IsDestructive: false,
+        [
+            "It returns to public listings and no longer shows as cancelled.",
+            "Registration reopens.",
+            "The event becomes editable again.",
+        ]);
+
+    private static EventLifecycleTransition Archive(Events ev) => new(
+        EventVersionActions.Archive,
+        EventLifecycleState.Archived,
+        "Archive event",
+        "Archive this event?",
+        IsReversible: true,
+        "Reversible — you can unarchive this event afterwards.",
+        IsDestructive: true,
+        [
+            "It is hidden from everyone except club managers.",
+            "The event can no longer be edited until it is unarchived.",
+            .. Audience(ev, "Their registrations are kept for your records."),
+        ]);
+
+    private static EventLifecycleTransition Unarchive(Events ev) => new(
+        EventVersionActions.Unarchive,
+        EventLifecycleState.Paused,
+        "Unarchive event",
+        "Unarchive this event?",
+        IsReversible: true,
+        "Reversible — you can archive it again at any time.",
+        IsDestructive: false,
+        [
+            "It moves back to Paused so you can review it before it goes live again.",
+            "It stays hidden from public listings until you resume it.",
+        ]);
+
+    /// <summary>
+    /// One line naming the people already attached to the event, or nothing at all when there
+    /// are none — an empty event should not be padded with reassurances about nobody.
+    /// </summary>
+    private static string[] Audience(Events ev, string consequence)
+    {
+        var parts = new List<string>();
+
+        if (ev.RegistrationCount > 0)
+            parts.Add(Pluralize(ev.RegistrationCount, "person is", "people are") + " registered");
+
+        if (ev.WaitlistCount > 0)
+            parts.Add(Pluralize(ev.WaitlistCount, "person is", "people are") + " on the waitlist");
+
+        return parts.Count == 0
+            ? []
+            : [$"{string.Join(" and ", parts)}. {consequence}"];
+    }
+
+    private static string Pluralize(int count, string singular, string plural) =>
+        $"{count.ToString("N0", CultureInfo.InvariantCulture)} {(count == 1 ? singular : plural)}";
 
     public static List<string> GetPublishIssues(Events ev, DateTime utcNow)
     {

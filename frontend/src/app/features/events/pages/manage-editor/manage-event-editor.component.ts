@@ -21,11 +21,19 @@ import { detectBrowserTimeZone, formatLocalStart, listTimeZones } from '../../mo
 import { EventsManagementService } from '../../services/events-management.service';
 import { EventSeriesService } from '../../services/event-series.service';
 import { OccurrenceScopeDialogComponent } from '../../components/occurrence-scope-dialog/occurrence-scope-dialog.component';
+import { EventLifecycleActionsComponent } from '../../components/lifecycle-actions/lifecycle-actions.component';
+import { lifecycleBadgeClass, lifecycleHint } from '../../models/event-lifecycle';
 
 @Component({
   selector: 'app-manage-event-editor',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, OccurrenceScopeDialogComponent],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    RouterLink,
+    OccurrenceScopeDialogComponent,
+    EventLifecycleActionsComponent,
+  ],
   templateUrl: './manage-event-editor.component.html',
 })
 export class ManageEventEditorComponent {
@@ -542,51 +550,41 @@ export class ManageEventEditorComponent {
     });
   }
 
-  publish(): void {
+  /**
+   * Runs whichever lifecycle move the operator confirmed. The key comes from the server's
+   * `availableTransitions`, so this does not need a branch per action.
+   */
+  runLifecycleTransition(key: string): void {
     if (!this.eventId) {
-      this.error = 'Save the draft before publishing it.';
+      this.error = 'Save the draft before changing its state.';
+      return;
+    }
+
+    this.runLifecycleAction(() => this.managementService.runTransition(this.eventId, key), 'Done.');
+  }
+
+  /** Undoes the last lifecycle change while the server still offers the window. */
+  undoLifecycleChange(): void {
+    if (!this.eventId) {
       return;
     }
 
     this.runLifecycleAction(
-      () => this.managementService.publishEvent(this.eventId),
-      'Event published.',
+      () => this.managementService.revertLifecycle(this.eventId),
+      'Change undone.',
     );
   }
 
-  cancel(): void {
-    if (!this.eventId) {
-      return;
-    }
-
-    this.runLifecycleAction(
-      () => this.managementService.cancelEvent(this.eventId),
-      'Event cancelled.',
-    );
-  }
-
-  archive(): void {
-    if (!this.eventId) {
-      return;
-    }
-
-    this.runLifecycleAction(
-      () => this.managementService.archiveEvent(this.eventId),
-      'Event archived.',
-    );
+  get canUndoLifecycleChange(): boolean {
+    return !!this.event?.revertAvailableUntil;
   }
 
   lifecycleBadge(lifecycleState: EventLifecycleState): string {
-    switch (lifecycleState) {
-      case 'Draft':
-        return 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20';
-      case 'Published':
-        return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20';
-      case 'Cancelled':
-        return 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20';
-      case 'Archived':
-        return 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border border-slate-500/20';
-    }
+    return lifecycleBadgeClass(lifecycleState);
+  }
+
+  get lifecycleHint(): string | null {
+    return lifecycleHint(this.lifecycleState);
   }
 
   private loadExisting(): void {
@@ -682,7 +680,7 @@ export class ManageEventEditorComponent {
       next: (response) => {
         const event = requireEnvelopeData(response, 'The event lifecycle action failed.');
         this.applyEvent(event);
-        this.successMessage = successMessage;
+        this.successMessage = `${successMessage} This event is now ${event.lifecycleState.toLowerCase()}.`;
         this.saving = false;
       },
       error: (error) => {

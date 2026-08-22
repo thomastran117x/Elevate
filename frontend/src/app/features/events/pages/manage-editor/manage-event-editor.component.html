@@ -19,6 +19,10 @@
           {{ lifecycleState }}
         </span>
       </div>
+
+      @if (lifecycleHint; as hint) {
+        <p class="mt-2 text-xs text-subtle">{{ hint }}</p>
+      }
     </div>
 
     <div class="flex flex-wrap gap-3">
@@ -57,9 +61,37 @@
 
   @if (!loading && successMessage) {
     <div
-      class="mb-6 rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success"
+      class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success"
     >
-      {{ successMessage }}
+      <span>{{ successMessage }}</span>
+
+      @if (canUndoLifecycleChange) {
+        <button
+          type="button"
+          (click)="undoLifecycleChange()"
+          [disabled]="saving"
+          class="rounded-2xl border border-success/40 px-4 py-2 text-xs font-semibold text-success transition hover:bg-success/10 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Undo
+        </button>
+      }
+    </div>
+  }
+
+  @if (!loading && !successMessage && canUndoLifecycleChange) {
+    <div
+      class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-glass-strong px-5 py-4 text-sm text-muted"
+    >
+      <span>You recently changed this event&rsquo;s state. You can still undo it.</span>
+
+      <button
+        type="button"
+        (click)="undoLifecycleChange()"
+        [disabled]="saving"
+        class="rounded-2xl border border-line-strong px-4 py-2 text-xs font-semibold text-content transition hover:bg-glass disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        Undo
+      </button>
     </div>
   }
 
@@ -674,35 +706,12 @@
             >
               {{ saving ? 'Saving…' : eventId ? 'Save draft' : 'Create draft' }}
             </button>
-            @if (lifecycleState === 'Draft' && eventId) {
-              <button
-                type="button"
-                (click)="publish()"
-                [disabled]="saving || uploading"
-                class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Publish
-              </button>
-            }
-            @if (lifecycleState === 'Published') {
-              <button
-                type="button"
-                (click)="cancel()"
-                [disabled]="saving || uploading"
-                class="inline-flex items-center justify-center rounded-2xl border border-danger/30 px-5 py-3 text-sm font-semibold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Cancel event
-              </button>
-            }
-            @if (lifecycleState === 'Published' || lifecycleState === 'Cancelled') {
-              <button
-                type="button"
-                (click)="archive()"
-                [disabled]="saving || uploading"
-                class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-muted transition hover:bg-glass-strong disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Archive
-              </button>
+            @if (event && eventId) {
+              <app-event-lifecycle-actions
+                [event]="event"
+                [busy]="saving || uploading"
+                (act)="runLifecycleTransition($event)"
+              />
             }
           </div>
         }

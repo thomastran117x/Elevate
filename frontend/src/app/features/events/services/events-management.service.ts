@@ -11,6 +11,7 @@ import {
   EventCategory,
   EventDraftPayload,
   EventLifecycleState,
+  EventLifecycleTransition,
   EventStatus,
   ManageEventsParams,
   ManagedEvent,
@@ -47,10 +48,25 @@ type ManagedEventPayload = Partial<ManagedEvent> & {
   WaitlistCount?: number;
   PublishReady?: boolean;
   PublishIssues?: string[];
+  LifecycleChangedAt?: string | null;
+  PreviousLifecycleState?: string | number | null;
+  RevertAvailableUntil?: string | null;
+  AvailableTransitions?: EventLifecycleTransitionPayload[];
   SeriesId?: number | null;
   OccurrenceIndex?: number | null;
   SeriesOverridden?: boolean;
   TimeZoneId?: string | null;
+};
+
+type EventLifecycleTransitionPayload = Partial<EventLifecycleTransition> & {
+  Key?: string;
+  Target?: string | number;
+  Label?: string;
+  Title?: string;
+  IsReversible?: boolean;
+  ReversibleNote?: string | null;
+  IsDestructive?: boolean;
+  Impacts?: string[];
 };
 
 type ManagedEventsPagedPayload = Partial<ManagedEventsPagedData> & {
@@ -135,6 +151,39 @@ export class EventsManagementService {
 
   archiveEvent(eventId: number): Observable<ManagedEventApiResponse> {
     return this.transition(`${this.base}/${eventId}/archive`);
+  }
+
+  pauseEvent(eventId: number): Observable<ManagedEventApiResponse> {
+    return this.transition(`${this.base}/${eventId}/pause`);
+  }
+
+  resumeEvent(eventId: number): Observable<ManagedEventApiResponse> {
+    return this.transition(`${this.base}/${eventId}/resume`);
+  }
+
+  reinstateEvent(eventId: number): Observable<ManagedEventApiResponse> {
+    return this.transition(`${this.base}/${eventId}/reinstate`);
+  }
+
+  unarchiveEvent(eventId: number): Observable<ManagedEventApiResponse> {
+    return this.transition(`${this.base}/${eventId}/unarchive`);
+  }
+
+  /**
+   * Runs a lifecycle transition by its server-supplied key, so callers can drive
+   * `availableTransitions` without a switch that would need editing for every new state.
+   */
+  runTransition(eventId: number, key: string): Observable<ManagedEventApiResponse> {
+    return this.transition(`${this.base}/${eventId}/${key}`);
+  }
+
+  /** Undoes the most recent lifecycle change, while the server still offers the window. */
+  revertLifecycle(eventId: number): Observable<ManagedEventApiResponse> {
+    return this.transition(`${this.base}/${eventId}/lifecycle/revert`);
+  }
+
+  deleteEvent(eventId: number): Observable<unknown> {
+    return this.http.delete(`${this.base}/${eventId}`);
   }
 
   uploadImage(clubId: number, file: File, eventId?: number): Observable<string> {
@@ -249,7 +298,40 @@ export class EventsManagementService {
       occurrenceIndex: item.occurrenceIndex ?? item.OccurrenceIndex ?? null,
       seriesOverridden: item.seriesOverridden ?? item.SeriesOverridden ?? false,
       timeZoneId: item.timeZoneId ?? item.TimeZoneId ?? null,
+      lifecycleChangedAt: item.lifecycleChangedAt ?? item.LifecycleChangedAt ?? null,
+      previousLifecycleState: this.normalizeOptionalLifecycle(
+        item.previousLifecycleState ?? item.PreviousLifecycleState,
+      ),
+      revertAvailableUntil: item.revertAvailableUntil ?? item.RevertAvailableUntil ?? null,
+      availableTransitions: (item.availableTransitions ?? item.AvailableTransitions ?? []).map(
+        (transition) => this.normalizeTransition(transition),
+      ),
     };
+  }
+
+  private normalizeTransition(
+    transition: EventLifecycleTransitionPayload,
+  ): EventLifecycleTransition {
+    return {
+      key: transition.key ?? transition.Key ?? '',
+      target: this.normalizeLifecycle(transition.target ?? transition.Target),
+      label: transition.label ?? transition.Label ?? '',
+      title: transition.title ?? transition.Title ?? '',
+      isReversible: transition.isReversible ?? transition.IsReversible ?? false,
+      reversibleNote: transition.reversibleNote ?? transition.ReversibleNote ?? null,
+      isDestructive: transition.isDestructive ?? transition.IsDestructive ?? false,
+      impacts: transition.impacts ?? transition.Impacts ?? [],
+    };
+  }
+
+  /**
+   * Like `normalizeLifecycle`, but keeps null as null: an event that has never changed state
+   * has no previous state, which is different from being a draft.
+   */
+  private normalizeOptionalLifecycle(
+    value: string | number | undefined | null,
+  ): EventLifecycleState | null {
+    return value === undefined || value === null ? null : this.normalizeLifecycle(value);
   }
 
   private normalizeLifecycle(value: string | number | undefined): EventLifecycleState {

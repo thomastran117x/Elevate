@@ -80,6 +80,11 @@
               @if (!item.accessRevoked && isCancelled(item)) {
                 <div class="mt-2 text-xs font-semibold text-danger">Event cancelled</div>
               }
+              @if (!item.accessRevoked && isPaused(item)) {
+                <div class="mt-2 text-xs font-semibold text-sky-700 dark:text-sky-300">
+                  Paused &middot; the queue is on hold
+                </div>
+              }
             </div>
 
             <div class="text-center">

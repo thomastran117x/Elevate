@@ -46,6 +46,7 @@ function buildEvent(overrides: Partial<ManagedEvent> = {}): ManagedEvent {
     waitlistCount: 0,
     publishReady: true,
     publishIssues: [],
+    availableTransitions: [],
     ...overrides,
   };
 }
@@ -78,6 +79,8 @@ describe('ManageEventEditorComponent', () => {
       'publishEvent',
       'cancelEvent',
       'archiveEvent',
+      'runTransition',
+      'revertLifecycle',
       'uploadImage',
     ]);
     seriesService = jasmine.createSpyObj<EventSeriesService>('EventSeriesService', [
@@ -751,55 +754,45 @@ describe('ManageEventEditorComponent', () => {
   });
 
   describe('lifecycle actions', () => {
-    it('refuses to publish an unsaved draft', () => {
+    it('refuses to change state on an unsaved draft', () => {
       setup({ clubId: '4' });
 
-      component.publish();
+      component.runLifecycleTransition('publish');
 
-      expect(managementService.publishEvent).not.toHaveBeenCalled();
-      expect(component.error).toBe('Save the draft before publishing it.');
+      expect(managementService.runTransition).not.toHaveBeenCalled();
+      expect(component.error).toBe('Save the draft before changing its state.');
     });
 
-    it('ignores cancel and archive on an unsaved draft', () => {
-      setup({ clubId: '4' });
-
-      component.cancel();
-      component.archive();
-
-      expect(managementService.cancelEvent).not.toHaveBeenCalled();
-      expect(managementService.archiveEvent).not.toHaveBeenCalled();
-      expect(component.error).toBe('');
-    });
-
-    const actions = [
-      ['publish', 'publishEvent', 'Published', 'Event published.'],
-      ['cancel', 'cancelEvent', 'Cancelled', 'Event cancelled.'],
-      ['archive', 'archiveEvent', 'Archived', 'Event archived.'],
-    ] as const;
-
-    for (const [method, spyName, state, message] of actions) {
-      it(`${method}es the event and applies the returned state`, () => {
+    for (const [key, state] of [
+      ['publish', 'Published'],
+      ['pause', 'Paused'],
+      ['cancel', 'Cancelled'],
+      ['archive', 'Archived'],
+      ['reinstate', 'Published'],
+      ['unarchive', 'Paused'],
+    ] as const) {
+      it(`runs '${key}' by key and applies the state the server returns`, () => {
         setup({ clubId: '4', eventId: '12' }, buildEvent());
-        managementService[spyName].and.returnValue(
+        managementService.runTransition.and.returnValue(
           of(envelope(buildEvent({ lifecycleState: state }))) as never,
         );
 
-        component[method]();
+        component.runLifecycleTransition(key);
 
-        expect(managementService[spyName]).toHaveBeenCalledOnceWith(12);
+        expect(managementService.runTransition).toHaveBeenCalledOnceWith(12, key);
         expect(component.lifecycleState).toBe(state);
-        expect(component.successMessage).toBe(message);
+        expect(component.successMessage).toContain(state.toLowerCase());
         expect(component.saving).toBeFalse();
       });
     }
 
     it('reports a rejected lifecycle transition', () => {
       setup({ clubId: '4', eventId: '12' }, buildEvent());
-      managementService.publishEvent.and.returnValue(
+      managementService.runTransition.and.returnValue(
         throwError(() => ({ error: { message: 'Add a start time first.' } })) as never,
       );
 
-      component.publish();
+      component.runLifecycleTransition('publish');
 
       expect(component.error).toBe('Add a start time first.');
       expect(component.saving).toBeFalse();
@@ -807,11 +800,58 @@ describe('ManageEventEditorComponent', () => {
 
     it('falls back to a generic lifecycle message', () => {
       setup({ clubId: '4', eventId: '12' }, buildEvent());
-      managementService.archiveEvent.and.returnValue(throwError(() => ({})) as never);
+      managementService.runTransition.and.returnValue(throwError(() => ({})) as never);
 
-      component.archive();
+      component.runLifecycleTransition('archive');
 
       expect(component.error).toBe('The lifecycle action could not be completed.');
+    });
+  });
+
+  describe('undoing a lifecycle change', () => {
+    it('offers undo only while the server still says the window is open', () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent());
+      expect(component.canUndoLifecycleChange).toBeFalse();
+
+      setup(
+        { clubId: '4', eventId: '12' },
+        buildEvent({ revertAvailableUntil: '2026-08-23T12:00:00Z' }),
+      );
+      expect(component.canUndoLifecycleChange).toBeTrue();
+    });
+
+    it('reverts through the server and applies the restored state', () => {
+      setup(
+        { clubId: '4', eventId: '12' },
+        buildEvent({ lifecycleState: 'Cancelled', revertAvailableUntil: '2026-08-23T12:00:00Z' }),
+      );
+      managementService.revertLifecycle.and.returnValue(
+        of(envelope(buildEvent({ lifecycleState: 'Published' }))) as never,
+      );
+
+      component.undoLifecycleChange();
+
+      expect(managementService.revertLifecycle).toHaveBeenCalledOnceWith(12);
+      expect(component.lifecycleState).toBe('Published');
+
+      // The server clears the window once undo is spent, so the button goes away.
+      expect(component.canUndoLifecycleChange).toBeFalse();
+    });
+
+    it('surfaces a lapsed window as an error rather than failing silently', () => {
+      setup(
+        { clubId: '4', eventId: '12' },
+        buildEvent({ revertAvailableUntil: '2026-08-23T12:00:00Z' }),
+      );
+      managementService.revertLifecycle.and.returnValue(
+        throwError(() => ({
+          error: { message: 'The window for undoing this change has passed.' },
+        })) as never,
+      );
+
+      component.undoLifecycleChange();
+
+      expect(component.error).toBe('The window for undoing this change has passed.');
     });
   });
 

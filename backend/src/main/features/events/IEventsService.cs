@@ -79,6 +79,21 @@ namespace backend.main.features.events
         Task<Events> CancelEvent(int eventId, int userId, string userRole);
         Task<Events> ArchiveEvent(int eventId, int userId, string userRole);
 
+        /// <summary>Withdraws a published event from sale without ending it.</summary>
+        Task<Events> PauseEvent(int eventId, int userId, string userRole);
+
+        /// <summary>Puts a paused event back on sale, re-running the publish checks.</summary>
+        Task<Events> ResumeEvent(int eventId, int userId, string userRole);
+
+        /// <summary>Takes back a cancellation, re-running the publish checks.</summary>
+        Task<Events> ReinstateEvent(int eventId, int userId, string userRole);
+
+        /// <summary>Recovers an archived event into <c>Paused</c> for review.</summary>
+        Task<Events> UnarchiveEvent(int eventId, int userId, string userRole);
+
+        /// <summary>Undoes the most recent lifecycle change inside the revert window.</summary>
+        Task<Events> RevertLastLifecycleChangeAsync(int eventId, int userId, string userRole);
+
         Task DeleteEvent(int eventId, int userId, string userRole);
 
         // Batch operations

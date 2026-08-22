@@ -440,12 +440,69 @@ public class EventsServiceTests
     }
 
     [Fact]
+    public async Task BatchDeleteEvents_ShouldRefuseTheWholeBatchWhenAnyEventIsStillLive()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        var archived = harness.BuildEvent(
+            id: 51, clubId: harness.ClubId, lifecycleState: EventLifecycleState.Archived);
+        var published = harness.BuildEvent(
+            id: 52, clubId: harness.ClubId, lifecycleState: EventLifecycleState.Published);
+
+        harness.EventsRepositoryMock
+            .Setup(repository => repository.GetByIdsAsync(It.IsAny<IEnumerable<int>>()))
+            .ReturnsAsync([archived, published]);
+        harness.ClubServiceMock
+            .Setup(service => service.CanManageClubAsync(harness.ClubId, harness.OwnerUserId, harness.OwnerRole))
+            .ReturnsAsync(true);
+
+        var action = () => harness.Service.BatchDeleteEvents(harness.OwnerUserId, harness.OwnerRole, [51, 52]);
+
+        await action.Should()
+            .ThrowAsync<ConflictException>()
+            .WithMessage("*52*");
+
+        // Nothing is deleted, so the batch endpoint cannot be used to slip past the guard.
+        harness.EventsRepositoryMock.Verify(
+            repository => repository.DeleteManyAsync(It.IsAny<IEnumerable<int>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task BatchDeleteEvents_ShouldRefuseWhenAnyEventHasRegistrations()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        var booked = harness.BuildEvent(
+            id: 53,
+            clubId: harness.ClubId,
+            lifecycleState: EventLifecycleState.Archived,
+            registrationCount: 4);
+
+        harness.EventsRepositoryMock
+            .Setup(repository => repository.GetByIdsAsync(It.IsAny<IEnumerable<int>>()))
+            .ReturnsAsync([booked]);
+        harness.ClubServiceMock
+            .Setup(service => service.CanManageClubAsync(harness.ClubId, harness.OwnerUserId, harness.OwnerRole))
+            .ReturnsAsync(true);
+
+        var action = () => harness.Service.BatchDeleteEvents(harness.OwnerUserId, harness.OwnerRole, [53]);
+
+        await action.Should()
+            .ThrowAsync<ConflictException>()
+            .WithMessage("*registrations*");
+
+        harness.EventsRepositoryMock.Verify(
+            repository => repository.DeleteManyAsync(It.IsAny<IEnumerable<int>>()), Times.Never);
+    }
+
+    [Fact]
     public async Task BatchDeleteEvents_ShouldDeleteRequestedIds_StageDeletes_AndClearCaches()
     {
         await using var harness = await EventsServiceHarness.CreateAsync();
-        var first = harness.BuildEvent(id: 41, clubId: harness.ClubId);
+        // Deleting is only reachable once events are archived, in batch as well as one at a time.
+        var first = harness.BuildEvent(
+            id: 41, clubId: harness.ClubId, lifecycleState: EventLifecycleState.Archived);
         first.Images.Add(new EventImage { EventId = 41, ImageUrl = "https://cdn.test/events/41.png" });
-        var second = harness.BuildEvent(id: 42, clubId: harness.ClubId);
+        var second = harness.BuildEvent(
+            id: 42, clubId: harness.ClubId, lifecycleState: EventLifecycleState.Archived);
         second.Images.Add(new EventImage { EventId = 42, ImageUrl = "https://cdn.test/events/42.png" });
 
         harness.EventsRepositoryMock
@@ -649,6 +706,304 @@ public class EventsServiceTests
         harness.BlobServiceMock.Verify(service => service.DeleteBlobAsync(image.ImageUrl), Times.Once);
         harness.RefreshCacheMock.Verify(cache => cache.RemoveAsync($"event:{ev.Id}"), Times.Once);
         harness.CacheMock.Verify(cache => cache.IncrementAsync("events:version", 1), Times.Once);
+    }
+
+    [Fact]
+    public async Task PauseEvent_ShouldWithdrawFromListings_KeepRegistrations_AndRecordUndo()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 401,
+            lifecycleState: EventLifecycleState.Published,
+            imageUrls: ["https://cdn.test/events/pause.png"],
+            registrationCount: 12);
+
+        var paused = await harness.Service.PauseEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        paused.LifecycleState.Should().Be(EventLifecycleState.Paused);
+        paused.PreviousLifecycleState.Should().Be(EventLifecycleState.Published);
+        paused.LifecycleChangedAt.Should().NotBeNull();
+
+        // Pausing is not cancelling: nobody loses their place.
+        paused.RegistrationCount.Should().Be(12);
+
+        harness.Db.EventVersions
+            .Single(version => version.EventId == ev.Id)
+            .ActionType.Should().Be(EventVersionActions.Pause);
+    }
+
+    [Fact]
+    public async Task ResumeEvent_ShouldReturnAPausedEventToPublished()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 402,
+            lifecycleState: EventLifecycleState.Paused,
+            imageUrls: ["https://cdn.test/events/resume.png"]);
+
+        var resumed = await harness.Service.ResumeEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        resumed.LifecycleState.Should().Be(EventLifecycleState.Published);
+        resumed.PreviousLifecycleState.Should().Be(EventLifecycleState.Paused);
+    }
+
+    [Fact]
+    public async Task ResumeEvent_ShouldRefuseWhenTheEventIsNoLongerPublishable()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 403,
+            lifecycleState: EventLifecycleState.Paused,
+            imageUrls: ["https://cdn.test/events/stale.png"]);
+
+        // An event can sit paused long enough for its own start time to pass.
+        ev.StartTime = DateTime.UtcNow.AddDays(-1);
+        ev.EndTime = DateTime.UtcNow.AddDays(-1).AddHours(2);
+        await harness.Db.SaveChangesAsync();
+
+        var action = () => harness.Service.ResumeEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        await action.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("*not ready to publish*");
+
+        harness.LoadEvent(ev.Id)!.LifecycleState.Should().Be(EventLifecycleState.Paused);
+    }
+
+    [Fact]
+    public async Task ReinstateEvent_ShouldBringACancelledEventBackToPublished()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 404,
+            lifecycleState: EventLifecycleState.Cancelled,
+            imageUrls: ["https://cdn.test/events/reinstate.png"]);
+
+        var reinstated = await harness.Service.ReinstateEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        reinstated.LifecycleState.Should().Be(EventLifecycleState.Published);
+        harness.Db.EventVersions
+            .Single(version => version.EventId == ev.Id)
+            .ActionType.Should().Be(EventVersionActions.Reinstate);
+    }
+
+    [Fact]
+    public async Task UnarchiveEvent_ShouldLandInPausedRatherThanGoingStraightBackOnSale()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 405,
+            lifecycleState: EventLifecycleState.Archived,
+            imageUrls: ["https://cdn.test/events/unarchive.png"]);
+
+        var unarchived = await harness.Service.UnarchiveEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        unarchived.LifecycleState.Should().Be(EventLifecycleState.Paused);
+    }
+
+    [Fact]
+    public async Task PauseEvent_ShouldRejectAnEventThatWasNeverPublished()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        var ev = await harness.SeedPersistedEventAsync(id: 406, lifecycleState: EventLifecycleState.Draft);
+
+        var action = () => harness.Service.PauseEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        await action.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("Cannot transition an event from Draft to Paused.");
+    }
+
+    [Fact]
+    public async Task RevertLastLifecycleChange_ShouldUndoACancellationInsideTheWindow()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 411,
+            lifecycleState: EventLifecycleState.Published,
+            imageUrls: ["https://cdn.test/events/undo.png"]);
+
+        await harness.Service.CancelEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+        harness.LoadEvent(ev.Id)!.LifecycleState.Should().Be(EventLifecycleState.Cancelled);
+
+        var reverted = await harness.Service.RevertLastLifecycleChangeAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        reverted.LifecycleState.Should().Be(EventLifecycleState.Published);
+        harness.Db.EventVersions
+            .Should().ContainSingle(version => version.ActionType == EventVersionActions.LifecycleRevert);
+    }
+
+    [Fact]
+    public async Task RevertLastLifecycleChange_ShouldReachDraftEvenThoughTheMatrixForbidsIt()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 412,
+            lifecycleState: EventLifecycleState.Draft,
+            imageUrls: ["https://cdn.test/events/unpublish.png"]);
+
+        await harness.Service.PublishEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        var reverted = await harness.Service.RevertLastLifecycleChangeAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        // Undo restores a state the event provably held moments ago, so CanTransition does not
+        // apply — publishing by mistake must be recoverable.
+        reverted.LifecycleState.Should().Be(EventLifecycleState.Draft);
+        EventLifecyclePolicy
+            .CanTransition(EventLifecycleState.Published, EventLifecycleState.Draft)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RevertLastLifecycleChange_ShouldBeSingleUse()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 413,
+            lifecycleState: EventLifecycleState.Published,
+            imageUrls: ["https://cdn.test/events/once.png"]);
+
+        await harness.Service.PauseEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+        await harness.Service.RevertLastLifecycleChangeAsync(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        // Undo is a safety net, not a toggle to flip back and forth.
+        harness.LoadEvent(ev.Id)!.PreviousLifecycleState.Should().BeNull();
+
+        var action = () => harness.Service.RevertLastLifecycleChangeAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        await action.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("There is no recent lifecycle change to undo.");
+    }
+
+    [Fact]
+    public async Task RevertLastLifecycleChange_ShouldRefuseOnceTheWindowHasPassed()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 414,
+            lifecycleState: EventLifecycleState.Cancelled,
+            previousLifecycleState: EventLifecycleState.Published,
+            // The default window is 24 hours.
+            lifecycleChangedAt: DateTime.UtcNow.AddHours(-48));
+
+        var action = () => harness.Service.RevertLastLifecycleChangeAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        await action.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("*window for undoing this change has passed*");
+
+        harness.LoadEvent(ev.Id)!.LifecycleState.Should().Be(EventLifecycleState.Cancelled);
+    }
+
+    [Fact]
+    public async Task RevertLastLifecycleChange_ShouldRespectAConfiguredWindow()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync(
+            versioningOptions: new EventVersioningOptions { LifecycleRevertWindowHours = 72 });
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 415,
+            lifecycleState: EventLifecycleState.Cancelled,
+            imageUrls: ["https://cdn.test/events/window.png"],
+            previousLifecycleState: EventLifecycleState.Published,
+            lifecycleChangedAt: DateTime.UtcNow.AddHours(-48));
+
+        var reverted = await harness.Service.RevertLastLifecycleChangeAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        reverted.LifecycleState.Should().Be(EventLifecycleState.Published);
+    }
+
+    [Fact]
+    public async Task RevertLastLifecycleChange_ShouldRejectAStrangerToTheClub()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 416,
+            lifecycleState: EventLifecycleState.Cancelled,
+            previousLifecycleState: EventLifecycleState.Published,
+            lifecycleChangedAt: DateTime.UtcNow);
+
+        var action = () => harness.Service.RevertLastLifecycleChangeAsync(
+            ev.Id, harness.ViewerUserId, harness.ViewerRole);
+
+        await action.Should().ThrowAsync<ForbiddenException>();
+    }
+
+    [Fact]
+    public async Task DeleteEvent_ShouldRefusePublishedEvents_AndPointAtArchiving()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(id: 421, lifecycleState: EventLifecycleState.Published);
+        harness.SetupCachedEvent(ev);
+
+        var action = () => harness.Service.DeleteEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        await action.Should()
+            .ThrowAsync<ConflictException>()
+            .WithMessage("*Archive it first*");
+
+        harness.LoadEvent(ev.Id).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task DeleteEvent_ShouldRefuseWhenPeopleHaveSignedUp()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 422,
+            lifecycleState: EventLifecycleState.Archived,
+            registrationCount: 3);
+        harness.SetupCachedEvent(ev);
+
+        var action = () => harness.Service.DeleteEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        await action.Should()
+            .ThrowAsync<ConflictException>()
+            .WithMessage("*3 registration(s)*");
+
+        harness.LoadEvent(ev.Id).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task DeleteEvent_ShouldStillAllowDiscardingAnUnseenDraft()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(id: 423, lifecycleState: EventLifecycleState.Draft);
+        harness.SetupCachedEvent(ev);
+
+        await harness.Service.DeleteEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        harness.LoadEvent(ev.Id).Should().BeNull();
     }
 
     [Fact]
@@ -914,6 +1269,7 @@ public class EventsServiceTests
                 TotalEvents: 3,
                 DraftEvents: 1,
                 PublishedEvents: 2,
+                PausedEvents: 0,
                 CancelledEvents: 0,
                 ArchivedEvents: 0,
                 UpcomingEvents: 2,
@@ -1212,9 +1568,11 @@ public class EventsServiceTests
         await using var harness = await EventsServiceHarness.CreateAsync();
         harness.ConfigureEventPersistence();
 
+        // Deleting is only offered once an event is archived out of sight, or while it is still
+        // a draft nobody has seen.
         var ev = await harness.SeedPersistedEventAsync(
             id: 291,
-            lifecycleState: EventLifecycleState.Published,
+            lifecycleState: EventLifecycleState.Archived,
             imageUrls:
             [
                 "https://cdn.test/events/delete-1.png",
@@ -1915,10 +2273,16 @@ public class EventsServiceTests
         public string OwnerRole => "Organizer";
         public string ViewerRole => "Participant";
 
-        private EventsServiceHarness(SqliteConnection connection, AppDatabaseContext db)
+        private EventsServiceHarness(
+            SqliteConnection connection,
+            AppDatabaseContext db,
+            TimeProvider timeProvider,
+            EventVersioningOptions versioningOptions)
         {
             _connection = connection;
             Db = db;
+            TimeProvider = timeProvider;
+            VersioningOptions = versioningOptions;
 
             ClubServiceMock
                 .Setup(service => service.HasClubStaffAccessAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string?>()))
@@ -1987,11 +2351,18 @@ public class EventsServiceTests
                     RegistrationRepositoryMock.Object,
                     InvitationServiceMock.Object),
                 WaitlistPromoterMock.Object,
-                Options.Create(new EventVersioningOptions()),
-                TimeProvider.System);
+                Options.Create(versioningOptions),
+                timeProvider);
         }
 
-        public static async Task<EventsServiceHarness> CreateAsync()
+        /// <summary>The clock the service reads; a fake one lets revert-window tests move time.</summary>
+        public TimeProvider TimeProvider { get; }
+
+        public EventVersioningOptions VersioningOptions { get; }
+
+        public static async Task<EventsServiceHarness> CreateAsync(
+            TimeProvider? timeProvider = null,
+            EventVersioningOptions? versioningOptions = null)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
@@ -2029,14 +2400,20 @@ public class EventsServiceTests
 
             await db.SaveChangesAsync();
 
-            return new EventsServiceHarness(connection, db);
+            return new EventsServiceHarness(
+                connection,
+                db,
+                timeProvider ?? TimeProvider.System,
+                versioningOptions ?? new EventVersioningOptions());
         }
 
         public backend.main.features.events.Events BuildEvent(
             int id = 9,
             int clubId = 4,
             string name = "Board Game Night",
-            bool isPrivate = false)
+            bool isPrivate = false,
+            EventLifecycleState lifecycleState = EventLifecycleState.Published,
+            int registrationCount = 0)
         {
             return new backend.main.features.events.Events
             {
@@ -2047,7 +2424,8 @@ public class EventsServiceTests
                 Location = "Student Center",
                 StartTime = DateTime.UtcNow.AddDays(2),
                 EndTime = DateTime.UtcNow.AddDays(2).AddHours(2),
-                LifecycleState = EventLifecycleState.Published,
+                LifecycleState = lifecycleState,
+                RegistrationCount = registrationCount,
                 isPrivate = isPrivate,
                 Category = EventCategory.Gaming
             };
@@ -2147,7 +2525,12 @@ public class EventsServiceTests
         public async Task<backend.main.features.events.Events> SeedPersistedEventAsync(
             int id = 18,
             EventLifecycleState lifecycleState = EventLifecycleState.Draft,
-            IEnumerable<string>? imageUrls = null)
+            IEnumerable<string>? imageUrls = null,
+            int registrationCount = 0,
+            bool waitlistEnabled = false,
+            int waitlistCount = 0,
+            EventLifecycleState? previousLifecycleState = null,
+            DateTime? lifecycleChangedAt = null)
         {
             var ev = new backend.main.features.events.Events
             {
@@ -2159,6 +2542,11 @@ public class EventsServiceTests
                 StartTime = DateTime.UtcNow.AddDays(2),
                 EndTime = DateTime.UtcNow.AddDays(2).AddHours(2),
                 LifecycleState = lifecycleState,
+                PreviousLifecycleState = previousLifecycleState,
+                LifecycleChangedAt = lifecycleChangedAt,
+                RegistrationCount = registrationCount,
+                WaitlistEnabled = waitlistEnabled,
+                WaitlistCount = waitlistCount,
                 isPrivate = false,
                 maxParticipants = 50,
                 registerCost = 0,

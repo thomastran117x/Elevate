@@ -849,7 +849,7 @@ public class EventSeriesService : IEventSeriesService
             return false;
         }
 
-        if (occurrence.LifecycleState is EventLifecycleState.Cancelled or EventLifecycleState.Archived)
+        if (!EventLifecyclePolicy.AllowsEditing(occurrence.LifecycleState))
         {
             result.Skipped.Add(Skip(
                 occurrence,

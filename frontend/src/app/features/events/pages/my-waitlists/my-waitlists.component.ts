@@ -48,6 +48,14 @@ export class MyWaitlistsComponent implements OnInit {
     return item.event?.lifecycleState === 'Cancelled';
   }
 
+  /**
+   * Paused events stop promoting off the waitlist, so someone holding a position needs to know
+   * why the queue has gone quiet — without reading it as a cancellation.
+   */
+  isPaused(item: WaitlistedEvent): boolean {
+    return item.event?.lifecycleState === 'Paused';
+  }
+
   onFavouriteFailed(response: unknown): void {
     this.error = getApiClientMessage(response, 'We could not update your saved events.');
   }

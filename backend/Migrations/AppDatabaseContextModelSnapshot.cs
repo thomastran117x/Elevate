@@ -774,6 +774,9 @@ namespace backend.Migrations
                     b.Property<double?>("Latitude")
                         .HasColumnType("double precision");
 
+                    b.Property<DateTime?>("LifecycleChangedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("LifecycleState")
                         .HasColumnType("integer");
 
@@ -787,6 +790,9 @@ namespace backend.Migrations
                         .HasColumnType("text");
 
                     b.Property<int?>("OccurrenceIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PreviousLifecycleState")
                         .HasColumnType("integer");
 
                     b.Property<int>("RegistrationCount")
@@ -846,6 +852,8 @@ namespace backend.Migrations
                     b.HasIndex("ClubId");
 
                     b.HasIndex("Latitude", "Longitude");
+
+                    b.HasIndex("LifecycleState");
 
                     b.HasIndex("SeriesId", "OccurrenceIndex")
                         .IsUnique();

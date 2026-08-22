@@ -6,6 +6,7 @@ using backend.main.features.events.contracts.requests;
 using backend.main.features.events.contracts.responses;
 using backend.main.features.events.search;
 using backend.main.features.events.versions;
+using Microsoft.Extensions.Options;
 using backend.main.features.events.versions.contracts.responses;
 using backend.main.features.events.images;
 using backend.main.shared.responses;
@@ -629,7 +630,10 @@ public class EventControllerTests
         IClubService? clubService = null,
         ClaimsPrincipal? user = null)
     {
-        var controller = new EventsController(service, clubService ?? Mock.Of<IClubService>());
+        var controller = new EventsController(
+            service,
+            clubService ?? Mock.Of<IClubService>(),
+            Options.Create(new EventVersioningOptions()));
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

@@ -9,7 +9,20 @@ import {
   EventSeriesDeleteScope,
   ManagedEvent,
 } from '../../models/event.types';
+import { lifecycleBadgeClass } from '../../models/event-lifecycle';
+import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
 import { EventSeriesService } from '../../services/event-series.service';
+
+/** A confirmed-before-it-runs action that applies to every occurrence at once. */
+interface SeriesBulkAction {
+  key: 'publishAll' | 'cancelSeries' | 'deleteSeries';
+  title: string;
+  confirmLabel: string;
+  tone: 'danger' | 'primary';
+  impacts: string[];
+  reversibleNote: string | null;
+  requireTypedConfirmation?: string;
+}
 
 /**
  * Series overview: the repeat rule, every occurrence, and the actions that apply to the group.
@@ -18,7 +31,7 @@ import { EventSeriesService } from '../../services/event-series.service';
 @Component({
   selector: 'app-manage-event-series',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, ConfirmDialogComponent],
   templateUrl: './manage-event-series.component.html',
 })
 export class ManageEventSeriesComponent implements OnInit {
@@ -82,19 +95,10 @@ export class ManageEventSeriesComponent implements OnInit {
   }
 
   lifecycleBadge(lifecycleState: EventLifecycleState): string {
-    switch (lifecycleState) {
-      case 'Draft':
-        return 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20';
-      case 'Published':
-        return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20';
-      case 'Cancelled':
-        return 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20';
-      case 'Archived':
-        return 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border border-slate-500/20';
-    }
+    return lifecycleBadgeClass(lifecycleState);
   }
 
-  publishAll(): void {
+  private publishAll(): void {
     this.run(
       () => this.seriesService.publishSeries(this.seriesId),
       (result) =>
@@ -102,7 +106,101 @@ export class ManageEventSeriesComponent implements OnInit {
     );
   }
 
-  cancelSeries(): void {
+  /**
+   * The bulk action awaiting confirmation. Series actions hit every occurrence at once, so the
+   * prompt has to say how many and what survives — unlike single events, the server has no
+   * per-transition descriptor to lean on here.
+   */
+  pendingBulkAction: SeriesBulkAction | null = null;
+
+  private get registeredOccurrenceCount(): number {
+    return (this.series?.occurrences ?? []).filter((occurrence) => occurrence.registrationCount > 0)
+      .length;
+  }
+
+  private get cancellableCount(): number {
+    return (this.series?.occurrences ?? []).filter(
+      (occurrence) =>
+        occurrence.lifecycleState === 'Published' || occurrence.lifecycleState === 'Paused',
+    ).length;
+  }
+
+  askPublishAll(): void {
+    this.pendingBulkAction = {
+      key: 'publishAll',
+      title: `Publish ${this.draftCount} ${this.draftCount === 1 ? 'occurrence' : 'occurrences'}?`,
+      confirmLabel: 'Publish all',
+      tone: 'primary',
+      impacts: [
+        'Every draft occurrence in this series becomes visible publicly and opens for registration.',
+        'Occurrences that are not ready to publish are skipped and reported back to you.',
+      ],
+      reversibleNote: 'Reversible — you can pause or cancel occurrences individually afterwards.',
+    };
+  }
+
+  askCancelSeries(): void {
+    const impacts = [
+      `${this.cancellableCount} ${this.cancellableCount === 1 ? 'occurrence' : 'occurrences'} will be cancelled.`,
+      'Each is removed from public listings and closed to new registrations.',
+      'Occurrences that have already started are left alone.',
+    ];
+
+    if (this.registeredOccurrenceCount > 0) {
+      impacts.unshift(
+        `${this.registeredOccurrenceCount} of these ${this.registeredOccurrenceCount === 1 ? 'occurrence has' : 'occurrences have'} people registered. Their registrations stay on record.`,
+      );
+    }
+
+    this.pendingBulkAction = {
+      key: 'cancelSeries',
+      title: 'Cancel this whole series?',
+      confirmLabel: 'Cancel series',
+      tone: 'danger',
+      impacts,
+      reversibleNote: 'Reversible — occurrences can be reinstated one at a time afterwards.',
+    };
+  }
+
+  askDeleteSeries(): void {
+    this.pendingBulkAction = {
+      key: 'deleteSeries',
+      title: 'Delete this series?',
+      confirmLabel: 'Delete series',
+      tone: 'danger',
+      impacts: [
+        'Unbooked future draft occurrences are permanently deleted, along with their images.',
+        'Occurrences anyone has registered for are kept and become standalone events.',
+        'Occurrences that have already happened are not touched.',
+      ],
+      // The one genuinely unrecoverable action on this screen.
+      reversibleNote: null,
+      requireTypedConfirmation: 'DELETE',
+    };
+  }
+
+  onBulkActionResolved(confirmed: boolean): void {
+    const action = this.pendingBulkAction;
+    this.pendingBulkAction = null;
+
+    if (!confirmed || !action) {
+      return;
+    }
+
+    switch (action.key) {
+      case 'publishAll':
+        this.publishAll();
+        return;
+      case 'cancelSeries':
+        this.cancelSeries();
+        return;
+      case 'deleteSeries':
+        this.deleteSeries('FutureDrafts');
+        return;
+    }
+  }
+
+  private cancelSeries(): void {
     this.run(
       () => this.seriesService.cancelSeries(this.seriesId, true),
       (result) =>
@@ -138,7 +236,7 @@ export class ManageEventSeriesComponent implements OnInit {
     });
   }
 
-  deleteSeries(scope: EventSeriesDeleteScope): void {
+  private deleteSeries(scope: EventSeriesDeleteScope): void {
     this.working = true;
     this.resetMessages();
 

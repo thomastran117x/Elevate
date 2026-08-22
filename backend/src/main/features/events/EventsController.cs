@@ -14,6 +14,7 @@ using backend.main.utilities;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace backend.main.features.events
 {
@@ -27,11 +28,16 @@ namespace backend.main.features.events
     {
         private readonly IEventsService _eventService;
         private readonly IClubService _clubService;
+        private readonly EventVersioningOptions _versioningOptions;
 
-        public EventsController(IEventsService eventService, IClubService clubService)
+        public EventsController(
+            IEventsService eventService,
+            IClubService clubService,
+            IOptions<EventVersioningOptions> versioningOptions)
         {
             _eventService = eventService;
             _clubService = clubService;
+            _versioningOptions = versioningOptions.Value;
         }
 
         [Authorize]
@@ -465,6 +471,131 @@ namespace backend.main.features.events
                     return HandleError.Resolve(e);
 
                 Logger.Error($"[EventsController] ArchiveEvent failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [HttpPost("{eventId}/pause")]
+        [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> PauseEvent(int eventId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+                var ev = await _eventService.PauseEvent(eventId, user.Id, user.Role);
+
+                return Ok(new ApiResponse<ManagedEventResponse>(
+                    $"The event with ID {eventId} has been paused. Resume it when you are ready.",
+                    MapManagedEvent(ev)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] PauseEvent failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [HttpPost("{eventId}/resume")]
+        [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ResumeEvent(int eventId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+                var ev = await _eventService.ResumeEvent(eventId, user.Id, user.Role);
+
+                return Ok(new ApiResponse<ManagedEventResponse>(
+                    $"The event with ID {eventId} is live again.",
+                    MapManagedEvent(ev)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] ResumeEvent failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [HttpPost("{eventId}/reinstate")]
+        [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ReinstateEvent(int eventId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+                var ev = await _eventService.ReinstateEvent(eventId, user.Id, user.Role);
+
+                return Ok(new ApiResponse<ManagedEventResponse>(
+                    $"The event with ID {eventId} has been reinstated.",
+                    MapManagedEvent(ev)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] ReinstateEvent failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [HttpPost("{eventId}/unarchive")]
+        [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> UnarchiveEvent(int eventId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+                var ev = await _eventService.UnarchiveEvent(eventId, user.Id, user.Role);
+
+                return Ok(new ApiResponse<ManagedEventResponse>(
+                    $"The event with ID {eventId} has been unarchived and is paused for review.",
+                    MapManagedEvent(ev)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] UnarchiveEvent failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [HttpPost("{eventId}/lifecycle/revert")]
+        [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> RevertEventLifecycle(int eventId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+                var ev = await _eventService.RevertLastLifecycleChangeAsync(eventId, user.Id, user.Role);
+
+                return Ok(new ApiResponse<ManagedEventResponse>(
+                    $"The last change to the event with ID {eventId} has been undone.",
+                    MapManagedEvent(ev)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] RevertEventLifecycle failed: {e}");
                 return HandleError.Resolve(e);
             }
         }
@@ -911,10 +1042,16 @@ namespace backend.main.features.events
         private static EventVersionFieldChangeResponse MapToFieldChangeResponse(EventVersionFieldChange change) =>
             new(change.Field, change.OldValue, change.NewValue);
 
-        private static ManagedEventResponse MapManagedEvent(Events ev) =>
-            EventMapper.MapToManagedResponse(
+        private ManagedEventResponse MapManagedEvent(Events ev)
+        {
+            var now = DateTime.UtcNow;
+
+            return EventMapper.MapToManagedResponse(
                 ev,
-                EventLifecyclePolicy.GetPublishIssues(ev, DateTime.UtcNow));
+                EventLifecyclePolicy.GetPublishIssues(ev, now),
+                EventLifecyclePolicy.GetRevertAvailableUntil(
+                    ev, now, _versioningOptions.LifecycleRevertWindowHours));
+        }
     }
 
     [ApiController]

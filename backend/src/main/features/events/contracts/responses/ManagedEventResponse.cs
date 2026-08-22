@@ -124,5 +124,29 @@ namespace backend.main.features.events.contracts.responses
             get; set;
         }
         public List<string> PublishIssues { get; set; } = new();
+
+        /// <summary>When <see cref="LifecycleState"/> last changed, or null if it never has.</summary>
+        public DateTime? LifecycleChangedAt
+        {
+            get; set;
+        }
+
+        /// <summary>The state the most recent lifecycle change moved away from, if any.</summary>
+        public EventLifecycleState? PreviousLifecycleState
+        {
+            get; set;
+        }
+
+        /// <summary>
+        /// Deadline for undoing the most recent lifecycle change, or null when there is nothing
+        /// to undo or the window has already lapsed. Drives the "Undo" affordance.
+        /// </summary>
+        public DateTime? RevertAvailableUntil
+        {
+            get; set;
+        }
+
+        /// <summary>Every lifecycle move available from the current state.</summary>
+        public List<EventLifecycleTransitionResponse> AvailableTransitions { get; set; } = new();
     }
 }

@@ -31,6 +31,11 @@ export class PinnedEventRowComponent {
     return this.item.event?.lifecycleState === 'Cancelled';
   }
 
+  /** Paused is not cancelled — the event is coming back, it is just off sale for now. */
+  get isPaused(): boolean {
+    return this.item.event?.lifecycleState === 'Paused';
+  }
+
   /**
    * True once the star has been removed but the row is still on screen — the backtrack window
    * that lasts until the page reloads.

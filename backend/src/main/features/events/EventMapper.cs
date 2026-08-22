@@ -58,9 +58,24 @@ namespace backend.main.features.events
             Location = club.Location
         };
 
+        /// <summary>
+        /// Maps an event to the organizer-facing shape, including the lifecycle moves currently
+        /// available to them and the consequences of each.
+        /// </summary>
+        /// <param name="ev">The event to map.</param>
+        /// <param name="publishIssues">
+        /// Outstanding publish blockers from <see cref="EventLifecyclePolicy.GetPublishIssues"/>.
+        /// </param>
+        /// <param name="revertAvailableUntil">
+        /// Deadline for undoing the last lifecycle change, from
+        /// <see cref="EventLifecyclePolicy.GetRevertAvailableUntil"/>. Null suppresses the undo
+        /// affordance, which is what the series screens want: an occurrence's lifecycle is undone
+        /// from the event itself, not from a list of siblings.
+        /// </param>
         public static ManagedEventResponse MapToManagedResponse(
             Events ev,
-            IReadOnlyList<string> publishIssues) => new()
+            IReadOnlyList<string> publishIssues,
+            DateTime? revertAvailableUntil = null) => new()
             {
                 Id = ev.Id,
                 Name = ev.Name,
@@ -92,7 +107,27 @@ namespace backend.main.features.events
                 SeriesOverridden = ev.SeriesOverridden,
                 TimeZoneId = ev.TimeZoneId,
                 PublishReady = publishIssues.Count == 0,
-                PublishIssues = publishIssues.ToList()
+                PublishIssues = publishIssues.ToList(),
+                LifecycleChangedAt = ev.LifecycleChangedAt,
+                PreviousLifecycleState = ev.PreviousLifecycleState,
+                RevertAvailableUntil = revertAvailableUntil,
+                AvailableTransitions = EventLifecyclePolicy
+                    .GetAvailableTransitions(ev)
+                    .Select(MapToTransitionResponse)
+                    .ToList()
+            };
+
+        private static EventLifecycleTransitionResponse MapToTransitionResponse(
+            EventLifecycleTransition transition) => new()
+            {
+                Key = transition.Key,
+                Target = transition.Target,
+                Label = transition.Label,
+                Title = transition.Title,
+                IsReversible = transition.IsReversible,
+                ReversibleNote = transition.ReversibleNote,
+                IsDestructive = transition.IsDestructive,
+                Impacts = transition.Impacts.ToList()
             };
 
         public static EventStatus ResolveStatus(Events ev)

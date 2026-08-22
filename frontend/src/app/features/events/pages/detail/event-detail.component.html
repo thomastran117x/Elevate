@@ -63,6 +63,15 @@
             </div>
           }
 
+          @if (event.lifecycleState === 'Paused') {
+            <div
+              class="rounded-3xl border border-sky-500/25 bg-sky-500/10 p-5 text-sm leading-6 text-sky-700 dark:text-sky-300"
+            >
+              Registration for this event is paused while the organizers make changes. It has not
+              been cancelled &mdash; if you are already registered, you keep your place.
+            </div>
+          }
+
           <section class="surface-panel overflow-hidden rounded-3xl">
             <div class="h-[320px] bg-surface-muted sm:h-[420px]">
               @if (heroImage) {
@@ -516,6 +525,9 @@
                 >
                   @if (event.lifecycleState === 'Cancelled') {
                     This event has been cancelled.
+                  }
+                  @if (event.lifecycleState === 'Paused') {
+                    Registration is paused. Check back soon.
                   }
                   @if (
                     event.lifecycleState === 'Published' &&

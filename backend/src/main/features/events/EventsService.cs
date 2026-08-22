@@ -604,6 +604,18 @@ namespace backend.main.features.events
         public Task<Events> ArchiveEvent(int eventId, int userId, string userRole) =>
             TransitionLifecycleAsync(eventId, userId, userRole, EventLifecycleState.Archived, EventVersionActions.Archive);
 
+        public Task<Events> PauseEvent(int eventId, int userId, string userRole) =>
+            TransitionLifecycleAsync(eventId, userId, userRole, EventLifecycleState.Paused, EventVersionActions.Pause);
+
+        public Task<Events> ResumeEvent(int eventId, int userId, string userRole) =>
+            TransitionLifecycleAsync(eventId, userId, userRole, EventLifecycleState.Published, EventVersionActions.Resume);
+
+        public Task<Events> ReinstateEvent(int eventId, int userId, string userRole) =>
+            TransitionLifecycleAsync(eventId, userId, userRole, EventLifecycleState.Published, EventVersionActions.Reinstate);
+
+        public Task<Events> UnarchiveEvent(int eventId, int userId, string userRole) =>
+            TransitionLifecycleAsync(eventId, userId, userRole, EventLifecycleState.Paused, EventVersionActions.Unarchive);
+
         public async Task<Events> UpdateEvent(
             int eventId,
             int userId,
@@ -629,7 +641,9 @@ namespace backend.main.features.events
                 var existing = await GetTrackedEventOrThrowAsync(eventId);
                 await EnsureCanManageEventAsync(existing, userId, userRole);
 
-                if (existing.LifecycleState is EventLifecycleState.Cancelled or EventLifecycleState.Archived)
+                // Paused events stay editable on purpose — reworking one while it is off sale is
+                // the main reason to pause it.
+                if (!EventLifecyclePolicy.AllowsEditing(existing.LifecycleState))
                     throw new ConflictException(
                         $"Cannot update a {existing.LifecycleState.ToString().ToLower()} event.");
 
@@ -742,6 +756,25 @@ namespace backend.main.features.events
             {
                 var ev = await GetEvent(eventId);
                 await EnsureCanManageEventAsync(ev, userId, userRole);
+
+                // Deletion is unrecoverable — it drops the row, its version history, and its
+                // blobs. Everything short of a never-published draft or an already-archived
+                // event must go through archiving first, which is reversible.
+                if (!EventLifecyclePolicy.AllowsHardDelete(ev.LifecycleState))
+                {
+                    throw new ConflictException(
+                        $"A {ev.LifecycleState.ToString().ToLowerInvariant()} event cannot be deleted. " +
+                        "Archive it first — archiving is reversible, deleting is not.");
+                }
+
+                // Mirrors EventSeriesService.DeleteAsync, which refuses to delete an occurrence
+                // that people have signed up to.
+                if (ev.RegistrationCount > 0)
+                {
+                    throw new ConflictException(
+                        $"This event has {ev.RegistrationCount} registration(s) and cannot be deleted. " +
+                        "Archiving keeps them on record.");
+                }
 
                 // The context enables retry-on-failure, and that strategy rejects a
                 // user-initiated transaction unless the whole unit runs through it.
@@ -1068,6 +1101,32 @@ namespace backend.main.features.events
                     userId,
                     userRole,
                     "One or more events do not belong to a club you can manage");
+
+                // Same guard as the single delete — otherwise the batch endpoint is a way
+                // around it, and deleting is the one thing nothing can walk back.
+                var undeletable = existing
+                    .Where(ev => !EventLifecyclePolicy.AllowsHardDelete(ev.LifecycleState))
+                    .Select(ev => ev.Id)
+                    .ToList();
+
+                if (undeletable.Count > 0)
+                {
+                    throw new ConflictException(
+                        $"Events {string.Join(", ", undeletable)} must be archived before they can be deleted. " +
+                        "Archiving is reversible, deleting is not.");
+                }
+
+                var withRegistrations = existing
+                    .Where(ev => ev.RegistrationCount > 0)
+                    .Select(ev => ev.Id)
+                    .ToList();
+
+                if (withRegistrations.Count > 0)
+                {
+                    throw new ConflictException(
+                        $"Events {string.Join(", ", withRegistrations)} have registrations and cannot be deleted. " +
+                        "Archiving keeps them on record.");
+                }
 
                 var imageUrls = existing
                     .SelectMany(ev => ev.Images.Select(i => i.ImageUrl))
@@ -1482,6 +1541,7 @@ namespace backend.main.features.events
                     TotalEvents = data.TotalEvents,
                     DraftEvents = data.DraftEvents,
                     PublishedEvents = data.PublishedEvents,
+                    PausedEvents = data.PausedEvents,
                     CancelledEvents = data.CancelledEvents,
                     ArchivedEvents = data.ArchivedEvents,
                     UpcomingEvents = data.UpcomingEvents,
@@ -1545,6 +1605,10 @@ namespace backend.main.features.events
                     }
                 }
 
+                // Remembered so the organizer can undo a misclick in one step; the revert window
+                // is measured from LifecycleChangedAt.
+                ev.PreviousLifecycleState = ev.LifecycleState;
+                ev.LifecycleChangedAt = now;
                 ev.LifecycleState = targetState;
                 ev.CurrentVersionNumber += 1;
                 ev.UpdatedAt = now;
@@ -1575,6 +1639,12 @@ namespace backend.main.features.events
 
                 await CacheEventAsync(withImages);
                 await BumpEventListVersionAsync();
+
+                // Seats can free up while an event is off sale, but the promoter refuses to act
+                // on anything that is not published, so reopening has to drain the queue.
+                if (targetState == EventLifecycleState.Published && withImages.WaitlistEnabled)
+                    await DrainWaitlistAsync(eventId);
+
                 return withImages;
             }
             catch (Exception e)
@@ -1583,6 +1653,87 @@ namespace backend.main.features.events
                     throw;
 
                 Logger.Error($"[EventsService] TransitionLifecycleAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        /// <summary>
+        /// Undoes the most recent lifecycle change, provided it happened inside the configured
+        /// revert window.
+        /// <para>
+        /// Deliberately bypasses <see cref="EventLifecyclePolicy.CanTransition"/>: the reverse of
+        /// a transition is frequently not itself a legal move — undoing a publish means going back
+        /// to <c>Draft</c>, which is not, and should not be, a route organizers can take directly.
+        /// Undo restores a state the event provably held moments ago, so the matrix does not apply.
+        /// </para>
+        /// </summary>
+        public async Task<Events> RevertLastLifecycleChangeAsync(int eventId, int userId, string userRole)
+        {
+            try
+            {
+                var ev = await GetTrackedEventOrThrowAsync(eventId);
+                await EnsureCanManageEventAsync(ev, userId, userRole);
+
+                var now = GetUtcNow();
+
+                if (ev.PreviousLifecycleState is null || ev.LifecycleChangedAt is null)
+                    throw new BadRequestException("There is no recent lifecycle change to undo.");
+
+                if (EventLifecyclePolicy.GetRevertAvailableUntil(
+                        ev, now, _versioningOptions.LifecycleRevertWindowHours) is null)
+                {
+                    throw new BadRequestException(
+                        "The window for undoing this change has passed. Use the lifecycle actions instead.");
+                }
+
+                var restoredState = ev.PreviousLifecycleState.Value;
+                var previousSnapshot = BuildSnapshot(ev);
+
+                ev.LifecycleState = restoredState;
+                // Consumed: undo is a one-shot safety net, not a toggle to flip back and forth.
+                ev.PreviousLifecycleState = null;
+                ev.LifecycleChangedAt = now;
+                ev.CurrentVersionNumber += 1;
+                ev.UpdatedAt = now;
+
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _db.Database.BeginTransactionAsync();
+
+                    AddVersionRecord(
+                        ev,
+                        EventVersionActions.LifecycleRevert,
+                        actorUserId: userId,
+                        actorRole: NormalizeActorRole(userRole),
+                        rollbackSourceVersionNumber: null,
+                        changedFields: BuildChangedFields(previousSnapshot, BuildSnapshot(ev)),
+                        createdAt: now);
+
+                    _outboxWriter.StageSync(ev);
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                });
+
+                var withImages = await _eventsRepository.GetByIdAsync(eventId)
+                    ?? throw new InternalServerErrorException("Failed to reload the reverted event.");
+
+                await CacheEventAsync(withImages);
+                await BumpEventListVersionAsync();
+
+                if (restoredState == EventLifecycleState.Published && withImages.WaitlistEnabled)
+                    await DrainWaitlistAsync(eventId);
+
+                return withImages;
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] RevertLastLifecycleChangeAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
         }
@@ -1895,6 +2046,19 @@ namespace backend.main.features.events
             if (!current.WaitlistEnabled || (!capacityRaised && !waitlistJustEnabled))
                 return;
 
+            await DrainWaitlistAsync(eventId);
+        }
+
+        /// <summary>
+        /// Promotes waitlisted people into any free seats.
+        /// <para>
+        /// Also used when an event returns to <c>Published</c>: the promoter refuses to act on a
+        /// paused or cancelled event, so seats freed while it was off sale stay queued until
+        /// something reopens it.
+        /// </para>
+        /// </summary>
+        private async Task DrainWaitlistAsync(int eventId)
+        {
             try
             {
                 // A single run is capped (it holds a 10s lock), so raising capacity by more than
