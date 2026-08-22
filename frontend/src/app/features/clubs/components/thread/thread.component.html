@@ -1,0 +1,139 @@
+<section class="mt-5 border-t border-line pt-5">
+  <!-- Header: count, who is online, whether updates are actually flowing. -->
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-wrap items-center gap-3">
+      <h3 class="text-sm font-bold text-content">
+        {{ source.labels.heading }} <span class="font-normal text-faint">({{ totalItems }})</span>
+      </h3>
+      <app-connection-pill [state]="connectionState" />
+    </div>
+
+    <div class="flex flex-wrap items-center gap-3">
+      @if (totalOnline > 0) {
+        <app-presence-stack [users]="presenceUsers" [totalOnline]="totalOnline" />
+      }
+      <div class="flex rounded-full border border-line p-0.5 text-xs">
+        <button
+          type="button"
+          (click)="changeSort('Newest')"
+          class="cursor-pointer rounded-full px-3 py-1 transition"
+          [class.bg-accent]="sort === 'Newest'"
+          [class.text-accent-contrast]="sort === 'Newest'"
+        >
+          Newest
+        </button>
+        <button
+          type="button"
+          (click)="changeSort('Oldest')"
+          class="cursor-pointer rounded-full px-3 py-1 transition"
+          [class.bg-accent]="sort === 'Oldest'"
+          [class.text-accent-contrast]="sort === 'Oldest'"
+        >
+          Oldest
+        </button>
+      </div>
+    </div>
+  </div>
+
+  @if (error) {
+    <p class="mt-3 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+      {{ error }}
+    </p>
+  }
+
+  <!-- Messages -->
+  @if (loading && roots.length === 0) {
+    <div class="mt-5 space-y-4" aria-hidden="true">
+      @for (row of [1, 2, 3]; track row) {
+        <div class="flex gap-3">
+          <app-skeleton width="2rem" height="2rem" className="rounded-full shrink-0" />
+          <div class="flex-1 space-y-2 pt-1">
+            <app-skeleton width="30%" height="0.6rem" />
+            <app-skeleton width="85%" height="0.75rem" />
+            <app-skeleton width="60%" height="0.75rem" />
+          </div>
+        </div>
+      }
+    </div>
+    <p class="sr-only">Loading {{ source.labels.plural }}</p>
+  } @else if (roots.length === 0) {
+    <div class="mt-5 rounded-2xl border border-line bg-surface-sunken/40 px-6 py-10 text-center">
+      <p class="text-sm font-semibold text-subtle">{{ source.labels.emptyTitle }}</p>
+      <p class="mt-1 text-xs text-faint">{{ source.labels.emptyBody }}</p>
+    </div>
+  } @else {
+    <div class="mt-4">
+      @for (root of roots; track root.id; let i = $index) {
+        <app-thread-node
+          [node]="root"
+          [labels]="source.labels"
+          [currentUser]="currentUser"
+          [depth]="0"
+          [grouped]="isRootGrouped(i)"
+          (action)="handleNodeAction($event)"
+        />
+      }
+    </div>
+  }
+
+  @if (hasMore) {
+    <button
+      type="button"
+      (click)="loadRoots(true)"
+      [disabled]="loadingMore"
+      class="mt-4 cursor-pointer rounded-full border border-line-strong px-5 py-2 text-xs font-semibold text-subtle transition hover:border-accent hover:text-accent disabled:opacity-50"
+    >
+      {{ loadingMore ? 'Loading...' : 'Load more ' + source.labels.plural }}
+    </button>
+  }
+
+  <!-- Composer, pinned below the messages like a chat input. -->
+  <div class="sticky bottom-0 mt-4 bg-surface pt-2">
+    <div class="flex h-5 items-center px-1">
+      @if (typingLabel) {
+        <span class="flex items-center gap-2 text-xs text-faint" role="status">
+          <app-typing-dots />
+          {{ typingLabel }}
+        </span>
+      }
+    </div>
+
+    @if (currentUser) {
+      <div
+        class="rounded-2xl border border-line bg-surface-sunken transition focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/15"
+      >
+        <textarea
+          [(ngModel)]="newText"
+          (ngModelChange)="onComposerInput()"
+          (keydown)="onComposerKeydown($event)"
+          rows="2"
+          [maxlength]="maxLength"
+          [placeholder]="source.labels.composerPlaceholder"
+          class="w-full resize-none bg-transparent px-4 py-3 text-sm text-content outline-none"
+        ></textarea>
+        <div class="flex items-center justify-between gap-3 px-3 pb-2">
+          <span class="text-[11px] text-faint">
+            @if (showCharCount) {
+              {{ remainingChars }} left
+            } @else {
+              Enter to send &middot; Shift+Enter for a new line
+            }
+          </span>
+          <button
+            type="button"
+            (click)="submitRoot()"
+            [disabled]="submitting || !newText.trim()"
+            class="cursor-pointer rounded-full bg-accent px-5 py-1.5 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:opacity-40"
+          >
+            {{ submitting ? 'Posting...' : 'Post' }}
+          </button>
+        </div>
+      </div>
+    } @else {
+      <p class="rounded-xl bg-surface-sunken px-4 py-3 text-sm text-subtle">
+        <a routerLink="/auth/login" class="font-semibold text-accent">Sign in</a>
+        {{ source.labels.signInPrompt }}
+      </p>
+    }
+  </div>
+</section>

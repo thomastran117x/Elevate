@@ -6,14 +6,20 @@ import { Store } from '@ngrx/store';
 
 import { ClubPostsService } from '../../services/club-posts.service';
 import { ClubPost, POST_TYPE_STYLES } from '../../models/club-post.types';
-import { CommentThreadComponent } from '../../components/comment-thread/comment-thread.component';
+import { ThreadComponent } from '../../components/thread/thread.component';
+import {
+  ThreadDataSource,
+  createPostThreadSource,
+} from '../../components/thread/thread-data-source';
+import { ThreadDisplayItem } from '../../components/thread/thread-item';
+import { PostCommentsService } from '../../services/post-comments.service';
 import { User } from '../../../../core/stores/user.model';
 import { selectUser } from '../../../../core/stores/user.selectors';
 
 @Component({
   selector: 'app-club-post-detail',
   standalone: true,
-  imports: [CommonModule, CommentThreadComponent],
+  imports: [CommonModule, ThreadComponent],
   templateUrl: './club-post-detail.component.html',
 })
 export class ClubPostDetailComponent implements OnInit, OnDestroy {
@@ -26,12 +32,19 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
 
   readonly postTypeStyles = POST_TYPE_STYLES;
 
+  /**
+   * Built once per post. The thread component treats a new `source` reference as a
+   * different thread, so this must not be rebuilt on every render.
+   */
+  threadSource: ThreadDataSource<ThreadDisplayItem> | null = null;
+
   private readonly destroy$ = new Subject<void>();
 
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     private postsService: ClubPostsService,
+    private commentsService: PostCommentsService,
     private store: Store,
   ) {}
 
@@ -45,6 +58,7 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
       this.clubId = Number(params.get('clubId')) || 0;
       this.postId = Number(params.get('postId')) || 0;
       if (this.clubId && this.postId) {
+        this.threadSource = createPostThreadSource(this.commentsService, this.clubId, this.postId);
         this.fetch();
       } else {
         this.loading = false;

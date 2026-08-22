@@ -60,22 +60,25 @@ namespace backend.main.features.clubs.posts
             if (!await _clubService.CanManageClubPostsAsync(clubId, userId, userRole))
                 throw new ForbiddenException("You are not allowed to create posts for this club.");
 
-            var post = new ClubPost
-            {
-                ClubId = clubId,
-                UserId = userId,
-                Title = title,
-                Content = content,
-                PostType = postType,
-                IsPinned = isPinned
-            };
-
+            // The entity is built inside the retryable unit on purpose. An execution-strategy
+            // retry re-runs this delegate, and reusing an instance from a previous attempt
+            // would re-Add an entity the change tracker already knows, inserting a duplicate
+            // row and staging the outbox entry twice.
             return await ExecuteInTransactionAsync(async () =>
             {
-                post = await _postRepository.CreateAsync(post);
-                _outboxWriter.StageUpsert(post);
+                var created = await _postRepository.CreateAsync(new ClubPost
+                {
+                    ClubId = clubId,
+                    UserId = userId,
+                    Title = title,
+                    Content = content,
+                    PostType = postType,
+                    IsPinned = isPinned
+                });
+
+                _outboxWriter.StageUpsert(created);
                 await _db.SaveChangesAsync();
-                return post;
+                return created;
             });
         }
 

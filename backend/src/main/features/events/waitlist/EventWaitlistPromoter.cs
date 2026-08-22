@@ -225,27 +225,33 @@ namespace backend.main.features.events.waitlist
 
             try
             {
-                await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-
-                var now = DateTime.UtcNow;
-                promotions = await PromoteWithinTransactionAsync(eventId, now);
-
-                var trackedEvent = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
-                if (trackedEvent != null)
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
                 {
-                    eventName = trackedEvent.Name;
-                    startsAtUtc = trackedEvent.StartTime;
+                    await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
 
-                    trackedEvent.RegistrationCount = await _db.EventRegistrations
-                        .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Active);
-                    trackedEvent.WaitlistCount = await _db.EventWaitlistEntries
-                        .CountAsync(w => w.EventId == eventId && w.Status == EventWaitlistEntryStatus.Waiting);
-                    trackedEvent.UpdatedAt = now;
-                    _outboxWriter.StageSync(trackedEvent);
-                }
+                    var now = DateTime.UtcNow;
+                    promotions = await PromoteWithinTransactionAsync(eventId, now);
 
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    var trackedEvent = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+                    if (trackedEvent != null)
+                    {
+                        eventName = trackedEvent.Name;
+                        startsAtUtc = trackedEvent.StartTime;
+
+                        trackedEvent.RegistrationCount = await _db.EventRegistrations
+                            .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Active);
+                        trackedEvent.WaitlistCount = await _db.EventWaitlistEntries
+                            .CountAsync(w => w.EventId == eventId && w.Status == EventWaitlistEntryStatus.Waiting);
+                        trackedEvent.UpdatedAt = now;
+                        _outboxWriter.StageSync(trackedEvent);
+                    }
+
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                });
             }
             catch (Exception e)
             {

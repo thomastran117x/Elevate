@@ -107,13 +107,14 @@
       </article>
 
       <!-- Comment thread -->
-      <app-comment-thread
-        [clubId]="clubId"
-        [postId]="postId"
-        [currentUser]="currentUser"
-        [initialCommentCount]="post.commentCount"
-        (commentCountChange)="updateCommentCount($event)"
-      ></app-comment-thread>
+      @if (threadSource) {
+        <app-thread
+          [source]="threadSource"
+          [currentUser]="currentUser"
+          [initialCount]="post.commentCount"
+          (countChange)="updateCommentCount($event)"
+        />
+      }
     }
   </div>
 </div>

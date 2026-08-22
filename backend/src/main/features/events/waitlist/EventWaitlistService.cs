@@ -76,99 +76,105 @@ namespace backend.main.features.events.waitlist
             if (!await _cache.AcquireLockAsync(lockKey, lockValue, LockTTL))
                 throw new ConflictException("Event waitlist is busy, please try again");
 
-            EventWaitlistEntry entry;
-            string? eventName;
-            DateTime? eventStartsAtUtc;
+            EventWaitlistEntry entry = null!;
+            string? eventName = null;
+            DateTime? eventStartsAtUtc = null;
 
             try
             {
-                await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-
-                var ev = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId)
-                    ?? throw new ResourceNotFoundException($"Event {eventId} not found");
-
-                if (!ev.WaitlistEnabled)
-                    throw new BadRequestException("This event does not have a waitlist.");
-
-                if (!EventLifecyclePolicy.AllowsRegistration(ev.LifecycleState))
-                    throw new ConflictException("The waitlist is only available for published events.");
-
-                if (ev.registerCost > 0)
-                    throw new BadRequestException("Waitlists are not available for paid events.");
-
-                if (ev.maxParticipants <= 0)
-                    throw new BadRequestException("This event has unlimited capacity — you can register directly.");
-
-                if (ev.StartTime.HasValue && ev.StartTime.Value <= DateTime.UtcNow)
-                    throw new ConflictException("The waitlist is closed — the event has already started");
-
-                var alreadyRegistered = await _db.EventRegistrations
-                    .AnyAsync(r => r.EventId == eventId && r.UserId == userId && r.Status == RegistrationStatus.Active);
-
-                if (alreadyRegistered)
-                    throw new ConflictException("You're already registered for this event");
-
-                var activeCount = await _db.EventRegistrations
-                    .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Active);
-
-                if (activeCount < ev.maxParticipants)
-                    throw new ConflictException("Seats are still available — register instead");
-
-                var now = DateTime.UtcNow;
-                var existing = await _db.EventWaitlistEntries
-                    .FirstOrDefaultAsync(w => w.EventId == eventId && w.UserId == userId);
-
-                if (existing != null)
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
                 {
-                    if (existing.Status == EventWaitlistEntryStatus.Waiting)
-                        throw new ConflictException("You're already on the waitlist for this event");
+                    await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
 
-                    // Reactivate in place — the unique (EventId, UserId) index forbids a second
-                    // row. JoinedAtUtc is reset so a rejoin goes to the back of the queue.
-                    existing.Status = EventWaitlistEntryStatus.Waiting;
-                    existing.JoinedAtUtc = now;
-                    existing.PromotedAtUtc = null;
-                    existing.LeftAtUtc = null;
-                    existing.RemovedAtUtc = null;
-                    existing.RemovedByUserId = null;
-                    existing.PromotionEmailQueuedAtUtc = null;
-                    // A rejoin is a fresh eligibility claim; don't inherit an old cooldown.
-                    existing.EligibilityDeferredUntilUtc = null;
-                    existing.Notes = Sanitize(request?.Notes);
-                    existing.PhoneNumber = Sanitize(request?.PhoneNumber);
-                    existing.DietaryNeeds = Sanitize(request?.DietaryNeeds);
-                    existing.UpdatedAt = now;
-                    entry = existing;
-                }
-                else
-                {
-                    entry = new EventWaitlistEntry
+                    var ev = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId)
+                        ?? throw new ResourceNotFoundException($"Event {eventId} not found");
+
+                    if (!ev.WaitlistEnabled)
+                        throw new BadRequestException("This event does not have a waitlist.");
+
+                    if (!EventLifecyclePolicy.AllowsRegistration(ev.LifecycleState))
+                        throw new ConflictException("The waitlist is only available for published events.");
+
+                    if (ev.registerCost > 0)
+                        throw new BadRequestException("Waitlists are not available for paid events.");
+
+                    if (ev.maxParticipants <= 0)
+                        throw new BadRequestException("This event has unlimited capacity — you can register directly.");
+
+                    if (ev.StartTime.HasValue && ev.StartTime.Value <= DateTime.UtcNow)
+                        throw new ConflictException("The waitlist is closed — the event has already started");
+
+                    var alreadyRegistered = await _db.EventRegistrations
+                        .AnyAsync(r => r.EventId == eventId && r.UserId == userId && r.Status == RegistrationStatus.Active);
+
+                    if (alreadyRegistered)
+                        throw new ConflictException("You're already registered for this event");
+
+                    var activeCount = await _db.EventRegistrations
+                        .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Active);
+
+                    if (activeCount < ev.maxParticipants)
+                        throw new ConflictException("Seats are still available — register instead");
+
+                    var now = DateTime.UtcNow;
+                    var existing = await _db.EventWaitlistEntries
+                        .FirstOrDefaultAsync(w => w.EventId == eventId && w.UserId == userId);
+
+                    if (existing != null)
                     {
-                        EventId = eventId,
-                        UserId = userId,
-                        Status = EventWaitlistEntryStatus.Waiting,
-                        JoinedAtUtc = now,
-                        Notes = Sanitize(request?.Notes),
-                        PhoneNumber = Sanitize(request?.PhoneNumber),
-                        DietaryNeeds = Sanitize(request?.DietaryNeeds),
-                        CreatedAt = now,
-                        UpdatedAt = now
-                    };
-                    _db.EventWaitlistEntries.Add(entry);
-                }
+                        if (existing.Status == EventWaitlistEntryStatus.Waiting)
+                            throw new ConflictException("You're already on the waitlist for this event");
 
-                await _db.SaveChangesAsync();
+                        // Reactivate in place — the unique (EventId, UserId) index forbids a second
+                        // row. JoinedAtUtc is reset so a rejoin goes to the back of the queue.
+                        existing.Status = EventWaitlistEntryStatus.Waiting;
+                        existing.JoinedAtUtc = now;
+                        existing.PromotedAtUtc = null;
+                        existing.LeftAtUtc = null;
+                        existing.RemovedAtUtc = null;
+                        existing.RemovedByUserId = null;
+                        existing.PromotionEmailQueuedAtUtc = null;
+                        // A rejoin is a fresh eligibility claim; don't inherit an old cooldown.
+                        existing.EligibilityDeferredUntilUtc = null;
+                        existing.Notes = Sanitize(request?.Notes);
+                        existing.PhoneNumber = Sanitize(request?.PhoneNumber);
+                        existing.DietaryNeeds = Sanitize(request?.DietaryNeeds);
+                        existing.UpdatedAt = now;
+                        entry = existing;
+                    }
+                    else
+                    {
+                        entry = new EventWaitlistEntry
+                        {
+                            EventId = eventId,
+                            UserId = userId,
+                            Status = EventWaitlistEntryStatus.Waiting,
+                            JoinedAtUtc = now,
+                            Notes = Sanitize(request?.Notes),
+                            PhoneNumber = Sanitize(request?.PhoneNumber),
+                            DietaryNeeds = Sanitize(request?.DietaryNeeds),
+                            CreatedAt = now,
+                            UpdatedAt = now
+                        };
+                        _db.EventWaitlistEntries.Add(entry);
+                    }
 
-                ev.WaitlistCount = await _db.EventWaitlistEntries
-                    .CountAsync(w => w.EventId == eventId && w.Status == EventWaitlistEntryStatus.Waiting);
-                ev.UpdatedAt = now;
-                _outboxWriter.StageSync(ev);
+                    await _db.SaveChangesAsync();
 
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    ev.WaitlistCount = await _db.EventWaitlistEntries
+                        .CountAsync(w => w.EventId == eventId && w.Status == EventWaitlistEntryStatus.Waiting);
+                    ev.UpdatedAt = now;
+                    _outboxWriter.StageSync(ev);
 
-                eventName = ev.Name;
-                eventStartsAtUtc = ev.StartTime;
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    eventName = ev.Name;
+                    eventStartsAtUtc = ev.StartTime;
+                });
             }
             catch (DbUpdateException)
             {
@@ -231,25 +237,31 @@ namespace backend.main.features.events.waitlist
 
             try
             {
-                await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
 
-                var entry = await _db.EventWaitlistEntries
-                    .FirstOrDefaultAsync(w =>
-                        w.EventId == eventId &&
-                        w.UserId == userId &&
-                        w.Status == EventWaitlistEntryStatus.Waiting)
-                    ?? throw new ResourceNotFoundException("You're not on the waitlist for this event");
+                    var entry = await _db.EventWaitlistEntries
+                        .FirstOrDefaultAsync(w =>
+                            w.EventId == eventId &&
+                            w.UserId == userId &&
+                            w.Status == EventWaitlistEntryStatus.Waiting)
+                        ?? throw new ResourceNotFoundException("You're not on the waitlist for this event");
 
-                var now = DateTime.UtcNow;
-                entry.Status = EventWaitlistEntryStatus.Left;
-                entry.LeftAtUtc = now;
-                entry.UpdatedAt = now;
+                    var now = DateTime.UtcNow;
+                    entry.Status = EventWaitlistEntryStatus.Left;
+                    entry.LeftAtUtc = now;
+                    entry.UpdatedAt = now;
 
-                await _db.SaveChangesAsync();
-                await UpdateWaitlistCountAsync(eventId, now);
+                    await _db.SaveChangesAsync();
+                    await UpdateWaitlistCountAsync(eventId, now);
 
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                });
             }
             catch (Exception e)
             {
@@ -346,26 +358,32 @@ namespace backend.main.features.events.waitlist
 
             try
             {
-                await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
 
-                var entry = await _db.EventWaitlistEntries
-                    .FirstOrDefaultAsync(w =>
-                        w.EventId == eventId &&
-                        w.Id == entryId &&
-                        w.Status == EventWaitlistEntryStatus.Waiting)
-                    ?? throw new ResourceNotFoundException($"Waitlist entry {entryId} not found");
+                    var entry = await _db.EventWaitlistEntries
+                        .FirstOrDefaultAsync(w =>
+                            w.EventId == eventId &&
+                            w.Id == entryId &&
+                            w.Status == EventWaitlistEntryStatus.Waiting)
+                        ?? throw new ResourceNotFoundException($"Waitlist entry {entryId} not found");
 
-                var now = DateTime.UtcNow;
-                entry.Status = EventWaitlistEntryStatus.Removed;
-                entry.RemovedAtUtc = now;
-                entry.RemovedByUserId = actorUserId;
-                entry.UpdatedAt = now;
+                    var now = DateTime.UtcNow;
+                    entry.Status = EventWaitlistEntryStatus.Removed;
+                    entry.RemovedAtUtc = now;
+                    entry.RemovedByUserId = actorUserId;
+                    entry.UpdatedAt = now;
 
-                await _db.SaveChangesAsync();
-                await UpdateWaitlistCountAsync(eventId, now);
+                    await _db.SaveChangesAsync();
+                    await UpdateWaitlistCountAsync(eventId, now);
 
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                });
             }
             catch (Exception e)
             {

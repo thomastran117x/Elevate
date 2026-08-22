@@ -55,7 +55,8 @@
         },
         "serve": {
           "options": {
-            "port": 3090
+            "port": 3090,
+            "proxyConfig": "proxy.conf.mjs"
           },
           "builder": "@angular/build:dev-server",
           "configurations": {

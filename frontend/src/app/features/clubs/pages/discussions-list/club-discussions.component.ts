@@ -12,7 +12,13 @@ import { ClubDiscussionsService } from '../../services/club-discussions.service'
 import { ClubsService } from '../../services/clubs.service';
 import { ClubDiscussion, discussionAuthorName } from '../../models/club-discussion.types';
 import { Club } from '../../models/club.types';
-import { DiscussionReplyThreadComponent } from '../../components/discussion-reply-thread/discussion-reply-thread.component';
+import { ThreadComponent } from '../../components/thread/thread.component';
+import {
+  ThreadDataSource,
+  createDiscussionThreadSource,
+} from '../../components/thread/thread-data-source';
+import { ThreadDisplayItem } from '../../components/thread/thread-item';
+import { DiscussionRepliesService } from '../../services/discussion-replies.service';
 
 /** Frontend mirror of the server's `HasClubStaffAccessAsync`: owner, staff, or admin. */
 function isClubStaff(club: Club | null): boolean {
@@ -22,7 +28,7 @@ function isClubStaff(club: Club | null): boolean {
 @Component({
   selector: 'app-club-discussions',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule, DiscussionReplyThreadComponent],
+  imports: [CommonModule, FormsModule, RouterModule, ThreadComponent],
   templateUrl: './club-discussions.component.html',
 })
 export class ClubDiscussionsComponent implements OnInit, OnDestroy {
@@ -52,6 +58,7 @@ export class ClubDiscussionsComponent implements OnInit, OnDestroy {
   readonly expandedDiscussionIds = new Set<number>();
 
   private readonly destroy$ = new Subject<void>();
+  private readonly threadSources = new Map<number, ThreadDataSource<ThreadDisplayItem>>();
   private requestVersion = 0;
 
   constructor(
@@ -60,7 +67,21 @@ export class ClubDiscussionsComponent implements OnInit, OnDestroy {
     private store: Store,
     private discussionsService: ClubDiscussionsService,
     private clubsService: ClubsService,
+    private repliesService: DiscussionRepliesService,
   ) {}
+
+  /**
+   * Cached per discussion: the thread component treats a new `source` reference as "you are
+   * looking at a different thread now" and resets, so this must be stable across renders.
+   */
+  threadSource(discussionId: number): ThreadDataSource<ThreadDisplayItem> {
+    let source = this.threadSources.get(discussionId);
+    if (!source) {
+      source = createDiscussionThreadSource(this.repliesService, this.clubId, discussionId);
+      this.threadSources.set(discussionId, source);
+    }
+    return source;
+  }
 
   ngOnInit(): void {
     this.store

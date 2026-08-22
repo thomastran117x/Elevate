@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { firstValueFrom } from 'rxjs';
+import { Observable, distinctUntilChanged, firstValueFrom, map } from 'rxjs';
 import { ApiEnvelope, extractEnvelopeData } from '../models/api-envelope.model';
 import { ApiClient } from './api-client.service';
 import { environment } from '../../../../environments/environment';
@@ -20,15 +20,33 @@ export class AuthTokenService {
   accessToken: string | null = null;
   csrfToken: string | null = null;
 
+  /**
+   * Emits the current access token whenever it changes, including a refresh that replaces an
+   * expired token with a new one for the same user.
+   *
+   * Long-lived connections (the realtime hub) fix their principal at handshake time. A
+   * reconnect that lands while the token is expired comes back anonymous, and the refresh
+   * that follows would be invisible to them if this only reported signed-in versus anonymous
+   * — so it reports the token itself, and consumers compare against what they connected with.
+   */
+  readonly accessToken$: Observable<string | null>;
+
   private csrfPromise: Promise<void> | null = null;
 
   constructor(
     private api: ApiClient,
     private store: Store<{ session: SessionState }>,
   ) {
-    this.store.select(selectAccessToken).subscribe((token) => {
+    const token$ = this.store.select(selectAccessToken);
+
+    token$.subscribe((token) => {
       this.accessToken = token || null;
     });
+
+    this.accessToken$ = token$.pipe(
+      map((token) => token || null),
+      distinctUntilChanged(),
+    );
   }
 
   async ensureCsrfToken(): Promise<void> {

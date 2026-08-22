@@ -319,92 +319,90 @@ public sealed class EventInvitationService : IEventInvitationService
         var tokenHash = ComputeTokenHash(token);
         var now = GetUtcNow();
 
-        await using var transaction = await _db.Database.BeginTransactionAsync();
-
-        var invitation = await _db.EventInvitations
-            .FirstOrDefaultAsync(i => i.ClaimTokenHash == tokenHash);
-
-        if (invitation != null)
+        // The context enables retry-on-failure, and that strategy rejects a
+        // user-initiated transaction unless the whole unit runs through it.
+        var strategy = _db.Database.CreateExecutionStrategy();
+        var (resultInvitation, eventId) = await strategy.ExecuteAsync(async () =>
         {
-            EnsureDirectInvitationCanBeAccepted(invitation, userId, normalizedEmail, now);
-            await EnsureEventAcceptsInvitationsAsync(invitation.EventId);
-            invitation.LifecycleStatus = EventInvitationLifecycleStatus.Accepted;
-            invitation.AcceptedAtUtc = now;
-            invitation.AcceptedByUserId = userId;
-            invitation.RecipientUserId ??= userId;
-            invitation.RecipientEmail ??= userEmail;
-            invitation.RecipientEmailNormalized ??= normalizedEmail;
-            invitation.UpdatedAt = now;
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+            await using var transaction = await _db.Database.BeginTransactionAsync();
 
-            await _refreshCache.RemoveAsync(GetMyInvitationsCacheKey(userId, normalizedEmail));
-            await _refreshCache.RemoveAsync(GetEventInvitationsCacheKey(invitation.EventId));
-            return new EventInvitationDecisionResponse
+            var invitation = await _db.EventInvitations
+                .FirstOrDefaultAsync(i => i.ClaimTokenHash == tokenHash);
+
+            if (invitation != null)
             {
-                Invitation = (await MapInvitationResponsesAsync([invitation], includeEvents: true)).Single()
-            };
-        }
-
-        var link = await _db.EventInvitationLinks
-            .FirstOrDefaultAsync(l => l.TokenHash == tokenHash)
-            ?? throw new ResourceNotFoundException("Invitation was not found.");
-
-        EnsureLinkCanBeAccepted(link, now);
-        await EnsureEventAcceptsInvitationsAsync(link.EventId);
-
-        var existingClaim = await _db.EventInvitations
-            .FirstOrDefaultAsync(i =>
-                i.EventInvitationLinkId == link.Id &&
-                i.RecipientUserId == userId);
-
-        if (existingClaim != null)
-        {
-            if (existingClaim.LifecycleStatus == EventInvitationLifecycleStatus.Accepted)
-            {
+                EnsureDirectInvitationCanBeAccepted(invitation, userId, normalizedEmail, now);
+                await EnsureEventAcceptsInvitationsAsync(invitation.EventId);
+                invitation.LifecycleStatus = EventInvitationLifecycleStatus.Accepted;
+                invitation.AcceptedAtUtc = now;
+                invitation.AcceptedByUserId = userId;
+                invitation.RecipientUserId ??= userId;
+                invitation.RecipientEmail ??= userEmail;
+                invitation.RecipientEmailNormalized ??= normalizedEmail;
+                invitation.UpdatedAt = now;
+                await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
-                return new EventInvitationDecisionResponse
-                {
-                    Invitation = (await MapInvitationResponsesAsync([existingClaim], includeEvents: true)).Single()
-                };
+                return (invitation, invitation.EventId);
             }
 
-            if (existingClaim.LifecycleStatus == EventInvitationLifecycleStatus.Declined)
-                throw new ConflictException("This invitation has already been declined.");
+            var link = await _db.EventInvitationLinks
+                .FirstOrDefaultAsync(l => l.TokenHash == tokenHash)
+                ?? throw new ResourceNotFoundException("Invitation was not found.");
 
-            if (existingClaim.LifecycleStatus == EventInvitationLifecycleStatus.Revoked)
-                throw new GoneException("This invitation is no longer available.");
-        }
+            EnsureLinkCanBeAccepted(link, now);
+            await EnsureEventAcceptsInvitationsAsync(link.EventId);
 
-        var acceptedClaim = new EventInvitation
-        {
-            EventId = link.EventId,
-            RecipientUserId = userId,
-            RecipientEmail = userEmail,
-            RecipientEmailNormalized = normalizedEmail,
-            SourceType = EventInvitationSource.LinkClaim,
-            LifecycleStatus = EventInvitationLifecycleStatus.Accepted,
-            DeliveryStatus = EventInvitationDeliveryStatus.Skipped,
-            ExpiresAt = link.ExpiresAt,
-            EventInvitationLinkId = link.Id,
-            CreatedByUserId = link.CreatedByUserId,
-            AcceptedByUserId = userId,
-            AcceptedAtUtc = now,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
+            var existingClaim = await _db.EventInvitations
+                .FirstOrDefaultAsync(i =>
+                    i.EventInvitationLinkId == link.Id &&
+                    i.RecipientUserId == userId);
 
-        _db.EventInvitations.Add(acceptedClaim);
-        link.RedemptionCount += 1;
-        link.UpdatedAt = now;
-        await _db.SaveChangesAsync();
-        await transaction.CommitAsync();
+            if (existingClaim != null)
+            {
+                if (existingClaim.LifecycleStatus == EventInvitationLifecycleStatus.Accepted)
+                {
+                    await transaction.CommitAsync();
+                    return (existingClaim, link.EventId);
+                }
+
+                if (existingClaim.LifecycleStatus == EventInvitationLifecycleStatus.Declined)
+                    throw new ConflictException("This invitation has already been declined.");
+
+                if (existingClaim.LifecycleStatus == EventInvitationLifecycleStatus.Revoked)
+                    throw new GoneException("This invitation is no longer available.");
+            }
+
+            var acceptedClaim = new EventInvitation
+            {
+                EventId = link.EventId,
+                RecipientUserId = userId,
+                RecipientEmail = userEmail,
+                RecipientEmailNormalized = normalizedEmail,
+                SourceType = EventInvitationSource.LinkClaim,
+                LifecycleStatus = EventInvitationLifecycleStatus.Accepted,
+                DeliveryStatus = EventInvitationDeliveryStatus.Skipped,
+                ExpiresAt = link.ExpiresAt,
+                EventInvitationLinkId = link.Id,
+                CreatedByUserId = link.CreatedByUserId,
+                AcceptedByUserId = userId,
+                AcceptedAtUtc = now,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            _db.EventInvitations.Add(acceptedClaim);
+            link.RedemptionCount += 1;
+            link.UpdatedAt = now;
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return (acceptedClaim, link.EventId);
+        });
 
         await _refreshCache.RemoveAsync(GetMyInvitationsCacheKey(userId, normalizedEmail));
-        await _refreshCache.RemoveAsync(GetEventInvitationsCacheKey(link.EventId));
+        await _refreshCache.RemoveAsync(GetEventInvitationsCacheKey(eventId));
         return new EventInvitationDecisionResponse
         {
-            Invitation = (await MapInvitationResponsesAsync([acceptedClaim], includeEvents: true)).Single()
+            Invitation = (await MapInvitationResponsesAsync([resultInvitation], includeEvents: true)).Single()
         };
     }
 
@@ -448,79 +446,77 @@ public sealed class EventInvitationService : IEventInvitationService
         var tokenHash = ComputeTokenHash(token);
         var now = GetUtcNow();
 
-        await using var transaction = await _db.Database.BeginTransactionAsync();
-
-        var invitation = await _db.EventInvitations
-            .FirstOrDefaultAsync(i => i.ClaimTokenHash == tokenHash);
-
-        if (invitation != null)
+        // The context enables retry-on-failure, and that strategy rejects a
+        // user-initiated transaction unless the whole unit runs through it.
+        var strategy = _db.Database.CreateExecutionStrategy();
+        var (resultInvitation, eventId) = await strategy.ExecuteAsync(async () =>
         {
-            EnsureDirectInvitationCanBeDecided(invitation, userId, normalizedEmail, now);
-            invitation.LifecycleStatus = EventInvitationLifecycleStatus.Declined;
-            invitation.DeclinedAtUtc = now;
-            invitation.DeclinedByUserId = userId;
-            invitation.RecipientUserId ??= userId;
-            invitation.RecipientEmail ??= userEmail;
-            invitation.RecipientEmailNormalized ??= normalizedEmail;
-            invitation.UpdatedAt = now;
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+
+            var invitation = await _db.EventInvitations
+                .FirstOrDefaultAsync(i => i.ClaimTokenHash == tokenHash);
+
+            if (invitation != null)
+            {
+                EnsureDirectInvitationCanBeDecided(invitation, userId, normalizedEmail, now);
+                invitation.LifecycleStatus = EventInvitationLifecycleStatus.Declined;
+                invitation.DeclinedAtUtc = now;
+                invitation.DeclinedByUserId = userId;
+                invitation.RecipientUserId ??= userId;
+                invitation.RecipientEmail ??= userEmail;
+                invitation.RecipientEmailNormalized ??= normalizedEmail;
+                invitation.UpdatedAt = now;
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return (invitation, invitation.EventId);
+            }
+
+            var link = await _db.EventInvitationLinks
+                .FirstOrDefaultAsync(l => l.TokenHash == tokenHash)
+                ?? throw new ResourceNotFoundException("Invitation was not found.");
+
+            EnsureLinkCanBeAccepted(link, now);
+
+            var existingDecision = await _db.EventInvitations
+                .FirstOrDefaultAsync(i =>
+                    i.EventInvitationLinkId == link.Id &&
+                    i.RecipientUserId == userId);
+
+            if (existingDecision != null)
+            {
+                await transaction.CommitAsync();
+                return (existingDecision, link.EventId);
+            }
+
+            var declinedClaim = new EventInvitation
+            {
+                EventId = link.EventId,
+                RecipientUserId = userId,
+                RecipientEmail = userEmail,
+                RecipientEmailNormalized = normalizedEmail,
+                SourceType = EventInvitationSource.LinkClaim,
+                LifecycleStatus = EventInvitationLifecycleStatus.Declined,
+                DeliveryStatus = EventInvitationDeliveryStatus.Skipped,
+                ExpiresAt = link.ExpiresAt,
+                EventInvitationLinkId = link.Id,
+                CreatedByUserId = link.CreatedByUserId,
+                DeclinedByUserId = userId,
+                DeclinedAtUtc = now,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            _db.EventInvitations.Add(declinedClaim);
             await _db.SaveChangesAsync();
             await transaction.CommitAsync();
-
-            await _refreshCache.RemoveAsync(GetMyInvitationsCacheKey(userId, normalizedEmail));
-            await _refreshCache.RemoveAsync(GetEventInvitationsCacheKey(invitation.EventId));
-            return new EventInvitationDecisionResponse
-            {
-                Invitation = (await MapInvitationResponsesAsync([invitation], includeEvents: true)).Single()
-            };
-        }
-
-        var link = await _db.EventInvitationLinks
-            .FirstOrDefaultAsync(l => l.TokenHash == tokenHash)
-            ?? throw new ResourceNotFoundException("Invitation was not found.");
-
-        EnsureLinkCanBeAccepted(link, now);
-
-        var existingDecision = await _db.EventInvitations
-            .FirstOrDefaultAsync(i =>
-                i.EventInvitationLinkId == link.Id &&
-                i.RecipientUserId == userId);
-
-        if (existingDecision != null)
-        {
-            await transaction.CommitAsync();
-            return new EventInvitationDecisionResponse
-            {
-                Invitation = (await MapInvitationResponsesAsync([existingDecision], includeEvents: true)).Single()
-            };
-        }
-
-        var declinedClaim = new EventInvitation
-        {
-            EventId = link.EventId,
-            RecipientUserId = userId,
-            RecipientEmail = userEmail,
-            RecipientEmailNormalized = normalizedEmail,
-            SourceType = EventInvitationSource.LinkClaim,
-            LifecycleStatus = EventInvitationLifecycleStatus.Declined,
-            DeliveryStatus = EventInvitationDeliveryStatus.Skipped,
-            ExpiresAt = link.ExpiresAt,
-            EventInvitationLinkId = link.Id,
-            CreatedByUserId = link.CreatedByUserId,
-            DeclinedByUserId = userId,
-            DeclinedAtUtc = now,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-
-        _db.EventInvitations.Add(declinedClaim);
-        await _db.SaveChangesAsync();
-        await transaction.CommitAsync();
+            return (declinedClaim, link.EventId);
+        });
 
         await _refreshCache.RemoveAsync(GetMyInvitationsCacheKey(userId, normalizedEmail));
-        await _refreshCache.RemoveAsync(GetEventInvitationsCacheKey(link.EventId));
+        await _refreshCache.RemoveAsync(GetEventInvitationsCacheKey(eventId));
         return new EventInvitationDecisionResponse
         {
-            Invitation = (await MapInvitationResponsesAsync([declinedClaim], includeEvents: true)).Single()
+            Invitation = (await MapInvitationResponsesAsync([resultInvitation], includeEvents: true)).Single()
         };
     }
 

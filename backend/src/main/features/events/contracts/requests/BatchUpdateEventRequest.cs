@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 using backend.main.features.events;
 
@@ -58,6 +59,7 @@ namespace backend.main.features.events.contracts.requests
         }
 
         [EnumDataType(typeof(EventCategory))]
+        [JsonConverter(typeof(JsonStringEnumConverter))]
         public EventCategory? Category
         {
             get; set;

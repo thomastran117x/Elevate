@@ -1,19 +1,19 @@
-using System.Text.Json;
-using System.Threading.Channels;
-
 using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.clubs.posts.comments.contracts.requests;
 using backend.main.features.clubs.posts.comments.contracts.responses;
+using backend.main.features.clubs.realtime;
 using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http.Timeouts;
 using Microsoft.AspNetCore.Mvc;
 
 namespace backend.main.features.clubs.posts.comments;
 
-/// <summary>Nested comments, reactions, and live updates for club posts.</summary>
+/// <summary>
+/// Nested comments and reactions for club posts. Live delivery of these changes is handled
+/// by <see cref="ClubRealtimeHub"/>.
+/// </summary>
 [ApiController]
 [FeatureGate(FeatureFlagKeys.ClubsPosts)]
 [Route("clubs")]
@@ -21,15 +21,14 @@ public sealed class PostCommentController : ControllerBase
 {
     private const int DefaultPageSize = 20;
     private const int MaxPageSize = 100;
-    private static readonly JsonSerializerOptions EventJsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IPostCommentService _commentService;
-    private readonly CommentEventBroker _broker;
+    private readonly IClubRealtimeNotifier _notifier;
 
-    public PostCommentController(IPostCommentService commentService, CommentEventBroker broker)
+    public PostCommentController(IPostCommentService commentService, IClubRealtimeNotifier notifier)
     {
         _commentService = commentService;
-        _broker = broker;
+        _notifier = notifier;
     }
 
     [AllowAnonymous]
@@ -67,7 +66,7 @@ public sealed class PostCommentController : ControllerBase
         var view = await _commentService.CreateAsync(
             clubId, postId, request.ParentCommentId, user.Id, user.Role, request.Content);
         var response = MapComment(view);
-        _broker.Publish(postId, new CommentEvent("CommentCreated", response));
+        await _notifier.CommentCreatedAsync(clubId, postId, response);
         return StatusCode(201, new ApiResponse<PostCommentResponse>("Comment created successfully.", response));
     }
 
@@ -81,7 +80,9 @@ public sealed class PostCommentController : ControllerBase
         var view = await _commentService.UpdateAsync(
             clubId, postId, commentId, user.Id, user.Role, request.Content);
         var response = MapComment(view);
-        _broker.Publish(postId, new CommentEvent("CommentUpdated", MapComment(view, false)));
+        // The broadcast deliberately strips the editor's own reaction so other viewers do
+        // not inherit it; the caller's own 200 body keeps it.
+        await _notifier.CommentUpdatedAsync(clubId, postId, MapComment(view, false));
         return Ok(new ApiResponse<PostCommentResponse>("Comment updated successfully.", response));
     }
 
@@ -93,7 +94,7 @@ public sealed class PostCommentController : ControllerBase
         var user = User.GetUserPayload();
         var view = await _commentService.DeleteAsync(clubId, postId, commentId, user.Id, user.Role);
         var response = MapComment(view);
-        _broker.Publish(postId, new CommentEvent("CommentDeleted", response));
+        await _notifier.CommentDeletedAsync(clubId, postId, response);
         return Ok(new ApiResponse<PostCommentResponse>("Comment deleted successfully.", response));
     }
 
@@ -106,7 +107,7 @@ public sealed class PostCommentController : ControllerBase
         var user = User.GetUserPayload();
         var summary = await _commentService.SetReactionAsync(
             clubId, postId, commentId, user.Id, user.Role, request.Reaction!.Value);
-        return PublishReaction(postId, commentId, summary);
+        return await PublishReactionAsync(clubId, postId, commentId, summary);
     }
 
     [Authorize]
@@ -117,63 +118,11 @@ public sealed class PostCommentController : ControllerBase
         var user = User.GetUserPayload();
         var summary = await _commentService.ClearReactionAsync(
             clubId, postId, commentId, user.Id, user.Role);
-        return PublishReaction(postId, commentId, summary);
+        return await PublishReactionAsync(clubId, postId, commentId, summary);
     }
 
-    [AllowAnonymous]
-    [DisableRequestTimeout]
-    [HttpGet("{clubId}/posts/{postId}/comments/events")]
-    public async Task StreamComments(int clubId, int postId, CancellationToken cancellationToken)
-    {
-        var (userId, userRole) = GetOptionalUser();
-        await _commentService.EnsureCanReadPostAsync(clubId, postId, userId, userRole);
-
-        Response.Headers.ContentType = "text/event-stream";
-        Response.Headers.CacheControl = "no-cache";
-        Response.Headers["X-Accel-Buffering"] = "no";
-
-        var subscriptionId = Guid.NewGuid();
-        var channel = Channel.CreateUnbounded<CommentEvent>();
-        _broker.Subscribe(postId, subscriptionId, channel.Writer);
-        try
-        {
-            await Response.WriteAsync(": keepalive\n\n", cancellationToken);
-            await Response.Body.FlushAsync(cancellationToken);
-            var heartbeat = Task.Delay(TimeSpan.FromSeconds(15), cancellationToken);
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                var available = channel.Reader.WaitToReadAsync(cancellationToken).AsTask();
-                if (await Task.WhenAny(available, heartbeat) == heartbeat)
-                {
-                    await Response.WriteAsync(": keepalive\n\n", cancellationToken);
-                    await Response.Body.FlushAsync(cancellationToken);
-                    heartbeat = Task.Delay(TimeSpan.FromSeconds(15), cancellationToken);
-                    continue;
-                }
-
-                if (!await available)
-                    break;
-                while (channel.Reader.TryRead(out var evt))
-                {
-                    var json = JsonSerializer.Serialize(evt.Payload, EventJsonOptions);
-                    await Response.WriteAsync($"event: {evt.Type}\ndata: {json}\n\n", cancellationToken);
-                }
-                await Response.Body.FlushAsync(cancellationToken);
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // A disconnected browser or proxy is the normal end of an SSE subscription.
-        }
-        finally
-        {
-            _broker.Unsubscribe(postId, subscriptionId);
-            channel.Writer.TryComplete();
-        }
-    }
-
-    private IActionResult PublishReaction(
-        int postId, int commentId, PostCommentReactionSummary summary)
+    private async Task<IActionResult> PublishReactionAsync(
+        int clubId, int postId, int commentId, PostCommentReactionSummary summary)
     {
         var response = new PostCommentReactionResponse
         {
@@ -182,13 +131,8 @@ public sealed class PostCommentController : ControllerBase
             DislikeCount = summary.DislikeCount,
             CurrentUserReaction = summary.CurrentUserReaction?.ToString()
         };
-        _broker.Publish(postId, new CommentEvent("CommentReactionChanged", new
-        {
-            postId,
-            commentId,
-            likeCount = summary.LikeCount,
-            dislikeCount = summary.DislikeCount
-        }));
+        await _notifier.CommentReactionChangedAsync(
+            clubId, postId, commentId, summary.LikeCount, summary.DislikeCount);
         return Ok(new ApiResponse<PostCommentReactionResponse>("Comment reaction updated successfully.", response));
     }
 

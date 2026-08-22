@@ -10870,59 +10870,6 @@
         ]
       }
     },
-    "/api/clubs/{clubId}/posts/{postId}/comments/events": {
-      "get": {
-        "tags": [
-          "clubs"
-        ],
-        "summary": "Stream live comment events",
-        "description": "Opens a post-scoped Server-Sent Events stream for comment creation, editing, deletion, and reaction counts.",
-        "operationId": "PostComment_StreamComments_get",
-        "parameters": [
-          {
-            "name": "clubId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/Int32"
-            }
-          },
-          {
-            "name": "postId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/Int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad request, validation failure, or CSRF failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponseOfObject"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponseOfObject"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/clubs/{clubId}/staff/invitations": {
       "post": {
         "tags": [
@@ -13661,51 +13608,6 @@
         "security": [
           { }
         ]
-      }
-    },
-    "/api/clubs/{clubId}/discussions/replies/events": {
-      "get": {
-        "tags": [
-          "clubs"
-        ],
-        "summary": "Stream live discussion reply events",
-        "description": "Opens a club-wide Server-Sent Events stream for reply creation, editing, deletion, and reaction counts.",
-        "operationId": "ClubDiscussionReply_StreamReplyEvents_get",
-        "parameters": [
-          {
-            "name": "clubId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/Int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad request, validation failure, or CSRF failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponseOfObject"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponseOfObject"
-                }
-              }
-            }
-          }
-        }
       }
     },
     "/api/auth/login": {

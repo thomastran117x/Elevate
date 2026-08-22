@@ -138,70 +138,77 @@ public class EventSeriesService : IEventSeriesService
                 .Select(i => i.ImageUrl)
                 .ToList();
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
-
-            _db.EventSeries.Add(series);
-            await _db.SaveChangesAsync();
-
-            // Occurrence 0 reuses the template itself, so starting a series does not leave an
-            // orphaned draft behind in the club's event list.
-            var first = expansion.Occurrences[0];
-            template.SeriesId = series.Id;
-            template.OccurrenceIndex = 0;
-            template.TimeZoneId = timeZoneId;
-            template.StartTime = first.StartUtc;
-            template.EndTime = first.EndUtc;
-            template.CurrentVersionNumber += 1;
-            template.UpdatedAt = now;
-
-            EventVersionRecorder.Add(
-                _db,
-                template,
-                EventVersionActions.SeriesCreate,
-                userId,
-                EventVersionRecorder.NormalizeActorRole(userRole),
-                rollbackSourceVersionNumber: null,
-                changedFields: EventVersionRecorder.BuildChangedFields(null, EventVersionRecorder.BuildSnapshot(template)),
-                createdAt: now);
-
-            _outboxWriter.StageSync(template);
-
-            var generated = new List<Events>();
-
-            foreach (var slot in expansion.Occurrences.Skip(1))
+            // The context enables retry-on-failure, and that strategy rejects a
+            // user-initiated transaction unless the whole unit runs through it.
+            var strategy = _db.Database.CreateExecutionStrategy();
+            var generated = await strategy.ExecuteAsync(async () =>
             {
-                var occurrence = CloneTemplate(template, series.Id, slot, timeZoneId, now);
-                generated.Add(occurrence);
-            }
+                await using var transaction = await _db.Database.BeginTransactionAsync();
 
-            if (generated.Count > 0)
-            {
-                await _db.Events.AddRangeAsync(generated);
+                _db.EventSeries.Add(series);
                 await _db.SaveChangesAsync();
 
-                foreach (var occurrence in generated)
+                // Occurrence 0 reuses the template itself, so starting a series does not leave an
+                // orphaned draft behind in the club's event list.
+                var first = expansion.Occurrences[0];
+                template.SeriesId = series.Id;
+                template.OccurrenceIndex = 0;
+                template.TimeZoneId = timeZoneId;
+                template.StartTime = first.StartUtc;
+                template.EndTime = first.EndUtc;
+                template.CurrentVersionNumber += 1;
+                template.UpdatedAt = now;
+
+                EventVersionRecorder.Add(
+                    _db,
+                    template,
+                    EventVersionActions.SeriesCreate,
+                    userId,
+                    EventVersionRecorder.NormalizeActorRole(userRole),
+                    rollbackSourceVersionNumber: null,
+                    changedFields: EventVersionRecorder.BuildChangedFields(null, EventVersionRecorder.BuildSnapshot(template)),
+                    createdAt: now);
+
+                _outboxWriter.StageSync(template);
+
+                var occurrences = new List<Events>();
+
+                foreach (var slot in expansion.Occurrences.Skip(1))
                 {
-                    EventVersionRecorder.Add(
-                        _db,
-                        occurrence,
-                        EventVersionActions.SeriesCreate,
-                        userId,
-                        EventVersionRecorder.NormalizeActorRole(userRole),
-                        rollbackSourceVersionNumber: null,
-                        changedFields: EventVersionRecorder.BuildChangedFields(
-                            null,
-                            EventVersionRecorder.BuildSnapshot(occurrence)),
-                        createdAt: now);
-
-                    if (templateImageUrls.Count > 0)
-                        await _imageRepository.AddImagesAsync(occurrence.Id, templateImageUrls);
-
-                    _outboxWriter.StageSync(occurrence);
+                    var occurrence = CloneTemplate(template, series.Id, slot, timeZoneId, now);
+                    occurrences.Add(occurrence);
                 }
-            }
 
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+                if (occurrences.Count > 0)
+                {
+                    await _db.Events.AddRangeAsync(occurrences);
+                    await _db.SaveChangesAsync();
+
+                    foreach (var occurrence in occurrences)
+                    {
+                        EventVersionRecorder.Add(
+                            _db,
+                            occurrence,
+                            EventVersionActions.SeriesCreate,
+                            userId,
+                            EventVersionRecorder.NormalizeActorRole(userRole),
+                            rollbackSourceVersionNumber: null,
+                            changedFields: EventVersionRecorder.BuildChangedFields(
+                                null,
+                                EventVersionRecorder.BuildSnapshot(occurrence)),
+                            createdAt: now);
+
+                        if (templateImageUrls.Count > 0)
+                            await _imageRepository.AddImagesAsync(occurrence.Id, templateImageUrls);
+
+                        _outboxWriter.StageSync(occurrence);
+                    }
+                }
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return occurrences;
+            });
 
             await InvalidateAsync(generated.Select(e => e.Id).Append(template.Id));
 
@@ -339,43 +346,51 @@ public class EventSeriesService : IEventSeriesService
                 .ToList();
 
             var now = GetUtcNow();
-            var added = new List<Events>();
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
-
-            // Resume at the high-water mark rather than re-creating rows that already exist,
-            // so extending twice is idempotent for the occurrences already materialized.
-            foreach (var slot in expansion.Occurrences.Skip(series.GeneratedCount))
-                added.Add(CloneTemplate(templateSource, series.Id, slot, series.TimeZoneId, now));
-
-            await _db.Events.AddRangeAsync(added);
-            await _db.SaveChangesAsync();
-
-            foreach (var occurrence in added)
+            // The context enables retry-on-failure, and that strategy rejects a
+            // user-initiated transaction unless the whole unit runs through it.
+            var strategy = _db.Database.CreateExecutionStrategy();
+            var added = await strategy.ExecuteAsync(async () =>
             {
-                EventVersionRecorder.Add(
-                    _db,
-                    occurrence,
-                    EventVersionActions.SeriesCreate,
-                    userId,
-                    EventVersionRecorder.NormalizeActorRole(userRole),
-                    rollbackSourceVersionNumber: null,
-                    changedFields: EventVersionRecorder.BuildChangedFields(
-                        null,
-                        EventVersionRecorder.BuildSnapshot(occurrence)),
-                    createdAt: now);
+                await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                if (templateImageUrls.Count > 0)
-                    await _imageRepository.AddImagesAsync(occurrence.Id, templateImageUrls);
+                var occurrences = new List<Events>();
 
-                _outboxWriter.StageSync(occurrence);
-            }
+                // Resume at the high-water mark rather than re-creating rows that already exist,
+                // so extending twice is idempotent for the occurrences already materialized.
+                foreach (var slot in expansion.Occurrences.Skip(series.GeneratedCount))
+                    occurrences.Add(CloneTemplate(templateSource, series.Id, slot, series.TimeZoneId, now));
 
-            series.GeneratedCount = expansion.Occurrences.Count;
-            series.UpdatedAt = now;
+                await _db.Events.AddRangeAsync(occurrences);
+                await _db.SaveChangesAsync();
 
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+                foreach (var occurrence in occurrences)
+                {
+                    EventVersionRecorder.Add(
+                        _db,
+                        occurrence,
+                        EventVersionActions.SeriesCreate,
+                        userId,
+                        EventVersionRecorder.NormalizeActorRole(userRole),
+                        rollbackSourceVersionNumber: null,
+                        changedFields: EventVersionRecorder.BuildChangedFields(
+                            null,
+                            EventVersionRecorder.BuildSnapshot(occurrence)),
+                        createdAt: now);
+
+                    if (templateImageUrls.Count > 0)
+                        await _imageRepository.AddImagesAsync(occurrence.Id, templateImageUrls);
+
+                    _outboxWriter.StageSync(occurrence);
+                }
+
+                series.GeneratedCount = expansion.Occurrences.Count;
+                series.UpdatedAt = now;
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return occurrences;
+            });
 
             await InvalidateAsync(added.Select(e => e.Id));
 
@@ -400,53 +415,62 @@ public class EventSeriesService : IEventSeriesService
             var now = GetUtcNow();
             var result = new EventSeriesBulkResultResponse { SeriesId = seriesId };
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
-
-            foreach (var occurrence in occurrences)
+            // The context enables retry-on-failure, and that strategy rejects a
+            // user-initiated transaction unless the whole unit runs through it.
+            var strategy = _db.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
             {
-                if (occurrence.LifecycleState != EventLifecycleState.Draft)
-                {
-                    result.Skipped.Add(new EventSeriesSkippedOccurrence
-                    {
-                        EventId = occurrence.Id,
-                        OccurrenceIndex = occurrence.OccurrenceIndex,
-                        Reason = "not-a-draft",
-                        Details = [$"This occurrence is already {occurrence.LifecycleState.ToString().ToLowerInvariant()}."]
-                    });
+                await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                    continue;
+                result.Skipped.Clear();
+                result.AffectedEventIds.Clear();
+
+                foreach (var occurrence in occurrences)
+                {
+                    if (occurrence.LifecycleState != EventLifecycleState.Draft)
+                    {
+                        result.Skipped.Add(new EventSeriesSkippedOccurrence
+                        {
+                            EventId = occurrence.Id,
+                            OccurrenceIndex = occurrence.OccurrenceIndex,
+                            Reason = "not-a-draft",
+                            Details = [$"This occurrence is already {occurrence.LifecycleState.ToString().ToLowerInvariant()}."]
+                        });
+
+                        continue;
+                    }
+
+                    // An occurrence whose start has already passed fails the publish checks. Report
+                    // it and keep going — one stale draft must not block the rest of the series.
+                    var issues = EventLifecyclePolicy.GetPublishIssues(occurrence, now);
+
+                    if (issues.Count > 0)
+                    {
+                        result.Skipped.Add(new EventSeriesSkippedOccurrence
+                        {
+                            EventId = occurrence.Id,
+                            OccurrenceIndex = occurrence.OccurrenceIndex,
+                            Reason = "not-publish-ready",
+                            Details = issues
+                        });
+
+                        continue;
+                    }
+
+                    occurrence.LifecycleState = EventLifecycleState.Published;
+                    occurrence.CurrentVersionNumber += 1;
+                    occurrence.UpdatedAt = now;
+
+                    RecordAndStage(occurrence, EventVersionActions.Publish, userId, userRole, now);
+
+                    result.AffectedEventIds.Add(occurrence.Id);
                 }
 
-                // An occurrence whose start has already passed fails the publish checks. Report
-                // it and keep going — one stale draft must not block the rest of the series.
-                var issues = EventLifecyclePolicy.GetPublishIssues(occurrence, now);
+                series.UpdatedAt = now;
 
-                if (issues.Count > 0)
-                {
-                    result.Skipped.Add(new EventSeriesSkippedOccurrence
-                    {
-                        EventId = occurrence.Id,
-                        OccurrenceIndex = occurrence.OccurrenceIndex,
-                        Reason = "not-publish-ready",
-                        Details = issues
-                    });
-
-                    continue;
-                }
-
-                occurrence.LifecycleState = EventLifecycleState.Published;
-                occurrence.CurrentVersionNumber += 1;
-                occurrence.UpdatedAt = now;
-
-                RecordAndStage(occurrence, EventVersionActions.Publish, userId, userRole, now);
-
-                result.AffectedEventIds.Add(occurrence.Id);
-            }
-
-            series.UpdatedAt = now;
-
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+            });
 
             result.AffectedCount = result.AffectedEventIds.Count;
             await InvalidateAsync(result.AffectedEventIds);
@@ -504,50 +528,60 @@ public class EventSeriesService : IEventSeriesService
                     existingUrls: alreadyAttached);
             }
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
-
-            foreach (var occurrence in occurrences)
+            // The context enables retry-on-failure, and that strategy rejects a
+            // user-initiated transaction unless the whole unit runs through it.
+            var strategy = _db.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
             {
-                if (!IsInFutureScope(occurrence, pivot, now, request.IncludeOverridden, result))
-                    continue;
+                await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                var previous = EventVersionRecorder.BuildSnapshot(occurrence);
+                result.Skipped.Clear();
+                result.AffectedEventIds.Clear();
+                result.RetimedWithRegistrations.Clear();
 
-                if (!TryApplyPatch(occurrence, request, timeZone, result, out var retimed))
-                    continue;
-
-                occurrence.CurrentVersionNumber += 1;
-                occurrence.UpdatedAt = now;
-
-                RecordAndStage(
-                    occurrence,
-                    EventVersionActions.SeriesUpdate,
-                    userId,
-                    userRole,
-                    now,
-                    previous);
-
-                result.AffectedEventIds.Add(occurrence.Id);
-
-                if (retimed && occurrence.RegistrationCount > 0)
-                    result.RetimedWithRegistrations.Add(occurrence.Id);
-            }
-
-            if (requestedImageUrls is not null)
-            {
-                foreach (var eventId in result.AffectedEventIds)
+                foreach (var occurrence in occurrences)
                 {
-                    await _imageRepository.DeleteAllByEventIdAsync(eventId);
+                    if (!IsInFutureScope(occurrence, pivot, now, request.IncludeOverridden, result))
+                        continue;
 
-                    if (requestedImageUrls.Count > 0)
-                        await _imageRepository.AddImagesAsync(eventId, requestedImageUrls);
+                    var previous = EventVersionRecorder.BuildSnapshot(occurrence);
+
+                    if (!TryApplyPatch(occurrence, request, timeZone, result, out var retimed))
+                        continue;
+
+                    occurrence.CurrentVersionNumber += 1;
+                    occurrence.UpdatedAt = now;
+
+                    RecordAndStage(
+                        occurrence,
+                        EventVersionActions.SeriesUpdate,
+                        userId,
+                        userRole,
+                        now,
+                        previous);
+
+                    result.AffectedEventIds.Add(occurrence.Id);
+
+                    if (retimed && occurrence.RegistrationCount > 0)
+                        result.RetimedWithRegistrations.Add(occurrence.Id);
                 }
-            }
 
-            series.UpdatedAt = now;
+                if (requestedImageUrls is not null)
+                {
+                    foreach (var eventId in result.AffectedEventIds)
+                    {
+                        await _imageRepository.DeleteAllByEventIdAsync(eventId);
 
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+                        if (requestedImageUrls.Count > 0)
+                            await _imageRepository.AddImagesAsync(eventId, requestedImageUrls);
+                    }
+                }
+
+                series.UpdatedAt = now;
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+            });
 
             result.AffectedCount = result.AffectedEventIds.Count;
             await InvalidateAsync(result.AffectedEventIds);
@@ -577,40 +611,49 @@ public class EventSeriesService : IEventSeriesService
             var now = GetUtcNow();
             var result = new EventSeriesBulkResultResponse { SeriesId = seriesId };
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
-
-            foreach (var occurrence in occurrences)
+            // The context enables retry-on-failure, and that strategy rejects a
+            // user-initiated transaction unless the whole unit runs through it.
+            var strategy = _db.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
             {
-                if (request.FutureOnly && occurrence.StartTime <= now)
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+
+                result.Skipped.Clear();
+                result.AffectedEventIds.Clear();
+
+                foreach (var occurrence in occurrences)
                 {
-                    result.Skipped.Add(Skip(occurrence, "already-started", "This occurrence has already started."));
-                    continue;
+                    if (request.FutureOnly && occurrence.StartTime <= now)
+                    {
+                        result.Skipped.Add(Skip(occurrence, "already-started", "This occurrence has already started."));
+                        continue;
+                    }
+
+                    if (!EventLifecyclePolicy.CanTransition(occurrence.LifecycleState, EventLifecycleState.Cancelled))
+                    {
+                        result.Skipped.Add(Skip(
+                            occurrence,
+                            occurrence.LifecycleState == EventLifecycleState.Draft ? "draft-not-cancellable" : "not-cancellable",
+                            $"A {occurrence.LifecycleState.ToString().ToLowerInvariant()} occurrence cannot be cancelled."));
+
+                        continue;
+                    }
+
+                    occurrence.LifecycleState = EventLifecycleState.Cancelled;
+                    occurrence.CurrentVersionNumber += 1;
+                    occurrence.UpdatedAt = now;
+
+                    RecordAndStage(occurrence, EventVersionActions.SeriesCancel, userId, userRole, now);
+
+                    result.AffectedEventIds.Add(occurrence.Id);
                 }
 
-                if (!EventLifecyclePolicy.CanTransition(occurrence.LifecycleState, EventLifecycleState.Cancelled))
-                {
-                    result.Skipped.Add(Skip(
-                        occurrence,
-                        occurrence.LifecycleState == EventLifecycleState.Draft ? "draft-not-cancellable" : "not-cancellable",
-                        $"A {occurrence.LifecycleState.ToString().ToLowerInvariant()} occurrence cannot be cancelled."));
+                series.Status = EventSeriesStatus.Cancelled;
+                series.UpdatedAt = now;
 
-                    continue;
-                }
-
-                occurrence.LifecycleState = EventLifecycleState.Cancelled;
-                occurrence.CurrentVersionNumber += 1;
-                occurrence.UpdatedAt = now;
-
-                RecordAndStage(occurrence, EventVersionActions.SeriesCancel, userId, userRole, now);
-
-                result.AffectedEventIds.Add(occurrence.Id);
-            }
-
-            series.Status = EventSeriesStatus.Cancelled;
-            series.UpdatedAt = now;
-
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+            });
 
             result.AffectedCount = result.AffectedEventIds.Count;
             await InvalidateAsync(result.AffectedEventIds);
@@ -676,40 +719,49 @@ public class EventSeriesService : IEventSeriesService
 
             var deletedImageUrls = new List<string>();
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
-
-            foreach (var occurrence in toDetach)
+            // The context enables retry-on-failure, and that strategy rejects a
+            // user-initiated transaction unless the whole unit runs through it.
+            var strategy = _db.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
             {
-                occurrence.SeriesId = null;
-                occurrence.OccurrenceIndex = null;
-                occurrence.CurrentVersionNumber += 1;
-                occurrence.UpdatedAt = now;
+                await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                RecordAndStage(occurrence, EventVersionActions.SeriesDetach, userId, userRole, now);
-            }
+                deletedImageUrls.Clear();
+                result.AffectedEventIds.Clear();
 
-            if (toDelete.Count > 0)
-            {
-                var deleteIds = toDelete.Select(o => o.Id).ToList();
+                foreach (var occurrence in toDetach)
+                {
+                    occurrence.SeriesId = null;
+                    occurrence.OccurrenceIndex = null;
+                    occurrence.CurrentVersionNumber += 1;
+                    occurrence.UpdatedAt = now;
 
-                deletedImageUrls.AddRange(await _db.EventImages
-                    .Where(i => deleteIds.Contains(i.EventId))
-                    .Select(i => i.ImageUrl)
-                    .ToListAsync());
+                    RecordAndStage(occurrence, EventVersionActions.SeriesDetach, userId, userRole, now);
+                }
 
-                foreach (var id in deleteIds)
-                    _outboxWriter.StageDelete(id);
+                if (toDelete.Count > 0)
+                {
+                    var deleteIds = toDelete.Select(o => o.Id).ToList();
 
-                _db.Events.RemoveRange(toDelete);
-                result.AffectedEventIds.AddRange(deleteIds);
-            }
+                    deletedImageUrls.AddRange(await _db.EventImages
+                        .Where(i => deleteIds.Contains(i.EventId))
+                        .Select(i => i.ImageUrl)
+                        .ToListAsync());
 
-            await _db.SaveChangesAsync();
+                    foreach (var id in deleteIds)
+                        _outboxWriter.StageDelete(id);
 
-            _db.EventSeries.Remove(series);
-            await _db.SaveChangesAsync();
+                    _db.Events.RemoveRange(toDelete);
+                    result.AffectedEventIds.AddRange(deleteIds);
+                }
 
-            await transaction.CommitAsync();
+                await _db.SaveChangesAsync();
+
+                _db.EventSeries.Remove(series);
+                await _db.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+            });
 
             if (deletedImageUrls.Count > 0)
                 _ = Task.WhenAll(deletedImageUrls.Select(url => _blobService.DeleteBlobAsync(url)));
@@ -746,12 +798,18 @@ public class EventSeriesService : IEventSeriesService
             occurrence.CurrentVersionNumber += 1;
             occurrence.UpdatedAt = now;
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
+            // The context enables retry-on-failure, and that strategy rejects a
+            // user-initiated transaction unless the whole unit runs through it.
+            var strategy = _db.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _db.Database.BeginTransactionAsync();
 
-            RecordAndStage(occurrence, EventVersionActions.SeriesDetach, userId, userRole, now, previous);
+                RecordAndStage(occurrence, EventVersionActions.SeriesDetach, userId, userRole, now, previous);
 
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+            });
 
             await InvalidateAsync([eventId]);
 
