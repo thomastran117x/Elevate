@@ -293,7 +293,10 @@ namespace backend.main.application.bootstrap
                 if (featureFlags.IsEnabled(FeatureFlagKeys.StorageOrphanCleanup))
                     services.AddHostedService<OrphanBlobCleanupService>();
 
-                if (featureFlags.IsEnabled(FeatureFlagKeys.Clubs))
+                // Named after the surfaces that actually produce typing rather than the club
+                // parent, so the sweeper's lifetime tracks what it reaps.
+                if (featureFlags.IsEnabled(FeatureFlagKeys.ClubsDiscussions)
+                    || featureFlags.IsEnabled(FeatureFlagKeys.ClubsPosts))
                     services.AddHostedService<TypingExpirySweeper>();
             }
 

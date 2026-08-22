@@ -1,6 +1,8 @@
 using backend.main.features.clubs.discussions.replies.contracts.responses;
 using backend.main.features.clubs.posts.comments.contracts.responses;
 
+using backend.main.shared.utilities.logger;
+
 using Microsoft.AspNetCore.SignalR;
 
 namespace backend.main.features.clubs.realtime;
@@ -44,10 +46,34 @@ public sealed class ClubRealtimeNotifier : IClubRealtimeNotifier
             postId, commentId, likeCount, dislikeCount));
 
     private Task ToClub(int clubId, string eventName, object payload) =>
-        _hub.Clients.Group(ClubRealtimeGroups.Club(clubId)).SendAsync(eventName, payload);
+        Dispatch(_hub.Clients.Group(ClubRealtimeGroups.Club(clubId)), eventName, payload);
 
     private Task ToPost(int clubId, int postId, string eventName, object payload) =>
-        _hub.Clients.Group(ClubRealtimeGroups.Post(clubId, postId)).SendAsync(eventName, payload);
+        Dispatch(_hub.Clients.Group(ClubRealtimeGroups.Post(clubId, postId)), eventName, payload);
+
+    /// <summary>
+    /// Fans out without blocking the caller.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not awaited. Group delivery waits on each subscriber's transport buffer,
+    /// so awaiting it inside an HTTP handler lets one back-pressured client hold up the
+    /// response of the member who posted — on the club group, every other reader of the club.
+    /// The SSE brokers this replaced were fire-and-forget (<c>TryWrite</c>) for the same
+    /// reason; a failed broadcast is logged rather than surfaced, since the write itself
+    /// already succeeded and the client reconciles on its next connect.
+    /// </remarks>
+    private static Task Dispatch(IClientProxy clients, string eventName, object payload)
+    {
+        _ = clients
+            .SendAsync(eventName, payload)
+            .ContinueWith(
+                task => Logger.Error(task.Exception!, $"Failed to broadcast '{eventName}'."),
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default);
+
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>Reaction counts only; the actor's own reaction is deliberately not broadcast.</summary>

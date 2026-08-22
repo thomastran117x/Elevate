@@ -115,37 +115,39 @@ namespace backend.main.features.events
                 await ValidateUploadedImageUrlsAsync(clubId, userId, requestedImageUrls);
 
                 var now = GetUtcNow();
-                var ev = new Events
-                {
-                    Name = name,
-                    Description = description,
-                    Location = location,
-                    StartTime = startTime,
-                    EndTime = endTime,
-                    isPrivate = isPrivate,
-                    maxParticipants = maxParticipants,
-                    registerCost = registerCost,
-                    ClubId = clubId,
-                    LifecycleState = EventLifecycleState.Draft,
-                    Category = category,
-                    VenueName = venueName,
-                    City = city,
-                    Latitude = latitude,
-                    Longitude = longitude,
-                    Tags = NormalizeTags(tags),
-                    CurrentVersionNumber = 1,
-                    CreatedAt = now,
-                    UpdatedAt = now
-                };
 
                 // The context enables retry-on-failure, and that strategy rejects a
-                // user-initiated transaction unless the whole unit runs through it.
+                // user-initiated transaction unless the whole unit runs through it. The entity
+                // is built inside the delegate because a retry re-runs it, and reusing an
+                // instance from a previous attempt would re-Add one the change tracker already
+                // knows, inserting a duplicate row and staging the outbox entry twice.
                 var strategy = _db.Database.CreateExecutionStrategy();
                 var created = await strategy.ExecuteAsync(async () =>
                 {
                     await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                    var draft = await _eventsRepository.CreateAsync(ev);
+                    var draft = await _eventsRepository.CreateAsync(new Events
+                    {
+                        Name = name,
+                        Description = description,
+                        Location = location,
+                        StartTime = startTime,
+                        EndTime = endTime,
+                        isPrivate = isPrivate,
+                        maxParticipants = maxParticipants,
+                        registerCost = registerCost,
+                        ClubId = clubId,
+                        LifecycleState = EventLifecycleState.Draft,
+                        Category = category,
+                        VenueName = venueName,
+                        City = city,
+                        Latitude = latitude,
+                        Longitude = longitude,
+                        Tags = NormalizeTags(tags),
+                        CurrentVersionNumber = 1,
+                        CreatedAt = now,
+                        UpdatedAt = now
+                    });
                     await _db.SaveChangesAsync();
 
                     AddVersionRecord(

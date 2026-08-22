@@ -148,6 +148,12 @@ public sealed class ClubRealtimeHub : Hub
         if (kind is not (ClubRealtimeGroups.DiscussionKind or ClubRealtimeGroups.PostKind))
             throw new HubException("Unknown thread kind.");
 
+        // The join that precedes this is already gated, but typing is the one hub method that
+        // carried no check of its own; disabling a surface should silence it here too.
+        EnsureFeature(kind == ClubRealtimeGroups.DiscussionKind
+            ? FeatureFlagKeys.ClubsDiscussions
+            : FeatureFlagKeys.ClubsPosts);
+
         var (userId, _) = GetOptionalUser();
         if (!userId.HasValue)
             throw new HubException("Authentication is required to broadcast typing.");
