@@ -163,72 +163,78 @@ namespace backend.main.features.events.registration
 
             try
             {
-                await using var transaction = await _db.Database.BeginTransactionAsync(
-                    IsolationLevel.Serializable);
-
-                var trackedEvent = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
-                if (trackedEvent == null)
-                    throw new ResourceNotFoundException($"Event {eventId} not found");
-
-                if (!EventLifecyclePolicy.AllowsRegistration(trackedEvent.LifecycleState))
-                    throw new ConflictException("Registration is only available for published events.");
-
-                if (trackedEvent.StartTime.HasValue && trackedEvent.StartTime <= DateTime.UtcNow)
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
                 {
-                    var message = trackedEvent.EndTime.HasValue && trackedEvent.EndTime <= DateTime.UtcNow
-                        ? "Event has already ended"
-                        : "Registration is closed — the event has already started";
-                    throw new ConflictException(message);
-                }
+                    await using var transaction = await _db.Database.BeginTransactionAsync(
+                        IsolationLevel.Serializable);
 
-                // Single COUNT query serves both capacity enforcement and counter reconciliation.
-                // Done inside the SERIALIZABLE transaction so no concurrent registration can
-                // slip in between the count read and the insert/reactivation.
-                var activeCount = await _db.EventRegistrations
-                    .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Active);
+                    var trackedEvent = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+                    if (trackedEvent == null)
+                        throw new ResourceNotFoundException($"Event {eventId} not found");
 
-                if (trackedEvent.maxParticipants > 0 && activeCount >= trackedEvent.maxParticipants)
-                    throw new ConflictException("Event is full");
+                    if (!EventLifecyclePolicy.AllowsRegistration(trackedEvent.LifecycleState))
+                        throw new ConflictException("Registration is only available for published events.");
 
-                var existing = await _db.EventRegistrations
-                    .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
-
-                if (existing != null)
-                {
-                    if (existing.Status == RegistrationStatus.Active)
-                        throw new ConflictException("Already registered for this event");
-
-                    // Reactivate the cancelled row
-                    existing.Status = RegistrationStatus.Active;
-                    existing.CancelledAt = null;
-                    existing.Notes = Sanitize(request?.Notes);
-                    existing.PhoneNumber = Sanitize(request?.PhoneNumber);
-                    existing.DietaryNeeds = Sanitize(request?.DietaryNeeds);
-                }
-                else
-                {
-                    _db.EventRegistrations.Add(new EventRegistration
+                    if (trackedEvent.StartTime.HasValue && trackedEvent.StartTime <= DateTime.UtcNow)
                     {
-                        EventId = eventId,
-                        UserId = userId,
-                        CreatedAt = DateTime.UtcNow,
-                        Status = RegistrationStatus.Active,
-                        Notes = Sanitize(request?.Notes),
-                        PhoneNumber = Sanitize(request?.PhoneNumber),
-                        DietaryNeeds = Sanitize(request?.DietaryNeeds)
-                    });
-                }
+                        var message = trackedEvent.EndTime.HasValue && trackedEvent.EndTime <= DateTime.UtcNow
+                            ? "Event has already ended"
+                            : "Registration is closed — the event has already started";
+                        throw new ConflictException(message);
+                    }
 
-                // Set the counter from source truth rather than blindly incrementing.
-                // The new/reactivated registration is not yet saved, so the DB count
-                // is still activeCount; the correct post-save value is activeCount + 1.
-                trackedEvent.RegistrationCount = activeCount + 1;
-                trackedEvent.UpdatedAt = DateTime.UtcNow;
+                    // Single COUNT query serves both capacity enforcement and counter reconciliation.
+                    // Done inside the SERIALIZABLE transaction so no concurrent registration can
+                    // slip in between the count read and the insert/reactivation.
+                    var activeCount = await _db.EventRegistrations
+                        .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Active);
 
-                _outboxWriter.StageSync(trackedEvent);
+                    if (trackedEvent.maxParticipants > 0 && activeCount >= trackedEvent.maxParticipants)
+                        throw new ConflictException("Event is full");
 
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    var existing = await _db.EventRegistrations
+                        .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
+
+                    if (existing != null)
+                    {
+                        if (existing.Status == RegistrationStatus.Active)
+                            throw new ConflictException("Already registered for this event");
+
+                        // Reactivate the cancelled row
+                        existing.Status = RegistrationStatus.Active;
+                        existing.CancelledAt = null;
+                        existing.Notes = Sanitize(request?.Notes);
+                        existing.PhoneNumber = Sanitize(request?.PhoneNumber);
+                        existing.DietaryNeeds = Sanitize(request?.DietaryNeeds);
+                    }
+                    else
+                    {
+                        _db.EventRegistrations.Add(new EventRegistration
+                        {
+                            EventId = eventId,
+                            UserId = userId,
+                            CreatedAt = DateTime.UtcNow,
+                            Status = RegistrationStatus.Active,
+                            Notes = Sanitize(request?.Notes),
+                            PhoneNumber = Sanitize(request?.PhoneNumber),
+                            DietaryNeeds = Sanitize(request?.DietaryNeeds)
+                        });
+                    }
+
+                    // Set the counter from source truth rather than blindly incrementing.
+                    // The new/reactivated registration is not yet saved, so the DB count
+                    // is still activeCount; the correct post-save value is activeCount + 1.
+                    trackedEvent.RegistrationCount = activeCount + 1;
+                    trackedEvent.UpdatedAt = DateTime.UtcNow;
+
+                    _outboxWriter.StageSync(trackedEvent);
+
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                });
 
                 await _refreshCache.RemoveAsync(MembershipKey(userId, eventId));
                 await InvalidateListsAsync(userId, eventId);
@@ -274,50 +280,56 @@ namespace backend.main.features.events.registration
 
             try
             {
-                await using var transaction = await _db.Database.BeginTransactionAsync(
-                    IsolationLevel.Serializable);
-
-                var trackedEvent = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
-                if (trackedEvent != null && trackedEvent.StartTime.HasValue && trackedEvent.StartTime.Value <= DateTime.UtcNow)
-                    throw new ConflictException("Cannot unregister — the event has already started");
-
-                var registration = await _db.EventRegistrations
-                    .FirstOrDefaultAsync(r =>
-                        r.EventId == eventId &&
-                        r.UserId == userId &&
-                        r.Status == RegistrationStatus.Active);
-
-                if (registration == null)
-                    throw new ResourceNotFoundException("Registration not found");
-
-                var now = DateTime.UtcNow;
-                registration.Status = RegistrationStatus.Cancelled;
-                registration.CancelledAt = now;
-
-                // MUST flush before promoting: the promoter counts active registrations, and
-                // would otherwise still see this row as Active and find no free seat — a silent
-                // failure in which the waitlist simply never advances.
-                await _db.SaveChangesAsync();
-
-                promotions = await _waitlistPromoter.PromoteWithinTransactionAsync(eventId, now);
-
-                if (trackedEvent != null)
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
                 {
-                    eventName = trackedEvent.Name;
-                    eventStartsAtUtc = trackedEvent.StartTime;
+                    await using var transaction = await _db.Database.BeginTransactionAsync(
+                        IsolationLevel.Serializable);
 
-                    // Assign from source truth rather than `activeCount - 1`: a promotion may
-                    // have added a registration inside this same transaction.
-                    trackedEvent.RegistrationCount = await _db.EventRegistrations
-                        .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Active);
-                    trackedEvent.WaitlistCount = await _db.EventWaitlistEntries
-                        .CountAsync(w => w.EventId == eventId && w.Status == EventWaitlistEntryStatus.Waiting);
-                    trackedEvent.UpdatedAt = now;
-                    _outboxWriter.StageSync(trackedEvent);
-                }
+                    var trackedEvent = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+                    if (trackedEvent != null && trackedEvent.StartTime.HasValue && trackedEvent.StartTime.Value <= DateTime.UtcNow)
+                        throw new ConflictException("Cannot unregister — the event has already started");
 
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    var registration = await _db.EventRegistrations
+                        .FirstOrDefaultAsync(r =>
+                            r.EventId == eventId &&
+                            r.UserId == userId &&
+                            r.Status == RegistrationStatus.Active);
+
+                    if (registration == null)
+                        throw new ResourceNotFoundException("Registration not found");
+
+                    var now = DateTime.UtcNow;
+                    registration.Status = RegistrationStatus.Cancelled;
+                    registration.CancelledAt = now;
+
+                    // MUST flush before promoting: the promoter counts active registrations, and
+                    // would otherwise still see this row as Active and find no free seat — a silent
+                    // failure in which the waitlist simply never advances.
+                    await _db.SaveChangesAsync();
+
+                    promotions = await _waitlistPromoter.PromoteWithinTransactionAsync(eventId, now);
+
+                    if (trackedEvent != null)
+                    {
+                        eventName = trackedEvent.Name;
+                        eventStartsAtUtc = trackedEvent.StartTime;
+
+                        // Assign from source truth rather than `activeCount - 1`: a promotion may
+                        // have added a registration inside this same transaction.
+                        trackedEvent.RegistrationCount = await _db.EventRegistrations
+                            .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Active);
+                        trackedEvent.WaitlistCount = await _db.EventWaitlistEntries
+                            .CountAsync(w => w.EventId == eventId && w.Status == EventWaitlistEntryStatus.Waiting);
+                        trackedEvent.UpdatedAt = now;
+                        _outboxWriter.StageSync(trackedEvent);
+                    }
+
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                });
             }
             catch (Exception e)
             {
@@ -355,26 +367,33 @@ namespace backend.main.features.events.registration
 
             try
             {
-                await using var transaction = await _db.Database.BeginTransactionAsync(
-                    IsolationLevel.Serializable);
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                var registration = await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _db.Database.BeginTransactionAsync(
+                        IsolationLevel.Serializable);
 
-                // Re-read inside the transaction so concurrent UnregisterAsync cannot
-                // soft-delete the row between our Status check and SaveChanges.
-                var registration = await _db.EventRegistrations
-                    .FirstOrDefaultAsync(r =>
-                        r.EventId == eventId &&
-                        r.UserId == userId &&
-                        r.Status == RegistrationStatus.Active);
+                    // Re-read inside the transaction so concurrent UnregisterAsync cannot
+                    // soft-delete the row between our Status check and SaveChanges.
+                    var reg = await _db.EventRegistrations
+                        .FirstOrDefaultAsync(r =>
+                            r.EventId == eventId &&
+                            r.UserId == userId &&
+                            r.Status == RegistrationStatus.Active);
 
-                if (registration == null)
-                    throw new ResourceNotFoundException("Registration not found");
+                    if (reg == null)
+                        throw new ResourceNotFoundException("Registration not found");
 
-                registration.Notes = Sanitize(request.Notes);
-                registration.PhoneNumber = Sanitize(request.PhoneNumber);
-                registration.DietaryNeeds = Sanitize(request.DietaryNeeds);
+                    reg.Notes = Sanitize(request.Notes);
+                    reg.PhoneNumber = Sanitize(request.PhoneNumber);
+                    reg.DietaryNeeds = Sanitize(request.DietaryNeeds);
 
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return reg;
+                });
 
                 await _refreshCache.RemoveAsync(MembershipKey(userId, eventId));
                 await InvalidateListsAsync(userId, eventId);

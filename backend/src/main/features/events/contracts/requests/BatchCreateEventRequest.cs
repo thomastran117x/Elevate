@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 using backend.main.features.events;
@@ -42,6 +43,7 @@ namespace backend.main.features.events.contracts.requests
 
         [Required(ErrorMessage = "Category is required.")]
         [EnumDataType(typeof(EventCategory))]
+        [JsonConverter(typeof(JsonStringEnumConverter))]
         public EventCategory Category
         {
             get; set;

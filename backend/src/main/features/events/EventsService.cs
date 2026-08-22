@@ -413,26 +413,33 @@ namespace backend.main.features.events
                     UpdatedAt = now
                 };
 
-                await using var transaction = await _db.Database.BeginTransactionAsync();
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                var created = await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                var created = await _eventsRepository.CreateAsync(ev);
-                await _db.SaveChangesAsync();
+                    var draft = await _eventsRepository.CreateAsync(ev);
+                    await _db.SaveChangesAsync();
 
-                AddVersionRecord(
-                    created,
-                    EventVersionActions.Create,
-                    actorUserId: userId,
-                    actorRole: NormalizeActorRole(userRole),
-                    rollbackSourceVersionNumber: null,
-                    changedFields: BuildChangedFields(null, BuildSnapshot(created)),
-                    createdAt: now);
+                    AddVersionRecord(
+                        draft,
+                        EventVersionActions.Create,
+                        actorUserId: userId,
+                        actorRole: NormalizeActorRole(userRole),
+                        rollbackSourceVersionNumber: null,
+                        changedFields: BuildChangedFields(null, BuildSnapshot(draft)),
+                        createdAt: now);
 
-                if (requestedImageUrls.Count > 0)
-                    await _imageRepository.AddImagesAsync(created.Id, requestedImageUrls);
+                    if (requestedImageUrls.Count > 0)
+                        await _imageRepository.AddImagesAsync(draft.Id, requestedImageUrls);
 
-                _outboxWriter.StageSync(created);
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    _outboxWriter.StageSync(draft);
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return draft;
+                });
 
                 var withImages = await _eventsRepository.GetByIdAsync(created.Id)
                     ?? throw new InternalServerErrorException("Failed to reload created draft event");
@@ -536,27 +543,33 @@ namespace backend.main.features.events
                 existing.CurrentVersionNumber += 1;
                 existing.UpdatedAt = now;
 
-                await using var transaction = await _db.Database.BeginTransactionAsync();
-
-                if (requestedImageUrls != null)
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
                 {
-                    await _imageRepository.DeleteAllByEventIdAsync(eventId);
-                    if (requestedImageUrls.Count > 0)
-                        await _imageRepository.AddImagesAsync(eventId, requestedImageUrls);
-                }
+                    await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                AddVersionRecord(
-                    existing,
-                    EventVersionActions.Update,
-                    actorUserId: userId,
-                    actorRole: NormalizeActorRole(userRole),
-                    rollbackSourceVersionNumber: null,
-                    changedFields: BuildChangedFields(previousSnapshot, BuildSnapshot(existing)),
-                    createdAt: now);
+                    if (requestedImageUrls != null)
+                    {
+                        await _imageRepository.DeleteAllByEventIdAsync(eventId);
+                        if (requestedImageUrls.Count > 0)
+                            await _imageRepository.AddImagesAsync(eventId, requestedImageUrls);
+                    }
 
-                _outboxWriter.StageSync(existing);
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    AddVersionRecord(
+                        existing,
+                        EventVersionActions.Update,
+                        actorUserId: userId,
+                        actorRole: NormalizeActorRole(userRole),
+                        rollbackSourceVersionNumber: null,
+                        changedFields: BuildChangedFields(previousSnapshot, BuildSnapshot(existing)),
+                        createdAt: now);
+
+                    _outboxWriter.StageSync(existing);
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                });
 
                 var withImages = await _eventsRepository.GetByIdAsync(eventId)
                     ?? throw new InternalServerErrorException("Failed to reload updated draft event");
@@ -672,26 +685,32 @@ namespace backend.main.features.events
 
                 var changedFields = BuildChangedFields(previousSnapshot, BuildSnapshot(existing));
 
-                await using var transaction = await _db.Database.BeginTransactionAsync();
-
-                if (requestedImageUrls != null)
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
                 {
-                    await _imageRepository.DeleteAllByEventIdAsync(eventId);
-                    await _imageRepository.AddImagesAsync(eventId, requestedImageUrls);
-                }
+                    await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                AddVersionRecord(
-                    existing,
-                    EventVersionActions.Update,
-                    actorUserId: userId,
-                    actorRole: NormalizeActorRole(userRole),
-                    rollbackSourceVersionNumber: null,
-                    changedFields: changedFields,
-                    createdAt: existing.UpdatedAt);
+                    if (requestedImageUrls != null)
+                    {
+                        await _imageRepository.DeleteAllByEventIdAsync(eventId);
+                        await _imageRepository.AddImagesAsync(eventId, requestedImageUrls);
+                    }
 
-                _outboxWriter.StageSync(existing);
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    AddVersionRecord(
+                        existing,
+                        EventVersionActions.Update,
+                        actorUserId: userId,
+                        actorRole: NormalizeActorRole(userRole),
+                        rollbackSourceVersionNumber: null,
+                        changedFields: changedFields,
+                        createdAt: existing.UpdatedAt);
+
+                    _outboxWriter.StageSync(existing);
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                });
 
                 var withImages = await _eventsRepository.GetByIdAsync(eventId)
                     ?? throw new InternalServerErrorException("Failed to reload updated event");
@@ -722,14 +741,20 @@ namespace backend.main.features.events
                 var ev = await GetEvent(eventId);
                 await EnsureCanManageEventAsync(ev, userId, userRole);
 
-                await using var transaction = await _db.Database.BeginTransactionAsync();
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                if (!await _eventsRepository.DeleteAsync(eventId))
-                    throw new InternalServerErrorException("Delete failed");
+                    if (!await _eventsRepository.DeleteAsync(eventId))
+                        throw new InternalServerErrorException("Delete failed");
 
-                _outboxWriter.StageDelete(eventId);
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    _outboxWriter.StageDelete(eventId);
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                });
 
                 var urls = ev.Images.Select(i => i.ImageUrl).ToList();
                 if (urls.Count > 0)
@@ -882,27 +907,34 @@ namespace backend.main.features.events
                     UpdatedAt = now
                 }).ToList();
 
-                await using var transaction = await _db.Database.BeginTransactionAsync();
-
-                var created = await _eventsRepository.CreateManyAsync(entities);
-                await _db.SaveChangesAsync();
-
-                foreach (var (ev, item) in created.Zip(itemList))
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                var created = await strategy.ExecuteAsync(async () =>
                 {
-                    AddVersionRecord(
-                        ev,
-                        EventVersionActions.Create,
-                        actorUserId: userId,
-                        actorRole: NormalizeActorRole(userRole),
-                        rollbackSourceVersionNumber: null,
-                        changedFields: BuildChangedFields(null, BuildSnapshot(ev)),
-                        createdAt: now);
-                    await _imageRepository.AddImagesAsync(ev.Id, item.ImageUrls.Take(5));
-                    _outboxWriter.StageSync(ev);
-                }
+                    await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    var createdEntities = await _eventsRepository.CreateManyAsync(entities);
+                    await _db.SaveChangesAsync();
+
+                    foreach (var (ev, item) in createdEntities.Zip(itemList))
+                    {
+                        AddVersionRecord(
+                            ev,
+                            EventVersionActions.Create,
+                            actorUserId: userId,
+                            actorRole: NormalizeActorRole(userRole),
+                            rollbackSourceVersionNumber: null,
+                            changedFields: BuildChangedFields(null, BuildSnapshot(ev)),
+                            createdAt: now);
+                        await _imageRepository.AddImagesAsync(ev.Id, item.ImageUrls.Take(5));
+                        _outboxWriter.StageSync(ev);
+                    }
+
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return createdEntities;
+                });
 
                 var reloaded = await _eventsRepository.GetByIdsAsync(created.Select(e => e.Id));
                 var byId = reloaded.ToDictionary(e => e.Id);
@@ -951,48 +983,55 @@ namespace backend.main.features.events
                     .ToDictionaryAsync(ev => ev.Id);
 
                 var now = GetUtcNow();
-                await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                foreach (var item in itemList)
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
                 {
-                    var ev = trackedEvents[item.EventId];
-                    if (ev.LifecycleState == EventLifecycleState.Draft)
-                        throw new BadRequestException($"Event {ev.Id} must be updated through the draft workflow.");
+                    await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                    var previousSnapshot = BuildSnapshot(ev);
-
-                    ApplyBatchPatch(ev, item);
-
-                    // Batch update is another way to edit a single event, so an occurrence
-                    // changed here has to be flagged like any other one-off edit. Without this
-                    // a later "update this and following occurrences" would silently overwrite
-                    // the change, unlike the same edit made through the single-event endpoints.
-                    MarkSeriesOverridden(ev);
-
-                    ev.CurrentVersionNumber += 1;
-                    ev.UpdatedAt = now;
-
-                    var publishIssues = EventLifecyclePolicy.GetPublishIssues(ev, now);
-                    if (publishIssues.Count > 0)
+                    foreach (var item in itemList)
                     {
-                        throw new BadRequestException(
-                            $"Event {ev.Id} is not publish-ready: {string.Join(" ", publishIssues)}");
+                        var ev = trackedEvents[item.EventId];
+                        if (ev.LifecycleState == EventLifecycleState.Draft)
+                            throw new BadRequestException($"Event {ev.Id} must be updated through the draft workflow.");
+
+                        var previousSnapshot = BuildSnapshot(ev);
+
+                        ApplyBatchPatch(ev, item);
+
+                        // Batch update is another way to edit a single event, so an occurrence
+                        // changed here has to be flagged like any other one-off edit. Without this
+                        // a later "update this and following occurrences" would silently overwrite
+                        // the change, unlike the same edit made through the single-event endpoints.
+                        MarkSeriesOverridden(ev);
+
+                        ev.CurrentVersionNumber += 1;
+                        ev.UpdatedAt = now;
+
+                        var publishIssues = EventLifecyclePolicy.GetPublishIssues(ev, now);
+                        if (publishIssues.Count > 0)
+                        {
+                            throw new BadRequestException(
+                                $"Event {ev.Id} is not publish-ready: {string.Join(" ", publishIssues)}");
+                        }
+
+                        AddVersionRecord(
+                            ev,
+                            EventVersionActions.Update,
+                            actorUserId: userId,
+                            actorRole: NormalizeActorRole(userRole),
+                            rollbackSourceVersionNumber: null,
+                            changedFields: BuildChangedFields(previousSnapshot, BuildSnapshot(ev)),
+                            createdAt: now);
+
+                        _outboxWriter.StageSync(ev);
                     }
 
-                    AddVersionRecord(
-                        ev,
-                        EventVersionActions.Update,
-                        actorUserId: userId,
-                        actorRole: NormalizeActorRole(userRole),
-                        rollbackSourceVersionNumber: null,
-                        changedFields: BuildChangedFields(previousSnapshot, BuildSnapshot(ev)),
-                        createdAt: now);
-
-                    _outboxWriter.StageSync(ev);
-                }
-
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                });
 
                 await Task.WhenAll(requestedIds.Select(id => _refreshCache.RemoveAsync(EventCacheKeys.Event(id))));
                 await BumpEventListVersionAsync();
@@ -1032,14 +1071,21 @@ namespace backend.main.features.events
                     .SelectMany(ev => ev.Images.Select(i => i.ImageUrl))
                     .ToList();
 
-                await using var transaction = await _db.Database.BeginTransactionAsync();
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                var deleted = await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                foreach (var id in requestedIds)
-                    _outboxWriter.StageDelete(id);
+                    foreach (var id in requestedIds)
+                        _outboxWriter.StageDelete(id);
 
-                var deleted = await _eventsRepository.DeleteManyAsync(requestedIds);
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    var deletedCount = await _eventsRepository.DeleteManyAsync(requestedIds);
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return deletedCount;
+                });
 
                 if (imageUrls.Count > 0)
                     _ = Task.WhenAll(imageUrls.Select(url => _blobService.DeleteBlobAsync(url)));
@@ -1179,20 +1225,26 @@ namespace backend.main.features.events
 
                 var changedFields = BuildChangedFields(currentSnapshot, BuildSnapshot(ev));
 
-                await using var transaction = await _db.Database.BeginTransactionAsync();
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                AddVersionRecord(
-                    ev,
-                    EventVersionActions.Rollback,
-                    actorUserId: userId,
-                    actorRole: NormalizeActorRole(userRole),
-                    rollbackSourceVersionNumber: targetVersion.VersionNumber,
-                    changedFields: changedFields,
-                    createdAt: ev.UpdatedAt);
+                    AddVersionRecord(
+                        ev,
+                        EventVersionActions.Rollback,
+                        actorUserId: userId,
+                        actorRole: NormalizeActorRole(userRole),
+                        rollbackSourceVersionNumber: targetVersion.VersionNumber,
+                        changedFields: changedFields,
+                        createdAt: ev.UpdatedAt);
 
-                _outboxWriter.StageSync(ev);
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    _outboxWriter.StageSync(ev);
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                });
 
                 await CacheEventAsync(ev);
                 await BumpEventListVersionAsync();
@@ -1495,20 +1547,26 @@ namespace backend.main.features.events
                 ev.CurrentVersionNumber += 1;
                 ev.UpdatedAt = now;
 
-                await using var transaction = await _db.Database.BeginTransactionAsync();
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                AddVersionRecord(
-                    ev,
-                    versionAction,
-                    actorUserId: userId,
-                    actorRole: NormalizeActorRole(userRole),
-                    rollbackSourceVersionNumber: null,
-                    changedFields: BuildChangedFields(previousSnapshot, BuildSnapshot(ev)),
-                    createdAt: now);
+                    AddVersionRecord(
+                        ev,
+                        versionAction,
+                        actorUserId: userId,
+                        actorRole: NormalizeActorRole(userRole),
+                        rollbackSourceVersionNumber: null,
+                        changedFields: BuildChangedFields(previousSnapshot, BuildSnapshot(ev)),
+                        createdAt: now);
 
-                _outboxWriter.StageSync(ev);
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    _outboxWriter.StageSync(ev);
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                });
 
                 var withImages = await _eventsRepository.GetByIdAsync(eventId)
                     ?? throw new InternalServerErrorException("Failed to reload lifecycle transition result.");
@@ -1763,15 +1821,26 @@ namespace backend.main.features.events
         {
             try
             {
-                await using var transaction = await _db.Database.BeginTransactionAsync();
+                // The context enables retry-on-failure, and that strategy rejects a
+                // user-initiated transaction unless the whole unit runs through it.
+                var strategy = _db.Database.CreateExecutionStrategy();
+                var found = await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                var ev = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
-                if (ev == null)
+                    var ev = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+                    if (ev == null)
+                        return false;
+
+                    _outboxWriter.StageSync(ev);
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return true;
+                });
+
+                if (!found)
                     return;
 
-                _outboxWriter.StageSync(ev);
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
                 await _refreshCache.RemoveAsync(EventCacheKeys.Event(eventId));
             }
             catch (Exception e)
