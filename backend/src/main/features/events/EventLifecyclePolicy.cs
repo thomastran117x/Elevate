@@ -67,6 +67,24 @@ public static class EventLifecyclePolicy
         lifecycleState is EventLifecycleState.Draft or EventLifecycleState.Archived;
 
     /// <summary>
+    /// Moves an event to <paramref name="target"/> and records the bookkeeping that makes the
+    /// change undoable.
+    /// <para>
+    /// Every path that changes <see cref="Events.LifecycleState"/> must go through here,
+    /// including the bulk series operations. Setting the state directly leaves the previous
+    /// state pointing at a stale value, so the editor would offer an Undo that restores the
+    /// wrong state — e.g. putting a cancelled occurrence back on sale as Published when it was
+    /// actually Paused immediately before.
+    /// </para>
+    /// </summary>
+    public static void ApplyTransition(Events ev, EventLifecycleState target, DateTime now)
+    {
+        ev.PreviousLifecycleState = ev.LifecycleState;
+        ev.LifecycleChangedAt = now;
+        ev.LifecycleState = target;
+    }
+
+    /// <summary>
     /// Deadline for undoing the most recent lifecycle change, or null when there is nothing to
     /// undo or the window has already lapsed.
     /// </summary>

@@ -1605,11 +1605,9 @@ namespace backend.main.features.events
                     }
                 }
 
-                // Remembered so the organizer can undo a misclick in one step; the revert window
-                // is measured from LifecycleChangedAt.
-                ev.PreviousLifecycleState = ev.LifecycleState;
-                ev.LifecycleChangedAt = now;
-                ev.LifecycleState = targetState;
+                // Records the previous state so the organizer can undo a misclick in one step;
+                // the revert window is measured from LifecycleChangedAt.
+                EventLifecyclePolicy.ApplyTransition(ev, targetState, now);
                 ev.CurrentVersionNumber += 1;
                 ev.UpdatedAt = now;
 

@@ -6,7 +6,10 @@
     aria-labelledby="confirm-dialog-title"
     (click)="onBackdropClick($event)"
   >
-    <div class="w-full max-w-md rounded-2xl border border-line-strong bg-surface p-6 shadow-xl">
+    <div
+      #panel
+      class="w-full max-w-md rounded-2xl border border-line-strong bg-surface p-6 shadow-xl"
+    >
       <h3
         id="confirm-dialog-title"
         class="text-lg font-bold tracking-tight"

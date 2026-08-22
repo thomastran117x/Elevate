@@ -4,6 +4,7 @@ import { map, Observable } from 'rxjs';
 import { environment } from '@environments/environment';
 import {
   ALL_CATEGORIES,
+  ALL_LIFECYCLE_STATES,
   ALL_STATUSES,
   ClubType,
   EventApiResponse,
@@ -223,13 +224,14 @@ export class EventsService {
   }
 
   private normalizeLifecycleState(value: string | number | undefined): EventLifecycleState {
-    const lifecycles: EventLifecycleState[] = ['Draft', 'Published', 'Cancelled', 'Archived'];
-
+    // Reuses the shared array rather than a local copy. A private list here silently decoded
+    // every Paused event (ordinal 4) as Published, which hid the pause banner and left the
+    // registration controls looking open.
     if (typeof value === 'number') {
-      return lifecycles[value] ?? 'Published';
+      return ALL_LIFECYCLE_STATES[value] ?? 'Published';
     }
 
-    return lifecycles.includes(value as EventLifecycleState)
+    return ALL_LIFECYCLE_STATES.includes(value as EventLifecycleState)
       ? (value as EventLifecycleState)
       : 'Published';
   }

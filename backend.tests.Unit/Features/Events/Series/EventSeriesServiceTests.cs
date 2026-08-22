@@ -489,6 +489,64 @@ public class EventSeriesServiceTests
         result.Skipped.Should().OnlyContain(s => s.Reason == "draft-not-cancellable");
     }
 
+    [Fact]
+    public async Task CancelAsync_ShouldRecordTheStateItCancelledFrom_SoUndoDoesNotRestoreTheWrongOne()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var series = await harness.CreateSeriesAsync(occurrenceCount: 2, publish: true);
+
+        // One occurrence was paused before the series was cancelled. Undo must take it back to
+        // Paused, not to the Published state it held before the pause.
+        var paused = await harness.OccurrenceAsync(series.Id, index: 0);
+        EventLifecyclePolicy.ApplyTransition(
+            paused, EventLifecycleState.Paused, new DateTime(2026, 4, 30, 0, 0, 0, DateTimeKind.Utc));
+        await harness.Db.SaveChangesAsync();
+
+        await harness.Service.CancelAsync(
+            series.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new CancelEventSeriesRequest());
+
+        var cancelled = await harness.Db.Events.SingleAsync(e => e.Id == paused.Id);
+        cancelled.LifecycleState.Should().Be(EventLifecycleState.Cancelled);
+        cancelled.PreviousLifecycleState.Should().Be(
+            EventLifecycleState.Paused,
+            "a bulk cancel must record the same bookkeeping as the single-event path");
+    }
+
+    [Fact]
+    public async Task CancelAsync_ShouldStampWhenTheStateChanged_SoTheUndoWindowIsMeasuredFromTheCancel()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var series = await harness.CreateSeriesAsync(occurrenceCount: 1, publish: true);
+
+        // The harness clock is pinned to 2026-05-01, so the stale stamp has to predate it.
+        var stale = new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc);
+        var occurrence = await harness.OccurrenceAsync(series.Id, index: 0);
+        occurrence.LifecycleChangedAt = stale;
+        await harness.Db.SaveChangesAsync();
+
+        await harness.Service.CancelAsync(
+            series.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new CancelEventSeriesRequest());
+
+        (await harness.Db.Events.SingleAsync(e => e.Id == occurrence.Id))
+            .LifecycleChangedAt.Should().BeAfter(stale);
+    }
+
+    [Fact]
+    public async Task PublishAsync_ShouldRecordTheStateItPublishedFrom()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var series = await harness.CreateSeriesAsync(occurrenceCount: 2, publish: true);
+
+        harness.Db.Events.Should().OnlyContain(e =>
+            e.PreviousLifecycleState == EventLifecycleState.Draft);
+    }
+
     // ------------------------------------------------------------------ delete
 
     [Fact]
@@ -530,6 +588,49 @@ public class EventSeriesServiceTests
         harness.Db.Events.Count().Should().Be(3);
         harness.Db.Events.Should().OnlyContain(e => e.SeriesId == null);
         harness.Db.EventSeries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldNotHardDeleteLiveOccurrences_EvenWhenNobodyHasRegistered()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var series = await harness.CreateSeriesAsync(occurrenceCount: 3, publish: true);
+
+        var result = await harness.Service.DeleteAsync(
+            series.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new DeleteEventSeriesRequest { Scope = EventSeriesDeleteScope.AllUnregistered });
+
+        // The single and batch delete endpoints both refuse a published event; the series
+        // endpoint must not be a way around that.
+        harness.Db.Events.Count().Should().Be(3, "published occurrences are detached, not deleted");
+        harness.Db.Events.Should().OnlyContain(e => e.SeriesId == null);
+        harness.Db.Events.Should().OnlyContain(e => e.LifecycleState == EventLifecycleState.Published);
+        result.AffectedEventIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldStillHardDeleteArchivedAndDraftOccurrences()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var series = await harness.CreateSeriesAsync(occurrenceCount: 2, publish: true);
+
+        foreach (var occurrence in await harness.Db.Events.ToListAsync())
+        {
+            EventLifecyclePolicy.ApplyTransition(
+                occurrence, EventLifecycleState.Archived, new DateTime(2026, 4, 30, 0, 0, 0, DateTimeKind.Utc));
+        }
+
+        await harness.Db.SaveChangesAsync();
+
+        await harness.Service.DeleteAsync(
+            series.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new DeleteEventSeriesRequest { Scope = EventSeriesDeleteScope.AllUnregistered });
+
+        harness.Db.Events.Should().BeEmpty("archived occurrences are out of sight and deletable");
     }
 
     // ------------------------------------------------------------------ detach
