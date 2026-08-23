@@ -110,9 +110,19 @@ export class EventsTabComponent implements OnInit {
       .subscribe({
         next: (response) => {
           const updated = extractEnvelopeData(response);
-          if (updated) {
-            this.events = this.events.map((item) => (item.id === updated.id ? updated : item));
+          if (!updated) {
+            return;
           }
+
+          // A transition can move an event out of the filter that is showing it. Swapping the
+          // card in place would leave a Paused card sitting in the Published results with a
+          // stale total, so reload instead and let the server decide what belongs on the page.
+          if (this.selectedLifecycle && updated.lifecycleState !== this.selectedLifecycle) {
+            this.load();
+            return;
+          }
+
+          this.events = this.events.map((item) => (item.id === updated.id ? updated : item));
         },
         error: (err) => {
           this.error = getApiClientMessage(err, 'That change could not be applied.');

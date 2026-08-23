@@ -1008,6 +1008,101 @@ public class EventsServiceTests
     }
 
     [Fact]
+    public async Task RevertLastLifecycleChange_ShouldRefuseToReturnToDraft_OncePeopleHaveJoined()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 441,
+            lifecycleState: EventLifecycleState.Draft,
+            imageUrls: ["https://cdn.test/events/stranded.png"]);
+
+        await harness.Service.PublishEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        // Somebody registers inside the undo window.
+        var tracked = await harness.Db.Events.SingleAsync(item => item.Id == ev.Id);
+        tracked.RegistrationCount = 1;
+        await harness.Db.SaveChangesAsync();
+
+        var action = () => harness.Service.RevertLastLifecycleChangeAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        // Draft is invisible even to people holding a registration, so undoing the publish
+        // would strand them with a registration they can no longer see.
+        await action.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("*cannot be returned to draft*");
+
+        harness.LoadEvent(ev.Id)!.LifecycleState.Should().Be(EventLifecycleState.Published);
+    }
+
+    [Fact]
+    public async Task RevertLastLifecycleChange_ShouldRefuseToReturnToDraft_WhenOnlyTheWaitlistHasPeople()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 442,
+            lifecycleState: EventLifecycleState.Draft,
+            imageUrls: ["https://cdn.test/events/queued.png"]);
+
+        await harness.Service.PublishEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        var tracked = await harness.Db.Events.SingleAsync(item => item.Id == ev.Id);
+        tracked.WaitlistCount = 2;
+        await harness.Db.SaveChangesAsync();
+
+        var action = () => harness.Service.RevertLastLifecycleChangeAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        await action.Should().ThrowAsync<BadRequestException>();
+    }
+
+    [Fact]
+    public async Task RevertLastLifecycleChange_ShouldStillUndoAPublishNobodyHasJoined()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 443,
+            lifecycleState: EventLifecycleState.Draft,
+            imageUrls: ["https://cdn.test/events/nobody.png"]);
+
+        await harness.Service.PublishEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        // The whole point of undo: publishing by mistake stays recoverable.
+        var reverted = await harness.Service.RevertLastLifecycleChangeAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        reverted.LifecycleState.Should().Be(EventLifecycleState.Draft);
+    }
+
+    [Fact]
+    public async Task RevertLastLifecycleChange_ShouldAllowUndoingAPauseForAnEventWithRegistrations()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 444,
+            lifecycleState: EventLifecycleState.Published,
+            imageUrls: ["https://cdn.test/events/audience.png"],
+            registrationCount: 25);
+
+        await harness.Service.PauseEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        // Restoring Published gives the audience more access, not less, so the guard must not
+        // fire here.
+        var reverted = await harness.Service.RevertLastLifecycleChangeAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        reverted.LifecycleState.Should().Be(EventLifecycleState.Published);
+    }
+
+    [Fact]
     public async Task DeleteEvent_ShouldRefusePublishedEvents_AndPointAtArchiving()
     {
         await using var harness = await EventsServiceHarness.CreateAsync();

@@ -1701,6 +1701,19 @@ namespace backend.main.features.events
                     }
                 }
 
+                // Undoing a publish means going back to Draft, which is invisible even to people
+                // who already hold a registration. That is coherent only while nobody has
+                // joined: Draft means "never been live", and an event someone signed up to was.
+                // Pausing is the honest way to take a live event off sale.
+                if (restoredState == EventLifecycleState.Draft
+                    && (ev.RegistrationCount > 0 || ev.WaitlistCount > 0))
+                {
+                    throw new BadRequestException(
+                        "People have already joined this event, so it cannot be returned to draft " +
+                        "— they would lose access while their registrations stayed attached. " +
+                        "Pause it instead to take it off sale.");
+                }
+
                 var previousSnapshot = BuildSnapshot(ev);
 
                 ev.LifecycleState = restoredState;
