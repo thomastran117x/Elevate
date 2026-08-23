@@ -144,7 +144,10 @@ public static class EventLifecyclePolicy
     private static EventLifecycleTransition Block(
         EventLifecycleTransition transition,
         IReadOnlyList<string> issues) =>
-        issues.Count == 0 ? transition : transition with { BlockedReason = issues[0] };
+        issues.Count == 0 ? transition : transition with
+        {
+            BlockedReason = issues[0]
+        };
 
     private static EventLifecycleTransition Publish(Events ev) => new(
         EventVersionActions.Publish,
