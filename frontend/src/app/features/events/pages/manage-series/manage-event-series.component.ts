@@ -113,16 +113,30 @@ export class ManageEventSeriesComponent implements OnInit {
    */
   pendingBulkAction: SeriesBulkAction | null = null;
 
-  private get registeredOccurrenceCount(): number {
-    return (this.series?.occurrences ?? []).filter((occurrence) => occurrence.registrationCount > 0)
-      .length;
+  /**
+   * The occurrences a cancel request will actually change.
+   *
+   * Mirrors the backend's futureOnly skip: counting occurrences that have already started, or
+   * that are not in a cancellable state, would promise more than the request delivers.
+   */
+  private get cancellableOccurrences(): ManagedEvent[] {
+    const now = Date.now();
+
+    return (this.series?.occurrences ?? []).filter(
+      (occurrence) =>
+        (occurrence.lifecycleState === 'Published' || occurrence.lifecycleState === 'Paused') &&
+        !!occurrence.startTime &&
+        new Date(occurrence.startTime).getTime() > now,
+    );
   }
 
   private get cancellableCount(): number {
-    return (this.series?.occurrences ?? []).filter(
-      (occurrence) =>
-        occurrence.lifecycleState === 'Published' || occurrence.lifecycleState === 'Paused',
-    ).length;
+    return this.cancellableOccurrences.length;
+  }
+
+  private get registeredOccurrenceCount(): number {
+    return this.cancellableOccurrences.filter((occurrence) => occurrence.registrationCount > 0)
+      .length;
   }
 
   askPublishAll(): void {
@@ -146,9 +160,10 @@ export class ManageEventSeriesComponent implements OnInit {
       'Occurrences that have already started are left alone.',
     ];
 
-    if (this.registeredOccurrenceCount > 0) {
+    const registered = this.registeredOccurrenceCount;
+    if (registered > 0) {
       impacts.unshift(
-        `${this.registeredOccurrenceCount} of these ${this.registeredOccurrenceCount === 1 ? 'occurrence has' : 'occurrences have'} people registered. Their registrations stay on record.`,
+        `${registered} ${registered === 1 ? 'occurrence has' : 'occurrences have'} people registered. Their registrations stay on record.`,
       );
     }
 

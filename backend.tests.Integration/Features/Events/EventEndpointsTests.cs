@@ -1192,7 +1192,7 @@ public class EventEndpointsTests
             $"/api/events/{created.Id}/register",
             attendeeSession.AccessToken,
             JsonContent.Create(new { })));
-        register.StatusCode.Should().Be(HttpStatusCode.OK);
+        register.StatusCode.Should().Be(HttpStatusCode.Created);
 
         var pause = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Post,

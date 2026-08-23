@@ -1685,6 +1685,22 @@ namespace backend.main.features.events
                 }
 
                 var restoredState = ev.PreviousLifecycleState.Value;
+
+                // Undo reaches Published without going through resume or reinstate, so without
+                // this it is a way around the readiness checks those enforce. A paused event
+                // stays editable and its start time keeps advancing, so the state it held an
+                // hour ago is not necessarily one it may hold now.
+                if (restoredState == EventLifecycleState.Published)
+                {
+                    var publishIssues = EventLifecyclePolicy.GetPublishIssues(ev, now);
+                    if (publishIssues.Count > 0)
+                    {
+                        throw new BadRequestException(
+                            "This event can no longer be restored to published. " +
+                            string.Join(" ", publishIssues));
+                    }
+                }
+
                 var previousSnapshot = BuildSnapshot(ev);
 
                 ev.LifecycleState = restoredState;

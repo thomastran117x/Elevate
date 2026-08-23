@@ -90,12 +90,16 @@ export class ConfirmDialogComponent implements OnChanges {
    * Keeps Tab inside the dialog. Without this, focus walks out into the page behind the
    * overlay, where the very control that opened the prompt is still clickable.
    */
+  // Typed as Event, not KeyboardEvent: the AOT compiler types a HostListener's $event as the
+  // base Event, and the production build rejects the narrower signature.
   @HostListener('document:keydown.tab', ['$event'])
   @HostListener('document:keydown.shift.tab', ['$event'])
-  onTab(event: KeyboardEvent): void {
+  onTab(event: Event): void {
     if (!this.open) {
       return;
     }
+
+    const shiftKey = (event as KeyboardEvent).shiftKey;
 
     const focusable = this.focusableElements();
     if (focusable.length === 0) {
@@ -106,13 +110,13 @@ export class ConfirmDialogComponent implements OnChanges {
     const last = focusable[focusable.length - 1];
     const active = document.activeElement;
 
-    if (event.shiftKey && (active === first || !this.panel?.nativeElement.contains(active))) {
+    if (shiftKey && (active === first || !this.panel?.nativeElement.contains(active))) {
       event.preventDefault();
       last.focus();
       return;
     }
 
-    if (!event.shiftKey && active === last) {
+    if (!shiftKey && active === last) {
       event.preventDefault();
       first.focus();
     }

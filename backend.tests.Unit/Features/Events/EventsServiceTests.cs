@@ -954,6 +954,60 @@ public class EventsServiceTests
     }
 
     [Fact]
+    public async Task RevertLastLifecycleChange_ShouldRefuseToRestorePublished_WhenTheEventIsNoLongerPublishable()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 431,
+            lifecycleState: EventLifecycleState.Published,
+            imageUrls: ["https://cdn.test/events/revalidate.png"]);
+
+        await harness.Service.PauseEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        // A paused event stays editable, and its start time keeps advancing. Either can leave it
+        // in a state resume would reject, so undo must not be a way around that check.
+        var tracked = await harness.Db.Events.SingleAsync(item => item.Id == ev.Id);
+        tracked.StartTime = DateTime.UtcNow.AddDays(-1);
+        tracked.EndTime = DateTime.UtcNow.AddDays(-1).AddHours(2);
+        await harness.Db.SaveChangesAsync();
+
+        var action = () => harness.Service.RevertLastLifecycleChangeAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        await action.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("*no longer be restored to published*");
+
+        // The refusal must leave the event alone, undo still on offer.
+        var after = harness.LoadEvent(ev.Id)!;
+        after.LifecycleState.Should().Be(EventLifecycleState.Paused);
+        after.PreviousLifecycleState.Should().Be(EventLifecycleState.Published);
+    }
+
+    [Fact]
+    public async Task RevertLastLifecycleChange_ShouldStillRestoreNonPublishedStatesWithoutRevalidating()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 432,
+            lifecycleState: EventLifecycleState.Published,
+            imageUrls: ["https://cdn.test/events/archive-undo.png"]);
+
+        await harness.Service.ArchiveEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+        await harness.Service.UnarchiveEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        // Undoing the unarchive goes back to Archived, which has no readiness bar to clear.
+        var reverted = await harness.Service.RevertLastLifecycleChangeAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        reverted.LifecycleState.Should().Be(EventLifecycleState.Archived);
+    }
+
+    [Fact]
     public async Task DeleteEvent_ShouldRefusePublishedEvents_AndPointAtArchiving()
     {
         await using var harness = await EventsServiceHarness.CreateAsync();
