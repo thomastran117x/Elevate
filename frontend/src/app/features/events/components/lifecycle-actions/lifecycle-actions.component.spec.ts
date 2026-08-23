@@ -93,15 +93,14 @@ describe('EventLifecycleActionsComponent', () => {
     });
   });
 
-  describe('publish readiness', () => {
-    const publish = transition({ key: 'publish', target: 'Published', label: 'Publish event' });
-
-    it('blocks moves to Published while the event still has issues', () => {
-      component.event = makeEvent({
-        publishReady: false,
-        publishIssues: ['Start time must be in the future.'],
-        availableTransitions: [publish],
+  describe('readiness', () => {
+    it('blocks a move the server marked as blocked, and says why', () => {
+      const publish = transition({
+        key: 'publish',
+        target: 'Published',
+        blockedReason: 'Start time must be in the future.',
       });
+      component.event = makeEvent({ availableTransitions: [publish] });
 
       expect(component.isBlocked(publish)).toBeTrue();
       expect(component.blockedReason(publish)).toBe(
@@ -112,17 +111,25 @@ describe('EventLifecycleActionsComponent', () => {
       expect(component.pending).toBeNull();
     });
 
-    it('allows the move once the event is ready', () => {
-      component.event = makeEvent({ publishReady: true, availableTransitions: [publish] });
+    it('allows a move the server left unblocked', () => {
+      const publish = transition({ key: 'publish', target: 'Published', blockedReason: null });
+      component.event = makeEvent({ availableTransitions: [publish] });
 
       expect(component.isBlocked(publish)).toBeFalse();
       expect(component.blockedReason(publish)).toBeNull();
     });
 
-    it('does not block moves that are not going live', () => {
-      component.event = makeEvent({ publishReady: false, publishIssues: ['Anything'] });
+    it('does not gate on publishReady, which does not apply to every move to Published', () => {
+      // Resuming or reinstating an event that has already started is legitimate; the old
+      // publishReady check would have disabled exactly the recovery this feature offers.
+      const resume = transition({ key: 'resume', target: 'Published', blockedReason: null });
+      component.event = makeEvent({
+        publishReady: false,
+        publishIssues: ['Start time must be in the future.'],
+        availableTransitions: [resume],
+      });
 
-      expect(component.isBlocked(transition({ key: 'archive', target: 'Archived' }))).toBeFalse();
+      expect(component.isBlocked(resume)).toBeFalse();
     });
   });
 

@@ -122,16 +122,29 @@ public static class EventLifecyclePolicy
     /// than reimplementing <see cref="CanTransition"/>, so a future state needs no UI change.
     /// </para>
     /// </summary>
-    public static IReadOnlyList<EventLifecycleTransition> GetAvailableTransitions(Events ev) =>
+    public static IReadOnlyList<EventLifecycleTransition> GetAvailableTransitions(
+        Events ev,
+        DateTime utcNow) =>
         ev.LifecycleState switch
         {
-            EventLifecycleState.Draft => [Publish(ev)],
+            EventLifecycleState.Draft => [Block(Publish(ev), GetPublishIssues(ev, utcNow))],
             EventLifecycleState.Published => [Pause(ev), Cancel(ev), Archive(ev)],
-            EventLifecycleState.Paused => [Resume(ev), Cancel(ev), Archive(ev)],
-            EventLifecycleState.Cancelled => [Reinstate(ev), Archive(ev)],
+            EventLifecycleState.Paused =>
+                [Block(Resume(ev), GetRestoreIssues(ev)), Cancel(ev), Archive(ev)],
+            EventLifecycleState.Cancelled =>
+                [Block(Reinstate(ev), GetRestoreIssues(ev)), Archive(ev)],
             EventLifecycleState.Archived => [Unarchive(ev)],
             _ => [],
         };
+
+    /// <summary>
+    /// Attaches the first outstanding issue to a transition, so the client can disable the
+    /// button and say why without knowing which rules apply to which move.
+    /// </summary>
+    private static EventLifecycleTransition Block(
+        EventLifecycleTransition transition,
+        IReadOnlyList<string> issues) =>
+        issues.Count == 0 ? transition : transition with { BlockedReason = issues[0] };
 
     private static EventLifecycleTransition Publish(Events ev) => new(
         EventVersionActions.Publish,
@@ -257,7 +270,37 @@ public static class EventLifecyclePolicy
     private static string Pluralize(int count, string singular, string plural) =>
         $"{count.ToString("N0", CultureInfo.InvariantCulture)} {(count == 1 ? singular : plural)}";
 
+    /// <summary>
+    /// Everything that must hold before an event may go live for the first time: the content
+    /// rules, plus the requirement that it has not already started.
+    /// </summary>
     public static List<string> GetPublishIssues(Events ev, DateTime utcNow)
+    {
+        var issues = GetRestoreIssues(ev);
+
+        if (!ev.StartTime.HasValue)
+            issues.Add("Start time is required.");
+        else if (ev.StartTime.Value < utcNow)
+            issues.Add("Start time must be in the future.");
+
+        return issues;
+    }
+
+    /// <summary>
+    /// The content rules only, for returning an event to <c>Published</c> from a state it was
+    /// already live in — resume, reinstate, and undo.
+    /// <para>
+    /// Deliberately omits "start time must be in the future". That rule stops an organizer
+    /// listing something already over as if it were upcoming; it must not stop them taking back
+    /// a cancellation. An event can be paused or cancelled while it is running, so applying the
+    /// first-publication rule here would make the reversibility this promises unusable for
+    /// exactly the events most likely to be cancelled by mistake. Nothing is lost by allowing
+    /// it: registration is closed on the start time independently of lifecycle state
+    /// (see EventRegistrationService), so a restored past event is simply visible again and
+    /// resolves to Ongoing or Closed.
+    /// </para>
+    /// </summary>
+    public static List<string> GetRestoreIssues(Events ev)
     {
         var issues = new List<string>();
 
@@ -273,11 +316,6 @@ public static class EventLifecyclePolicy
         var imageCount = ev.Images.Count;
         if (imageCount is < 1 or > 5)
             issues.Add("At least one image and at most five images are required.");
-
-        if (!ev.StartTime.HasValue)
-            issues.Add("Start time is required.");
-        else if (ev.StartTime.Value < utcNow)
-            issues.Add("Start time must be in the future.");
 
         if (ev.StartTime.HasValue && ev.EndTime.HasValue && ev.EndTime.Value <= ev.StartTime.Value)
             issues.Add("End time must be later than start time.");

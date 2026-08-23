@@ -752,31 +752,6 @@ public class EventsServiceTests
     }
 
     [Fact]
-    public async Task ResumeEvent_ShouldRefuseWhenTheEventIsNoLongerPublishable()
-    {
-        await using var harness = await EventsServiceHarness.CreateAsync();
-        harness.ConfigureEventPersistence();
-
-        var ev = await harness.SeedPersistedEventAsync(
-            id: 403,
-            lifecycleState: EventLifecycleState.Paused,
-            imageUrls: ["https://cdn.test/events/stale.png"]);
-
-        // An event can sit paused long enough for its own start time to pass.
-        ev.StartTime = DateTime.UtcNow.AddDays(-1);
-        ev.EndTime = DateTime.UtcNow.AddDays(-1).AddHours(2);
-        await harness.Db.SaveChangesAsync();
-
-        var action = () => harness.Service.ResumeEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
-
-        await action.Should()
-            .ThrowAsync<BadRequestException>()
-            .WithMessage("*not ready to publish*");
-
-        harness.LoadEvent(ev.Id)!.LifecycleState.Should().Be(EventLifecycleState.Paused);
-    }
-
-    [Fact]
     public async Task ReinstateEvent_ShouldBringACancelledEventBackToPublished()
     {
         await using var harness = await EventsServiceHarness.CreateAsync();
@@ -966,11 +941,10 @@ public class EventsServiceTests
 
         await harness.Service.PauseEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
 
-        // A paused event stays editable, and its start time keeps advancing. Either can leave it
-        // in a state resume would reject, so undo must not be a way around that check.
+        // A paused event stays editable, so it can be edited into a state resume would reject.
+        // Undo must not be a way around that check.
         var tracked = await harness.Db.Events.SingleAsync(item => item.Id == ev.Id);
-        tracked.StartTime = DateTime.UtcNow.AddDays(-1);
-        tracked.EndTime = DateTime.UtcNow.AddDays(-1).AddHours(2);
+        tracked.Description = "too short";
         await harness.Db.SaveChangesAsync();
 
         var action = () => harness.Service.RevertLastLifecycleChangeAsync(
@@ -1157,6 +1131,126 @@ public class EventsServiceTests
         // Going off sale must not promote anyone.
         harness.WaitlistPromoterMock.Verify(
             promoter => promoter.PromoteStandaloneAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ReinstateEvent_ShouldWorkForAnEventCancelledAfterItStarted()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 461,
+            lifecycleState: EventLifecycleState.Cancelled,
+            imageUrls: ["https://cdn.test/events/ongoing.png"]);
+
+        // Cancelling is allowed at any time, including mid-event. If reinstating then demanded
+        // a future start time, the "you can reinstate this afterwards" promise on the cancel
+        // prompt would be a lie for exactly the events most likely to be cancelled by mistake.
+        var tracked = await harness.Db.Events.SingleAsync(item => item.Id == ev.Id);
+        tracked.StartTime = DateTime.UtcNow.AddHours(-1);
+        tracked.EndTime = DateTime.UtcNow.AddHours(2);
+        await harness.Db.SaveChangesAsync();
+
+        var reinstated = await harness.Service.ReinstateEvent(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        reinstated.LifecycleState.Should().Be(EventLifecycleState.Published);
+    }
+
+    [Fact]
+    public async Task ResumeEvent_ShouldWorkForAnEventPausedAfterItStarted()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 462,
+            lifecycleState: EventLifecycleState.Paused,
+            imageUrls: ["https://cdn.test/events/running.png"]);
+
+        var tracked = await harness.Db.Events.SingleAsync(item => item.Id == ev.Id);
+        tracked.StartTime = DateTime.UtcNow.AddHours(-1);
+        tracked.EndTime = DateTime.UtcNow.AddHours(2);
+        await harness.Db.SaveChangesAsync();
+
+        var resumed = await harness.Service.ResumeEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        resumed.LifecycleState.Should().Be(EventLifecycleState.Published);
+    }
+
+    [Fact]
+    public async Task ResumeEvent_ShouldStillRefuseWhenTheContentItselfIsBroken()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 463,
+            lifecycleState: EventLifecycleState.Paused,
+            imageUrls: ["https://cdn.test/events/edited.png"]);
+
+        // Paused events stay editable, so the content rules still have to hold on the way back.
+        var tracked = await harness.Db.Events.SingleAsync(item => item.Id == ev.Id);
+        tracked.Name = "x";
+        await harness.Db.SaveChangesAsync();
+
+        var action = () => harness.Service.ResumeEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        await action.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("*Name must be between 3 and 30 characters*");
+
+        harness.LoadEvent(ev.Id)!.LifecycleState.Should().Be(EventLifecycleState.Paused);
+    }
+
+    [Fact]
+    public async Task PublishEvent_ShouldStillRequireAFutureStartTimeForAFirstPublication()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 464,
+            lifecycleState: EventLifecycleState.Draft,
+            imageUrls: ["https://cdn.test/events/stale-draft.png"]);
+
+        var tracked = await harness.Db.Events.SingleAsync(item => item.Id == ev.Id);
+        tracked.StartTime = DateTime.UtcNow.AddDays(-1);
+        tracked.EndTime = DateTime.UtcNow.AddDays(-1).AddHours(2);
+        await harness.Db.SaveChangesAsync();
+
+        var action = () => harness.Service.PublishEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        // The relaxation is only for returning to a state the event already held; listing
+        // something already over as a new event is still refused.
+        await action.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("*Start time must be in the future*");
+    }
+
+    [Fact]
+    public async Task RevertLastLifecycleChange_ShouldUndoACancellationOfAnEventThatHasStarted()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 465,
+            lifecycleState: EventLifecycleState.Published,
+            imageUrls: ["https://cdn.test/events/misclick.png"]);
+
+        await harness.Service.CancelEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        var tracked = await harness.Db.Events.SingleAsync(item => item.Id == ev.Id);
+        tracked.StartTime = DateTime.UtcNow.AddHours(-1);
+        tracked.EndTime = DateTime.UtcNow.AddHours(2);
+        await harness.Db.SaveChangesAsync();
+
+        var reverted = await harness.Service.RevertLastLifecycleChangeAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        reverted.LifecycleState.Should().Be(EventLifecycleState.Published);
     }
 
     [Fact]

@@ -268,7 +268,7 @@ public class EventLifecyclePolicyTests
     {
         var ev = new EventEntity { LifecycleState = state };
 
-        EventLifecyclePolicy.GetAvailableTransitions(ev)
+        EventLifecyclePolicy.GetAvailableTransitions(ev, DateTime.UtcNow)
             .Select(transition => transition.Key)
             .Should().Equal(expectedKeys.Split(','));
     }
@@ -282,7 +282,7 @@ public class EventLifecyclePolicyTests
         {
             var ev = new EventEntity { LifecycleState = state };
 
-            foreach (var transition in EventLifecyclePolicy.GetAvailableTransitions(ev))
+            foreach (var transition in EventLifecyclePolicy.GetAvailableTransitions(ev, DateTime.UtcNow))
             {
                 EventLifecyclePolicy.CanTransition(state, transition.Target)
                     .Should().BeTrue($"'{transition.Key}' is offered from {state}");
@@ -300,7 +300,7 @@ public class EventLifecyclePolicyTests
             WaitlistCount = 3
         };
 
-        var cancel = EventLifecyclePolicy.GetAvailableTransitions(ev).Single(t => t.Key == "cancel");
+        var cancel = EventLifecyclePolicy.GetAvailableTransitions(ev, DateTime.UtcNow).Single(t => t.Key == "cancel");
 
         cancel.IsDestructive.Should().BeTrue();
         cancel.IsReversible.Should().BeTrue("cancelling can now be undone by reinstating");
@@ -317,7 +317,7 @@ public class EventLifecyclePolicyTests
     {
         var ev = new EventEntity { LifecycleState = EventLifecycleState.Published };
 
-        EventLifecyclePolicy.GetAvailableTransitions(ev)
+        EventLifecyclePolicy.GetAvailableTransitions(ev, DateTime.UtcNow)
             .Single(t => t.Key == "cancel")
             .Impacts.Should().NotContain(impact => impact.Contains("registered"));
     }
@@ -331,7 +331,7 @@ public class EventLifecyclePolicyTests
             RegistrationCount = 1
         };
 
-        EventLifecyclePolicy.GetAvailableTransitions(ev)
+        EventLifecyclePolicy.GetAvailableTransitions(ev, DateTime.UtcNow)
             .Single(t => t.Key == "pause")
             .Impacts.Should().Contain(impact => impact.Contains("1 person is registered"));
     }
@@ -365,5 +365,95 @@ public class EventLifecyclePolicyTests
         };
 
         EventLifecyclePolicy.GetRevertAvailableUntil(ev, DateTime.UtcNow, windowHours: 24).Should().BeNull();
+    }
+
+    [Fact]
+    public void GetRestoreIssues_ShouldDropTheFuture_StartTimeRule_ButKeepTheContentRules()
+    {
+        var started = new EventEntity
+        {
+            Name = "Campus Mixer",
+            Description = "A welcoming social mixer for new and returning students.",
+            Location = "Student Center",
+            StartTime = DateTime.UtcNow.AddHours(-1),
+            EndTime = DateTime.UtcNow.AddHours(2),
+            maxParticipants = 100,
+            registerCost = 0,
+            Images = [new EventImage { ImageUrl = "https://cdn.test/events/1.png" }]
+        };
+
+        // Publishing this for the first time is refused; restoring it to a state it already
+        // held is not, or cancelling a running event would be irreversible.
+        EventLifecyclePolicy.GetPublishIssues(started, DateTime.UtcNow)
+            .Should().Contain("Start time must be in the future.");
+        EventLifecyclePolicy.GetRestoreIssues(started).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GetRestoreIssues_ShouldStillRejectBrokenContent()
+    {
+        var broken = new EventEntity
+        {
+            Name = "x",
+            Description = "short",
+            Location = "Student Center",
+            StartTime = DateTime.UtcNow.AddHours(-1),
+            maxParticipants = 100,
+        };
+
+        var issues = EventLifecyclePolicy.GetRestoreIssues(broken);
+
+        issues.Should().Contain("Name must be between 3 and 30 characters.");
+        issues.Should().Contain("Description must be between 10 and 200 characters.");
+        issues.Should().Contain("At least one image and at most five images are required.");
+        issues.Should().NotContain("Start time must be in the future.");
+    }
+
+    [Fact]
+    public void GetAvailableTransitions_ShouldNotBlockRecoveryOfAnEventThatHasAlreadyStarted()
+    {
+        var cancelledMidEvent = new EventEntity
+        {
+            LifecycleState = EventLifecycleState.Cancelled,
+            Name = "Campus Mixer",
+            Description = "A welcoming social mixer for new and returning students.",
+            Location = "Student Center",
+            StartTime = DateTime.UtcNow.AddHours(-1),
+            EndTime = DateTime.UtcNow.AddHours(2),
+            maxParticipants = 100,
+            Images = [new EventImage { ImageUrl = "https://cdn.test/events/1.png" }]
+        };
+
+        EventLifecyclePolicy.GetAvailableTransitions(cancelledMidEvent, DateTime.UtcNow)
+            .Single(transition => transition.Key == "reinstate")
+            .BlockedReason.Should().BeNull("the cancel prompt promised this would be reversible");
+    }
+
+    [Fact]
+    public void GetAvailableTransitions_ShouldBlockAFirstPublicationOfAStaleDraft()
+    {
+        var staleDraft = new EventEntity
+        {
+            LifecycleState = EventLifecycleState.Draft,
+            Name = "Campus Mixer",
+            Description = "A welcoming social mixer for new and returning students.",
+            Location = "Student Center",
+            StartTime = DateTime.UtcNow.AddDays(-1),
+            maxParticipants = 100,
+            Images = [new EventImage { ImageUrl = "https://cdn.test/events/1.png" }]
+        };
+
+        EventLifecyclePolicy.GetAvailableTransitions(staleDraft, DateTime.UtcNow)
+            .Single(transition => transition.Key == "publish")
+            .BlockedReason.Should().Be("Start time must be in the future.");
+    }
+
+    [Fact]
+    public void GetAvailableTransitions_ShouldLeaveMovesWithNoReadinessBarUnblocked()
+    {
+        var ev = new EventEntity { LifecycleState = EventLifecycleState.Published };
+
+        EventLifecyclePolicy.GetAvailableTransitions(ev, DateTime.UtcNow)
+            .Should().OnlyContain(transition => transition.BlockedReason == null);
     }
 }

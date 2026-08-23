@@ -67,6 +67,7 @@ type EventLifecycleTransitionPayload = Partial<EventLifecycleTransition> & {
   ReversibleNote?: string | null;
   IsDestructive?: boolean;
   Impacts?: string[];
+  BlockedReason?: string | null;
 };
 
 type ManagedEventsPagedPayload = Partial<ManagedEventsPagedData> & {
@@ -321,6 +322,7 @@ export class EventsManagementService {
       reversibleNote: transition.reversibleNote ?? transition.ReversibleNote ?? null,
       isDestructive: transition.isDestructive ?? transition.IsDestructive ?? false,
       impacts: transition.impacts ?? transition.Impacts ?? [],
+      blockedReason: transition.blockedReason ?? transition.BlockedReason ?? null,
     };
   }
 

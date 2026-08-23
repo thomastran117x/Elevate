@@ -34,5 +34,11 @@ namespace backend.main.features.events.contracts.responses
         }
 
         public List<string> Impacts { get; set; } = new();
+
+        /// <summary>Why this move cannot be made right now, or null when it can.</summary>
+        public string? BlockedReason
+        {
+            get; set;
+        }
     }
 }

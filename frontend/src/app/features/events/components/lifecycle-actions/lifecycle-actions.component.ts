@@ -37,20 +37,19 @@ export class EventLifecycleActionsComponent {
   }
 
   /**
-   * Publishing is the one move with a precondition the operator can see and fix, so it is
-   * disabled rather than allowed to fail at the server.
+   * Whether the server says this move cannot be made yet.
+   *
+   * Read straight from the transition rather than derived from `publishReady`: the readiness
+   * rules differ per move. A first publication must not be in the past, but resuming or
+   * reinstating an event that has already started is legitimate, and gating those on
+   * `publishReady` would disable exactly the recovery this feature exists to offer.
    */
   isBlocked(transition: EventLifecycleTransition): boolean {
-    return transition.target === 'Published' && !this.event.publishReady;
+    return !!transition.blockedReason;
   }
 
   blockedReason(transition: EventLifecycleTransition): string | null {
-    if (!this.isBlocked(transition)) {
-      return null;
-    }
-
-    const [firstIssue] = this.event.publishIssues;
-    return firstIssue ? `Not ready yet: ${firstIssue}` : 'This event is not ready to go live yet.';
+    return transition.blockedReason ? `Not ready yet: ${transition.blockedReason}` : null;
   }
 
   buttonClass(transition: EventLifecycleTransition): string {

@@ -13,6 +13,10 @@ namespace backend.main.features.events;
 /// <param name="ReversibleNote">Reassurance shown in the prompt, or null when not reversible.</param>
 /// <param name="IsDestructive">Drives danger styling and a more deliberate confirm on the client.</param>
 /// <param name="Impacts">Concrete consequences, already resolved against this event's real numbers.</param>
+/// <param name="BlockedReason">
+/// Why this move cannot be made right now, or null when it can. Computed server-side so the
+/// client never has to work out which readiness rules apply to which transition.
+/// </param>
 public sealed record EventLifecycleTransition(
     string Key,
     EventLifecycleState Target,
@@ -21,4 +25,5 @@ public sealed record EventLifecycleTransition(
     bool IsReversible,
     string? ReversibleNote,
     bool IsDestructive,
-    IReadOnlyList<string> Impacts);
+    IReadOnlyList<string> Impacts,
+    string? BlockedReason = null);

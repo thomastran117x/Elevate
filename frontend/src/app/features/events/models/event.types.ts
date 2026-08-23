@@ -219,6 +219,8 @@ export interface EventLifecycleTransition {
   reversibleNote?: string | null;
   isDestructive: boolean;
   impacts: string[];
+  /** Why this move cannot be made right now, or null when it can. Decided by the server. */
+  blockedReason?: string | null;
 }
 
 export const ALL_EVENT_SORTS: EventSortBy[] = ['Relevance', 'Date', 'Distance', 'Popularity'];

@@ -1597,11 +1597,18 @@ namespace backend.main.features.events
 
                 if (targetState == EventLifecycleState.Published)
                 {
-                    var publishIssues = EventLifecyclePolicy.GetPublishIssues(ev, now);
-                    if (publishIssues.Count > 0)
+                    // A first publication out of Draft must clear the timing rule too; resume
+                    // and reinstate return an event to a state it already held, and blocking
+                    // those on a start time in the past would make the reversibility this
+                    // feature advertises unusable for an event cancelled while it was running.
+                    var issues = ev.LifecycleState == EventLifecycleState.Draft
+                        ? EventLifecyclePolicy.GetPublishIssues(ev, now)
+                        : EventLifecyclePolicy.GetRestoreIssues(ev);
+
+                    if (issues.Count > 0)
                     {
                         throw new BadRequestException(
-                            $"This event is not ready to publish. {string.Join(" ", publishIssues)}");
+                            $"This event is not ready to publish. {string.Join(" ", issues)}");
                     }
                 }
 
@@ -1695,12 +1702,12 @@ namespace backend.main.features.events
                 // hour ago is not necessarily one it may hold now.
                 if (restoredState == EventLifecycleState.Published)
                 {
-                    var publishIssues = EventLifecyclePolicy.GetPublishIssues(ev, now);
-                    if (publishIssues.Count > 0)
+                    var issues = EventLifecyclePolicy.GetRestoreIssues(ev);
+                    if (issues.Count > 0)
                     {
                         throw new BadRequestException(
                             "This event can no longer be restored to published. " +
-                            string.Join(" ", publishIssues));
+                            string.Join(" ", issues));
                     }
                 }
 

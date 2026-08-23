@@ -112,7 +112,7 @@ namespace backend.main.features.events
                 PreviousLifecycleState = ev.PreviousLifecycleState,
                 RevertAvailableUntil = revertAvailableUntil,
                 AvailableTransitions = EventLifecyclePolicy
-                    .GetAvailableTransitions(ev)
+                    .GetAvailableTransitions(ev, DateTime.UtcNow)
                     .Select(MapToTransitionResponse)
                     .ToList()
             };
@@ -127,7 +127,8 @@ namespace backend.main.features.events
                 IsReversible = transition.IsReversible,
                 ReversibleNote = transition.ReversibleNote,
                 IsDestructive = transition.IsDestructive,
-                Impacts = transition.Impacts.ToList()
+                Impacts = transition.Impacts.ToList(),
+                BlockedReason = transition.BlockedReason
             };
 
         public static EventStatus ResolveStatus(Events ev)

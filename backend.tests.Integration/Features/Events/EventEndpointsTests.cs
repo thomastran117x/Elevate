@@ -1301,6 +1301,47 @@ public class EventEndpointsTests
     }
 
     [Fact]
+    public async Task CancellingAnEventThatHasStarted_ShouldStillBeReversible()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-midevent-owner@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Mid Event Club");
+        var created = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Running Event");
+
+        // Push the event into the past so it is underway, the way a real one would be by the
+        // time somebody cancels it by mistake.
+        await app.QueryDbAsync(async db =>
+        {
+            var ev = await db.Events.SingleAsync(e => e.Id == created.Id);
+            ev.StartTime = DateTime.UtcNow.AddHours(-1);
+            ev.EndTime = DateTime.UtcNow.AddHours(2);
+            await db.SaveChangesAsync();
+            return ev.Id;
+        });
+
+        var cancel = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/cancel",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        cancel.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var cancelled = (await app.ReadApiResponseAsync<ManagedEventResponse>(cancel)).Data!;
+        cancelled.AvailableTransitions.Single(t => t.Key == "reinstate")
+            .BlockedReason.Should().BeNull("the cancel prompt promised this was reversible");
+
+        var reinstate = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/reinstate",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        reinstate.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await app.ReadApiResponseAsync<ManagedEventResponse>(reinstate)).Data!
+            .LifecycleState.Should().Be(EventLifecycleState.Published);
+    }
+
+    [Fact]
     public async Task RevertLifecycleEndpoint_ShouldUndoTheLastChangeExactlyOnce()
     {
         await using var app = await AuthApiTestApp.CreateAsync();

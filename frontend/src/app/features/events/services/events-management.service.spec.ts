@@ -129,6 +129,7 @@ describe('EventsManagementService', () => {
             ReversibleNote: 'Reversible — resume any time.',
             IsDestructive: false,
             Impacts: ['It is removed from public search and listings.'],
+            BlockedReason: null,
           },
         ],
       });
@@ -143,6 +144,7 @@ describe('EventsManagementService', () => {
           reversibleNote: 'Reversible — resume any time.',
           isDestructive: false,
           impacts: ['It is removed from public search and listings.'],
+          blockedReason: null,
         },
       ]);
     });
