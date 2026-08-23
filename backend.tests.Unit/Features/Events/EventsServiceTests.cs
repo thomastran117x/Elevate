@@ -1103,6 +1103,63 @@ public class EventsServiceTests
     }
 
     [Fact]
+    public async Task ResumeEvent_ShouldReturnCountsThatAlreadyReflectWaitlistPromotion()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 451,
+            lifecycleState: EventLifecycleState.Paused,
+            imageUrls: ["https://cdn.test/events/queue.png"],
+            registrationCount: 8,
+            waitlistEnabled: true,
+            waitlistCount: 2);
+
+        // Reopening lets the promoter move the queue into the free seats. The response has to
+        // carry the post-promotion figures: the card and the next confirmation prompt quote
+        // them, and stale occupancy would understate who is actually attending.
+        harness.WaitlistPromoterMock
+            .Setup(promoter => promoter.PromoteStandaloneAsync(ev.Id))
+            .ReturnsAsync(() =>
+            {
+                var tracked = harness.Db.Events.Single(item => item.Id == ev.Id);
+                if (tracked.WaitlistCount == 0)
+                    return 0;
+
+                tracked.RegistrationCount += tracked.WaitlistCount;
+                tracked.WaitlistCount = 0;
+                harness.Db.SaveChanges();
+                return 2;
+            });
+
+        var resumed = await harness.Service.ResumeEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        resumed.RegistrationCount.Should().Be(10);
+        resumed.WaitlistCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task PauseEvent_ShouldNotDrainTheWaitlist()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureEventPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 452,
+            lifecycleState: EventLifecycleState.Published,
+            imageUrls: ["https://cdn.test/events/hold.png"],
+            waitlistEnabled: true,
+            waitlistCount: 3);
+
+        await harness.Service.PauseEvent(ev.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        // Going off sale must not promote anyone.
+        harness.WaitlistPromoterMock.Verify(
+            promoter => promoter.PromoteStandaloneAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
     public async Task DeleteEvent_ShouldRefusePublishedEvents_AndPointAtArchiving()
     {
         await using var harness = await EventsServiceHarness.CreateAsync();

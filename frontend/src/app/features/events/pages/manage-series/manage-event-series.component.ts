@@ -185,8 +185,11 @@ export class ManageEventSeriesComponent implements OnInit {
       tone: 'danger',
       impacts: [
         'Unbooked future draft occurrences are permanently deleted, along with their images.',
-        'Occurrences anyone has registered for are kept and become standalone events.',
-        'Occurrences that have already happened are not touched.',
+        // Everything not deleted is detached, not left alone: the series record goes away, so
+        // every surviving occurrence loses its series link and stands on its own.
+        'Every other occurrence survives as a standalone event, including past ones and any ' +
+          'anyone has registered for. They keep their details, but no longer belong to a series.',
+        'The series itself and its repeat rule are gone, so there is nothing left to extend.',
       ],
       // The one genuinely unrecoverable action on this screen.
       reversibleNote: null,

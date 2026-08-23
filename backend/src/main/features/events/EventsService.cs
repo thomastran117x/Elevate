@@ -1632,16 +1632,19 @@ namespace backend.main.features.events
                     await transaction.CommitAsync();
                 });
 
+                // Seats can free up while an event is off sale, but the promoter refuses to act
+                // on anything that is not published, so reopening has to drain the queue.
+                // Runs before the reload: promotion moves people from the waitlist into
+                // registrations, and returning the pre-promotion counts would leave the card and
+                // the next confirmation prompt quoting occupancy that is already out of date.
+                if (targetState == EventLifecycleState.Published && ev.WaitlistEnabled)
+                    await DrainWaitlistAsync(eventId);
+
                 var withImages = await _eventsRepository.GetByIdAsync(eventId)
                     ?? throw new InternalServerErrorException("Failed to reload lifecycle transition result.");
 
                 await CacheEventAsync(withImages);
                 await BumpEventListVersionAsync();
-
-                // Seats can free up while an event is off sale, but the promoter refuses to act
-                // on anything that is not published, so reopening has to drain the queue.
-                if (targetState == EventLifecycleState.Published && withImages.WaitlistEnabled)
-                    await DrainWaitlistAsync(eventId);
 
                 return withImages;
             }
@@ -1744,14 +1747,14 @@ namespace backend.main.features.events
                     await transaction.CommitAsync();
                 });
 
+                if (restoredState == EventLifecycleState.Published && ev.WaitlistEnabled)
+                    await DrainWaitlistAsync(eventId);
+
                 var withImages = await _eventsRepository.GetByIdAsync(eventId)
                     ?? throw new InternalServerErrorException("Failed to reload the reverted event.");
 
                 await CacheEventAsync(withImages);
                 await BumpEventListVersionAsync();
-
-                if (restoredState == EventLifecycleState.Published && withImages.WaitlistEnabled)
-                    await DrainWaitlistAsync(eventId);
 
                 return withImages;
             }

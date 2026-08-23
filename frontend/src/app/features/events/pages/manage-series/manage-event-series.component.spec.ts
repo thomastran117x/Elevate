@@ -451,5 +451,18 @@ describe('ManageEventSeriesComponent', () => {
       expect(component.pendingBulkAction!.requireTypedConfirmation).toBe('DELETE');
       expect(component.pendingBulkAction!.reversibleNote).toBeNull();
     });
+
+    it('discloses that surviving occurrences are detached, not left alone', () => {
+      // Everything the backend does not delete is detached from the series, so a prompt that
+      // promised past occurrences were untouched would be wrong.
+      seedOccurrences([occurrence()]);
+
+      component.askDeleteSeries();
+
+      const impacts = component.pendingBulkAction!.impacts.join(' ');
+      expect(impacts).toContain('standalone event');
+      expect(impacts).toContain('past ones');
+      expect(impacts).not.toContain('not touched');
+    });
   });
 });
