@@ -2,7 +2,10 @@ using System.Reflection;
 
 using backend.main.application.bootstrap;
 using backend.main.application.features;
+using backend.main.features.auth;
 using backend.main.features.auth.captcha;
+using backend.main.features.bloom;
+using backend.main.features.cache;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.follow.invitations;
 using backend.main.features.clubs.invitations;
@@ -27,6 +30,92 @@ namespace backend.tests.Unit.Application.Bootstrap;
 
 public class ContainerTests
 {
+    [Fact]
+    public void AddApplicationServices_ShouldRegisterBloomFilters_WhenTheFeatureIsOn()
+    {
+        var config = new ConfigurationBuilder().Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);
+
+        services.AddApplicationServices(config, includeHostedServices: false);
+
+        // The concrete registry is registered alongside the interface because the rebuild runner
+        // needs its internal publish members, and both must resolve to the same instance.
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(BloomFilterRegistry));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IBloomFilterRegistry));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IBloomFilterSource)
+            && descriptor.ImplementationType == typeof(UsernameBloomFilterSource));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(BloomFilterRebuildRunner));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IUsernameAvailabilityService)
+            && descriptor.ImplementationType == typeof(UsernameAvailabilityService));
+    }
+
+    [Fact]
+    public void AddApplicationServices_ShouldResolveOneRegistryInstance_ForBothRegistrations()
+    {
+        var config = new ConfigurationBuilder().Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);
+        services.AddSingleton<ICacheService, NoOpCacheService>();
+
+        services.AddApplicationServices(config, includeHostedServices: false);
+
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<IBloomFilterRegistry>()
+            .Should().BeSameAs(provider.GetRequiredService<BloomFilterRegistry>());
+    }
+
+    [Fact]
+    public void AddApplicationServices_ShouldRegisterTheDisabledRegistry_WhenBloomIsOff()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["FeatureFlags:bloom"] = "false"
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);
+
+        services.AddApplicationServices(config, includeHostedServices: false);
+
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IBloomFilterRegistry)
+            && descriptor.ImplementationType == typeof(DisabledBloomFilterRegistry));
+        services.Should().NotContain(descriptor =>
+            descriptor.ServiceType == typeof(IBloomFilterSource));
+        services.Should().NotContain(descriptor =>
+            descriptor.ServiceType == typeof(BloomFilterRebuildRunner));
+
+        // Still registered: it falls back to the repository whenever the filter cannot answer.
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IUsernameAvailabilityService));
+    }
+
+    [Fact]
+    public void AddApplicationServices_ShouldRegisterTheBloomMaintenanceService_WithHostedServices()
+    {
+        var config = new ConfigurationBuilder().Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);
+
+        services.AddApplicationServices(config, includeHostedServices: true);
+
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IHostedService)
+            && descriptor.ImplementationType == typeof(BloomFilterMaintenanceService));
+    }
+
     [Fact]
     public void ResolveCaptchaProvider_ShouldHonorExplicitGoogleSetting()
     {

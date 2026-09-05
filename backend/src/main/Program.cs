@@ -107,6 +107,11 @@ app.UseRequestId();
 
 app.UseRouting();
 
+// The limiter was configured but never mounted, so every [EnableRateLimiting] attribute and the
+// global partition were inert. It is mounted here because the anonymous username availability
+// endpoint is an enumeration surface that depends on its policy actually running.
+app.UseRateLimiter();
+
 app.UseRequestTimeouts();
 
 app.UseSecurityHeaders();

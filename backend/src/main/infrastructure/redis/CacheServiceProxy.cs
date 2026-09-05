@@ -92,6 +92,15 @@ namespace backend.main.infrastructure.redis
         public Task<Dictionary<string, string?>> GetManyAsync(IEnumerable<string> keys) =>
             Current.GetManyAsync(keys);
 
+        public Task<bool> SetBitsAsync(string key, IReadOnlyCollection<long> bitPositions) =>
+            Current.SetBitsAsync(key, bitPositions);
+
+        public Task<byte[]?> GetBitmapAsync(string key) =>
+            Current.GetBitmapAsync(key);
+
+        public Task<bool> SetBitmapAsync(string key, byte[] bitmap, TimeSpan? expiry = null) =>
+            Current.SetBitmapAsync(key, bitmap, expiry);
+
         public Task<object> EvalAsync(string script, RedisKey[] keys, RedisValue[] values) =>
             Current.EvalAsync(script, keys, values);
     }

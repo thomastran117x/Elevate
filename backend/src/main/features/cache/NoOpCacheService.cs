@@ -80,6 +80,18 @@ namespace backend.main.features.cache
         public Task<Dictionary<string, string?>> GetManyAsync(IEnumerable<string> keys) =>
             Task.FromResult(new Dictionary<string, string?>());
 
+        // Returning false/null rather than a success value matters for the bloom filters:
+        // callers must be able to see that shared state was unreachable and fall back to the
+        // database, instead of trusting a local-only filter that may be missing bits.
+        public Task<bool> SetBitsAsync(string key, IReadOnlyCollection<long> bitPositions) =>
+            Task.FromResult(false);
+
+        public Task<byte[]?> GetBitmapAsync(string key) =>
+            Task.FromResult<byte[]?>(null);
+
+        public Task<bool> SetBitmapAsync(string key, byte[] bitmap, TimeSpan? expiry = null) =>
+            Task.FromResult(false);
+
         public Task<object> EvalAsync(string script, RedisKey[] keys, RedisValue[] values)
         {
             // Allow request when Redis is unavailable (e.g. rate limiters). Return int[] so middlewares can handle without RedisResult.

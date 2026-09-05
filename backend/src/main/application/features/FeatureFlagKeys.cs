@@ -3,6 +3,13 @@ namespace backend.main.application.features;
 public static class FeatureFlagKeys
 {
     public const string Auth = "auth";
+
+    /// <summary>
+    /// Probabilistic membership filters fronting uniqueness checks. Turning this off makes every
+    /// lookup report Unavailable, so callers fall back to querying the database directly.
+    /// </summary>
+    public const string Bloom = "bloom";
+
     public const string Clubs = "clubs";
     public const string ClubsDiscussions = "clubs.discussions";
     public const string ClubsFollow = "clubs.follow";

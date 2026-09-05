@@ -1,4 +1,5 @@
-import { Component } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs/operators';
@@ -8,6 +9,10 @@ import { AuthService, SignupRole } from '../../services/auth.service';
 import { RecaptchaV3Service } from '../../services/recaptcha.service';
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
+import {
+  normalizeUsername,
+  usernameAvailabilityValidator,
+} from '../../validators/username-availability.validator';
 
 @Component({
   selector: 'app-signup',
@@ -17,6 +22,10 @@ import { AuthReturnUrlService } from '../../services/auth-return-url.service';
   styleUrls: ['./signup.component.css'],
 })
 export class SignupComponent {
+  // Injected as a field rather than a constructor parameter: the form initialiser below needs it,
+  // and with ES2022 class fields those run before the constructor body assigns parameters.
+  private readonly auth = inject(AuthService);
+
   private readonly fb = new FormBuilder();
 
   readonly siteKey = environment.googleSiteKey;
@@ -28,7 +37,10 @@ export class SignupComponent {
 
   readonly form = this.fb.nonNullable.group({
     email: this.fb.nonNullable.control('', [Validators.required, Validators.email]),
-    username: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(50)]),
+    username: this.fb.nonNullable.control('', {
+      validators: [Validators.required, Validators.maxLength(50)],
+      asyncValidators: [usernameAvailabilityValidator(this.auth)],
+    }),
     password: this.fb.nonNullable.control('', [Validators.required, Validators.minLength(8)]),
     usertype: this.fb.nonNullable.control<SignupRole>('participant', [Validators.required]),
   });
@@ -38,12 +50,26 @@ export class SignupComponent {
   error = '';
   success = '';
 
+  private readonly usernameStatus = signal(this.form.controls.username.status);
+
+  readonly usernameChecking = computed(() => this.usernameStatus() === 'PENDING');
+
+  /** Only claim availability once a non-empty name has actually been checked and came back clean. */
+  readonly usernameAvailable = computed(
+    () =>
+      this.usernameStatus() === 'VALID' &&
+      normalizeUsername(this.form.controls.username.value) !== '',
+  );
+
   constructor(
-    private auth: AuthService,
     private recaptcha: RecaptchaV3Service,
     private route: ActivatedRoute,
     private authReturnUrl: AuthReturnUrlService,
-  ) {}
+  ) {
+    this.form.controls.username.statusChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((status) => this.usernameStatus.set(status));
+  }
 
   ngOnInit(): void {
     this.authReturnUrl.captureFromRoute(this.route);
@@ -63,7 +89,7 @@ export class SignupComponent {
     try {
       const captcha = await this.recaptcha.execute(this.siteKey, 'signup');
       const values = this.form.getRawValue();
-      const username = values.username.trim().toLowerCase();
+      const username = normalizeUsername(values.username);
       this.form.controls.username.setValue(username);
       this.auth
         .signup({

@@ -1,5 +1,6 @@
 using backend.main.application.security;
 using backend.main.features.auth;
+using backend.main.features.bloom;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
@@ -75,6 +76,7 @@ public class AuthTotpStepUpControllerTests
 
         return new AuthController(
             authService.Object,
+            new UsernameAvailabilityService(new Mock<IAuthUserRepository>().Object, new DisabledBloomFilterRegistry()),
             antiforgery.Object,
             captchaService.Object,
             new SeedAccountBypassPolicy(configuration),
@@ -174,6 +176,7 @@ public class AuthTotpStepUpServiceTests
             deviceTrustService.Object,
             loginStepUpChallengeService.Object,
             authSessionService.Object,
+            new UsernameAvailabilityService(userRepository.Object, new DisabledBloomFilterRegistry()),
             new SeedAccountBypassPolicy(new ConfigurationBuilder().Build()),
             TestRequestInfoFactory.Browser());
     }

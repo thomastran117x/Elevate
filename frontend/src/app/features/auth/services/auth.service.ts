@@ -24,6 +24,11 @@ export interface LoginRequest {
   returnUrl?: string;
 }
 
+export interface UsernameAvailabilityResponse {
+  username: string;
+  available: boolean;
+}
+
 export interface SignupRequest {
   email: string;
   username: string;
@@ -204,6 +209,18 @@ export class AuthService {
         ),
       ),
     );
+  }
+
+  /**
+   * Asks whether a username is still free. Advisory only: the name is not reserved by asking,
+   * so signup can still fail with USERNAME_TAKEN if someone claims it first.
+   */
+  checkUsernameAvailability(username: string): Observable<UsernameAvailabilityResponse> {
+    return this.api
+      .get<ApiEnvelope<UsernameAvailabilityResponse>>(`${this.baseUrl}/username/availability`, {
+        params: { username },
+      })
+      .pipe(map((res) => this.requireData(res, 'Username availability response was incomplete.')));
   }
 
   signup(payload: SignupRequest): Observable<ApiEnvelope<VerificationChallengeResponse>> {

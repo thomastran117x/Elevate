@@ -144,6 +144,41 @@ namespace backend.main.features.cache
                 return result;
             }, new Dictionary<string, string?>());
 
+        public Task<bool> SetBitsAsync(string key, IReadOnlyCollection<long> bitPositions)
+        {
+            if (bitPositions.Count == 0)
+                return Task.FromResult(true);
+
+            return ExecuteAsync(async () =>
+            {
+                // One batch rather than one round-trip per bit: a bloom write touches k bits
+                // (typically 7-10) and the write path sits inside signup.
+                var batch = _db.CreateBatch();
+                var pending = new List<Task>(bitPositions.Count);
+
+                foreach (var position in bitPositions)
+                    pending.Add(batch.StringSetBitAsync(key, position, true));
+
+                batch.Execute();
+                await Task.WhenAll(pending);
+
+                return true;
+            }, false);
+        }
+
+        public Task<byte[]?> GetBitmapAsync(string key) =>
+            ExecuteAsync(async () =>
+            {
+                var value = await _db.StringGetAsync(key);
+                return value.HasValue ? (byte[]?)value : null;
+            });
+
+        public Task<bool> SetBitmapAsync(string key, byte[] bitmap, TimeSpan? expiry = null) =>
+            ExecuteAsync(
+                () => _db.StringSetAsync(key, bitmap, expiry.HasValue ? new Expiration(expiry.Value) : default),
+                false
+            );
+
         public async Task<object> EvalAsync(string script, RedisKey[] keys, RedisValue[] values)
         {
             try

@@ -703,6 +703,15 @@ internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheS
         }
     }
 
+    // The token service does not use bitmaps; these exist so the fake still satisfies ICacheService.
+    public Task<bool> SetBitsAsync(string key, IReadOnlyCollection<long> bitPositions) =>
+        Task.FromResult(false);
+
+    public Task<byte[]?> GetBitmapAsync(string key) => Task.FromResult<byte[]?>(null);
+
+    public Task<bool> SetBitmapAsync(string key, byte[] bitmap, TimeSpan? expiry = null) =>
+        Task.FromResult(false);
+
     private CacheEntry GetOrCreateEntry(string key)
     {
         if (!_entries.TryGetValue(key, out var entry))

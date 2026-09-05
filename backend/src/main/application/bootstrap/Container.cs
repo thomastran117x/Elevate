@@ -9,6 +9,7 @@ using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
+using backend.main.features.bloom;
 using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.clubs.discussions;
@@ -162,6 +163,13 @@ namespace backend.main.application.bootstrap
                 .Bind(config.GetSection("Profile"))
                 .ValidateDataAnnotations()
                 .ValidateOnStart();
+            services.AddOptions<BloomFilterOptions>()
+                .Bind(config.GetSection("BloomFilters"))
+                .ValidateDataAnnotations()
+                .Validate(
+                    options => options.Targets.Count > 0,
+                    "BloomFilters:Targets must contain at least one target.")
+                .ValidateOnStart();
             services.AddSingleton(TimeProvider.System);
             services.AddSearchInfrastructure(config, featureFlags);
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
@@ -213,6 +221,29 @@ namespace backend.main.application.bootstrap
             services.AddSingleton<IClubPresenceStore, ClubPresenceStore>();
             services.AddSingleton<IClubRealtimeNotifier, ClubRealtimeNotifier>();
             services.AddSingleton<IRefreshAheadCache, RefreshAheadCache>();
+
+            if (featureFlags.IsEnabled(FeatureFlagKeys.Bloom))
+            {
+                // Registered concretely as well as behind the interface: the rebuild runner needs
+                // the internal publish/install members, and both must share one instance because
+                // the local bitmaps live on it.
+                services.AddSingleton<BloomFilterRegistry>();
+                services.AddSingleton<IBloomFilterRegistry>(provider =>
+                    provider.GetRequiredService<BloomFilterRegistry>());
+                services.AddScoped<BloomFilterRebuildRunner>();
+
+                // One source per target. Club names and emails join here once their namespaces
+                // are actually constrained.
+                services.AddScoped<IBloomFilterSource, UsernameBloomFilterSource>();
+            }
+            else
+            {
+                services.AddSingleton<IBloomFilterRegistry, DisabledBloomFilterRegistry>();
+            }
+
+            // Registered either way: it falls back to the repository whenever the filter cannot
+            // answer, so it behaves correctly with the feature off.
+            services.AddScoped<IUsernameAvailabilityService, UsernameAvailabilityService>();
             services.AddScoped<IAzureBlobService, AzureBlobService>();
             services.AddScoped<OrphanBlobCleanupRunner>();
 
@@ -289,6 +320,9 @@ namespace backend.main.application.bootstrap
 
                 if (featureFlags.IsEnabled(FeatureFlagKeys.EventsInvitations))
                     services.AddHostedService<EventInvitationStatusConsumer>();
+
+                if (featureFlags.IsEnabled(FeatureFlagKeys.Bloom))
+                    services.AddHostedService<BloomFilterMaintenanceService>();
 
                 if (featureFlags.IsEnabled(FeatureFlagKeys.StorageOrphanCleanup))
                     services.AddHostedService<OrphanBlobCleanupService>();
