@@ -4,7 +4,7 @@ import { environment } from '@environments/environment';
 import { ApiEnvelope } from '../../../core/api/models/api-envelope.model';
 import { ApiClient } from '../../../core/api/services/api-client.service';
 import { EventFavourite, PinnedEvent } from '../models/event-favourite.types';
-import { EventItem } from '../models/event.types';
+import { EventItemPayload, normalizeEventItem } from '../models/event-normalizers';
 
 type FavouritePayload = Partial<EventFavourite> & {
   EventId?: number;
@@ -84,7 +84,7 @@ export class EventFavouritesService {
             favouritedAtUtc: item.favouritedAtUtc ?? item.FavouritedAtUtc ?? null,
             registeredAtUtc: item.registeredAtUtc ?? item.RegisteredAtUtc ?? null,
             accessRevoked: item.accessRevoked ?? item.AccessRevoked ?? false,
-            event: (item.event ?? item.Event) as EventItem,
+            event: normalizeEventItem((item.event ?? item.Event) as EventItemPayload),
           })),
         ),
       );

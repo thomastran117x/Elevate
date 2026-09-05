@@ -93,6 +93,25 @@ describe('EventFavouritesService', () => {
     expect(ids).toEqual([]);
   });
 
+  it('decodes the nested event, whose enums arrive as integers', () => {
+    // Same defect as /my-waitlists, reached through a different service: the cast hid that
+    // lifecycleState was still a number, so the "Registration paused" row never rendered.
+    let pinned: PinnedEvent[] = [];
+    service.getMyPinned().subscribe((result) => (pinned = result));
+
+    httpMock
+      .expectOne((r) => r.url.includes('/events/me/pinned'))
+      .flush(
+        envelope([
+          { isRegistered: true, event: { id: 9, lifecycleState: 4 } },
+          { isRegistered: false, event: { id: 4, lifecycleState: 2 } },
+        ]),
+      );
+
+    expect(pinned[0].event.lifecycleState).toBe('Paused');
+    expect(pinned[1].event.lifecycleState).toBe('Cancelled');
+  });
+
   it('normalizes pinned rows and keeps the server ordering', () => {
     let pinned: PinnedEvent[] = [];
     service.getMyPinned().subscribe((result) => (pinned = result));

@@ -43,6 +43,18 @@ namespace backend.main.features.payment
                 await _eventsService.EnsureCanViewEventAsync(eventId, userId, userRole);
                 var ev = await _eventsService.GetEvent(eventId);
 
+                // Viewable no longer implies registerable. Paused and cancelled events both keep
+                // their detail page so people who already signed up do not lose it, which means
+                // this path can be reached for an event that is off sale — and unlike every other
+                // write path it never checked. Taking money for a registration the product says
+                // is closed is the worst version of that gap.
+                //
+                // Deliberately placed after the idempotency early-return above: a client retrying
+                // a request it made before the pause is the same logical attempt, and should get
+                // its existing payment back rather than a new error.
+                if (!EventLifecyclePolicy.AllowsRegistration(ev.LifecycleState))
+                    throw new ConflictException("Registration is only available for published events.");
+
                 if (ev.registerCost == 0)
                     throw new BadRequestException("This event is free and does not require payment.");
 

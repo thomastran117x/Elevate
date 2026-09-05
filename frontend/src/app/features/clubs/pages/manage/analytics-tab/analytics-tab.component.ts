@@ -131,7 +131,10 @@ export class AnalyticsTabComponent implements OnInit {
     lines.push(row(['Metric', 'Value']));
     lines.push(row(['Total events', a.totalEvents]));
     lines.push(row(['Published events', a.publishedEvents]));
+    lines.push(row(['Paused events', a.pausedEvents]));
     lines.push(row(['Draft events', a.draftEvents]));
+    lines.push(row(['Cancelled events', a.cancelledEvents]));
+    lines.push(row(['Archived events', a.archivedEvents]));
     lines.push(row(['Upcoming events', a.upcomingEvents]));
     lines.push(row(['Total registrations', a.totalRegistrations]));
     lines.push(row(['Unique attendees', a.uniqueAttendees]));
