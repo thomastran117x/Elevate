@@ -457,7 +457,7 @@ public class EventSeriesService : IEventSeriesService
                         continue;
                     }
 
-                    occurrence.LifecycleState = EventLifecycleState.Published;
+                    EventLifecyclePolicy.ApplyTransition(occurrence, EventLifecycleState.Published, now);
                     occurrence.CurrentVersionNumber += 1;
                     occurrence.UpdatedAt = now;
 
@@ -639,7 +639,7 @@ public class EventSeriesService : IEventSeriesService
                         continue;
                     }
 
-                    occurrence.LifecycleState = EventLifecycleState.Cancelled;
+                    EventLifecyclePolicy.ApplyTransition(occurrence, EventLifecycleState.Cancelled, now);
                     occurrence.CurrentVersionNumber += 1;
                     occurrence.UpdatedAt = now;
 
@@ -707,7 +707,11 @@ public class EventSeriesService : IEventSeriesService
                     EventSeriesDeleteScope.SeriesRecordOnly => false,
                     EventSeriesDeleteScope.FutureDrafts =>
                         occurrence.LifecycleState == EventLifecycleState.Draft && occurrence.StartTime > now,
-                    EventSeriesDeleteScope.AllUnregistered => true,
+                    // Still subject to the hard-delete invariant: without this, the series
+                    // endpoint would be a way to permanently delete a published, paused, or
+                    // cancelled occurrence that the single and batch endpoints both refuse.
+                    EventSeriesDeleteScope.AllUnregistered =>
+                        EventLifecyclePolicy.AllowsHardDelete(occurrence.LifecycleState),
                     _ => false
                 };
 
@@ -849,7 +853,7 @@ public class EventSeriesService : IEventSeriesService
             return false;
         }
 
-        if (occurrence.LifecycleState is EventLifecycleState.Cancelled or EventLifecycleState.Archived)
+        if (!EventLifecyclePolicy.AllowsEditing(occurrence.LifecycleState))
         {
             result.Skipped.Add(Skip(
                 occurrence,

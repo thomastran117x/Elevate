@@ -135,6 +135,21 @@ public class EventEndpointsTests
         persistedAfterUpdate.Location.Should().Be("Innovation Hub");
         persistedAfterUpdate.maxParticipants.Should().Be(50);
 
+        // Deleting is now reachable only once an event is archived out of sight, so that a
+        // misclick costs an archive (reversible) rather than the event and its images.
+        var deletePublished = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/events/{ev.Id}",
+            organizerSession.AccessToken));
+        deletePublished.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var archived = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/archive",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        archived.StatusCode.Should().Be(HttpStatusCode.OK);
+
         var deleted = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete,
             $"/api/events/{ev.Id}",
@@ -1161,6 +1176,286 @@ public class EventEndpointsTests
         cancelAgain.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    [Fact]
+    public async Task PauseAndResume_ShouldTakeAnEventOffSaleAndBackWithoutTouchingRegistrations()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-pause-owner@example.com", "Organizer");
+        var (attendeeSession, _) = await CreateUserSessionAsync(app, "events-pause-attendee@example.com");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Pause Workflow Club");
+        // CreateEventAsync publishes as its last step, so the event arrives already live.
+        var created = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Pausable Event");
+
+        var register = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/register",
+            attendeeSession.AccessToken,
+            JsonContent.Create(new { })));
+        register.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var pause = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/pause",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        pause.StatusCode.Should().Be(HttpStatusCode.OK);
+        await app.ReindexEventsAsync();
+
+        var paused = (await app.ReadApiResponseAsync<ManagedEventResponse>(pause)).Data!;
+        paused.LifecycleState.Should().Be(EventLifecycleState.Paused);
+        paused.PreviousLifecycleState.Should().Be(EventLifecycleState.Published);
+        paused.RevertAvailableUntil.Should().NotBeNull("a fresh change is still undoable");
+
+        // Off sale, but the people who already signed up keep both their place and their link.
+        paused.RegistrationCount.Should().Be(1);
+        (await app.Client.GetAsync($"/api/events/{created.Id}")).StatusCode
+            .Should().Be(HttpStatusCode.OK);
+
+        var registerWhilePaused = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/register",
+            attendeeSession.AccessToken,
+            JsonContent.Create(new { })));
+        registerWhilePaused.StatusCode.Should().NotBe(HttpStatusCode.OK);
+
+        // Pausing exists so the event can be reworked while it is withdrawn.
+        var editWhilePaused = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/events/{created.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Reworked While Paused",
+                description = "An event edited while it was withdrawn from sale.",
+                location = "Studio 9",
+                imageUrls = paused.ImageUrls,
+                isPrivate = false,
+                maxParticipants = 30,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(6),
+                endTime = DateTime.UtcNow.AddDays(6).AddHours(2),
+                category = EventCategory.Other,
+                venueName = "Room C",
+                city = "Toronto",
+                tags = new[] { "paused" }
+            })));
+        editWhilePaused.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var resume = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/resume",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        resume.StatusCode.Should().Be(HttpStatusCode.OK);
+        await app.ReindexEventsAsync();
+
+        var resumed = (await app.ReadApiResponseAsync<ManagedEventResponse>(resume)).Data!;
+        resumed.LifecycleState.Should().Be(EventLifecycleState.Published);
+        resumed.RegistrationCount.Should().Be(1, "resuming must not disturb who already signed up");
+    }
+
+    [Fact]
+    public async Task CancelledEvent_ShouldBeReinstatable_AndArchivedEventUnarchivable()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-reinstate-owner@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Reinstate Workflow Club");
+        var created = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Reinstatable Event");
+
+        var cancel = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/cancel",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        cancel.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Cancelling used to be a dead end; a misclick is now recoverable.
+        var reinstate = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/reinstate",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        reinstate.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await app.ReadApiResponseAsync<ManagedEventResponse>(reinstate)).Data!
+            .LifecycleState.Should().Be(EventLifecycleState.Published);
+
+        var archive = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/archive",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        archive.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var unarchive = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/unarchive",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        unarchive.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Unarchiving must not silently put the event back in front of the public.
+        (await app.ReadApiResponseAsync<ManagedEventResponse>(unarchive)).Data!
+            .LifecycleState.Should().Be(EventLifecycleState.Paused);
+    }
+
+    [Fact]
+    public async Task CancellingAnEventThatHasStarted_ShouldStillBeReversible()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-midevent-owner@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Mid Event Club");
+        var created = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Running Event");
+
+        // Push the event into the past so it is underway, the way a real one would be by the
+        // time somebody cancels it by mistake.
+        await app.QueryDbAsync(async db =>
+        {
+            var ev = await db.Events.SingleAsync(e => e.Id == created.Id);
+            ev.StartTime = DateTime.UtcNow.AddHours(-1);
+            ev.EndTime = DateTime.UtcNow.AddHours(2);
+            await db.SaveChangesAsync();
+            return ev.Id;
+        });
+
+        var cancel = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/cancel",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        cancel.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var cancelled = (await app.ReadApiResponseAsync<ManagedEventResponse>(cancel)).Data!;
+        cancelled.AvailableTransitions.Single(t => t.Key == "reinstate")
+            .BlockedReason.Should().BeNull("the cancel prompt promised this was reversible");
+
+        var reinstate = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/reinstate",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        reinstate.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await app.ReadApiResponseAsync<ManagedEventResponse>(reinstate)).Data!
+            .LifecycleState.Should().Be(EventLifecycleState.Published);
+    }
+
+    [Fact]
+    public async Task RevertLifecycleEndpoint_ShouldUndoTheLastChangeExactlyOnce()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-undo-owner@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Undo Workflow Club");
+        var created = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Undoable Event");
+
+        var cancel = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/cancel",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        cancel.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var revert = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/lifecycle/revert",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        revert.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var reverted = (await app.ReadApiResponseAsync<ManagedEventResponse>(revert)).Data!;
+        reverted.LifecycleState.Should().Be(EventLifecycleState.Published);
+        reverted.RevertAvailableUntil.Should().BeNull("undo is single-use");
+
+        var revertAgain = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/lifecycle/revert",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        revertAgain.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task ManagedEventResponse_ShouldAdvertiseTheTransitionsAvailableFromEachState()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-transitions-owner@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Transition Advertising Club");
+        var image = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id);
+
+        // Built through the drafts endpoint rather than CreateEventAsync, which publishes as its
+        // last step — the point here is to observe a genuine Draft.
+        var createDraft = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/clubs/{club.Id}/drafts",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Advertised Event",
+                description = "A draft used to verify the advertised lifecycle transitions.",
+                location = "Studio 7",
+                imageUrls = new[] { image.PublicUrl },
+                isPrivate = false,
+                maxParticipants = 20,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(4),
+                endTime = DateTime.UtcNow.AddDays(4).AddHours(2),
+                category = EventCategory.Other
+            })));
+        createDraft.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = (await app.ReadApiResponseAsync<ManagedEventResponse>(createDraft)).Data!;
+
+        created.AvailableTransitions.Select(transition => transition.Key)
+            .Should().Equal("publish");
+
+        await PublishEventAsync(app, organizerSession.AccessToken, created.Id);
+
+        var published = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/{created.Id}/manage",
+            organizerSession.AccessToken));
+        var transitions = (await app.ReadApiResponseAsync<ManagedEventResponse>(published)).Data!.AvailableTransitions;
+
+        transitions.Select(transition => transition.Key).Should().Equal("pause", "cancel", "archive");
+
+        // The client renders its confirmation prompt from this, so it has to arrive populated.
+        var cancelTransition = transitions.Single(transition => transition.Key == "cancel");
+        cancelTransition.IsDestructive.Should().BeTrue();
+        cancelTransition.Impacts.Should().NotBeEmpty();
+        cancelTransition.ReversibleNote.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task DeleteEvent_ShouldRequireArchivingFirst()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-delete-guard-owner@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Delete Guard Club");
+        var created = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Guarded Event");
+
+        var deletePublished = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/events/{created.Id}",
+            organizerSession.AccessToken));
+        deletePublished.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var archive = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{created.Id}/archive",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        archive.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var deleteArchived = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/events/{created.Id}",
+            organizerSession.AccessToken));
+        deleteArchived.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
     private static async Task<(AuthenticatedSessionResponse Session, backend.main.features.profile.User? User)> CreateUserSessionAsync(
         AuthApiTestApp app,
         string email,
@@ -1962,6 +2257,25 @@ public class EventEndpointsTests
         persistedBatchUpdated.City.Should().Be("Ottawa");
         (await app.QueryDbAsync(db => db.Events.Where(e => e.Id == createdIds[1]).Select(e => e.maxParticipants).SingleAsync()))
             .Should().Be(45);
+
+        // The batch endpoint enforces the same archive-first rule as the single delete, so it
+        // cannot be used to route around it.
+        var batchDeletePublished = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            "/api/events/batch",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { ids = createdIds })));
+        batchDeletePublished.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        foreach (var id in createdIds)
+        {
+            var archiveResponse = await app.Client.SendAsync(CreateAuthorizedRequest(
+                HttpMethod.Post,
+                $"/api/events/{id}/archive",
+                organizerSession.AccessToken,
+                JsonContent.Create(new { })));
+            archiveResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        }
 
         var batchDelete = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete,

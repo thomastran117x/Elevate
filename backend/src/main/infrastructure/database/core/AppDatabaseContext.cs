@@ -313,6 +313,10 @@ namespace backend.main.infrastructure.database.core
                 .HasConversion<int>();
 
             modelBuilder.Entity<Events>()
+                .Property(e => e.PreviousLifecycleState)
+                .HasConversion<int?>();
+
+            modelBuilder.Entity<Events>()
                 .Property(e => e.WaitlistEnabled)
                 .HasDefaultValue(false);
 
@@ -322,6 +326,11 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<Events>()
                 .HasIndex(e => e.Category);
+
+            // Every manage listing and the public search both filter on lifecycle state, and
+            // Paused adds a fifth value to discriminate.
+            modelBuilder.Entity<Events>()
+                .HasIndex(e => e.LifecycleState);
 
             modelBuilder.Entity<Events>()
                 .HasIndex(e => e.City);

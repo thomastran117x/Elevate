@@ -4,6 +4,7 @@ import { map, Observable } from 'rxjs';
 import { environment } from '@environments/environment';
 import {
   ALL_CATEGORIES,
+  ALL_LIFECYCLE_STATES,
   ALL_STATUSES,
   ClubType,
   EventApiResponse,
@@ -16,55 +17,9 @@ import {
   EventsPagedData,
   EventStatus,
 } from '../models/event.types';
+import { EventItemPayload, normalizeEventItem } from '../models/event-normalizers';
 import { ApiEnvelope } from '../../../core/api/models/api-envelope.model';
 import { ApiClient } from '../../../core/api/services/api-client.service';
-
-type EventItemPayload = EventItem & {
-  Id?: number;
-  Name?: string;
-  Description?: string;
-  Location?: string;
-  ImageUrls?: string[];
-  IsPrivate?: boolean;
-  MaxParticipants?: number;
-  RegisterCost?: number;
-  StartTime?: string;
-  EndTime?: string;
-  ClubId?: number;
-  CreatedAt?: string;
-  LifecycleState?: string | number;
-  Status?: string | number;
-  Category?: string | number;
-  VenueName?: string;
-  City?: string;
-  Latitude?: number;
-  Longitude?: number;
-  Tags?: string[];
-  RegistrationCount?: number;
-  WaitlistEnabled?: boolean;
-  WaitlistCount?: number;
-  DistanceKm?: number;
-  Club?: EventHostClubPayload;
-};
-
-type EventHostClubPayload = EventHostClub & {
-  Id?: number;
-  Name?: string;
-  Description?: string;
-  ClubType?: string | number;
-  Clubtype?: string | number;
-  ClubImage?: string;
-  MemberCount?: number;
-  EventCount?: number;
-  AvailableEventCount?: number;
-  AvaliableEventCount?: number;
-  IsPrivate?: boolean;
-  Email?: string;
-  Phone?: string;
-  Rating?: number;
-  WebsiteUrl?: string;
-  Location?: string;
-};
 
 type EventsPagedPayload = Partial<EventsPagedData> & {
   Items?: EventItemPayload[];
@@ -145,110 +100,18 @@ export class EventsService {
 
     return {
       ...response,
-      data: payload ? this.normalizeEvent(payload) : null,
+      data: payload ? normalizeEventItem(payload) : null,
       Data: undefined,
     };
   }
 
   private normalizePagedData(payload: EventsPagedPayload): EventsPagedData {
     return {
-      items: (payload.items ?? payload.Items ?? []).map((item) => this.normalizeEvent(item)),
+      items: (payload.items ?? payload.Items ?? []).map((item) => normalizeEventItem(item)),
       totalCount: payload.totalCount ?? payload.TotalCount ?? 0,
       page: payload.page ?? payload.Page ?? 1,
       pageSize: payload.pageSize ?? payload.PageSize ?? 20,
       totalPages: payload.totalPages ?? payload.TotalPages ?? 0,
     };
-  }
-
-  private normalizeEvent(item: EventItemPayload): EventItem {
-    return {
-      id: item.id ?? item.Id ?? 0,
-      name: item.name ?? item.Name ?? '',
-      description: item.description ?? item.Description ?? '',
-      location: item.location ?? item.Location ?? '',
-      imageUrls: item.imageUrls ?? item.ImageUrls ?? [],
-      isPrivate: item.isPrivate ?? item.IsPrivate ?? false,
-      maxParticipants: item.maxParticipants ?? item.MaxParticipants ?? 0,
-      registerCost: item.registerCost ?? item.RegisterCost ?? 0,
-      startTime: item.startTime ?? item.StartTime ?? '',
-      endTime: item.endTime ?? item.EndTime,
-      clubId: item.clubId ?? item.ClubId ?? 0,
-      createdAt: item.createdAt ?? item.CreatedAt ?? '',
-      lifecycleState: this.normalizeLifecycleState(item.lifecycleState ?? item.LifecycleState),
-      status: this.normalizeStatus(item.status ?? item.Status),
-      category: this.normalizeCategory(item.category ?? item.Category),
-      venueName: item.venueName ?? item.VenueName,
-      city: item.city ?? item.City,
-      latitude: item.latitude ?? item.Latitude,
-      longitude: item.longitude ?? item.Longitude,
-      tags: item.tags ?? item.Tags ?? [],
-      registrationCount: item.registrationCount ?? item.RegistrationCount ?? 0,
-      waitlistEnabled: item.waitlistEnabled ?? item.WaitlistEnabled ?? false,
-      waitlistCount: item.waitlistCount ?? item.WaitlistCount ?? 0,
-      distanceKm: item.distanceKm ?? item.DistanceKm,
-      club: this.normalizeClub(item.club ?? item.Club),
-    };
-  }
-
-  private normalizeClub(value: EventHostClubPayload | undefined): EventHostClub | undefined {
-    if (!value) {
-      return undefined;
-    }
-
-    return {
-      id: value.id ?? value.Id ?? 0,
-      name: value.name ?? value.Name ?? '',
-      description: value.description ?? value.Description ?? '',
-      clubType: this.normalizeClubType(value.clubType ?? value.ClubType ?? value.Clubtype),
-      clubImage: value.clubImage ?? value.ClubImage ?? '',
-      memberCount: value.memberCount ?? value.MemberCount ?? 0,
-      eventCount: value.eventCount ?? value.EventCount ?? 0,
-      availableEventCount:
-        value.availableEventCount ?? value.AvailableEventCount ?? value.AvaliableEventCount ?? 0,
-      isPrivate: value.isPrivate ?? value.IsPrivate ?? false,
-      email: value.email ?? value.Email,
-      phone: value.phone ?? value.Phone,
-      rating: value.rating ?? value.Rating,
-      websiteUrl: value.websiteUrl ?? value.WebsiteUrl,
-      location: value.location ?? value.Location,
-    };
-  }
-
-  private normalizeStatus(value: string | number | undefined): EventStatus {
-    if (typeof value === 'number') {
-      return ALL_STATUSES[value] ?? 'Upcoming';
-    }
-
-    return ALL_STATUSES.includes(value as EventStatus) ? (value as EventStatus) : 'Upcoming';
-  }
-
-  private normalizeLifecycleState(value: string | number | undefined): EventLifecycleState {
-    const lifecycles: EventLifecycleState[] = ['Draft', 'Published', 'Cancelled', 'Archived'];
-
-    if (typeof value === 'number') {
-      return lifecycles[value] ?? 'Published';
-    }
-
-    return lifecycles.includes(value as EventLifecycleState)
-      ? (value as EventLifecycleState)
-      : 'Published';
-  }
-
-  private normalizeCategory(value: string | number | undefined): EventCategory {
-    if (typeof value === 'number') {
-      return ALL_CATEGORIES[value] ?? 'Other';
-    }
-
-    return ALL_CATEGORIES.includes(value as EventCategory) ? (value as EventCategory) : 'Other';
-  }
-
-  private normalizeClubType(value: string | number | undefined): ClubType {
-    const clubTypes: ClubType[] = ['Sports', 'Academic', 'Social', 'Cultural', 'Gaming', 'Other'];
-
-    if (typeof value === 'number') {
-      return clubTypes[value] ?? 'Other';
-    }
-
-    return clubTypes.includes(value as ClubType) ? (value as ClubType) : 'Other';
   }
 }

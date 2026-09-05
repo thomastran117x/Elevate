@@ -43,7 +43,7 @@
       <button
         type="button"
         [disabled]="working || draftCount === 0"
-        (click)="publishAll()"
+        (click)="askPublishAll()"
         class="inline-flex items-center justify-center rounded-2xl bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
       >
         Publish all ({{ draftCount }})
@@ -59,7 +59,7 @@
       <button
         type="button"
         [disabled]="working || series.status === 'Cancelled'"
-        (click)="cancelSeries()"
+        (click)="askCancelSeries()"
         class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-4 py-2.5 text-sm font-semibold text-muted transition hover:bg-glass-strong disabled:opacity-60"
       >
         Cancel series
@@ -67,7 +67,7 @@
       <button
         type="button"
         [disabled]="working"
-        (click)="deleteSeries('FutureDrafts')"
+        (click)="askDeleteSeries()"
         class="inline-flex items-center justify-center rounded-2xl border border-rose-500/40 px-4 py-2.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-500/10 disabled:opacity-60 dark:text-rose-400"
       >
         Delete series
@@ -75,9 +75,23 @@
     </div>
 
     <p class="mb-4 text-xs text-subtle">
-      Deleting a series removes unbooked future drafts. Occurrences anyone has registered for are
-      always kept as standalone events.
+      Deleting a series removes unbooked future drafts. Every other occurrence survives as a
+      standalone event &mdash; including past ones and any anyone has registered for &mdash; but no
+      longer belongs to a series.
     </p>
+
+    <app-confirm-dialog
+      [open]="!!pendingBulkAction"
+      [title]="pendingBulkAction?.title ?? ''"
+      [impacts]="pendingBulkAction?.impacts ?? []"
+      [reversibleNote]="pendingBulkAction?.reversibleNote ?? null"
+      [confirmLabel]="pendingBulkAction?.confirmLabel ?? 'Confirm'"
+      cancelLabel="Keep as is"
+      [tone]="pendingBulkAction?.tone ?? 'primary'"
+      [requireTypedConfirmation]="pendingBulkAction?.requireTypedConfirmation ?? null"
+      [busy]="working"
+      (resolve)="onBulkActionResolved($event)"
+    />
 
     <div class="overflow-x-auto rounded-2xl border border-line-strong">
       <table class="w-full text-left text-sm">

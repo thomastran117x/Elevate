@@ -627,4 +627,42 @@ describe('EventsService', () => {
       expect((data as { items: { id: number }[] }).items[0].id).toBe(5);
     });
   });
+
+  describe('lifecycle decoding', () => {
+    function readLifecycle(value: unknown): string {
+      let state = '';
+      service.getEvent(42).subscribe((response) => (state = response.data!.lifecycleState));
+
+      httpMock
+        .expectOne((req) => req.url.endsWith('/events/42'))
+        .flush({
+          Success: true,
+          Message: 'ok',
+          Data: { Id: 42, LifecycleState: value },
+          error: null,
+          meta: null,
+        });
+
+      return state;
+    }
+
+    it('decodes Paused from both the ordinal and the name', () => {
+      // This service used to keep its own lifecycle array ending at Archived, so ordinal 4 fell
+      // through to the Published fallback: paused events rendered as open for registration.
+      expect(readLifecycle(4)).toBe('Paused');
+      expect(readLifecycle('Paused')).toBe('Paused');
+    });
+
+    it('still decodes the pre-existing states', () => {
+      expect(readLifecycle(0)).toBe('Draft');
+      expect(readLifecycle(1)).toBe('Published');
+      expect(readLifecycle(2)).toBe('Cancelled');
+      expect(readLifecycle(3)).toBe('Archived');
+    });
+
+    it('falls back to Published for a genuinely unknown value', () => {
+      expect(readLifecycle(99)).toBe('Published');
+      expect(readLifecycle('Zombie')).toBe('Published');
+    });
+  });
 });

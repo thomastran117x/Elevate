@@ -4,6 +4,7 @@ import { map, Observable } from 'rxjs';
 import { environment } from '@environments/environment';
 import { ApiEnvelope, extractEnvelopeMeta } from '../../../core/api/models/api-envelope.model';
 import { ApiClient } from '../../../core/api/services/api-client.service';
+import { EventItemPayload, normalizeEventItem } from '../models/event-normalizers';
 import {
   EventWaitlistEntry,
   EventWaitlistPage,
@@ -13,7 +14,6 @@ import {
   WaitlistEntryStatus,
   WaitlistPromotionResult,
 } from '../models/event-waitlist.types';
-import { EventItem } from '../models/event.types';
 
 type EntryPayload = Partial<EventWaitlistEntry> & {
   Id?: number;
@@ -49,8 +49,8 @@ type WaitlistedEventPayload = {
   JoinedAtUtc?: string;
   accessRevoked?: boolean;
   AccessRevoked?: boolean;
-  event?: unknown;
-  Event?: unknown;
+  event?: EventItemPayload;
+  Event?: EventItemPayload;
 };
 
 type PromotionPayload = {
@@ -163,7 +163,7 @@ export class EventWaitlistService {
             position: item.position ?? item.Position ?? 0,
             joinedAtUtc: item.joinedAtUtc ?? item.JoinedAtUtc ?? '',
             accessRevoked: item.accessRevoked ?? item.AccessRevoked ?? false,
-            event: (item.event ?? item.Event) as EventItem,
+            event: normalizeEventItem((item.event ?? item.Event) as EventItemPayload),
           })),
         ),
       );

@@ -144,12 +144,21 @@
             </p>
           }
 
-          <a
-            [routerLink]="['/clubs', clubId, 'manage', 'events', event.id]"
-            class="mt-auto inline-flex items-center justify-center rounded-2xl border border-line-strong px-4 py-2 text-sm font-semibold text-muted transition hover:bg-glass-strong"
-          >
-            Open editor
-          </a>
+          <div class="mt-auto space-y-3 pt-4">
+            <app-event-lifecycle-actions
+              [event]="event"
+              [busy]="transitioningEventId === event.id"
+              layout="compact"
+              (act)="runLifecycleTransition(event, $event)"
+            />
+
+            <a
+              [routerLink]="['/clubs', clubId, 'manage', 'events', event.id]"
+              class="inline-flex w-full items-center justify-center rounded-2xl border border-line-strong px-4 py-2 text-sm font-semibold text-muted transition hover:bg-glass-strong"
+            >
+              Open editor
+            </a>
+          </div>
         </article>
       }
     </div>

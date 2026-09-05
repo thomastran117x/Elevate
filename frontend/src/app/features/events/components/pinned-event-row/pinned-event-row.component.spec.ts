@@ -97,4 +97,21 @@ describe('PinnedEventRowComponent', () => {
     expect(component.isCancelled).toBeTrue();
     expect(text).toContain('Event cancelled');
   });
+
+  it('flags a paused event without calling it cancelled', () => {
+    const text = render(pinnedRow({ event: makeEventItem({ lifecycleState: 'Paused' }) }));
+
+    expect(component.isPaused).toBeTrue();
+    expect(component.isCancelled).toBeFalse();
+    expect(text).toContain('Registration paused');
+    expect(text).not.toContain('Event cancelled');
+  });
+
+  it('says nothing about state for an ordinary published event', () => {
+    const text = render(pinnedRow({ event: makeEventItem({ lifecycleState: 'Published' }) }));
+
+    expect(component.isPaused).toBeFalse();
+    expect(component.isCancelled).toBeFalse();
+    expect(text).not.toContain('Registration paused');
+  });
 });

@@ -29,6 +29,7 @@ namespace backend.main.features.events.analytics
         int TotalEvents,
         int DraftEvents,
         int PublishedEvents,
+        int PausedEvents,
         int CancelledEvents,
         int ArchivedEvents,
         int UpcomingEvents,

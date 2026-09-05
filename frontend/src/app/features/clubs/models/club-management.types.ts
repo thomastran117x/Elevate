@@ -345,6 +345,7 @@ export interface ClubAnalytics {
   totalEvents: number;
   draftEvents: number;
   publishedEvents: number;
+  pausedEvents: number;
   cancelledEvents: number;
   archivedEvents: number;
   upcomingEvents: number;
@@ -423,6 +424,7 @@ export function normalizeClubAnalytics(raw: AnalyticsPayload): ClubAnalytics {
     totalEvents: num(raw, 'totalEvents', 'TotalEvents'),
     draftEvents: num(raw, 'draftEvents', 'DraftEvents'),
     publishedEvents: num(raw, 'publishedEvents', 'PublishedEvents'),
+    pausedEvents: num(raw, 'pausedEvents', 'PausedEvents'),
     cancelledEvents: num(raw, 'cancelledEvents', 'CancelledEvents'),
     archivedEvents: num(raw, 'archivedEvents', 'ArchivedEvents'),
     upcomingEvents: num(raw, 'upcomingEvents', 'UpcomingEvents'),

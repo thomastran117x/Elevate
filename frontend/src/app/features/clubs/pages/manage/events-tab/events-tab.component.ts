@@ -13,12 +13,14 @@ import {
   EventLifecycleState,
   ManagedEvent,
 } from '../../../../events/models/event.types';
+import { lifecycleBadgeClass } from '../../../../events/models/event-lifecycle';
+import { EventLifecycleActionsComponent } from '../../../../events/components/lifecycle-actions/lifecycle-actions.component';
 import { EventsManagementService } from '../../../../events/services/events-management.service';
 
 @Component({
   selector: 'app-events-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, EventLifecycleActionsComponent],
   templateUrl: './events-tab.component.html',
 })
 export class EventsTabComponent implements OnInit {
@@ -85,16 +87,47 @@ export class EventsTabComponent implements OnInit {
   }
 
   lifecycleBadge(state: EventLifecycleState): string {
-    switch (state) {
-      case 'Draft':
-        return 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20';
-      case 'Published':
-        return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20';
-      case 'Cancelled':
-        return 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20';
-      case 'Archived':
-        return 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20';
-    }
+    return lifecycleBadgeClass(state);
+  }
+
+  /** Id of the event whose lifecycle request is in flight, so only its card greys out. */
+  transitioningEventId: number | null = null;
+
+  /**
+   * Runs a lifecycle move from the card grid, then swaps the returned event into the list in
+   * place so the card's buttons and badge update without a full reload.
+   */
+  runLifecycleTransition(event: ManagedEvent, key: string): void {
+    this.transitioningEventId = event.id;
+    this.error = '';
+
+    this.management
+      .runTransition(event.id, key)
+      .pipe(
+        finalize(() => (this.transitioningEventId = null)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (response) => {
+          const updated = extractEnvelopeData(response);
+          if (!updated) {
+            return;
+          }
+
+          // A transition can move an event out of the filter that is showing it. Swapping the
+          // card in place would leave a Paused card sitting in the Published results with a
+          // stale total, so reload instead and let the server decide what belongs on the page.
+          if (this.selectedLifecycle && updated.lifecycleState !== this.selectedLifecycle) {
+            this.load();
+            return;
+          }
+
+          this.events = this.events.map((item) => (item.id === updated.id ? updated : item));
+        },
+        error: (err) => {
+          this.error = getApiClientMessage(err, 'That change could not be applied.');
+        },
+      });
   }
 
   private load(): void {

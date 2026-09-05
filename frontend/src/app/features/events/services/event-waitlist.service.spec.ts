@@ -262,6 +262,39 @@ describe('EventWaitlistService', () => {
       expect(result).toEqual({ promotedCount: 0, promotedUserIds: [] });
     });
 
+    it('decodes the nested event, whose enums arrive as integers', () => {
+      // The payload used to be cast straight to EventItem, so lifecycleState stayed a number and
+      // every `=== 'Paused'` / `=== 'Cancelled'` check on /my-waitlists was silently always false.
+      let items: Record<string, unknown>[] = [];
+      service.getMine().subscribe((value) => (items = value as never));
+
+      httpMock
+        .expectOne((r) => r.url.includes('/events/me/waitlisted'))
+        .flush({
+          data: [
+            { entryId: 1, event: { id: 42, lifecycleState: 4 } },
+            { entryId: 2, event: { id: 43, lifecycleState: 2 } },
+            { entryId: 3, event: { id: 44, lifecycleState: 'Published' } },
+          ],
+        });
+
+      expect((items[0]['event'] as Record<string, unknown>)['lifecycleState']).toBe('Paused');
+      expect((items[1]['event'] as Record<string, unknown>)['lifecycleState']).toBe('Cancelled');
+      expect((items[2]['event'] as Record<string, unknown>)['lifecycleState']).toBe('Published');
+    });
+
+    it('defaults a missing nested event rather than leaking undefined fields', () => {
+      let items: Record<string, unknown>[] = [];
+      service.getMine().subscribe((value) => (items = value as never));
+
+      httpMock.expectOne((r) => r.url.includes('/events/me/waitlisted')).flush({ data: [{}] });
+
+      const event = items[0]['event'] as Record<string, unknown>;
+      expect(event['id']).toBe(0);
+      expect(event['tags']).toEqual([]);
+      expect(event['imageUrls']).toEqual([]);
+    });
+
     it('reads a PascalCase list of my waitlisted events', () => {
       let items: Record<string, unknown>[] = [];
       service.getMine().subscribe((value) => (items = value as never));

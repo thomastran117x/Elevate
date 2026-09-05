@@ -9,6 +9,21 @@ public static class EventVersionActions
     public const string Archive = "archive";
     public const string Rollback = "rollback";
 
+    /// <summary>Withdrawn from public listings without ending the event. Reversed by <see cref="Resume"/>.</summary>
+    public const string Pause = "pause";
+
+    /// <summary>Put back on sale after a pause.</summary>
+    public const string Resume = "resume";
+
+    /// <summary>A cancellation was taken back and the event is live again.</summary>
+    public const string Reinstate = "reinstate";
+
+    /// <summary>Recovered from the archive, landing in <c>Paused</c> for review.</summary>
+    public const string Unarchive = "unarchive";
+
+    /// <summary>The most recent lifecycle change was undone inside the revert window.</summary>
+    public const string LifecycleRevert = "lifecycle-revert";
+
     /// <summary>The occurrence was materialized as part of a recurrence series.</summary>
     public const string SeriesCreate = "series-create";
 

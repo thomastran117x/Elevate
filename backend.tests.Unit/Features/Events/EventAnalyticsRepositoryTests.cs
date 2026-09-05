@@ -70,6 +70,7 @@ public class EventAnalyticsRepositoryTests
             TotalEvents: 3,
             DraftEvents: 1,
             PublishedEvents: 2,
+            PausedEvents: 0,
             CancelledEvents: 0,
             ArchivedEvents: 0,
             UpcomingEvents: 1,
@@ -114,7 +115,7 @@ public class EventAnalyticsRepositoryTests
                 It.IsAny<TimeSpan?>(),
                 It.IsAny<double>(),
                 It.IsAny<System.Text.Json.JsonSerializerOptions?>()))
-            .ReturnsAsync(new ClubAnalyticsData(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0L, 0L, [], [], []));
+            .ReturnsAsync(new ClubAnalyticsData(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0L, 0L, [], [], []));
 
         var repo = CreateRepository(refreshCache);
 

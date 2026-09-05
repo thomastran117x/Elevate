@@ -36,6 +36,25 @@ public class Events
         get; set;
     }
     public EventLifecycleState LifecycleState { get; set; } = EventLifecycleState.Draft;
+
+    /// <summary>
+    /// The state this event was in immediately before its most recent lifecycle change, or null
+    /// when there is nothing to undo. Cleared once a revert consumes it, so undo cannot ping-pong.
+    /// </summary>
+    public EventLifecycleState? PreviousLifecycleState
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// When <see cref="LifecycleState"/> last changed. Also answers "when was this cancelled?",
+    /// which previously required digging through EventVersions.
+    /// </summary>
+    public DateTime? LifecycleChangedAt
+    {
+        get; set;
+    }
+
     public int CurrentVersionNumber { get; set; } = 0;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

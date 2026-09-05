@@ -148,7 +148,10 @@
     <!-- Event breakdown -->
     <article class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl">
       <h2 class="text-lg font-bold">Events</h2>
-      <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+
+      <!-- The five lifecycle buckets add up to Total; Upcoming is a separate, time-derived
+           axis and is shown apart so the breakdown still reconciles. -->
+      <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div class="rounded-2xl bg-surface-muted px-4 py-3 text-center">
           <p class="text-xl font-bold">{{ a.totalEvents }}</p>
           <p class="text-xs text-faint">Total</p>
@@ -158,14 +161,24 @@
           <p class="text-xs text-faint">Published</p>
         </div>
         <div class="rounded-2xl bg-surface-muted px-4 py-3 text-center">
+          <p class="text-xl font-bold">{{ a.pausedEvents }}</p>
+          <p class="text-xs text-faint">Paused</p>
+        </div>
+        <div class="rounded-2xl bg-surface-muted px-4 py-3 text-center">
           <p class="text-xl font-bold">{{ a.draftEvents }}</p>
           <p class="text-xs text-faint">Drafts</p>
         </div>
         <div class="rounded-2xl bg-surface-muted px-4 py-3 text-center">
-          <p class="text-xl font-bold">{{ a.upcomingEvents }}</p>
-          <p class="text-xs text-faint">Upcoming</p>
+          <p class="text-xl font-bold">{{ a.cancelledEvents }}</p>
+          <p class="text-xs text-faint">Cancelled</p>
+        </div>
+        <div class="rounded-2xl bg-surface-muted px-4 py-3 text-center">
+          <p class="text-xl font-bold">{{ a.archivedEvents }}</p>
+          <p class="text-xs text-faint">Archived</p>
         </div>
       </div>
+
+      <p class="mt-3 text-xs text-faint">{{ a.upcomingEvents }} upcoming</p>
     </article>
 
     <!-- Fill-rate bars -->
