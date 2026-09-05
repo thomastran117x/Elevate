@@ -59,6 +59,10 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
                 [SearchIndexNames.EventsConfigurationKey] = _resources.EventsIndex,
                 [SearchIndexNames.ClubsConfigurationKey] = _resources.ClubsIndex,
                 [SearchIndexNames.ClubPostsConfigurationKey] = _resources.ClubPostsIndex,
+                // Retained for intent, but these do not actually raise the limits:
+                // AddInMemoryRateLimiter reads configuration at service-registration time, which
+                // happens before this source is layered in. Program.cs therefore skips
+                // UseRateLimiter entirely under the Testing environment instead.
                 ["RateLimiter:PermitLimit"] = "100000",
                 ["RateLimiter:AuthPermitLimit"] = "100000"
             };

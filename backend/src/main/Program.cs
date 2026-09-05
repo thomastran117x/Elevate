@@ -110,7 +110,17 @@ app.UseRouting();
 // The limiter was configured but never mounted, so every [EnableRateLimiting] attribute and the
 // global partition were inert. It is mounted here because the anonymous username availability
 // endpoint is an enumeration surface that depends on its policy actually running.
-app.UseRateLimiter();
+//
+// Skipped under Testing: the integration suite drives hundreds of auth requests from a single
+// client address, which no realistic policy would allow. The RateLimiter:* overrides in
+// TestWebApplicationFactory cannot raise the limits either, because AddInMemoryRateLimiter reads
+// configuration when services are registered — before WebApplicationFactory layers its own
+// sources in — which is the same reason the factory re-registers AppDatabaseContext by hand
+// rather than relying on Database:ConnectionString.
+if (!isTesting)
+{
+    app.UseRateLimiter();
+}
 
 app.UseRequestTimeouts();
 
