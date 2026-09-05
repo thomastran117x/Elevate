@@ -21,12 +21,42 @@ public class UsernameAvailabilityServiceTests
         var repository = new Mock<IAuthUserRepository>();
         var service = CreateService(repository, BloomFilterLookup.DefinitelyAbsent);
 
-        var unavailable = await service.IsUnavailableAsync("ada", Now);
+        var unavailable = await service.IsUnavailableAsync("ada", Now, UsernameLookupMode.Advisory);
 
         unavailable.Should().BeFalse();
         repository.Verify(
             r => r.UsernameUnavailableAsync(It.IsAny<string>(), It.IsAny<DateTime>()),
             Times.Never);
+    }
+
+    /// <summary>
+    /// The safety fix behind UsernameLookupMode. The local filter can lag a claim made on another
+    /// instance, so a path that is about to take the name must confirm against the database —
+    /// otherwise a stale "free" turns a clean 409 into a unique-index violation and a 500.
+    /// </summary>
+    [Fact]
+    public async Task IsUnavailableAsync_ShouldQueryTheDatabase_EvenWhenTheFilterProvesAbsence()
+    {
+        var repository = new Mock<IAuthUserRepository>();
+        repository.Setup(r => r.UsernameUnavailableAsync("ada", Now)).ReturnsAsync(true);
+        var service = CreateService(repository, BloomFilterLookup.DefinitelyAbsent);
+
+        var unavailable = await service.IsUnavailableAsync("ada", Now, UsernameLookupMode.Authoritative);
+
+        unavailable.Should().BeTrue();
+        repository.Verify(r => r.UsernameUnavailableAsync("ada", Now), Times.Once);
+    }
+
+    [Fact]
+    public async Task IsUnavailableAsync_ShouldDefaultToAuthoritative()
+    {
+        var repository = new Mock<IAuthUserRepository>();
+        repository.Setup(r => r.UsernameUnavailableAsync("ada", Now)).ReturnsAsync(true);
+        var service = CreateService(repository, BloomFilterLookup.DefinitelyAbsent);
+
+        // Callers must opt in to trusting the filter, never out of it.
+        (await service.IsUnavailableAsync("ada", Now)).Should().BeTrue();
+        repository.Verify(r => r.UsernameUnavailableAsync("ada", Now), Times.Once);
     }
 
     [Theory]
@@ -76,7 +106,7 @@ public class UsernameAvailabilityServiceTests
         using var cancellation = new CancellationTokenSource();
         await cancellation.CancelAsync();
 
-        var act = () => service.IsUnavailableAsync("ada", Now, cancellation.Token);
+        var act = () => service.IsUnavailableAsync("ada", Now, UsernameLookupMode.Advisory, cancellation.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
     }

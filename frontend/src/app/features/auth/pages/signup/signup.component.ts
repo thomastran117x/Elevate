@@ -28,6 +28,9 @@ export class SignupComponent {
 
   private readonly fb = new FormBuilder();
 
+  /** The last username the API actually confirmed as free; null whenever we did not get an answer. */
+  private readonly confirmedAvailable = signal<string | null>(null);
+
   readonly siteKey = environment.googleSiteKey;
   readonly roleOptions: Array<{ value: SignupRole; label: string }> = [
     { value: 'participant', label: 'Participant' },
@@ -39,7 +42,11 @@ export class SignupComponent {
     email: this.fb.nonNullable.control('', [Validators.required, Validators.email]),
     username: this.fb.nonNullable.control('', {
       validators: [Validators.required, Validators.maxLength(50)],
-      asyncValidators: [usernameAvailabilityValidator(this.auth)],
+      asyncValidators: [
+        usernameAvailabilityValidator(this.auth, (username) =>
+          this.confirmedAvailable.set(username),
+        ),
+      ],
     }),
     password: this.fb.nonNullable.control('', [Validators.required, Validators.minLength(8)]),
     usertype: this.fb.nonNullable.control<SignupRole>('participant', [Validators.required]),
@@ -54,12 +61,19 @@ export class SignupComponent {
 
   readonly usernameChecking = computed(() => this.usernameStatus() === 'PENDING');
 
-  /** Only claim availability once a non-empty name has actually been checked and came back clean. */
-  readonly usernameAvailable = computed(
-    () =>
+  /**
+   * Only claim availability for a name the API actually confirmed. The validator fails open, so
+   * a failed or rate-limited probe also leaves the control VALID — reading validity alone would
+   * announce "available" when nothing was ever checked.
+   */
+  readonly usernameAvailable = computed(() => {
+    const confirmed = this.confirmedAvailable();
+    return (
       this.usernameStatus() === 'VALID' &&
-      normalizeUsername(this.form.controls.username.value) !== '',
-  );
+      confirmed !== null &&
+      confirmed === normalizeUsername(this.form.controls.username.value)
+    );
+  });
 
   constructor(
     private recaptcha: RecaptchaV3Service,

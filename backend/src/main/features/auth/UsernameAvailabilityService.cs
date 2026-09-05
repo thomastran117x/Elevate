@@ -20,15 +20,20 @@ public sealed class UsernameAvailabilityService : IUsernameAvailabilityService
     public async Task<bool> IsUnavailableAsync(
         string normalizedUsername,
         DateTime utcNow,
+        UsernameLookupMode mode = UsernameLookupMode.Authoritative,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        // DefinitelyAbsent is the only answer that permits skipping the query, and it is exact:
-        // a bloom filter has no false negatives, so a clear bit proves the name was never added.
-        // PossiblyPresent and Unavailable both fall through to the database.
-        if (_bloomFilters.MightContain(BloomFilterTargets.Username, normalizedUsername)
-            == BloomFilterLookup.DefinitelyAbsent)
+        // DefinitelyAbsent is the only answer that permits skipping the query. It is exact with
+        // respect to this filter — a bloom filter has no false negatives, so a clear bit proves
+        // the value was never added to *this* bitmap — but the bitmap itself can lag a claim made
+        // on another instance until the next refresh. Callers about to claim the name therefore
+        // ask authoritatively, so a stale answer cannot turn a clean conflict into a 500 from the
+        // unique index. PossiblyPresent and Unavailable always fall through.
+        if (mode == UsernameLookupMode.Advisory
+            && _bloomFilters.MightContain(BloomFilterTargets.Username, normalizedUsername)
+                == BloomFilterLookup.DefinitelyAbsent)
         {
             return false;
         }

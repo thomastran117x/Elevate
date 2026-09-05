@@ -50,6 +50,33 @@ public class BloomFilterMaintenanceServiceTests
         await act.Should().NotThrowAsync();
     }
 
+    /// <summary>
+    /// The cooldown must be evaluated before the flag is read. Consuming it first would clear the
+    /// divergence signal on a tick that then declines to rebuild, losing it until the six-hourly
+    /// pass. This asserts the registry still holds the flag after such a tick.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_ShouldNotConsumeTheDirtyFlag_WhileTheCooldownBlocksRebuilding()
+    {
+        var cache = CreateCache();
+        cache.Setup(c => c.SetBitsAsync(It.IsAny<string>(), It.IsAny<IReadOnlyCollection<long>>()))
+            .ReturnsAsync(false);
+        var registry = CreateRegistry(cache);
+        using var service = CreateService(registry, cache, out _);
+
+        await service.StartAsync(CancellationToken.None);
+        await WaitUntilAsync(() => registry.IsReady(Target));
+
+        // Diverge: the local bit is set but the shared write failed.
+        await registry.AddAsync(Target, "diverged");
+
+        // A refresh tick runs well inside the 15-minute cooldown and must leave the flag alone.
+        await Task.Delay(TimeSpan.FromSeconds(1));
+        await service.StopAsync(CancellationToken.None);
+
+        registry.ConsumeSharedStateDirty().Should().BeTrue();
+    }
+
     [Fact]
     public async Task StopAsync_ShouldShutDownPromptly()
     {
@@ -103,7 +130,7 @@ public class BloomFilterMaintenanceServiceTests
     private static IOptions<BloomFilterOptions> BuildOptions() =>
         Options.Create(new BloomFilterOptions
         {
-            RefreshIntervalSeconds = 5,
+            RefreshIntervalSeconds = 1,
             Targets = new Dictionary<string, BloomFilterTargetOptions>(StringComparer.Ordinal)
             {
                 [Target] = new() { ExpectedItems = 1000, FalsePositiveRate = 0.01 },

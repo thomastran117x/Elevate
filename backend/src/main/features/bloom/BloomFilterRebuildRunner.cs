@@ -125,15 +125,33 @@ public sealed class BloomFilterRebuildRunner
                 return;
             }
 
-            // Only the values actually folded into this generation are cleared. Anything added
-            // after the snapshot stays pending for the next rebuild to replay.
-            foreach (var value in replayed)
+            // A value committed between the first pending read and the pointer moving was written
+            // into the *previous* generation, so it is absent from the bitmap just published. A
+            // same-generation refresh only unions shared bits and never replays pending, so
+            // without this second pass that name would read as definitely absent until the next
+            // rebuild. Re-reading after the flip catches exactly those late arrivals.
+            var lateArrivals = (await _cache.SetMembersAsync(BloomFilterKeys.Pending(target)))
+                .Except(replayed, StringComparer.Ordinal)
+                .Where(value => !string.IsNullOrEmpty(value))
+                .ToArray();
+
+            foreach (var value in lateArrivals)
+            {
+                var positions = descriptor.GetBitPositions(value);
+                bitmap.SetAll(positions);
+                await _cache.SetBitsAsync(BloomFilterKeys.Bits(target, nextGeneration), positions);
+            }
+
+            // Only the values actually folded into this generation are cleared. Anything arriving
+            // after this point stays pending for the next rebuild to replay.
+            foreach (var value in replayed.Concat(lateArrivals))
                 await _cache.SetRemoveAsync(BloomFilterKeys.Pending(target), value);
 
             var stats = _registry.GetStats(target);
             Logger.Info(
                 $"[BloomFilterRebuildRunner] Published '{target}' generation {nextGeneration} "
                 + $"({sourceCount} values, {replayed.Length} replayed, "
+                + $"{lateArrivals.Length} late, "
                 + $"estimated false-positive rate {stats?.EstimatedFalsePositiveRate:P3}).");
         }
         finally

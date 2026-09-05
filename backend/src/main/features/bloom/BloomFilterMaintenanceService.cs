@@ -55,8 +55,12 @@ public sealed class BloomFilterMaintenanceService : BackgroundService
             // A failed write to the shared bitmap means the local and shared filters disagree,
             // and only a rebuild reconciles them. The cooldown stops a sustained Redis outage —
             // where every write fails — from scheduling a full table scan on every tick.
+            //
+            // The cooldown is checked first so the flag is consumed only when a rebuild can
+            // actually follow. Reading it first would clear the divergence signal on a tick that
+            // then declines to rebuild, losing it until the next six-hourly pass.
             var reconcileDivergence =
-                _registry.ConsumeSharedStateDirty() && elapsed >= forcedRebuildCooldown;
+                elapsed >= forcedRebuildCooldown && _registry.ConsumeSharedStateDirty();
 
             if (elapsed >= rebuildInterval || reconcileDivergence)
             {

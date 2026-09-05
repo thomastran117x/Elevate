@@ -86,6 +86,31 @@ public class BloomFilterRebuildRunnerTests
         registry.MightContain(Target, "written-mid-rebuild").Should().Be(BloomFilterLookup.PossiblyPresent);
     }
 
+    /// <summary>
+    /// A value committed after the pending snapshot but before the pointer moves lands in the old
+    /// generation only. Without a second replay around the flip it would be missing from the newly
+    /// published bitmap, and same-generation refreshes never replay pending, so the name would read
+    /// as definitely absent until the next rebuild.
+    /// </summary>
+    [Fact]
+    public async Task RunOnceAsync_ShouldReplayValuesThatArriveDuringThePointerFlip()
+    {
+        var cache = CreatePublishableCache(currentGeneration: 1);
+        cache.SetupSequence(c => c.SetMembersAsync("bloom:username:pending"))
+            .ReturnsAsync([])
+            .ReturnsAsync(["arrived-during-flip"]);
+        var registry = CreateRegistry(cache);
+        var runner = CreateRunner(registry, cache, new StubSource("ada"));
+
+        await runner.RunOnceAsync(CancellationToken.None);
+
+        registry.MightContain(Target, "arrived-during-flip").Should().Be(BloomFilterLookup.PossiblyPresent);
+        cache.Verify(
+            c => c.SetBitsAsync("bloom:username:bits:2", It.IsAny<IReadOnlyCollection<long>>()),
+            Times.Once);
+        cache.Verify(c => c.SetRemoveAsync("bloom:username:pending", "arrived-during-flip"), Times.Once);
+    }
+
     [Fact]
     public async Task RunOnceAsync_ShouldClearOnlyTheValuesItReplayed()
     {

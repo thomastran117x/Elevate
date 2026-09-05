@@ -1,8 +1,27 @@
 namespace backend.main.features.auth;
 
 /// <summary>
-/// Answers "is this username already spoken for", using the bloom filter to skip the database
-/// when it can prove the name is free.
+/// How much a caller is willing to trust the bloom filter.
+/// </summary>
+public enum UsernameLookupMode
+{
+    /// <summary>
+    /// Always confirm against the database. Required on any path that is about to claim the
+    /// name: the local filter can lag another instance by up to one refresh interval, and a
+    /// wrongly optimistic answer there turns a clean conflict into a unique-index violation.
+    /// </summary>
+    Authoritative = 0,
+
+    /// <summary>
+    /// Let the filter answer when it proves the name is free. For read-only probes, where a
+    /// briefly stale answer costs a late error message and nothing else.
+    /// </summary>
+    Advisory = 1,
+}
+
+/// <summary>
+/// Answers "is this username already spoken for", optionally using the bloom filter to skip the
+/// database when it can prove the name is free.
 /// </summary>
 public interface IUsernameAvailabilityService
 {
@@ -17,10 +36,12 @@ public interface IUsernameAvailabilityService
     /// </remarks>
     /// <param name="normalizedUsername">Username already passed through <c>UsernamePolicy</c>.</param>
     /// <param name="utcNow">Clock reading used to test reservation expiry.</param>
+    /// <param name="mode">Whether the filter may answer on its own. Defaults to authoritative.</param>
     /// <param name="cancellationToken">Cancels the lookup.</param>
     Task<bool> IsUnavailableAsync(
         string normalizedUsername,
         DateTime utcNow,
+        UsernameLookupMode mode = UsernameLookupMode.Authoritative,
         CancellationToken cancellationToken = default);
 
     /// <summary>

@@ -158,9 +158,13 @@ namespace backend.main.features.auth
             {
                 var normalized = UsernamePolicy.NormalizeAndValidate(username);
 
+                // Advisory: this endpoint only reports, it never claims, so letting the filter
+                // answer outright is what makes a type-ahead probe cheap. The signup path that
+                // actually takes the name still confirms against the database.
                 var unavailable = await _usernameAvailability.IsUnavailableAsync(
                     normalized,
                     DateTime.UtcNow,
+                    UsernameLookupMode.Advisory,
                     cancellationToken
                 );
 

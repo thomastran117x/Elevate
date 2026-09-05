@@ -17,11 +17,21 @@ describe('usernameAvailabilityValidator', () => {
     return auth;
   }
 
-  function runValidator(auth: jasmine.SpyObj<AuthService>, value: string): { errors: unknown } {
+  function runValidator(
+    auth: jasmine.SpyObj<AuthService>,
+    value: string,
+  ): { errors: unknown; confirmed: string | null | undefined } {
     const control = new FormControl(value);
-    const captured: { errors: unknown } = { errors: undefined };
+    const captured: { errors: unknown; confirmed: string | null | undefined } = {
+      errors: undefined,
+      confirmed: undefined,
+    };
 
-    (usernameAvailabilityValidator(auth)(control) as Observable<unknown>).subscribe((errors) => {
+    const validator = usernameAvailabilityValidator(auth, (username) => {
+      captured.confirmed = username;
+    });
+
+    (validator(control) as Observable<unknown>).subscribe((errors) => {
       captured.errors = errors;
     });
 
@@ -88,6 +98,45 @@ describe('usernameAvailabilityValidator', () => {
     tick(400);
 
     expect(result.errors).toBeNull();
+  }));
+
+  // The UI must be able to tell "confirmed free" from "we never found out"; without this the
+  // signup form announces "That username is available" after a failed or throttled probe.
+  it('confirms the username only when the API actually answered', fakeAsync(() => {
+    const auth = createAuth(of({ username: 'ada', available: true }));
+
+    const result = runValidator(auth, 'ada');
+    tick(400);
+
+    expect(result.confirmed).toBe('ada');
+  }));
+
+  it('reports no confirmation when the name is taken', fakeAsync(() => {
+    const auth = createAuth(of({ username: 'ada', available: false }));
+
+    const result = runValidator(auth, 'ada');
+    tick(400);
+
+    expect(result.confirmed).toBeNull();
+  }));
+
+  it('reports no confirmation when the request fails', fakeAsync(() => {
+    const auth = createAuth(throwError(() => new Error('network down')));
+
+    const result = runValidator(auth, 'ada');
+    tick(400);
+
+    expect(result.errors).toBeNull();
+    expect(result.confirmed).toBeNull();
+  }));
+
+  it('reports no confirmation for values it never probes', fakeAsync(() => {
+    const auth = createAuth(of({ username: 'ada', available: true }));
+
+    const result = runValidator(auth, '   ');
+    tick(400);
+
+    expect(result.confirmed).toBeNull();
   }));
 });
 
