@@ -134,15 +134,16 @@ export class SignupComponent {
     try {
       const captcha = await this.recaptcha.execute(this.siteKey, 'signup');
       const values = this.form.getRawValue();
+      // Deliberately not written back into the controls. setValue re-runs the async validators
+      // (emitEvent: false suppresses the events but still issues the request), spending a probe
+      // from the rate-limit budget on every submit and leaving the fields PENDING under a form
+      // that has already been submitted. The payload below carries the exact values being sent,
+      // so echoing them into the inputs bought nothing.
       const username = normalizeUsername(values.username);
-      const email = normalizeEmail(values.email);
-      this.form.controls.username.setValue(username);
-      this.form.controls.email.setValue(email);
       this.auth
         .signup({
           ...values,
           username,
-          email,
           captcha,
         })
         .pipe(finalize(() => (this.loading = false)))

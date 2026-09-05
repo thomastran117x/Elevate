@@ -20,8 +20,21 @@ public static class EmailPolicy
     /// </summary>
     public const int MaxLength = 254;
 
-    public static string Normalize(string? email) =>
-        (email ?? string.Empty).Trim().ToLowerInvariant();
+    /// <summary>
+    /// The form to persist and deliver mail to: surrounding whitespace removed, casing intact.
+    /// </summary>
+    /// <remarks>
+    /// RFC 5321 section 2.4 leaves the local part case-sensitive and reserves its interpretation
+    /// to the destination host, so lowercasing an address before storing or mailing it can produce
+    /// one that does not exist. Nothing here needs that: the unique index is <c>citext</c>, and the
+    /// filter gets its lowercase form from <see cref="Normalize"/> at the point of hashing.
+    /// </remarks>
+    public static string Sanitize(string? email) => (email ?? string.Empty).Trim();
+
+    /// <summary>
+    /// The form to hash and look up by. Never persist this — see <see cref="Sanitize"/>.
+    /// </summary>
+    public static string Normalize(string? email) => Sanitize(email).ToLowerInvariant();
 
     /// <summary>
     /// Normalises and applies the cheap structural checks a probe endpoint needs before it is

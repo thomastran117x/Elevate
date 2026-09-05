@@ -1076,6 +1076,79 @@ public class AuthServiceTests
     }
 
     /// <summary>
+    /// The address we persist and deliver mail to must keep the casing the user typed.
+    /// </summary>
+    /// <remarks>
+    /// RFC 5321 leaves the local part case-sensitive to the destination host, so mailing a
+    /// lowercased address can bounce on a host that distinguishes them — and the account would be
+    /// unrecoverable, because the stored address is not one that exists. Only the filter lookup
+    /// gets the lowercased form.
+    /// </remarks>
+    [Fact]
+    public async Task SignUpAsync_ShouldMailTheAddressAsTyped_WhileProbingTheNormalisedForm()
+    {
+        var emailAvailability = new Mock<IEmailAvailabilityService>();
+        var service = CreateServiceWithEmailFilter(
+            emailAvailability,
+            out var userRepository,
+            out var notifications,
+            out var tokenService);
+        userRepository.Setup(repository => repository.GetAuthByUsernameAsync("new-user"))
+            .ReturnsAsync((UserAuthRecord?)null);
+
+        backend.main.features.profile.User? captured = null;
+        tokenService.Setup(t => t.GenerateVerificationArtifactsAsync(
+                It.IsAny<backend.main.features.profile.User>(),
+                VerificationPurpose.SignUp))
+            .Callback<backend.main.features.profile.User, VerificationPurpose, bool>(
+                (user, _, _) => captured = user)
+            .ReturnsAsync(SignupArtifacts());
+
+        await service.SignUpAsync("  Ada.Lovelace@Example.COM  ", "new-user", "Password123!", "organizer");
+
+        // Trimmed, but not lowercased.
+        captured.Should().NotBeNull();
+        captured!.Email.Should().Be("Ada.Lovelace@Example.COM");
+        notifications.Verify(n => n.SendSignupVerificationAsync(
+                "Ada.Lovelace@Example.COM",
+                It.IsAny<string>(),
+                It.IsAny<string>()),
+            Times.Once);
+
+        // The filter only ever sees the lowercased form.
+        emailAvailability.Verify(availability => availability.IsRegisteredAsync(
+                "ada.lovelace@example.com",
+                AvailabilityLookupMode.Advisory,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task VerifyAsync_ShouldPersistTheAddressAsTyped_WhileRecordingTheNormalisedForm()
+    {
+        var user = new backend.main.features.profile.User
+        {
+            Id = 12,
+            Email = "  Ada.Lovelace@Example.COM  ",
+            Username = "verify-user",
+            Usertype = "Participant",
+            AuthVersion = 1
+        };
+        var emailAvailability = new Mock<IEmailAvailabilityService>();
+        var service = CreateSignupCompletionService(user, emailAvailability, out var tokenService);
+        tokenService.Setup(t => t.VerifyVerificationToken("verify-token", VerificationPurpose.SignUp))
+            .ReturnsAsync(user);
+
+        await service.VerifyAsync("verify-token", SessionTransport.BrowserCookie);
+
+        user.Email.Should().Be("Ada.Lovelace@Example.COM");
+        emailAvailability.Verify(availability => availability.MarkRegisteredAsync(
+                "ada.lovelace@example.com",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    /// <summary>
     /// The signup pre-flight creates nothing, and the verify step re-checks authoritatively before
     /// inserting, so this is the one email read allowed to trust the filter.
     /// </summary>
@@ -1266,30 +1339,41 @@ public class AuthServiceTests
             Times.Once);
     }
 
+    private static VerificationArtifacts SignupArtifacts() => new()
+    {
+        LinkToken = "verify-link",
+        Purpose = VerificationPurpose.SignUp,
+        OtpChallenge = new VerificationOtpChallenge
+        {
+            Code = "123456",
+            Challenge = "challenge",
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(30)
+        }
+    };
+
     private static AuthService CreateServiceWithEmailFilter(
         Mock<IEmailAvailabilityService> emailAvailability,
-        out Mock<IAuthUserRepository> userRepository)
+        out Mock<IAuthUserRepository> userRepository) =>
+        CreateServiceWithEmailFilter(emailAvailability, out userRepository, out _, out _);
+
+    private static AuthService CreateServiceWithEmailFilter(
+        Mock<IEmailAvailabilityService> emailAvailability,
+        out Mock<IAuthUserRepository> userRepository,
+        out Mock<IAuthNotificationService> notifications,
+        out Mock<ITokenService> tokenService)
     {
         userRepository = new Mock<IAuthUserRepository>();
-        var tokenService = new Mock<ITokenService>();
+        notifications = new Mock<IAuthNotificationService>();
+        tokenService = new Mock<ITokenService>();
         tokenService.Setup(service => service.GenerateVerificationArtifactsAsync(
                 It.IsAny<backend.main.features.profile.User>(),
                 VerificationPurpose.SignUp))
-            .ReturnsAsync(new VerificationArtifacts
-            {
-                LinkToken = "verify-link",
-                Purpose = VerificationPurpose.SignUp,
-                OtpChallenge = new VerificationOtpChallenge
-                {
-                    Code = "123456",
-                    Challenge = "challenge",
-                    ExpiresAtUtc = DateTime.UtcNow.AddMinutes(30)
-                }
-            });
+            .ReturnsAsync(SignupArtifacts());
 
         return CreateService(
             userRepository: userRepository,
             tokenService: tokenService,
+            authNotificationService: notifications,
             emailAvailability: emailAvailability.Object);
     }
 

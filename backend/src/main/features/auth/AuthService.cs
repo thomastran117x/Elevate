@@ -123,13 +123,18 @@ namespace backend.main.features.auth
             try
             {
                 username = UsernamePolicy.NormalizeAndValidate(username);
-                email = EmailPolicy.NormalizeAndValidate(email);
+
+                // Only the lookup gets the lowercased form. The address carried forward keeps the
+                // casing the user typed, because it is the one we store and deliver mail to, and
+                // RFC 5321 leaves the local part case-sensitive to the destination host.
+                email = EmailPolicy.Sanitize(email);
+                var probeEmail = EmailPolicy.NormalizeAndValidate(email);
 
                 // Advisory: this method sends a verification mail, it does not create the account.
                 // The verify step below re-checks authoritatively before inserting, so a filter
                 // that has not yet seen a signup from another instance only defers the conflict
                 // rather than admitting a duplicate.
-                if (await _emailAvailability.IsRegisteredAsync(email, AvailabilityLookupMode.Advisory))
+                if (await _emailAvailability.IsRegisteredAsync(probeEmail, AvailabilityLookupMode.Advisory))
                     throw new ConflictException($"An account is already registered with the email: {email}");
                 if (await _usernameAvailability.IsUnavailableAsync(username, DateTime.UtcNow))
                     throw new UsernameTakenException(username);
@@ -176,10 +181,11 @@ namespace backend.main.features.auth
                     VerificationPurpose.SignUp
                 );
 
-                user.Email = EmailPolicy.Normalize(user.Email);
+                user.Email = EmailPolicy.Sanitize(user.Email);
+                var probeEmail = EmailPolicy.Normalize(user.Email);
                 // Authoritative: CreateUserAsync is a few lines away, so a stale "absent" here
                 // would turn a clean 409 into a unique-index violation surfacing as a 500.
-                if (await _emailAvailability.IsRegisteredAsync(user.Email))
+                if (await _emailAvailability.IsRegisteredAsync(probeEmail))
                     throw new ConflictException($"An account is already registered with the email: {user.Email}");
                 if (string.IsNullOrWhiteSpace(user.Username))
                     throw new BadRequestException("A username is required to complete signup.");
@@ -189,7 +195,7 @@ namespace backend.main.features.auth
 
                 await _userRepository.CreateUserAsync(user);
                 await _usernameAvailability.MarkTakenAsync(user.Username);
-                await _emailAvailability.MarkRegisteredAsync(user.Email);
+                await _emailAvailability.MarkRegisteredAsync(probeEmail);
 
                 return await _authSessionService.IssueAsync(user, transport);
             }
@@ -217,10 +223,11 @@ namespace backend.main.features.auth
                     VerificationPurpose.SignUp
                 );
 
-                user.Email = EmailPolicy.Normalize(user.Email);
+                user.Email = EmailPolicy.Sanitize(user.Email);
+                var probeEmail = EmailPolicy.Normalize(user.Email);
                 // Authoritative: CreateUserAsync is a few lines away, so a stale "absent" here
                 // would turn a clean 409 into a unique-index violation surfacing as a 500.
-                if (await _emailAvailability.IsRegisteredAsync(user.Email))
+                if (await _emailAvailability.IsRegisteredAsync(probeEmail))
                     throw new ConflictException($"An account is already registered with the email: {user.Email}");
                 if (string.IsNullOrWhiteSpace(user.Username))
                     throw new BadRequestException("A username is required to complete signup.");
@@ -230,7 +237,7 @@ namespace backend.main.features.auth
 
                 await _userRepository.CreateUserAsync(user);
                 await _usernameAvailability.MarkTakenAsync(user.Username);
-                await _emailAvailability.MarkRegisteredAsync(user.Email);
+                await _emailAvailability.MarkRegisteredAsync(probeEmail);
 
                 return await _authSessionService.IssueAsync(user, transport);
             }

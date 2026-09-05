@@ -18,13 +18,17 @@ using backend.main.features.events.registration;
 using backend.main.features.events.search;
 using backend.main.features.events.waitlist;
 using backend.main.features.payment;
+using backend.main.infrastructure.database.core;
 using backend.main.infrastructure.elasticsearch;
 
 using FluentAssertions;
 
+using Microsoft.EntityFrameworkCore;
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace backend.tests.Unit.Application.Bootstrap;
 
@@ -63,25 +67,40 @@ public class ContainerTests
     }
 
     /// <summary>
-    /// The rebuild runner resolves every source and rebuilds each one, so a target that fails to
-    /// register is a filter that silently never populates.
+    /// Sources and configured targets must be the same set, in both directions.
     /// </summary>
+    /// <remarks>
+    /// A source with no matching target fails silently: <c>BloomFilterRebuildRunner</c> warns once
+    /// per cycle and every lookup for it degrades to a database query forever, so the filter simply
+    /// never turns on. A target with no source is an empty bitmap that answers DefinitelyAbsent for
+    /// values that do exist. Both sides are derived from the bound options rather than a literal
+    /// list, so adding a target without its source (or the reverse) fails here.
+    ///
+    /// Deliberately built on the defaults with no configuration supplied: appsettings.json is not
+    /// loaded on every host, so the defaults are what has to be self-consistent.
+    /// </remarks>
     [Fact]
-    public void AddApplicationServices_ShouldRegisterOneSourcePerConfiguredTarget()
+    public void AddApplicationServices_ShouldRegisterExactlyOneSourcePerConfiguredTarget()
     {
         var config = new ConfigurationBuilder().Build();
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton<IConfiguration>(config);
+        services.AddSingleton<ICacheService, NoOpCacheService>();
+        // Sources are scoped and take the DbContext; they only need to be constructible here.
+        services.AddDbContext<AppDatabaseContext>(options => options.UseSqlite("Data Source=:memory:"));
 
         services.AddApplicationServices(config, includeHostedServices: false);
 
-        services.Where(descriptor => descriptor.ServiceType == typeof(IBloomFilterSource))
-            .Select(descriptor => descriptor.ImplementationType)
-            .Should().BeEquivalentTo([
-                typeof(UsernameBloomFilterSource),
-                typeof(EmailBloomFilterSource)
-            ]);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var configuredTargets = provider.GetRequiredService<IOptions<BloomFilterOptions>>()
+            .Value.Targets.Keys;
+        var coveredTargets = scope.ServiceProvider.GetServices<IBloomFilterSource>()
+            .Select(source => source.Target);
+
+        coveredTargets.Should().BeEquivalentTo(configuredTargets);
     }
 
     [Fact]

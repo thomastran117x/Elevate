@@ -199,10 +199,16 @@ namespace backend.main.features.auth
         /// </summary>
         /// <remarks>
         /// Anonymous by necessity — it serves the signup form, where there is no session yet — and
-        /// therefore an account-existence oracle. That is a deliberate, recorded tradeoff: it
-        /// reveals nothing a signup attempt would not also reveal, but it makes the answer cheap
-        /// and scriptable, so the endpoint carries a tighter rate-limit policy than the username
-        /// probe and returns nothing beyond a boolean. See the bloom filter section of
+        /// therefore an account-existence oracle, accepted deliberately because the signup UX is
+        /// judged to be worth it.
+        ///
+        /// Be clear about what that costs: this is strictly cheaper to script than the signup it
+        /// serves. <c>LocalSignup</c> requires an antiforgery token and a passing captcha; this
+        /// requires neither and answers with a boolean. So existence testing that was previously
+        /// behind a captcha is now bounded only by
+        /// <see cref="RateLimiterConfiguration.EmailAvailabilityPolicyName"/>, which is why that
+        /// policy is half the username budget. Gate this endpoint, or lower that limit, if
+        /// enumeration ever matters more than the type-ahead. See the bloom filter section of
         /// docs/CONFIGURATION.md.
         ///
         /// The answer is advisory. An address reported free can be registered a moment later; the

@@ -39,6 +39,27 @@ public class EmailPolicyTests
         EmailPolicy.Normalize(once).Should().Be(once);
     }
 
+    /// <summary>
+    /// Sanitize is the form that gets persisted and mailed, so it must not touch casing: RFC 5321
+    /// leaves the local part case-sensitive to the destination host.
+    /// </summary>
+    [Theory]
+    [InlineData("  Ada@Example.COM  ", "Ada@Example.COM")]
+    [InlineData("ada@example.com", "ada@example.com")]
+    [InlineData(null, "")]
+    public void Sanitize_ShouldTrimWithoutChangingCase(string? input, string expected)
+    {
+        EmailPolicy.Sanitize(input).Should().Be(expected);
+    }
+
+    [Fact]
+    public void Normalize_ShouldBeSanitizeLowercased()
+    {
+        const string input = "  Ada@Example.COM  ";
+
+        EmailPolicy.Normalize(input).Should().Be(EmailPolicy.Sanitize(input).ToLowerInvariant());
+    }
+
     [Fact]
     public void NormalizeAndValidate_ShouldReturnTheNormalisedAddress()
     {

@@ -14263,7 +14263,7 @@
           "auth"
         ],
         "summary": "Check email availability",
-        "description": "Anonymous by necessity — it serves the signup form, where there is no session yet — and\r\ntherefore an account-existence oracle. That is a deliberate, recorded tradeoff: it\r\nreveals nothing a signup attempt would not also reveal, but it makes the answer cheap\r\nand scriptable, so the endpoint carries a tighter rate-limit policy than the username\r\nprobe and returns nothing beyond a boolean. See the bloom filter section of\r\ndocs/CONFIGURATION.md.\r\n\r\nThe answer is advisory. An address reported free can be registered a moment later; the\r\nunique index is what actually decides.",
+        "description": "Anonymous by necessity — it serves the signup form, where there is no session yet — and\r\ntherefore an account-existence oracle, accepted deliberately because the signup UX is\r\njudged to be worth it.\r\n\r\nBe clear about what that costs: this is strictly cheaper to script than the signup it\r\nserves. `LocalSignup` requires an antiforgery token and a passing captcha; this\r\nrequires neither and answers with a boolean. So existence testing that was previously\r\nbehind a captcha is now bounded only by\r\nstring RateLimiterConfiguration.EmailAvailabilityPolicyName, which is why that\r\npolicy is half the username budget. Gate this endpoint, or lower that limit, if\r\nenumeration ever matters more than the type-ahead. See the bloom filter section of\r\ndocs/CONFIGURATION.md.\r\n\r\nThe answer is advisory. An address reported free can be registered a moment later; the\r\nunique index is what actually decides.",
         "operationId": "Auth_CheckEmailAvailability_get",
         "parameters": [
           {
