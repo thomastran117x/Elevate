@@ -50,10 +50,38 @@ public class ContainerTests
             descriptor.ServiceType == typeof(IBloomFilterSource)
             && descriptor.ImplementationType == typeof(UsernameBloomFilterSource));
         services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IBloomFilterSource)
+            && descriptor.ImplementationType == typeof(EmailBloomFilterSource));
+        services.Should().Contain(descriptor =>
             descriptor.ServiceType == typeof(BloomFilterRebuildRunner));
         services.Should().Contain(descriptor =>
             descriptor.ServiceType == typeof(IUsernameAvailabilityService)
             && descriptor.ImplementationType == typeof(UsernameAvailabilityService));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IEmailAvailabilityService)
+            && descriptor.ImplementationType == typeof(EmailAvailabilityService));
+    }
+
+    /// <summary>
+    /// The rebuild runner resolves every source and rebuilds each one, so a target that fails to
+    /// register is a filter that silently never populates.
+    /// </summary>
+    [Fact]
+    public void AddApplicationServices_ShouldRegisterOneSourcePerConfiguredTarget()
+    {
+        var config = new ConfigurationBuilder().Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);
+
+        services.AddApplicationServices(config, includeHostedServices: false);
+
+        services.Where(descriptor => descriptor.ServiceType == typeof(IBloomFilterSource))
+            .Select(descriptor => descriptor.ImplementationType)
+            .Should().BeEquivalentTo([
+                typeof(UsernameBloomFilterSource),
+                typeof(EmailBloomFilterSource)
+            ]);
     }
 
     [Fact]
@@ -96,9 +124,11 @@ public class ContainerTests
         services.Should().NotContain(descriptor =>
             descriptor.ServiceType == typeof(BloomFilterRebuildRunner));
 
-        // Still registered: it falls back to the repository whenever the filter cannot answer.
+        // Still registered: both fall back to the repository whenever the filter cannot answer.
         services.Should().Contain(descriptor =>
             descriptor.ServiceType == typeof(IUsernameAvailabilityService));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IEmailAvailabilityService));
     }
 
     [Fact]
