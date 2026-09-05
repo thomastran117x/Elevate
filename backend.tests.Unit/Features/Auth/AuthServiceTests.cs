@@ -1,5 +1,6 @@
 using backend.main.application.security;
 using backend.main.features.auth;
+using backend.main.features.bloom;
 using backend.main.features.auth.contracts;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.device;
@@ -1110,6 +1111,7 @@ public class AuthServiceTests
             deviceTrustService.Object,
             loginStepUpChallengeService.Object,
             authSessionService.Object,
+            new UsernameAvailabilityService(userRepository.Object, new DisabledBloomFilterRegistry()),
             seedBypass,
             TestRequestInfoFactory.Browser());
     }

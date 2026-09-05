@@ -31,6 +31,7 @@ namespace backend.main.features.auth
     {
         private const string DefaultFrontendUrl = "http://localhost:3090";
         private readonly IAuthService _authService;
+        private readonly IUsernameAvailabilityService _usernameAvailability;
         private readonly IAntiforgery _antiforgery;
         private readonly ICaptchaService _captchaService;
         private readonly SeedAccountBypassPolicy _seedBypass;
@@ -39,6 +40,7 @@ namespace backend.main.features.auth
 
         public AuthController(
             IAuthService authService,
+            IUsernameAvailabilityService usernameAvailability,
             IAntiforgery antiforgery,
             ICaptchaService captchaService,
             SeedAccountBypassPolicy seedBypass,
@@ -47,6 +49,7 @@ namespace backend.main.features.auth
         )
         {
             _authService = authService;
+            _usernameAvailability = usernameAvailability;
             _antiforgery = antiforgery;
             _captchaService = captchaService;
             _seedBypass = seedBypass;
@@ -127,6 +130,62 @@ namespace backend.main.features.auth
                     return HandleError.Resolve(e);
 
                 Logger.Error($"[AuthController] LocalSignup failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        /// <summary>
+        /// Reports whether a username is free, so signup can tell the user before they submit.
+        /// </summary>
+        /// <remarks>
+        /// Anonymous by necessity — it serves the signup form, where there is no session yet — and
+        /// therefore an enumeration surface, which is why it carries its own rate-limit policy
+        /// rather than the global one. It returns nothing beyond a boolean; a caller learns only
+        /// what they would learn by attempting to sign up.
+        ///
+        /// The answer is advisory. It is not a reservation, and a name reported free can be taken
+        /// a moment later; the unique index is what actually decides.
+        /// </remarks>
+        [HttpGet("username/availability")]
+        [AllowAnonymous]
+        [EnableRateLimiting(RateLimiterConfiguration.UsernameAvailabilityPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<UsernameAvailabilityResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> CheckUsernameAvailability(
+            [FromQuery] string username,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                var normalized = UsernamePolicy.NormalizeAndValidate(username);
+
+                // Advisory: this endpoint only reports, it never claims, so letting the filter
+                // answer outright is what makes a type-ahead probe cheap. The signup path that
+                // actually takes the name still confirms against the database.
+                var unavailable = await _usernameAvailability.IsUnavailableAsync(
+                    normalized,
+                    DateTime.UtcNow,
+                    UsernameLookupMode.Advisory,
+                    cancellationToken
+                );
+
+                return StatusCode(
+                    200,
+                    new ApiResponse<UsernameAvailabilityResponse>(
+                        unavailable ? "Username is taken." : "Username is available.",
+                        new UsernameAvailabilityResponse
+                        {
+                            Username = normalized,
+                            Available = !unavailable,
+                        }
+                    )
+                );
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[AuthController] CheckUsernameAvailability failed: {e}");
                 return HandleError.Resolve(e);
             }
         }

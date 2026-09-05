@@ -2534,6 +2534,426 @@
         ]
       }
     },
+    "/api/events/{eventId}/pause": {
+      "post": {
+        "tags": [
+          "events"
+        ],
+        "summary": "Pause event",
+        "operationId": "Events_PauseEvent_post",
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfManagedEventResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfManagedEventResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfManagedEventResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/events/{eventId}/resume": {
+      "post": {
+        "tags": [
+          "events"
+        ],
+        "summary": "Resume event",
+        "operationId": "Events_ResumeEvent_post",
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfManagedEventResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfManagedEventResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfManagedEventResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/events/{eventId}/reinstate": {
+      "post": {
+        "tags": [
+          "events"
+        ],
+        "summary": "Reinstate event",
+        "operationId": "Events_ReinstateEvent_post",
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfManagedEventResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfManagedEventResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfManagedEventResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/events/{eventId}/unarchive": {
+      "post": {
+        "tags": [
+          "events"
+        ],
+        "summary": "Unarchive event",
+        "operationId": "Events_UnarchiveEvent_post",
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfManagedEventResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfManagedEventResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfManagedEventResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/events/{eventId}/lifecycle/revert": {
+      "post": {
+        "tags": [
+          "events"
+        ],
+        "summary": "Revert event lifecycle",
+        "operationId": "Events_RevertEventLifecycle_post",
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfManagedEventResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfManagedEventResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfManagedEventResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
     "/api/events": {
       "get": {
         "tags": [
@@ -13776,6 +14196,67 @@
         }
       }
     },
+    "/api/auth/username/availability": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Check username availability",
+        "description": "Anonymous by necessity — it serves the signup form, where there is no session yet — and\r\ntherefore an enumeration surface, which is why it carries its own rate-limit policy\r\nrather than the global one. It returns nothing beyond a boolean; a caller learns only\r\nwhat they would learn by attempting to sign up.\r\n\r\nThe answer is advisory. It is not a reservation, and a name reported free can be taken\r\na moment later; the unique index is what actually decides.",
+        "operationId": "Auth_CheckUsernameAvailability_get",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/String"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfUsernameAvailabilityResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfUsernameAvailabilityResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfUsernameAvailabilityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/verify/otp": {
       "post": {
         "tags": [
@@ -21012,6 +21493,48 @@
         },
         "description": "Standard JSON envelope returned by all API endpoints."
       },
+      "ApiResponseOfUsernameAvailabilityResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/UsernameAvailabilityResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
       "ApiResponseOfUserStatusResponse": {
         "type": "object",
         "properties": {
@@ -21639,6 +22162,9 @@
             "$ref": "#/components/schemas/Int32"
           },
           "publishedEvents": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "pausedEvents": {
             "$ref": "#/components/schemas/Int32"
           },
           "cancelledEvents": {
@@ -24284,7 +24810,57 @@
         }
       },
       "EventLifecycleState": {
-        "type": "integer"
+        "type": "integer",
+        "description": "    The organizer-controlled state of an event.\r\n    These values are persisted as integers and, because no global\r\nJsonStringEnumConverter is registered, they also travel over the wire as integers.\r\nThe Angular client decodes them positionally against ALL_LIFECYCLE_STATES, so new\r\nmembers must only ever be appended — renumbering silently remaps every stored row."
+      },
+      "EventLifecycleTransitionResponse": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "description": "Endpoint segment for the action, e.g. \"pause\".",
+            "$ref": "#/components/schemas/String"
+          },
+          "target": {
+            "$ref": "#/components/schemas/EventLifecycleState"
+          },
+          "label": {
+            "$ref": "#/components/schemas/String"
+          },
+          "title": {
+            "$ref": "#/components/schemas/String"
+          },
+          "isReversible": {
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "reversibleNote": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          },
+          "isDestructive": {
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "impacts": {
+            "$ref": "#/components/schemas/ListOfString"
+          },
+          "blockedReason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Why this move cannot be made right now, or null when it can.",
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          }
+        },
+        "description": "Wire shape of EventLifecycleTransition. The client renders its lifecycle\r\nbuttons and confirmation prompts from these, so it never duplicates the state machine."
       },
       "EventMonthlyDayPolicy": {
         "enum": [
@@ -25898,6 +26474,12 @@
           "$ref": "#/components/schemas/DayOfWeek"
         }
       },
+      "ListOfEventLifecycleTransitionResponse": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/EventLifecycleTransitionResponse"
+        }
+      },
       "ListOfEventOccurrencePreviewResponse": {
         "type": "array",
         "items": {
@@ -26240,6 +26822,43 @@
           },
           "publishIssues": {
             "$ref": "#/components/schemas/ListOfString"
+          },
+          "lifecycleChangedAt": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "When EventLifecycleState ManagedEventResponse.LifecycleState last changed, or null if it never has.",
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ]
+          },
+          "previousLifecycleState": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The state the most recent lifecycle change moved away from, if any.",
+                "$ref": "#/components/schemas/EventLifecycleState"
+              }
+            ]
+          },
+          "revertAvailableUntil": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Deadline for undoing the most recent lifecycle change, or null when there is nothing\r\nto undo or the window has already lapsed. Drives the \"Undo\" affordance.",
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ]
+          },
+          "availableTransitions": {
+            "description": "Every lifecycle move available from the current state.",
+            "$ref": "#/components/schemas/ListOfEventLifecycleTransitionResponse"
           }
         }
       },
@@ -27998,6 +28617,24 @@
             ]
           }
         }
+      },
+      "UsernameAvailabilityResponse": {
+        "required": [
+          "username",
+          "available"
+        ],
+        "type": "object",
+        "properties": {
+          "username": {
+            "description": "The normalised form the username was checked as, so the client can show what it evaluated.",
+            "$ref": "#/components/schemas/String"
+          },
+          "available": {
+            "description": "True when nothing currently holds the name. Advisory only: the name is not reserved by\r\nasking, and signup can still fail with USERNAME_TAKEN if someone claims it first.",
+            "$ref": "#/components/schemas/Boolean"
+          }
+        },
+        "description": "Result of a username availability probe."
       },
       "UsernameRecoveryRequest": {
         "required": [

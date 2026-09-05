@@ -39,6 +39,9 @@ public class CacheServiceProxyTests
         var server = new Mock<IServer>().Object;
         current.Setup(service => service.GetServer()).Returns(server);
         current.Setup(service => service.ScanKeys(server, "clubs:*")).Returns(["clubs:1"]);
+        current.Setup(service => service.SetBitsAsync("bits", It.IsAny<IReadOnlyCollection<long>>())).ReturnsAsync(true);
+        current.Setup(service => service.GetBitmapAsync("bits")).ReturnsAsync([0x80]);
+        current.Setup(service => service.SetBitmapAsync("bits", It.IsAny<byte[]>(), It.IsAny<TimeSpan?>())).ReturnsAsync(true);
         current.Setup(service => service.GetManyAsync(It.IsAny<IEnumerable<string>>()))
             .ReturnsAsync(new Dictionary<string, string?> { ["a"] = "1" });
         current.Setup(service => service.EvalAsync("return 1", It.IsAny<RedisKey[]>(), It.IsAny<RedisValue[]>()))
@@ -71,6 +74,9 @@ public class CacheServiceProxyTests
         proxy.GetServer().Should().BeSameAs(server);
         proxy.ScanKeys(server, "clubs:*").Should().Equal("clubs:1");
         (await proxy.GetManyAsync(["a"]))["a"].Should().Be("1");
+        (await proxy.SetBitsAsync("bits", [1, 2])).Should().BeTrue();
+        (await proxy.GetBitmapAsync("bits")).Should().Equal([0x80]);
+        (await proxy.SetBitmapAsync("bits", [0x80], null)).Should().BeTrue();
         await proxy.EvalAsync("return 1", ["k"], ["v"]);
 
         current.VerifyAll();

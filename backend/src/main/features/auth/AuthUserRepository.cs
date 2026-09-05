@@ -583,7 +583,10 @@ namespace backend.main.features.auth
 
                     await _context.SaveChangesAsync();
                     await transaction.CommitAsync();
-                    return new UsernameChangeRecord(UsernameChangeStatus.Changed, user);
+                    return new UsernameChangeRecord(
+                        UsernameChangeStatus.Changed,
+                        user,
+                        PreviousUsername: currentUsername);
                 }
                 catch (Exception exception) when (IsUsernameConflict(exception))
                 {

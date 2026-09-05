@@ -18,6 +18,16 @@ namespace backend.main.application.security
         private const int AuthPermitLimit = 10;
         private static readonly TimeSpan AuthWindow = TimeSpan.FromMinutes(5);
 
+        /// <summary>
+        /// Policy for the anonymous username availability probe. It is called once per pause in
+        /// typing, so the auth policy's 10-per-5-minutes would break the signup form long before
+        /// it inconvenienced anyone enumerating names; this window is sized for a person filling
+        /// in a field while still bounding how fast the namespace can be walked.
+        /// </summary>
+        public const string UsernameAvailabilityPolicyName = "username-availability";
+        private const int UsernameAvailabilityPermitLimit = 30;
+        private static readonly TimeSpan UsernameAvailabilityWindow = TimeSpan.FromMinutes(1);
+
         public static IServiceCollection AddInMemoryRateLimiter(
             this IServiceCollection services,
             IConfiguration? configuration = null)
@@ -26,6 +36,9 @@ namespace backend.main.application.security
                 ?? PermitLimit;
             var authPermitLimit = configuration?.GetValue<int?>("RateLimiter:AuthPermitLimit")
                 ?? AuthPermitLimit;
+            var usernameAvailabilityPermitLimit =
+                configuration?.GetValue<int?>("RateLimiter:UsernameAvailabilityPermitLimit")
+                ?? UsernameAvailabilityPermitLimit;
 
             services.AddRateLimiter(options =>
             {
@@ -78,6 +91,20 @@ namespace backend.main.application.security
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                         QueueLimit = 0
                     });
+                });
+
+                options.AddPolicy(UsernameAvailabilityPolicyName, context =>
+                {
+                    var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                    return RateLimitPartition.GetFixedWindowLimiter(
+                        $"username-availability:{ip}",
+                        _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = usernameAvailabilityPermitLimit,
+                            Window = UsernameAvailabilityWindow,
+                            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                            QueueLimit = 0
+                        });
                 });
             });
 

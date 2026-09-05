@@ -9,6 +9,7 @@ EventXperience uses a code-owned feature flag registry to control whether backen
 The supported keys are:
 
 - `auth`
+- `bloom`
 - `clubs`
 - `clubs.follow`
 - `clubs.posts`
@@ -47,6 +48,7 @@ Examples:
 Deployments should use the flat environment variables defined in `.env.example`:
 
 - `FEATURE_AUTH`
+- `FEATURE_BLOOM`
 - `FEATURE_CLUBS`
 - `FEATURE_CLUBS_DISCUSSIONS`
 - `FEATURE_CLUBS_FOLLOW`
@@ -91,3 +93,44 @@ Frontend flags are generated at build time into `src/environments/environment.ts
 Backend and frontend flags must be configured together for each deploy.
 
 If the backend disables a feature but the frontend build still exposes it, users will see broken entry points. If the frontend disables a feature but the backend leaves it enabled, the feature may still be reachable directly. Treat the env vars as a single deploy-time contract across both applications.
+
+## Bloom filters
+
+Probabilistic membership filters that front uniqueness checks, so an availability probe can
+answer "free" without querying the database. Gated by the `bloom` feature flag; with it off every
+lookup reports "unavailable" and callers query the database exactly as they did before.
+
+Each filter is two-tier: a process-local bitmap answers lookups, and a Redis bitmap carries
+writes between instances and across restarts. The database stays the sole authority — a filter
+can prevent a read, never authorise a write.
+
+Bound from the `BloomFilters` section of `appsettings.json`:
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `RefreshIntervalSeconds` | `30` | How often a filter merges the shared bitmap and checks for a generation flip. |
+| `RebuildIntervalHours` | `6` | How often a filter is rebuilt from the database. |
+| `RetiredGenerationTtlMinutes` | `60` | How long a superseded bitmap survives after a flip, for instances that have not noticed it yet. |
+| `LocalReplayWindowMinutes` | `30` | How long a locally-added value is replayed onto a newly adopted generation. |
+| `ForcedRebuildCooldownMinutes` | `15` | Minimum gap between rebuilds triggered by a failed shared write. |
+| `Targets:<name>:ExpectedItems` | `250000` | Number of distinct values the filter is sized for. |
+| `Targets:<name>:FalsePositiveRate` | `0.01` | Target false-positive rate. A false positive costs one database query. |
+
+### Targets
+
+`username` is the only registered target. `club-name` and `email` are reserved names — adding one
+means a `BloomFilters:Targets:<name>` entry plus an `IBloomFilterSource` implementation registered
+in `Container.AddApplicationServices`; nothing in the registry or the rebuild service changes.
+
+Two caveats before adding them: club names have no uniqueness constraint or index today, so a
+filter over them can only warn about duplicates rather than report availability; and email
+membership must never be exposed through an anonymous endpoint, because that turns account
+existence into a reconnaissance oracle.
+
+### Rebuilds
+
+A bloom filter has no delete, so bits left by deleted users and lapsed username reservations
+accumulate and slowly inflate the false-positive rate. A rebuild reads the authoritative source,
+publishes a fresh bitmap under a new generation key, then moves the pointer — which is the only
+operation that clears a bit. Values written while the rebuild was reading are replayed from a
+pending set, so a signup that commits mid-rebuild cannot be lost.

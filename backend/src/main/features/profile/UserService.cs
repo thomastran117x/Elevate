@@ -21,6 +21,7 @@ namespace backend.main.features.profile
         private readonly IFollowService _followService;
         private readonly ITokenService _tokenService;
         private readonly IRefreshAheadCache _refreshCache;
+        private readonly IUsernameAvailabilityService _usernameAvailability;
         private readonly TimeProvider _timeProvider;
         private readonly ProfileOptions _profileOptions;
 
@@ -36,6 +37,7 @@ namespace backend.main.features.profile
             IFollowService followService,
             ITokenService tokenService,
             IRefreshAheadCache refreshCache,
+            IUsernameAvailabilityService usernameAvailability,
             TimeProvider timeProvider,
             IOptions<ProfileOptions> profileOptions
         )
@@ -46,6 +48,7 @@ namespace backend.main.features.profile
             _followService = followService;
             _tokenService = tokenService;
             _refreshCache = refreshCache;
+            _usernameAvailability = usernameAvailability;
             _timeProvider = timeProvider;
             _profileOptions = profileOptions.Value;
         }
@@ -111,6 +114,14 @@ namespace backend.main.features.profile
             {
                 case UsernameChangeStatus.Changed when result.User != null:
                     await _refreshCache.RemoveAsync(GetUserCacheKey(id));
+
+                    // Both names are now occupied: the new one by the user, the old one by the
+                    // reservation the change created. Recording only the new name would let the
+                    // filter report the cooling-down name as free.
+                    await _usernameAvailability.MarkTakenAsync(normalizedUsername);
+                    if (!string.IsNullOrEmpty(result.PreviousUsername))
+                        await _usernameAvailability.MarkTakenAsync(result.PreviousUsername);
+
                     return result.User;
                 case UsernameChangeStatus.UserNotFound:
                     throw new ResourceNotFoundException($"User with the id {id} is not found");

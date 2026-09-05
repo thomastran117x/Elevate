@@ -10,6 +10,21 @@ namespace backend.tests.Unit.Features.Cache;
 
 public class NoOpCacheServiceTests
 {
+    /// <summary>
+    /// The bitmap members deliberately break the "fail open" convention the rate limiters rely
+    /// on. A bloom filter that read a missing bitmap as an empty one would report every existing
+    /// username as free, so absence of data must mean "ask the database", not "the set is empty".
+    /// </summary>
+    [Fact]
+    public async Task BitmapOperations_ShouldReportUnavailableRatherThanEmpty()
+    {
+        var service = new NoOpCacheService();
+
+        (await service.SetBitsAsync("bloom:username:bits:1", [1, 2, 3])).Should().BeFalse();
+        (await service.GetBitmapAsync("bloom:username:bits:1")).Should().BeNull();
+        (await service.SetBitmapAsync("bloom:username:bits:1", [0x80])).Should().BeFalse();
+    }
+
     [Fact]
     public async Task Operations_ShouldReturnSafeDefaultValues()
     {

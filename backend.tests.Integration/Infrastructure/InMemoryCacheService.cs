@@ -8,6 +8,7 @@ public sealed class InMemoryCacheService : backend.main.features.cache.ICacheSer
     private sealed class CacheEntry
     {
         public string? StringValue { get; set; }
+        public byte[]? BinaryValue { get; set; }
         public Dictionary<string, string> HashValues { get; } = [];
         public HashSet<string> SetValues { get; } = [];
         public LinkedList<string> ListValues { get; } = [];
@@ -264,6 +265,49 @@ public sealed class InMemoryCacheService : backend.main.features.cache.ICacheSer
             {
                 return TryGetEntry(key, out var entry) ? entry.StringValue : null;
             }));
+        }
+    }
+
+    public Task<bool> SetBitsAsync(string key, IReadOnlyCollection<long> bitPositions)
+    {
+        lock (_gate)
+        {
+            var entry = GetOrCreateEntry(key);
+
+            foreach (var position in bitPositions)
+            {
+                var byteIndex = (int)(position >> 3);
+                if (entry.BinaryValue is null || entry.BinaryValue.Length <= byteIndex)
+                {
+                    var grown = new byte[byteIndex + 1];
+                    entry.BinaryValue?.CopyTo(grown, 0);
+                    entry.BinaryValue = grown;
+                }
+
+                // Redis SETBIT numbering: bit 0 is the most significant bit of byte 0.
+                entry.BinaryValue[byteIndex] |= (byte)(0x80 >> (int)(position & 7));
+            }
+
+            return Task.FromResult(true);
+        }
+    }
+
+    public Task<byte[]?> GetBitmapAsync(string key)
+    {
+        lock (_gate)
+        {
+            return Task.FromResult(TryGetEntry(key, out var entry) ? entry.BinaryValue : null);
+        }
+    }
+
+    public Task<bool> SetBitmapAsync(string key, byte[] bitmap, TimeSpan? expiry = null)
+    {
+        lock (_gate)
+        {
+            var entry = GetOrCreateEntry(key);
+            entry.BinaryValue = (byte[])bitmap.Clone();
+            entry.ExpiresAt = ResolveExpiry(expiry);
+            return Task.FromResult(true);
         }
     }
 

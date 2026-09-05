@@ -512,5 +512,8 @@ public class ClubMemberInvitationServiceTests
         public IServer GetServer() => throw new System.NotImplementedException();
         public Task<Dictionary<string, string?>> GetManyAsync(IEnumerable<string> keys) => throw new System.NotImplementedException();
         public Task<object> EvalAsync(string script, RedisKey[] keys, RedisValue[] values) => throw new System.NotImplementedException();
+        public Task<bool> SetBitsAsync(string key, IReadOnlyCollection<long> bitPositions) => throw new System.NotImplementedException();
+        public Task<byte[]?> GetBitmapAsync(string key) => throw new System.NotImplementedException();
+        public Task<bool> SetBitmapAsync(string key, byte[] bitmap, TimeSpan? expiry = null) => throw new System.NotImplementedException();
     }
 }

@@ -30,6 +30,30 @@ namespace backend.main.features.cache
         Task<Dictionary<string, string?>> GetManyAsync(IEnumerable<string> keys);
 
         /// <summary>
+        /// Sets the given bit positions on a Redis bitmap, leaving every other bit untouched.
+        /// Applied as one pipelined batch. Bit numbering follows Redis SETBIT: bit 0 is the
+        /// most significant bit of the first byte.
+        /// </summary>
+        /// <returns>
+        /// True when the bits were applied. False when the cache is unavailable, so callers
+        /// can tell "written to shared state" from "local only" instead of assuming success.
+        /// </returns>
+        Task<bool> SetBitsAsync(string key, IReadOnlyCollection<long> bitPositions);
+
+        /// <summary>
+        /// Reads a whole bitmap as raw bytes. Distinct from <see cref="GetValueAsync"/>, which
+        /// decodes as UTF-8 and would corrupt arbitrary binary content.
+        /// </summary>
+        /// <returns>The bytes, or null when the key is absent or the cache is unavailable.</returns>
+        Task<byte[]?> GetBitmapAsync(string key);
+
+        /// <summary>
+        /// Overwrites a whole bitmap with raw bytes. Used to publish a freshly rebuilt bloom
+        /// filter generation under a new key.
+        /// </summary>
+        Task<bool> SetBitmapAsync(string key, byte[] bitmap, TimeSpan? expiry = null);
+
+        /// <summary>
         /// Evaluates a Lua script on the cache (Redis). When Redis is unavailable,
         /// returns a result that allows the request (e.g. for rate limiters: allowed=1).
         /// </summary>

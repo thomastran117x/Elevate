@@ -34,6 +34,7 @@ namespace backend.main.features.auth
         private readonly IDeviceTrustService _deviceTrustService;
         private readonly ILoginStepUpChallengeService _loginStepUpChallengeService;
         private readonly IAuthSessionService _authSessionService;
+        private readonly IUsernameAvailabilityService _usernameAvailability;
         private readonly SeedAccountBypassPolicy _seedBypass;
         private readonly ClientRequestInfo _requestInfo;
         private const string DummyHash = "$2a$11$9FJqO6j/4jP3E2fOQdWgMuKZXWWvPZ09f8Pj0L9VqB6TfqZ4fE5SO";
@@ -50,6 +51,7 @@ namespace backend.main.features.auth
             IDeviceTrustService deviceTrustService,
             ILoginStepUpChallengeService loginStepUpChallengeService,
             IAuthSessionService authSessionService,
+            IUsernameAvailabilityService usernameAvailability,
             SeedAccountBypassPolicy seedBypass,
             ClientRequestInfo requestInfo
         )
@@ -64,6 +66,7 @@ namespace backend.main.features.auth
             _deviceTrustService = deviceTrustService;
             _loginStepUpChallengeService = loginStepUpChallengeService;
             _authSessionService = authSessionService;
+            _usernameAvailability = usernameAvailability;
             _seedBypass = seedBypass;
             _requestInfo = requestInfo;
         }
@@ -120,7 +123,7 @@ namespace backend.main.features.auth
 
                 if (await _userRepository.EmailExistsAsync(email))
                     throw new ConflictException($"An account is already registered with the email: {email}");
-                if (await _userRepository.UsernameUnavailableAsync(username, DateTime.UtcNow))
+                if (await _usernameAvailability.IsUnavailableAsync(username, DateTime.UtcNow))
                     throw new UsernameTakenException(username);
 
                 userType = AuthRoles.NormalizeOrThrow(userType);
@@ -170,10 +173,11 @@ namespace backend.main.features.auth
                 if (string.IsNullOrWhiteSpace(user.Username))
                     throw new BadRequestException("A username is required to complete signup.");
                 user.Username = UsernamePolicy.NormalizeAndValidate(user.Username);
-                if (await _userRepository.UsernameUnavailableAsync(user.Username, DateTime.UtcNow))
+                if (await _usernameAvailability.IsUnavailableAsync(user.Username, DateTime.UtcNow))
                     throw new UsernameTakenException(user.Username);
 
                 await _userRepository.CreateUserAsync(user);
+                await _usernameAvailability.MarkTakenAsync(user.Username);
 
                 return await _authSessionService.IssueAsync(user, transport);
             }
@@ -206,10 +210,11 @@ namespace backend.main.features.auth
                 if (string.IsNullOrWhiteSpace(user.Username))
                     throw new BadRequestException("A username is required to complete signup.");
                 user.Username = UsernamePolicy.NormalizeAndValidate(user.Username);
-                if (await _userRepository.UsernameUnavailableAsync(user.Username, DateTime.UtcNow))
+                if (await _usernameAvailability.IsUnavailableAsync(user.Username, DateTime.UtcNow))
                     throw new UsernameTakenException(user.Username);
 
                 await _userRepository.CreateUserAsync(user);
+                await _usernameAvailability.MarkTakenAsync(user.Username);
 
                 return await _authSessionService.IssueAsync(user, transport);
             }

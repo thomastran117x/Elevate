@@ -1,4 +1,5 @@
 using backend.main.features.auth;
+using backend.main.features.bloom;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
@@ -622,6 +623,7 @@ public class AuthControllerTests
 
         var controller = new AuthController(
             authService.Object,
+            new UsernameAvailabilityService(new Mock<IAuthUserRepository>().Object, new DisabledBloomFilterRegistry()),
             antiforgery.Object,
             captchaService.Object,
             new SeedAccountBypassPolicy(configuration),

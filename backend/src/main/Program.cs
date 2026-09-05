@@ -132,6 +132,26 @@ app.UseRefreshCsrfValidation();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// The limiter was configured but never mounted, so every [EnableRateLimiting] attribute and the
+// global partition were inert. It is mounted here because the anonymous username availability
+// endpoint is an enumeration surface that depends on its policy actually running.
+//
+// Placed after authentication on purpose: the global partition key prefers the authenticated
+// user id and only falls back to the client address. Mounted any earlier, HttpContext.User is
+// still anonymous, so every signed-in request would share one per-IP bucket and users behind a
+// common NAT or proxy would throttle each other.
+//
+// Skipped under Testing: the integration suite drives hundreds of auth requests from a single
+// client address, which no realistic policy would allow. The RateLimiter:* overrides in
+// TestWebApplicationFactory cannot raise the limits either, because AddInMemoryRateLimiter reads
+// configuration when services are registered — before WebApplicationFactory layers its own
+// sources in — which is the same reason the factory re-registers AppDatabaseContext by hand
+// rather than relying on Database:ConnectionString.
+if (!isTesting)
+{
+    app.UseRateLimiter();
+}
+
 app.UseClientRequestInspection();
 
 app.MapAppOpenApi();

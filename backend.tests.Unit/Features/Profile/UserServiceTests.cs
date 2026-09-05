@@ -1,4 +1,5 @@
 using backend.main.features.auth;
+using backend.main.features.bloom;
 using backend.main.features.auth.contracts;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
@@ -272,6 +273,7 @@ public class UserServiceTests
             followService.Object,
             tokenService.Object,
             refreshCache.Object,
+            new UsernameAvailabilityService(authRepository.Object, new DisabledBloomFilterRegistry()),
             timeProvider ?? TimeProvider.System,
             Options.Create(profileOptions ?? new ProfileOptions()));
     }
