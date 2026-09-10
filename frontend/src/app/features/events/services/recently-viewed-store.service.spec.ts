@@ -640,6 +640,145 @@ describe('RecentlyViewedStore', () => {
     });
   });
 
+  describe('the browser opt-out across a session change', () => {
+    it('comes back when the account session ends', () => {
+      restoreStorage();
+      restoreStorage = installMemoryStorage('local', { 'recently-viewed-opt-out': 'true' });
+      recentlyViewed.updateSettings.and.returnValue(of({ enabled: true, updatedAtUtc: null }));
+      const service = createStore();
+
+      expect(service.optedOut).toBeTrue();
+
+      signIn();
+      service.setEnabled(true).subscribe();
+      expect(service.optedOut).toBeFalse();
+
+      signOut();
+
+      // The browser preference outlived the account session and is still in localStorage; it must
+      // not be discarded just because the account had tracking on.
+      expect(service.optedOut).toBeTrue();
+      expect(readLocalOptOut()).toBeTrue();
+    });
+
+    it('does not record anonymous views after such a sign-out', () => {
+      restoreStorage();
+      restoreStorage = installMemoryStorage('local', { 'recently-viewed-opt-out': 'true' });
+      recentlyViewed.updateSettings.and.returnValue(of({ enabled: true, updatedAtUtc: null }));
+      const service = createStore();
+
+      signIn();
+      service.setEnabled(true).subscribe();
+      signOut();
+
+      service.recordView(4);
+
+      expect(readLocalHistory()).toEqual([]);
+    });
+
+    it('keeps an account opt-out from leaking into the anonymous session', () => {
+      recentlyViewed.updateSettings.and.returnValue(of({ enabled: false, updatedAtUtc: null }));
+      const service = createStore({ user: signedInUser });
+
+      service.setEnabled(false).subscribe();
+      expect(service.optedOut).toBeTrue();
+
+      signOut();
+
+      // Nothing in this browser ever opted out, so the anonymous session tracks again.
+      expect(service.optedOut).toBeFalse();
+    });
+  });
+
+  describe('switching tracking off mid-flight', () => {
+    it('discards a list load that lands afterwards', () => {
+      const pending = new Subject<RecentlyViewedEntry[]>();
+      recentlyViewed.getRecent.and.returnValue(pending.asObservable());
+      recentlyViewed.updateSettings.and.returnValue(of({ enabled: false, updatedAtUtc: null }));
+      const service = createStore({ user: signedInUser });
+
+      service.ensureLoaded();
+      service.setEnabled(false).subscribe();
+      pending.next([entry(1), entry(2)]);
+
+      let entries: RecentlyViewedEntry[] = [];
+      service.items$.subscribe((value) => (entries = value));
+      // Otherwise the rails show history the user has just opted out of.
+      expect(entries).toEqual([]);
+    });
+
+    it('discards a local hydration that lands afterwards', () => {
+      restoreStorage();
+      restoreStorage = installMemoryStorage(
+        'local',
+        seedLocal([{ id: 4, at: '2026-09-09T12:00:00Z' }]),
+      );
+      const pending = new Subject<ReturnType<typeof makeEventItem>[]>();
+      events.getEventsBatch.and.returnValue(pending.asObservable());
+      const service = createStore();
+
+      service.ensureLoaded();
+      service.setEnabled(false).subscribe();
+      pending.next([makeEventItem({ id: 4 })]);
+
+      let entries: RecentlyViewedEntry[] = [];
+      service.items$.subscribe((value) => (entries = value));
+      expect(entries).toEqual([]);
+    });
+  });
+
+  describe('overlapping removals', () => {
+    it('keeps a later successful removal applied when an earlier one fails', () => {
+      recentlyViewed.getRecent.and.returnValue(of([entry(1), entry(2), entry(3)]));
+      const failing = new Subject<void>();
+      recentlyViewed.remove.and.returnValues(failing.asObservable(), of(void 0));
+      const service = createStore({ user: signedInUser });
+      service.ensureLoaded();
+
+      service.remove(1).subscribe({ error: () => undefined });
+      service.remove(2).subscribe();
+
+      // The second delete has already committed; the first now fails and rolls back.
+      failing.error(new Error('offline'));
+
+      let entries: RecentlyViewedEntry[] = [];
+      service.items$.subscribe((value) => (entries = value));
+      // Entry 1 comes back, entry 2 stays gone - restoring a whole snapshot would resurrect it.
+      expect(entries.map((e) => e.eventId)).toEqual([1, 3]);
+    });
+
+    it('restores a failed removal to its original position', () => {
+      const older = { ...entry(1), viewedAtUtc: '2026-09-01T12:00:00Z' };
+      const newer = { ...entry(2), viewedAtUtc: '2026-09-09T12:00:00Z' };
+      recentlyViewed.getRecent.and.returnValue(of([newer, older]));
+      recentlyViewed.remove.and.returnValue(throwError(() => new Error('offline')));
+      const service = createStore({ user: signedInUser });
+      service.ensureLoaded();
+
+      service.remove(2).subscribe({ error: () => undefined });
+
+      let entries: RecentlyViewedEntry[] = [];
+      service.items$.subscribe((value) => (entries = value));
+      expect(entries.map((e) => e.eventId)).toEqual([2, 1]);
+    });
+
+    it('does not duplicate an entry that came back by another route', () => {
+      recentlyViewed.getRecent.and.returnValue(of([entry(1)]));
+      const failing = new Subject<void>();
+      recentlyViewed.remove.and.returnValue(failing.asObservable());
+      const service = createStore({ user: signedInUser });
+      service.ensureLoaded();
+
+      service.remove(1).subscribe({ error: () => undefined });
+      failing.error(new Error('offline'));
+      failing.error(new Error('offline'));
+
+      let entries: RecentlyViewedEntry[] = [];
+      service.items$.subscribe((value) => (entries = value));
+      expect(entries.filter((e) => e.eventId === 1).length).toBe(1);
+    });
+  });
+
   describe('failures and stale sessions', () => {
     it('leaves the list empty when the history fails to load', () => {
       recentlyViewed.getRecent.and.returnValue(throwError(() => new Error('offline')));

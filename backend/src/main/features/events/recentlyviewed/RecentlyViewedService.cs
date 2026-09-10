@@ -1,4 +1,3 @@
-using backend.main.features.cache;
 using backend.main.features.events.recentlyviewed.contracts.requests;
 using backend.main.features.events.recentlyviewed.contracts.responses;
 using backend.main.infrastructure.database.core;
@@ -20,12 +19,9 @@ namespace backend.main.features.events.recentlyviewed
     /// </summary>
     public class RecentlyViewedService : IRecentlyViewedService
     {
-        private static readonly TimeSpan SettingsTTL = TimeSpan.FromHours(6);
-
         private readonly AppDatabaseContext _db;
         private readonly IRecentlyViewedRepository _repository;
         private readonly IEventsService _eventsService;
-        private readonly IRefreshAheadCache _refreshCache;
         private readonly RecentlyViewedOptions _options;
         private readonly TimeProvider _timeProvider;
 
@@ -33,14 +29,12 @@ namespace backend.main.features.events.recentlyviewed
             AppDatabaseContext db,
             IRecentlyViewedRepository repository,
             IEventsService eventsService,
-            IRefreshAheadCache refreshCache,
             IOptions<RecentlyViewedOptions> options,
             TimeProvider timeProvider)
         {
             _db = db;
             _repository = repository;
             _eventsService = eventsService;
-            _refreshCache = refreshCache;
             _options = options.Value;
             _timeProvider = timeProvider;
         }
@@ -269,26 +263,26 @@ namespace backend.main.features.events.recentlyviewed
             }
         }
 
+        /// <summary>
+        /// Reads the preference straight from the database, deliberately uncached.
+        /// <para>
+        /// It was cached once, since it is read on every record-view call and changes almost never.
+        /// That is the wrong trade for a privacy switch: refresh-ahead runs its factory on a
+        /// detached task and writes the result back with a full TTL, so a refresh that sampled the
+        /// enabled state just before the user opted out could restore it after the invalidation
+        /// and carry on recording for hours. An indexed single-row read, on a path that is already
+        /// writing, costs far less than that failure mode.
+        /// </para>
+        /// </summary>
         public async Task<RecentlyViewedSettingsResponse> GetSettingsAsync(int userId)
         {
             try
             {
-                // Cached as an object rather than a bare bool: GetOrSetAsync treats a null factory
-                // result as a "known missing" sentinel, and the default here is a real value
-                // rather than an absence.
-                var settings = await _refreshCache.GetOrSetAsync(
-                    RecentlyViewedCacheKeys.Settings(userId),
-                    async () =>
-                    {
-                        var row = await _repository.GetSettingAsync(userId);
+                var row = await _repository.GetSettingAsync(userId);
 
-                        return row == null
-                            ? new RecentlyViewedSettingsResponse { Enabled = true }
-                            : new RecentlyViewedSettingsResponse { Enabled = row.Enabled, UpdatedAtUtc = row.UpdatedAt };
-                    },
-                    SettingsTTL);
-
-                return settings ?? new RecentlyViewedSettingsResponse { Enabled = true };
+                return row == null
+                    ? new RecentlyViewedSettingsResponse { Enabled = true }
+                    : new RecentlyViewedSettingsResponse { Enabled = row.Enabled, UpdatedAtUtc = row.UpdatedAt };
             }
             catch (Exception e)
             {
@@ -340,8 +334,6 @@ namespace backend.main.features.events.recentlyviewed
 
                 // Switching off stops collection and hides the list, but keeps the rows. Users who
                 // want them gone press Clear history, which is a separate, explicit act.
-                await RecentlyViewedCacheKeys.InvalidateUserAsync(_refreshCache, userId);
-
                 return new RecentlyViewedSettingsResponse { Enabled = row.Enabled, UpdatedAtUtc = row.UpdatedAt };
             }
             catch (Exception e)

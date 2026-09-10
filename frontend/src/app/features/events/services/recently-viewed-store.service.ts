@@ -48,8 +48,18 @@ export class RecentlyViewedStore {
   private loaded = false;
   private loading = false;
   private currentUserId: number | null = null;
-  private optedOutValue = false;
   private mergeInFlight = false;
+
+  /**
+   * The two preferences are held apart on purpose.
+   *
+   * They belong to different subjects: one to this browser, one to the account. Collapsing them
+   * into a single flag means signing in, enabling tracking for the account, and signing out again
+   * silently discards a browser opt-out that is still sitting in localStorage - and anonymous
+   * views then get recorded against a preference the visitor never revoked.
+   */
+  private localOptOut = false;
+  private accountOptOut = false;
 
   /** Last recorded time per event id, so a re-render does not re-POST. */
   private readonly lastRecorded = new Map<number, number>();
@@ -86,7 +96,7 @@ export class RecentlyViewedStore {
     features: FeatureFlagsService,
   ) {
     this.featureEnabled = features.isEnabled(FEATURE_KEYS.eventsRecentlyViewed);
-    this.optedOutValue = readLocalOptOut();
+    this.localOptOut = readLocalOptOut();
 
     this.store.select(selectUser).subscribe((user) => {
       const userId = user?.Id ?? null;
@@ -97,6 +107,15 @@ export class RecentlyViewedStore {
       const wasSignedOut = this.currentUserId === null;
       this.currentUserId = userId;
       this.reset();
+
+      if (userId === null) {
+        // Back to the browser preference, which outlived the account session.
+        this.localOptOut = readLocalOptOut();
+      } else {
+        // The server is authoritative here and refuses to record while the account has tracking
+        // off, so assuming enabled until loadSettings runs cannot over-collect.
+        this.accountOptOut = false;
+      }
 
       if (userId !== null && wasSignedOut) {
         // The one moment the browser-held history can be folded into the account. There is no
@@ -114,9 +133,9 @@ export class RecentlyViewedStore {
     return this.currentUserId !== null;
   }
 
-  /** True while the user has asked not to be tracked, signed in or not. */
+  /** True while whoever is currently browsing has asked not to be tracked. */
   get optedOut(): boolean {
-    return this.optedOutValue;
+    return this.currentUserId === null ? this.localOptOut : this.accountOptOut;
   }
 
   get sessionGeneration(): number {
@@ -129,7 +148,7 @@ export class RecentlyViewedStore {
 
   /** Loads the history once per session. Safe to call from every surface. */
   ensureLoaded(): void {
-    if (!this.featureEnabled || this.loaded || this.loading || this.optedOutValue) {
+    if (!this.featureEnabled || this.loaded || this.loading || this.optedOut) {
       return;
     }
 
@@ -139,11 +158,12 @@ export class RecentlyViewedStore {
     }
 
     const generation = this.sessionGeneration;
+    const hydration = ++this.hydrationVersion;
     this.loading = true;
 
     this.recentlyViewed.getRecent().subscribe({
       next: (entries) => {
-        if (!this.isCurrentSession(generation)) {
+        if (!this.canApply(generation, hydration)) {
           return;
         }
 
@@ -152,7 +172,7 @@ export class RecentlyViewedStore {
         this.items.next(entries);
       },
       error: () => {
-        if (!this.isCurrentSession(generation)) {
+        if (!this.canApply(generation, hydration)) {
           return;
         }
 
@@ -163,13 +183,25 @@ export class RecentlyViewedStore {
   }
 
   /**
+   * Whether a response that has just arrived is still allowed to write.
+   *
+   * Three ways it may not be: the session changed under it, a newer request for the same data
+   * superseded it, or tracking was switched off while it was in flight.
+   */
+  private canApply(generation: number, hydration: number): boolean {
+    return (
+      this.isCurrentSession(generation) && hydration === this.hydrationVersion && !this.optedOut
+    );
+  }
+
+  /**
    * Records that the user opened an event.
    *
    * The detail page re-runs its fetch on every route parameter change and on back-navigation, so
    * repeats are the expected case rather than an anomaly — hence the debounce.
    */
   recordView(eventId: number): void {
-    if (!this.featureEnabled || this.optedOutValue || eventId <= 0) {
+    if (!this.featureEnabled || this.optedOut || eventId <= 0) {
       return;
     }
 
@@ -231,12 +263,22 @@ export class RecentlyViewedStore {
    * not delete anything — that is what {@link clear} is for, and the UI says so.
    */
   setEnabled(enabled: boolean): Observable<void> {
-    this.optedOutValue = !enabled;
+    if (this.currentUserId === null) {
+      this.localOptOut = !enabled;
+    } else {
+      this.accountOptOut = !enabled;
+    }
+
     this.lastRecorded.clear();
 
     if (!enabled) {
       this.items.next([]);
       this.loaded = false;
+      this.loading = false;
+
+      // A load or hydration already in flight would otherwise pass its generation check and
+      // repopulate the rails after the user opted out.
+      this.hydrationVersion++;
     }
 
     if (this.currentUserId === null) {
@@ -266,7 +308,7 @@ export class RecentlyViewedStore {
       error: () => {
         // Put the toggle back where it was; the caller surfaces the failure.
         if (this.isCurrentSession(generation)) {
-          this.optedOutValue = enabled;
+          this.accountOptOut = enabled;
         }
       },
     });
@@ -277,13 +319,13 @@ export class RecentlyViewedStore {
   /** Reads the stored preference for a signed-in user, so the settings tab opens in sync. */
   loadSettings(): Observable<boolean> {
     if (this.currentUserId === null) {
-      this.optedOutValue = readLocalOptOut();
-      return of(!this.optedOutValue);
+      this.localOptOut = readLocalOptOut();
+      return of(!this.localOptOut);
     }
 
     return this.recentlyViewed.getSettings().pipe(
       map((settings) => {
-        this.optedOutValue = !settings.enabled;
+        this.accountOptOut = !settings.enabled;
         return settings.enabled;
       }),
     );
@@ -308,10 +350,16 @@ export class RecentlyViewedStore {
     clearLocalAll = false,
   ): Observable<void> {
     const generation = this.sessionGeneration;
-    const previous = this.items.value;
     const doomed = new Set(eventIds);
 
-    this.items.next(previous.filter((entry) => !doomed.has(entry.eventId)));
+    // Only the entries this operation is removing, not a snapshot of the whole list: two removals
+    // can overlap, and restoring a full snapshot would resurrect whatever the other one deleted.
+    // Positions are kept so a rollback puts them back where they were.
+    const removed = this.items.value
+      .map((entry, index) => ({ entry, index }))
+      .filter(({ entry }) => doomed.has(entry.eventId));
+
+    this.items.next(this.items.value.filter((entry) => !doomed.has(entry.eventId)));
 
     if (this.currentUserId === null) {
       if (clearLocalAll) {
@@ -326,7 +374,7 @@ export class RecentlyViewedStore {
     const request = write().pipe(
       catchError((error: unknown) => {
         if (this.isCurrentSession(generation)) {
-          this.items.next(previous);
+          this.restore(removed);
         }
 
         return throwError(() => error);
@@ -338,6 +386,36 @@ export class RecentlyViewedStore {
     request.subscribe({ error: () => undefined });
 
     return request;
+  }
+
+  /**
+   * Puts entries back after a failed removal, spliced into whatever the list holds now rather than
+   * written over it, so a removal that succeeded in the meantime stays applied.
+   *
+   * Restoring by original index rather than re-sorting on the timestamp: entries recorded in the
+   * same second carry identical timestamps, and a sort cannot tell those apart, so it would shuffle
+   * the list on every rolled-back delete.
+   */
+  private restore(removed: { entry: RecentlyViewedEntry; index: number }[]): void {
+    if (removed.length === 0) {
+      return;
+    }
+
+    const present = new Set(this.items.value.map((entry) => entry.eventId));
+    const missing = removed.filter(({ entry }) => !present.has(entry.eventId));
+
+    if (missing.length === 0) {
+      return;
+    }
+
+    const next = [...this.items.value];
+
+    // Ascending index order, so each splice lands before the next one is measured.
+    for (const { entry, index } of missing) {
+      next.splice(Math.min(index, next.length), 0, entry);
+    }
+
+    this.items.next(next.slice(0, RecentlyViewedMaxItems));
   }
 
   /** Hydrates the locally-held ids into events through the batch endpoint. */
@@ -355,7 +433,7 @@ export class RecentlyViewedStore {
 
     this.events.getEventsBatch(local.map((item) => item.id)).subscribe({
       next: (events) => {
-        if (!this.isCurrentSession(generation) || hydration !== this.hydrationVersion) {
+        if (!this.canApply(generation, hydration)) {
           return;
         }
 
@@ -364,7 +442,7 @@ export class RecentlyViewedStore {
         this.items.next(this.toEntries(local, events));
       },
       error: () => {
-        if (!this.isCurrentSession(generation) || hydration !== this.hydrationVersion) {
+        if (!this.canApply(generation, hydration)) {
           return;
         }
 
@@ -382,7 +460,7 @@ export class RecentlyViewedStore {
       next: (events) => {
         // Opening two events in quick succession leaves two hydrations in flight over different
         // local snapshots; only the newest may write, or the older one hides the newer view.
-        if (!this.isCurrentSession(generation) || hydration !== this.hydrationVersion) {
+        if (!this.canApply(generation, hydration)) {
           return;
         }
 
@@ -404,7 +482,7 @@ export class RecentlyViewedStore {
       return;
     }
 
-    if (this.optedOutValue) {
+    if (this.localOptOut) {
       // Someone who opted out while signed out has not agreed to a server-side history either.
       clearLocalHistory();
       return;
@@ -497,12 +575,13 @@ export class RecentlyViewedStore {
     }
 
     const generation = this.sessionGeneration;
+    const hydration = this.hydrationVersion;
 
     this.events.getEventsBatch([eventId]).subscribe({
       next: (events) => {
         const event = events.find((candidate) => candidate.id === eventId);
 
-        if (!this.isCurrentSession(generation) || !event) {
+        if (!this.canApply(generation, hydration) || !event) {
           return;
         }
 

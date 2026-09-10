@@ -1,6 +1,3 @@
-using System.Text.Json;
-
-using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.events;
 using backend.main.features.events.recentlyviewed;
@@ -543,7 +540,7 @@ public class RecentlyViewedServiceTests
     }
 
     [Fact]
-    public async Task UpdateSettingsAsync_ShouldPersistAndInvalidateTheCache()
+    public async Task UpdateSettingsAsync_ShouldPersistThePreference()
     {
         await using var harness = await RecentlyViewedHarness.CreateAsync();
 
@@ -551,9 +548,31 @@ public class RecentlyViewedServiceTests
 
         settings.Enabled.Should().BeFalse();
         settings.UpdatedAtUtc.Should().Be(harness.Time.GetUtcNow().UtcDateTime);
-        harness.RefreshCacheMock.Verify(
-            cache => cache.RemoveAsync(RecentlyViewedCacheKeys.Settings(harness.UserId)),
-            Times.Once);
+
+        var stored = await harness.Db.RecentlyViewedSettings.AsNoTracking().SingleAsync();
+        stored.Enabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetSettingsAsync_ShouldObserveAnOptOutWrittenElsewhere()
+    {
+        await using var harness = await RecentlyViewedHarness.CreateAsync();
+
+        // The preference is read uncached precisely so a switch-off cannot be undone by a
+        // refresh-ahead task writing a stale enabled state back over the invalidation.
+        harness.Db.RecentlyViewedSettings.Add(new RecentlyViewedSetting
+        {
+            UserId = harness.UserId,
+            Enabled = false,
+            UpdatedAt = harness.Time.GetUtcNow().UtcDateTime
+        });
+        await harness.Db.SaveChangesAsync();
+        harness.Db.ChangeTracker.Clear();
+
+        (await harness.Service.GetSettingsAsync(harness.UserId)).Enabled.Should().BeFalse();
+
+        var recorded = await harness.Service.RecordViewAsync(1, harness.UserId, "Participant");
+        recorded.Recorded.Should().BeFalse();
     }
 
     [Fact]
@@ -606,7 +625,6 @@ internal sealed class RecentlyViewedHarness : IAsyncDisposable
 
     public AppDatabaseContext Db { get; }
     public RecentlyViewedService Service { get; }
-    public Mock<IRefreshAheadCache> RefreshCacheMock { get; }
     public FakeTimeProvider Time { get; }
 
     public int UserId => 2;
@@ -616,13 +634,11 @@ internal sealed class RecentlyViewedHarness : IAsyncDisposable
         SqliteConnection connection,
         AppDatabaseContext db,
         RecentlyViewedService service,
-        Mock<IRefreshAheadCache> refreshCacheMock,
         FakeTimeProvider time)
     {
         _connection = connection;
         Db = db;
         Service = service;
-        RefreshCacheMock = refreshCacheMock;
         Time = time;
     }
 
@@ -688,36 +704,14 @@ internal sealed class RecentlyViewedHarness : IAsyncDisposable
                     .ToList();
             });
 
-        var refreshCacheMock = new Mock<IRefreshAheadCache>();
-        refreshCacheMock.Setup(cache => cache.RemoveAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
-
-        // Always defers to the factory. Caching the settings row is a latency optimisation, and
-        // the behaviour under test is what the factory computes, not what Redis remembers.
-        refreshCacheMock
-            .Setup(cache => cache.GetOrSetAsync(
-                It.IsAny<string>(),
-                It.IsAny<Func<Task<RecentlyViewedSettingsResponse?>>>(),
-                It.IsAny<TimeSpan>(),
-                It.IsAny<TimeSpan?>(),
-                It.IsAny<double>(),
-                It.IsAny<JsonSerializerOptions?>()))
-            .Returns((
-                string _,
-                Func<Task<RecentlyViewedSettingsResponse?>> factory,
-                TimeSpan _,
-                TimeSpan? _,
-                double _,
-                JsonSerializerOptions? _) => factory());
-
         var service = new RecentlyViewedService(
             db,
             new RecentlyViewedRepository(db),
             eventsServiceMock.Object,
-            refreshCacheMock.Object,
             Options.Create(new RecentlyViewedOptions()),
             time);
 
-        var harness = new RecentlyViewedHarness(connection, db, service, refreshCacheMock, time)
+        var harness = new RecentlyViewedHarness(connection, db, service, time)
         {
             _contextOptions = options
         };
