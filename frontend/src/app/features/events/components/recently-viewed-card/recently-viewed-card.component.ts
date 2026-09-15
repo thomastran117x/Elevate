@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { CATEGORY_STYLES } from '../../models/event.types';
@@ -16,6 +16,7 @@ import { EventFavouriteToggleComponent } from '../event-favourite-toggle/event-f
   selector: 'app-recently-viewed-card',
   standalone: true,
   imports: [CommonModule, RouterLink, EventFavouriteToggleComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './recently-viewed-card.component.html',
 })
 export class RecentlyViewedCardComponent {

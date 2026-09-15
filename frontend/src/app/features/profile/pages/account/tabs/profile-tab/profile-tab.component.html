@@ -451,7 +451,8 @@
               >. Enter it below, or open the link in that email from any device.
             </p>
             <p class="mt-1 text-xs text-faint">
-              Expires {{ pendingEmailChange?.ExpiresAtUtc | date: 'shortTime' }}.
+              Expires
+              {{ $safeNavigationMigration(pendingEmailChange?.ExpiresAtUtc) | date: 'shortTime' }}.
             </p>
           </div>
 

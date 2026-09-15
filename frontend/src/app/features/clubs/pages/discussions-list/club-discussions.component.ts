@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
@@ -29,6 +29,7 @@ function isClubStaff(club: Club | null): boolean {
   selector: 'app-club-discussions',
   standalone: true,
   imports: [CommonModule, FormsModule, RouterModule, ThreadComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './club-discussions.component.html',
 })
 export class ClubDiscussionsComponent implements OnInit, OnDestroy {

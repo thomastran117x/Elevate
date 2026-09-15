@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { AppButtonComponent } from '@common/button/button.component';
 import { PillComponent } from '@common/pill/pill.component';
@@ -8,6 +8,7 @@ import { PillComponent } from '@common/pill/pill.component';
   standalone: true,
   imports: [RouterModule, AppButtonComponent, PillComponent],
   templateUrl: './hero-card.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './hero-card.component.css',
 })
 export class HeroCardComponent {

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FeatureFlagsService } from '../../core/features/feature-flags.service';
 import { FEATURE_KEYS } from '../../core/features/feature-flags.types';
@@ -14,6 +14,7 @@ interface SocialLink {
   selector: 'app-footer',
   standalone: true,
   imports: [CommonModule, RouterLink],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './footer.component.html',
 })
 export class FooterComponent {

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, DestroyRef, OnInit, inject } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -17,6 +17,7 @@ import { MfaGateComponent } from '../../mfa-gate/mfa-gate.component';
   selector: 'app-danger-zone-tab',
   standalone: true,
   imports: [CommonModule, FormsModule, MfaGateComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './danger-zone-tab.component.html',
 })
 export class DangerZoneTabComponent implements OnInit {

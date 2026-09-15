@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 
 /**
  * A single shimmering placeholder bar.
@@ -10,6 +10,7 @@ import { Component, Input } from '@angular/core';
   selector: 'app-skeleton',
   standalone: true,
   imports: [],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<span
     aria-hidden="true"
     class="block rounded bg-glass-strong motion-safe:animate-pulse"

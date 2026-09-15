@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { EventInvitationResolve } from '../../models/event-invitation.types';
@@ -11,6 +11,7 @@ import { AuthReturnUrlService } from '../../../auth/services/auth-return-url.ser
   standalone: true,
   imports: [CommonModule, RouterLink],
   templateUrl: './event-invite.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./event-invite.component.css'],
 })
 export class EventInviteComponent {

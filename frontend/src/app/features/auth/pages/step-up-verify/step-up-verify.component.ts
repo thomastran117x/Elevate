@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, signal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs/operators';
@@ -20,6 +20,7 @@ import { AuthReturnUrlService } from '../../services/auth-return-url.service';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './step-up-verify.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./step-up-verify.component.css'],
 })
 export class StepUpVerifyComponent {

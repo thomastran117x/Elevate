@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 
 import { EventWaitlistService } from './event-waitlist.service';
 
@@ -10,7 +10,7 @@ describe('EventWaitlistService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [EventWaitlistService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [EventWaitlistService, provideHttpClient(withXhr()), provideHttpClientTesting()],
     });
 
     service = TestBed.inject(EventWaitlistService);

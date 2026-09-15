@@ -1,5 +1,12 @@
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { Component, Inject, Input, OnInit, PLATFORM_ID } from '@angular/core';
+import {
+  Component,
+  Inject,
+  Input,
+  OnInit,
+  PLATFORM_ID,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Observable, map } from 'rxjs';
 
@@ -23,6 +30,7 @@ import { RecentlyViewedCardComponent } from '../recently-viewed-card/recently-vi
   selector: 'app-recently-viewed-rail',
   standalone: true,
   imports: [CommonModule, RouterLink, RecentlyViewedCardComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './recently-viewed-rail.component.html',
 })
 export class RecentlyViewedRailComponent implements OnInit {

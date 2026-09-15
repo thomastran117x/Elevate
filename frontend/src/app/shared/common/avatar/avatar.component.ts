@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 
 export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg';
 
@@ -12,6 +12,7 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg';
   selector: 'app-avatar',
   standalone: true,
   imports: [],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './avatar.component.html',
 })
 export class AvatarComponent {

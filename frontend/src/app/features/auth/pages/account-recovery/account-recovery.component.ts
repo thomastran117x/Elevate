@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { environment } from '@environments/environment';
@@ -16,6 +16,7 @@ type RecoveryMode = 'password' | 'username';
   standalone: true,
   imports: [ReactiveFormsModule, RouterLink],
   templateUrl: './account-recovery.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./account-recovery.component.css'],
 })
 export class AccountRecoveryComponent implements OnInit {

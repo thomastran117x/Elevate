@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 
@@ -25,6 +25,7 @@ import { RecentlyViewedCardComponent } from '../../components/recently-viewed-ca
   selector: 'app-my-recent',
   standalone: true,
   imports: [CommonModule, RouterLink, RecentlyViewedCardComponent, ToggleSwitchComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './my-recent.component.html',
 })
 export class MyRecentComponent implements OnInit, OnDestroy {

@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
 
 /**
  * An accessible on/off switch.
@@ -11,6 +11,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 @Component({
   selector: 'app-toggle-switch',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './toggle-switch.component.html',
 })
 export class ToggleSwitchComponent {

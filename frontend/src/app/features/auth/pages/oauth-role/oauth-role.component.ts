@@ -1,5 +1,5 @@
 import { isPlatformBrowser } from '@angular/common';
-import { Component, inject, PLATFORM_ID, signal } from '@angular/core';
+import { Component, inject, PLATFORM_ID, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 
@@ -28,6 +28,7 @@ import { UsernameSuggestionsComponent } from '../../components/username-suggesti
   standalone: true,
   imports: [ReactiveFormsModule, RouterLink, UsernameSuggestionsComponent],
   templateUrl: './oauth-role.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./oauth-role.component.css'],
 })
 export class OAuthRoleComponent {

@@ -70,7 +70,9 @@
               {{ invitation.event?.description || 'This invite unlocks a private event.' }}
             </p>
             <div class="mt-4 grid gap-3 text-sm text-muted">
-              <div>Starts: {{ invitation.event?.startTime | date: 'medium' }}</div>
+              <div>
+                Starts: {{ $safeNavigationMigration(invitation.event?.startTime) | date: 'medium' }}
+              </div>
               @if (invitation.expiresAt) {
                 <div>Expires: {{ invitation.expiresAt | date: 'medium' }}</div>
               }

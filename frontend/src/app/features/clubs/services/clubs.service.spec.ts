@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { ClubsService } from './clubs.service';
@@ -11,7 +11,7 @@ describe('ClubsService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [ClubsService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [ClubsService, provideHttpClient(withXhr()), provideHttpClientTesting()],
     });
 
     service = TestBed.inject(ClubsService);

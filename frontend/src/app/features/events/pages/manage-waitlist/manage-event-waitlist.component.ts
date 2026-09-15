@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 
@@ -14,6 +14,7 @@ import { EventsService } from '../../services/events.service';
   selector: 'app-manage-event-waitlist',
   standalone: true,
   imports: [CommonModule, RouterLink],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './manage-event-waitlist.component.html',
 })
 export class ManageEventWaitlistComponent implements OnInit {

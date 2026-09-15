@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
 
 type Size = 'sm' | 'md';
 
@@ -13,6 +13,7 @@ type Size = 'sm' | 'md';
   selector: 'favourite-star',
   standalone: true,
   imports: [],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './favourite-star.component.html',
 })
 export class FavouriteStarComponent {

@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { Route } from '@angular/router';
+import { CanMatchFn, Route } from '@angular/router';
 
 import { environment } from '@environments/environment';
 
@@ -10,6 +10,7 @@ import { FeatureFlagsService } from './feature-flags.service';
 describe('featureCanMatch', () => {
   const originalFeatureFlags = environment.featureFlags;
   const route = {} as Route;
+  const currentSnapshot = {} as Parameters<CanMatchFn>[2];
 
   afterEach(() => {
     environment.featureFlags = { ...originalFeatureFlags };
@@ -23,7 +24,7 @@ describe('featureCanMatch', () => {
     TestBed.configureTestingModule({ providers: [FeatureFlagsService] });
 
     const result = TestBed.runInInjectionContext(() =>
-      featureCanMatch(FEATURE_KEYS.events)(route, []),
+      featureCanMatch(FEATURE_KEYS.events)(route, [], currentSnapshot),
     );
 
     expect(result).toBeFalse();
@@ -36,7 +37,7 @@ describe('featureCanMatch', () => {
     TestBed.configureTestingModule({ providers: [FeatureFlagsService] });
 
     const result = TestBed.runInInjectionContext(() =>
-      featureCanMatch(FEATURE_KEYS.events)(route, []),
+      featureCanMatch(FEATURE_KEYS.events)(route, [], currentSnapshot),
     );
 
     expect(result).toBeTrue();

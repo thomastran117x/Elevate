@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, OnInit, Output, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { from } from 'rxjs';
 import { finalize } from 'rxjs/operators';
@@ -28,6 +28,7 @@ const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
   selector: 'app-mfa-gate',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './mfa-gate.component.html',
 })
 export class MfaGateComponent implements OnInit {

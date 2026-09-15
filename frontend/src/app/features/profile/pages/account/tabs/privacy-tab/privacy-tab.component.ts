@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, DestroyRef, OnInit, inject } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
@@ -22,6 +22,7 @@ import { RecentlyViewedStore } from '../../../../../events/services/recently-vie
   selector: 'app-privacy-tab',
   standalone: true,
   imports: [CommonModule, RouterLink, ToggleSwitchComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './privacy-tab.component.html',
 })
 export class PrivacyTabComponent implements OnInit {

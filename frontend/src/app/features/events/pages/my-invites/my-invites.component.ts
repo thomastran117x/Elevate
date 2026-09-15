@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
@@ -15,6 +15,7 @@ import { AuthReturnUrlService } from '../../../auth/services/auth-return-url.ser
   standalone: true,
   imports: [CommonModule, RouterLink, EventFavouriteToggleComponent],
   templateUrl: './my-invites.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-invites.component.css'],
 })
 export class MyInvitesComponent {

@@ -1,5 +1,5 @@
 import { isPlatformBrowser } from '@angular/common';
-import { Component, inject, PLATFORM_ID, signal } from '@angular/core';
+import { Component, inject, PLATFORM_ID, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
@@ -12,6 +12,7 @@ import { AuthReturnUrlService } from '../../services/auth-return-url.service';
   standalone: true,
   imports: [RouterLink],
   templateUrl: './device-verify.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./device-verify.component.css'],
 })
 export class DeviceVerifyComponent {

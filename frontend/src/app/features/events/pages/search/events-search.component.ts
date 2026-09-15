@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, ParamMap, Router, RouterModule } from '@angular/router';
@@ -57,6 +57,7 @@ type FilterChip = {
     EventFavouriteToggleComponent,
     RecentlyViewedRailComponent,
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './events-search.component.html',
 })
 export class EventsSearchComponent implements OnInit, OnDestroy {
