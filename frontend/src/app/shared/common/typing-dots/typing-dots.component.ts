@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 
 /** Three-dot "someone is typing" animation. */
 @Component({
@@ -10,6 +10,7 @@ import { Component } from '@angular/core';
     <span class="dot" style="animation-delay: 150ms"></span>
     <span class="dot" style="animation-delay: 300ms"></span>
   </span>`,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       .dot {

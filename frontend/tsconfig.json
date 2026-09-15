@@ -14,17 +14,16 @@
     "importHelpers": true,
     "target": "ES2022",
     "module": "preserve",
-    "baseUrl": ".",
     "paths": {
-      "@common/*": ["src/app/shared/common/*"],
-      "@shared/*": ["src/app/shared/*"],
-      "@environments/*": ["src/environments/*"],
-      "@stores/*": ["src/app/core/stores/*"],
-      "@core/*": ["src/app/core/*"],
-      "@icons/*": ["src/app/core/*"],
-      "@testing": ["src/testing/index.ts"],
-      "@testing/*": ["src/testing/*"],
-      "@/*": ["src/app/*"]
+      "@common/*": ["./src/app/shared/common/*"],
+      "@shared/*": ["./src/app/shared/*"],
+      "@environments/*": ["./src/environments/*"],
+      "@stores/*": ["./src/app/core/stores/*"],
+      "@core/*": ["./src/app/core/*"],
+      "@icons/*": ["./src/app/core/*"],
+      "@testing": ["./src/testing/index.ts"],
+      "@testing/*": ["./src/testing/*"],
+      "@/*": ["./src/app/*"]
     }
   },
   "angularCompilerOptions": {

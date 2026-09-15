@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 import { RouterModule } from '@angular/router';
 
 @Component({
@@ -6,6 +6,7 @@ import { RouterModule } from '@angular/router';
   standalone: true,
   imports: [RouterModule],
   templateUrl: './section-link.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './section-link.component.css',
 })
 export class SectionLinkComponent {

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { EventFavouriteToggleComponent } from '../event-favourite-toggle/event-favourite-toggle.component';
@@ -13,6 +13,7 @@ import { PinnedEvent } from '../../models/event-favourite.types';
   selector: 'app-pinned-event-row',
   standalone: true,
   imports: [CommonModule, RouterLink, EventFavouriteToggleComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './pinned-event-row.component.html',
 })
 export class PinnedEventRowComponent {

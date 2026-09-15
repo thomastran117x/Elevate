@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 
 import { AvatarComponent } from '../avatar/avatar.component';
 
@@ -16,6 +16,7 @@ export interface PresenceStackUser {
   selector: 'app-presence-stack',
   standalone: true,
   imports: [AvatarComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './presence-stack.component.html',
 })
 export class PresenceStackComponent {

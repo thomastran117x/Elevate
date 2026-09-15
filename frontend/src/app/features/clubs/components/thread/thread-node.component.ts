@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { AvatarComponent } from '../../../../shared/common/avatar/avatar.component';
@@ -22,6 +22,7 @@ import {
   selector: 'app-thread-node',
   standalone: true,
   imports: [FormsModule, AvatarComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './thread-node.component.html',
 })
 export class ThreadNodeComponent {

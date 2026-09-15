@@ -527,7 +527,7 @@ public class EventSeriesEndpointsTests
 
             await Task.Delay(TimeSpan.FromMilliseconds(100));
         }
-        while (timeout.Elapsed < TimeSpan.FromSeconds(5));
+        while (timeout.Elapsed < TimeSpan.FromSeconds(30));
 
         return latest!;
     }

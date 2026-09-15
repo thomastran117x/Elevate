@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, DestroyRef, OnInit, inject } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -45,6 +45,7 @@ import { UsernameSuggestionsComponent } from '../../../../../auth/components/use
     MfaGateComponent,
     UsernameSuggestionsComponent,
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './profile-tab.component.html',
 })
 export class ProfileTabComponent implements OnInit {

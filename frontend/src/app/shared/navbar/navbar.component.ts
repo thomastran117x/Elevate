@@ -1,5 +1,12 @@
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { Component, ElementRef, HostListener, Inject, PLATFORM_ID } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  HostListener,
+  Inject,
+  PLATFORM_ID,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { Observable } from 'rxjs';
@@ -16,6 +23,7 @@ import { ThemeService } from '../../core/services/theme.service';
   selector: 'app-navbar',
   standalone: true,
   imports: [CommonModule, RouterLink, RouterLinkActive],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './navbar.component.html',
 })
 export class NavbarComponent {

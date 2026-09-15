@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 
@@ -14,6 +14,7 @@ import { EventFavouritesStore } from '../../services/event-favourites-store.serv
   selector: 'app-my-pinned',
   standalone: true,
   imports: [CommonModule, RouterLink, PinnedEventRowComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './my-pinned.component.html',
 })
 export class MyPinnedComponent implements OnInit, OnDestroy {

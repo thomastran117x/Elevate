@@ -4,6 +4,7 @@ import {
   HttpErrorResponse,
   provideHttpClient,
   withInterceptorsFromDi,
+  withXhr,
 } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
@@ -31,7 +32,7 @@ describe('RefreshTokenInterceptor', () => {
 
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(withInterceptorsFromDi()),
+        provideHttpClient(withXhr(), withInterceptorsFromDi()),
         provideHttpClientTesting(),
         { provide: AuthTokenService, useValue: auth },
         { provide: HTTP_INTERCEPTORS, useClass: RefreshTokenInterceptor, multi: true },

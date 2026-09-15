@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 
 export type ConnectionPillState = 'connecting' | 'live' | 'reconnecting' | 'offline';
 
@@ -12,6 +12,7 @@ export type ConnectionPillState = 'connecting' | 'live' | 'reconnecting' | 'offl
   selector: 'app-connection-pill',
   standalone: true,
   imports: [],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './connection-pill.component.html',
 })
 export class ConnectionPillComponent {

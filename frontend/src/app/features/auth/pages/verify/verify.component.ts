@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
@@ -12,6 +12,7 @@ import { AuthReturnUrlService } from '../../services/auth-return-url.service';
   standalone: true,
   imports: [RouterLink],
   templateUrl: './verify.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./verify.component.css'],
 })
 export class VerifyComponent {

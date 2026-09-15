@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 
 type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'accent';
 
@@ -7,6 +7,7 @@ type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'accent';
   standalone: true,
   imports: [],
   templateUrl: './badge-dot.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './badge-dot.component.css',
 })
 export class BadgeDotComponent {

@@ -7,6 +7,7 @@ import {
   OnInit,
   Output,
   SimpleChanges,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
@@ -57,6 +58,7 @@ import { ThreadNodeComponent } from './thread-node.component';
     SkeletonComponent,
     TypingDotsComponent,
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './thread.component.html',
 })
 export class ThreadComponent implements OnInit, OnChanges, OnDestroy {

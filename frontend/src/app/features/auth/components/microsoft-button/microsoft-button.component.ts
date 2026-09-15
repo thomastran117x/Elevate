@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 
 import { environment } from '../../../../../environments/environment';
 
@@ -7,6 +7,7 @@ import { environment } from '../../../../../environments/environment';
   standalone: true,
   imports: [],
   templateUrl: './microsoft-button.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./microsoft-button.component.css'],
 })
 export class MicrosoftButtonComponent {

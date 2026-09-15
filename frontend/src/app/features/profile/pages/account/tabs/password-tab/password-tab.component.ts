@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import {
   AbstractControl,
   FormBuilder,
@@ -28,6 +28,7 @@ const passwordsMatchValidator: ValidatorFn = (group: AbstractControl): Validatio
   selector: 'app-password-tab',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, MfaGateComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './password-tab.component.html',
 })
 export class PasswordTabComponent {

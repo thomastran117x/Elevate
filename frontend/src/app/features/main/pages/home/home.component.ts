@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 
@@ -23,6 +23,7 @@ type Testimonial = { quote: string; name: string; role: string };
   selector: 'app-home-page',
   standalone: true,
   imports: [FormsModule, RouterModule, AppButtonComponent, PillComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <div class="app-page">
       <main class="pb-16 sm:pb-20">

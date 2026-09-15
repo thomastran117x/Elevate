@@ -1,10 +1,11 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 
 @Component({
   selector: 'bullets',
   standalone: true,
   imports: [],
   templateUrl: './bullets.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './bullets.component.css',
 })
 export class BulletsComponent {

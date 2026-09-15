@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 
 import { EventsService } from './events.service';
 import {
@@ -15,7 +15,7 @@ describe('EventsService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [EventsService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [EventsService, provideHttpClient(withXhr()), provideHttpClientTesting()],
     });
 
     service = TestBed.inject(EventsService);

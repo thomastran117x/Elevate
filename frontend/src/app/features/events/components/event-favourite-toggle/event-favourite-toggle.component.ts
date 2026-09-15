@@ -6,6 +6,7 @@ import {
   OnDestroy,
   OnInit,
   Output,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
@@ -26,6 +27,7 @@ import { EventFavouritesStore } from '../../services/event-favourites-store.serv
   selector: 'app-event-favourite-toggle',
   standalone: true,
   imports: [FavouriteStarComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './event-favourite-toggle.component.html',
 })
 export class EventFavouriteToggleComponent implements OnInit, OnChanges, OnDestroy {

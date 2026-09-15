@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 
 import { EventSeriesService } from './event-series.service';
 import { RecurrenceRule, SeriesBulkResult } from '../models/event.types';
@@ -31,7 +31,7 @@ describe('EventSeriesService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [EventSeriesService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [EventSeriesService, provideHttpClient(withXhr()), provideHttpClientTesting()],
     });
 
     service = TestBed.inject(EventSeriesService);

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { AuthReturnUrlService } from '../../../auth/services/auth-return-url.service';
@@ -10,6 +10,7 @@ import { ClubMemberInvitationsService } from '../../services/club-member-invitat
   selector: 'app-club-member-invite',
   standalone: true,
   imports: [CommonModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './club-member-invite.component.html',
 })
 export class ClubMemberInviteComponent implements OnInit {

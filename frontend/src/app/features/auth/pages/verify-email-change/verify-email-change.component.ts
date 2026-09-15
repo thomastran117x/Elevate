@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
@@ -18,6 +18,7 @@ import { AuthService } from '../../services/auth.service';
   standalone: true,
   imports: [RouterLink],
   templateUrl: './verify-email-change.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./verify-email-change.component.css'],
 })
 export class VerifyEmailChangeComponent implements OnInit {

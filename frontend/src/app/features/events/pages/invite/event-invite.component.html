@@ -45,7 +45,9 @@
             <div class="grid gap-3 text-sm text-muted sm:grid-cols-2">
               <div class="rounded-2xl border border-line bg-glass p-4">
                 <div class="text-xs uppercase tracking-[0.16em] text-faint">When</div>
-                <div class="mt-2">{{ invite.event?.startTime | date: 'medium' }}</div>
+                <div class="mt-2">
+                  {{ $safeNavigationMigration(invite.event?.startTime) | date: 'medium' }}
+                </div>
               </div>
               <div class="rounded-2xl border border-line bg-glass p-4">
                 <div class="text-xs uppercase tracking-[0.16em] text-faint">Where</div>

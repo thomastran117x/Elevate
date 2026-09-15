@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 
@@ -24,6 +24,7 @@ const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
   selector: 'app-security-tab',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, MfaGateComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './security-tab.component.html',
 })
 export class SecurityTabComponent implements OnInit {

@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, ParamMap, Router, RouterModule } from '@angular/router';
@@ -39,6 +39,7 @@ type FilterChip = {
   selector: 'app-clubs-search',
   standalone: true,
   imports: [CommonModule, FormsModule, RouterModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './clubs-search.component.html',
 })
 export class ClubsSearchComponent implements OnInit, OnDestroy {

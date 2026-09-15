@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
@@ -14,6 +14,7 @@ import { EventWaitlistService } from '../../services/event-waitlist.service';
   selector: 'app-my-waitlists',
   standalone: true,
   imports: [CommonModule, RouterLink, EventFavouriteToggleComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './my-waitlists.component.html',
 })
 export class MyWaitlistsComponent implements OnInit {

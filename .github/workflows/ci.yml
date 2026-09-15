@@ -92,13 +92,8 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 
-      # Informational only. The dev toolchain currently carries advisories with no
-      # forward fix on Angular 21 (undici is exact-pinned by @angular/build, and
-      # @angular/cli pulls a vulnerable @modelcontextprotocol/sdk chain). Promote
-      # this to a blocking step once the Angular 22 upgrade lands.
-      - name: Report development dependency advisories
+      - name: Audit all dependencies
         if: always()
-        continue-on-error: true
         run: npm audit --audit-level=moderate
 
   frontend-build:
