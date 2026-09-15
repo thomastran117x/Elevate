@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { Store } from '@ngrx/store';
@@ -27,6 +27,7 @@ import { EventFavouriteToggleComponent } from '../../components/event-favourite-
   selector: 'app-event-detail',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, EventFavouriteToggleComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './event-detail.component.html',
 })
 export class EventDetailComponent implements OnInit, OnDestroy {

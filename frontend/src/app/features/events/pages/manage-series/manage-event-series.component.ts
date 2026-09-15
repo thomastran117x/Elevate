@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { requireEnvelopeData } from '../../../../core/api/models/api-envelope.model';
@@ -32,6 +32,7 @@ interface SeriesBulkAction {
   selector: 'app-manage-event-series',
   standalone: true,
   imports: [CommonModule, RouterLink, ConfirmDialogComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './manage-event-series.component.html',
 })
 export class ManageEventSeriesComponent implements OnInit {

@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { AppButtonComponent } from '@common/button/button.component';
 import { IconShellComponent } from '@common/icon-shell/icon-shell.component';
@@ -8,6 +8,7 @@ import { IconShellComponent } from '@common/icon-shell/icon-shell.component';
   standalone: true,
   imports: [RouterModule, AppButtonComponent, IconShellComponent],
   templateUrl: './empty-state.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './empty-state.component.css',
 })
 export class EmptyStateComponent {

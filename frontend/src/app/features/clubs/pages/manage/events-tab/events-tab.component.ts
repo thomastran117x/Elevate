@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, DestroyRef, OnInit, inject } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -21,6 +21,7 @@ import { EventsManagementService } from '../../../../events/services/events-mana
   selector: 'app-events-tab',
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, EventLifecycleActionsComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './events-tab.component.html',
 })
 export class EventsTabComponent implements OnInit {

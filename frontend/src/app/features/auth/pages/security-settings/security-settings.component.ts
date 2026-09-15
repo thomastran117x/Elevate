@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 
@@ -19,6 +19,7 @@ type TotpManageAction = 'enable' | 'disable' | 'remove' | null;
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './security-settings.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./security-settings.component.css'],
 })
 export class SecuritySettingsComponent implements OnInit {

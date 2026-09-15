@@ -1,5 +1,12 @@
 import { isPlatformBrowser } from '@angular/common';
-import { Component, inject, OnInit, PLATFORM_ID, signal } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  PLATFORM_ID,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { AuthTokenService } from '../../../../core/api/services/auth-token.service';
@@ -25,6 +32,7 @@ import { AuthReturnUrlService } from '../../services/auth-return-url.service';
   standalone: true,
   imports: [RouterLink],
   templateUrl: './google-callback.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./google-callback.component.css'],
 })
 export class GoogleCallbackComponent implements OnInit {

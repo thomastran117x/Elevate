@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
@@ -20,6 +20,7 @@ import { selectUser } from '../../../../core/stores/user.selectors';
   selector: 'app-club-post-detail',
   standalone: true,
   imports: [CommonModule, ThreadComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './club-post-detail.component.html',
 })
 export class ClubPostDetailComponent implements OnInit, OnDestroy {

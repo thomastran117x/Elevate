@@ -1,6 +1,6 @@
 import { EnvironmentProviders, Provider, ProviderToken } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
 export type TestProvider = Provider | EnvironmentProviders;
@@ -10,7 +10,7 @@ export type TestProvider = Provider | EnvironmentProviders;
  * cannot accidentally register the testing backend without the real client.
  */
 export function provideHttpTesting(): TestProvider[] {
-  return [provideHttpClient(), provideHttpClientTesting()];
+  return [provideHttpClient(withXhr()), provideHttpClientTesting()];
 }
 
 export interface ServiceHarness<T> {

@@ -1,4 +1,11 @@
-import { Component, PLATFORM_ID, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  PLATFORM_ID,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -29,6 +36,7 @@ import { UsernameSuggestionsComponent } from '../../components/username-suggesti
   standalone: true,
   imports: [ReactiveFormsModule, RouterLink, PillComponent, UsernameSuggestionsComponent],
   templateUrl: './signup.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./signup.component.css'],
 })
 export class SignupComponent {

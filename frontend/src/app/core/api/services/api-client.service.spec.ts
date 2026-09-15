@@ -1,4 +1,4 @@
-import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
@@ -17,7 +17,7 @@ describe('ApiClient', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [ApiClient, provideHttpClient(), provideHttpClientTesting()],
+      providers: [ApiClient, provideHttpClient(withXhr()), provideHttpClientTesting()],
     });
 
     service = TestBed.inject(ApiClient);

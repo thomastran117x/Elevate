@@ -220,7 +220,13 @@
                   Saving will ask whether the change applies to this date only or to every later
                   one. Manage the whole series from the
                   <a
-                    [routerLink]="['/clubs', clubId, 'manage', 'series', event?.seriesId]"
+                    [routerLink]="[
+                      '/clubs',
+                      clubId,
+                      'manage',
+                      'series',
+                      $safeNavigationMigration(event?.seriesId),
+                    ]"
                     class="font-semibold underline"
                     >series page</a
                   >.

@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
 import { RouterModule } from '@angular/router';
 
 export type AppButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
@@ -9,6 +9,7 @@ export type AppButtonSize = 'sm' | 'md' | 'lg';
   standalone: true,
   imports: [RouterModule],
   templateUrl: './button.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './button.component.css',
 })
 export class AppButtonComponent {

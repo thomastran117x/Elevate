@@ -8,6 +8,7 @@ import {
   provideClientHydration,
   withEventReplay,
   withNoHttpTransferCache,
+  withNoIncrementalHydration,
 } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { CoreModule } from './core/core.module';
@@ -25,7 +26,11 @@ export const appConfig: ApplicationConfig = {
     // Disable the SSR HTTP transfer cache so authenticated backend GETs are always
     // re-issued from the browser (visible in the Network tab) rather than replayed
     // from server-rendered TransferState.
-    provideClientHydration(withEventReplay(), withNoHttpTransferCache()),
+    provideClientHydration(
+      withEventReplay(),
+      withNoHttpTransferCache(),
+      withNoIncrementalHydration(),
+    ),
     provideRouter(routes),
     importProvidersFrom(CoreModule),
   ],

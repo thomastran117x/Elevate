@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 
 export type CardTone = 'glass' | 'solid';
 
@@ -7,6 +7,7 @@ export type CardTone = 'glass' | 'solid';
   standalone: true,
   imports: [],
   templateUrl: './card.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './card.component.css',
 })
 export class CardComponent {

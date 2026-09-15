@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 
 type Tone = 'neutral' | 'accent' | 'soft' | 'outline';
 
@@ -7,6 +7,7 @@ type Tone = 'neutral' | 'accent' | 'soft' | 'outline';
   standalone: true,
   imports: [],
   templateUrl: './pill.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pill.component.css',
 })
 export class PillComponent {

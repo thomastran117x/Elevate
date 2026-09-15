@@ -123,7 +123,7 @@
               <span
                 class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold"
                 [ngClass]="{
-                  'bg-success/15 text-success': smsSettings?.isEnabled,
+                  'bg-success/15 text-success': $safeNavigationMigration(smsSettings?.isEnabled),
                   'bg-warning/15 text-warning': !smsSettings?.isEnabled,
                 }"
               >
@@ -218,7 +218,8 @@
                 </h3>
                 <p class="mt-2 text-sm leading-6 text-subtle">
                   Enter the 6-digit code sent to {{ smsChallenge?.MaskedDestination }}. This
-                  challenge expires at {{ smsChallenge?.ExpiresAtUtc | date: 'medium' }}.
+                  challenge expires at
+                  {{ $safeNavigationMigration(smsChallenge?.ExpiresAtUtc) | date: 'medium' }}.
                 </p>
               </div>
               <div class="space-y-2">
@@ -342,7 +343,7 @@
               <span
                 class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold"
                 [ngClass]="{
-                  'bg-success/15 text-success': totpSettings?.isEnabled,
+                  'bg-success/15 text-success': $safeNavigationMigration(totpSettings?.isEnabled),
                   'bg-warning/15 text-warning': !totpSettings?.isEnabled,
                 }"
               >

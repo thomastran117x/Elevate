@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, catchError, debounceTime, firstValueFrom, map, of, switchMap } from 'rxjs';
@@ -34,6 +34,7 @@ import { lifecycleBadgeClass, lifecycleHint } from '../../models/event-lifecycle
     OccurrenceScopeDialogComponent,
     EventLifecycleActionsComponent,
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './manage-event-editor.component.html',
 })
 export class ManageEventEditorComponent {

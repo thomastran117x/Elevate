@@ -1,5 +1,12 @@
 import { isPlatformBrowser } from '@angular/common';
-import { Component, inject, OnInit, PLATFORM_ID, signal } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  PLATFORM_ID,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { environment } from '../../../../../environments/environment';
@@ -25,6 +32,7 @@ import { AuthReturnUrlService } from '../../services/auth-return-url.service';
   standalone: true,
   imports: [RouterLink],
   templateUrl: './microsoft-callback.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./microsoft-callback.component.css'],
 })
 export class MicrosoftCallbackComponent implements OnInit {

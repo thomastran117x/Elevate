@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 
 type Tone = 'accent' | 'neutral';
 
@@ -7,6 +7,7 @@ type Tone = 'accent' | 'neutral';
   standalone: true,
   imports: [],
   templateUrl: './icon-shell.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './icon-shell.component.css',
 })
 export class IconShellComponent {

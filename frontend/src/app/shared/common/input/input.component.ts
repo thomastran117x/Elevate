@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 
 export type InputTone = 'default' | 'glass';
 
@@ -7,6 +7,7 @@ export type InputTone = 'default' | 'glass';
   standalone: true,
   imports: [],
   templateUrl: './input.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './input.component.css',
 })
 export class AppInputComponent {

@@ -31,7 +31,8 @@
           </p>
           @if (pending()?.ExpiresAtUtc) {
             <p class="mt-2 text-sm text-subtle">
-              Challenge expires at {{ pending()?.ExpiresAtUtc | date: 'medium' }}.
+              Challenge expires at
+              {{ $safeNavigationMigration(pending()?.ExpiresAtUtc) | date: 'medium' }}.
             </p>
           }
         </div>

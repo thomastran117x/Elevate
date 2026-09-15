@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 
 export type TimelineItem = {
   title: string;
@@ -11,6 +11,7 @@ export type TimelineItem = {
   standalone: true,
   imports: [],
   templateUrl: './timeline.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './timeline.component.css',
 })
 export class TimelineComponent {

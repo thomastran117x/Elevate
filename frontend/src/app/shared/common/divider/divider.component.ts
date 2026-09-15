@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 
 export type DividerTone = 'subtle' | 'strong';
 
@@ -7,6 +7,7 @@ export type DividerTone = 'subtle' | 'strong';
   standalone: true,
   imports: [],
   templateUrl: './divider.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './divider.component.css',
 })
 export class DividerComponent {

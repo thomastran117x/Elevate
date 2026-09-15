@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, DestroyRef, OnInit, inject } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -17,6 +17,7 @@ type SortKey = 'name' | 'members' | 'events';
   selector: 'app-managed-clubs',
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, EmptyStateComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './managed-clubs.component.html',
 })
 export class ManagedClubsComponent implements OnInit {
