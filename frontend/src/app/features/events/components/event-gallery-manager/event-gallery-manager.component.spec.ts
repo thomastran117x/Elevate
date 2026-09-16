@@ -147,6 +147,67 @@ describe('EventGalleryManagerComponent', () => {
       });
     });
 
+    describe('un-marking decorative', () => {
+      const decorative = makeImage({
+        id: 7,
+        isDecorative: true,
+        altText: null,
+        needsAltText: false,
+      });
+
+      beforeEach(() => {
+        component.images = [decorative];
+        component.ngOnChanges({ images: {} as never });
+      });
+
+      it('opens the description field instead of saving an edit the server would reject', async () => {
+        await component.toggleDecorative(decorative, false);
+
+        expect(service.updateEventImage).not.toHaveBeenCalled();
+        expect(component.isDescribing(decorative)).toBeTrue();
+      });
+
+      it('leaves the image decorative when nothing is typed', async () => {
+        await component.toggleDecorative(decorative, false);
+        await component.saveAltText(decorative);
+
+        expect(service.updateEventImage).not.toHaveBeenCalled();
+        expect(component.isDescribing(decorative)).toBeTrue();
+      });
+
+      it('commits both changes once a description is written', async () => {
+        service.updateEventImage.and.returnValue(
+          of({
+            ...decorative,
+            isDecorative: false,
+            altText: 'A quiet corner',
+            needsAltText: false,
+          }),
+        );
+
+        await component.toggleDecorative(decorative, false);
+        component.altDrafts.set(7, 'A quiet corner');
+        await component.saveAltText(decorative);
+
+        expect(service.updateEventImage).toHaveBeenCalledWith(12, 7, {
+          altText: 'A quiet corner',
+          isDecorative: false,
+        });
+        expect(component.isDescribing(decorative)).toBeFalse();
+      });
+
+      it('keeps what was typed when the gallery refreshes mid-edit', async () => {
+        await component.toggleDecorative(decorative, false);
+        component.altDrafts.set(7, 'Half a thought');
+
+        // A refresh still reports the image as decorative with no alt text.
+        component.images = [decorative];
+        component.ngOnChanges({ images: {} as never });
+
+        expect(component.altDrafts.get(7)).toBe('Half a thought');
+      });
+    });
+
     it('surfaces a failure without dropping the gallery', async () => {
       service.updateEventImage.and.returnValue(throwError(() => new Error('nope')));
       component.altDrafts.set(2, 'Main stage');

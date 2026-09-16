@@ -145,6 +145,9 @@ public class EventSeriesService : IEventSeriesService
             {
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
+                // Occurrences that were given images and still need their cover stamped.
+                var coverPendingEventIds = new List<int>();
+
                 _db.EventSeries.Add(series);
                 await _db.SaveChangesAsync();
 
@@ -199,13 +202,23 @@ public class EventSeriesService : IEventSeriesService
                             createdAt: now);
 
                         if (templateImageUrls.Count > 0)
+                        {
                             await _imageRepository.AddImagesAsync(occurrence.Id, templateImageUrls);
+                            coverPendingEventIds.Add(occurrence.Id);
+                        }
 
                         _outboxWriter.StageSync(occurrence);
                     }
                 }
 
                 await _db.SaveChangesAsync();
+
+                // Occurrences are generated with images but no cover. Stamped after the save so
+                // the rows have ids: the read-side fallback hides this from public responses, but
+                // the gallery editor reads the real flag.
+                foreach (var eventId in coverPendingEventIds)
+                    await _imageRepository.EnsureCoverAsync(eventId);
+
                 await transaction.CommitAsync();
                 return occurrences;
             });
@@ -354,6 +367,9 @@ public class EventSeriesService : IEventSeriesService
             {
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
+                // Occurrences that were given images and still need their cover stamped.
+                var coverPendingEventIds = new List<int>();
+
                 var occurrences = new List<Events>();
 
                 // Resume at the high-water mark rather than re-creating rows that already exist,
@@ -379,7 +395,10 @@ public class EventSeriesService : IEventSeriesService
                         createdAt: now);
 
                     if (templateImageUrls.Count > 0)
+                    {
                         await _imageRepository.AddImagesAsync(occurrence.Id, templateImageUrls);
+                        coverPendingEventIds.Add(occurrence.Id);
+                    }
 
                     _outboxWriter.StageSync(occurrence);
                 }
@@ -388,6 +407,13 @@ public class EventSeriesService : IEventSeriesService
                 series.UpdatedAt = now;
 
                 await _db.SaveChangesAsync();
+
+                // Occurrences are generated with images but no cover. Stamped after the save so
+                // the rows have ids: the read-side fallback hides this from public responses, but
+                // the gallery editor reads the real flag.
+                foreach (var eventId in coverPendingEventIds)
+                    await _imageRepository.EnsureCoverAsync(eventId);
+
                 await transaction.CommitAsync();
                 return occurrences;
             });
@@ -568,13 +594,12 @@ public class EventSeriesService : IEventSeriesService
 
                 if (requestedImageUrls is not null)
                 {
+                    // Reconciled rather than replaced, for the same reason the single-event
+                    // update is: a delete-and-re-add would discard the alt text, cover flag and
+                    // id of every image that survived the edit — and here it would do so across
+                    // every remaining occurrence at once.
                     foreach (var eventId in result.AffectedEventIds)
-                    {
-                        await _imageRepository.DeleteAllByEventIdAsync(eventId);
-
-                        if (requestedImageUrls.Count > 0)
-                            await _imageRepository.AddImagesAsync(eventId, requestedImageUrls);
-                    }
+                        await _imageRepository.SyncImagesAsync(eventId, requestedImageUrls);
                 }
 
                 series.UpdatedAt = now;

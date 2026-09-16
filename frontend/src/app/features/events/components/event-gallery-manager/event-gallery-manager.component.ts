@@ -34,6 +34,12 @@ export class EventGalleryManagerComponent implements OnChanges {
   /** Alt-text drafts, so typing does not fire a request per keystroke. */
   altDrafts = new Map<number, string>();
 
+  /**
+   * Images that are still decorative on the server but whose description field is open, because
+   * the organizer un-checked the box and has not written anything yet.
+   */
+  private describing = new Set<number>();
+
   constructor(private readonly managementService: EventsManagementService) {}
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -99,6 +105,12 @@ export class EventGalleryManagerComponent implements OnChanges {
 
   async saveAltText(image: EventImage): Promise<void> {
     const draft = (this.altDrafts.get(image.id) ?? '').trim();
+
+    // Nothing typed while converting a decorative image: leave it decorative rather than sending
+    // an edit the server would reject. The input stays open until they either describe it or
+    // re-check the box.
+    if (!draft && this.describing.has(image.id)) return;
+
     if (draft === (image.altText ?? '') && !image.isDecorative) return;
 
     await this.mutate(
@@ -110,27 +122,46 @@ export class EventGalleryManagerComponent implements OnChanges {
             isDecorative: false,
           }),
         );
+        this.describing.delete(image.id);
         this.replaceOne(saved);
       },
       'The description could not be saved.',
     );
   }
 
+  /**
+   * Marking an image decorative saves immediately — it needs no description, so there is nothing
+   * left to fill in. Un-marking one does not: the server requires a non-decorative image to carry
+   * alt text, so saving here would always be rejected. Instead this opens the description field
+   * and {@link saveAltText} commits both changes once something has been written.
+   */
   async toggleDecorative(image: EventImage, isDecorative: boolean): Promise<void> {
+    if (!isDecorative) {
+      this.describing.add(image.id);
+      this.altDrafts.set(image.id, image.altText ?? '');
+      return;
+    }
+
     await this.mutate(
       image.id,
       async () => {
         const saved = await firstValueFrom(
           this.managementService.updateEventImage(this.eventId, image.id, {
-            // Marking an image decorative clears its alt text: the server rejects holding both.
-            altText: isDecorative ? null : (this.altDrafts.get(image.id) ?? ''),
-            isDecorative,
+            // The server rejects an image holding both, so the description goes.
+            altText: null,
+            isDecorative: true,
           }),
         );
+        this.describing.delete(image.id);
         this.replaceOne(saved);
       },
       'The image could not be updated.',
     );
+  }
+
+  /** True while an image is decorative but the organizer is partway through describing it. */
+  isDescribing(image: EventImage): boolean {
+    return this.describing.has(image.id);
   }
 
   async remove(image: EventImage): Promise<void> {
@@ -162,9 +193,18 @@ export class EventGalleryManagerComponent implements OnChanges {
   private syncDrafts(): void {
     const next = new Map<number, string>();
     for (const image of this.images) {
-      next.set(image.id, image.altText ?? '');
+      // An image being described mid-edit keeps what has been typed; the server still has it as
+      // decorative with no alt text, so taking its copy would wipe the draft on every refresh.
+      const inProgress = this.describing.has(image.id) ? this.altDrafts.get(image.id) : undefined;
+      next.set(image.id, inProgress ?? image.altText ?? '');
     }
     this.altDrafts = next;
+
+    for (const id of [...this.describing]) {
+      if (!this.images.some((image) => image.id === id)) {
+        this.describing.delete(id);
+      }
+    }
   }
 
   private async mutate(

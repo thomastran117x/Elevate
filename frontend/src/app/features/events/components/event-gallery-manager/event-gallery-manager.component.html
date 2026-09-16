@@ -77,7 +77,7 @@
                 <label class="flex items-center gap-1.5 text-xs text-subtle">
                   <input
                     type="checkbox"
-                    [checked]="image.isDecorative"
+                    [checked]="image.isDecorative && !isDescribing(image)"
                     [disabled]="busyImageId !== null"
                     (change)="toggleDecorative(image, $any($event.target).checked)"
                   />
@@ -99,11 +99,17 @@
                 </button>
               </div>
 
-              @if (image.isDecorative) {
+              @if (image.isDecorative && !isDescribing(image)) {
                 <p class="text-xs text-faint">
                   Decorative images are hidden from screen readers and need no description.
                 </p>
               } @else {
+                @if (isDescribing(image)) {
+                  <p class="text-xs text-faint">
+                    Still decorative until you describe it — the description is what makes it count
+                    as content.
+                  </p>
+                }
                 <label class="block">
                   <span class="sr-only">Describe image {{ $index + 1 }}</span>
                   <input
