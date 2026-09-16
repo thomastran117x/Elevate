@@ -19,6 +19,18 @@ namespace backend.main.features.events.contracts.responses
             get; set;
         }
         public List<string> ImageUrls { get; set; } = new();
+
+        /// <summary>
+        /// The image representing the event wherever one picture is shown. Null only when the
+        /// event has no images. Also the first entry of <see cref="ImageUrls"/>.
+        /// </summary>
+        public string? CoverImageUrl
+        {
+            get; set;
+        }
+
+        /// <summary>The full gallery in display order, cover first, with accessibility metadata.</summary>
+        public List<EventImageResponse> Images { get; set; } = new();
         public bool IsPrivate
         {
             get; set;

@@ -40,12 +40,34 @@ export interface EventHostClub {
   location?: string;
 }
 
+/**
+ * One image in an event gallery.
+ *
+ * `altText` is null on images uploaded before gallery management existed; `needsAltText` is the
+ * server's verdict on whether that still needs a person's attention, which is not the same as
+ * `!altText` — a deliberately decorative image needs nothing.
+ */
+export interface EventImage {
+  id: number;
+  url: string;
+  altText: string | null;
+  isDecorative: boolean;
+  isCover: boolean;
+  sortOrder: number;
+  needsAltText: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface EventItem {
   id: number;
   name: string;
   description: string;
   location: string;
+  /** Cover first. Kept so existing `imageUrls[0]` consumers show the chosen cover. */
   imageUrls: string[];
+  coverImageUrl: string | null;
+  images: EventImage[];
   isPrivate: boolean;
   maxParticipants: number;
   registerCost: number;
@@ -82,6 +104,8 @@ export interface ManagedEvent {
   description?: string;
   location?: string;
   imageUrls: string[];
+  coverImageUrl: string | null;
+  images: EventImage[];
   isPrivate: boolean;
   maxParticipants?: number;
   registerCost: number;

@@ -29,6 +29,8 @@ function buildEvent(overrides: Partial<ManagedEvent> = {}): ManagedEvent {
     description: 'A recurring evening of board games.',
     location: 'Studio 1',
     imageUrls: ['https://cdn.test/a.png'],
+    coverImageUrl: 'https://cdn.test/a.png',
+    images: [],
     isPrivate: false,
     maxParticipants: 30,
     registerCost: 0,
@@ -55,6 +57,7 @@ describe('ManageEventEditorComponent', () => {
   let fixture: ComponentFixture<ManageEventEditorComponent>;
   let component: ManageEventEditorComponent;
   let managementService: jasmine.SpyObj<EventsManagementService>;
+  let nextImageId = 1;
   let seriesService: jasmine.SpyObj<EventSeriesService>;
 
   const envelope = <T>(data: T) => ({
@@ -82,7 +85,22 @@ describe('ManageEventEditorComponent', () => {
       'runTransition',
       'revertLifecycle',
       'uploadImage',
+      'addEventImage',
     ]);
+    // A saved event attaches each upload to the gallery, which is what gives it an id.
+    managementService.addEventImage.and.callFake((_eventId: number, image: { imageUrl: string }) =>
+      of({
+        id: nextImageId++,
+        url: image.imageUrl,
+        altText: null,
+        isDecorative: false,
+        isCover: false,
+        sortOrder: 0,
+        needsAltText: true,
+        createdAt: '2026-05-01T00:00:00Z',
+        updatedAt: '2026-05-01T00:00:00Z',
+      }),
+    );
     seriesService = jasmine.createSpyObj<EventSeriesService>('EventSeriesService', [
       'previewSeries',
       'createSeries',
@@ -601,6 +619,12 @@ describe('ManageEventEditorComponent', () => {
       await component.onFilesSelected(event);
 
       expect(component.imageUrls).toEqual(['https://cdn/a.png', 'https://cdn/b.png']);
+      // The event is saved, so each upload is also attached and comes back with an id.
+      expect(managementService.addEventImage).toHaveBeenCalledTimes(2);
+      expect(component.images.map((image) => image.url)).toEqual([
+        'https://cdn/a.png',
+        'https://cdn/b.png',
+      ]);
       expect(component.uploading).toBeFalse();
       expect((event.target as HTMLInputElement).value).toBe('');
     });

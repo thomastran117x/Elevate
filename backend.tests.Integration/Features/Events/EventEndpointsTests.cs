@@ -1493,6 +1493,218 @@ public class EventEndpointsTests
         return (await app.ReadApiResponseAsync<ClubApiModel>(response)).Data!;
     }
 
+    [Fact]
+    public async Task EventGalleryEndpoints_ShouldReorderSetCoverAndDescribeImages()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-gallery@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Gallery Club");
+        var firstImage = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id);
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Gallery Walk", firstImage.PublicUrl);
+
+        var second = await AddGalleryImageAsync(app, organizerSession.AccessToken, club.Id, ev.Id);
+        var third = await AddGalleryImageAsync(app, organizerSession.AccessToken, club.Id, ev.Id);
+
+        var listed = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/events/{ev.Id}/images",
+            organizerSession.AccessToken));
+        listed.StatusCode.Should().Be(HttpStatusCode.OK);
+        var gallery = (await app.ReadApiResponseAsync<List<EventImageApiModel>>(listed)).Data!;
+        gallery.Should().HaveCount(3);
+        gallery.Should().ContainSingle(image => image.IsCover);
+        gallery.Should().OnlyContain(image => image.NeedsAltText, "no image has been described yet");
+
+        // Reorder to third, first, second.
+        var firstId = gallery.Single(image => image.Url == firstImage.PublicUrl).Id;
+        var reordered = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/events/{ev.Id}/images/order",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { imageIds = new[] { third.Id, firstId, second.Id } })));
+        reordered.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var afterReorder = (await app.ReadApiResponseAsync<List<EventImageApiModel>>(reordered)).Data!;
+        afterReorder.Select(image => image.Id).Should().Equal(third.Id, firstId, second.Id);
+        afterReorder.Select(image => image.SortOrder).Should().Equal(0, 1, 2);
+
+        // Make the second image the cover.
+        var coverSet = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/events/{ev.Id}/images/{second.Id}/cover",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+        coverSet.StatusCode.Should().Be(HttpStatusCode.OK);
+        var afterCover = (await app.ReadApiResponseAsync<List<EventImageApiModel>>(coverSet)).Data!;
+        afterCover.Should().ContainSingle(image => image.IsCover)
+            .Which.Id.Should().Be(second.Id);
+
+        // Describe one image and mark another decorative.
+        var described = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Patch,
+            $"/api/events/{ev.Id}/images/{second.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { altText = "Volunteers setting up the hall" })));
+        described.StatusCode.Should().Be(HttpStatusCode.OK);
+        var describedBody = (await app.ReadApiResponseAsync<EventImageApiModel>(described)).Data!;
+        describedBody.AltText.Should().Be("Volunteers setting up the hall");
+        describedBody.NeedsAltText.Should().BeFalse();
+
+        var decorative = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Patch,
+            $"/api/events/{ev.Id}/images/{third.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { isDecorative = true })));
+        decorative.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await app.ReadApiResponseAsync<EventImageApiModel>(decorative)).Data!.NeedsAltText
+            .Should().BeFalse("a decorative image needs no description");
+
+        // Holding both alt text and the decorative flag is a contradiction.
+        var contradiction = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Patch,
+            $"/api/events/{ev.Id}/images/{third.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { altText = "Never read aloud", isDecorative = true })));
+        contradiction.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        // The public payload leads with the cover and carries the gallery.
+        var detail = await app.Client.GetAsync($"/api/events/{ev.Id}");
+        var detailBody = (await app.ReadApiResponseAsync<EventResponse>(detail)).Data!;
+        detailBody.CoverImageUrl.Should().Be(second.Url);
+        detailBody.ImageUrls.First().Should().Be(second.Url,
+            "every client reads imageUrls[0] as the cover");
+        detailBody.Images.Should().HaveCount(3);
+        detailBody.Images.Should().ContainSingle(image => image.IsCover);
+    }
+
+    [Fact]
+    public async Task EventGalleryEndpoints_ShouldRejectReorder_ThatDoesNotListEveryImage()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-gallery-order@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Order Club");
+        var firstImage = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id);
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Order Walk", firstImage.PublicUrl);
+        var second = await AddGalleryImageAsync(app, organizerSession.AccessToken, club.Id, ev.Id);
+
+        var partial = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/events/{ev.Id}/images/order",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { imageIds = new[] { second.Id } })));
+        partial.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var duplicated = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/events/{ev.Id}/images/order",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { imageIds = new[] { second.Id, second.Id } })));
+        duplicated.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task EventGalleryEndpoints_ShouldPromoteANewCover_WhenTheCoverIsRemoved()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-gallery-cover@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Cover Club");
+        var firstImage = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id);
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Cover Walk", firstImage.PublicUrl);
+        var second = await AddGalleryImageAsync(app, organizerSession.AccessToken, club.Id, ev.Id);
+
+        var cover = await app.QueryDbAsync(db =>
+            db.EventImages.SingleAsync(image => image.EventId == ev.Id && image.IsCover));
+
+        var removed = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/events/{ev.Id}/images/{cover.Id}",
+            organizerSession.AccessToken));
+        removed.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var remaining = await app.QueryDbAsync(db =>
+            db.EventImages.Where(image => image.EventId == ev.Id).ToListAsync());
+        remaining.Should().ContainSingle()
+            .Which.Id.Should().Be(second.Id);
+        remaining.Single().IsCover.Should().BeTrue("the event must not be left without a cover");
+    }
+
+    [Fact]
+    public async Task EventUpdate_ShouldPreserveGalleryMetadata_ForImagesThatSurvive()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-gallery-update@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Persistence Club");
+        var keepImage = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id);
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Persistent Walk", keepImage.PublicUrl);
+        var dropImage = await AddGalleryImageAsync(app, organizerSession.AccessToken, club.Id, ev.Id);
+
+        var kept = await app.QueryDbAsync(db =>
+            db.EventImages.SingleAsync(image => image.EventId == ev.Id && image.ImageUrl == keepImage.PublicUrl));
+
+        await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Patch,
+            $"/api/events/{ev.Id}/images/{kept.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { altText = "The main hall before doors" })));
+
+        // An ordinary edit that resubmits the surviving image must not reset its metadata.
+        var updated = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/events/{ev.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Persistent Walk Renamed",
+                description = "A detailed event description for integration testing coverage.",
+                location = "Student Center",
+                imageUrls = new[] { keepImage.PublicUrl },
+                isPrivate = false,
+                maxParticipants = 30,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(8),
+                endTime = DateTime.UtcNow.AddDays(8).AddHours(2),
+                category = EventCategory.Other,
+                city = "Toronto",
+                venueName = "Room A"
+            })));
+        updated.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var survivors = await app.QueryDbAsync(db =>
+            db.EventImages.Where(image => image.EventId == ev.Id).ToListAsync());
+        survivors.Should().ContainSingle();
+
+        var survivor = survivors.Single();
+        survivor.Id.Should().Be(kept.Id, "the row is reconciled by URL, not deleted and recreated");
+        survivor.AltText.Should().Be("The main hall before doors");
+        survivor.IsCover.Should().BeTrue();
+        survivor.SortOrder.Should().Be(0);
+
+        (await app.QueryDbAsync(db => db.EventImages.AnyAsync(image => image.Id == dropImage.Id)))
+            .Should().BeFalse("the image left out of the update is removed");
+    }
+
+    /// <summary>Uploads and attaches one more image to an event, returning the created row.</summary>
+    private static async Task<EventImageApiModel> AddGalleryImageAsync(
+        AuthApiTestApp app,
+        string accessToken,
+        int clubId,
+        int eventId)
+    {
+        var pending = await CreatePendingImageAsync(app, accessToken, clubId, eventId);
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{eventId}/images",
+            accessToken,
+            JsonContent.Create(new { imageUrl = pending.PublicUrl })));
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        return (await app.ReadApiResponseAsync<EventImageApiModel>(response)).Data!;
+    }
+
     private static async Task<PresignedUploadResponse> CreatePendingImageAsync(
         AuthApiTestApp app,
         string accessToken,
@@ -2866,8 +3078,12 @@ public class EventEndpointsTests
     private sealed class EventImageApiModel
     {
         public int Id { get; init; }
-        public string ImageUrl { get; init; } = string.Empty;
+        public string Url { get; init; } = string.Empty;
+        public string? AltText { get; init; }
+        public bool IsDecorative { get; init; }
+        public bool IsCover { get; init; }
         public int SortOrder { get; init; }
+        public bool NeedsAltText { get; init; }
     }
 
     private sealed class BatchMutationCountResponse

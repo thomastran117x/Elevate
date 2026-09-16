@@ -14,6 +14,7 @@ using backend.main.utilities;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 
 namespace backend.main.features.events
@@ -880,6 +881,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [FeatureGate(FeatureFlagKeys.EventsImages)]
+        [EnableRateLimiting(RateLimiterConfiguration.ImageUploadPolicyName)]
         [HttpPost("images/presigned-url")]
         [ProducesResponseType(typeof(ApiResponse<PresignedUploadResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetPresignedUploadUrl([FromBody] PresignedUrlRequest request)
@@ -913,24 +915,53 @@ namespace backend.main.features.events
 
         [Authorize]
         [FeatureGate(FeatureFlagKeys.EventsImages)]
+        [HttpGet("{eventId}/images")]
+        [ProducesResponseType(typeof(ApiResponse<List<EventImageResponse>>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetEventImages(int eventId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+
+                var images = await _eventService.GetEventImagesAsync(eventId, user.Id, user.Role);
+
+                return Ok(new ApiResponse<List<EventImageResponse>>(
+                    $"Images for event {eventId} fetched successfully.",
+                    images.Select(EventMapper.MapImageToResponse).ToList()
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] GetEventImages failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [FeatureGate(FeatureFlagKeys.EventsImages)]
         [HttpPost("{eventId}/images")]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ApiResponse<EventImageResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> AddEventImage([FromBody] AddEventImageRequest request, int eventId)
         {
             try
             {
                 var user = User.GetUserPayload();
 
-                var image = await _eventService.AddEventImageAsync(eventId, user.Id, user.Role, request.ImageUrl);
+                var image = await _eventService.AddEventImageAsync(
+                    eventId,
+                    user.Id,
+                    user.Role,
+                    request.ImageUrl,
+                    request.AltText,
+                    request.IsDecorative,
+                    request.IsCover);
 
-                return StatusCode(201, new ApiResponse<object>(
+                return StatusCode(201, new ApiResponse<EventImageResponse>(
                     $"Image added to event {eventId} successfully.",
-                    new
-                    {
-                        image.Id,
-                        image.ImageUrl,
-                        image.SortOrder
-                    }
+                    EventMapper.MapImageToResponse(image)
                 ));
             }
             catch (Exception e)
@@ -939,6 +970,131 @@ namespace backend.main.features.events
                     return HandleError.Resolve(e);
 
                 Logger.Error($"[EventsController] AddEventImage failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [FeatureGate(FeatureFlagKeys.EventsImages)]
+        [HttpPatch("{eventId}/images/{imageId}")]
+        [ProducesResponseType(typeof(ApiResponse<EventImageResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> UpdateEventImage(
+            [FromBody] UpdateEventImageRequest request,
+            int eventId,
+            int imageId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+
+                var image = await _eventService.UpdateEventImageAsync(
+                    eventId,
+                    imageId,
+                    user.Id,
+                    user.Role,
+                    request.AltText,
+                    request.IsDecorative);
+
+                return Ok(new ApiResponse<EventImageResponse>(
+                    $"Image {imageId} updated successfully.",
+                    EventMapper.MapImageToResponse(image)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] UpdateEventImage failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [FeatureGate(FeatureFlagKeys.EventsImages)]
+        [HttpPut("{eventId}/images/{imageId}")]
+        [ProducesResponseType(typeof(ApiResponse<EventImageResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ReplaceEventImage(
+            [FromBody] ReplaceEventImageRequest request,
+            int eventId,
+            int imageId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+
+                var image = await _eventService.ReplaceEventImageAsync(
+                    eventId, imageId, user.Id, user.Role, request.ImageUrl);
+
+                return Ok(new ApiResponse<EventImageResponse>(
+                    $"Image {imageId} replaced successfully.",
+                    EventMapper.MapImageToResponse(image)
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] ReplaceEventImage failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [FeatureGate(FeatureFlagKeys.EventsImages)]
+        [HttpPut("{eventId}/images/order")]
+        [ProducesResponseType(typeof(ApiResponse<List<EventImageResponse>>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ReorderEventImages(
+            [FromBody] ReorderEventImagesRequest request,
+            int eventId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+
+                var images = await _eventService.ReorderEventImagesAsync(
+                    eventId, user.Id, user.Role, request.ImageIds);
+
+                return Ok(new ApiResponse<List<EventImageResponse>>(
+                    $"Images for event {eventId} reordered successfully.",
+                    images.Select(EventMapper.MapImageToResponse).ToList()
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] ReorderEventImages failed: {e}");
+                return HandleError.Resolve(e);
+            }
+        }
+
+        [Authorize]
+        [FeatureGate(FeatureFlagKeys.EventsImages)]
+        [HttpPut("{eventId}/images/{imageId}/cover")]
+        [ProducesResponseType(typeof(ApiResponse<List<EventImageResponse>>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> SetEventCoverImage(int eventId, int imageId)
+        {
+            try
+            {
+                var user = User.GetUserPayload();
+
+                var images = await _eventService.SetEventCoverImageAsync(
+                    eventId, imageId, user.Id, user.Role);
+
+                return Ok(new ApiResponse<List<EventImageResponse>>(
+                    $"Image {imageId} is now the cover for event {eventId}.",
+                    images.Select(EventMapper.MapImageToResponse).ToList()
+                ));
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[EventsController] SetEventCoverImage failed: {e}");
                 return HandleError.Resolve(e);
             }
         }

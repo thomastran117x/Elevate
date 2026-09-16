@@ -1,0 +1,120 @@
+<div class="space-y-3">
+  @if (error) {
+    <p class="rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger" role="alert">
+      {{ error }}
+    </p>
+  }
+
+  @if (imagesNeedingAltText > 0) {
+    <p class="rounded-xl border border-line bg-surface-muted px-3 py-2 text-xs text-subtle">
+      {{ imagesNeedingAltText }}
+      {{ imagesNeedingAltText === 1 ? 'image has' : 'images have' }} no description yet, so screen
+      readers announce nothing for {{ imagesNeedingAltText === 1 ? 'it' : 'them' }}. Describe each
+      one, or mark it as decorative.
+    </p>
+  }
+
+  @if (images.length === 0) {
+    <p class="text-xs text-faint">No images yet. Upload one above to start the gallery.</p>
+  } @else {
+    <p class="text-xs text-faint">
+      Drag to reorder. The cover image is what people see in listings and at the top of the event
+      page.
+    </p>
+
+    <ul
+      cdkDropList
+      (cdkDropListDropped)="onDrop($event)"
+      class="space-y-2"
+      [class.opacity-60]="reordering"
+    >
+      @for (image of images; track trackById($index, image)) {
+        <li
+          cdkDrag
+          [cdkDragDisabled]="busyImageId !== null"
+          class="rounded-2xl border border-line bg-glass p-3"
+        >
+          <div class="flex gap-3">
+            <button
+              type="button"
+              cdkDragHandle
+              class="flex w-6 shrink-0 cursor-grab items-center justify-center rounded-lg text-faint transition hover:text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              [attr.aria-label]="
+                'Reorder ' + (image.altText || 'image ' + ($index + 1)) + '. Currently position ' +
+                ($index + 1) + ' of ' + images.length + '.'
+              "
+            >
+              <span aria-hidden="true">⠿</span>
+            </button>
+
+            <img
+              [src]="image.url"
+              [alt]="image.isDecorative ? '' : image.altText || ''"
+              class="h-20 w-20 shrink-0 rounded-xl border border-line object-cover"
+            />
+
+            <div class="min-w-0 flex-1 space-y-2">
+              <div class="flex flex-wrap items-center gap-3">
+                <label class="flex items-center gap-1.5 text-xs text-subtle">
+                  <input
+                    type="radio"
+                    name="event-cover-image"
+                    [checked]="image.isCover"
+                    [disabled]="busyImageId !== null"
+                    (change)="setCover(image)"
+                  />
+                  Cover
+                </label>
+
+                <label class="flex items-center gap-1.5 text-xs text-subtle">
+                  <input
+                    type="checkbox"
+                    [checked]="image.isDecorative"
+                    [disabled]="busyImageId !== null"
+                    (change)="toggleDecorative(image, $any($event.target).checked)"
+                  />
+                  Decorative
+                </label>
+
+                @if (image.needsAltText) {
+                  <span class="text-xs font-medium text-warning">Needs a description</span>
+                }
+
+                <button
+                  type="button"
+                  class="ml-auto text-xs text-danger transition hover:underline disabled:opacity-50"
+                  [disabled]="busyImageId !== null"
+                  (click)="remove(image)"
+                  [attr.aria-label]="'Remove ' + (image.altText || 'image ' + ($index + 1))"
+                >
+                  Remove
+                </button>
+              </div>
+
+              @if (image.isDecorative) {
+                <p class="text-xs text-faint">
+                  Decorative images are hidden from screen readers and need no description.
+                </p>
+              } @else {
+                <label class="block">
+                  <span class="sr-only">Describe image {{ $index + 1 }}</span>
+                  <input
+                    type="text"
+                    maxlength="300"
+                    placeholder="Describe this image for screen readers"
+                    class="w-full rounded-xl border border-line bg-surface-muted px-3 py-1.5 text-xs text-content placeholder:text-faint focus:border-accent focus:outline-none"
+                    [disabled]="busyImageId !== null"
+                    [ngModel]="altDrafts.get(image.id)"
+                    (ngModelChange)="altDrafts.set(image.id, $event)"
+                    [ngModelOptions]="{ standalone: true }"
+                    (blur)="saveAltText(image)"
+                  />
+                </label>
+              }
+            </div>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</div>

@@ -456,6 +456,23 @@ namespace backend.main.infrastructure.database.core
             modelBuilder.Entity<EventImage>()
                 .HasIndex(ei => new { ei.EventId, ei.SortOrder });
 
+            modelBuilder.Entity<EventImage>()
+                .Property(ei => ei.AltText)
+                .HasMaxLength(300);
+
+            modelBuilder.Entity<EventImage>()
+                .Ignore(ei => ei.NeedsAltText);
+
+            // Partial unique index rather than an application-level check: a second cover is
+            // close to undetectable after the fact, since every read path silently takes the
+            // first one it finds.
+            // Named overload: EF keys indexes by property set, so an unnamed HasIndex(EventId)
+            // here would mutate the plain lookup index above instead of adding a second one.
+            modelBuilder.Entity<EventImage>()
+                .HasIndex(ei => ei.EventId, "UX_EventImages_EventId_Cover")
+                .HasFilter("\"IsCover\"")
+                .IsUnique();
+
             modelBuilder.Entity<EventInvitation>()
                 .HasOne(i => i.Event)
                 .WithMany()

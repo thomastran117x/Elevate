@@ -73,9 +73,9 @@ namespace backend.main.features.clubs
             var user = await _userService.GetUserByIdAsync(userId)
                 ?? throw new ResourceNotFoundException("User not found");
 
-            ValidateClubImageUrl(model.ClubImageUrl);
-            ValidateOptionalBannerImageUrl(model.BannerImageUrl);
-            var gallery = ValidateAndNormalizeGallery(model.GalleryImageUrls);
+            await ValidateClubImageUrlAsync(model.ClubImageUrl, clubId: 0, userId);
+            await ValidateOptionalBannerImageUrlAsync(model.BannerImageUrl, clubId: 0, userId);
+            var gallery = await ValidateAndNormalizeGalleryAsync(model.GalleryImageUrls, clubId: 0, userId);
 
             var now = GetUtcNow();
             var club = new Club
@@ -378,13 +378,21 @@ namespace backend.main.features.clubs
 
             var previousSnapshot = BuildSnapshot(existing);
 
-            ValidateClubImageUrl(model.ClubImageUrl);
-            ValidateOptionalBannerImageUrl(model.BannerImageUrl);
-
             var previousBanner = existing.BannerImage;
-            var newBanner = NormalizeOptionalUrl(model.BannerImageUrl);
             var previousGallery = existing.GalleryImages ?? [];
-            var newGallery = ValidateAndNormalizeGallery(model.GalleryImageUrls);
+
+            var retainedUrls = new HashSet<string>(StringComparer.Ordinal) { existing.ClubImage };
+            if (!string.IsNullOrWhiteSpace(previousBanner))
+                retainedUrls.Add(previousBanner);
+            foreach (var url in previousGallery)
+                retainedUrls.Add(url);
+
+            await ValidateClubImageUrlAsync(model.ClubImageUrl, clubId, userId, retainedUrls);
+            await ValidateOptionalBannerImageUrlAsync(model.BannerImageUrl, clubId, userId, retainedUrls);
+
+            var newBanner = NormalizeOptionalUrl(model.BannerImageUrl);
+            var newGallery = await ValidateAndNormalizeGalleryAsync(
+                model.GalleryImageUrls, clubId, userId, retainedUrls);
 
             existing.Name = model.Name;
             existing.Description = model.Description;
@@ -454,35 +462,60 @@ namespace backend.main.features.clubs
             await BumpClubListVersionAsync();
         }
 
-        private void ValidateClubImageUrl(string clubImageUrl)
+        /// <summary>
+        /// Proves the URL came from a presigned upload this service issued to this user for this
+        /// club. <c>IsOwnedBlobUrl</c> alone only proves the blob is in our container, which every
+        /// other user's uploads also are — without the intent check any user could attach another
+        /// user's blob to their own club.
+        /// </summary>
+        /// <param name="existingUrls">
+        /// URLs the club already holds. Intents expire after
+        /// <see cref="BlobUploadIntentValidator.IntentTtl"/>, so re-submitting an unchanged image
+        /// on a later edit must not be treated as a new upload.
+        /// </param>
+        private async Task ValidateClubImageUrlAsync(
+            string clubImageUrl,
+            int clubId,
+            int userId,
+            ISet<string>? existingUrls = null)
         {
-            if (!Uri.TryCreate(clubImageUrl, UriKind.Absolute, out var uri) ||
-                !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new BadRequestException("Club images must use a valid HTTPS URL.");
-            }
+            if (existingUrls?.Contains(clubImageUrl) == true)
+                return;
 
-            if (!_blobService.IsOwnedBlobUrl(clubImageUrl))
+            var intent = await BlobUploadIntentValidator.RequireIntentAsync(
+                _blobService, _cache, userId, clubImageUrl, "Club images");
+
+            // A club-creation upload is issued before the club has an id, so it carries 0. Once
+            // the club exists, its uploads are pinned to it.
+            if (intent.ClubId != 0 && intent.ClubId != clubId)
             {
                 throw new BadRequestException(
-                    "Club images must reference uploads issued by this service.");
+                    "Image upload is invalid or does not belong to this club.");
             }
         }
 
         /// <summary>Validates the banner URL only when one is supplied; an empty value clears the banner.</summary>
-        private void ValidateOptionalBannerImageUrl(string? bannerImageUrl)
+        private async Task ValidateOptionalBannerImageUrlAsync(
+            string? bannerImageUrl,
+            int clubId,
+            int userId,
+            ISet<string>? existingUrls = null)
         {
             if (string.IsNullOrWhiteSpace(bannerImageUrl))
                 return;
 
-            ValidateClubImageUrl(bannerImageUrl);
+            await ValidateClubImageUrlAsync(bannerImageUrl, clubId, userId, existingUrls);
         }
 
         private static string? NormalizeOptionalUrl(string? url) =>
             string.IsNullOrWhiteSpace(url) ? null : url.Trim();
 
-        /// <summary>Trims/dedupes gallery URLs, enforces the 5-image cap, and validates each is an owned blob.</summary>
-        private List<string> ValidateAndNormalizeGallery(List<string>? urls)
+        /// <summary>Trims/dedupes gallery URLs, enforces the 5-image cap, and validates each upload.</summary>
+        private async Task<List<string>> ValidateAndNormalizeGalleryAsync(
+            List<string>? urls,
+            int clubId,
+            int userId,
+            ISet<string>? existingUrls = null)
         {
             if (urls == null || urls.Count == 0)
                 return [];
@@ -497,7 +530,7 @@ namespace backend.main.features.clubs
                 throw new BadRequestException("A club can have at most 5 gallery images.");
 
             foreach (var url in normalized)
-                ValidateClubImageUrl(url);
+                await ValidateClubImageUrlAsync(url, clubId, userId, existingUrls);
 
             return normalized;
         }

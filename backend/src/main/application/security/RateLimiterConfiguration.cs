@@ -63,6 +63,18 @@ namespace backend.main.application.security
         private const int EmailChangePermitLimit = 3;
         private static readonly TimeSpan EmailChangeWindow = TimeSpan.FromHours(1);
 
+        /// <summary>
+        /// Policy for minting presigned image upload URLs. The club-creation branch issues a URL
+        /// before any club exists, so it deliberately runs no ownership check — which leaves this
+        /// the only thing bounding how much storage one account can claim. Each permit is a
+        /// writable blob slot, and unreferenced blobs are only reclaimed if the orphan sweeper is
+        /// enabled, so the budget is sized for filling a gallery a few times over rather than for
+        /// bulk upload. Partitioned per account so it cannot be widened by changing network.
+        /// </summary>
+        public const string ImageUploadPolicyName = "image-upload";
+        private const int ImageUploadPermitLimit = 30;
+        private static readonly TimeSpan ImageUploadWindow = TimeSpan.FromMinutes(10);
+
         public static IServiceCollection AddInMemoryRateLimiter(
             this IServiceCollection services,
             IConfiguration? configuration = null)
@@ -83,6 +95,9 @@ namespace backend.main.application.security
             var emailChangePermitLimit =
                 configuration?.GetValue<int?>("RateLimiter:EmailChangePermitLimit")
                 ?? EmailChangePermitLimit;
+            var imageUploadPermitLimit =
+                configuration?.GetValue<int?>("RateLimiter:ImageUploadPermitLimit")
+                ?? ImageUploadPermitLimit;
 
             services.AddRateLimiter(options =>
             {
@@ -187,6 +202,19 @@ namespace backend.main.application.security
                         {
                             PermitLimit = emailChangePermitLimit,
                             Window = EmailChangeWindow,
+                            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                            QueueLimit = 0
+                        });
+                });
+
+                options.AddPolicy(ImageUploadPolicyName, context =>
+                {
+                    return RateLimitPartition.GetFixedWindowLimiter(
+                        $"image-upload:{GetPartitionKey(context)}",
+                        _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = imageUploadPermitLimit,
+                            Window = ImageUploadWindow,
                             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                             QueueLimit = 0
                         });

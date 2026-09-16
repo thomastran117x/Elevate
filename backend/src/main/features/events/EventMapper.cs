@@ -14,7 +14,9 @@ namespace backend.main.features.events
                 Name = ev.Name ?? string.Empty,
                 Description = ev.Description ?? string.Empty,
                 Location = ev.Location ?? string.Empty,
-                ImageUrls = ev.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl).ToList(),
+                ImageUrls = OrderGallery(ev).Select(i => i.ImageUrl).ToList(),
+                CoverImageUrl = ResolveCoverUrl(ev),
+                Images = MapGallery(ev),
                 IsPrivate = ev.isPrivate,
                 MaxParticipants = ev.maxParticipants,
                 RegisterCost = ev.registerCost,
@@ -39,6 +41,60 @@ namespace backend.main.features.events
                 TimeZoneId = ev.TimeZoneId,
                 DistanceKm = distanceKm
             };
+
+        /// <summary>
+        /// The gallery in display order, cover first. Every client that shows a single picture
+        /// reads <c>imageUrls[0]</c>, so leading with the cover is what makes an explicit cover
+        /// selection take effect without each of them having to change.
+        /// </summary>
+        private static IEnumerable<images.EventImage> OrderGallery(Events ev) =>
+            ev.Images
+                .OrderByDescending(i => i.IsCover)
+                .ThenBy(i => i.SortOrder)
+                .ThenBy(i => i.Id);
+
+        /// <remarks>
+        /// Falls back to the first image by sort order. An event whose rows predate the cover
+        /// column, or whose cover was just deleted, still resolves to something.
+        /// </remarks>
+        private static string? ResolveCoverUrl(Events ev) =>
+            OrderGallery(ev).FirstOrDefault()?.ImageUrl;
+
+        private static List<EventImageResponse> MapGallery(Events ev)
+        {
+            var ordered = OrderGallery(ev).ToList();
+            var coverId = ordered.FirstOrDefault()?.Id;
+
+            return ordered
+                .Select(image => new EventImageResponse
+                {
+                    Id = image.Id,
+                    Url = image.ImageUrl,
+                    AltText = image.AltText,
+                    IsDecorative = image.IsDecorative,
+                    // Reports the resolved cover, not the raw column, so the flagged image always
+                    // matches the one CoverImageUrl points at.
+                    IsCover = image.Id == coverId,
+                    SortOrder = image.SortOrder,
+                    NeedsAltText = image.NeedsAltText,
+                    CreatedAt = image.CreatedAt,
+                    UpdatedAt = image.UpdatedAt
+                })
+                .ToList();
+        }
+
+        public static EventImageResponse MapImageToResponse(images.EventImage image) => new()
+        {
+            Id = image.Id,
+            Url = image.ImageUrl,
+            AltText = image.AltText,
+            IsDecorative = image.IsDecorative,
+            IsCover = image.IsCover,
+            SortOrder = image.SortOrder,
+            NeedsAltText = image.NeedsAltText,
+            CreatedAt = image.CreatedAt,
+            UpdatedAt = image.UpdatedAt
+        };
 
         public static EventHostClubResponse MapClubToResponse(Club club) => new()
         {
@@ -81,7 +137,9 @@ namespace backend.main.features.events
                 Name = ev.Name,
                 Description = ev.Description,
                 Location = ev.Location,
-                ImageUrls = ev.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl).ToList(),
+                ImageUrls = OrderGallery(ev).Select(i => i.ImageUrl).ToList(),
+                CoverImageUrl = ResolveCoverUrl(ev),
+                Images = MapGallery(ev),
                 IsPrivate = ev.isPrivate,
                 MaxParticipants = ev.maxParticipants == 0 ? null : ev.maxParticipants,
                 RegisterCost = ev.registerCost,

@@ -551,9 +551,20 @@
               {{ uploading ? 'Uploading images…' : 'Drop or click to upload (up to 5)' }}
             </label>
 
-            @if (imageUrls.length === 0) {
+            @if (event?.id) {
+              <!-- A saved event has image rows, so the full gallery editor applies. -->
+              <app-event-gallery-manager
+                [eventId]="event!.id"
+                [images]="images"
+                (imagesChange)="onGalleryChanged($event)"
+              />
+            } @else if (imageUrls.length === 0) {
               <p class="text-center text-sm text-faint">No images yet — this step is optional.</p>
             } @else {
+              <!-- Unsaved draft: no rows exist yet, so ordering and alt text wait for the save. -->
+              <p class="text-sm text-faint">
+                Save the draft to reorder these, choose a cover, and describe them.
+              </p>
               <div class="grid gap-4 sm:grid-cols-2">
                 @for (imageUrl of imageUrls; track imageUrl; let index = $index) {
                   <div class="overflow-hidden rounded-2xl border border-line bg-glass">
