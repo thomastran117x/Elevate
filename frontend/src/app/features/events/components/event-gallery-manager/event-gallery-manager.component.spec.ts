@@ -91,11 +91,7 @@ describe('EventGalleryManagerComponent', () => {
 
   describe('cover', () => {
     it('replaces the whole gallery so exactly one cover survives', async () => {
-      const updated = [
-        { ...first, isCover: false },
-        { ...second, isCover: true },
-        third,
-      ];
+      const updated = [{ ...first, isCover: false }, { ...second, isCover: true }, third];
       service.setEventCoverImage.and.returnValue(of(updated));
 
       await component.setCover(second);

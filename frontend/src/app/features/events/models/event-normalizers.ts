@@ -104,9 +104,7 @@ export function normalizeEventImage(image: EventImagePayload): EventImage {
   };
 }
 
-export function normalizeEventImages(
-  images: EventImagePayload[] | null | undefined,
-): EventImage[] {
+export function normalizeEventImages(images: EventImagePayload[] | null | undefined): EventImage[] {
   return (images ?? []).map(normalizeEventImage);
 }
 

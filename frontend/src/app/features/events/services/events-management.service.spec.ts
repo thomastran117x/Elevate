@@ -94,7 +94,9 @@ describe('EventsManagementService', () => {
     });
 
     it('sends alt text when attaching a described image', () => {
-      service.addEventImage(12, { imageUrl: 'https://cdn.test/a.png', altText: 'Main stage' }).subscribe();
+      service
+        .addEventImage(12, { imageUrl: 'https://cdn.test/a.png', altText: 'Main stage' })
+        .subscribe();
 
       const request = httpMock.expectOne(`${base}/12/images`);
       expect(request.request.method).toBe('POST');
@@ -148,7 +150,9 @@ describe('EventsManagementService', () => {
 
       const request = httpMock.expectOne(`${base}/12/images/9/cover`);
       expect(request.request.method).toBe('PUT');
-      request.flush(envelope([wireImage({ id: 9, isCover: true }), wireImage({ id: 4, isCover: false })]));
+      request.flush(
+        envelope([wireImage({ id: 9, isCover: true }), wireImage({ id: 4, isCover: false })]),
+      );
 
       const gallery = await pending;
       expect(gallery.filter((image) => image.isCover).length).toBe(1);
@@ -219,9 +223,7 @@ describe('EventsManagementService', () => {
     });
 
     it('can attach an image as the cover straight away', () => {
-      service
-        .addEventImage(12, { imageUrl: 'https://cdn.test/a.png', isCover: true })
-        .subscribe();
+      service.addEventImage(12, { imageUrl: 'https://cdn.test/a.png', isCover: true }).subscribe();
 
       const request = httpMock.expectOne(`${base}/12/images`);
       expect(request.request.body.isCover).toBeTrue();

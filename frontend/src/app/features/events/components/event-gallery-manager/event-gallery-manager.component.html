@@ -1,6 +1,9 @@
 <div class="space-y-3">
   @if (error) {
-    <p class="rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger" role="alert">
+    <p
+      class="rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger"
+      role="alert"
+    >
       {{ error }}
     </p>
   }
@@ -40,8 +43,13 @@
               cdkDragHandle
               class="flex w-6 shrink-0 cursor-grab items-center justify-center rounded-lg text-faint transition hover:text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               [attr.aria-label]="
-                'Reorder ' + (image.altText || 'image ' + ($index + 1)) + '. Currently position ' +
-                ($index + 1) + ' of ' + images.length + '.'
+                'Reorder ' +
+                (image.altText || 'image ' + ($index + 1)) +
+                '. Currently position ' +
+                ($index + 1) +
+                ' of ' +
+                images.length +
+                '.'
               "
             >
               <span aria-hidden="true">⠿</span>

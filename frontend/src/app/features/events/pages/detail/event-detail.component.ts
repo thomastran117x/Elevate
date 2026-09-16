@@ -9,11 +9,7 @@ import { extractEnvelopeData } from '../../../../core/api/models/api-envelope.mo
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { UserState } from '../../../../core/stores/user.reducer';
 import { selectUser } from '../../../../core/stores/user.selectors';
-import {
-  CATEGORY_STYLES,
-  EventImage,
-  EventItem,
-} from '../../models/event.types';
+import { CATEGORY_STYLES, EventImage, EventItem } from '../../models/event.types';
 import {
   EventRegistrationService,
   RegistrationDetails,

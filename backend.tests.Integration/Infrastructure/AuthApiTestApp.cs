@@ -1,3 +1,6 @@
+using backend.main.features.events.contracts.responses;
+using System.Net.Http.Headers;
+using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -452,6 +455,36 @@ public sealed class AuthApiTestApp : IAsyncDisposable
 
         var body = await response.Content.ReadFromJsonAsync<ApiEnvelope<CsrfTokenPayload>>(JsonOptions);
         return body!.Data!.Token;
+    }
+
+    /// <summary>
+    /// Mints a club image URL the way a real client does — through the presigned endpoint — so it
+    /// carries an upload intent as well as being an owned blob.
+    /// </summary>
+    /// <remarks>
+    /// <c>BlobStorage.CreateOwnedBlobUrl</c> is not enough on its own: attaching an image proves
+    /// the upload was issued to this user, and a fabricated URL has no intent behind it. Club
+    /// images are issued with <c>clubId: 0</c>, which is what a club-creation upload carries
+    /// before the club exists.
+    /// </remarks>
+    public async Task<string> CreateClubImageUrlAsync(string accessToken, string fileName = "club.png")
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/events/images/presigned-url")
+        {
+            Content = JsonContent.Create(new
+            {
+                clubId = 0,
+                fileName,
+                contentType = "image/png"
+            })
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var response = await Client.SendAsync(request);
+        if (response.StatusCode != HttpStatusCode.OK)
+            throw new Xunit.Sdk.XunitException(await DescribeFailureAsync(response));
+
+        return (await ReadApiResponseAsync<PresignedUploadResponse>(response)).Data!.PublicUrl;
     }
 
     public async Task<ApiEnvelope<T>> ReadApiResponseAsync<T>(HttpResponseMessage response)

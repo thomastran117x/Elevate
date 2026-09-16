@@ -239,7 +239,7 @@ public class ClubMemberInvitationEndpointsTests
                 Name = name,
                 Description = "Member invitation test group",
                 Clubtype = "social",
-                ClubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club.png"),
+                ClubImageUrl = await app.CreateClubImageUrlAsync(accessToken),
                 Email = $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"
             })));
 
