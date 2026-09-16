@@ -1579,6 +1579,55 @@ public class EventEndpointsTests
     }
 
     [Fact]
+    public async Task EventGalleryEndpoints_ShouldReplaceTheFile_KeepingTheSlotsOrderCoverAndAltText()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizerSession, _) = await CreateUserSessionAsync(app, "events-gallery-replace@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, organizerSession.AccessToken, "Replace Club");
+        var firstImage = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id);
+        var ev = await CreateEventAsync(app, organizerSession.AccessToken, club.Id, "Replace Walk", firstImage.PublicUrl);
+        var second = await AddGalleryImageAsync(app, organizerSession.AccessToken, club.Id, ev.Id);
+
+        // Give the second slot an identity worth preserving.
+        await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Patch,
+            $"/api/events/{ev.Id}/images/{second.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { altText = "The hall before doors" })));
+        await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/events/{ev.Id}/images/{second.Id}/cover",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { })));
+
+        var replacement = await CreatePendingImageAsync(app, organizerSession.AccessToken, club.Id, ev.Id);
+        var replaced = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/events/{ev.Id}/images/{second.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { imageUrl = replacement.PublicUrl })));
+        replaced.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var body = (await app.ReadApiResponseAsync<EventImageApiModel>(replaced)).Data!;
+        body.Id.Should().Be(second.Id, "the slot is reused rather than recreated");
+        body.Url.Should().Be(replacement.PublicUrl);
+        body.AltText.Should().Be("The hall before doors");
+        body.IsCover.Should().BeTrue();
+
+        // The file it replaced is no longer referenced, so it should not survive in storage.
+        app.BlobStorage.IsOwnedBlobUrl(second.Url).Should().BeFalse();
+
+        // A URL with no upload intent behind it is refused, exactly as on attach.
+        var forged = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/events/{ev.Id}/images/{second.Id}",
+            organizerSession.AccessToken,
+            JsonContent.Create(new { imageUrl = "https://evil.example/photo.png" })));
+        forged.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task EventGalleryEndpoints_ShouldRejectReorder_ThatDoesNotListEveryImage()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
