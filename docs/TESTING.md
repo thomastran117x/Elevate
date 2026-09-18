@@ -1,182 +1,100 @@
-# Testing
+# Testing and coverage policy
 
-Backend tests are split into two projects:
+Run backend commands from the repository root and frontend commands from `frontend/`. See the [unit-test README](../backend.tests.Unit/), [integration-test README](../backend.tests.Integration/), and [frontend README](../frontend/) for component entry points.
 
-- `backend.tests.Unit`
-- `backend.tests.Integration`
-
-The unit suite covers controller logic, pure helpers, token/auth logic, and worker parsers.
-The integration suite now runs the real ASP.NET app in the `Testing` environment against Docker-backed Testcontainers for PostgreSQL, Redis, Elasticsearch, and Kafka, covering repository/service flows, seeders, search, and HTTP auth/event/club endpoints.
-
-## Commands
-
-Run the unit suite:
+## Backend unit tests
 
 ```powershell
-dotnet test backend.tests.Unit\backend.tests.Unit.csproj
-```
-
-Run the unit suite with the enforced backend coverage gate:
-
-```powershell
+dotnet test backend.tests.Unit/backend.tests.Unit.csproj
 dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-unit-coverage
 ```
 
-Run the integration suite:
+The unit project covers feature services/controllers/repositories with doubles, shared utilities, validation, security helpers, infrastructure policies, bootstrap behavior, and workers. Use xUnit, Moq, FluentAssertions, and existing builders/collections. Tests that change process environment or the global logger use the existing isolation collections.
 
-Docker must be running locally before you start the integration suite.
-On Windows ARM64, Kafka-backed integration tests also require an x64 .NET installation because `Confluent.Kafka` currently restores Windows native assets for x64/x86, not ARM64.
+### Backend coverage
+
+The enforced default is **90% filtered unit line coverage**. The development task runs Release tests using `backend.coverage.runsettings` and the first-party Microsoft Code Coverage collector, reads Cobertura under `.tmp/backend-unit-coverage/`, and fails below the floor. Branch coverage is reported separately, without a separate branch floor.
+
+The settings include backend/worker/indexer assemblies and exclude test assemblies, migrations/designers/model snapshots, seeders, and compiler/generated-code attributed code. The measured scope depends on assemblies actually loaded by the unit suite; a passing floor does not prove every standalone indexer is instrumented. Do not lower the threshold to accommodate a regression.
+
+Prefer branch-focused behavior tests over assertion-free creation stubs. Use integration tests when correctness depends on PostgreSQL, Redis, Kafka, Elasticsearch, or real endpoint wiring.
+
+## Backend integration tests
+
+Start Docker before running:
 
 ```powershell
-dotnet test backend.tests.Integration\backend.tests.Integration.csproj
-```
-
-Run the full backend test pass:
-
-```powershell
-dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-unit-coverage
 dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-integration-tests
+dotnet test backend.tests.Integration/backend.tests.Integration.csproj --filter "FullyQualifiedName~Features.Auth"
+dotnet test backend.tests.Integration/backend.tests.Integration.csproj --filter "Category=EndToEnd"
 ```
 
-Run only the auth integration flow coverage:
+The harness uses ASP.NET `WebApplicationFactory<Program>` in `Testing` with real Testcontainers PostgreSQL, Redis, Elasticsearch, and Kafka. Captcha, OAuth, and blob storage are faked; Kafka probes capture notification traffic. A running Docker daemon is required; starting the application's Compose stack is not necessary.
+
+On Windows ARM64, Kafka-backed tests require an x64 .NET runtime/toolchain because the Confluent package's Windows native assets are x64/x86. Use a compatible execution environment; CI runs these tests on x64 Linux.
+
+The harness allows up to four test classes in parallel, migrates a PostgreSQL template database, clones it for direct database tests, and pools four isolated API slots. Each slot separates database, Redis logical database, Elasticsearch indices, and Kafka topics. State is cleared before reuse; custom overrides run in a transient host on the leased slot. Reuse the fixtures and namespacing helpers instead of creating uncoordinated shared resources.
+
+Feature endpoint tests live under `Features/`, seeder tests under `Seeders/`, and cross-feature business journeys under `Workflows/`. Workflow tests carry `Category=EndToEnd`; they exercise multiple users across API features, not the Angular UI. CI runs authentication, clubs, events, workflows, and other shards without duplicating the workflow category.
+
+The application suppresses normal startup side effects under Testing; the harness owns migrations and infrastructure setup. Request rate limiting is skipped in Testing, so endpoint tests do not measure rate-limit enforcement.
+
+### Endpoint audit
 
 ```powershell
-dotnet test backend.tests.Integration\backend.tests.Integration.csproj --filter "FullyQualifiedName~backend.tests.Integration.Features.Auth.AuthEndpointsTests"
+dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-integration-endpoint-coverage --fail-on-missing
 ```
 
-Run the cross-feature API workflow tests:
+This static audit compares discovered controller actions with matching API request literals in integration test sources. It reports covered/uncovered actions by controller; CI fails on missing matches. It does not execute tests or replace code coverage and can miss dynamically assembled requests. Add meaningful endpoint assertions rather than source literals solely to satisfy the audit.
+
+PowerShell compatibility wrappers remain in `bin/backend-unit-coverage.ps1` and `bin/backend-integration-endpoint-coverage.ps1`.
+
+## Frontend unit tests
+
+From `frontend/`, install dependencies and generate the environment before tests:
 
 ```powershell
-dotnet test backend.tests.Integration\backend.tests.Integration.csproj --filter "Category=EndToEnd"
-```
-
-These end-to-end workflow tests remain part of the backend integration project, but differ from
-feature-local endpoint tests by following multiple users through complete business journeys across
-authentication, clubs, event management, discovery, registration, and analytics. They use the same
-real application host and containerized infrastructure; they do not drive the Angular UI.
-
-CI runs this category in its own `workflows` integration shard on an x64 Linux runner. The
-miscellaneous integration shard explicitly excludes the workflow namespace, so workflow tests run
-once rather than being duplicated across matrix jobs.
-
-Run backend unit coverage with generated code and seed data excluded from the count:
-
-```powershell
-dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-unit-coverage
-```
-
-Run the integration endpoint audit:
-
-```powershell
-dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-integration-endpoint-coverage
-```
-
-Compatibility shims still exist if you prefer the older PowerShell entrypoints:
-
-- `.\bin\backend-unit-coverage.ps1`
-- `.\bin\backend-integration-endpoint-coverage.ps1`
-
-The coverage script:
-
-- runs `backend.tests.Unit` in `Release`
-- uses `backend.coverage.runsettings`
-- reads the generated Cobertura report from a repo-local `.tmp` directory
-- fails if filtered backend unit line coverage is below `90.00%`
-
-The filtered coverage scope keeps application code such as services, controllers, repositories, utilities, and DTO/contracts in scope, while excluding:
-
-- EF Core migrations and designer files
-- `src/main/seeders/**`
-- compiler/generated-code attributed files
-
-The integration endpoint audit is a separate metric. It reports the percentage of controller actions that have at least one matching `/api/...` request in the integration test sources. It is useful for endpoint surface coverage, but it is not a substitute for backend code coverage.
-
-The current backend coverage improvement plan lives in:
-
-- `docs/COVERAGE_ROADMAP.md`
-
-## Test Structure
-
-- `backend.tests.Unit/Features`
-- `backend.tests.Unit/Workers`
-- `backend.tests.Integration/Features`
-- `backend.tests.Integration/Seeders`
-
-Auth integration tests use:
-
-- ASP.NET `WebApplicationFactory<Program>`
-- Testcontainers-backed PostgreSQL, Redis, Elasticsearch, and Kafka
-- fake captcha provider
-- fake OAuth provider
-- fake blob storage
-- Kafka-backed test probes for email and SMS assertions
-
-The backend app exposes a `Testing` startup path so integration tests can boot with real infra wiring while still avoiding production-only side effects such as background email/SMS workers. A running Docker daemon is now a hard requirement for `backend.tests.Integration` locally and in CI.
-
-Integration tests run with up to four test classes in parallel. The harness migrates one PostgreSQL template database, clones it for direct database tests, and reuses four isolated API-app slots. Each slot has its own database, Redis logical database, Elasticsearch indices, and Kafka topics; application rows and external state are cleared before the slot is leased to another test. Tests that supply custom configuration or service overrides use a transient host on the leased slot and cannot leak those overrides into the shared hosts.
-
-## Frontend Unit Tests (Karma + Jasmine)
-
-Angular unit tests live beside the code they cover as `*.spec.ts` under `frontend/src`. They run on Karma + Jasmine through the `@angular/build:karma` builder, configured by `frontend/karma.conf.js`.
-
-`npm run generate:env` must run first — it writes `src/environments/environment.ts`, which most specs import.
-
-```powershell
-cd frontend
+npm ci
 npm run generate:env
-npm test -- --watch=false --browsers=ChromeHeadlessCI
+npm test -- --watch=false --browsers=ChromeHeadlessCI --code-coverage
 ```
 
-Add `--code-coverage` for an HTML report in `frontend/coverage/` plus a summary in the console. **Coverage is gated at 90%** (statements, lines, branches, functions) — with `--code-coverage` the run fails if any metric drops below its floor. See `docs/COVERAGE_ROADMAP.md`. Narrow a run with `--include`:
+Colocated `*.spec.ts` tests use Karma/Jasmine through `@angular/build:karma` and `karma.conf.js`. Chrome/Chromium must be available. `ChromeHeadlessCI` uses no-sandbox/GPU/shared-memory flags suited to CI; ordinary `ChromeHeadless` is also available locally. Narrow a run with `--include="**/refresh.interceptor.spec.ts"`.
+
+### Frontend coverage
+
+With `--code-coverage`, Karma enforces **90% statements, lines, branches, and functions**. CI runs that command and uploads `frontend/coverage/`. Helpers under `src/testing/**` are excluded.
+
+Karma instruments code reachable from specs; adding the first spec for a file can increase the denominator. Compare covered counts as well as percentages. Do not weaken floors or add assertion-free stubs to inflate results.
+
+### Shared helpers and conventions
+
+Import from `@testing`:
+
+| Helper                                                                                    | Purpose                                                            |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `provideHttpTesting()`, `setupService()`                                                  | HTTP service setup with `httpMock`                                 |
+| `envelope()`, `pascalEnvelope()`, `errorEnvelope()`                                       | Standard and compatibility API responses                           |
+| `provideFeatureFlags()`                                                                   | Isolated service override; avoid mutating global environment flags |
+| `provideTestStore()`, `dispatchSpy()`                                                     | NgRx user/session selector overrides and dispatch assertions       |
+| `fakeActivatedRoute()`                                                                    | Consistent route snapshot and observables                          |
+| `installMemoryStorage()`, `installThrowingStorage()`                                      | Storage doubles with restore functions                             |
+| `flushPromises()`                                                                         | Drain asynchronous setup before HTTP expectations                  |
+| `makeClub()`, `makeClubMember()`, `makeEventItem()`, `makeCurrentUser()`, `makeSession()` | Typed fixtures with partial overrides                              |
+
+Helpers are excluded from the application compilation/bundle. New services, guards, interceptors, and normalizers need meaningful specs. Assert request URL/method/params/body and normalized results; cover supported camelCase/PascalCase payloads and missing/empty fields. Call `httpMock.verify()` in cleanup, restore replaced globals, and reset TestBed before configuring it twice in one spec.
+
+## Frontend browser tests
+
+From `frontend/`:
 
 ```powershell
-npm test -- --watch=false --browsers=ChromeHeadlessCI --include="**/refresh.interceptor.spec.ts"
-```
-
-`ChromeHeadlessCI` is a custom launcher (`--no-sandbox --disable-gpu --disable-dev-shm-usage`) that also works on GitHub runners, where plain `ChromeHeadless` cannot start its sandbox. Plain `ChromeHeadless` still works locally.
-
-### Shared test helpers (`frontend/src/testing/`)
-
-Import from `@testing` rather than repeating TestBed boilerplate:
-
-| Helper | Use |
-| --- | --- |
-| `provideHttpTesting()` / `setupService(Token, extra?)` | HTTP-backed service specs; `setupService` returns `{ service, httpMock }` |
-| `envelope(data, overrides?)`, `pascalEnvelope(Data)`, `errorEnvelope(code, message)` | Response bodies in the `{ success, message, data, error, meta }` contract |
-| `provideFeatureFlags({ auth: false })` | Overrides `FeatureFlagsService` — **use this instead of mutating `environment.featureFlags`**, which is module-global and leaks between specs |
-| `provideTestStore({ user, session })`, `dispatchSpy(store)` | NgRx `MockStore` with `selectUser` / `selectSession` / `selectAccessToken` pre-overridden |
-| `fakeActivatedRoute({ params, queryParams })` | `ActivatedRoute` double whose observables and `snapshot` stay in sync |
-| `installMemoryStorage(kind, seed?)`, `installThrowingStorage(kind)` | Swap `localStorage` / `sessionStorage`; both return a restore function for `afterEach` |
-| `flushPromises()` | Drain microtasks before `httpMock.expectOne` when the service `await`s something first (e.g. CSRF bootstrap) |
-| `makeClub()`, `makeClubMember()`, `makeEventItem()`, `makeCurrentUser()`, `makeSession()` | Fully-populated fixtures with partial overrides |
-
-`src/testing/**` is excluded from `tsconfig.app.json`, so helpers may use Jasmine types and never reach the app bundle.
-
-### Conventions
-
-- New services, guards, interceptors and normalizer functions ship with a spec.
-- Assert on the request (URL, method, serialized params, body) and on the normalized result, not on internals.
-- Cover both the camelCase and PascalCase payload shapes for anything with `??` fallback chains — that is where silent regressions hide, and those chains are most of the branch count.
-- Call `httpMock.verify()` in `afterEach`.
-- A helper that reconfigures the TestBed for a second time within one spec must call `TestBed.resetTestingModule()` first.
-
-## Frontend E2E (Playwright)
-
-Frontend end-to-end tests live in `frontend/tests/` and use Playwright (`frontend/playwright.config.ts`). Playwright auto-starts the E2E dev server (`npm run start:e2e`, served at `http://127.0.0.1:3101`, matching the config `baseURL`). The regular dev server runs at `http://localhost:3090` (`npm start`).
-
-```powershell
-cd frontend
-npm run playwright:install   # first time only, installs browsers
+npm run playwright:install
 npm run test:e2e
 ```
 
-### MCP servers (for Claude Code / agents)
+Playwright tests live in `tests/` and use `playwright.config.ts`. They start `npm run start:e2e` at `http://127.0.0.1:3101` and can reuse a local server. The normal development port is 3090. The current home-page smoke test checks rendered UI; additional authenticated journeys require appropriate backend/test data.
 
-Two `.mcp.json` files register MCP servers for Claude Code so agents can drive a real browser (and query the Angular workspace) through MCP tools instead of writing one-off scripts. VS Code uses the equivalent `frontend/.vscode/mcp.json`.
+The root `.mcp.json` configures Playwright; `frontend/.mcp.json` adds Angular CLI MCP. Launch frontend-focused tools from the Angular workspace so the CLI can resolve `angular.json`. Start the desired app server before navigating with browser tools. Equivalent frontend VS Code configuration is in `frontend/.vscode/mcp.json`.
 
-- **Repo-root `.mcp.json`** — the **Playwright** MCP server (`browser_navigate`, `browser_snapshot`, etc.). Loaded when you launch Claude Code from the repo root. Browser automation needs no project context, so it works from anywhere. Runs headless by default; remove the `--headless` flag to watch a visible browser.
-- **`frontend/.mcp.json`** — **Playwright + Angular CLI** (`ng mcp`). Loaded when you launch Claude Code from `frontend/`.
-
-Why the Angular CLI MCP lives only in `frontend/.mcp.json`: Claude Code launches stdio MCP servers with their working directory set to wherever you started Claude Code, and it [ignores the `cwd` field](https://github.com/anthropics/claude-code/issues/17565). The Angular CLI MCP must run inside the Angular workspace (`frontend/`) to resolve the local `@angular/cli` and read `angular.json`, so it only works when Claude Code is launched from `frontend/`. For frontend-focused agent work, run `cd frontend && claude`.
-
-To exercise a running app via the Playwright MCP, start `npm run start:e2e` first (serves `http://127.0.0.1:3101`), then point the MCP browser at that URL.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for formatting, type/build checks, audits, and PR validation expectations.
