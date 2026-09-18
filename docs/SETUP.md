@@ -1,6 +1,6 @@
 # Setup
 
-Run commands from the repository root unless a section states otherwise. See [configuration](CONFIGURATION.md) for settings and the [root README](../) for component links.
+Run commands from the repository root unless a section states otherwise. See [configuration](CONFIGURATION.md) for settings and the [root README](../README.md) for component links.
 
 ## Prerequisites
 

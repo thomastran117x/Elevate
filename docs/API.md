@@ -12,7 +12,7 @@ Regenerate both committed formats from the repository root after API contract ch
 dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- export-openapi --port 8091
 ```
 
-The task starts a temporary Development host, suppresses startup migrations/seeders/hosted services, uses SQLite and a no-op cache, writes both artifacts, and stops the host. The example uses an alternate port to avoid an API already listening on 8090. Export reflects the configured feature flags; review the generated diff before committing. See [development tasks](../tools/Event.DevTasks/).
+The task starts a temporary Development host, suppresses startup migrations/seeders/hosted services, uses SQLite and a no-op cache, writes both artifacts, and stops the host. The example uses an alternate port to avoid an API already listening on 8090. Export reflects the configured feature flags; review the generated diff before committing. See [development tasks](../tools/Event.DevTasks/README.md).
 
 ## Responses and pagination
 

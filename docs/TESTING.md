@@ -1,6 +1,6 @@
 # Testing and coverage policy
 
-Run backend commands from the repository root and frontend commands from `frontend/`. See the [unit-test README](../backend.tests.Unit/), [integration-test README](../backend.tests.Integration/), and [frontend README](../frontend/) for component entry points.
+Run backend commands from the repository root and frontend commands from `frontend/`. See the [unit-test README](../backend.tests.Unit/README.md), [integration-test README](../backend.tests.Integration/README.md), and [frontend README](../frontend/README.md) for component entry points.
 
 ## Backend unit tests
 

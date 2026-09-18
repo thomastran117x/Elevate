@@ -51,7 +51,7 @@ Compose maps `MSAL_CLIENT_ID` to backend `MS_CLIENT_ID`. A locally run backend m
 
 Default database provider is PostgreSQL. SQLite is used by OpenAPI export and selected isolated tests, not as the normal application database.
 
-Email/SMS consumers remain idle if provider configuration is incomplete. Topic/group/DLQ defaults and failure policies are documented in [worker READMEs](../backend/). Keep notification topic names aligned between API publishers and consumers.
+Email/SMS consumers remain idle if provider configuration is incomplete. Topic/group/DLQ defaults and failure policies are documented in [worker READMEs](../backend/README.md#workers). Keep notification topic names aligned between API publishers and consumers.
 
 ## Feature flags
 

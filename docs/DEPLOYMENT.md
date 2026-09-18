@@ -39,7 +39,7 @@ Public environment values and frontend flags are baked into the build. Rebuild f
 - Coordinate shared feature flags between the backend and frontend build. Verify flags absent from Compose mappings explicitly rather than assuming every backend option is forwarded.
 - Provision persistent storage and backups for authoritative database data and the infrastructure state you intend to retain. Monitor database connectivity, connector state, Kafka consumer lag and DLQs, Elasticsearch updates, notification delivery, API error rates, and logs.
 
-Use `docker compose logs` for API and worker diagnostics. Query a documented read endpoint to check API behavior and test an actual search update and hub connection. There is no dedicated API health endpoint mapped in the current entry point. Empty SMTP/Twilio settings disable their consumers; a running worker container does not prove messages are being delivered. See individual [worker READMEs](../backend/).
+Use `docker compose logs` for API and worker diagnostics. Query a documented read endpoint to check API behavior and test an actual search update and hub connection. There is no dedicated API health endpoint mapped in the current entry point. Empty SMTP/Twilio settings disable their consumers; a running worker container does not prove messages are being delivered. See individual [worker READMEs](../backend/README.md#workers).
 
 ## Kubernetes assets and gaps
 

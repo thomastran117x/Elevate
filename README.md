@@ -23,16 +23,16 @@ See [setup](docs/SETUP.md) for prerequisites, local development, infrastructure 
 
 | Component                                                          | Purpose                                                    |
 | ------------------------------------------------------------------ | ---------------------------------------------------------- |
-| [Frontend](frontend/)                                     | Angular UI, SSR server, and browser tests                  |
-| [Backend API](backend/)                                   | ASP.NET Core application and EF Core migrations            |
-| [Event indexer](backend/src/worker/event-indexer/)        | Event search updates                                       |
-| [Club indexer](backend/src/worker/club-indexer/)          | Club search updates                                        |
-| [Club-post indexer](backend/src/worker/clubpost-indexer/) | Club-post search updates                                   |
-| [Email worker](backend/src/worker/email-worker/)          | SMTP notifications and invitation delivery status          |
-| [SMS worker](backend/src/worker/sms-worker/)              | Twilio MFA messages                                        |
-| [Backend unit tests](backend.tests.Unit/)                 | Isolated behavior tests                                    |
-| [Backend integration tests](backend.tests.Integration/)   | Real API and container-backed infrastructure tests         |
-| [Development tasks](tools/Event.DevTasks/)                | Formatting, coverage, integration runs, and OpenAPI export |
+| [Frontend](frontend/README.md)                                     | Angular UI, SSR server, and browser tests                  |
+| [Backend API](backend/README.md)                                   | ASP.NET Core application and EF Core migrations            |
+| [Event indexer](backend/src/worker/event-indexer/README.md)        | Event search updates                                       |
+| [Club indexer](backend/src/worker/club-indexer/README.md)          | Club search updates                                        |
+| [Club-post indexer](backend/src/worker/clubpost-indexer/README.md) | Club-post search updates                                   |
+| [Email worker](backend/src/worker/email-worker/README.md)          | SMTP notifications and invitation delivery status          |
+| [SMS worker](backend/src/worker/sms-worker/README.md)              | Twilio MFA messages                                        |
+| [Backend unit tests](backend.tests.Unit/README.md)                 | Isolated behavior tests                                    |
+| [Backend integration tests](backend.tests.Integration/README.md)   | Real API and container-backed infrastructure tests         |
+| [Development tasks](tools/Event.DevTasks/README.md)                | Formatting, coverage, integration runs, and OpenAPI export |
 
 `docker/` contains Kafka Connect outbox configuration. `backend.sln` groups the .NET projects; `global.json` selects the SDK.
 
