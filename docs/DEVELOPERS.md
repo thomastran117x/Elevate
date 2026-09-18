@@ -1,37 +1,51 @@
-# Developers
+# Developer conventions
 
-This document is a more techinal in-depth overview of the EventXperience repo. This document will go over useful tips and advice when developing EventXperience.
+Read [CONTRIBUTING.md](../CONTRIBUTING.md) for branches, commits, checks, and pull requests. Use [architecture](ARCHITECTURE.md) to understand boundaries and component READMEs for local commands.
 
-For Architecture, refer to [ARCHITECTURE.md](\ARCHITECTURE.md)
-For Configuration, refer to [CONFIGURATION.md](\CONFIGURATION.md)
-For Setup, refer to [SETUP.md](\SETUP.md)
-For Testing, refer to [TESTING.md](\TESTING.md)
-For Deplyoment, refer to [DEPLOYMENT.md](\DEPLOYMENT.md)
-For APIs, refer to [API.md](\API.md)
+## Angular and TypeScript
 
-## Languages and Frameworks
+The frontend uses Angular 22, strict TypeScript/templates, NgRx user/session stores, Tailwind CSS, SSR, and ZoneJS. Feature code belongs in `src/app/features/`; application-wide infrastructure belongs in `core/`, and reusable UI belongs in `shared/`. Follow existing aliases such as `@core`, `@shared`, `@stores`, and `@environments`, and neighboring naming/template conventions.
 
-EventXperience is developed using [TypeScript](https://www.typescriptlang.org/) for the frontend and [C#](https://dotnet.microsoft.com/en-us/languages/csharp) for the backend. Although [.NET Core](https://dotnet.microsoft.com/en-us/) uses many languages, it is mainly known for C#. We leverage C# for its built in support for `asynchronous` operations, alongside some other useful features provided by [ASP.NET Core](https://dotnet.microsoft.com/en-us/apps/aspnet). `ASP.NET Core` abstracts many features that we would have to make ourselves such as HTTP request and validation, middleware and database drivers.
+The application contains both NgModules and standalone code. Prefer modern standalone components, signals/computed values for local reactive state, and modern template control flow for new work where compatible. Keep NgRx for the existing shared state contract and RxJS for asynchronous streams. Do not migrate surrounding modules, store architecture, ZoneJS, or hydration settings as an incidental cleanup.
 
-## Pull/Merge Request
+Use explicit types rather than `any`; narrow unknown external values at API boundaries. Keep components focused on presentation, put HTTP behavior in services, and preserve camelCase/PascalCase normalization. Use reactive forms where the feature already does. Prefer OnPush-compatible immutable updates for new components; preserve required change detection in existing views.
 
-All pull request generally must be peer-reviewed by at least one other core developer. It should following this format:
+Use `async` pipes or `takeUntilDestroyed` to manage subscriptions; call APIs that require an injection context in a valid context. Avoid nested subscriptions and dispose of browser/event resources. Guard browser-only APIs for SSR and preserve stable server/client rendering. Use semantic controls, labels, keyboard access, and accessible focus/error behavior.
 
-- `Summary`: fixes, problems addressed, new feature
-- `Issues`: what issue or bug did your PR address
-- `Test`: how to verify it works
-- `Extra notes`: anything else future developers need to know regarding your change
+Format with the configured Prettier settings (single quotes, semicolons, trailing commas, width 100). Format affected files rather than rewriting unrelated frontend code. New services, guards, interceptors, and normalizers should have behavior-focused colocated specs using the shared [testing helpers](TESTING.md#frontend-unit-tests).
 
-## Git Strategy
+References: [Angular style guide](https://angular.dev/style-guide), [signals](https://angular.dev/guide/signals), [SSR](https://angular.dev/guide/ssr), and [accessibility](https://angular.dev/best-practices/a11y).
 
-EventXperience will use the [GitLab Flow](https://about.gitlab.com/topics/version-control/what-is-gitlab-flow/) strategy throughout the development.
+## C# and .NET
 
-## Basic Architecture
+All .NET projects target .NET 10 with nullable reference types enabled. Put feature logic under `backend/src/main/features/`. Keep controllers responsible for binding, HTTP results, and access requirements; services for business rules; repositories for persistence. Register services through existing bootstrap code with suitable lifetimes. Preserve existing namespace/layout conventions and use `dotnet format`.
 
-EventXperience follows a basic client-server architecture. Currently at this time, the client is a web browser while the backend is a modular monolothic design. The backend is designed to be a MVC (Model-View-Controller) to improve maintainability.
+Use asynchronous database, HTTP, storage, and messaging APIs rather than blocking on tasks. Propagate cancellation where interfaces support it. Do not run concurrent operations on one EF DbContext, retain scoped services in singletons, or resolve a scoped dependency from the root provider in a worker. Workers create scopes for message processing.
 
-Future work after initial completetion of the prototype would be:
+Project only needed columns, paginate large reads, avoid N+1 queries, and use no-tracking reads where tracking is unnecessary. Preserve repository resilience/proxy behavior and database-authoritative validation. Coordinate transactions and search outbox writes so committed application changes and indexing events remain consistent.
 
-- Introduce SSR and SEO via [Angular SSR](https://angular.dev/guide/ssr)
-- Microservice design via [NATS](https://nats.io/)
-- Mobile App via [React Native](https://reactnative.dev/)
+Use request/response DTOs and shared response/error conventions. Preserve feature gates, roles/ownership checks, CSRF, rate policies, MFA requirements, session invalidation, and validation. Do not expose secrets or personal credentials in logs.
+
+References: [ASP.NET Core best practices](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/best-practices?view=aspnetcore-10.0), [DI lifetimes](https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection#service-lifetimes), [efficient EF queries](https://learn.microsoft.com/en-us/ef/core/performance/efficient-querying), and [EF async operations](https://learn.microsoft.com/en-us/ef/core/miscellaneous/async).
+
+## Generated files and contracts
+
+`frontend/src/environments/environment.ts` is generated by `npm run generate:env`. Change the generator/input configuration rather than editing that output by hand. Do not commit local environments, secrets, coverage output, dependencies, or build artifacts.
+
+Create EF migrations when the database model requires them; do not hand-edit migration designers/snapshots or alter previously deployed migrations to rewrite history. From the repository root with the EF tool installed:
+
+```powershell
+dotnet ef migrations add DescribeChange --project backend/backend.csproj --startup-project backend/backend.csproj
+```
+
+Review the generated schema/data changes and validate them against PostgreSQL. Keep migrations with the model change.
+
+For endpoint or contract changes, regenerate OpenAPI from the root:
+
+```powershell
+dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- export-openapi --port 8091
+```
+
+The command writes both JSON and YAML. Review both diffs and verify feature configuration so a disabled feature does not unintentionally disappear from the committed reference.
+
+Update backend registries, frontend flag generation/types, environment templates, deployment mappings, tests, and documentation together when adding a shared feature flag. Some backend flags are intentionally backend-only; see [configuration](CONFIGURATION.md).
