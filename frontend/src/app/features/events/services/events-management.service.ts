@@ -5,11 +5,17 @@ import { map, Observable, switchMap } from 'rxjs';
 import { environment } from '@environments/environment';
 import { ApiEnvelope } from '../../../core/api/models/api-envelope.model';
 import {
+  EventImagePayload,
+  normalizeEventImage,
+  normalizeEventImages,
+} from '../models/event-normalizers';
+import {
   ALL_CATEGORIES,
   ALL_LIFECYCLE_STATES,
   ALL_STATUSES,
   EventCategory,
   EventDraftPayload,
+  EventImage,
   EventLifecycleState,
   EventLifecycleTransition,
   EventStatus,
@@ -26,6 +32,8 @@ type ManagedEventPayload = Partial<ManagedEvent> & {
   Description?: string;
   Location?: string;
   ImageUrls?: string[];
+  CoverImageUrl?: string | null;
+  Images?: EventImagePayload[];
   IsPrivate?: boolean;
   MaxParticipants?: number;
   RegisterCost?: number;
@@ -98,6 +106,14 @@ type PresignedUploadPayload = ApiEnvelope<{
     publicUrl?: string;
     PublicUrl?: string;
   } | null;
+};
+
+type EventImagesPayload = ApiEnvelope<EventImagePayload[]> & {
+  Data?: EventImagePayload[] | null;
+};
+
+type EventImagePayloadEnvelope = ApiEnvelope<EventImagePayload> & {
+  Data?: EventImagePayload | null;
 };
 
 @Injectable({ providedIn: 'root' })
@@ -230,6 +246,68 @@ export class EventsManagementService {
       );
   }
 
+  // ---- Gallery management ----
+  //
+  // These act on a saved event and return the gallery the server now holds, so the caller can
+  // replace its local copy outright rather than trying to keep a parallel one in step.
+
+  getEventImages(eventId: number): Observable<EventImage[]> {
+    return this.http
+      .get<EventImagesPayload>(`${this.base}/${eventId}/images`)
+      .pipe(map((response) => normalizeEventImages(response.data ?? response.Data)));
+  }
+
+  addEventImage(
+    eventId: number,
+    image: { imageUrl: string; altText?: string | null; isDecorative?: boolean; isCover?: boolean },
+  ): Observable<EventImage> {
+    return this.http
+      .post<EventImagePayloadEnvelope>(`${this.base}/${eventId}/images`, {
+        imageUrl: image.imageUrl,
+        // The server rejects alt text on a decorative image, so send one or the other.
+        altText: image.isDecorative ? null : (image.altText ?? null),
+        isDecorative: image.isDecorative ?? false,
+        isCover: image.isCover ?? false,
+      })
+      .pipe(map((response) => normalizeEventImage(response.data ?? response.Data ?? {})));
+  }
+
+  updateEventImage(
+    eventId: number,
+    imageId: number,
+    metadata: { altText?: string | null; isDecorative?: boolean },
+  ): Observable<EventImage> {
+    return this.http
+      .patch<EventImagePayloadEnvelope>(`${this.base}/${eventId}/images/${imageId}`, {
+        altText: metadata.isDecorative ? null : (metadata.altText ?? null),
+        isDecorative: metadata.isDecorative ?? false,
+      })
+      .pipe(map((response) => normalizeEventImage(response.data ?? response.Data ?? {})));
+  }
+
+  replaceEventImage(eventId: number, imageId: number, imageUrl: string): Observable<EventImage> {
+    return this.http
+      .put<EventImagePayloadEnvelope>(`${this.base}/${eventId}/images/${imageId}`, { imageUrl })
+      .pipe(map((response) => normalizeEventImage(response.data ?? response.Data ?? {})));
+  }
+
+  /** `imageIds` must name every image on the event exactly once; the server rejects anything else. */
+  reorderEventImages(eventId: number, imageIds: number[]): Observable<EventImage[]> {
+    return this.http
+      .put<EventImagesPayload>(`${this.base}/${eventId}/images/order`, { imageIds })
+      .pipe(map((response) => normalizeEventImages(response.data ?? response.Data)));
+  }
+
+  setEventCoverImage(eventId: number, imageId: number): Observable<EventImage[]> {
+    return this.http
+      .put<EventImagesPayload>(`${this.base}/${eventId}/images/${imageId}/cover`, {})
+      .pipe(map((response) => normalizeEventImages(response.data ?? response.Data)));
+  }
+
+  removeEventImage(eventId: number, imageId: number): Observable<unknown> {
+    return this.http.delete(`${this.base}/${eventId}/images/${imageId}`);
+  }
+
   private transition(url: string): Observable<ManagedEventApiResponse> {
     return this.http
       .post<ManagedEventApiPayload>(url, {})
@@ -273,6 +351,8 @@ export class EventsManagementService {
       description: item.description ?? item.Description,
       location: item.location ?? item.Location,
       imageUrls: item.imageUrls ?? item.ImageUrls ?? [],
+      coverImageUrl: item.coverImageUrl ?? item.CoverImageUrl ?? null,
+      images: normalizeEventImages(item.images ?? item.Images),
       isPrivate: item.isPrivate ?? item.IsPrivate ?? false,
       maxParticipants: item.maxParticipants ?? item.MaxParticipants,
       registerCost: item.registerCost ?? item.RegisterCost ?? 0,

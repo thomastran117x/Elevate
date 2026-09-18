@@ -615,7 +615,7 @@ public class ClubDiscussionEndpointsTests
                 Name = name,
                 Description = "Campus group",
                 Clubtype = "social",
-                ClubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club.png"),
+                ClubImageUrl = await app.CreateClubImageUrlAsync(accessToken),
                 Email = $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com",
                 IsPrivate = isPrivate
             })));

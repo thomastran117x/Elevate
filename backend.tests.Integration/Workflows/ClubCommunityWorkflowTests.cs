@@ -396,7 +396,7 @@ public class ClubCommunityWorkflowTests
                 name,
                 description = "End-to-end workflow club",
                 clubtype = "social",
-                clubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "community-workflow.png"),
+                clubImageUrl = await app.CreateClubImageUrlAsync(accessToken, "community-workflow.png"),
                 email
             })));
         response.StatusCode.Should().Be(HttpStatusCode.Created, await app.DescribeFailureAsync(response));

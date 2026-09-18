@@ -233,8 +233,34 @@ namespace backend.main.application.openapi
                 ["POST /api/events/{eventId}/archive"] = new("Archive an event"),
                 ["GET /api/events/{eventId}/manage"] = new("Get an event (management view)"),
                 ["GET /api/events/{eventId}/analytics"] = new("Get event analytics"),
-                ["POST /api/events/{eventId}/images"] = new("Attach an uploaded image to an event"),
-                ["DELETE /api/events/{eventId}/images/{imageId}"] = new("Remove an image from an event"),
+                ["GET /api/events/{eventId}/images"] = new(
+                    "List an event's gallery",
+                    "Returns the images in display order, cover first, with alt text and the `needsAltText` flag for images that still lack it. Requires club staff access."
+                ),
+                ["POST /api/events/{eventId}/images"] = new(
+                    "Attach an uploaded image to an event",
+                    "Accepts optional `altText`, `isDecorative` and `isCover`. Supply either alt text or `isDecorative`; supplying both is rejected. The URL must come from a presigned upload issued to you for this event."
+                ),
+                ["PATCH /api/events/{eventId}/images/{imageId}"] = new(
+                    "Edit an image's accessibility metadata",
+                    "Updates `altText` and `isDecorative` without touching the image, its order, or the cover."
+                ),
+                ["PUT /api/events/{eventId}/images/{imageId}"] = new(
+                    "Replace the file behind an image",
+                    "Swaps in a newly uploaded image while keeping the slot's order, cover flag and alt text. The old blob is deleted."
+                ),
+                ["PUT /api/events/{eventId}/images/order"] = new(
+                    "Reorder an event's gallery",
+                    "Takes `imageIds` in the desired order. The list must name every image on the event exactly once; a partial list is rejected rather than applied."
+                ),
+                ["PUT /api/events/{eventId}/images/{imageId}/cover"] = new(
+                    "Set an event's cover image",
+                    "Makes this image the cover and clears the previous one. An event has at most one cover, enforced by a unique index."
+                ),
+                ["DELETE /api/events/{eventId}/images/{imageId}"] = new(
+                    "Remove an image from an event",
+                    "Removing the cover promotes the next image in order to take its place."
+                ),
                 ["GET /api/events/{eventId}/versions"] = new("List event version history"),
                 ["GET /api/events/{eventId}/versions/{versionNumber}"] = new("Get a specific event version"),
                 ["POST /api/events/{eventId}/versions/{versionNumber}/rollback"] = new(

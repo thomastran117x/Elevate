@@ -555,7 +555,7 @@ public class EventSeriesEndpointsTests
                 // Lowercase: ClubCreateRequest validates Clubtype against a fixed list of names.
                 Clubtype = "gaming",
                 // Must be a URL the fake blob storage owns, or the request is rejected.
-                ClubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club.png"),
+                ClubImageUrl = await app.CreateClubImageUrlAsync(accessToken),
                 Email = $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"
             })));
 

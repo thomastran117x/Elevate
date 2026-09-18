@@ -399,7 +399,7 @@ public class EventInvitationEndpointsTests
                 Name = name,
                 Description = "Invitation test group",
                 Clubtype = "social",
-                ClubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club.png"),
+                ClubImageUrl = await app.CreateClubImageUrlAsync(accessToken),
                 Email = $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"
             })));
         var diagnostics = await app.DescribeFailureAsync(response);

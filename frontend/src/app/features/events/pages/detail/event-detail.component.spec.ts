@@ -64,6 +64,8 @@ describe('EventDetailComponent', () => {
       description: 'Build things together',
       location: 'Student Center',
       imageUrls: ['https://example.com/poster.png'],
+      coverImageUrl: 'https://example.com/poster.png',
+      images: [],
       isPrivate: false,
       maxParticipants: 120,
       registerCost: 0,
@@ -639,6 +641,123 @@ describe('EventDetailComponent', () => {
       createComponent();
 
       expect(component.heroImage).toBeNull();
+    });
+
+    it('describes the hero from the gallery image behind it', () => {
+      eventsService.getEvent.and.returnValue(
+        of({
+          ...response,
+          data: {
+            ...response.data!,
+            images: [
+              {
+                id: 1,
+                url: 'https://example.com/poster.png',
+                altText: 'A packed main stage at dusk',
+                isDecorative: false,
+                isCover: true,
+                sortOrder: 0,
+                needsAltText: false,
+                createdAt: '2026-05-01T00:00:00Z',
+                updatedAt: '2026-05-01T00:00:00Z',
+              },
+            ],
+          },
+        }),
+      );
+      createComponent();
+
+      expect(component.heroAltText).toBe('A packed main stage at dusk');
+    });
+
+    it('gives a decorative hero an empty alt, which is what hides it from screen readers', () => {
+      eventsService.getEvent.and.returnValue(
+        of({
+          ...response,
+          data: {
+            ...response.data!,
+            images: [
+              {
+                id: 1,
+                url: 'https://example.com/poster.png',
+                altText: null,
+                isDecorative: true,
+                isCover: true,
+                sortOrder: 0,
+                needsAltText: false,
+                createdAt: '2026-05-01T00:00:00Z',
+                updatedAt: '2026-05-01T00:00:00Z',
+              },
+            ],
+          },
+        }),
+      );
+      createComponent();
+
+      expect(component.heroGalleryImage?.isDecorative).toBeTrue();
+      expect(component.heroAltText).toBe('');
+    });
+
+    it('names the event when an image carries no description', () => {
+      // Covers both an event served without gallery metadata at all, and one whose image simply
+      // has no alt text yet — neither should leave the hero unlabelled.
+      expect(component.heroGalleryImage).toBeNull();
+      expect(component.heroAltText).toBe('Hack Night event image');
+
+      eventsService.getEvent.and.returnValue(
+        of({
+          ...response,
+          data: {
+            ...response.data!,
+            images: [
+              {
+                id: 1,
+                url: 'https://example.com/poster.png',
+                altText: null,
+                isDecorative: false,
+                isCover: true,
+                sortOrder: 0,
+                needsAltText: true,
+                createdAt: '2026-05-01T00:00:00Z',
+                updatedAt: '2026-05-01T00:00:00Z',
+              },
+            ],
+          },
+        }),
+      );
+      createComponent();
+
+      expect(component.heroAltText).toBe('Hack Night event image');
+    });
+
+    it('labels thumbnail buttons, which have no text of their own', () => {
+      expect(component.thumbnailLabel(0)).toBe('Show image 1 of 1');
+
+      eventsService.getEvent.and.returnValue(
+        of({
+          ...response,
+          data: {
+            ...response.data!,
+            images: [
+              {
+                id: 1,
+                url: 'https://example.com/poster.png',
+                altText: 'Main stage',
+                isDecorative: false,
+                isCover: true,
+                sortOrder: 0,
+                needsAltText: false,
+                createdAt: '2026-05-01T00:00:00Z',
+                updatedAt: '2026-05-01T00:00:00Z',
+              },
+            ],
+          },
+        }),
+      );
+      createComponent();
+
+      expect(component.thumbnailLabel(0)).toBe('Show image 1 of 1: Main stage');
+      expect(component.thumbnailLabel(5)).toBe('Show image 6 of 1');
     });
 
     it('formats a schedule with and without an end time', () => {

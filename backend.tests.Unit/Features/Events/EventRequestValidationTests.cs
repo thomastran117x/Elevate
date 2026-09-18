@@ -206,6 +206,117 @@ public class EventRequestValidationTests
         };
     }
 
+    // ---- Gallery image requests ----
+
+    [Fact]
+    public void AddEventImageRequest_ShouldValidateSuccessfully_WithAltText()
+    {
+        var request = new AddEventImageRequest
+        {
+            ImageUrl = "https://cdn.test/events/poster.png",
+            AltText = "A crowded main stage at dusk"
+        };
+
+        Validate(request).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddEventImageRequest_ShouldValidateSuccessfully_WhenMarkedDecorative()
+    {
+        var request = new AddEventImageRequest
+        {
+            ImageUrl = "https://cdn.test/events/divider.png",
+            IsDecorative = true
+        };
+
+        Validate(request).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddEventImageRequest_ShouldAllowAttachingBeforeAnyoneHasWrittenAltText()
+    {
+        // An image is uploaded before it is described. Demanding a description here would only
+        // push organizers to mark real content decorative to get past it; NeedsAltText carries
+        // the gap forward instead.
+        var request = new AddEventImageRequest
+        {
+            ImageUrl = "https://cdn.test/events/poster.png"
+        };
+
+        Validate(request).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void UpdateEventImageRequest_ShouldRejectClearingAltText_WithoutMarkingDecorative()
+    {
+        var request = new UpdateEventImageRequest
+        {
+            AltText = "   "
+        };
+
+        Validate(request).Select(item => item.ErrorMessage).Should().Contain(
+            "Provide alt text describing the image, or mark it as decorative.");
+    }
+
+    [Fact]
+    public void AddEventImageRequest_ShouldRejectAltText_OnADecorativeImage()
+    {
+        var request = new AddEventImageRequest
+        {
+            ImageUrl = "https://cdn.test/events/divider.png",
+            AltText = "Never read aloud",
+            IsDecorative = true
+        };
+
+        Validate(request).Select(item => item.ErrorMessage).Should().Contain(
+            "A decorative image cannot also have alt text.");
+    }
+
+    [Fact]
+    public void AddEventImageRequest_ShouldRejectNonHttpsUrls()
+    {
+        var request = new AddEventImageRequest
+        {
+            ImageUrl = "http://cdn.test/events/poster.png",
+            AltText = "A crowded main stage at dusk"
+        };
+
+        Validate(request).Select(item => item.ErrorMessage).Should().Contain(
+            "ImageUrl must be a valid HTTPS URL.");
+    }
+
+    [Fact]
+    public void UpdateEventImageRequest_ShouldApplyTheSameAltTextRule()
+    {
+        var request = new UpdateEventImageRequest();
+
+        Validate(request).Select(item => item.ErrorMessage).Should().Contain(
+            "Provide alt text describing the image, or mark it as decorative.");
+    }
+
+    [Fact]
+    public void ReorderEventImagesRequest_ShouldRejectDuplicateIds()
+    {
+        var request = new ReorderEventImagesRequest
+        {
+            ImageIds = [3, 1, 3]
+        };
+
+        Validate(request).Select(item => item.ErrorMessage).Should().Contain(
+            "ImageIds cannot contain duplicates.");
+    }
+
+    [Fact]
+    public void ReorderEventImagesRequest_ShouldValidateSuccessfully_ForDistinctIds()
+    {
+        var request = new ReorderEventImagesRequest
+        {
+            ImageIds = [3, 1, 2]
+        };
+
+        Validate(request).Should().BeEmpty();
+    }
+
     private static List<ValidationResult> Validate(object instance)
     {
         var results = new List<ValidationResult>();

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Claims;
 using System.Text.Json;
 
@@ -69,6 +70,8 @@ public class ClubVersioningServiceTests
                 Clubtype = "Social",
                 ClubImageUrl = CreateClubImageUrl("club-v1.png")
             });
+
+        harness.IssueUploadFor(CreateClubImageUrl("club-v2.png"), 99);
 
         var updated = await harness.Service.UpdateClub(
             created.Id,
@@ -307,6 +310,8 @@ public class ClubVersioningServiceTests
 
         await harness.Service.AddStaffAsync(created.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
 
+        harness.IssueUploadFor(CreateClubImageUrl("club-v2.png"), 55);
+
         var updated = await harness.Service.UpdateClub(
             created.Id,
             55,
@@ -542,11 +547,31 @@ public class ClubVersioningServiceTests
             .Which.Should().Be("https://cdn.test/clubs/delete-me.png");
     }
 
-    private static string CreateClubImageUrl(string fileName) => $"https://cdn.test/clubs/{fileName}";
+    /// <summary>
+    /// Builds a club image URL and records it, so the harness can serve the upload intent that
+    /// attaching an image now requires.
+    /// </summary>
+    /// <remarks>
+    /// The registry is keyed by intent key because that is all the cache lookup receives — the key
+    /// is a hash of the URL, so it cannot be reversed. Entries are deterministic (one URL per
+    /// key), which is why sharing them across parallel tests is harmless.
+    /// </remarks>
+    private static string CreateClubImageUrl(string fileName)
+    {
+        var url = $"https://cdn.test/clubs/{fileName}";
+        IssuedUploadUrls[BlobUploadIntentValidator.IntentKey(url)] = url;
+        return url;
+    }
+
+    private static readonly ConcurrentDictionary<string, string> IssuedUploadUrls = new(StringComparer.Ordinal);
+
+    /// <summary>The user an upload is attributed to unless a test says otherwise.</summary>
+    private const int DefaultUploadUserId = 7;
 
     private sealed class ClubServiceHarness : IAsyncDisposable
     {
         private readonly PostgresTestDatabase _database;
+        private readonly Dictionary<string, int> _uploadUserByUrl;
 
         public AppDatabaseContext Db { get; }
         public ClubService Service { get; }
@@ -556,16 +581,26 @@ public class ClubVersioningServiceTests
             PostgresTestDatabase database,
             AppDatabaseContext db,
             ClubService service,
-            TestTimeProvider timeProvider)
+            TestTimeProvider timeProvider,
+            Dictionary<string, int> uploadUserByUrl)
         {
             _database = database;
             Db = db;
             Service = service;
             TimeProvider = timeProvider;
+            _uploadUserByUrl = uploadUserByUrl;
         }
+
+        /// <summary>
+        /// Attributes an image upload to a specific user, for the tests where someone other than
+        /// the owner supplies one. The intent check requires the uploader and the caller to match.
+        /// </summary>
+        public void IssueUploadFor(string imageUrl, int userId) =>
+            _uploadUserByUrl[imageUrl] = userId;
 
         public static async Task<ClubServiceHarness> CreateAsync()
         {
+            var uploadUserByUrl = new Dictionary<string, int>(StringComparer.Ordinal);
             var database = await PostgresTestDatabase.CreateAsync();
 
             var db = database.CreateDbContext();
@@ -607,6 +642,24 @@ public class ClubVersioningServiceTests
                 .ReturnsAsync(false);
             cache.Setup(service => service.SetExpiryAsync(It.IsAny<string>(), It.IsAny<TimeSpan>()))
                 .ReturnsAsync(true);
+
+            // Attaching a club image requires proof the upload was issued to the acting user.
+            // These tests are about versioning and permissions rather than upload provenance, so
+            // the intent is synthesized for any URL CreateClubImageUrl handed out. ClubId 0 is
+            // what a club-creation upload carries.
+            cache.Setup(service => service.GetValueAsync(It.IsAny<string>()))
+                .ReturnsAsync((string key) =>
+                {
+                    if (!IssuedUploadUrls.TryGetValue(key, out var url))
+                        return null;
+
+                    var userId = uploadUserByUrl.TryGetValue(url, out var owner)
+                        ? owner
+                        : DefaultUploadUserId;
+
+                    return JsonSerializer.Serialize(
+                        new BlobUploadIntent(0, null, userId, url, "image/png"));
+                });
 
             var blobService = new Mock<IAzureBlobService>();
             blobService.Setup(service => service.DeleteBlobAsync(It.IsAny<string>()))
@@ -663,7 +716,7 @@ public class ClubVersioningServiceTests
                 }),
                 timeProvider);
 
-            return new ClubServiceHarness(database, db, service, timeProvider);
+            return new ClubServiceHarness(database, db, service, timeProvider, uploadUserByUrl);
         }
 
         public async ValueTask DisposeAsync()

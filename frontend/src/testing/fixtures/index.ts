@@ -101,6 +101,8 @@ export function makeEventItem(overrides: Partial<EventItem> = {}): EventItem {
     description: 'Hands-on build session',
     location: '123 Main St',
     imageUrls: [],
+    coverImageUrl: null,
+    images: [],
     isPrivate: false,
     maxParticipants: 40,
     registerCost: 0,

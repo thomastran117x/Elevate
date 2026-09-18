@@ -5,6 +5,7 @@ import {
   ClubType,
   EventCategory,
   EventHostClub,
+  EventImage,
   EventItem,
   EventLifecycleState,
   EventStatus,
@@ -20,6 +21,8 @@ export type EventItemPayload = EventItem & {
   Description?: string;
   Location?: string;
   ImageUrls?: string[];
+  CoverImageUrl?: string | null;
+  Images?: EventImagePayload[];
   IsPrivate?: boolean;
   MaxParticipants?: number;
   RegisterCost?: number;
@@ -69,6 +72,42 @@ export type EventHostClubPayload = EventHostClub & {
  * payload straight to `EventItem` instead silently leaves `lifecycleState` as a number, so every
  * `=== 'Paused'` or `=== 'Cancelled'` comparison downstream is quietly always false.
  */
+/** Wire shape of a gallery image, tolerating both casings like the rest of this file. */
+export type EventImagePayload = Partial<EventImage> & {
+  Id?: number;
+  Url?: string;
+  AltText?: string | null;
+  IsDecorative?: boolean;
+  IsCover?: boolean;
+  SortOrder?: number;
+  NeedsAltText?: boolean;
+  CreatedAt?: string;
+  UpdatedAt?: string;
+};
+
+export function normalizeEventImage(image: EventImagePayload): EventImage {
+  const altText = image.altText ?? image.AltText ?? null;
+  const isDecorative = image.isDecorative ?? image.IsDecorative ?? false;
+
+  return {
+    id: image.id ?? image.Id ?? 0,
+    url: image.url ?? image.Url ?? '',
+    altText,
+    isDecorative,
+    isCover: image.isCover ?? image.IsCover ?? false,
+    sortOrder: image.sortOrder ?? image.SortOrder ?? 0,
+    // Recomputed rather than defaulted to false, so an older payload without the field still
+    // flags an image that a person needs to describe.
+    needsAltText: image.needsAltText ?? image.NeedsAltText ?? (!isDecorative && !altText),
+    createdAt: image.createdAt ?? image.CreatedAt ?? '',
+    updatedAt: image.updatedAt ?? image.UpdatedAt ?? '',
+  };
+}
+
+export function normalizeEventImages(images: EventImagePayload[] | null | undefined): EventImage[] {
+  return (images ?? []).map(normalizeEventImage);
+}
+
 export function normalizeEventItem(item: EventItemPayload | null | undefined): EventItem {
   // Tolerates a missing payload rather than throwing: several endpoints embed an event
   // optionally, and `EventItem` is non-optional on the domain types, so a fully defaulted
@@ -81,6 +120,8 @@ export function normalizeEventItem(item: EventItemPayload | null | undefined): E
     description: item.description ?? item.Description ?? '',
     location: item.location ?? item.Location ?? '',
     imageUrls: item.imageUrls ?? item.ImageUrls ?? [],
+    coverImageUrl: item.coverImageUrl ?? item.CoverImageUrl ?? null,
+    images: normalizeEventImages(item.images ?? item.Images),
     isPrivate: item.isPrivate ?? item.IsPrivate ?? false,
     maxParticipants: item.maxParticipants ?? item.MaxParticipants ?? 0,
     registerCost: item.registerCost ?? item.RegisterCost ?? 0,

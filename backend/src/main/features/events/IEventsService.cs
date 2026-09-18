@@ -115,8 +115,39 @@ namespace backend.main.features.events
             string fileName,
             string contentType,
             int? eventId = null);
-        Task<EventImage> AddEventImageAsync(int eventId, int userId, string userRole, string imageUrl);
+        Task<EventImage> AddEventImageAsync(
+            int eventId,
+            int userId,
+            string userRole,
+            string imageUrl,
+            string? altText = null,
+            bool isDecorative = false,
+            bool isCover = false);
         Task RemoveEventImageAsync(int eventId, int imageId, int userId, string userRole);
+        Task<List<EventImage>> GetEventImagesAsync(int eventId, int userId, string userRole);
+        Task<EventImage> UpdateEventImageAsync(
+            int eventId,
+            int imageId,
+            int userId,
+            string userRole,
+            string? altText,
+            bool isDecorative);
+        Task<EventImage> ReplaceEventImageAsync(
+            int eventId,
+            int imageId,
+            int userId,
+            string userRole,
+            string imageUrl);
+        Task<List<EventImage>> ReorderEventImagesAsync(
+            int eventId,
+            int userId,
+            string userRole,
+            IReadOnlyList<int> imageIds);
+        Task<List<EventImage>> SetEventCoverImageAsync(
+            int eventId,
+            int imageId,
+            int userId,
+            string userRole);
 
         // Registration count denorm (called by EventRegistrationService)
         Task NotifyRegistrationChangedAsync(int eventId);

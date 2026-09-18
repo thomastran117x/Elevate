@@ -9,7 +9,7 @@ import { extractEnvelopeData } from '../../../../core/api/models/api-envelope.mo
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { UserState } from '../../../../core/stores/user.reducer';
 import { selectUser } from '../../../../core/stores/user.selectors';
-import { EventItem, CATEGORY_STYLES } from '../../models/event.types';
+import { CATEGORY_STYLES, EventImage, EventItem } from '../../models/event.types';
 import {
   EventRegistrationService,
   RegistrationDetails,
@@ -110,6 +110,47 @@ export class EventDetailComponent implements OnInit, OnDestroy {
     }
 
     return this.event.imageUrls[this.selectedImageIndex] ?? this.event.imageUrls[0] ?? null;
+  }
+
+  /**
+   * The gallery entry behind {@link heroImage}, when the event carries gallery metadata.
+   *
+   * Null for an event served without it, in which case the hero falls back to a generic
+   * description rather than claiming an image is decorative.
+   */
+  get heroGalleryImage(): EventImage | null {
+    const images = this.event?.images;
+    if (!images?.length) {
+      return null;
+    }
+
+    return images[this.selectedImageIndex] ?? images[0] ?? null;
+  }
+
+  /**
+   * Alt text for the hero. A decorative image gets an empty string, which is what tells a screen
+   * reader to skip it; anything else falls back to naming the event rather than going unlabelled.
+   */
+  get heroAltText(): string {
+    const image = this.heroGalleryImage;
+    if (!image) {
+      return this.event ? `${this.event.name} event image` : '';
+    }
+
+    if (image.isDecorative) {
+      return '';
+    }
+
+    return image.altText || (this.event ? `${this.event.name} event image` : '');
+  }
+
+  /** Accessible name for a thumbnail button, which otherwise has no text at all. */
+  thumbnailLabel(index: number): string {
+    const image = this.event?.images?.[index];
+    const total = this.event?.imageUrls.length ?? 0;
+    const description = image && !image.isDecorative && image.altText ? `: ${image.altText}` : '';
+
+    return `Show image ${index + 1} of ${total}${description}`;
   }
 
   get canRegister(): boolean {

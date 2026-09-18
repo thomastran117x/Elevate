@@ -212,6 +212,29 @@ public class EventSeriesServiceTests
         harness.Db.Events.Count(e => e.LifecycleState == EventLifecycleState.Published).Should().Be(2);
     }
 
+    [Fact]
+    public async Task CreateFromDraftAsync_ShouldStampACoverOnEveryGeneratedOccurrence()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var template = await harness.AddDraftAsync(imageUrls: ["https://cdn.test/a.png"]);
+
+        await harness.Service.CreateFromDraftAsync(
+            template.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            Request(occurrenceCount: 3));
+
+        // The read-side mapper falls back to the first image, but the gallery editor reads the
+        // real flag — so an occurrence with images and no cover shows nothing selected.
+        var eventIds = await harness.Db.Events.Select(e => e.Id).ToListAsync();
+        foreach (var eventId in eventIds)
+        {
+            var covers = await harness.Db.EventImages
+                .CountAsync(image => image.EventId == eventId && image.IsCover);
+            covers.Should().Be(1, $"event {eventId} must have exactly one cover");
+        }
+    }
+
     // ------------------------------------------------------------------ update all future
 
     [Fact]
@@ -235,6 +258,46 @@ public class EventSeriesServiceTests
         all[1].Location.Should().NotBe("New Hall");
         all[2].Location.Should().Be("New Hall");
         all[3].Location.Should().Be("New Hall");
+    }
+
+    [Fact]
+    public async Task UpdateFutureOccurrencesAsync_ShouldPreserveAltTextAndCover_ForImagesThatSurvive()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var series = await harness.CreateSeriesAsync(occurrenceCount: 3);
+        var pivot = await harness.OccurrenceAsync(series.Id, index: 0);
+
+        // Describe every occurrence's image, as an organizer would have.
+        foreach (var image in await harness.Db.EventImages.ToListAsync())
+        {
+            image.AltText = "Volunteers setting up the hall";
+            image.IsCover = true;
+        }
+        await harness.Db.SaveChangesAsync();
+
+        var imageIdsBefore = await harness.Db.EventImages
+            .OrderBy(image => image.Id)
+            .Select(image => image.Id)
+            .ToListAsync();
+
+        // A location edit that resubmits the same gallery must not reset it.
+        await harness.Service.UpdateFutureOccurrencesAsync(
+            series.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new UpdateFutureOccurrencesRequest
+            {
+                FromEventId = pivot.Id,
+                Location = "New Hall",
+                ImageUrls = ["https://cdn.test/default.png"]
+            });
+
+        var after = await harness.Db.EventImages.OrderBy(image => image.Id).ToListAsync();
+        after.Select(image => image.Id).Should().Equal(
+            imageIdsBefore,
+            "rows are reconciled by URL, not deleted and recreated");
+        after.Should().OnlyContain(image => image.AltText == "Volunteers setting up the hall");
+        after.Should().OnlyContain(image => image.IsCover);
     }
 
     [Fact]
@@ -1057,6 +1120,69 @@ public class EventSeriesServiceTests
                     return images;
                 });
 
+            ImageRepositoryMock
+                .Setup(repository => repository.EnsureCoverAsync(It.IsAny<int>()))
+                .Returns(async (int eventId) =>
+                {
+                    var images = OrderedImages(eventId);
+                    if (images.Count == 0 || images.Any(image => image.IsCover))
+                        return;
+
+                    images[0].IsCover = true;
+                    await Db.SaveChangesAsync();
+                });
+
+            // Mirrors the real repository: surviving rows keep their id, alt text and cover.
+            ImageRepositoryMock
+                .Setup(repository => repository.SyncImagesAsync(It.IsAny<int>(), It.IsAny<IReadOnlyList<string>>()))
+                .Returns(async (int eventId, IReadOnlyList<string> orderedUrls) =>
+                {
+                    var existing = Db.EventImages.Where(image => image.EventId == eventId).ToList();
+                    var byUrl = new Dictionary<string, EventImage>(StringComparer.Ordinal);
+                    foreach (var image in existing)
+                        byUrl.TryAdd(image.ImageUrl, image);
+
+                    var keptIds = new HashSet<int>();
+                    var seen = new HashSet<string>(StringComparer.Ordinal);
+                    var position = 0;
+
+                    foreach (var url in orderedUrls)
+                    {
+                        if (!seen.Add(url))
+                            continue;
+
+                        if (byUrl.TryGetValue(url, out var image))
+                        {
+                            image.SortOrder = position;
+                            keptIds.Add(image.Id);
+                        }
+                        else
+                        {
+                            Db.EventImages.Add(new EventImage
+                            {
+                                EventId = eventId,
+                                ImageUrl = url,
+                                SortOrder = position
+                            });
+                        }
+
+                        position++;
+                    }
+
+                    var removed = existing.Where(image => !keptIds.Contains(image.Id)).ToList();
+                    if (removed.Count > 0)
+                        Db.EventImages.RemoveRange(removed);
+
+                    await Db.SaveChangesAsync();
+
+                    var remaining = OrderedImages(eventId);
+                    if (remaining.Count > 0 && !remaining.Any(image => image.IsCover))
+                    {
+                        remaining[0].IsCover = true;
+                        await Db.SaveChangesAsync();
+                    }
+                });
+
             RefreshCacheMock
                 .Setup(cache => cache.RemoveAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
@@ -1148,6 +1274,13 @@ public class EventSeriesServiceTests
                 utcNow ?? new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
         }
 
+        private List<EventImage> OrderedImages(int eventId) =>
+            Db.EventImages
+                .Where(image => image.EventId == eventId)
+                .OrderBy(image => image.SortOrder)
+                .ThenBy(image => image.Id)
+                .ToList();
+
         public async Task<EventEntity> AddDraftAsync(
             IEnumerable<string>? imageUrls = null,
             EventLifecycleState lifecycleState = EventLifecycleState.Draft)
@@ -1178,7 +1311,9 @@ public class EventSeriesServiceTests
                 {
                     EventId = ev.Id,
                     ImageUrl = url,
-                    SortOrder = index
+                    SortOrder = index,
+                    // The real draft-create path stamps a cover, so a seeded draft has one too.
+                    IsCover = index == 0
                 });
             }
 
