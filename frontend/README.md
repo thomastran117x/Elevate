@@ -49,4 +49,4 @@ Prettier uses single quotes, semicolons, trailing commas, and width 100. Format 
 
 ## Agent tools
 
-`.mcp.json` registers Playwright and Angular CLI MCP; launch workspace-dependent tools from this directory. VS Code has an equivalent `.vscode/mcp.json`.
+`.mcp.json` registers Playwright and Angular CLI MCP; launch workspace-dependent tools from this directory. VS Code has an equivalent `.vscode/mcp.json`. Shared agent rules live in the root [AGENTS.md](../AGENTS.md) and [CLAUDE.md](../CLAUDE.md).

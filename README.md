@@ -46,4 +46,4 @@ See [setup](docs/SETUP.md) for prerequisites, local development, infrastructure 
 - [Deployment](docs/DEPLOYMENT.md)
 - [Testing and coverage policy](docs/TESTING.md)
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before making changes.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before making changes. Coding agents must follow [AGENTS.md](AGENTS.md); Claude loads the same instructions through [CLAUDE.md](CLAUDE.md).
