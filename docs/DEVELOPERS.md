@@ -49,3 +49,16 @@ dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- export-openap
 The command writes both JSON and YAML. Review both diffs and verify feature configuration so a disabled feature does not unintentionally disappear from the committed reference.
 
 Update backend registries, frontend flag generation/types, environment templates, deployment mappings, tests, and documentation together when adding a shared feature flag. Some backend flags are intentionally backend-only; see [configuration](CONFIGURATION.md).
+
+## Pull requests
+
+Keep the pull request focused and structure its description with:
+
+- **Summary:** a concise overview of the outcome.
+- **Context:** the issue, bug, or user need that prompted the change, including a link or identifier when available.
+- **Changes made:** the important implementation and documentation changes.
+- **How to test:** clear verification steps and the checks that were run, distinguishing passed checks from checks that could not be run.
+- **Screenshots:** before-and-after or resulting UI evidence for frontend changes.
+- **Reviewer notes:** migrations, configuration changes, known limitations, follow-up work, or anything else that will help the reviewer.
+
+Screenshots and reviewer notes may be omitted when they are not relevant. See [CONTRIBUTING.md](../CONTRIBUTING.md) for the complete contribution workflow.

@@ -54,4 +54,13 @@ CI also audits dependencies: NuGet high/critical advisories, npm production high
 
 ## Pull requests
 
-Explain the concrete problem, resulting behavior, and validation performed. Include relevant issues, configuration or migration requirements, and known limitations. Clearly distinguish checks that passed from checks that were unavailable. Keep commits reviewable and the PR focused. Review is completed through the repository's pull-request process; the `ai-review` label additionally triggers the configured Claude review workflow for non-draft PRs.
+Keep the pull request focused and structure its description with:
+
+- **Summary:** a concise overview of the outcome.
+- **Context:** the issue, bug, or user need that prompted the change, including a link or identifier when available.
+- **Changes made:** the important implementation and documentation changes.
+- **How to test:** clear verification steps and the checks that were run, distinguishing passed checks from checks that could not be run.
+- **Screenshots:** before-and-after or resulting UI evidence for frontend changes.
+- **Reviewer notes:** migrations, configuration changes, known limitations, follow-up work, or anything else that will help the reviewer.
+
+Screenshots and reviewer notes may be omitted when they are not relevant. Keep commits reviewable. Review is completed through the repository's pull-request process; the `ai-review` label additionally triggers the configured Claude review workflow for non-draft PRs.

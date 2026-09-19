@@ -10,6 +10,21 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md), [developer conventions](docs/DEVELOPERS
 - Organize work into multiple logical commits when the task has distinct changes. Stage explicit paths or hunks, inspect `git diff --cached`, validate the group, and commit each coherent purpose separately. Keep coupled code/tests/contracts together so intermediate commits remain consistent; do not split an indivisible fix artificially.
 - Avoid blanket staging, secrets, local environments, generated dependencies, and build output. Do not amend others' commits or rewrite shared history without explicit authorization.
 
+## Pull requests and reviews
+
+When asked to open a pull request, keep it focused and include:
+
+- **Summary:** a concise overview of the outcome.
+- **Context:** the issue, bug, or user need that prompted the change, including a link or identifier when available.
+- **Changes made:** the important implementation and documentation changes.
+- **How to test:** clear verification steps and the checks that were run, distinguishing passed checks from checks that could not be run.
+- **Screenshots:** before-and-after or resulting UI evidence for frontend changes.
+- **Reviewer notes:** migrations, configuration changes, known limitations, follow-up work, or anything else that will help the reviewer.
+
+Screenshots and reviewer notes may be omitted when they are not relevant.
+
+When reviewing a pull request, assess both behavioral correctness and code quality. In addition to defects and regressions, consider maintainability, clarity, unnecessary complexity, duplication, consistency with the established architecture, and the quality of the tests. Treat material correctness risks, architectural violations, and maintainability problems as blocking findings. Present minor improvements as non-blocking suggestions, and avoid blocking solely on personal style preferences that are not established project conventions.
+
 ## Project boundaries
 
 The frontend is Angular 22/TypeScript with SSR, NgRx, RxJS, Tailwind, and ZoneJS. All .NET projects target .NET 10; `global.json` selects the SDK. The backend uses PostgreSQL/EF Core, Redis, Elasticsearch, and Kafka. Five standalone workers handle search indexing and notifications.
