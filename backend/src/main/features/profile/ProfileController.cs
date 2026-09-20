@@ -175,6 +175,12 @@ namespace backend.main.features.profile
         // This is the one image endpoint whose bytes flow through our servers and consume our
         // bandwidth, so it reuses the same policy as minting a presigned URL rather than falling
         // back to the global limiter.
+        //
+        // Sharing one per-account budget with presigned minting is deliberate: both hand the
+        // caller a blob, and a single bucket bounds how much storage one account can claim however
+        // it arrives. The cost is that filling a club gallery spends the same 30 permits as
+        // changing an avatar, so a burst of one starves the other for the rest of the window.
+        // Split the policy if that ever bites; the two are not otherwise coupled.
         [EnableRateLimiting(RateLimiterConfiguration.ImageUploadPolicyName)]
         // Raise the per-request cap above Kestrel's 1 MB global default to match the avatar limit
         // enforced by AvatarUploadRequest; otherwise larger uploads are rejected by the server

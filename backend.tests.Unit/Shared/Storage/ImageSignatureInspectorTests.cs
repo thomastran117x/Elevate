@@ -72,6 +72,21 @@ public class ImageSignatureInspectorTests
     }
 
     [Fact]
+    public void TryDetect_ShouldAcceptAPolyglotThatReallyIsAnImage()
+    {
+        // Documents the boundary of this layer rather than asserting a defence. Magic bytes prove
+        // a file is not "not an image"; they cannot prove it is only an image. A payload behind a
+        // genuine GIF89a header is a genuine GIF and is stored as one. Rejecting it needs full
+        // decode and re-encode, which is the separately tracked media-worker work.
+        var polyglot = (byte[])[.. "GIF89a"u8, .. "<script>alert(1)</script>"u8];
+
+        ImageSignatureInspector.TryDetect(polyglot, out var signature).Should().BeTrue();
+
+        signature.Format.Should().Be(ImageFormat.Gif);
+        signature.ContentType.Should().Be("image/gif");
+    }
+
+    [Fact]
     public void TryDetect_ShouldRestoreTheStreamPositionItWasGiven()
     {
         using var stream = new MemoryStream(PngBytes());
