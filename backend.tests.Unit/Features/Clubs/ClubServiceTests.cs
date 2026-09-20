@@ -15,6 +15,8 @@ using backend.main.shared.exceptions.http;
 using backend.main.shared.responses;
 using backend.main.shared.storage;
 
+using backend.tests.Unit.Support;
+
 using FluentAssertions;
 
 using Microsoft.AspNetCore.Http;
@@ -1564,6 +1566,11 @@ public class ClubServiceTests
             BlobServiceMock
                 .Setup(service => service.IsOwnedBlobUrl(It.Is<string>(url => url.StartsWith("https://cdn.test/clubs/", StringComparison.Ordinal))))
                 .Returns(true);
+
+            // Attaching also inspects what actually landed in storage. No test here PUTs bytes to
+            // a presigned URL, so every blob reports as a small valid image unless a test stages
+            // something else.
+            BlobServiceMock.StubAcceptableBlobs();
 
             // Attaching an image now requires proof that this service issued the upload to this
             // user, so the fake cache has to serve the intents the tests say were issued.

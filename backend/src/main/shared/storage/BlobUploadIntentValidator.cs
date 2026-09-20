@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -26,7 +27,8 @@ internal sealed record BlobUploadIntent(
 
 /// <summary>
 /// Proves that an image URL came from a presigned upload this service issued, to this user —
-/// rather than being any URL a caller pasted in.
+/// rather than being any URL a caller pasted in — and that what was actually uploaded is an image
+/// within the configured size cap.
 /// <para>
 /// Shared by the event and club attach paths so both enforce the same checks. Without the intent
 /// check, an owned-container URL belonging to another user is indistinguishable from one's own:
@@ -34,7 +36,8 @@ internal sealed record BlobUploadIntent(
 /// </para>
 /// <para>
 /// Static rather than injected because <c>EventsServiceHarness</c> constructs <c>EventsService</c>
-/// positionally, so its constructor must not gain dependencies.
+/// positionally, so its constructor must not gain dependencies. The size cap therefore travels on
+/// <see cref="IAzureBlobService.MaxImageBytes"/>, which every caller already passes in.
 /// </para>
 /// </summary>
 internal static class BlobUploadIntentValidator
@@ -54,7 +57,8 @@ internal static class BlobUploadIntentValidator
 
     /// <summary>
     /// Resolves the upload intent behind a URL, rejecting anything that is not an HTTPS URL in our
-    /// own container backed by a live intent issued to <paramref name="userId"/>.
+    /// own container backed by a live intent issued to <paramref name="userId"/>, and anything
+    /// whose stored bytes are not an acceptable image.
     /// </summary>
     /// <param name="subject">
     /// Names the thing being attached in the error message — "Event images" or "Club images".
@@ -94,6 +98,110 @@ internal static class BlobUploadIntentValidator
                 "Image upload is invalid or does not belong to this organizer.");
         }
 
+        await RequireAcceptableBlobAsync(blobService, imageUrl, intent, subject);
+
         return intent;
+    }
+
+    /// <summary>
+    /// Checks what actually landed in storage. A SAS bounds neither the size nor the content of
+    /// an upload, and the container is publicly readable, so attach time is the only moment where
+    /// the bytes exist and we still hold a handle to them.
+    /// </summary>
+    /// <remarks>
+    /// A rejected blob is deleted here rather than left to <c>OrphanBlobCleanupRunner</c>, which
+    /// is feature-gated off by default and never touches anything younger than its
+    /// <c>MinAgeHours</c> floor. Deletion is best-effort and swallows its own failures, so it
+    /// cannot mask the rejection.
+    /// </remarks>
+    private static async Task RequireAcceptableBlobAsync(
+        IAzureBlobService blobService,
+        string imageUrl,
+        BlobUploadIntent intent,
+        string subject)
+    {
+        var inspection = await blobService.InspectBlobAsync(imageUrl);
+        if (inspection == null)
+        {
+            throw new BadRequestException(
+                "Image upload did not complete. Please upload the image again.");
+        }
+
+        var blob = inspection.Value;
+
+        if (blob.ContentLength <= 0)
+        {
+            await blobService.DeleteBlobAsync(imageUrl);
+
+            throw new BadRequestException(
+                "Image upload did not complete. Please upload the image again.");
+        }
+
+        if (blob.ContentLength > blobService.MaxImageBytes)
+        {
+            await blobService.DeleteBlobAsync(imageUrl);
+
+            throw new BadRequestException(
+                $"{subject} must be smaller than {DescribeLimit(blobService.MaxImageBytes)}.");
+        }
+
+        if (!ImageSignatureInspector.TryDetect(blob.HeaderBytes, out var signature))
+        {
+            await blobService.DeleteBlobAsync(imageUrl);
+
+            throw new BadRequestException(
+                "Only JPEG, PNG, WEBP, and GIF images are supported.");
+        }
+
+        // The declared type is cross-checked against the bytes so a blob cannot be served as
+        // something it is not. The blob's own stored type is the fallback because the browser
+        // sends "application/octet-stream" when it cannot determine a file's type, and the
+        // presigned endpoint then derives the stored type from the file extension instead.
+        if ((TryResolveDeclaredFormat(intent.ContentType, out var declaredFormat) ||
+             TryResolveDeclaredFormat(blob.ContentType, out declaredFormat)) &&
+            signature.Format != declaredFormat)
+        {
+            await blobService.DeleteBlobAsync(imageUrl);
+
+            throw new BadRequestException(
+                "The uploaded file does not match the image type that was selected.");
+        }
+    }
+
+    /// <remarks>
+    /// Matched by format rather than by string: the presigned endpoint accepts <c>image/jpg</c>
+    /// as well as <c>image/jpeg</c>, while the inspector only ever reports the canonical
+    /// <c>image/jpeg</c>.
+    /// </remarks>
+    private static bool TryResolveDeclaredFormat(string? contentType, out ImageFormat format)
+    {
+        switch ((contentType ?? string.Empty).Trim().ToLowerInvariant())
+        {
+            case "image/jpeg":
+            case "image/jpg":
+                format = ImageFormat.Jpeg;
+                return true;
+            case "image/png":
+                format = ImageFormat.Png;
+                return true;
+            case "image/webp":
+                format = ImageFormat.Webp;
+                return true;
+            case "image/gif":
+                format = ImageFormat.Gif;
+                return true;
+            default:
+                format = default;
+                return false;
+        }
+    }
+
+    private static string DescribeLimit(long maxBytes)
+    {
+        var megabytes = maxBytes / (double)(1024 * 1024);
+
+        return megabytes >= 1
+            ? $"{megabytes.ToString("0.#", CultureInfo.InvariantCulture)}MB"
+            : $"{Math.Max(maxBytes, 0).ToString(CultureInfo.InvariantCulture)} bytes";
     }
 }
