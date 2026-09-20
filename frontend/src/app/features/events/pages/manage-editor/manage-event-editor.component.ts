@@ -26,6 +26,10 @@ import { EventLifecycleActionsComponent } from '../../components/lifecycle-actio
 import { EventGalleryManagerComponent } from '../../components/event-gallery-manager/event-gallery-manager.component';
 import { lifecycleBadgeClass, lifecycleHint } from '../../models/event-lifecycle';
 
+// Matches the server's ImageUpload:MaxBytes. The server is what enforces it — the browser PUTs
+// straight to storage — but checking here saves the user a pointless multi-megabyte upload.
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
 @Component({
   selector: 'app-manage-event-editor',
   standalone: true,
@@ -492,6 +496,16 @@ export class ManageEventEditorComponent {
       for (const file of files) {
         if (this.imageUrls.length >= 5) {
           break;
+        }
+
+        if (!file.type.startsWith('image/')) {
+          this.error = 'Please choose image files.';
+          continue;
+        }
+
+        if (file.size > MAX_IMAGE_BYTES) {
+          this.error = 'Each image must be smaller than 5MB.';
+          continue;
         }
 
         const publicUrl = await firstValueFrom(
