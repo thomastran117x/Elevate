@@ -7,7 +7,6 @@ using backend.main.features.auth.token;
 using backend.main.features.events;
 using backend.main.features.events.contracts.responses;
 using backend.main.features.events.recentlyviewed.contracts.responses;
-using backend.main.shared.storage;
 using backend.tests.Integration.Infrastructure;
 
 using FluentAssertions;
@@ -422,7 +421,7 @@ public class RecentlyViewedEndpointsTests
                 Name = name,
                 Description = "Recently viewed testing group",
                 Clubtype = "social",
-                ClubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club.png"),
+                ClubImageUrl = await app.CreateClubImageUrlAsync(accessToken),
                 Email = $"{name.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant()}@example.com"
             })));
 
