@@ -147,6 +147,36 @@ public class ProfileEndpointsTests
     }
 
     [Fact]
+    public async Task UploadAvatar_ShouldAcceptARealImageWithNoFileExtension()
+    {
+        // A Blob appended to FormData is sent with the file name "blob" and no extension. The
+        // bytes decide, so this has to succeed; an extension allowlist on the DTO would reject it
+        // during model validation before [ImageContent] ever saw the file.
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var user = await app.SeedUserAsync("avatar-blob-user@example.com");
+        await app.SeedKnownDeviceAsync(user.Id, "avatar-blob-device");
+        var session = await app.LoginApiAsync(
+            "avatar-blob-user",
+            trustedDeviceToken: "avatar-blob-device");
+
+        var multipart = new MultipartFormDataContent();
+        var file = new ByteArrayContent(MinimalPng);
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        multipart.Add(file, "image", "blob");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/profile/avatar")
+        {
+            Content = multipart
+        };
+        await AddAuthAndCsrfAsync(app, request, session.AccessToken);
+        var response = await app.Client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await app.ReadApiResponseAsync<MyProfileResponse>(response);
+        updated.Data!.Avatar.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
     public async Task UploadAvatar_ShouldRejectFilesWhoseBytesAreNotAnImage()
     {
         await using var app = await AuthApiTestApp.CreateAsync();

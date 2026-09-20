@@ -19,9 +19,13 @@ namespace backend.main.features.profile.contracts.requests
         /// </summary>
         public const int MaxRequestBytes = MaxImageBytes + (8 * 1024);
 
+        // No extension allowlist here on purpose. The multipart file name is caller-controlled
+        // and is never used to name the stored blob, so checking it only adds a way to reject a
+        // genuine image: a Blob appended to FormData carries the file name "blob", which has no
+        // extension at all. [ImageContent] subsumes the check and is strictly stronger, because
+        // it reads the bytes rather than believing the caller.
         [Required]
         [MaxFileSize(MaxImageBytes)]
-        [AllowedExtensions(new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif" })]
         [ImageContent]
         public required IFormFile Image
         {
