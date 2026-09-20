@@ -351,7 +351,10 @@ public class EventEndpointsTests
                 registerCost = 0,
                 startTime = DateTime.UtcNow.AddDays(5),
                 endTime = DateTime.UtcNow.AddDays(5).AddHours(2),
-                category = EventCategory.Other
+                category = EventCategory.Other,
+                venueName = "Room A",
+                city = "Toronto",
+                tags = new[] { "testing" }
             })));
 
         update.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(update));
