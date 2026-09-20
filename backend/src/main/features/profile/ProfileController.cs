@@ -181,7 +181,6 @@ namespace backend.main.features.profile
         // by the server before model validation runs.
         [RequestSizeLimit(5 * 1024 * 1024)]
         [ProducesResponseType(typeof(ApiResponse<MyProfileResponse>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> UploadAvatar([FromForm] AvatarUploadRequest request)
         {
             try
