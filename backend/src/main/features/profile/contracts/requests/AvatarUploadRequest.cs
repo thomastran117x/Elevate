@@ -9,6 +9,7 @@ namespace backend.main.features.profile.contracts.requests
         [Required]
         [MaxFileSize(5 * 1024 * 1024)]
         [AllowedExtensions(new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif" })]
+        [ImageContent]
         public required IFormFile Image
         {
             get; set;

@@ -61,6 +61,61 @@ public class ValidationAttributeTests
         Validate(attribute, CreateFormFile("archive.pdf", 128))!.ErrorMessage.Should().Be("Invalid file type. Allowed: .png, .jpg");
     }
 
+    [Fact]
+    public void ImageContent_ShouldJudgeTheBytes_NotTheNameOrTheDeclaredType()
+    {
+        var attribute = new ImageContentAttribute();
+
+        // A real PNG carrying a .jpg name and an image/jpeg header is still a PNG.
+        Validate(attribute, CreateFormFile("avatar.jpg", PngBytes(), "image/jpeg"))
+            .Should().Be(ValidationResult.Success);
+
+        // Arbitrary bytes dressed up as a PNG are not.
+        Validate(attribute, CreateFormFile("avatar.png", [0x01, 0x02, 0x03, 0x04], "image/png"))!
+            .ErrorMessage.Should().Be("The file content must be a JPEG, PNG, WEBP, or GIF image.");
+
+        // An SVG-prefixed polyglot is rejected on its bytes alone.
+        Validate(attribute, CreateFormFile("avatar.png", "<svg onload=alert(1)>"u8.ToArray(), "image/png"))!
+            .ErrorMessage.Should().Be("The file content must be a JPEG, PNG, WEBP, or GIF image.");
+
+        Validate(attribute, "not-a-file").Should().Be(ValidationResult.Success);
+    }
+
+    [Fact]
+    public void ImageContent_ShouldLeaveTheFileReadableForTheSubsequentUpload()
+    {
+        // The attribute reads the header during model validation and the blob service reads the
+        // whole file again afterwards. If the first read consumed or disposed the shared buffer,
+        // the upload would silently store a truncated blob rather than throwing, and no
+        // integration test could catch it: the fake blob service never opens the stream.
+        var content = new byte[2048];
+        PngBytes().CopyTo(content, 0);
+        Random.Shared.NextBytes(content.AsSpan(PngBytes().Length));
+
+        var file = CreateFormFile("avatar.png", content, "image/png");
+
+        Validate(new ImageContentAttribute(), file).Should().Be(ValidationResult.Success);
+
+        using var stream = file.OpenReadStream();
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+
+        buffer.ToArray().Should().Equal(content);
+    }
+
+    private static byte[] PngBytes() =>
+        [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52];
+
+    private static IFormFile CreateFormFile(string fileName, byte[] content, string contentType)
+    {
+        var stream = new MemoryStream(content);
+        return new FormFile(stream, 0, content.Length, "file", fileName)
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = contentType
+        };
+    }
+
     private static ValidationResult? Validate(ValidationAttribute attribute, object? value)
     {
         return attribute.GetValidationResult(value, new ValidationContext(new object()));
