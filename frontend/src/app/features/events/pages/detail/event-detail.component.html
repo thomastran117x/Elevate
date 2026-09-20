@@ -75,14 +75,17 @@
           <section class="surface-panel overflow-hidden rounded-3xl">
             <div class="h-[320px] bg-surface-muted sm:h-[420px]">
               @if (heroImage) {
-                <div
-                  class="h-full w-full bg-cover bg-center"
-                  [style.background-image]="
-                    'linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.48)), url(' +
-                    heroImage +
-                    ')'
-                  "
-                ></div>
+                <!--
+                  A real <img> rather than a CSS background: alt text has nowhere to land on a
+                  background, so the scrim moved to an overlay to make room for it.
+                -->
+                <div class="relative h-full w-full">
+                  <img [src]="heroImage" [alt]="heroAltText" class="h-full w-full object-cover" />
+                  <div
+                    aria-hidden="true"
+                    class="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 to-black/50"
+                  ></div>
+                </div>
               } @else {
                 <div
                   class="flex h-full items-center justify-center bg-accent/10 text-base font-semibold uppercase tracking-[0.18em] text-accent"
@@ -116,6 +119,8 @@
                       : 'border-line bg-surface hover:border-line-strong hover:bg-surface-muted'
                   "
                   (click)="selectImage(index)"
+                  [attr.aria-label]="thumbnailLabel(index)"
+                  [attr.aria-current]="index === selectedImageIndex"
                 >
                   <span
                     class="block h-20 bg-cover bg-center"

@@ -2548,6 +2548,315 @@ public class EventsServiceTests
         return (T)method!.Invoke(null, args)!;
     }
 
+    // ---- Gallery management ----
+
+    [Fact]
+    public async Task ReorderEventImagesAsync_ShouldRenumberSortOrder_AndKeepMetadata()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureImageRepositoryPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 601,
+            lifecycleState: EventLifecycleState.Published,
+            imageUrls:
+            [
+                "https://cdn.test/events/a.png",
+                "https://cdn.test/events/b.png",
+                "https://cdn.test/events/c.png"
+            ]);
+        harness.SetupCachedEvent(ev);
+
+        var images = await harness.Db.EventImages
+            .Where(image => image.EventId == ev.Id)
+            .OrderBy(image => image.SortOrder)
+            .ToListAsync();
+        images[1].AltText = "The middle one";
+        await harness.Db.SaveChangesAsync();
+
+        var reordered = await harness.Service.ReorderEventImagesAsync(
+            ev.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            [images[2].Id, images[0].Id, images[1].Id]);
+
+        reordered.Select(image => image.ImageUrl).Should().Equal(
+            "https://cdn.test/events/c.png",
+            "https://cdn.test/events/a.png",
+            "https://cdn.test/events/b.png");
+        reordered.Select(image => image.SortOrder).Should().Equal(0, 1, 2);
+        reordered.Single(image => image.Id == images[1].Id).AltText.Should().Be("The middle one");
+    }
+
+    [Fact]
+    public async Task ReorderEventImagesAsync_ShouldReject_WhenIdsAreNotACompletePermutation()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureImageRepositoryPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 602,
+            lifecycleState: EventLifecycleState.Published,
+            imageUrls:
+            [
+                "https://cdn.test/events/a.png",
+                "https://cdn.test/events/b.png"
+            ]);
+        harness.SetupCachedEvent(ev);
+
+        var firstId = await harness.Db.EventImages
+            .Where(image => image.EventId == ev.Id)
+            .OrderBy(image => image.SortOrder)
+            .Select(image => image.Id)
+            .FirstAsync();
+
+        var act = () => harness.Service.ReorderEventImagesAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole, [firstId]);
+
+        await act.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("The image order must list every image on this event exactly once.");
+    }
+
+    [Fact]
+    public async Task SetEventCoverImageAsync_ShouldMoveTheCover_LeavingExactlyOne()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureImageRepositoryPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 603,
+            lifecycleState: EventLifecycleState.Published,
+            imageUrls:
+            [
+                "https://cdn.test/events/a.png",
+                "https://cdn.test/events/b.png"
+            ]);
+        harness.SetupCachedEvent(ev);
+
+        var second = await harness.Db.EventImages
+            .Where(image => image.EventId == ev.Id)
+            .OrderBy(image => image.SortOrder)
+            .Skip(1)
+            .FirstAsync();
+
+        var gallery = await harness.Service.SetEventCoverImageAsync(
+            ev.Id, second.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        gallery.Where(image => image.IsCover).Should().ContainSingle()
+            .Which.ImageUrl.Should().Be("https://cdn.test/events/b.png");
+    }
+
+    [Fact]
+    public async Task RemoveEventImageAsync_ShouldPromoteAnotherImage_WhenTheCoverIsDeleted()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureImageRepositoryPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(
+            id: 604,
+            lifecycleState: EventLifecycleState.Published,
+            imageUrls:
+            [
+                "https://cdn.test/events/a.png",
+                "https://cdn.test/events/b.png"
+            ]);
+        harness.SetupCachedEvent(ev);
+
+        var cover = await harness.Db.EventImages
+            .Where(image => image.EventId == ev.Id)
+            .OrderBy(image => image.SortOrder)
+            .FirstAsync();
+        cover.IsCover = true;
+        await harness.Db.SaveChangesAsync();
+
+        await harness.Service.RemoveEventImageAsync(
+            ev.Id, cover.Id, harness.OwnerUserId, harness.OwnerRole);
+
+        var remaining = await harness.Db.EventImages
+            .Where(image => image.EventId == ev.Id)
+            .ToListAsync();
+        remaining.Should().ContainSingle()
+            .Which.IsCover.Should().BeTrue("the event must not be left without a cover");
+    }
+
+    [Fact]
+    public async Task UpdateDraftEvent_ShouldPreserveAltTextAndCover_ForImagesThatSurvive()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureImageRepositoryPersistence();
+
+        var existing = await harness.SeedPersistedEventAsync(
+            id: 605,
+            lifecycleState: EventLifecycleState.Draft,
+            imageUrls:
+            [
+                "https://cdn.test/events/keep.png",
+                "https://cdn.test/events/drop.png"
+            ]);
+
+        var kept = await harness.Db.EventImages
+            .SingleAsync(image => image.ImageUrl == "https://cdn.test/events/keep.png");
+        kept.AltText = "Volunteers setting up the hall";
+        kept.IsCover = true;
+        await harness.Db.SaveChangesAsync();
+        var keptId = kept.Id;
+
+        harness.EventsRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(existing.Id))
+            .ReturnsAsync(() => harness.LoadEvent(existing.Id));
+
+        // An ordinary field edit that resubmits the same gallery must not reset it.
+        await harness.Service.UpdateDraftEvent(
+            existing.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new backend.main.features.events.contracts.requests.EventDraftUpsertRequest
+            {
+                Name = "Renamed Draft",
+                ImageUrls = ["https://cdn.test/events/keep.png"]
+            });
+
+        var survivor = await harness.Db.EventImages
+            .SingleAsync(image => image.EventId == existing.Id);
+        survivor.Id.Should().Be(keptId, "the row is reconciled, not recreated");
+        survivor.AltText.Should().Be("Volunteers setting up the hall");
+        survivor.IsCover.Should().BeTrue();
+    }
+
+    // ---- Upload-intent protections (regression) ----
+
+    [Theory]
+    [InlineData("http://cdn.test/events/insecure.png", "Event images must use a valid HTTPS URL.")]
+    [InlineData("not-a-url", "Event images must use a valid HTTPS URL.")]
+    public async Task AddEventImageAsync_ShouldReject_WhenUrlIsNotHttps(string imageUrl, string expected)
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureImageRepositoryPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(id: 611, lifecycleState: EventLifecycleState.Published);
+        harness.SetupCachedEvent(ev);
+
+        var act = () => harness.Service.AddEventImageAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole, imageUrl);
+
+        await act.Should().ThrowAsync<BadRequestException>().WithMessage(expected);
+    }
+
+    [Fact]
+    public async Task AddEventImageAsync_ShouldReject_WhenUrlIsNotAnOwnedBlob()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureImageRepositoryPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(id: 612, lifecycleState: EventLifecycleState.Published);
+        harness.SetupCachedEvent(ev);
+
+        harness.BlobServiceMock
+            .Setup(service => service.IsOwnedBlobUrl(It.IsAny<string>()))
+            .Returns(false);
+
+        var act = () => harness.Service.AddEventImageAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole, "https://evil.example/photo.png");
+
+        await act.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("Event images must reference uploads issued by this service.");
+    }
+
+    [Fact]
+    public async Task AddEventImageAsync_ShouldReject_WhenNoUploadIntentExists()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureImageRepositoryPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(id: 613, lifecycleState: EventLifecycleState.Published);
+        harness.SetupCachedEvent(ev);
+
+        harness.BlobServiceMock
+            .Setup(service => service.IsOwnedBlobUrl(It.IsAny<string>()))
+            .Returns(true);
+        harness.CacheMock
+            .Setup(cache => cache.GetValueAsync(It.IsAny<string>()))
+            .ReturnsAsync((string?)null);
+
+        var act = () => harness.Service.AddEventImageAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole, "https://cdn.test/events/orphan.png");
+
+        await act.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("Image upload is invalid or expired. Please upload the image again.");
+    }
+
+    [Theory]
+    // Another organizer's upload, our club.
+    [InlineData(4, 99, "Image upload is invalid or does not belong to this organizer.")]
+    // Our upload, but issued for a club we are not attaching to.
+    [InlineData(1234, 7, "Image upload is invalid or does not belong to this organizer.")]
+    public async Task AddEventImageAsync_ShouldReject_WhenIntentBelongsToSomeoneElse(
+        int intentClubId,
+        int intentUserId,
+        string expected)
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureImageRepositoryPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(id: 614, lifecycleState: EventLifecycleState.Published);
+        harness.SetupCachedEvent(ev);
+
+        var url = "https://cdn.test/events/someone-elses.png";
+        harness.BlobServiceMock
+            .Setup(service => service.IsOwnedBlobUrl(It.IsAny<string>()))
+            .Returns(true);
+        harness.CacheMock
+            .Setup(cache => cache.GetValueAsync(It.IsAny<string>()))
+            .ReturnsAsync(JsonSerializer.Serialize(new
+            {
+                ClubId = intentClubId,
+                EventId = (int?)null,
+                UserId = intentUserId,
+                PublicUrl = url,
+                ContentType = "image/png"
+            }));
+
+        var act = () => harness.Service.AddEventImageAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole, url);
+
+        await act.Should().ThrowAsync<BadRequestException>().WithMessage(expected);
+    }
+
+    [Fact]
+    public async Task AddEventImageAsync_ShouldReject_WhenIntentWasIssuedForAnotherEvent()
+    {
+        await using var harness = await EventsServiceHarness.CreateAsync();
+        harness.ConfigureImageRepositoryPersistence();
+
+        var ev = await harness.SeedPersistedEventAsync(id: 615, lifecycleState: EventLifecycleState.Published);
+        harness.SetupCachedEvent(ev);
+
+        var url = "https://cdn.test/events/other-event.png";
+        harness.BlobServiceMock
+            .Setup(service => service.IsOwnedBlobUrl(It.IsAny<string>()))
+            .Returns(true);
+        harness.CacheMock
+            .Setup(cache => cache.GetValueAsync(It.IsAny<string>()))
+            .ReturnsAsync(JsonSerializer.Serialize(new
+            {
+                ClubId = harness.ClubId,
+                EventId = (int?)9999,
+                UserId = harness.OwnerUserId,
+                PublicUrl = url,
+                ContentType = "image/png"
+            }));
+
+        var act = () => harness.Service.AddEventImageAsync(
+            ev.Id, harness.OwnerUserId, harness.OwnerRole, url);
+
+        await act.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("Image upload does not belong to the specified event.");
+    }
+
     private sealed class EventsServiceHarness : IAsyncDisposable
     {
         private readonly SqliteConnection _connection;
@@ -2820,7 +3129,159 @@ public class EventsServiceTests
                     Db.EventImages.Remove(image);
                     return true;
                 });
+
+            ImageRepositoryMock
+                .Setup(repository => repository.GetByEventIdAsync(It.IsAny<int>()))
+                .ReturnsAsync((int eventId) => OrderedImages(eventId));
+
+            ImageRepositoryMock
+                .Setup(repository => repository.AddImageAsync(
+                    It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<bool>()))
+                .ReturnsAsync((int eventId, string url, string? altText, bool isDecorative) =>
+                {
+                    var maxSort = Db.EventImages
+                        .Where(image => image.EventId == eventId)
+                        .Select(image => (int?)image.SortOrder)
+                        .Max() ?? -1;
+
+                    var created = new EventImage
+                    {
+                        EventId = eventId,
+                        ImageUrl = url,
+                        SortOrder = maxSort + 1,
+                        AltText = string.IsNullOrWhiteSpace(altText) ? null : altText.Trim(),
+                        IsDecorative = isDecorative
+                    };
+
+                    Db.EventImages.Add(created);
+                    return created;
+                });
+
+            ImageRepositoryMock
+                .Setup(repository => repository.UpdateMetadataAsync(
+                    It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<bool>()))
+                .ReturnsAsync((int imageId, int eventId, string? altText, bool isDecorative) =>
+                {
+                    var image = Db.EventImages.FirstOrDefault(item => item.Id == imageId && item.EventId == eventId);
+                    if (image == null)
+                        return false;
+
+                    image.AltText = string.IsNullOrWhiteSpace(altText) ? null : altText.Trim();
+                    image.IsDecorative = isDecorative;
+                    return true;
+                });
+
+            ImageRepositoryMock
+                .Setup(repository => repository.ReplaceImageUrlAsync(
+                    It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>()))
+                .ReturnsAsync((int imageId, int eventId, string url) =>
+                {
+                    var image = Db.EventImages.FirstOrDefault(item => item.Id == imageId && item.EventId == eventId);
+                    if (image == null)
+                        return false;
+
+                    image.ImageUrl = url;
+                    return true;
+                });
+
+            ImageRepositoryMock
+                .Setup(repository => repository.ReorderAsync(It.IsAny<int>(), It.IsAny<IReadOnlyList<int>>()))
+                .Returns((int eventId, IReadOnlyList<int> imageIds) =>
+                {
+                    var byId = Db.EventImages
+                        .Where(image => image.EventId == eventId)
+                        .ToDictionary(image => image.Id);
+
+                    for (var position = 0; position < imageIds.Count; position++)
+                    {
+                        if (byId.TryGetValue(imageIds[position], out var image))
+                            image.SortOrder = position;
+                    }
+
+                    return Task.CompletedTask;
+                });
+
+            ImageRepositoryMock
+                .Setup(repository => repository.SetCoverAsync(It.IsAny<int>(), It.IsAny<int>()))
+                .Returns(async (int eventId, int imageId) =>
+                {
+                    foreach (var image in Db.EventImages.Where(item => item.EventId == eventId).ToList())
+                        image.IsCover = image.Id == imageId;
+
+                    await Db.SaveChangesAsync();
+                });
+
+            ImageRepositoryMock
+                .Setup(repository => repository.EnsureCoverAsync(It.IsAny<int>()))
+                .Returns(async (int eventId) =>
+                {
+                    var images = OrderedImages(eventId);
+                    if (images.Count == 0 || images.Any(image => image.IsCover))
+                        return;
+
+                    images[0].IsCover = true;
+                    await Db.SaveChangesAsync();
+                });
+
+            // Mirrors the real repository: images are reconciled by URL so surviving rows keep
+            // their id, alt text and cover flag.
+            ImageRepositoryMock
+                .Setup(repository => repository.SyncImagesAsync(It.IsAny<int>(), It.IsAny<IReadOnlyList<string>>()))
+                .Returns(async (int eventId, IReadOnlyList<string> orderedUrls) =>
+                {
+                    var existing = Db.EventImages.Where(image => image.EventId == eventId).ToList();
+                    var byUrl = new Dictionary<string, EventImage>(StringComparer.Ordinal);
+                    foreach (var image in existing)
+                        byUrl.TryAdd(image.ImageUrl, image);
+
+                    var keptIds = new HashSet<int>();
+                    var seen = new HashSet<string>(StringComparer.Ordinal);
+                    var position = 0;
+
+                    foreach (var url in orderedUrls)
+                    {
+                        if (!seen.Add(url))
+                            continue;
+
+                        if (byUrl.TryGetValue(url, out var image))
+                        {
+                            image.SortOrder = position;
+                            keptIds.Add(image.Id);
+                        }
+                        else
+                        {
+                            Db.EventImages.Add(new EventImage
+                            {
+                                EventId = eventId,
+                                ImageUrl = url,
+                                SortOrder = position
+                            });
+                        }
+
+                        position++;
+                    }
+
+                    var removed = existing.Where(image => !keptIds.Contains(image.Id)).ToList();
+                    if (removed.Count > 0)
+                        Db.EventImages.RemoveRange(removed);
+
+                    await Db.SaveChangesAsync();
+
+                    var remaining = OrderedImages(eventId);
+                    if (remaining.Count > 0 && !remaining.Any(image => image.IsCover))
+                    {
+                        remaining[0].IsCover = true;
+                        await Db.SaveChangesAsync();
+                    }
+                });
         }
+
+        private List<EventImage> OrderedImages(int eventId) =>
+            Db.EventImages
+                .Where(image => image.EventId == eventId)
+                .OrderBy(image => image.SortOrder)
+                .ThenBy(image => image.Id)
+                .ToList();
 
         public async Task<backend.main.features.events.Events> SeedPersistedEventAsync(
             int id = 18,

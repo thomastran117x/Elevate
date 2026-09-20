@@ -10,6 +10,7 @@ import {
   ALL_CATEGORIES,
   ALL_RECURRENCE_FREQUENCIES,
   EventDraftPayload,
+  EventImage,
   EventLifecycleState,
   ManagedEvent,
   OccurrenceEditScope,
@@ -22,6 +23,7 @@ import { EventsManagementService } from '../../services/events-management.servic
 import { EventSeriesService } from '../../services/event-series.service';
 import { OccurrenceScopeDialogComponent } from '../../components/occurrence-scope-dialog/occurrence-scope-dialog.component';
 import { EventLifecycleActionsComponent } from '../../components/lifecycle-actions/lifecycle-actions.component';
+import { EventGalleryManagerComponent } from '../../components/event-gallery-manager/event-gallery-manager.component';
 import { lifecycleBadgeClass, lifecycleHint } from '../../models/event-lifecycle';
 
 @Component({
@@ -33,6 +35,7 @@ import { lifecycleBadgeClass, lifecycleHint } from '../../models/event-lifecycle
     RouterLink,
     OccurrenceScopeDialogComponent,
     EventLifecycleActionsComponent,
+    EventGalleryManagerComponent,
   ],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './manage-event-editor.component.html',
@@ -101,6 +104,13 @@ export class ManageEventEditorComponent {
   eventId = 0;
   event: ManagedEvent | null = null;
   imageUrls: string[] = [];
+
+  /**
+   * The saved gallery, with its order, cover and alt text. Empty until the event exists — an
+   * unsaved draft has no image rows to manage, so it falls back to the plain `imageUrls` list
+   * that the draft payload carries.
+   */
+  images: EventImage[] = [];
   loading = true;
   saving = false;
   uploading = false;
@@ -480,12 +490,24 @@ export class ManageEventEditorComponent {
 
     try {
       for (const file of files) {
+        if (this.imageUrls.length >= 5) {
+          break;
+        }
+
         const publicUrl = await firstValueFrom(
           this.managementService.uploadImage(targetClubId, file, this.event?.id),
         );
 
-        if (this.imageUrls.length < 5) {
-          this.imageUrls = [...this.imageUrls, publicUrl];
+        this.imageUrls = [...this.imageUrls, publicUrl];
+
+        // A saved event attaches through the gallery endpoint so the image gets a row — and so
+        // an id to reorder, describe or make the cover. An unsaved draft has nothing to attach
+        // to yet, so its URLs ride along in the draft payload until the first save.
+        if (this.event?.id) {
+          const attached = await firstValueFrom(
+            this.managementService.addEventImage(this.event.id, { imageUrl: publicUrl }),
+          );
+          this.images = [...this.images, attached];
         }
       }
     } catch (error: unknown) {
@@ -501,6 +523,12 @@ export class ManageEventEditorComponent {
 
   removeImage(index: number): void {
     this.imageUrls = this.imageUrls.filter((_, currentIndex) => currentIndex !== index);
+  }
+
+  /** Keeps the draft payload's URL list in step with whatever the gallery editor just saved. */
+  onGalleryChanged(images: EventImage[]): void {
+    this.images = images;
+    this.imageUrls = images.map((image) => image.url);
   }
 
   saveDraft(): void {
@@ -607,6 +635,7 @@ export class ManageEventEditorComponent {
     this.event = event;
     this.clubId = event.clubId;
     this.imageUrls = [...event.imageUrls];
+    this.images = [...event.images];
     this.form.patchValue({
       name: event.name ?? '',
       description: event.description ?? '',

@@ -72,6 +72,11 @@
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>backend.tests.Unit</_Parameter1>
     </AssemblyAttribute>
+    <!-- Service-level integration tests construct ClubService directly and have to seed the
+         upload intents that attaching an image now requires. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>backend.tests.Integration</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 
 </Project>

@@ -47,8 +47,9 @@ public class ClubEndpointsTests
             HttpMethod.Post,
             "/api/clubs",
             ownerSession.AccessToken,
-            JsonContent.Create(CreateClubPayload(
+            JsonContent.Create(await CreateClubPayload(
                 app,
+                ownerSession.AccessToken,
                 name: "Chess Club",
                 description: "Board games",
                 clubtype: "social",
@@ -80,8 +81,9 @@ public class ClubEndpointsTests
             HttpMethod.Put,
             $"/api/clubs/{club.Id}",
             ownerSession.AccessToken,
-            JsonContent.Create(CreateClubPayload(
+            JsonContent.Create(await CreateClubPayload(
                 app,
+                ownerSession.AccessToken,
                 name: "Campus Chess Club",
                 description: "Board nights",
                 clubtype: "social",
@@ -809,8 +811,9 @@ public class ClubEndpointsTests
             HttpMethod.Post,
             "/api/clubs",
             ownerSession.AccessToken,
-            JsonContent.Create(CreateClubPayload(
+            JsonContent.Create(await CreateClubPayload(
                 app,
+                ownerSession.AccessToken,
                 name: "Debate Society",
                 description: "Campus debate",
                 clubtype: "academic",
@@ -873,8 +876,9 @@ public class ClubEndpointsTests
             HttpMethod.Put,
             $"/api/clubs/{club.Id}",
             ownerSession.AccessToken,
-            JsonContent.Create(CreateClubPayload(
+            JsonContent.Create(await CreateClubPayload(
                 app,
+                ownerSession.AccessToken,
                 name: "Service Club Updated",
                 description: "Community group",
                 clubtype: "social",
@@ -1263,8 +1267,9 @@ public class ClubEndpointsTests
             HttpMethod.Post,
             "/api/clubs",
             accessToken,
-            JsonContent.Create(CreateClubPayload(
+            JsonContent.Create(await CreateClubPayload(
                 app,
+                accessToken,
                 name: name,
                 description: "Campus group",
                 clubtype: "social",
@@ -1290,8 +1295,9 @@ public class ClubEndpointsTests
         return request;
     }
 
-    private static object CreateClubPayload(
+    private static async Task<object> CreateClubPayload(
         AuthApiTestApp app,
+        string accessToken,
         string name,
         string description,
         string clubtype,
@@ -1302,7 +1308,7 @@ public class ClubEndpointsTests
             Name = name,
             Description = description,
             Clubtype = clubtype,
-            ClubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club.png"),
+            ClubImageUrl = await app.CreateClubImageUrlAsync(accessToken),
             Email = email
         };
     }

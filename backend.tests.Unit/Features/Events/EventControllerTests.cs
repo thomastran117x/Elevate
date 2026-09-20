@@ -556,13 +556,15 @@ public class EventControllerTests
     public async Task AddAndRemoveEventImage_ShouldReturnExpectedResponses()
     {
         var service = new Mock<IEventsService>();
-        service.Setup(s => s.AddEventImageAsync(88, 7, "Organizer", "https://cdn.test/new.png"))
+        service.Setup(s => s.AddEventImageAsync(
+                88, 7, "Organizer", "https://cdn.test/new.png", "A packed dance floor", false, false))
             .ReturnsAsync(new EventImage
             {
                 Id = 5,
                 EventId = 88,
                 ImageUrl = "https://cdn.test/new.png",
                 SortOrder = 1,
+                AltText = "A packed dance floor",
                 Event = BuildEvent(88, 4)
             });
         service.Setup(s => s.RemoveEventImageAsync(88, 5, 7, "Organizer"))
@@ -572,13 +574,16 @@ public class EventControllerTests
 
         var addResult = await controller.AddEventImage(new AddEventImageRequest
         {
-            ImageUrl = "https://cdn.test/new.png"
+            ImageUrl = "https://cdn.test/new.png",
+            AltText = "A packed dance floor"
         }, 88);
 
         var created = addResult.Should().BeOfType<ObjectResult>().Subject;
         created.StatusCode.Should().Be(201);
-        created.Value.Should().BeOfType<ApiResponse<object>>()
-            .Which.Message.Should().Be("Image added to event 88 successfully.");
+        var addResponse = created.Value.Should().BeOfType<ApiResponse<EventImageResponse>>().Subject;
+        addResponse.Message.Should().Be("Image added to event 88 successfully.");
+        addResponse.Data!.AltText.Should().Be("A packed dance floor");
+        addResponse.Data!.NeedsAltText.Should().BeFalse();
 
         var removeResult = await controller.RemoveEventImage(88, 5);
         var ok = removeResult.Should().BeOfType<OkObjectResult>().Subject;

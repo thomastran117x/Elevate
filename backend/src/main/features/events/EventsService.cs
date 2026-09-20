@@ -163,6 +163,9 @@ namespace backend.main.features.events
                     _outboxWriter.StageSync(draft);
 
                     await _db.SaveChangesAsync();
+                    // Stamps the cover on the first image so the flag matches what every client
+                    // already renders, rather than relying on the read-side fallback forever.
+                    await _imageRepository.EnsureCoverAsync(draft.Id);
                     await transaction.CommitAsync();
                     return draft;
                 });
@@ -439,6 +442,9 @@ namespace backend.main.features.events
 
                     _outboxWriter.StageSync(draft);
                     await _db.SaveChangesAsync();
+                    // Stamps the cover on the first image so the flag matches what every client
+                    // already renders, rather than relying on the read-side fallback forever.
+                    await _imageRepository.EnsureCoverAsync(draft.Id);
                     await transaction.CommitAsync();
                     return draft;
                 });
@@ -552,12 +558,11 @@ namespace backend.main.features.events
                 {
                     await using var transaction = await _db.Database.BeginTransactionAsync();
 
+                    // Reconciled rather than replaced wholesale: a delete-and-re-add would
+                    // discard the alt text, cover flag and id of every image that survived the
+                    // edit, so an ordinary field change would silently reset the gallery.
                     if (requestedImageUrls != null)
-                    {
-                        await _imageRepository.DeleteAllByEventIdAsync(eventId);
-                        if (requestedImageUrls.Count > 0)
-                            await _imageRepository.AddImagesAsync(eventId, requestedImageUrls);
-                    }
+                        await _imageRepository.SyncImagesAsync(eventId, requestedImageUrls);
 
                     AddVersionRecord(
                         existing,
@@ -710,8 +715,7 @@ namespace backend.main.features.events
 
                     if (requestedImageUrls != null)
                     {
-                        await _imageRepository.DeleteAllByEventIdAsync(eventId);
-                        await _imageRepository.AddImagesAsync(eventId, requestedImageUrls);
+                        await _imageRepository.SyncImagesAsync(eventId, requestedImageUrls);
                     }
 
                     AddVersionRecord(
@@ -967,6 +971,12 @@ namespace backend.main.features.events
                     }
 
                     await _db.SaveChangesAsync();
+
+                    // Stamps the cover on the first image so the flag matches what every client
+                    // already renders, rather than relying on the read-side fallback forever.
+                    foreach (var ev in createdEntities)
+                        await _imageRepository.EnsureCoverAsync(ev.Id);
+
                     await transaction.CommitAsync();
                     return createdEntities;
                 });
@@ -1358,7 +1368,7 @@ namespace backend.main.features.events
 
                 var result = await _blobService.GenerateUploadUrlAsync(scope, fileName, contentType);
 
-                var intent = new EventImageUploadIntent(
+                var intent = new BlobUploadIntent(
                     clubId,
                     eventId,
                     userId,
@@ -1390,7 +1400,14 @@ namespace backend.main.features.events
             }
         }
 
-        public async Task<EventImage> AddEventImageAsync(int eventId, int userId, string userRole, string imageUrl)
+        public async Task<EventImage> AddEventImageAsync(
+            int eventId,
+            int userId,
+            string userRole,
+            string imageUrl,
+            string? altText = null,
+            bool isDecorative = false,
+            bool isCover = false)
         {
             try
             {
@@ -1403,13 +1420,18 @@ namespace backend.main.features.events
                 if (count >= 5)
                     throw new BadRequestException("An event cannot have more than 5 images.");
 
-                var images = await _imageRepository.AddImagesAsync(eventId, new[] { imageUrl });
+                var image = await _imageRepository.AddImageAsync(
+                    eventId, imageUrl, altText, isDecorative);
                 await _db.SaveChangesAsync();
 
-                await _refreshCache.RemoveAsync(EventCacheKeys.Event(eventId));
-                await BumpEventListVersionAsync();
+                if (isCover)
+                    await _imageRepository.SetCoverAsync(eventId, image.Id);
+                else
+                    await _imageRepository.EnsureCoverAsync(eventId);
 
-                return images[0];
+                await InvalidateEventCachesAsync(eventId);
+
+                return await _imageRepository.GetByIdAsync(image.Id, eventId) ?? image;
             }
             catch (Exception e)
             {
@@ -1417,6 +1439,174 @@ namespace backend.main.features.events
                     throw;
 
                 Logger.Error($"[EventsService] AddEventImageAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<List<EventImage>> GetEventImagesAsync(int eventId, int userId, string userRole)
+        {
+            try
+            {
+                var ev = await GetEvent(eventId);
+                await EnsureCanManageEventMediaAsync(ev, userId, userRole);
+
+                return await _imageRepository.GetByEventIdAsync(eventId);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] GetEventImagesAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<EventImage> UpdateEventImageAsync(
+            int eventId,
+            int imageId,
+            int userId,
+            string userRole,
+            string? altText,
+            bool isDecorative)
+        {
+            try
+            {
+                var ev = await GetEvent(eventId);
+                await EnsureCanManageEventMediaAsync(ev, userId, userRole);
+
+                var updated = await _imageRepository.UpdateMetadataAsync(
+                    imageId, eventId, altText, isDecorative);
+
+                if (!updated)
+                {
+                    throw new ResourceNotFoundException(
+                        $"Image {imageId} not found on event {eventId}");
+                }
+
+                await _db.SaveChangesAsync();
+                await InvalidateEventCachesAsync(eventId);
+
+                return await _imageRepository.GetByIdAsync(imageId, eventId)
+                    ?? throw new InternalServerErrorException("Failed to reload updated image");
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] UpdateEventImageAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<EventImage> ReplaceEventImageAsync(
+            int eventId,
+            int imageId,
+            int userId,
+            string userRole,
+            string imageUrl)
+        {
+            try
+            {
+                var ev = await GetEvent(eventId);
+                await EnsureCanManageEventMediaAsync(ev, userId, userRole);
+
+                var existing = await _imageRepository.GetByIdAsync(imageId, eventId)
+                    ?? throw new ResourceNotFoundException(
+                        $"Image {imageId} not found on event {eventId}");
+
+                // The replacement is a fresh upload and gets the same proof as any other.
+                await ValidateUploadedImageUrlsAsync(ev.ClubId, userId, new[] { imageUrl }, eventId);
+
+                var previousUrl = existing.ImageUrl;
+                if (string.Equals(previousUrl, imageUrl, StringComparison.Ordinal))
+                    return existing;
+
+                await _imageRepository.ReplaceImageUrlAsync(imageId, eventId, imageUrl);
+                await _db.SaveChangesAsync();
+
+                await _blobService.DeleteBlobAsync(previousUrl);
+                await InvalidateEventCachesAsync(eventId);
+
+                return await _imageRepository.GetByIdAsync(imageId, eventId)
+                    ?? throw new InternalServerErrorException("Failed to reload replaced image");
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] ReplaceEventImageAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<List<EventImage>> ReorderEventImagesAsync(
+            int eventId,
+            int userId,
+            string userRole,
+            IReadOnlyList<int> imageIds)
+        {
+            try
+            {
+                var ev = await GetEvent(eventId);
+                await EnsureCanManageEventMediaAsync(ev, userId, userRole);
+
+                var current = await _imageRepository.GetByEventIdAsync(eventId);
+                var currentIds = current.Select(image => image.Id).ToHashSet();
+
+                // A partial list is rejected rather than applied: a client working from a stale
+                // gallery would otherwise silently push the images it never saw to the end.
+                if (imageIds.Count != currentIds.Count || !imageIds.All(currentIds.Contains))
+                {
+                    throw new BadRequestException(
+                        "The image order must list every image on this event exactly once.");
+                }
+
+                await _imageRepository.ReorderAsync(eventId, imageIds);
+                await _db.SaveChangesAsync();
+
+                await InvalidateEventCachesAsync(eventId);
+
+                return await _imageRepository.GetByEventIdAsync(eventId);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] ReorderEventImagesAsync failed: {e}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task<List<EventImage>> SetEventCoverImageAsync(
+            int eventId,
+            int imageId,
+            int userId,
+            string userRole)
+        {
+            try
+            {
+                var ev = await GetEvent(eventId);
+                await EnsureCanManageEventMediaAsync(ev, userId, userRole);
+
+                _ = await _imageRepository.GetByIdAsync(imageId, eventId)
+                    ?? throw new ResourceNotFoundException(
+                        $"Image {imageId} not found on event {eventId}");
+
+                await _imageRepository.SetCoverAsync(eventId, imageId);
+                await InvalidateEventCachesAsync(eventId);
+
+                return await _imageRepository.GetByEventIdAsync(eventId);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[EventsService] SetEventCoverImageAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
         }
@@ -1435,10 +1625,14 @@ namespace backend.main.features.events
                 await _imageRepository.DeleteImageAsync(imageId, eventId);
                 await _db.SaveChangesAsync();
 
-                _ = _blobService.DeleteBlobAsync(image.ImageUrl);
+                // Removing the cover leaves the event without one; the next image takes over.
+                await _imageRepository.EnsureCoverAsync(eventId);
 
-                await _refreshCache.RemoveAsync(EventCacheKeys.Event(eventId));
-                await BumpEventListVersionAsync();
+                // Awaited rather than fire-and-forget: the task would otherwise outlive the DI
+                // scope owning _blobService. DeleteBlobAsync is already best-effort internally.
+                await _blobService.DeleteBlobAsync(image.ImageUrl);
+
+                await InvalidateEventCachesAsync(eventId);
             }
             catch (Exception e)
             {
@@ -2001,6 +2195,16 @@ namespace backend.main.features.events
 
         private static string GetImageUploadIntentKey(string imageUrl) =>
             EventImageUploadValidator.IntentKey(imageUrl);
+
+        /// <summary>
+        /// Drops the cached event and bumps the list version. Gallery edits change what every
+        /// listing renders as the cover, so they have to invalidate both.
+        /// </summary>
+        private async Task InvalidateEventCachesAsync(int eventId)
+        {
+            await _refreshCache.RemoveAsync(EventCacheKeys.Event(eventId));
+            await BumpEventListVersionAsync();
+        }
 
         // The policy itself lives in EventAccessChecker so that components which cannot
         // depend on IEventsService (the waitlist promoter) can evaluate the same rules.

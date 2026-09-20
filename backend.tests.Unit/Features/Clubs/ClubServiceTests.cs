@@ -40,6 +40,7 @@ public class ClubServiceTests
                 Email = "owner@test.local",
                 Usertype = " Organizer "
             });
+        harness.IssueUploads(harness.OwnerUserId, 0, "https://cdn.test/clubs/new-club.png");
 
         var created = await harness.Service.CreateClub(
             harness.OwnerUserId,
@@ -248,6 +249,7 @@ public class ClubServiceTests
     {
         await using var harness = await ClubServiceHarness.CreateAsync();
         var existing = await harness.SeedPersistedClubAsync(id: 61, userId: harness.OwnerUserId);
+        harness.IssueUploads(harness.OwnerUserId, existing.Id, "https://cdn.test/clubs/updated.png");
 
         var updated = await harness.Service.UpdateClub(
             existing.Id,
@@ -388,6 +390,13 @@ public class ClubServiceTests
                 Email = "owner@test.local",
                 Usertype = "Organizer"
             });
+        harness.IssueUploads(
+            harness.OwnerUserId,
+            0,
+            "https://cdn.test/clubs/icon.png",
+            "https://cdn.test/clubs/banner.png",
+            "https://cdn.test/clubs/g1.png",
+            "https://cdn.test/clubs/g2.png");
 
         var created = await harness.Service.CreateClub(
             harness.OwnerUserId,
@@ -426,6 +435,8 @@ public class ClubServiceTests
                 Usertype = "Organizer"
             });
 
+        harness.IssueUploads(harness.OwnerUserId, 0, "https://cdn.test/clubs/icon.png");
+
         var act = () => harness.Service.CreateClub(
             harness.OwnerUserId,
             new ClubWriteModel
@@ -458,6 +469,8 @@ public class ClubServiceTests
                 Usertype = "Organizer"
             });
 
+        harness.IssueUploads(harness.OwnerUserId, 0, "https://cdn.test/clubs/icon.png");
+
         var act = () => harness.Service.CreateClub(
             harness.OwnerUserId,
             new ClubWriteModel
@@ -486,6 +499,13 @@ public class ClubServiceTests
             "https://cdn.test/clubs/drop.png"
         ];
         await harness.Db.SaveChangesAsync();
+
+        // The images the club already holds are grandfathered; only the new ones need an intent.
+        harness.IssueUploads(
+            harness.OwnerUserId,
+            existing.Id,
+            "https://cdn.test/clubs/new-banner.png",
+            "https://cdn.test/clubs/added.png");
 
         await harness.Service.UpdateClub(
             existing.Id,
@@ -1337,6 +1357,127 @@ public class ClubServiceTests
         return (T)method!.Invoke(null, args)!;
     }
 
+    // ---- Upload-intent protections ----
+    //
+    // IsOwnedBlobUrl only proves a blob sits in our container, which is equally true of every
+    // other user's uploads. These pin the check that makes the URL provably the caller's own.
+
+    [Fact]
+    public async Task CreateClub_ShouldRejectImageUrl_WhenNoUploadIntentExists()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        harness.UserServiceMock
+            .Setup(service => service.GetUserByIdAsync(harness.OwnerUserId))
+            .ReturnsAsync(new User
+            {
+                Id = harness.OwnerUserId,
+                Email = "owner@test.local",
+                Usertype = "Organizer"
+            });
+
+        var act = () => harness.Service.CreateClub(
+            harness.OwnerUserId,
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "A focused club for competitive and casual chess players.",
+                Clubtype = "gaming",
+                ClubImageUrl = "https://cdn.test/clubs/never-uploaded.png"
+            });
+
+        await act.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("Image upload is invalid or expired. Please upload the image again.");
+    }
+
+    [Fact]
+    public async Task CreateClub_ShouldRejectImageUrl_WhenTheUploadBelongsToAnotherUser()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        harness.UserServiceMock
+            .Setup(service => service.GetUserByIdAsync(harness.OwnerUserId))
+            .ReturnsAsync(new User
+            {
+                Id = harness.OwnerUserId,
+                Email = "owner@test.local",
+                Usertype = "Organizer"
+            });
+
+        // Issued to a different organizer; the URL is a perfectly valid owned blob.
+        var stolenUrl = "https://cdn.test/clubs/someone-elses.png";
+        harness.IssueUploads(harness.OtherOwnerUserId, 0, stolenUrl);
+
+        var act = () => harness.Service.CreateClub(
+            harness.OwnerUserId,
+            new ClubWriteModel
+            {
+                Name = "Chess Club",
+                Description = "A focused club for competitive and casual chess players.",
+                Clubtype = "gaming",
+                ClubImageUrl = stolenUrl
+            });
+
+        await act.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("Image upload is invalid or does not belong to this organizer.");
+    }
+
+    [Fact]
+    public async Task UpdateClub_ShouldRejectImageUrl_WhenTheUploadWasIssuedForAnotherClub()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        var existing = await harness.SeedPersistedClubAsync(id: 210, userId: harness.OwnerUserId);
+
+        var foreignUrl = "https://cdn.test/clubs/other-club.png";
+        harness.IssueUploads(harness.OwnerUserId, existing.Id + 1, foreignUrl);
+
+        var act = () => harness.Service.UpdateClub(
+            existing.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new ClubWriteModel
+            {
+                Name = "Updated Club",
+                Description = "An updated description for the club.",
+                Clubtype = "music",
+                ClubImageUrl = foreignUrl
+            });
+
+        await act.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage("Image upload is invalid or does not belong to this club.");
+    }
+
+    [Fact]
+    public async Task UpdateClub_ShouldAllowResubmittingExistingImages_WhenTheirIntentsHaveExpired()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        var existing = await harness.SeedPersistedClubAsync(id: 211, userId: harness.OwnerUserId);
+        existing.BannerImage = "https://cdn.test/clubs/old-banner.png";
+        existing.GalleryImages = ["https://cdn.test/clubs/old-gallery.png"];
+        await harness.Db.SaveChangesAsync();
+
+        // No intents are registered at all: every URL here is one the club already holds, and
+        // intents live for 20 minutes while clubs live indefinitely.
+        var updated = await harness.Service.UpdateClub(
+            existing.Id,
+            harness.OwnerUserId,
+            harness.OwnerRole,
+            new ClubWriteModel
+            {
+                Name = "Updated Club",
+                Description = "An updated description for the club.",
+                Clubtype = "music",
+                ClubImageUrl = existing.ClubImage,
+                BannerImageUrl = "https://cdn.test/clubs/old-banner.png",
+                GalleryImageUrls = ["https://cdn.test/clubs/old-gallery.png"]
+            });
+
+        updated.Name.Should().Be("Updated Club");
+        updated.BannerImage.Should().Be("https://cdn.test/clubs/old-banner.png");
+        updated.GalleryImages.Should().Equal("https://cdn.test/clubs/old-gallery.png");
+    }
+
     private sealed class ClubServiceHarness : IAsyncDisposable
     {
         private readonly SqliteConnection _connection;
@@ -1351,6 +1492,24 @@ public class ClubServiceTests
         public Mock<IRefreshAheadCache> RefreshCacheMock { get; } = new();
         public Mock<IClubSearchService> SearchServiceMock { get; } = new();
         public Mock<IClubSearchOutboxWriter> OutboxWriterMock { get; } = new();
+
+        /// <summary>Upload intents the fake cache will serve, keyed by cache key.</summary>
+        public Dictionary<string, string> UploadIntents { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Records an upload intent for each URL, as if this user had just been issued a presigned
+        /// URL for them. <paramref name="clubId"/> defaults to 0, which is what a club-creation
+        /// upload carries.
+        /// </summary>
+        public void IssueUploads(int userId, int clubId = 0, params string[] urls)
+        {
+            foreach (var url in urls)
+            {
+                UploadIntents[BlobUploadIntentValidator.IntentKey(url)] =
+                    JsonSerializer.Serialize(
+                        new BlobUploadIntent(clubId, null, userId, url, "image/png"));
+            }
+        }
 
         public int OwnerUserId => 7;
         public int OtherOwnerUserId => 8;
@@ -1405,6 +1564,13 @@ public class ClubServiceTests
             BlobServiceMock
                 .Setup(service => service.IsOwnedBlobUrl(It.Is<string>(url => url.StartsWith("https://cdn.test/clubs/", StringComparison.Ordinal))))
                 .Returns(true);
+
+            // Attaching an image now requires proof that this service issued the upload to this
+            // user, so the fake cache has to serve the intents the tests say were issued.
+            CacheMock
+                .Setup(cache => cache.GetValueAsync(It.IsAny<string>()))
+                .ReturnsAsync((string key) =>
+                    UploadIntents.TryGetValue(key, out var intent) ? intent : null);
 
             Service = new ClubService(
                 db,

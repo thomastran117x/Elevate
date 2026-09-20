@@ -20,6 +20,225 @@ describe('EventsManagementService', () => {
     httpMock.verify();
   });
 
+  describe('gallery management', () => {
+    const wireImage = (overrides: Record<string, unknown> = {}) => ({
+      id: 9,
+      url: 'https://cdn.test/a.png',
+      altText: 'A packed main stage',
+      isDecorative: false,
+      isCover: true,
+      sortOrder: 0,
+      needsAltText: false,
+      createdAt: '2026-05-01T00:00:00Z',
+      updatedAt: '2026-05-02T00:00:00Z',
+      ...overrides,
+    });
+
+    it('normalizes the gallery from a camelCase payload', async () => {
+      const pending = firstValueFrom(service.getEventImages(12));
+
+      const request = httpMock.expectOne(`${base}/12/images`);
+      expect(request.request.method).toBe('GET');
+      request.flush(envelope([wireImage()]));
+
+      const images = await pending;
+      expect(images).toEqual([
+        {
+          id: 9,
+          url: 'https://cdn.test/a.png',
+          altText: 'A packed main stage',
+          isDecorative: false,
+          isCover: true,
+          sortOrder: 0,
+          needsAltText: false,
+          createdAt: '2026-05-01T00:00:00Z',
+          updatedAt: '2026-05-02T00:00:00Z',
+        },
+      ]);
+    });
+
+    it('normalizes a PascalCase gallery payload', async () => {
+      const pending = firstValueFrom(service.getEventImages(12));
+
+      httpMock.expectOne(`${base}/12/images`).flush(
+        pascalEnvelope([
+          {
+            Id: 4,
+            Url: 'https://cdn.test/b.png',
+            AltText: null,
+            IsDecorative: false,
+            IsCover: false,
+            SortOrder: 1,
+            NeedsAltText: true,
+            CreatedAt: '2026-05-01T00:00:00Z',
+            UpdatedAt: '2026-05-01T00:00:00Z',
+          },
+        ]),
+      );
+
+      const images = await pending;
+      expect(images[0].id).toBe(4);
+      expect(images[0].url).toBe('https://cdn.test/b.png');
+      expect(images[0].needsAltText).toBeTrue();
+    });
+
+    it('derives needsAltText when the payload omits it', async () => {
+      const pending = firstValueFrom(service.getEventImages(12));
+
+      httpMock
+        .expectOne(`${base}/12/images`)
+        .flush(envelope([{ id: 7, url: 'https://cdn.test/c.png' }]));
+
+      const images = await pending;
+      expect(images[0].needsAltText).toBeTrue();
+    });
+
+    it('sends alt text when attaching a described image', () => {
+      service
+        .addEventImage(12, { imageUrl: 'https://cdn.test/a.png', altText: 'Main stage' })
+        .subscribe();
+
+      const request = httpMock.expectOne(`${base}/12/images`);
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toEqual({
+        imageUrl: 'https://cdn.test/a.png',
+        altText: 'Main stage',
+        isDecorative: false,
+        isCover: false,
+      });
+      request.flush(envelope(wireImage()));
+    });
+
+    it('drops alt text when the image is marked decorative', () => {
+      service
+        .addEventImage(12, {
+          imageUrl: 'https://cdn.test/a.png',
+          altText: 'ignored',
+          isDecorative: true,
+        })
+        .subscribe();
+
+      const request = httpMock.expectOne(`${base}/12/images`);
+      // The server rejects an image holding both, so one of them has to give.
+      expect(request.request.body.altText).toBeNull();
+      expect(request.request.body.isDecorative).toBeTrue();
+      request.flush(envelope(wireImage({ isDecorative: true, altText: null })));
+    });
+
+    it('patches metadata without touching the image', () => {
+      service.updateEventImage(12, 9, { altText: 'Updated text' }).subscribe();
+
+      const request = httpMock.expectOne(`${base}/12/images/9`);
+      expect(request.request.method).toBe('PATCH');
+      expect(request.request.body).toEqual({ altText: 'Updated text', isDecorative: false });
+      request.flush(envelope(wireImage({ altText: 'Updated text' })));
+    });
+
+    it('puts the full id order when reordering', async () => {
+      const pending = firstValueFrom(service.reorderEventImages(12, [3, 1, 2]));
+
+      const request = httpMock.expectOne(`${base}/12/images/order`);
+      expect(request.request.method).toBe('PUT');
+      expect(request.request.body).toEqual({ imageIds: [3, 1, 2] });
+      request.flush(envelope([wireImage({ id: 3 }), wireImage({ id: 1 }), wireImage({ id: 2 })]));
+
+      expect((await pending).map((image) => image.id)).toEqual([3, 1, 2]);
+    });
+
+    it('sets the cover and returns the whole gallery', async () => {
+      const pending = firstValueFrom(service.setEventCoverImage(12, 9));
+
+      const request = httpMock.expectOne(`${base}/12/images/9/cover`);
+      expect(request.request.method).toBe('PUT');
+      request.flush(
+        envelope([wireImage({ id: 9, isCover: true }), wireImage({ id: 4, isCover: false })]),
+      );
+
+      const gallery = await pending;
+      expect(gallery.filter((image) => image.isCover).length).toBe(1);
+    });
+
+    it('replaces the file behind an image', () => {
+      service.replaceEventImage(12, 9, 'https://cdn.test/new.png').subscribe();
+
+      const request = httpMock.expectOne(`${base}/12/images/9`);
+      expect(request.request.method).toBe('PUT');
+      expect(request.request.body).toEqual({ imageUrl: 'https://cdn.test/new.png' });
+      request.flush(envelope(wireImage({ url: 'https://cdn.test/new.png' })));
+    });
+
+    it('reads a single image back from a PascalCase envelope', async () => {
+      const pending = firstValueFrom(
+        service.addEventImage(12, { imageUrl: 'https://cdn.test/a.png' }),
+      );
+
+      httpMock.expectOne(`${base}/12/images`).flush(
+        pascalEnvelope({
+          Id: 11,
+          Url: 'https://cdn.test/a.png',
+          AltText: 'Described',
+          IsDecorative: false,
+          IsCover: false,
+          SortOrder: 2,
+          NeedsAltText: false,
+          CreatedAt: '2026-05-01T00:00:00Z',
+          UpdatedAt: '2026-05-01T00:00:00Z',
+        }),
+      );
+
+      const image = await pending;
+      expect(image.id).toBe(11);
+      expect(image.altText).toBe('Described');
+    });
+
+    it('survives an empty body rather than throwing on the caller', async () => {
+      const pending = firstValueFrom(service.updateEventImage(12, 9, { isDecorative: true }));
+
+      httpMock.expectOne(`${base}/12/images/9`).flush(envelope(null));
+
+      const image = await pending;
+      expect(image.id).toBe(0);
+      expect(image.url).toBe('');
+    });
+
+    it('treats a null gallery as empty', async () => {
+      const pending = firstValueFrom(service.reorderEventImages(12, [1]));
+
+      httpMock.expectOne(`${base}/12/images/order`).flush(envelope(null));
+
+      expect(await pending).toEqual([]);
+    });
+
+    it('defaults the flags when attaching with only a URL', () => {
+      service.addEventImage(12, { imageUrl: 'https://cdn.test/a.png' }).subscribe();
+
+      const request = httpMock.expectOne(`${base}/12/images`);
+      expect(request.request.body).toEqual({
+        imageUrl: 'https://cdn.test/a.png',
+        altText: null,
+        isDecorative: false,
+        isCover: false,
+      });
+      request.flush(envelope(wireImage()));
+    });
+
+    it('can attach an image as the cover straight away', () => {
+      service.addEventImage(12, { imageUrl: 'https://cdn.test/a.png', isCover: true }).subscribe();
+
+      const request = httpMock.expectOne(`${base}/12/images`);
+      expect(request.request.body.isCover).toBeTrue();
+      request.flush(envelope(wireImage()));
+    });
+
+    it('removes an image', () => {
+      service.removeEventImage(12, 9).subscribe();
+
+      const request = httpMock.expectOne(`${base}/12/images/9`);
+      expect(request.request.method).toBe('DELETE');
+      request.flush({});
+    });
+  });
+
   describe('getManageableEvents', () => {
     const url = `${base}/clubs/3/manage`;
 
