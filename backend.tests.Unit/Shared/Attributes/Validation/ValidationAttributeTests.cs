@@ -1,4 +1,8 @@
 using System.ComponentModel.DataAnnotations;
+using System.Reflection;
+
+using backend.main.features.profile;
+using backend.main.features.profile.contracts.requests;
 
 using backend.app.shared.attributes.validation;
 using backend.main.shared.attributes.validation;
@@ -6,6 +10,8 @@ using backend.main.shared.attributes.validation;
 using FluentAssertions;
 
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Mvc;
 
 namespace backend.tests.Unit.Shared.Attributes.Validation;
 
@@ -114,6 +120,27 @@ public class ValidationAttributeTests
             Headers = new HeaderDictionary(),
             ContentType = contentType
         };
+    }
+
+    [Fact]
+    public void AvatarUpload_ShouldLeaveRequestHeadroomForTheMultipartEnvelope()
+    {
+        // A file at exactly the advertised limit still has to fit inside the per-request cap once
+        // the boundary lines and part headers are added, or Kestrel answers 413 before
+        // MaxFileSizeAttribute can answer with the validation message.
+        var method = typeof(ProfileController).GetMethod(nameof(ProfileController.UploadAvatar))!;
+        var sizeLimit = (IRequestSizeLimitMetadata)method.GetCustomAttribute<RequestSizeLimitAttribute>()!;
+        var requestLimit = sizeLimit.MaxRequestBodySize!.Value;
+
+        requestLimit.Should().Be(AvatarUploadRequest.MaxRequestBytes);
+        requestLimit.Should().BeGreaterThan(AvatarUploadRequest.MaxImageBytes);
+
+        // Enough room for a realistic envelope: two boundary lines plus the part headers.
+        (requestLimit - AvatarUploadRequest.MaxImageBytes).Should().BeGreaterThanOrEqualTo(1024);
+
+        Validate(new MaxFileSizeAttribute(AvatarUploadRequest.MaxImageBytes),
+                CreateFormFile("avatar.png", AvatarUploadRequest.MaxImageBytes))
+            .Should().Be(ValidationResult.Success);
     }
 
     private static ValidationResult? Validate(ValidationAttribute attribute, object? value)
