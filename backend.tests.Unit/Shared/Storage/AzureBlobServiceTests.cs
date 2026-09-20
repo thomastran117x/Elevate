@@ -317,6 +317,36 @@ public class AzureBlobServiceTests
             .WithMessage("*Image is null or empty*");
     }
 
+    [Fact]
+    public async Task InspectBlobAsync_ShouldReturnNull_WhenStorageIsNotConfigured()
+    {
+        var service = CreateServiceWithoutContainer("AZURE_STORAGE_CONNECTION_STRING is not configured.");
+
+        var inspection = await service.InspectBlobAsync("https://eventassets.blob.core.windows.net/media/poster.png");
+
+        inspection.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task InspectBlobAsync_ShouldReturnNull_ForUrlsOutsideOurContainer()
+    {
+        // Reaching storage would need credentials; returning null proves the ownership guard
+        // runs first, so a pasted URL never costs an Azure round trip.
+        var service = CreateServiceWithContainer();
+
+        var inspection = await service.InspectBlobAsync("https://attacker.test/media/poster.png");
+
+        inspection.Should().BeNull();
+    }
+
+    [Fact]
+    public void MaxImageBytes_ShouldComeFromConfiguredOptions()
+    {
+        var service = CreateServiceWithContainer(new ImageUploadOptions { MaxBytes = 1234 });
+
+        service.MaxImageBytes.Should().Be(1234);
+    }
+
     private static byte[] PngBytes() =>
         [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52];
 
@@ -330,7 +360,7 @@ public class AzureBlobServiceTests
         };
     }
 
-    private static AzureBlobService CreateServiceWithContainer()
+    private static AzureBlobService CreateServiceWithContainer(ImageUploadOptions? imageUploadOptions = null)
     {
         var container = new BlobContainerClient(
             "DefaultEndpointsProtocol=https;AccountName=eventassets;AccountKey=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=;EndpointSuffix=core.windows.net",
@@ -339,6 +369,7 @@ public class AzureBlobServiceTests
         var service = (AzureBlobService)RuntimeHelpers.GetUninitializedObject(typeof(AzureBlobService));
         SetPrivateField(service, "_container", container);
         SetPrivateField(service, "_configurationError", null);
+        SetPrivateField(service, "_imageUploadOptions", imageUploadOptions ?? new ImageUploadOptions());
         return service;
     }
 
@@ -347,6 +378,7 @@ public class AzureBlobServiceTests
         var service = (AzureBlobService)RuntimeHelpers.GetUninitializedObject(typeof(AzureBlobService));
         SetPrivateField(service, "_container", null);
         SetPrivateField(service, "_configurationError", configurationError);
+        SetPrivateField(service, "_imageUploadOptions", new ImageUploadOptions());
         return service;
     }
 
@@ -392,7 +424,26 @@ public class AzureBlobServiceTests
             return new AzureBlobServiceHarness(loadContext, type);
         }
 
-        public void CreateInstance() => _instance = Activator.CreateInstance(_type);
+        /// <remarks>
+        /// The options argument has to be built out of the isolated context's own
+        /// <c>ImageUploadOptions</c>, because a type loaded there is not the type of the same
+        /// name loaded here.
+        /// </remarks>
+        public void CreateInstance()
+        {
+            var optionsType = _type.Assembly.GetType(
+                "backend.main.shared.storage.ImageUploadOptions", throwOnError: true)!;
+            var optionsHost = _loadContext.LoadFromAssemblyName(
+                new AssemblyName("Microsoft.Extensions.Options"));
+            var create = optionsHost
+                .GetType("Microsoft.Extensions.Options.Options", throwOnError: true)!
+                .GetMethod("Create")!
+                .MakeGenericMethod(optionsType);
+
+            _instance = Activator.CreateInstance(
+                _type,
+                create.Invoke(null, [Activator.CreateInstance(optionsType)]));
+        }
 
         public string? GetConfigurationError() =>
             (string?)GetField("_configurationError");

@@ -1,3 +1,4 @@
+using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
@@ -6,6 +7,8 @@ using backend.main.application.environment;
 using backend.main.features.events.contracts.responses;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.utilities.logger;
+
+using Microsoft.Extensions.Options;
 
 namespace backend.main.shared.storage
 {
@@ -32,9 +35,14 @@ namespace backend.main.shared.storage
 
         private readonly BlobContainerClient? _container;
         private readonly string? _configurationError;
+        private readonly ImageUploadOptions _imageUploadOptions;
 
-        public AzureBlobService()
+        public long MaxImageBytes => _imageUploadOptions.MaxBytes;
+
+        public AzureBlobService(IOptions<ImageUploadOptions> imageUploadOptions)
         {
+            _imageUploadOptions = imageUploadOptions.Value;
+
             var connectionString = EnvironmentSetting.AzureStorageConnectionString;
             var containerName = EnvironmentSetting.AzureStorageContainerName;
 
@@ -166,6 +174,56 @@ namespace backend.main.shared.storage
             {
                 var url = container.GetBlobClient(blob.Name).Uri.ToString();
                 yield return new BlobListItem(url, blob.Properties.LastModified);
+            }
+        }
+
+        public async Task<BlobInspection?> InspectBlobAsync(
+            string blobUrl,
+            int prefixByteCount = ImageSignatureInspector.HeaderByteCount,
+            CancellationToken cancellationToken = default)
+        {
+            if (!TryGetManagedBlobPath(blobUrl, out var blobPath))
+                return null;
+
+            var container = _container;
+            if (container == null)
+                return null;
+
+            var blobClient = container.GetBlobClient(blobPath);
+
+            try
+            {
+                var properties = await blobClient.GetPropertiesAsync(cancellationToken: cancellationToken);
+
+                // Only the header crosses the wire. Downloading the blob to find out how big it
+                // is would defeat the point of having a size cap at all.
+                var requestedBytes = Math.Max(prefixByteCount, 0);
+                var header = Array.Empty<byte>();
+
+                if (requestedBytes > 0 && properties.Value.ContentLength > 0)
+                {
+                    var download = await blobClient.DownloadStreamingAsync(
+                        new BlobDownloadOptions { Range = new HttpRange(0, requestedBytes) },
+                        cancellationToken);
+
+                    await using var content = download.Value.Content;
+                    var buffer = new byte[requestedBytes];
+                    var read = await content.ReadAtLeastAsync(
+                        buffer, requestedBytes, throwOnEndOfStream: false, cancellationToken);
+                    header = buffer[..read];
+                }
+
+                return new BlobInspection(
+                    properties.Value.ContentLength,
+                    properties.Value.ContentType,
+                    header);
+            }
+            catch (RequestFailedException ex) when (ex.Status == StatusCodes.Status404NotFound)
+            {
+                // The upload never completed, or the blob is already gone. Either way there is
+                // nothing to attach; a transient fault is deliberately not caught here, so it
+                // can never be mistaken for a valid image.
+                return null;
             }
         }
 
