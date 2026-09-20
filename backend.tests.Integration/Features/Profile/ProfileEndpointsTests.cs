@@ -129,7 +129,7 @@ public class ProfileEndpointsTests
             trustedDeviceToken: "avatar-device");
 
         var multipart = new MultipartFormDataContent();
-        var file = new ByteArrayContent(new byte[] { 0x1, 0x2, 0x3, 0x4 });
+        var file = new ByteArrayContent(MinimalPng);
         file.Headers.ContentType = new MediaTypeHeaderValue("image/png");
         multipart.Add(file, "image", "avatar.png");
 
@@ -144,6 +144,73 @@ public class ProfileEndpointsTests
         var updated = await app.ReadApiResponseAsync<MyProfileResponse>(response);
         updated.Data!.Avatar.Should().NotBeNullOrWhiteSpace();
         updated.Data.Avatar!.Should().Contain("avatar.png");
+    }
+
+    [Fact]
+    public async Task UploadAvatar_ShouldAcceptARealImageWithNoFileExtension()
+    {
+        // A Blob appended to FormData is sent with the file name "blob" and no extension. The
+        // bytes decide, so this has to succeed; an extension allowlist on the DTO would reject it
+        // during model validation before [ImageContent] ever saw the file.
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var user = await app.SeedUserAsync("avatar-blob-user@example.com");
+        await app.SeedKnownDeviceAsync(user.Id, "avatar-blob-device");
+        var session = await app.LoginApiAsync(
+            "avatar-blob-user",
+            trustedDeviceToken: "avatar-blob-device");
+
+        var multipart = new MultipartFormDataContent();
+        var file = new ByteArrayContent(MinimalPng);
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        multipart.Add(file, "image", "blob");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/profile/avatar")
+        {
+            Content = multipart
+        };
+        await AddAuthAndCsrfAsync(app, request, session.AccessToken);
+        var response = await app.Client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await app.ReadApiResponseAsync<MyProfileResponse>(response);
+        updated.Data!.Avatar.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task UploadAvatar_ShouldRejectFilesWhoseBytesAreNotAnImage()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var user = await app.SeedUserAsync("avatar-bytes-user@example.com");
+        await app.SeedKnownDeviceAsync(user.Id, "avatar-bytes-device");
+        var session = await app.LoginApiAsync(
+            "avatar-bytes-user",
+            trustedDeviceToken: "avatar-bytes-device");
+
+        var multipart = new MultipartFormDataContent();
+        var file = new ByteArrayContent(new byte[] { 0x1, 0x2, 0x3, 0x4 });
+        file.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+        multipart.Add(file, "image", "avatar.png");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/profile/avatar")
+        {
+            Content = multipart
+        };
+        await AddAuthAndCsrfAsync(app, request, session.AccessToken);
+        var response = await app.Client.SendAsync(request);
+
+        // The rejection comes from [ImageContent] during model validation, not from the blob
+        // service: the harness swaps in FakeAzureBlobService, so the sniff inside
+        // AzureBlobService.UploadImageAsync is not reachable from here.
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().Contain("must be a JPEG, PNG, WEBP, or GIF image");
+
+        var profileRequest = new HttpRequestMessage(HttpMethod.Get, "/api/profile");
+        await AddAuthAndCsrfAsync(app, profileRequest, session.AccessToken);
+        var profileResponse = await app.Client.SendAsync(profileRequest);
+        var profile = await app.ReadApiResponseAsync<MyProfileResponse>(profileResponse);
+
+        profile.Data!.Avatar.Should().BeNullOrWhiteSpace();
     }
 
     [Fact]
@@ -315,6 +382,12 @@ public class ProfileEndpointsTests
         (await response.Content.ReadAsStringAsync()).Should().Contain("already taken");
         (await response.Content.ReadAsStringAsync()).Should().Contain("USERNAME_TAKEN");
     }
+
+    private static readonly byte[] MinimalPng =
+    [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52
+    ];
 
     private static async Task AddAuthAndCsrfAsync(
         AuthApiTestApp app,

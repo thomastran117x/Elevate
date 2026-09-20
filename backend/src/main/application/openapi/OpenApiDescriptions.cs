@@ -222,7 +222,7 @@ namespace backend.main.application.openapi
                 ["POST /api/events/clubs/{clubId}/drafts"] = new("Create a draft event"),
                 ["POST /api/events/images/presigned-url"] = new(
                     "Get a presigned URL for image upload",
-                    "Returns a short-lived presigned URL for direct S3 upload. After uploading, call `POST /api/events/{eventId}/images` with the resulting object key to attach the image to an event."
+                    "Returns a short-lived presigned URL for direct upload to Azure Blob Storage. After uploading, call `POST /api/events/{eventId}/images` with the resulting image URL to attach the image to an event."
                 ),
                 ["GET /api/events/{eventId}"] = new("Get an event"),
                 ["PUT /api/events/{eventId}"] = new("Update an event"),
@@ -340,7 +340,10 @@ namespace backend.main.application.openapi
                     "Change the current user's username",
                     "Requires recent MFA verification. Usernames are trimmed and lowercased; replacing an existing username starts the configured cooldown and reserves the previous username for the same period."
                 ),
-                ["POST /api/profile/avatar"] = new("Update the current user's avatar"),
+                ["POST /api/profile/avatar"] = new(
+                    "Update the current user's avatar",
+                    "Accepts a multipart `image` field up to 5 MB. The stored content type and file extension are derived from the file's own bytes: JPEG, PNG, WEBP, and GIF are accepted and anything else is rejected, whatever the declared `Content-Type` or file name claims."
+                ),
                 ["POST /api/profile/change-password"] = new("Change the current user's password"),
                 ["DELETE /api/profile"] = new("Delete the current user's account"),
 

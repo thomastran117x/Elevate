@@ -275,6 +275,61 @@ public class AzureBlobServiceTests
         harness.GetContainerName().Should().Be("images");
     }
 
+    [Fact]
+    public async Task UploadImageAsync_ShouldThrowUnsupportedMediaType_WhenBytesAreNotAnImage()
+    {
+        // The service has no container, so reaching storage would throw InvalidOperationException
+        // instead. Getting the media-type failure proves the sniff runs before any storage call
+        // and that a rejected upload never creates the container.
+        var service = CreateServiceWithoutContainer("AZURE_STORAGE_CONNECTION_STRING is not configured.");
+        var file = CreateFormFile("avatar.png", [0x01, 0x02, 0x03, 0x04], "image/png");
+
+        await service.Invoking(svc => svc.UploadImageAsync(file, "users"))
+            .Should()
+            .ThrowAsync<UnsupportedMediaTypeException>()
+            .WithMessage("*JPEG, PNG, WEBP, and GIF*");
+    }
+
+    [Fact]
+    public async Task UploadImageAsync_ShouldSniffPastTheFileName_ForRealImageBytes()
+    {
+        // PNG bytes carrying a .jpg name: the declared values disagree with the content, which
+        // the old extension check rejected. Failing on the missing container rather than on the
+        // media type is what says the bytes were accepted and the upload reached storage.
+        var service = CreateServiceWithoutContainer("AZURE_STORAGE_CONNECTION_STRING is not configured.");
+        var file = CreateFormFile("avatar.jpg", PngBytes(), "image/jpeg");
+
+        await service.Invoking(svc => svc.UploadImageAsync(file, "users"))
+            .Should()
+            .ThrowAsync<InvalidOperationException>()
+            .WithMessage("*AZURE_STORAGE_CONNECTION_STRING is not configured.*");
+    }
+
+    [Fact]
+    public async Task UploadImageAsync_ShouldThrowArgumentException_ForEmptyFiles()
+    {
+        var service = CreateServiceWithoutContainer("missing config");
+        var file = CreateFormFile("avatar.png", [], "image/png");
+
+        await service.Invoking(svc => svc.UploadImageAsync(file, "users"))
+            .Should()
+            .ThrowAsync<ArgumentException>()
+            .WithMessage("*Image is null or empty*");
+    }
+
+    private static byte[] PngBytes() =>
+        [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52];
+
+    private static FormFile CreateFormFile(string fileName, byte[] content, string contentType)
+    {
+        var stream = new MemoryStream(content);
+        return new FormFile(stream, 0, content.Length, "image", fileName)
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = contentType
+        };
+    }
+
     private static AzureBlobService CreateServiceWithContainer()
     {
         var container = new BlobContainerClient(

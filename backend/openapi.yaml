@@ -277,6 +277,7 @@ paths:
       tags:
         - profile
       summary: Update the current user's avatar
+      description: 'Accepts a multipart `image` field up to 5 MB. The stored content type and file extension are derived from the file''s own bytes: JPEG, PNG, WEBP, and GIF are accepted and anything else is rejected, whatever the declared `Content-Type` or file name claims.'
       operationId: Profile_UploadAvatar_post
       requestBody:
         content:
@@ -2356,7 +2357,7 @@ paths:
       tags:
         - events
       summary: Get a presigned URL for image upload
-      description: 'Returns a short-lived presigned URL for direct S3 upload. After uploading, call `POST /api/events/{eventId}/images` with the resulting object key to attach the image to an event.'
+      description: 'Returns a short-lived presigned URL for direct upload to Azure Blob Storage. After uploading, call `POST /api/events/{eventId}/images` with the resulting image URL to attach the image to an event.'
       operationId: Events_GetPresignedUploadUrl_post
       requestBody:
         content:
@@ -2410,10 +2411,62 @@ paths:
       security:
         - { }
   '/api/events/{eventId}/images':
+    get:
+      tags:
+        - events
+      summary: List an event's gallery
+      description: 'Returns the images in display order, cover first, with alt text and the `needsAltText` flag for images that still lack it. Requires club staff access.'
+      operationId: Events_GetEventImages_get
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfListOfEventImageResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfListOfEventImageResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfListOfEventImageResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
     post:
       tags:
         - events
       summary: Attach an uploaded image to an event
+      description: 'Accepts optional `altText`, `isDecorative` and `isCover`. Supply either alt text or `isDecorative`; supplying both is rejected. The URL must come from a presigned upload issued to you for this event.'
       operationId: Events_AddEventImage_post
       parameters:
         - name: eventId
@@ -2439,13 +2492,13 @@ paths:
           content:
             text/plain:
               schema:
-                $ref: '#/components/schemas/ApiResponseOfObject'
+                $ref: '#/components/schemas/ApiResponseOfEventImageResponse'
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponseOfObject'
+                $ref: '#/components/schemas/ApiResponseOfEventImageResponse'
             text/json:
               schema:
-                $ref: '#/components/schemas/ApiResponseOfObject'
+                $ref: '#/components/schemas/ApiResponseOfEventImageResponse'
         '400':
           description: 'Bad request, validation failure, or CSRF failure.'
           content:
@@ -2473,10 +2526,147 @@ paths:
       security:
         - { }
   '/api/events/{eventId}/images/{imageId}':
+    patch:
+      tags:
+        - events
+      summary: Edit an image's accessibility metadata
+      description: 'Updates `altText` and `isDecorative` without touching the image, its order, or the cover.'
+      operationId: Events_UpdateEventImage_patch
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+        - name: imageId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEventImageRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEventImageRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/UpdateEventImageRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfEventImageResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfEventImageResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfEventImageResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
+    put:
+      tags:
+        - events
+      summary: Replace the file behind an image
+      description: 'Swaps in a newly uploaded image while keeping the slot''s order, cover flag and alt text. The old blob is deleted.'
+      operationId: Events_ReplaceEventImage_put
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+        - name: imageId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceEventImageRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceEventImageRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/ReplaceEventImageRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfEventImageResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfEventImageResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfEventImageResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
     delete:
       tags:
         - events
       summary: Remove an image from an event
+      description: Removing the cover promotes the next image in order to take its place.
       operationId: Events_RemoveEventImage_delete
       parameters:
         - name: eventId
@@ -2502,6 +2692,127 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
+  '/api/events/{eventId}/images/order':
+    put:
+      tags:
+        - events
+      summary: Reorder an event's gallery
+      description: Takes `imageIds` in the desired order. The list must name every image on the event exactly once; a partial list is rejected rather than applied.
+      operationId: Events_ReorderEventImages_put
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderEventImagesRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/ReorderEventImagesRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/ReorderEventImagesRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfListOfEventImageResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfListOfEventImageResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfListOfEventImageResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
+  '/api/events/{eventId}/images/{imageId}/cover':
+    put:
+      tags:
+        - events
+      summary: Set an event's cover image
+      description: 'Makes this image the cover and clears the previous one. An event has at most one cover, enforced by a unique index.'
+      operationId: Events_SetEventCoverImage_put
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+        - name: imageId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfListOfEventImageResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfListOfEventImageResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfListOfEventImageResponse'
         '400':
           description: 'Bad request, validation failure, or CSRF failure.'
           content:
@@ -4042,6 +4353,412 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfIEnumerableOfEventRegistrationResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
+  '/api/events/{eventId}/view':
+    post:
+      tags:
+        - events
+      summary: Record view
+      operationId: RecentlyViewed_RecordView_post
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+      responses:
+        '201':
+          description: Created
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfRecordEventViewResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfRecordEventViewResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfRecordEventViewResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
+  /api/events/me/recently-viewed:
+    get:
+      tags:
+        - events
+      summary: Get my recently viewed
+      operationId: RecentlyViewed_GetMyRecentlyViewed_get
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfIEnumerableOfRecentlyViewedEventResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfIEnumerableOfRecentlyViewedEventResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfIEnumerableOfRecentlyViewedEventResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
+    delete:
+      tags:
+        - events
+      summary: Clear my recently viewed
+      operationId: RecentlyViewed_ClearMyRecentlyViewed_delete
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
+  /api/events/me/recently-viewed/batch:
+    delete:
+      tags:
+        - events
+      summary: Remove many from my recently viewed
+      operationId: RecentlyViewed_RemoveManyFromMyRecentlyViewed_delete
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchDeleteRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/BatchDeleteRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/BatchDeleteRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
+  '/api/events/me/recently-viewed/{eventId}':
+    delete:
+      tags:
+        - events
+      summary: Remove from my recently viewed
+      operationId: RecentlyViewed_RemoveFromMyRecentlyViewed_delete
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
+  /api/events/me/recently-viewed/merge:
+    post:
+      tags:
+        - events
+      summary: Merge my recently viewed
+      operationId: RecentlyViewed_MergeMyRecentlyViewed_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MergeRecentlyViewedRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/MergeRecentlyViewedRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/MergeRecentlyViewedRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfRecentlyViewedMergeResultResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfRecentlyViewedMergeResultResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfRecentlyViewedMergeResultResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
+  /api/events/me/recently-viewed/settings:
+    get:
+      tags:
+        - events
+      summary: Get my recently viewed settings
+      operationId: RecentlyViewed_GetMyRecentlyViewedSettings_get
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfRecentlyViewedSettingsResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfRecentlyViewedSettingsResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfRecentlyViewedSettingsResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
+    put:
+      tags:
+        - events
+      summary: Update my recently viewed settings
+      operationId: RecentlyViewed_UpdateMyRecentlyViewedSettings_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRecentlyViewedSettingsRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRecentlyViewedSettingsRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/UpdateRecentlyViewedSettingsRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfRecentlyViewedSettingsResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfRecentlyViewedSettingsResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfRecentlyViewedSettingsResponse'
         '400':
           description: 'Bad request, validation failure, or CSRF failure.'
           content:
@@ -11321,6 +12038,15 @@ components:
       properties:
         imageUrl:
           $ref: '#/components/schemas/String'
+        altText:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/String'
+        isDecorative:
+          $ref: '#/components/schemas/Boolean'
+        isCover:
+          description: Makes the new image the event's cover once it is attached.
+          $ref: '#/components/schemas/Boolean'
     ApiError:
       required:
         - code
@@ -11946,6 +12672,31 @@ components:
             - type: 'null'
             - description: Endpoint-specific response payload.
               $ref: '#/components/schemas/EventFavouriteResponse'
+          description: Endpoint-specific response payload. `null` on error responses.
+        error:
+          oneOf:
+            - type: 'null'
+            - description: Structured error details when the request fails.
+              $ref: '#/components/schemas/ApiError'
+          description: Structured error details. Present only when `success` is `false`.
+        meta:
+          description: Optional metadata such as pagination or response source details.
+          $ref: '#/components/schemas/Object'
+      description: Standard JSON envelope returned by all API endpoints.
+    ApiResponseOfEventImageResponse:
+      type: object
+      properties:
+        success:
+          description: Indicates whether the request succeeded.
+          $ref: '#/components/schemas/Boolean'
+        message:
+          description: Human-readable message summarizing the outcome.
+          $ref: '#/components/schemas/String'
+        data:
+          oneOf:
+            - type: 'null'
+            - description: Endpoint-specific response payload.
+              $ref: '#/components/schemas/EventImageResponse'
           description: Endpoint-specific response payload. `null` on error responses.
         error:
           oneOf:
@@ -12632,6 +13383,31 @@ components:
           description: Optional metadata such as pagination or response source details.
           $ref: '#/components/schemas/Object'
       description: Standard JSON envelope returned by all API endpoints.
+    ApiResponseOfIEnumerableOfRecentlyViewedEventResponse:
+      type: object
+      properties:
+        success:
+          description: Indicates whether the request succeeded.
+          $ref: '#/components/schemas/Boolean'
+        message:
+          description: Human-readable message summarizing the outcome.
+          $ref: '#/components/schemas/String'
+        data:
+          oneOf:
+            - type: 'null'
+            - description: Endpoint-specific response payload.
+              $ref: '#/components/schemas/IEnumerableOfRecentlyViewedEventResponse'
+          description: Endpoint-specific response payload. `null` on error responses.
+        error:
+          oneOf:
+            - type: 'null'
+            - description: Structured error details when the request fails.
+              $ref: '#/components/schemas/ApiError'
+          description: Structured error details. Present only when `success` is `false`.
+        meta:
+          description: Optional metadata such as pagination or response source details.
+          $ref: '#/components/schemas/Object'
+      description: Standard JSON envelope returned by all API endpoints.
     ApiResponseOfIEnumerableOfWaitlistedEventResponse:
       type: object
       properties:
@@ -12646,6 +13422,31 @@ components:
             - type: 'null'
             - description: Endpoint-specific response payload.
               $ref: '#/components/schemas/IEnumerableOfWaitlistedEventResponse'
+          description: Endpoint-specific response payload. `null` on error responses.
+        error:
+          oneOf:
+            - type: 'null'
+            - description: Structured error details when the request fails.
+              $ref: '#/components/schemas/ApiError'
+          description: Structured error details. Present only when `success` is `false`.
+        meta:
+          description: Optional metadata such as pagination or response source details.
+          $ref: '#/components/schemas/Object'
+      description: Standard JSON envelope returned by all API endpoints.
+    ApiResponseOfListOfEventImageResponse:
+      type: object
+      properties:
+        success:
+          description: Indicates whether the request succeeded.
+          $ref: '#/components/schemas/Boolean'
+        message:
+          description: Human-readable message summarizing the outcome.
+          $ref: '#/components/schemas/String'
+        data:
+          oneOf:
+            - type: 'null'
+            - description: Endpoint-specific response payload.
+              $ref: '#/components/schemas/ListOfEventImageResponse'
           description: Endpoint-specific response payload. `null` on error responses.
         error:
           oneOf:
@@ -13268,6 +14069,81 @@ components:
             - type: 'null'
             - description: Endpoint-specific response payload.
               $ref: '#/components/schemas/PublicProfileResponse'
+          description: Endpoint-specific response payload. `null` on error responses.
+        error:
+          oneOf:
+            - type: 'null'
+            - description: Structured error details when the request fails.
+              $ref: '#/components/schemas/ApiError'
+          description: Structured error details. Present only when `success` is `false`.
+        meta:
+          description: Optional metadata such as pagination or response source details.
+          $ref: '#/components/schemas/Object'
+      description: Standard JSON envelope returned by all API endpoints.
+    ApiResponseOfRecentlyViewedMergeResultResponse:
+      type: object
+      properties:
+        success:
+          description: Indicates whether the request succeeded.
+          $ref: '#/components/schemas/Boolean'
+        message:
+          description: Human-readable message summarizing the outcome.
+          $ref: '#/components/schemas/String'
+        data:
+          oneOf:
+            - type: 'null'
+            - description: Endpoint-specific response payload.
+              $ref: '#/components/schemas/RecentlyViewedMergeResultResponse'
+          description: Endpoint-specific response payload. `null` on error responses.
+        error:
+          oneOf:
+            - type: 'null'
+            - description: Structured error details when the request fails.
+              $ref: '#/components/schemas/ApiError'
+          description: Structured error details. Present only when `success` is `false`.
+        meta:
+          description: Optional metadata such as pagination or response source details.
+          $ref: '#/components/schemas/Object'
+      description: Standard JSON envelope returned by all API endpoints.
+    ApiResponseOfRecentlyViewedSettingsResponse:
+      type: object
+      properties:
+        success:
+          description: Indicates whether the request succeeded.
+          $ref: '#/components/schemas/Boolean'
+        message:
+          description: Human-readable message summarizing the outcome.
+          $ref: '#/components/schemas/String'
+        data:
+          oneOf:
+            - type: 'null'
+            - description: Endpoint-specific response payload.
+              $ref: '#/components/schemas/RecentlyViewedSettingsResponse'
+          description: Endpoint-specific response payload. `null` on error responses.
+        error:
+          oneOf:
+            - type: 'null'
+            - description: Structured error details when the request fails.
+              $ref: '#/components/schemas/ApiError'
+          description: Structured error details. Present only when `success` is `false`.
+        meta:
+          description: Optional metadata such as pagination or response source details.
+          $ref: '#/components/schemas/Object'
+      description: Standard JSON envelope returned by all API endpoints.
+    ApiResponseOfRecordEventViewResponse:
+      type: object
+      properties:
+        success:
+          description: Indicates whether the request succeeded.
+          $ref: '#/components/schemas/Boolean'
+        message:
+          description: Human-readable message summarizing the outcome.
+          $ref: '#/components/schemas/String'
+        data:
+          oneOf:
+            - type: 'null'
+            - description: Endpoint-specific response payload.
+              $ref: '#/components/schemas/RecordEventViewResponse'
           description: Endpoint-specific response payload. `null` on error responses.
         error:
           oneOf:
@@ -15161,6 +16037,32 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/String'
+    EventImageResponse:
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/Int32'
+        url:
+          $ref: '#/components/schemas/String'
+        altText:
+          oneOf:
+            - type: 'null'
+            - description: "Null when nobody has written alt text yet. Distinct from a decorative image, which is\r\ndeliberately unlabelled — see bool EventImageResponse.IsDecorative."
+              $ref: '#/components/schemas/String'
+        isDecorative:
+          $ref: '#/components/schemas/Boolean'
+        isCover:
+          $ref: '#/components/schemas/Boolean'
+        sortOrder:
+          $ref: '#/components/schemas/Int32'
+        needsAltText:
+          description: 'True when the image still needs alt text, so the editor can flag it.'
+          $ref: '#/components/schemas/Boolean'
+        createdAt:
+          $ref: '#/components/schemas/DateTime'
+        updatedAt:
+          $ref: '#/components/schemas/DateTime'
+      description: "One image in an event's gallery, with the metadata a client needs to render it accessibly\r\nand in the organizer's chosen order."
     EventInvitationDecisionResponse:
       type: object
       properties:
@@ -15461,6 +16363,14 @@ components:
           $ref: '#/components/schemas/String'
         imageUrls:
           $ref: '#/components/schemas/ListOfString'
+        coverImageUrl:
+          oneOf:
+            - type: 'null'
+            - description: "The image representing the event wherever one picture is shown. Null only when the\r\nevent has no images. Also the first entry of List&lt;string&gt; EventResponse.ImageUrls."
+              $ref: '#/components/schemas/String'
+        images:
+          description: 'The full gallery in display order, cover first, with accessibility metadata.'
+          $ref: '#/components/schemas/ListOfEventImageResponse'
         isPrivate:
           $ref: '#/components/schemas/Boolean'
         maxParticipants:
@@ -16167,6 +17077,10 @@ components:
       type: array
       items:
         $ref: '#/components/schemas/PostCommentResponse'
+    IEnumerableOfRecentlyViewedEventResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/RecentlyViewedEventResponse'
     IEnumerableOfWaitlistedEventResponse:
       type: array
       items:
@@ -16246,6 +17160,10 @@ components:
       type: array
       items:
         $ref: '#/components/schemas/DayOfWeek'
+    ListOfEventImageResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/EventImageResponse'
     ListOfEventLifecycleTransitionResponse:
       type: array
       items:
@@ -16270,6 +17188,10 @@ components:
       type: array
       items:
         $ref: '#/components/schemas/ManagedEventResponse'
+    ListOfMergeRecentlyViewedItem:
+      type: array
+      items:
+        $ref: '#/components/schemas/MergeRecentlyViewedItem'
     ListOfString:
       type: array
       items:
@@ -16355,6 +17277,14 @@ components:
             - $ref: '#/components/schemas/String'
         imageUrls:
           $ref: '#/components/schemas/ListOfString'
+        coverImageUrl:
+          oneOf:
+            - type: 'null'
+            - description: "The image representing the event wherever one picture is shown. Null only when the\r\nevent has no images. Also the first entry of List&lt;string&gt; ManagedEventResponse.ImageUrls."
+              $ref: '#/components/schemas/String'
+        images:
+          description: 'The full gallery in display order, cover first, with accessibility metadata.'
+          $ref: '#/components/schemas/ListOfEventImageResponse'
         isPrivate:
           $ref: '#/components/schemas/Boolean'
         maxParticipants:
@@ -16448,6 +17378,19 @@ components:
         availableTransitions:
           description: Every lifecycle move available from the current state.
           $ref: '#/components/schemas/ListOfEventLifecycleTransitionResponse'
+    MergeRecentlyViewedItem:
+      type: object
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Int32'
+        viewedAtUtc:
+          $ref: '#/components/schemas/DateTime'
+    MergeRecentlyViewedRequest:
+      type: object
+      properties:
+        items:
+          $ref: '#/components/schemas/ListOfMergeRecentlyViewedItem'
+      description: "The browser-held history being synced up at login. Every field is client-supplied and\r\ntherefore untrusted: the service clamps timestamps and re-checks visibility on each id."
     MessageResponse:
       type: object
       properties:
@@ -17121,6 +18064,51 @@ components:
         createdAtUtc:
           $ref: '#/components/schemas/DateTime'
       description: "Publicly viewable profile fields for any user, keyed by username.\r\nDeliberately excludes the internal id, email, phone, and address."
+    RecentlyViewedEventResponse:
+      type: object
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Int32'
+        viewedAtUtc:
+          $ref: '#/components/schemas/DateTime'
+        event:
+          $ref: '#/components/schemas/EventResponse'
+      description: 'One entry in the user''s history, carrying the full event so the client can render it directly.'
+    RecentlyViewedMergeResultResponse:
+      type: object
+      properties:
+        merged:
+          $ref: '#/components/schemas/Int32'
+        skipped:
+          $ref: '#/components/schemas/Int32'
+        total:
+          $ref: '#/components/schemas/Int32'
+      description: "    What a sync of the browser-held history actually did.\r\n    int RecentlyViewedMergeResultResponse.Skipped lumps together every reason an item did not land — expired, or an\r\nevent the caller cannot see. Reporting per-item reasons would turn this endpoint into an\r\noracle for probing which private events exist."
+    RecentlyViewedSettingsResponse:
+      type: object
+      properties:
+        enabled:
+          $ref: '#/components/schemas/Boolean'
+        updatedAtUtc:
+          oneOf:
+            - type: 'null'
+            - description: Null while the user has never changed the default.
+              $ref: '#/components/schemas/DateTime'
+      description: The user's view-tracking preference. Enabled unless they have turned it off.
+    RecordEventViewResponse:
+      type: object
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Int32'
+        recorded:
+          description: "False when the user has opted out. Deliberately a successful response rather than a\r\n403: honouring a preference is not an error, and the detail page fires this call and\r\nforgets it, so an error status would only invite the client to branch on one."
+          $ref: '#/components/schemas/Boolean'
+        viewedAtUtc:
+          oneOf:
+            - type: 'null'
+            - description: 'Null when bool RecordEventViewResponse.Recorded is false, so nothing serializes a year-0001 timestamp.'
+              $ref: '#/components/schemas/DateTime'
+      description: The outcome of recording one view.
     RefreshTokenRequest:
       type: object
       properties:
@@ -17150,6 +18138,22 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/String'
+    ReorderEventImagesRequest:
+      required:
+        - imageIds
+      type: object
+      properties:
+        imageIds:
+          $ref: '#/components/schemas/ListOfInt32'
+      description: "The event's images in their new order. Must list every image exactly once — a partial list\r\nis rejected rather than applied, so a client working from a stale gallery cannot silently\r\ndrop an image from the ordering."
+    ReplaceEventImageRequest:
+      required:
+        - imageUrl
+      type: object
+      properties:
+        imageUrl:
+          $ref: '#/components/schemas/String'
+      description: 'Swaps the file behind an image slot, keeping its order, cover flag and alt text.'
     ResetPasswordRequest:
       required:
         - password
@@ -17371,6 +18375,16 @@ components:
           $ref: '#/components/schemas/Boolean'
         canRemove:
           $ref: '#/components/schemas/Boolean'
+    UpdateEventImageRequest:
+      type: object
+      properties:
+        altText:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/String'
+        isDecorative:
+          $ref: '#/components/schemas/Boolean'
+      description: Edits the accessibility metadata of an image already attached to the event.
     UpdateFutureOccurrencesRequest:
       required:
         - fromEventId
@@ -17464,6 +18478,16 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/String'
+    UpdateRecentlyViewedSettingsRequest:
+      required:
+        - enabled
+      type: object
+      properties:
+        enabled:
+          oneOf:
+            - type: 'null'
+            - description: "Nullable so an absent field fails validation instead of silently binding to false —\r\na malformed body must not switch tracking off on the user's behalf."
+              $ref: '#/components/schemas/Boolean'
     UpdateRegistrationRequest:
       type: object
       properties:

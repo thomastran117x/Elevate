@@ -212,6 +212,67 @@ public class RateLimiterConfigurationTests
         context.Response.Headers["X-RateLimit-Remaining"].ToString().Should().Be("0");
     }
 
+    [Fact]
+    public async Task ImageUploadPolicy_ShouldRejectRequestsBeyondPermitLimit()
+    {
+        // The limiter is not mounted under Testing (Program.cs skips UseRateLimiter there), so the
+        // avatar endpoint's 429 cannot be observed by an integration test. Drive the real policy
+        // in process instead, with endpoint metadata so the named policy runs rather than only the
+        // global partition.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddInMemoryRateLimiter();
+
+        using var provider = services.BuildServiceProvider();
+        var app = new ApplicationBuilder(provider);
+        app.UseRateLimiter();
+        app.Run(async context => await context.Response.WriteAsync("ok"));
+        var pipeline = app.Build();
+
+        var endpoint = new Endpoint(
+            _ => Task.CompletedTask,
+            new EndpointMetadataCollection(
+                new EnableRateLimitingAttribute(RateLimiterConfiguration.ImageUploadPolicyName)),
+            "POST /api/profile/avatar");
+
+        // Thirty uploads per ten minutes, partitioned per account.
+        for (var i = 0; i < 30; i++)
+        {
+            var allowedContext = CreateAvatarUploadContext(provider, endpoint, "77");
+            await pipeline(allowedContext);
+            allowedContext.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        }
+
+        var rejectedContext = CreateAvatarUploadContext(provider, endpoint, "77");
+        await pipeline(rejectedContext);
+
+        rejectedContext.Response.StatusCode.Should().Be(StatusCodes.Status429TooManyRequests);
+        rejectedContext.Response.Body.Position = 0;
+        using var json = await JsonDocument.ParseAsync(rejectedContext.Response.Body);
+        json.RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("TOO_MANY_REQUESTS");
+
+        // Thirty-one requests is well inside the global 100/minute allowance, and a second account
+        // is still served, so the rejection came from this account's image-upload bucket.
+        var otherUserContext = CreateAvatarUploadContext(provider, endpoint, "78");
+        await pipeline(otherUserContext);
+        otherUserContext.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+    }
+
+    private static DefaultHttpContext CreateAvatarUploadContext(
+        IServiceProvider provider,
+        Endpoint endpoint,
+        string userId)
+    {
+        var context = CreateRateLimitContext(provider, IPAddress.Parse("127.0.0.1"));
+        context.User = new ClaimsPrincipal(
+            new ClaimsIdentity(
+                [new Claim(ClaimTypes.NameIdentifier, userId)],
+                "Bearer"));
+        context.SetEndpoint(endpoint);
+        return context;
+    }
+
     private static ServiceProvider BuildRateLimitProvider(Action<ServiceCollection> configure)
     {
         var services = new ServiceCollection();
