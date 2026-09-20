@@ -58,13 +58,23 @@ namespace backend.main.shared.storage
             if (image == null || image.Length == 0)
                 throw new ArgumentException("Image is null or empty");
 
+            // The declared content type and the file name are both caller-controlled, and this
+            // container is created with anonymous read access, so whatever content type is
+            // stamped here is what the world is later served. Derive both it and the extension
+            // from the bytes rather than checking the caller's values and then trusting them:
+            // a polyglot is stored as what it actually is, not as what the uploader chose.
+            // Sniffed before any storage call so a rejected upload never creates the container.
+            if (!ImageSignatureInspector.TryDetect(image, out var signature))
+            {
+                throw new UnsupportedMediaTypeException(
+                    "Only JPEG, PNG, WEBP, and GIF images are supported.");
+            }
+
             var container = GetRequiredContainer();
             await container.CreateIfNotExistsAsync(PublicAccessType.Blob);
 
-            var contentType = ResolveImageContentType(image.FileName, image.ContentType);
-            var extension = ValidateAndNormalizeImageExtension(image.FileName, contentType);
             var normalizedPrefix = NormalizeBlobPathPrefix(blobPathPrefix, "uploads");
-            var blobName = $"{normalizedPrefix}/{Guid.NewGuid():N}{extension}";
+            var blobName = $"{normalizedPrefix}/{Guid.NewGuid():N}{signature.FileExtension}";
             var blobClient = container.GetBlobClient(blobName);
 
             await using var stream = image.OpenReadStream();
@@ -74,7 +84,7 @@ namespace backend.main.shared.storage
                 {
                     HttpHeaders = new BlobHttpHeaders
                     {
-                        ContentType = contentType
+                        ContentType = signature.ContentType
                     }
                 });
 
