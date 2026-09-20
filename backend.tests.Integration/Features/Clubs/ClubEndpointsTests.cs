@@ -1022,6 +1022,94 @@ public class ClubEndpointsTests
     }
 
     [Fact]
+    public async Task ClubCreate_ShouldRejectAnOversizedImage_AndDeleteTheBlob()
+    {
+        // A club-creation upload is issued before the club exists, so it is the earliest attach
+        // path there is — and the one a SAS leaves entirely unbounded.
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, _) = await CreateUserSessionAsync(app, "clubs-image-oversized@example.com", "Organizer");
+
+        var oversized = await app.CreateClubImageUrlAsync(ownerSession.AccessToken, "oversized.png");
+        app.BlobStorage.StagedBlobs[oversized] =
+            FakeAzureBlobService.ImageBlob(contentLength: app.BlobStorage.MaxImageBytes + 1);
+
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            "/api/clubs",
+            ownerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                Name = "Oversized Image Club",
+                Description = "A club whose icon never fit the cap.",
+                Clubtype = "social",
+                ClubImageUrl = oversized
+            })));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        app.BlobStorage.IsOwnedBlobUrl(oversized).Should().BeFalse();
+        (await app.QueryDbAsync(db => db.Clubs.AnyAsync(c => c.Name == "Oversized Image Club")))
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ClubUpdate_ShouldRejectNonImageBytes_AndKeepTheExistingImage()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, _) = await CreateUserSessionAsync(app, "clubs-image-bytes@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, ownerSession.AccessToken, "Byte Checked Club");
+
+        var notAnImage = await app.CreateClubImageUrlAsync(ownerSession.AccessToken, "payload.png");
+        app.BlobStorage.StagedBlobs[notAnImage] = new StagedBlob(4096, "image/png", [0x4D, 0x5A, 0x90, 0x00]);
+
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/clubs/{club.Id}",
+            ownerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Byte Checked Club",
+                description = "The replacement icon is not an image at all.",
+                clubtype = "social",
+                clubImageUrl = notAnImage
+            })));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        app.BlobStorage.IsOwnedBlobUrl(notAnImage).Should().BeFalse();
+
+        (await app.QueryDbAsync(db => db.Clubs.Where(c => c.Id == club.Id).Select(c => c.ClubImage).FirstAsync()))
+            .Should().Be(club.ClubImage);
+    }
+
+    [Fact]
+    public async Task ClubUpdate_ShouldNotInspectStorage_WhenResubmittingTheExistingImage()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, _) = await CreateUserSessionAsync(app, "clubs-image-reattach@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, ownerSession.AccessToken, "Reattach Image Club");
+
+        // The intent behind the club's icon expired long ago; re-submitting it on a later edit is
+        // not a new upload and must not cost a storage round trip.
+        var inspectionsBeforeEdit = app.BlobStorage.InspectedUrls.Count;
+
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/clubs/{club.Id}",
+            ownerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Reattach Image Club Renamed",
+                description = "Same icon, new name.",
+                clubtype = "social",
+                clubImageUrl = club.ClubImage
+            })));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(response));
+        app.BlobStorage.InspectedUrls.Count.Should().Be(inspectionsBeforeEdit);
+    }
+
+    [Fact]
     public async Task ClubManagementEndpoints_ShouldReturnForbidden_ForOutsiders()
     {
         await using var app = await AuthApiTestApp.CreateAsync();

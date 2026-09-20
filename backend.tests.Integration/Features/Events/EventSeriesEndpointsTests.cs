@@ -202,6 +202,56 @@ public class EventSeriesEndpointsTests
     }
 
     [Fact]
+    public async Task SeriesEndpoints_ShouldRejectOversizedAndNonImageBlobs_OnFutureOccurrences()
+    {
+        // The series path attaches images to every future occurrence in one request, so it runs
+        // the same attach-time checks a single-event update does.
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (organizer, _) = await CreateUserSessionAsync(app, "series-image-bytes@example.com", "Organizer");
+        var club = await CreateClubAsync(app, organizer.AccessToken, "Series Upload Limits Club");
+        var series = await CreateSeriesAsync(app, organizer.AccessToken, club.Id, occurrenceCount: 3);
+
+        var pivot = series.Occurrences[1];
+
+        var oversized = await CreatePendingImageAsync(app, organizer.AccessToken, club.Id);
+        app.BlobStorage.StagedBlobs[oversized.PublicUrl] =
+            FakeAzureBlobService.ImageBlob(contentLength: app.BlobStorage.MaxImageBytes + 1);
+
+        var tooLarge = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Patch,
+            $"/api/events/series/{series.Id}/occurrences",
+            organizer.AccessToken,
+            JsonContent.Create(new { fromEventId = pivot.Id, imageUrls = new[] { oversized.PublicUrl } })));
+
+        tooLarge.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        app.BlobStorage.IsOwnedBlobUrl(oversized.PublicUrl).Should().BeFalse();
+
+        var notAnImage = await CreatePendingImageAsync(app, organizer.AccessToken, club.Id);
+        app.BlobStorage.StagedBlobs[notAnImage.PublicUrl] =
+            new StagedBlob(4096, "image/png", [0x4D, 0x5A, 0x90, 0x00]);
+
+        var rejectedContent = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Patch,
+            $"/api/events/series/{series.Id}/occurrences",
+            organizer.AccessToken,
+            JsonContent.Create(new { fromEventId = pivot.Id, imageUrls = new[] { notAnImage.PublicUrl } })));
+
+        rejectedContent.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        app.BlobStorage.IsOwnedBlobUrl(notAnImage.PublicUrl).Should().BeFalse();
+
+        // Nothing was attached to any occurrence, and the rejection happens before the
+        // transaction, so the rest of the series is untouched.
+        var occurrenceIds = await app.QueryDbAsync(db => db.Events
+            .Where(e => e.SeriesId == series.Id)
+            .Select(e => e.Id)
+            .ToListAsync());
+
+        (await app.QueryDbAsync(db => db.EventImages
+            .CountAsync(i => occurrenceIds.Contains(i.EventId))))
+            .Should().Be(0);
+    }
+
+    [Fact]
     public async Task SeriesEndpoints_ShouldUpdateThisAndAllFutureOccurrencesOnly()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
