@@ -172,11 +172,16 @@ namespace backend.main.features.profile
         }
 
         [HttpPost("avatar")]
+        // This is the one image endpoint whose bytes flow through our servers and consume our
+        // bandwidth, so it reuses the same policy as minting a presigned URL rather than falling
+        // back to the global limiter.
+        [EnableRateLimiting(RateLimiterConfiguration.ImageUploadPolicyName)]
         // Raise the per-request cap above Kestrel's 1 MB global default to match the 5 MB
         // avatar limit enforced by AvatarUploadRequest; otherwise larger uploads are rejected
         // by the server before model validation runs.
         [RequestSizeLimit(5 * 1024 * 1024)]
         [ProducesResponseType(typeof(ApiResponse<MyProfileResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> UploadAvatar([FromForm] AvatarUploadRequest request)
         {
             try
