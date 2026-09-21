@@ -46,6 +46,7 @@ using backend.main.seeders;
 using backend.main.shared.providers;
 using backend.main.shared.storage;
 using backend.main.shared.storage.cleanup;
+using backend.main.shared.storage.imaging;
 using backend.main.shared.utilities.logger;
 
 using Microsoft.Extensions.Options;
@@ -162,6 +163,10 @@ namespace backend.main.application.bootstrap
             services.Configure<ClubVersioningOptions>(config.GetSection("ClubVersioning"));
             services.Configure<EventVersioningOptions>(config.GetSection("EventVersioning"));
             services.Configure<ImageUploadOptions>(config.GetSection("ImageUpload"));
+            services.AddOptions<ImageProcessingOptions>()
+                .Bind(config.GetSection("ImageProcessing"))
+                .ValidateDataAnnotations()
+                .ValidateOnStart();
             services.Configure<OrphanBlobCleanupOptions>(config.GetSection("OrphanBlobCleanup"));
             services.Configure<RecentlyViewedOptions>(config.GetSection("RecentlyViewed"));
             services.AddOptions<ProfileOptions>()
@@ -256,6 +261,8 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IEmailAvailabilityService, EmailAvailabilityService>();
             services.AddScoped<IUsernameSuggestionService, UsernameSuggestionService>();
             services.AddScoped<IAzureBlobService, AzureBlobService>();
+            // Singleton: it owns the process-wide processing slots and the bounded allocator.
+            services.AddSingleton<IImageProcessor, ImageSharpImageProcessor>();
             services.AddScoped<OrphanBlobCleanupRunner>();
 
             if (featureFlags.IsEnabled(FeatureFlagKeys.ClubsFollow))
