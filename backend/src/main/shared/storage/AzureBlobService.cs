@@ -232,10 +232,12 @@ namespace backend.main.shared.storage
 
             try
             {
-                // SetHttpHeaders replaces the whole header set rather than merging, which is the
-                // point: it drops any Content-Disposition, Content-Encoding or Cache-Control the
-                // uploader set on its PUT along with them. The container is anonymously readable,
-                // so these headers are what the public is served.
+                // Set Blob Properties sets the whole header group together and clears any member
+                // the request leaves out, which is the point: sending only the content type drops
+                // any Content-Disposition, Content-Encoding, Content-Language or Cache-Control the
+                // uploader set on its PUT. The container is anonymously readable, so these headers
+                // are what the public is served. The stored Content-MD5 is cleared with them;
+                // nothing reads it.
                 await container.GetBlobClient(blobPath).SetHttpHeadersAsync(
                     new BlobHttpHeaders { ContentType = contentType },
                     cancellationToken: cancellationToken);

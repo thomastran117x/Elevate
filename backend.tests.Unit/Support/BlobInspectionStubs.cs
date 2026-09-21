@@ -56,7 +56,7 @@ public static class BlobInspectionStubs
 
     /// <summary>
     /// Makes every inspected URL report <paramref name="inspection"/>, or, when it is null, a blob
-    /// that is not there at all.
+    /// that is not there at all, and accepts the header rewrite that follows a passing check.
     /// </summary>
     public static Mock<IAzureBlobService> StubBlobInspection(
         this Mock<IAzureBlobService> blobService,
@@ -71,6 +71,12 @@ public static class BlobInspectionStubs
                 It.IsAny<int>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(inspection);
+        blobService
+            .Setup(service => service.NormalizeBlobHeadersAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         return blobService;
     }

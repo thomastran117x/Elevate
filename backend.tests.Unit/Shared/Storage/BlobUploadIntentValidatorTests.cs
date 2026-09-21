@@ -170,11 +170,25 @@ public class BlobUploadIntentValidatorTests
     }
 
     [Fact]
-    public async Task RequireIntentAsync_ShouldLeaveAnAlreadyCanonicalStoredTypeAlone()
+    public async Task RequireIntentAsync_ShouldRewriteHeaders_EvenWhenTheStoredTypeAlreadyMatches()
     {
+        // The content type is not the only header the uploader controls. A correctly typed blob
+        // can still carry its own Content-Disposition, Cache-Control or Content-Encoding, so the
+        // rewrite cannot be skipped just because the type is already right.
         var harness = new Harness(BlobInspectionStubs.Image());
 
         await harness.ValidateAsync();
+
+        harness.VerifyNormalizedTo("image/png");
+    }
+
+    [Fact]
+    public async Task RequireIntentAsync_ShouldNotRewriteHeaders_ForARejectedBlob()
+    {
+        // A rejected blob is deleted, not relabelled.
+        var harness = new Harness(new BlobInspection(2048, "image/png", [0x4D, 0x5A, 0x90, 0x00]));
+
+        await harness.Invoking(h => h.ValidateAsync()).Should().ThrowAsync<BadRequestException>();
 
         harness.BlobService.Verify(
             service => service.NormalizeBlobHeadersAsync(

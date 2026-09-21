@@ -166,15 +166,17 @@ internal static class BlobUploadIntentValidator
                 "The uploaded file does not match the image type that was selected.");
         }
 
-        // The stored content type is whatever the client put on its own PUT — the SAS content
-        // type only overrides reads made through that SAS, not the anonymous public URL. So it is
-        // restamped from the bytes rather than checked: matching bytes against a caller-chosen
-        // label still leaves the label deciding what the world is served, and a real GIF labelled
-        // text/html would pass every check above and then be executed by a browser.
-        if (blob.ContentType != signature.ContentType)
-        {
-            await blobService.NormalizeBlobHeadersAsync(imageUrl, signature.ContentType);
-        }
+        // Every header on the blob is whatever the client put on its own PUT — the SAS content
+        // type only overrides reads made through that SAS, not the anonymous public URL. So the
+        // header set is rewritten from the bytes rather than checked: matching bytes against a
+        // caller-chosen label still leaves the label deciding what the world is served, and a
+        // real GIF labelled text/html would pass every check above and then be executed.
+        //
+        // Unconditional, because the content type is not the only header that matters. A blob
+        // whose type is already right can still carry the uploader's Content-Disposition
+        // ("attachment; filename=invoice.exe"), Cache-Control or Content-Encoding, and skipping
+        // the rewrite when the type matches would leave exactly those in place.
+        await blobService.NormalizeBlobHeadersAsync(imageUrl, signature.ContentType);
     }
 
     /// <remarks>

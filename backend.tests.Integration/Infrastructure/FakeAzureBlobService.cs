@@ -9,7 +9,19 @@ namespace backend.tests.Integration.Infrastructure;
 /// What the fake reports when a blob is inspected: the metadata a test wants an attach path to
 /// see, standing in for bytes that a real client would have PUT to the presigned URL.
 /// </summary>
-public sealed record StagedBlob(long ContentLength, string? ContentType, byte[] HeaderBytes);
+/// <remarks>
+/// The trailing headers are the rest of the group Set Blob Properties writes together. A client
+/// sets them on its own PUT, so a test can plant hostile values and check they are gone after
+/// the attach rewrites the header set.
+/// </remarks>
+public sealed record StagedBlob(
+    long ContentLength,
+    string? ContentType,
+    byte[] HeaderBytes,
+    string? ContentDisposition = null,
+    string? CacheControl = null,
+    string? ContentEncoding = null,
+    string? ContentLanguage = null);
 
 public sealed class FakeAzureBlobService : IAzureBlobService
 {
@@ -37,8 +49,8 @@ public sealed class FakeAzureBlobService : IAzureBlobService
     public IReadOnlyList<string> InspectedUrls => _inspectedUrls;
 
     /// <summary>
-    /// The content type each blob was restamped with when it was attached. The stored type comes
-    /// from the uploader's own PUT headers, so the server overwrites it from the bytes.
+    /// The content type each blob's headers were rewritten with when it was attached. The stored
+    /// headers come from the uploader's own PUT, so the server replaces them from the bytes.
     /// </summary>
     public IReadOnlyDictionary<string, string> NormalizedContentTypes => _normalizedContentTypes;
 
@@ -165,8 +177,19 @@ public sealed class FakeAzureBlobService : IAzureBlobService
     {
         _normalizedContentTypes[blobUrl] = contentType;
 
+        // Mirrors Set Blob Properties: the header group is set together, and every member the
+        // request leaves out is cleared.
         if (_stagedBlobs.TryGetValue(blobUrl, out var staged))
-            _stagedBlobs[blobUrl] = staged with { ContentType = contentType };
+        {
+            _stagedBlobs[blobUrl] = staged with
+            {
+                ContentType = contentType,
+                ContentDisposition = null,
+                CacheControl = null,
+                ContentEncoding = null,
+                ContentLanguage = null
+            };
+        }
 
         return Task.CompletedTask;
     }

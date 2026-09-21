@@ -321,6 +321,43 @@ public class EventEndpointsTests
     }
 
     [Fact]
+    public async Task EventImageEndpoints_ShouldClearUploaderHeaders_EvenWhenTheTypeAlreadyMatches()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, _) = await CreateUserSessionAsync(app, "events-images-headers@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, ownerSession.AccessToken, "Header Reset Club");
+        var ev = await CreateEventAsync(app, ownerSession.AccessToken, club.Id, "Header Reset Event");
+
+        // Nothing about this blob's type is wrong, so a rewrite gated on the content type would
+        // skip it — and the public URL would go on serving every other header the uploader chose.
+        var pending = await CreatePendingImageAsync(app, ownerSession.AccessToken, club.Id, ev.Id);
+        app.BlobStorage.StagedBlobs[pending.PublicUrl] = new StagedBlob(
+            2048,
+            "image/png",
+            FakeAzureBlobService.HeaderFor("image/png"),
+            ContentDisposition: "attachment; filename=invoice.exe",
+            CacheControl: "public, max-age=31536000, immutable",
+            ContentEncoding: "gzip",
+            ContentLanguage: "x-attacker");
+
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/images",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { imageUrl = pending.PublicUrl })));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created, await app.DescribeFailureAsync(response));
+
+        var stored = app.BlobStorage.StagedBlobs[pending.PublicUrl];
+        stored.ContentType.Should().Be("image/png");
+        stored.ContentDisposition.Should().BeNull();
+        stored.CacheControl.Should().BeNull();
+        stored.ContentEncoding.Should().BeNull();
+        stored.ContentLanguage.Should().BeNull();
+    }
+
+    [Fact]
     public async Task DraftEvent_ShouldRejectAnOversizedImage_AndDeleteTheBlob()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
