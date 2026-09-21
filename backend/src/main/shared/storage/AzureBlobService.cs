@@ -115,16 +115,7 @@ namespace backend.main.shared.storage
             var blobClient = container.GetBlobClient(blobName);
 
             var expiresAt = DateTimeOffset.UtcNow.AddMinutes(15);
-
-            var sasBuilder = new BlobSasBuilder
-            {
-                BlobContainerName = container.Name,
-                BlobName = blobName,
-                Resource = "b",
-                ExpiresOn = expiresAt,
-                ContentType = normalizedContentType
-            };
-            sasBuilder.SetPermissions(BlobSasPermissions.Write | BlobSasPermissions.Create);
+            var sasBuilder = BuildUploadSas(container.Name, blobName, expiresAt, normalizedContentType);
 
             var uploadUrl = blobClient.GenerateSasUri(sasBuilder);
 
@@ -227,6 +218,34 @@ namespace backend.main.shared.storage
             }
         }
 
+        public async Task NormalizeBlobHeadersAsync(
+            string blobUrl,
+            string contentType,
+            CancellationToken cancellationToken = default)
+        {
+            if (!TryGetManagedBlobPath(blobUrl, out var blobPath))
+                return;
+
+            var container = _container;
+            if (container == null)
+                return;
+
+            try
+            {
+                // SetHttpHeaders replaces the whole header set rather than merging, which is the
+                // point: it drops any Content-Disposition, Content-Encoding or Cache-Control the
+                // uploader set on its PUT along with them. The container is anonymously readable,
+                // so these headers are what the public is served.
+                await container.GetBlobClient(blobPath).SetHttpHeadersAsync(
+                    new BlobHttpHeaders { ContentType = contentType },
+                    cancellationToken: cancellationToken);
+            }
+            catch (RequestFailedException ex) when (ex.Status == StatusCodes.Status404NotFound)
+            {
+                // Swept or deleted between the inspection and here; there is nothing to stamp.
+            }
+        }
+
         private BlobContainerClient GetRequiredContainer()
         {
             if (_container != null)
@@ -235,6 +254,41 @@ namespace backend.main.shared.storage
             throw new InvalidOperationException(
                 _configurationError ?? "Azure Blob Storage is not configured."
             );
+        }
+
+        /// <summary>
+        /// Builds the write-once SAS a client uploads through.
+        /// </summary>
+        /// <remarks>
+        /// Create without Write is deliberate. Per <c>Put Blob</c>'s authorization rules, creating
+        /// a new block blob accepts either permission but overwriting an existing one requires
+        /// Write, so granting only Create makes the URL usable exactly once. The SAS outlives the
+        /// attach by the rest of its window; with Write it could be replayed afterwards to swap
+        /// the inspected bytes for something oversized or not an image at all.
+        /// <para>
+        /// <c>ContentType</c> is the SAS <c>rsct</c> response override, which applies only to
+        /// reads made through this SAS — not to the anonymously readable public URL. The stored
+        /// content type comes from the client's own PUT headers, so it is not trusted here and is
+        /// restamped from the bytes when the blob is attached.
+        /// </para>
+        /// </remarks>
+        private static BlobSasBuilder BuildUploadSas(
+            string containerName,
+            string blobName,
+            DateTimeOffset expiresAt,
+            string contentType)
+        {
+            var sasBuilder = new BlobSasBuilder
+            {
+                BlobContainerName = containerName,
+                BlobName = blobName,
+                Resource = "b",
+                ExpiresOn = expiresAt,
+                ContentType = contentType
+            };
+            sasBuilder.SetPermissions(BlobSasPermissions.Create);
+
+            return sasBuilder;
         }
 
         private static string ResolveImageContentType(string fileName, string? contentType)

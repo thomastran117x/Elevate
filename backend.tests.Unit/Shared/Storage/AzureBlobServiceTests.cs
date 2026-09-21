@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 
 using Azure.Storage.Blobs;
+using Azure.Storage.Sas;
 
 using backend.main.shared.exceptions.http;
 using backend.main.shared.storage;
@@ -337,6 +338,36 @@ public class AzureBlobServiceTests
         var inspection = await service.InspectBlobAsync("https://attacker.test/media/poster.png");
 
         inspection.Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildUploadSas_ShouldGrantCreateWithoutWrite()
+    {
+        // Put Blob accepts Create or Write to make a new block blob, but requires Write to
+        // overwrite an existing one. Without this the SAS stays usable for the rest of its window
+        // after the blob has been inspected and attached, and the accepted bytes could be swapped
+        // for anything at all. A regression here silently reopens that hole, so it is pinned.
+        var sas = InvokePrivateStatic<BlobSasBuilder>(
+            typeof(AzureBlobService),
+            "BuildUploadSas",
+            "media",
+            "events/poster.png",
+            DateTimeOffset.UtcNow.AddMinutes(15),
+            "image/png");
+
+        sas.Permissions.Should().Be("c");
+        sas.Resource.Should().Be("b");
+        sas.ContentType.Should().Be("image/png");
+    }
+
+    [Fact]
+    public async Task NormalizeBlobHeadersAsync_ShouldDoNothing_ForUrlsOutsideOurContainer()
+    {
+        var service = CreateServiceWithContainer();
+
+        await service.Invoking(svc => svc.NormalizeBlobHeadersAsync("https://attacker.test/media/x.png", "image/png"))
+            .Should()
+            .NotThrowAsync();
     }
 
     [Fact]
