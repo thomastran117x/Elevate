@@ -67,20 +67,30 @@ const MESSAGES: Record<ImageFileRejection, (name: string) => string> = {
     `"${name}" is larger than ${MAX_IMAGE_DIMENSION} × ${MAX_IMAGE_DIMENSION} pixels.`,
 };
 
+/**
+ * The type the browser declared, or the empty string when it declared nothing useful. Some systems
+ * report `application/octet-stream` for a real image they have no mapping for; the server treats
+ * that exactly like no type at all (`AzureBlobService.ResolveImageContentType`), so this does too.
+ */
+function declaredType(file: File): string {
+  const type = file.type.toLowerCase();
+  return type === 'application/octet-stream' ? '' : type;
+}
+
 function reject(file: File, reason: ImageFileRejection): ImageFileResult {
   return { ok: false, reason, message: MESSAGES[reason](file.name) };
 }
 
 /**
  * The checks that need only the file's metadata. A declared type is taken at its word and the
- * name is ignored; an untyped file — a `.webp` the OS has no mapping for, say — is judged by its
- * extension instead of being turned away, because the upload service sends it as
- * `application/octet-stream` and the server works the type out itself.
+ * name is ignored. An untyped file — a `.webp` the OS has no mapping for, say, reported with no
+ * type or as `application/octet-stream` — is judged by its extension instead of being turned away,
+ * because the upload service sends it as `application/octet-stream` and the server works the type
+ * out itself.
  */
 export function validateImageFile(file: File): ImageFileResult {
-  const known = file.type
-    ? Object.hasOwn(DECLARED_FORMATS, file.type.toLowerCase())
-    : IMAGE_EXTENSION.test(file.name);
+  const type = declaredType(file);
+  const known = type ? Object.hasOwn(DECLARED_FORMATS, type) : IMAGE_EXTENSION.test(file.name);
 
   if (!known) return reject(file, 'type');
   if (file.size === 0) return reject(file, 'empty');
@@ -154,7 +164,7 @@ export async function screenImageFile(file: File): Promise<ImageFileResult> {
   const format = await sniffImageFormat(file);
   if (!format) return reject(file, 'signature');
 
-  const declared = DECLARED_FORMATS[file.type.toLowerCase()];
+  const declared = DECLARED_FORMATS[declaredType(file)];
   if (declared && declared !== format) return reject(file, 'mismatch');
 
   if (typeof createImageBitmap !== 'function') return ACCEPTED;

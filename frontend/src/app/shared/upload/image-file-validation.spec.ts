@@ -72,6 +72,15 @@ describe('image file validation', () => {
       }
     });
 
+    it('treats application/octet-stream as no type, as the server does', () => {
+      expect(validateImageFile(sized('photo.webp', 'application/octet-stream', 10))).toEqual({
+        ok: true,
+      });
+      expect(validateImageFile(sized('notes.txt', 'application/octet-stream', 10))).toEqual(
+        jasmine.objectContaining({ ok: false, reason: 'type' }),
+      );
+    });
+
     it('ignores the name when the type is declared', () => {
       expect(validateImageFile(sized('photo.png', 'image/jpeg', 10))).toEqual({ ok: true });
     });
@@ -201,6 +210,12 @@ describe('image file validation', () => {
       expect(await screenImageFile(await imageFile('photo.WEBP', '', { format: 'webp' }))).toEqual({
         ok: true,
       });
+    });
+
+    it('accepts a real image the browser typed as application/octet-stream', async () => {
+      const opaque = await imageFile('photo.png', 'application/octet-stream', { format: 'png' });
+
+      expect(await screenImageFile(opaque)).toEqual({ ok: true });
     });
 
     it('rejects a file with a valid header that does not decode', async () => {
