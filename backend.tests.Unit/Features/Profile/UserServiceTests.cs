@@ -311,15 +311,16 @@ public class UserServiceTests
     }
 
     [Fact]
-    public async Task UpdateAvatarAsync_ShouldPassTheRequestTokenToProcessingAndUpload()
+    public async Task UpdateAvatarAsync_ShouldCancelProcessingButNeverTheUpload()
     {
         // Processing slots are process-wide, so an abandoned upload must be cancellable rather
-        // than decoding to completion for a client that has disconnected.
+        // than decoding to completion for a client that has disconnected. The upload is not: a
+        // cancelled Put Blob can still commit, and without its URL nothing could delete it.
         using var cts = new CancellationTokenSource();
         var token = cts.Token;
 
         var blobService = new Mock<IAzureBlobService>();
-        blobService.Setup(service => service.UploadProcessedImageAsync(ProcessedAvatar, "users", token))
+        blobService.Setup(service => service.UploadProcessedImageAsync(ProcessedAvatar, "users", CancellationToken.None))
             .ReturnsAsync("https://cdn.test/users/avatar.webp");
 
         var repository = new Mock<IUserRepository>();
@@ -335,7 +336,9 @@ public class UserServiceTests
         await service.UpdateAvatarAsync(7, formFile, token);
 
         processor.Verify(p => p.ProcessAsync(It.IsAny<Stream>(), ImageProcessingProfile.Avatar, token), Times.Once);
-        blobService.Verify(b => b.UploadProcessedImageAsync(ProcessedAvatar, "users", token), Times.Once);
+        blobService.Verify(
+            b => b.UploadProcessedImageAsync(ProcessedAvatar, "users", CancellationToken.None),
+            Times.Once);
     }
 
     [Fact]

@@ -198,7 +198,14 @@ namespace backend.main.features.profile
                     cancellationToken);
             }
 
-            string filePath = await _blobService.UploadProcessedImageAsync(processed, "users", cancellationToken);
+            // Deliberately not cancellable. Once the image is processed, the upload is the commit
+            // point: a cancelled Put Blob may still have landed in storage, and with no URL back
+            // there would be nothing to delete. Letting this small WebP write finish means every
+            // blob it creates is either persisted below or removed by the catch.
+            string filePath = await _blobService.UploadProcessedImageAsync(
+                processed,
+                "users",
+                CancellationToken.None);
             user.Avatar = filePath;
 
             User updatedUser;
