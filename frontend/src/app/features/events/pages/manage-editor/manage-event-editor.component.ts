@@ -6,6 +6,7 @@ import { Subject, catchError, debounceTime, firstValueFrom, map, of, switchMap }
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { requireEnvelopeData } from '../../../../core/api/models/api-envelope.model';
+import { looksLikeImage } from '../../../../core/models/image-file';
 import {
   ALL_CATEGORIES,
   ALL_RECURRENCE_FREQUENCIES,
@@ -29,15 +30,6 @@ import { lifecycleBadgeClass, lifecycleHint } from '../../models/event-lifecycle
 // Matches the server's ImageUpload:MaxBytes. The server is what enforces it — the browser PUTs
 // straight to storage — but checking here saves the user a pointless multi-megabyte upload.
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-
-// The extensions the server accepts. Some systems report no MIME type at all for a real image;
-// the upload service then sends application/octet-stream and the server derives the type from
-// the extension, so an untyped file is judged by its name instead of being turned away.
-const IMAGE_EXTENSION = /\.(jpe?g|png|webp|gif)$/i;
-
-function looksLikeImage(file: File): boolean {
-  return file.type ? file.type.startsWith('image/') : IMAGE_EXTENSION.test(file.name);
-}
 
 @Component({
   selector: 'app-manage-event-editor',

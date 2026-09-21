@@ -330,6 +330,20 @@ describe('ProfileTabComponent', () => {
     expect(profileService.uploadAvatar).not.toHaveBeenCalled();
   });
 
+  it('uploads an avatar the browser could not type, going by its extension', () => {
+    // An empty File.type is not "not an image". The server identifies an avatar by its bytes, so
+    // an untyped .png is worth sending rather than refusing on the client.
+    profileService.uploadAvatar.and.returnValue(of(makeProfile({ Avatar: '/avatars/new.png' })));
+    const untyped = new File(['image'], 'avatar.PNG', { type: '' });
+
+    component.onAvatarSelected({
+      target: { files: [untyped], value: 'selected' },
+    } as unknown as Event);
+
+    expect(component.error).toBe('');
+    expect(profileService.uploadAvatar).toHaveBeenCalledOnceWith(untyped);
+  });
+
   it('updates the profile after a valid avatar upload', () => {
     const updated = makeProfile({ Avatar: '/avatars/new.png' });
     profileService.uploadAvatar.and.returnValue(of(updated));

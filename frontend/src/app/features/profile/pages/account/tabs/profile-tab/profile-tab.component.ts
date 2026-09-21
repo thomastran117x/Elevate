@@ -11,6 +11,7 @@ import {
   isApiClientErrorCode,
 } from '../../../../../../core/api/models/api-client-error.model';
 import { AuthTokenService } from '../../../../../../core/api/services/auth-token.service';
+import { looksLikeImage } from '../../../../../../core/models/image-file';
 import { setUser } from '../../../../../../core/stores/user.actions';
 import { User } from '../../../../../../core/stores/user.model';
 import { AuthService, UsernameSuggestion } from '../../../../../auth/services/auth.service';
@@ -477,7 +478,7 @@ export class ProfileTabComponent implements OnInit {
     this.error = '';
     this.success = '';
 
-    if (!file.type.startsWith('image/')) {
+    if (!looksLikeImage(file)) {
       this.error = 'Please choose an image file.';
       return;
     }
