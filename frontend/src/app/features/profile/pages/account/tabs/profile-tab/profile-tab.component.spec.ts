@@ -1,8 +1,8 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
-import { provideTestStore } from '@testing';
+import { bytesFile, imageFile, provideTestStore } from '@testing';
 
 import { ApiClientClientError } from '../../../../../../core/api/models/api-client-error.model';
 import { AuthTokenService } from '../../../../../../core/api/services/auth-token.service';
@@ -303,60 +303,114 @@ describe('ProfileTabComponent', () => {
     expect(component.usertypeLabel).toBe('');
   });
 
-  it('ignores an avatar event without a file', () => {
-    const input = { files: [], value: 'selected' };
+  describe('avatar', () => {
+    const pick = (file: File) =>
+      component.onAvatarSelected({
+        target: { files: [file], value: 'selected' },
+      } as unknown as Event);
 
-    component.onAvatarSelected({ target: input } as unknown as Event);
+    it('ignores an event without a file', async () => {
+      const input = { files: [], value: 'selected' };
 
-    expect(input.value).toBe('');
-    expect(profileService.uploadAvatar).not.toHaveBeenCalled();
-  });
+      await component.onAvatarSelected({ target: input } as unknown as Event);
 
-  it('rejects non-image and oversized avatar files locally', () => {
-    const nonImage = new File(['not-an-image'], 'avatar.txt', { type: 'text/plain' });
-    component.onAvatarSelected({
-      target: { files: [nonImage], value: 'selected' },
-    } as unknown as Event);
-    expect(component.error).toBe('Please choose an image file.');
-
-    const oversized = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'avatar.png', {
-      type: 'image/png',
+      expect(input.value).toBe('');
+      expect(profileService.uploadAvatar).not.toHaveBeenCalled();
     });
-    component.onAvatarSelected({
-      target: { files: [oversized], value: 'selected' },
-    } as unknown as Event);
 
-    expect(component.error).toBe('Image must be smaller than 5MB.');
-    expect(profileService.uploadAvatar).not.toHaveBeenCalled();
-  });
+    it('rejects unsupported and oversized files locally, naming them', async () => {
+      await pick(new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' }));
+      expect(component.error).toBe(
+        `"logo.svg" isn't a supported image. Use JPG, PNG, WEBP or GIF.`,
+      );
 
-  it('uploads an avatar the browser could not type, going by its extension', () => {
-    // An empty File.type is not "not an image". The server identifies an avatar by its bytes, so
-    // an untyped .png is worth sending rather than refusing on the client.
-    profileService.uploadAvatar.and.returnValue(of(makeProfile({ Avatar: '/avatars/new.png' })));
-    const untyped = new File(['image'], 'avatar.PNG', { type: '' });
+      await pick(
+        new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'huge.png', { type: 'image/png' }),
+      );
+      expect(component.error).toBe('"huge.png" is larger than 5MB.');
 
-    component.onAvatarSelected({
-      target: { files: [untyped], value: 'selected' },
-    } as unknown as Event);
+      expect(profileService.uploadAvatar).not.toHaveBeenCalled();
+      expect(component.avatarPreview).toBeNull();
+    });
 
-    expect(component.error).toBe('');
-    expect(profileService.uploadAvatar).toHaveBeenCalledOnceWith(untyped);
-  });
+    it('rejects a text file posing as a PNG without uploading it', async () => {
+      await pick(bytesFile('avatar.png', 'image/png', 'not really an image'));
 
-  it('updates the profile after a valid avatar upload', () => {
-    const updated = makeProfile({ Avatar: '/avatars/new.png' });
-    profileService.uploadAvatar.and.returnValue(of(updated));
-    const image = new File(['image'], 'avatar.png', { type: 'image/png' });
+      expect(component.error).toBe(`"avatar.png" isn't a JPG, PNG, WEBP or GIF image.`);
+      expect(profileService.uploadAvatar).not.toHaveBeenCalled();
+    });
 
-    component.onAvatarSelected({
-      target: { files: [image], value: 'selected' },
-    } as unknown as Event);
+    it('uploads an image the browser could not type, going by its extension', async () => {
+      // An empty File.type is not "not an image": the bytes decide, here and on the server.
+      profileService.uploadAvatar.and.returnValue(of(makeProfile({ Avatar: '/avatars/new.png' })));
+      const untyped = await imageFile('avatar.PNG', '');
 
-    expect(profileService.uploadAvatar).toHaveBeenCalledOnceWith(image);
-    expect(component.profile).toEqual(updated);
-    expect(component.success).toBe('Profile photo updated.');
-    expect(component.avatarUploading).toBeFalse();
+      await pick(untyped);
+
+      expect(component.error).toBe('');
+      expect(profileService.uploadAvatar).toHaveBeenCalledOnceWith(untyped);
+    });
+
+    it('previews the local file before the upload finishes', async () => {
+      const upload = new Subject<MyProfile>();
+      profileService.uploadAvatar.and.returnValue(upload);
+
+      await pick(await imageFile('avatar.png'));
+      fixture.detectChanges();
+
+      const img: HTMLImageElement = fixture.nativeElement.querySelector('img');
+      expect(component.avatarPreview).toMatch(/^blob:/);
+      expect(img.src).toBe(component.avatarPreview!);
+      expect(component.avatarUploading).toBeTrue();
+    });
+
+    it('updates the profile after a valid upload and keeps the local preview', async () => {
+      const updated = makeProfile({ Avatar: '/avatars/new.png' });
+      profileService.uploadAvatar.and.returnValue(of(updated));
+      const image = await imageFile('avatar.png');
+
+      await pick(image);
+
+      expect(profileService.uploadAvatar).toHaveBeenCalledOnceWith(image);
+      expect(component.profile).toEqual(updated);
+      expect(component.success).toBe('Profile photo updated.');
+      expect(component.avatarUploading).toBeFalse();
+      expect(component.avatarPreview).toMatch(/^blob:/);
+    });
+
+    it('revokes the previous preview when another photo is picked', async () => {
+      profileService.uploadAvatar.and.returnValue(of(makeProfile()));
+      const revoke = spyOn(URL, 'revokeObjectURL').and.callThrough();
+
+      await pick(await imageFile('first.png'));
+      const first = component.avatarPreview;
+      await pick(await imageFile('second.png'));
+
+      expect(revoke).toHaveBeenCalledOnceWith(first!);
+      expect(component.avatarPreview).not.toBe(first);
+    });
+
+    it('drops the preview when the upload fails', async () => {
+      profileService.uploadAvatar.and.returnValue(throwError(() => new Error('boom')));
+      const revoke = spyOn(URL, 'revokeObjectURL').and.callThrough();
+
+      await pick(await imageFile('avatar.png'));
+
+      expect(revoke).toHaveBeenCalledTimes(1);
+      expect(component.avatarPreview).toBeNull();
+      expect(component.error).toBe('boom');
+    });
+
+    it('revokes the preview on destroy', async () => {
+      profileService.uploadAvatar.and.returnValue(of(makeProfile()));
+      await pick(await imageFile('avatar.png'));
+      const preview = component.avatarPreview!;
+      const revoke = spyOn(URL, 'revokeObjectURL').and.callThrough();
+
+      fixture.destroy();
+
+      expect(revoke).toHaveBeenCalledOnceWith(preview);
+    });
   });
 
   describe('email change', () => {

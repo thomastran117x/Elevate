@@ -30,9 +30,9 @@
             <div
               class="flex h-24 w-24 flex-shrink-0 items-center justify-center rounded-full bg-accent/20 text-2xl font-bold text-accent"
             >
-              <ng-container *ngIf="p.Avatar; else initialsAvatar">
+              <ng-container *ngIf="avatarPreview ?? p.Avatar; else initialsAvatar">
                 <img
-                  [src]="p.Avatar"
+                  [src]="avatarPreview ?? p.Avatar"
                   [alt]="p.Username"
                   class="h-24 w-24 rounded-full object-cover"
                 />
@@ -51,7 +51,7 @@
             <input
               #avatarInput
               type="file"
-              accept="image/*"
+              [accept]="imageAccept"
               class="hidden"
               (change)="onAvatarSelected($event)"
             />
