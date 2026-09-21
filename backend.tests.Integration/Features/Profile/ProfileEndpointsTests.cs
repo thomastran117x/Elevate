@@ -199,6 +199,24 @@ public class ProfileEndpointsTests
     }
 
     [Fact]
+    public async Task UploadAvatar_ShouldDeleteTheReplacedAvatarBlob()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var user = await app.SeedUserAsync("avatar-replace-user@example.com");
+        await app.SeedKnownDeviceAsync(user.Id, "avatar-replace-device");
+        var session = await app.LoginApiAsync("avatar-replace-user", trustedDeviceToken: "avatar-replace-device");
+
+        var first = await PostAvatarAsync(app, session.AccessToken, MinimalPng, "image/png", "first.png");
+        var firstUrl = (await app.ReadApiResponseAsync<MyProfileResponse>(first)).Data!.Avatar!;
+        var second = await PostAvatarAsync(app, session.AccessToken, MinimalPng, "image/png", "second.png");
+        var secondUrl = (await app.ReadApiResponseAsync<MyProfileResponse>(second)).Data!.Avatar!;
+
+        secondUrl.Should().NotBe(firstUrl);
+        app.BlobStorage.UploadedImages.Keys.Should().BeEquivalentTo([secondUrl]);
+        app.BlobStorage.IsOwnedBlobUrl(firstUrl).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task UploadAvatar_ShouldRejectAnimatedGifWithAClearMessage()
     {
         await using var app = await AuthApiTestApp.CreateAsync();

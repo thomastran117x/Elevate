@@ -167,6 +167,7 @@ public sealed class FakeAzureBlobService : IAzureBlobService
     {
         _ownedUrls.Remove(blobUrl);
         _stagedBlobs.Remove(blobUrl);
+        _uploadedImages.Remove(blobUrl);
         return Task.CompletedTask;
     }
 
