@@ -15,6 +15,10 @@ using backend.tests.Integration.Infrastructure;
 
 using FluentAssertions;
 
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.PixelFormats;
+
 namespace backend.tests.Integration.Features.Profile;
 
 public class ProfileEndpointsTests
@@ -143,7 +147,77 @@ public class ProfileEndpointsTests
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var updated = await app.ReadApiResponseAsync<MyProfileResponse>(response);
         updated.Data!.Avatar.Should().NotBeNullOrWhiteSpace();
-        updated.Data.Avatar!.Should().Contain("avatar.png");
+        // Stored as what the pipeline produced, not as what the uploader named it.
+        updated.Data.Avatar!.Should().EndWith(".webp").And.NotContain("avatar.png");
+        app.BlobStorage.UploadedImages[updated.Data.Avatar].ContentType.Should().Be("image/webp");
+    }
+
+    [Fact]
+    public async Task UploadAvatar_ShouldStripGpsExifBeforeStoring()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var user = await app.SeedUserAsync("avatar-gps-user@example.com");
+        await app.SeedKnownDeviceAsync(user.Id, "avatar-gps-device");
+        var session = await app.LoginApiAsync("avatar-gps-user", trustedDeviceToken: "avatar-gps-device");
+
+        var photo = new Image<Rgba32>(64, 48, new Rgba32(200, 120, 40));
+        photo.Metadata.ExifProfile = new ExifProfile();
+        photo.Metadata.ExifProfile.SetValue(ExifTag.GPSLatitudeRef, "N");
+        photo.Metadata.ExifProfile.SetValue(
+            ExifTag.GPSLatitude,
+            [new Rational(43, 1), new Rational(39, 1), new Rational(12, 1)]);
+        var jpeg = EncodeImage(photo, (image, stream) => image.SaveAsJpeg(stream));
+
+        var response = await PostAvatarAsync(app, session.AccessToken, jpeg, "image/jpeg", "photo.jpg");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await app.ReadApiResponseAsync<MyProfileResponse>(response);
+        var stored = app.BlobStorage.UploadedImages[updated.Data!.Avatar!];
+        Image.Identify(stored.Content).Metadata.ExifProfile.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UploadAvatar_ShouldStoreALargePhotoAt512PixelsAsWebp()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var user = await app.SeedUserAsync("avatar-large-user@example.com");
+        await app.SeedKnownDeviceAsync(user.Id, "avatar-large-device");
+        var session = await app.LoginApiAsync("avatar-large-user", trustedDeviceToken: "avatar-large-device");
+
+        var jpeg = EncodeImage(
+            new Image<Rgba32>(4000, 3000, new Rgba32(30, 60, 90)),
+            (image, stream) => image.SaveAsJpeg(stream));
+
+        var response = await PostAvatarAsync(app, session.AccessToken, jpeg, "image/jpeg", "large.jpg");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await app.ReadApiResponseAsync<MyProfileResponse>(response);
+        var stored = app.BlobStorage.UploadedImages[updated.Data!.Avatar!];
+        stored.ContentType.Should().Be("image/webp");
+        var info = Image.Identify(stored.Content);
+        Math.Max(info.Width, info.Height).Should().Be(512);
+    }
+
+    [Fact]
+    public async Task UploadAvatar_ShouldRejectAnimatedGifWithAClearMessage()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var user = await app.SeedUserAsync("avatar-gif-user@example.com");
+        await app.SeedKnownDeviceAsync(user.Id, "avatar-gif-device");
+        var session = await app.LoginApiAsync("avatar-gif-user", trustedDeviceToken: "avatar-gif-device");
+
+        var animation = new Image<Rgba32>(16, 16, new Rgba32(255, 0, 0));
+        using (var second = new Image<Rgba32>(16, 16, new Rgba32(0, 0, 255)))
+        {
+            animation.Frames.AddFrame(second.Frames.RootFrame);
+        }
+        var gif = EncodeImage(animation, (image, stream) => image.SaveAsGif(stream));
+
+        var response = await PostAvatarAsync(app, session.AccessToken, gif, "image/gif", "wave.gif");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("Animated images are not supported");
+        app.BlobStorage.UploadedImages.Should().BeEmpty();
     }
 
     [Fact]
@@ -198,9 +272,8 @@ public class ProfileEndpointsTests
         await AddAuthAndCsrfAsync(app, request, session.AccessToken);
         var response = await app.Client.SendAsync(request);
 
-        // The rejection comes from [ImageContent] during model validation, not from the blob
-        // service: the harness swaps in FakeAzureBlobService, so the sniff inside
-        // AzureBlobService.UploadImageAsync is not reachable from here.
+        // The rejection comes from [ImageContent] during model validation, before the image
+        // processor or the blob service is reached.
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var body = await response.Content.ReadAsStringAsync();
         body.Should().Contain("must be a JPEG, PNG, WEBP, or GIF image");
@@ -383,11 +456,41 @@ public class ProfileEndpointsTests
         (await response.Content.ReadAsStringAsync()).Should().Contain("USERNAME_TAKEN");
     }
 
-    private static readonly byte[] MinimalPng =
-    [
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52
-    ];
+    // A real, decodable image: avatars are now decoded and re-encoded, so a bare signature is
+    // no longer enough to be accepted. Generated here rather than checked in as a binary asset.
+    private static readonly byte[] MinimalPng = EncodeImage(
+        new Image<Rgba32>(4, 4, new Rgba32(40, 90, 160)),
+        (image, stream) => image.SaveAsPng(stream));
+
+    private static byte[] EncodeImage(Image<Rgba32> image, Action<Image<Rgba32>, Stream> save)
+    {
+        using (image)
+        using (var stream = new MemoryStream())
+        {
+            save(image, stream);
+            return stream.ToArray();
+        }
+    }
+
+    private static async Task<HttpResponseMessage> PostAvatarAsync(
+        AuthApiTestApp app,
+        string accessToken,
+        byte[] bytes,
+        string contentType,
+        string fileName)
+    {
+        var multipart = new MultipartFormDataContent();
+        var file = new ByteArrayContent(bytes);
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        multipart.Add(file, "image", fileName);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/profile/avatar")
+        {
+            Content = multipart
+        };
+        await AddAuthAndCsrfAsync(app, request, accessToken);
+        return await app.Client.SendAsync(request);
+    }
 
     private static async Task AddAuthAndCsrfAsync(
         AuthApiTestApp app,

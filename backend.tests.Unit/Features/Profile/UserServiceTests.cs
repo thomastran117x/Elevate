@@ -8,6 +8,7 @@ using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.storage;
+using backend.main.shared.storage.imaging;
 
 using backend.tests.Unit.Support;
 
@@ -97,13 +98,13 @@ public class UserServiceTests
     public async Task UpdateAvatarAsync_ShouldUploadAndPersistAvatarAndInvalidateCache()
     {
         var blobService = new Mock<IAzureBlobService>();
-        blobService.Setup(service => service.UploadImageAsync(It.IsAny<IFormFile>(), "users"))
-            .ReturnsAsync("https://cdn.test/users/avatar.png");
+        blobService.Setup(service => service.UploadProcessedImageAsync(ProcessedAvatar, "users", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://cdn.test/users/avatar.webp");
 
         var repository = new Mock<IUserRepository>();
         repository.Setup(repo => repo.GetUserAsync(7))
             .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
-        repository.Setup(repo => repo.UpdatePartialAsync(It.Is<User>(user => user.Avatar == "https://cdn.test/users/avatar.png")))
+        repository.Setup(repo => repo.UpdatePartialAsync(It.Is<User>(user => user.Avatar == "https://cdn.test/users/avatar.webp")))
             .ReturnsAsync((User user) => user);
 
         var refreshCache = new Mock<IRefreshAheadCache>();
@@ -112,7 +113,7 @@ public class UserServiceTests
 
         var updated = await service.UpdateAvatarAsync(7, formFile);
 
-        updated!.Avatar.Should().Be("https://cdn.test/users/avatar.png");
+        updated!.Avatar.Should().Be("https://cdn.test/users/avatar.webp");
         refreshCache.Verify(c => c.RemoveAsync("user:7"), Times.Once);
     }
 
@@ -240,8 +241,8 @@ public class UserServiceTests
     public async Task UpdateAvatarAsync_WhenPersistFails_ShouldDeleteUploadedBlobAndRethrow()
     {
         var blobService = new Mock<IAzureBlobService>();
-        blobService.Setup(service => service.UploadImageAsync(It.IsAny<IFormFile>(), "users"))
-            .ReturnsAsync("https://cdn.test/users/new.png");
+        blobService.Setup(service => service.UploadProcessedImageAsync(ProcessedAvatar, "users", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://cdn.test/users/new.webp");
 
         var repository = new Mock<IUserRepository>();
         repository.Setup(repo => repo.GetUserAsync(7))
@@ -256,7 +257,7 @@ public class UserServiceTests
 
         // The persist failure surfaces, but the just-uploaded blob is cleaned up first.
         await act.Should().ThrowAsync<InvalidOperationException>();
-        blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/users/new.png"), Times.Once);
+        blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/users/new.webp"), Times.Once);
     }
 
     [Fact]
@@ -281,10 +282,72 @@ public class UserServiceTests
         result[0].ClubId.Should().Be(9);
     }
 
+    [Fact]
+    public async Task UpdateAvatarAsync_ShouldStoreOnlyTheProcessedImage()
+    {
+        var blobService = new Mock<IAzureBlobService>();
+        blobService.Setup(service => service.UploadProcessedImageAsync(
+                It.IsAny<ProcessedImage>(), "users", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://cdn.test/users/avatar.webp");
+
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.GetUserAsync(7))
+            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
+        repository.Setup(repo => repo.UpdatePartialAsync(It.IsAny<User>()))
+            .ReturnsAsync((User user) => user);
+
+        var processor = ProcessorReturning(ProcessedAvatar);
+        var service = CreateService(userRepository: repository, blobService: blobService, imageProcessor: processor);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
+
+        await service.UpdateAvatarAsync(7, formFile);
+
+        processor.Verify(p => p.ProcessAsync(
+            It.Is<Stream>(stream => stream.CanSeek),
+            ImageProcessingProfile.Avatar,
+            It.IsAny<CancellationToken>()), Times.Once);
+        blobService.Verify(b => b.UploadProcessedImageAsync(
+            ProcessedAvatar, "users", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateAvatarAsync_WhenProcessingRejectsTheImage_ShouldStoreNothing()
+    {
+        var blobService = new Mock<IAzureBlobService>();
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.GetUserAsync(7))
+            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
+
+        var processor = new Mock<IImageProcessor>();
+        processor.Setup(p => p.ProcessAsync(It.IsAny<Stream>(), It.IsAny<ImageProcessingProfile>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new BadRequestException("Animated images are not supported."));
+
+        var service = CreateService(userRepository: repository, blobService: blobService, imageProcessor: processor);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.gif");
+
+        var act = () => service.UpdateAvatarAsync(7, formFile);
+
+        await act.Should().ThrowAsync<BadRequestException>();
+        blobService.Verify(b => b.UploadProcessedImageAsync(
+            It.IsAny<ProcessedImage>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        repository.Verify(repo => repo.UpdatePartialAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    private static readonly ProcessedImage ProcessedAvatar = new([0x52, 0x49, 0x46, 0x46], 512, 384);
+
+    private static Mock<IImageProcessor> ProcessorReturning(ProcessedImage result)
+    {
+        var processor = new Mock<IImageProcessor>();
+        processor.Setup(p => p.ProcessAsync(It.IsAny<Stream>(), It.IsAny<ImageProcessingProfile>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(result);
+        return processor;
+    }
+
     private static UserService CreateService(
         Mock<IUserRepository>? userRepository = null,
         Mock<IAuthUserRepository>? authRepository = null,
         Mock<IAzureBlobService>? blobService = null,
+        Mock<IImageProcessor>? imageProcessor = null,
         Mock<IFollowService>? followService = null,
         Mock<ITokenService>? tokenService = null,
         Mock<IRefreshAheadCache>? refreshCache = null,
@@ -302,6 +365,7 @@ public class UserServiceTests
             userRepository.Object,
             authRepository.Object,
             blobService.Object,
+            (imageProcessor ?? ProcessorReturning(ProcessedAvatar)).Object,
             followService.Object,
             tokenService.Object,
             refreshCache.Object,

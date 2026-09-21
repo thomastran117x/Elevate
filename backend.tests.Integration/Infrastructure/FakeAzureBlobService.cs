@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 
 using backend.main.features.events.contracts.responses;
 using backend.main.shared.storage;
+using backend.main.shared.storage.imaging;
 
 namespace backend.tests.Integration.Infrastructure;
 
@@ -32,6 +33,7 @@ public sealed class FakeAzureBlobService : IAzureBlobService
     private readonly Dictionary<string, StagedBlob> _stagedBlobs = [];
     private readonly List<string> _inspectedUrls = [];
     private readonly Dictionary<string, string> _normalizedContentTypes = [];
+    private readonly Dictionary<string, ProcessedImage> _uploadedImages = [];
 
     public long MaxImageBytes { get; set; } = 5 * 1024 * 1024;
 
@@ -54,9 +56,16 @@ public sealed class FakeAzureBlobService : IAzureBlobService
     /// </summary>
     public IReadOnlyDictionary<string, string> NormalizedContentTypes => _normalizedContentTypes;
 
+    /// <summary>
+    /// The processed bytes stored by <see cref="UploadProcessedImageAsync"/>, by public URL, so a
+    /// test can decode what would have been published and check nothing but pixels survived.
+    /// </summary>
+    public IReadOnlyDictionary<string, ProcessedImage> UploadedImages => _uploadedImages;
+
     public void Clear()
     {
         _ownedUrls.Clear();
+        _uploadedImages.Clear();
         _stagedBlobs.Clear();
         _inspectedUrls.Clear();
         _normalizedContentTypes.Clear();
@@ -118,13 +127,22 @@ public sealed class FakeAzureBlobService : IAzureBlobService
         return publicUrl;
     }
 
-    public Task<string> UploadImageAsync(IFormFile image, string blobPathPrefix)
+    /// <remarks>
+    /// Mirrors the real service's naming: the stored name takes its extension from the processed
+    /// output, so every avatar ends in .webp whatever the uploader called the file.
+    /// </remarks>
+    public Task<string> UploadProcessedImageAsync(
+        ProcessedImage image,
+        string blobPathPrefix,
+        CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(CreateOwnedBlobUrl(
+        var url = CreateOwnedBlobUrl(
             blobPathPrefix,
-            image.FileName,
+            "upload" + image.FileExtension,
             DateTimeOffset.UtcNow,
-            image.ContentType));
+            image.ContentType);
+        _uploadedImages[url] = image;
+        return Task.FromResult(url);
     }
 
     public Task<PresignedUploadResponse> GenerateUploadUrlAsync(string blobPathPrefix, string fileName, string contentType)

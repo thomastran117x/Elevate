@@ -7,6 +7,7 @@ using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.storage;
+using backend.main.shared.storage.imaging;
 
 using Microsoft.Extensions.Options;
 
@@ -18,6 +19,7 @@ namespace backend.main.features.profile
         private readonly IUserRepository _userRepository;
         private readonly IAuthUserRepository _authUserRepository;
         private readonly IAzureBlobService _blobService;
+        private readonly IImageProcessor _imageProcessor;
         private readonly IFollowService _followService;
         private readonly ITokenService _tokenService;
         private readonly IRefreshAheadCache _refreshCache;
@@ -34,6 +36,7 @@ namespace backend.main.features.profile
             IUserRepository userRepository,
             IAuthUserRepository authUserRepository,
             IAzureBlobService blobService,
+            IImageProcessor imageProcessor,
             IFollowService followService,
             ITokenService tokenService,
             IRefreshAheadCache refreshCache,
@@ -45,6 +48,7 @@ namespace backend.main.features.profile
             _userRepository = userRepository;
             _authUserRepository = authUserRepository;
             _blobService = blobService;
+            _imageProcessor = imageProcessor;
             _followService = followService;
             _tokenService = tokenService;
             _refreshCache = refreshCache;
@@ -176,7 +180,17 @@ namespace backend.main.features.profile
                 ?? throw new ResourceNotFoundException($"User with the id {id} is not found");
 
             string? previousAvatar = user.Avatar;
-            string filePath = await _blobService.UploadImageAsync(image, "users");
+
+            // Decode and re-encode before anything reaches the public container: the stored
+            // avatar is WebP pixels only, with no EXIF (GPS included) and nothing hidden past the
+            // image header. A rejected image never touches storage.
+            ProcessedImage processed;
+            await using (var source = image.OpenReadStream())
+            {
+                processed = await _imageProcessor.ProcessAsync(source, ImageProcessingProfile.Avatar);
+            }
+
+            string filePath = await _blobService.UploadProcessedImageAsync(processed, "users");
             user.Avatar = filePath;
 
             User updatedUser;
