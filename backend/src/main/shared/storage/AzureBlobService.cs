@@ -1,3 +1,4 @@
+using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
@@ -6,6 +7,8 @@ using backend.main.application.environment;
 using backend.main.features.events.contracts.responses;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.utilities.logger;
+
+using Microsoft.Extensions.Options;
 
 namespace backend.main.shared.storage
 {
@@ -32,9 +35,14 @@ namespace backend.main.shared.storage
 
         private readonly BlobContainerClient? _container;
         private readonly string? _configurationError;
+        private readonly ImageUploadOptions _imageUploadOptions;
 
-        public AzureBlobService()
+        public long MaxImageBytes => _imageUploadOptions.MaxBytes;
+
+        public AzureBlobService(IOptions<ImageUploadOptions> imageUploadOptions)
         {
+            _imageUploadOptions = imageUploadOptions.Value;
+
             var connectionString = EnvironmentSetting.AzureStorageConnectionString;
             var containerName = EnvironmentSetting.AzureStorageContainerName;
 
@@ -107,16 +115,7 @@ namespace backend.main.shared.storage
             var blobClient = container.GetBlobClient(blobName);
 
             var expiresAt = DateTimeOffset.UtcNow.AddMinutes(15);
-
-            var sasBuilder = new BlobSasBuilder
-            {
-                BlobContainerName = container.Name,
-                BlobName = blobName,
-                Resource = "b",
-                ExpiresOn = expiresAt,
-                ContentType = normalizedContentType
-            };
-            sasBuilder.SetPermissions(BlobSasPermissions.Write | BlobSasPermissions.Create);
+            var sasBuilder = BuildUploadSas(container.Name, blobName, expiresAt, normalizedContentType);
 
             var uploadUrl = blobClient.GenerateSasUri(sasBuilder);
 
@@ -169,6 +168,86 @@ namespace backend.main.shared.storage
             }
         }
 
+        public async Task<BlobInspection?> InspectBlobAsync(
+            string blobUrl,
+            int prefixByteCount = ImageSignatureInspector.HeaderByteCount,
+            CancellationToken cancellationToken = default)
+        {
+            if (!TryGetManagedBlobPath(blobUrl, out var blobPath))
+                return null;
+
+            var container = _container;
+            if (container == null)
+                return null;
+
+            var blobClient = container.GetBlobClient(blobPath);
+
+            try
+            {
+                var properties = await blobClient.GetPropertiesAsync(cancellationToken: cancellationToken);
+
+                // Only the header crosses the wire. Downloading the blob to find out how big it
+                // is would defeat the point of having a size cap at all.
+                var requestedBytes = Math.Max(prefixByteCount, 0);
+                var header = Array.Empty<byte>();
+
+                if (requestedBytes > 0 && properties.Value.ContentLength > 0)
+                {
+                    var download = await blobClient.DownloadStreamingAsync(
+                        new BlobDownloadOptions { Range = new HttpRange(0, requestedBytes) },
+                        cancellationToken);
+
+                    await using var content = download.Value.Content;
+                    var buffer = new byte[requestedBytes];
+                    var read = await content.ReadAtLeastAsync(
+                        buffer, requestedBytes, throwOnEndOfStream: false, cancellationToken);
+                    header = buffer[..read];
+                }
+
+                return new BlobInspection(
+                    properties.Value.ContentLength,
+                    properties.Value.ContentType,
+                    header);
+            }
+            catch (RequestFailedException ex) when (ex.Status == StatusCodes.Status404NotFound)
+            {
+                // The upload never completed, or the blob is already gone. Either way there is
+                // nothing to attach; a transient fault is deliberately not caught here, so it
+                // can never be mistaken for a valid image.
+                return null;
+            }
+        }
+
+        public async Task NormalizeBlobHeadersAsync(
+            string blobUrl,
+            string contentType,
+            CancellationToken cancellationToken = default)
+        {
+            if (!TryGetManagedBlobPath(blobUrl, out var blobPath))
+                return;
+
+            var container = _container;
+            if (container == null)
+                return;
+
+            try
+            {
+                // Set Blob Properties sets the whole header group together and clears any member
+                // the request leaves out, which is the point: sending only the content type drops
+                // any Content-Disposition, Content-Encoding, Content-Language or Cache-Control the
+                // uploader set on its PUT. The container is anonymously readable, so these headers
+                // are what the public is served. The stored Content-MD5 is cleared with them;
+                // nothing reads it.
+                await container.GetBlobClient(blobPath).SetHttpHeadersAsync(
+                    new BlobHttpHeaders { ContentType = contentType },
+                    cancellationToken: cancellationToken);
+            }
+            catch (RequestFailedException ex) when (ex.Status == StatusCodes.Status404NotFound)
+            {
+                // Swept or deleted between the inspection and here; there is nothing to stamp.
+            }
+        }
+
         private BlobContainerClient GetRequiredContainer()
         {
             if (_container != null)
@@ -177,6 +256,41 @@ namespace backend.main.shared.storage
             throw new InvalidOperationException(
                 _configurationError ?? "Azure Blob Storage is not configured."
             );
+        }
+
+        /// <summary>
+        /// Builds the write-once SAS a client uploads through.
+        /// </summary>
+        /// <remarks>
+        /// Create without Write is deliberate. Per <c>Put Blob</c>'s authorization rules, creating
+        /// a new block blob accepts either permission but overwriting an existing one requires
+        /// Write, so granting only Create makes the URL usable exactly once. The SAS outlives the
+        /// attach by the rest of its window; with Write it could be replayed afterwards to swap
+        /// the inspected bytes for something oversized or not an image at all.
+        /// <para>
+        /// <c>ContentType</c> is the SAS <c>rsct</c> response override, which applies only to
+        /// reads made through this SAS — not to the anonymously readable public URL. The stored
+        /// content type comes from the client's own PUT headers, so it is not trusted here and is
+        /// restamped from the bytes when the blob is attached.
+        /// </para>
+        /// </remarks>
+        private static BlobSasBuilder BuildUploadSas(
+            string containerName,
+            string blobName,
+            DateTimeOffset expiresAt,
+            string contentType)
+        {
+            var sasBuilder = new BlobSasBuilder
+            {
+                BlobContainerName = containerName,
+                BlobName = blobName,
+                Resource = "b",
+                ExpiresOn = expiresAt,
+                ContentType = contentType
+            };
+            sasBuilder.SetPermissions(BlobSasPermissions.Create);
+
+            return sasBuilder;
         }
 
         private static string ResolveImageContentType(string fileName, string? contentType)

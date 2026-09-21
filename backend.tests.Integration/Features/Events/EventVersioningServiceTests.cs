@@ -593,6 +593,7 @@ public class EventVersioningServiceTests
                 .Returns(true);
             blobService.Setup(service => service.DeleteBlobAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
+            blobService.StubAcceptableBlobs();
 
             var service = new EventsService(
                 db,

@@ -6,6 +6,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
+import { looksLikeImage } from '../../../../../core/models/image-file';
 import { EventsManagementService } from '../../../../events/services/events-management.service';
 import { CanComponentDeactivate } from '../../../guards/unsaved-changes.guard';
 import { ALL_CLUB_TYPES, ClubType } from '../../../models/club.types';
@@ -226,7 +227,7 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
     }
 
     for (const file of Array.from(files).slice(0, remaining)) {
-      if (!file.type.startsWith('image/')) {
+      if (!looksLikeImage(file)) {
         this.error = 'Please choose image files.';
         continue;
       }
@@ -264,7 +265,7 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
     this.error = '';
     this.success = '';
 
-    if (!file.type.startsWith('image/')) {
+    if (!looksLikeImage(file)) {
       this.error = 'Please choose an image file.';
       return;
     }

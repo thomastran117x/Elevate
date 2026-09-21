@@ -161,6 +161,7 @@ namespace backend.main.application.bootstrap
 
             services.Configure<ClubVersioningOptions>(config.GetSection("ClubVersioning"));
             services.Configure<EventVersioningOptions>(config.GetSection("EventVersioning"));
+            services.Configure<ImageUploadOptions>(config.GetSection("ImageUpload"));
             services.Configure<OrphanBlobCleanupOptions>(config.GetSection("OrphanBlobCleanup"));
             services.Configure<RecentlyViewedOptions>(config.GetSection("RecentlyViewed"));
             services.AddOptions<ProfileOptions>()

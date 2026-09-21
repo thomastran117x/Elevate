@@ -20,6 +20,8 @@ using backend.main.shared.exceptions.http;
 using backend.main.shared.responses;
 using backend.main.shared.storage;
 
+using backend.tests.Unit.Support;
+
 using FluentAssertions;
 
 using Microsoft.Data.Sqlite;
@@ -2941,6 +2943,10 @@ public class EventsServiceTests
                 .Setup(service => service.DeleteBlobAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
+            // Attaching also inspects what actually landed in storage. No test here PUTs bytes to
+            // a presigned URL, so every blob reports as a small valid image unless a test stages
+            // something else.
+            BlobServiceMock.StubAcceptableBlobs();
             Service = new EventsService(
                 db,
                 EventsRepositoryMock.Object,

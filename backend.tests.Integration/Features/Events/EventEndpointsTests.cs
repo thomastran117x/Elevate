@@ -246,6 +246,193 @@ public class EventEndpointsTests
     }
 
     [Fact]
+    public async Task EventImageEndpoints_ShouldRejectOversizedAndNonImageBlobs_AndDeleteThem()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, _) = await CreateUserSessionAsync(app, "events-images-bytes@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, ownerSession.AccessToken, "Upload Limits Club");
+        var ev = await CreateEventAsync(app, ownerSession.AccessToken, club.Id, "Upload Limits Event");
+
+        // Creating the event attaches one image of its own; nothing below should add to it.
+        var attachedBefore = await app.QueryDbAsync(db => db.EventImages.CountAsync(i => i.EventId == ev.Id));
+
+        // A SAS has no content-length field, so the client is free to PUT gigabytes. The size is
+        // only knowable once the bytes are in storage.
+        var oversized = await CreatePendingImageAsync(app, ownerSession.AccessToken, club.Id, ev.Id);
+        app.BlobStorage.StagedBlobs[oversized.PublicUrl] =
+            FakeAzureBlobService.ImageBlob(contentLength: app.BlobStorage.MaxImageBytes + 1);
+
+        var tooLarge = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/images",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { imageUrl = oversized.PublicUrl })));
+        tooLarge.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        app.BlobStorage.IsOwnedBlobUrl(oversized.PublicUrl).Should().BeFalse();
+
+        // The SAS is equally valid for bytes that are not an image at all, and the container is
+        // publicly readable, so whatever lands is served to the world as the type it claims.
+        var notAnImage = await CreatePendingImageAsync(app, ownerSession.AccessToken, club.Id, ev.Id);
+        app.BlobStorage.StagedBlobs[notAnImage.PublicUrl] =
+            new StagedBlob(4096, "image/png", [0x4D, 0x5A, 0x90, 0x00]);
+
+        var rejectedContent = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/images",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { imageUrl = notAnImage.PublicUrl })));
+        rejectedContent.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        app.BlobStorage.IsOwnedBlobUrl(notAnImage.PublicUrl).Should().BeFalse();
+
+        (await app.QueryDbAsync(db => db.EventImages.CountAsync(i => i.EventId == ev.Id)))
+            .Should().Be(attachedBefore);
+    }
+
+    [Fact]
+    public async Task EventImageEndpoints_ShouldRestampAStoredContentTypeChosenByTheUploader()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, _) = await CreateUserSessionAsync(app, "events-images-restamp@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, ownerSession.AccessToken, "Restamp Club");
+        var ev = await CreateEventAsync(app, ownerSession.AccessToken, club.Id, "Restamp Event");
+
+        // The SAS content type only overrides reads made through the SAS. The stored type comes
+        // from the client's own PUT headers, and the container is anonymously readable, so a
+        // genuine PNG stored as text/html would be executed by a browser fetching the public URL.
+        // The bytes match what the upload was issued for, so every other check passes: the stored
+        // label is the only thing wrong, and it is the uploader's to choose.
+        var pending = await CreatePendingImageAsync(app, ownerSession.AccessToken, club.Id, ev.Id);
+        app.BlobStorage.StagedBlobs[pending.PublicUrl] = new StagedBlob(
+            2048, "text/html", FakeAzureBlobService.HeaderFor("image/png"));
+
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/images",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { imageUrl = pending.PublicUrl })));
+
+        // The bytes are a real image, so the upload is accepted — but the label is rewritten to
+        // match them rather than left as the uploader chose.
+        response.StatusCode.Should().Be(HttpStatusCode.Created, await app.DescribeFailureAsync(response));
+        app.BlobStorage.NormalizedContentTypes.Should().ContainKey(pending.PublicUrl)
+            .WhoseValue.Should().Be("image/png");
+    }
+
+    [Fact]
+    public async Task EventImageEndpoints_ShouldClearUploaderHeaders_EvenWhenTheTypeAlreadyMatches()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, _) = await CreateUserSessionAsync(app, "events-images-headers@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, ownerSession.AccessToken, "Header Reset Club");
+        var ev = await CreateEventAsync(app, ownerSession.AccessToken, club.Id, "Header Reset Event");
+
+        // Nothing about this blob's type is wrong, so a rewrite gated on the content type would
+        // skip it — and the public URL would go on serving every other header the uploader chose.
+        var pending = await CreatePendingImageAsync(app, ownerSession.AccessToken, club.Id, ev.Id);
+        app.BlobStorage.StagedBlobs[pending.PublicUrl] = new StagedBlob(
+            2048,
+            "image/png",
+            FakeAzureBlobService.HeaderFor("image/png"),
+            ContentDisposition: "attachment; filename=invoice.exe",
+            CacheControl: "public, max-age=31536000, immutable",
+            ContentEncoding: "gzip",
+            ContentLanguage: "x-attacker");
+
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/images",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { imageUrl = pending.PublicUrl })));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created, await app.DescribeFailureAsync(response));
+
+        var stored = app.BlobStorage.StagedBlobs[pending.PublicUrl];
+        stored.ContentType.Should().Be("image/png");
+        stored.ContentDisposition.Should().BeNull();
+        stored.CacheControl.Should().BeNull();
+        stored.ContentEncoding.Should().BeNull();
+        stored.ContentLanguage.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DraftEvent_ShouldRejectAnOversizedImage_AndDeleteTheBlob()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, _) = await CreateUserSessionAsync(app, "events-draft-bytes@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, ownerSession.AccessToken, "Draft Limits Club");
+
+        var oversized = await CreatePendingImageAsync(app, ownerSession.AccessToken, club.Id);
+        app.BlobStorage.StagedBlobs[oversized.PublicUrl] =
+            FakeAzureBlobService.ImageBlob(contentLength: app.BlobStorage.MaxImageBytes + 1);
+
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/clubs/{club.Id}/drafts",
+            ownerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Oversized Draft",
+                description = "A draft carrying an image that never fit the cap.",
+                location = "Room Q",
+                imageUrls = new[] { oversized.PublicUrl },
+                isPrivate = false,
+                maxParticipants = 10,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(3),
+                endTime = DateTime.UtcNow.AddDays(3).AddHours(1),
+                category = EventCategory.Other
+            })));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        app.BlobStorage.IsOwnedBlobUrl(oversized.PublicUrl).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task UpdateEvent_ShouldNotInspectStorage_WhenResubmittingAnAttachedImage()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, _) = await CreateUserSessionAsync(app, "events-reattach@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, ownerSession.AccessToken, "Reattach Club");
+        var pending = await CreatePendingImageAsync(app, ownerSession.AccessToken, club.Id);
+        var ev = await CreateEventAsync(
+            app, ownerSession.AccessToken, club.Id, "Reattach Event", imageUrl: pending.PublicUrl);
+
+        // The intent behind an attached image expires long before the next edit, so re-submitting
+        // it must not read as a new upload — and must not cost a storage round trip either.
+        app.BlobStorage.InspectedUrls.Should().ContainSingle(url => url == pending.PublicUrl);
+        var inspectionsBeforeEdit = app.BlobStorage.InspectedUrls.Count;
+
+        var update = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Put,
+            $"/api/events/{ev.Id}",
+            ownerSession.AccessToken,
+            JsonContent.Create(new
+            {
+                name = "Reattach Event Renamed",
+                description = "The same image, submitted again on a later edit.",
+                location = "Room R",
+                imageUrls = new[] { pending.PublicUrl },
+                isPrivate = false,
+                maxParticipants = 25,
+                registerCost = 0,
+                startTime = DateTime.UtcNow.AddDays(5),
+                endTime = DateTime.UtcNow.AddDays(5).AddHours(2),
+                category = EventCategory.Other,
+                venueName = "Room A",
+                city = "Toronto",
+                tags = new[] { "testing" }
+            })));
+
+        update.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(update));
+        app.BlobStorage.InspectedUrls.Count.Should().Be(inspectionsBeforeEdit);
+    }
+
+    [Fact]
     public async Task DraftEvent_ShouldStayPrivateUntilPublished_AndAppearInManageEndpoints()
     {
         await using var app = await AuthApiTestApp.CreateAsync();

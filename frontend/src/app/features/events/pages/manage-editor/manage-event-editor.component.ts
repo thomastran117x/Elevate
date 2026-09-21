@@ -6,6 +6,7 @@ import { Subject, catchError, debounceTime, firstValueFrom, map, of, switchMap }
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { requireEnvelopeData } from '../../../../core/api/models/api-envelope.model';
+import { looksLikeImage } from '../../../../core/models/image-file';
 import {
   ALL_CATEGORIES,
   ALL_RECURRENCE_FREQUENCIES,
@@ -25,6 +26,10 @@ import { OccurrenceScopeDialogComponent } from '../../components/occurrence-scop
 import { EventLifecycleActionsComponent } from '../../components/lifecycle-actions/lifecycle-actions.component';
 import { EventGalleryManagerComponent } from '../../components/event-gallery-manager/event-gallery-manager.component';
 import { lifecycleBadgeClass, lifecycleHint } from '../../models/event-lifecycle';
+
+// Matches the server's ImageUpload:MaxBytes. The server is what enforces it — the browser PUTs
+// straight to storage — but checking here saves the user a pointless multi-megabyte upload.
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 @Component({
   selector: 'app-manage-event-editor',
@@ -492,6 +497,16 @@ export class ManageEventEditorComponent {
       for (const file of files) {
         if (this.imageUrls.length >= 5) {
           break;
+        }
+
+        if (!looksLikeImage(file)) {
+          this.error = 'Please choose image files.';
+          continue;
+        }
+
+        if (file.size > MAX_IMAGE_BYTES) {
+          this.error = 'Each image must be smaller than 5MB.';
+          continue;
         }
 
         const publicUrl = await firstValueFrom(
