@@ -132,11 +132,10 @@ namespace backend.main.shared.storage.imaging
             source.Position = 0;
             using var image = await Image.LoadAsync<Rgba32>(_decodeOptions, source, cancellationToken);
 
-            // 3. Orientation before anything else. ImageSharp does not apply the EXIF orientation
-            // tag on load, and it lives in the EXIF profile cleared below, so skipping this would
-            // store every portrait phone photo on its side.
-            image.Mutate(context => context.AutoOrient());
-
+            // 3. Shrink first, then orient. Rotating at full resolution would allocate a second
+            // full-size buffer — another ~200 MB for a 50 MP photo — before the original is freed.
+            // The cap is a square box, so the result is the same in either order, and Resize
+            // keeps the EXIF profile, so AutoOrient still sees the tag afterwards.
             if (Math.Max(image.Width, image.Height) > maxEdge)
             {
                 image.Mutate(context => context.Resize(new ResizeOptions
@@ -145,6 +144,11 @@ namespace backend.main.shared.storage.imaging
                     Size = new Size(maxEdge, maxEdge)
                 }));
             }
+
+            // ImageSharp does not apply the EXIF orientation tag on load, and the tag lives in the
+            // EXIF profile cleared below, so skipping this would store every portrait phone photo
+            // on its side.
+            image.Mutate(context => context.AutoOrient());
 
             // 4. Strip. Only pixels leave this method.
             StripMetadata(image);

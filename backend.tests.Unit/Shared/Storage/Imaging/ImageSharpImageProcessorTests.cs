@@ -118,6 +118,35 @@ public class ImageSharpImageProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_ShouldStillOrientCorrectly_WhenTheImageIsShrunkFirst()
+    {
+        // Resizing happens before AutoOrient, so a full-resolution rotation never allocates a
+        // second full-size buffer. The EXIF tag has to survive the resize for this to work.
+        using var input = new Image<Rgba32>(2000, 1000);
+        input.ProcessPixelRows(rows =>
+        {
+            for (var y = 0; y < rows.Height; y++)
+            {
+                var row = rows.GetRowSpan(y);
+                for (var x = 0; x < row.Length; x++)
+                    row[x] = x < row.Length / 2 ? new Rgba32(255, 0, 0) : new Rgba32(0, 0, 255);
+            }
+        });
+        input.Metadata.ExifProfile = new ExifProfile();
+        input.Metadata.ExifProfile.SetValue(ExifTag.Orientation, (ushort)6);
+
+        var result = await CreateProcessor().ProcessAsync(
+            new MemoryStream(EncodeJpeg(input)), ImageProcessingProfile.Avatar);
+
+        result.Width.Should().Be(256);
+        result.Height.Should().Be(512);
+
+        using var stored = Image.Load<Rgba32>(result.Content);
+        IsMostly(stored[128, 64], red: true).Should().BeTrue("the top half should be the red side");
+        IsMostly(stored[128, 448], red: false).Should().BeTrue("the bottom half should be the blue side");
+    }
+
+    [Fact]
     public async Task ProcessAsync_ShouldRejectADecompressionBombFromItsHeaderAlone()
     {
         // 100000 x 100000 RGBA is 40 GB of pixels declared by a file of about 70 bytes. Were the

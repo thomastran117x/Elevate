@@ -88,7 +88,7 @@ Raising the cap affects only what is accepted from that point on; images already
 
 ### Image processing
 
-Multipart avatar uploads are decoded to pixels and re-encoded before anything is stored, so EXIF (including phone GPS), IPTC, XMP, ICC profiles, and any non-pixel payload hidden in the file are gone. The pipeline reads the header first, rejecting oversized dimensions and animated images before any pixel buffer is allocated. It then decodes a single frame, applies the EXIF orientation, shrinks the image to the size cap, strips the metadata, and encodes lossy WebP. Presigned uploads are not processed yet: the bytes go from the browser to Azure, so the server has nowhere to run this until uploads land in a quarantine container.
+Multipart avatar uploads are decoded to pixels and re-encoded before anything is stored, so EXIF (including phone GPS), IPTC, XMP, ICC profiles, and any non-pixel payload hidden in the file are gone. The pipeline reads the header first, rejecting oversized dimensions and animated images before any pixel buffer is allocated. It then decodes a single frame, shrinks the image to the size cap, applies the EXIF orientation (after shrinking, so the rotation never needs a second full-size buffer), strips the metadata, and encodes lossy WebP. Presigned uploads are not processed yet: the bytes go from the browser to Azure, so the server has nowhere to run this until uploads land in a quarantine container.
 
 | Key | Default | Purpose |
 | --- | --- | --- |
