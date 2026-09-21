@@ -311,6 +311,34 @@ public class UserServiceTests
     }
 
     [Fact]
+    public async Task UpdateAvatarAsync_ShouldPassTheRequestTokenToProcessingAndUpload()
+    {
+        // Processing slots are process-wide, so an abandoned upload must be cancellable rather
+        // than decoding to completion for a client that has disconnected.
+        using var cts = new CancellationTokenSource();
+        var token = cts.Token;
+
+        var blobService = new Mock<IAzureBlobService>();
+        blobService.Setup(service => service.UploadProcessedImageAsync(ProcessedAvatar, "users", token))
+            .ReturnsAsync("https://cdn.test/users/avatar.webp");
+
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.GetUserAsync(7))
+            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
+        repository.Setup(repo => repo.UpdatePartialAsync(It.IsAny<User>()))
+            .ReturnsAsync((User user) => user);
+
+        var processor = ProcessorReturning(ProcessedAvatar);
+        var service = CreateService(userRepository: repository, blobService: blobService, imageProcessor: processor);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
+
+        await service.UpdateAvatarAsync(7, formFile, token);
+
+        processor.Verify(p => p.ProcessAsync(It.IsAny<Stream>(), ImageProcessingProfile.Avatar, token), Times.Once);
+        blobService.Verify(b => b.UploadProcessedImageAsync(ProcessedAvatar, "users", token), Times.Once);
+    }
+
+    [Fact]
     public async Task UpdateAvatarAsync_WhenProcessingRejectsTheImage_ShouldStoreNothing()
     {
         var blobService = new Mock<IAzureBlobService>();

@@ -172,7 +172,10 @@ namespace backend.main.features.profile
             return user;
         }
 
-        public async Task<User?> UpdateAvatarAsync(int id, IFormFile image)
+        public async Task<User?> UpdateAvatarAsync(
+            int id,
+            IFormFile image,
+            CancellationToken cancellationToken = default)
         {
             // Verify the user exists before writing anything to blob storage, so a
             // deleted/missing account can't leave an orphaned upload behind.
@@ -183,14 +186,19 @@ namespace backend.main.features.profile
 
             // Decode and re-encode before anything reaches the public container: the stored
             // avatar is WebP pixels only, with no EXIF (GPS included) and nothing hidden past the
-            // image header. A rejected image never touches storage.
+            // image header. A rejected image never touches storage. The token matters: processing
+            // slots are process-wide, so an abandoned upload has to give its slot back rather than
+            // finish decoding for a client that has gone.
             ProcessedImage processed;
             await using (var source = image.OpenReadStream())
             {
-                processed = await _imageProcessor.ProcessAsync(source, ImageProcessingProfile.Avatar);
+                processed = await _imageProcessor.ProcessAsync(
+                    source,
+                    ImageProcessingProfile.Avatar,
+                    cancellationToken);
             }
 
-            string filePath = await _blobService.UploadProcessedImageAsync(processed, "users");
+            string filePath = await _blobService.UploadProcessedImageAsync(processed, "users", cancellationToken);
             user.Avatar = filePath;
 
             User updatedUser;

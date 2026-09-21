@@ -240,6 +240,24 @@ public class ImageSharpImageProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_WhenCancelled_ShouldThrowAndLeaveTheSlotFree()
+    {
+        var processor = CreateProcessor(new ImageProcessingOptions { MaxConcurrentOperations = 1 });
+        using var input = new Image<Rgba32>(32, 32, new Rgba32(1, 2, 3));
+        var png = EncodePng(input);
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var cancelled = () => processor.ProcessAsync(new MemoryStream(png), ImageProcessingProfile.Avatar, cts.Token);
+        await cancelled.Should().ThrowAsync<OperationCanceledException>();
+
+        // With a single slot, a leaked one would make this wait forever.
+        var next = processor.ProcessAsync(new MemoryStream(png), ImageProcessingProfile.Avatar);
+        (await Task.WhenAny(next, Task.Delay(TimeSpan.FromSeconds(10)))).Should().BeSameAs(next);
+        (await next).Width.Should().Be(32);
+    }
+
+    [Fact]
     public void Options_ShouldFailValidation_WhenOutOfRange()
     {
         var options = new ImageProcessingOptions { MaxDimension = 0, WebpQuality = 101, MaxConcurrentOperations = 0 };
