@@ -254,6 +254,9 @@ public class EventEndpointsTests
         var club = await CreateClubAsync(app, ownerSession.AccessToken, "Upload Limits Club");
         var ev = await CreateEventAsync(app, ownerSession.AccessToken, club.Id, "Upload Limits Event");
 
+        // Creating the event attaches one image of its own; nothing below should add to it.
+        var attachedBefore = await app.QueryDbAsync(db => db.EventImages.CountAsync(i => i.EventId == ev.Id));
+
         // A SAS has no content-length field, so the client is free to PUT gigabytes. The size is
         // only knowable once the bytes are in storage.
         var oversized = await CreatePendingImageAsync(app, ownerSession.AccessToken, club.Id, ev.Id);
@@ -283,7 +286,7 @@ public class EventEndpointsTests
         app.BlobStorage.IsOwnedBlobUrl(notAnImage.PublicUrl).Should().BeFalse();
 
         (await app.QueryDbAsync(db => db.EventImages.CountAsync(i => i.EventId == ev.Id)))
-            .Should().Be(0);
+            .Should().Be(attachedBefore);
     }
 
     [Fact]

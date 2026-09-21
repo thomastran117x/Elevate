@@ -1040,7 +1040,7 @@ public class ClubEndpointsTests
             JsonContent.Create(new
             {
                 Name = "Oversized Image Club",
-                Description = "A club whose icon never fit the cap.",
+                Description = "Icon over the size cap.",
                 Clubtype = "social",
                 ClubImageUrl = oversized
             })));
@@ -1069,7 +1069,7 @@ public class ClubEndpointsTests
             JsonContent.Create(new
             {
                 name = "Byte Checked Club",
-                description = "The replacement icon is not an image at all.",
+                description = "Icon replaced with junk.",
                 clubtype = "social",
                 clubImageUrl = notAnImage
             })));

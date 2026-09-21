@@ -213,6 +213,15 @@ public class EventSeriesEndpointsTests
 
         var pivot = series.Occurrences[1];
 
+        // Every occurrence already carries a copy of the template's image; nothing below should
+        // change that count.
+        var occurrenceIds = await app.QueryDbAsync(db => db.Events
+            .Where(e => e.SeriesId == series.Id)
+            .Select(e => e.Id)
+            .ToListAsync());
+        var attachedBefore = await app.QueryDbAsync(db => db.EventImages
+            .CountAsync(i => occurrenceIds.Contains(i.EventId)));
+
         var oversized = await CreatePendingImageAsync(app, organizer.AccessToken, club.Id);
         app.BlobStorage.StagedBlobs[oversized.PublicUrl] =
             FakeAzureBlobService.ImageBlob(contentLength: app.BlobStorage.MaxImageBytes + 1);
@@ -239,16 +248,11 @@ public class EventSeriesEndpointsTests
         rejectedContent.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         app.BlobStorage.IsOwnedBlobUrl(notAnImage.PublicUrl).Should().BeFalse();
 
-        // Nothing was attached to any occurrence, and the rejection happens before the
+        // Neither rejected image reached an occurrence, and the rejection happens before the
         // transaction, so the rest of the series is untouched.
-        var occurrenceIds = await app.QueryDbAsync(db => db.Events
-            .Where(e => e.SeriesId == series.Id)
-            .Select(e => e.Id)
-            .ToListAsync());
-
         (await app.QueryDbAsync(db => db.EventImages
             .CountAsync(i => occurrenceIds.Contains(i.EventId))))
-            .Should().Be(0);
+            .Should().Be(attachedBefore);
     }
 
     [Fact]

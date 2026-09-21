@@ -666,6 +666,7 @@ public class ClubVersioningServiceTests
                 .Returns(Task.CompletedTask);
             blobService.Setup(service => service.IsOwnedBlobUrl(It.Is<string>(url => url.StartsWith("https://cdn.test/clubs/", StringComparison.Ordinal))))
                 .Returns(true);
+            blobService.StubAcceptableBlobs();
 
             var userService = new Mock<IUserService>();
             userService.Setup(service => service.GetUserByIdAsync(7))
