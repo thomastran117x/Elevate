@@ -684,6 +684,29 @@ describe('ManageEventEditorComponent', () => {
       expect(component.error).toBe('Please choose image files.');
     });
 
+    it('uploads an image the browser could not type, going by its extension', async () => {
+      // An empty type is not "not an image": the upload service sends it as
+      // application/octet-stream and the server works the type out from the extension.
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
+      const untyped = new File(['bytes'], 'photo.WEBP', { type: '' });
+      managementService.uploadImage.and.returnValue(of('https://cdn/photo.webp'));
+
+      await component.onFilesSelected(fileInput([untyped]));
+
+      expect(managementService.uploadImage).toHaveBeenCalledOnceWith(4, untyped, 12);
+      expect(component.error).toBe('');
+    });
+
+    it('skips an untyped file whose name is not a supported image', async () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
+      const untyped = new File(['bytes'], 'notes', { type: '' });
+
+      await component.onFilesSelected(fileInput([untyped]));
+
+      expect(managementService.uploadImage).not.toHaveBeenCalled();
+      expect(component.error).toBe('Please choose image files.');
+    });
+
     it('reports an upload failure and still stops the spinner', async () => {
       setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
       managementService.uploadImage.and.returnValue(
