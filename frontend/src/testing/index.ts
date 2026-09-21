@@ -6,3 +6,4 @@ export * from './store.mocks';
 export * from './route.mocks';
 export * from './storage.mocks';
 export * from './fixtures';
+export * from './images';

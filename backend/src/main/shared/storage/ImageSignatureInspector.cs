@@ -24,6 +24,12 @@ namespace backend.main.shared.storage
     /// both chosen by whoever is uploading, so neither can be allowed to decide what a publicly
     /// readable blob is served as; only the bytes can.
     /// </summary>
+    /// <remarks>
+    /// The frontend screens picked files against a copy of this signature table
+    /// (<c>sniffImageFormat</c> in <c>frontend/src/app/shared/upload/image-file-validation.ts</c>),
+    /// so users hear about an unsupported file before uploading it. That copy is UX only; this is
+    /// the check that counts. A format added here or removed from here must change there too.
+    /// </remarks>
     public static class ImageSignatureInspector
     {
         /// <summary>
