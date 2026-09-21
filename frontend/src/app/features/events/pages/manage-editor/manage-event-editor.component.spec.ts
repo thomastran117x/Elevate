@@ -767,6 +767,27 @@ describe('ManageEventEditorComponent', () => {
       expect(component.srcForImage('https://cdn/a.png')).toBe(preview);
     });
 
+    it('ignores a second pick while a batch is still uploading', async () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
+      const upload = new Subject<string>();
+      managementService.uploadImage.and.returnValue(upload);
+
+      const running = component.onFilesSelected(fileInput([file('a.png')]));
+      await waitUntil(() => component.pendingPreviews.length > 0);
+      const pending = [...component.pendingPreviews];
+
+      await component.onFilesSelected(fileInput([file('b.png')]));
+
+      expect(managementService.uploadImage).toHaveBeenCalledTimes(1);
+      expect(component.pendingPreviews).toEqual(pending);
+
+      upload.next('https://cdn/a.png');
+      upload.complete();
+      await running;
+
+      expect(component.imageUrls).toEqual(['https://cdn/a.png']);
+    });
+
     it('revokes the previews of uploads that failed or never started', async () => {
       setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
       managementService.uploadImage.and.returnValue(throwError(() => new Error('refused')));

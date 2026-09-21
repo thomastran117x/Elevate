@@ -494,7 +494,9 @@ export class ManageEventEditorComponent {
     const input = event.target as HTMLInputElement | null;
     const files = Array.from(input?.files ?? []);
 
-    if (!files.length) {
+    // The picker is disabled while a batch uploads. Two batches at once would each claim the
+    // same free slots and revoke each other's pending previews.
+    if (!files.length || this.uploading) {
       return;
     }
 

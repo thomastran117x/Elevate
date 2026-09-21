@@ -3,6 +3,7 @@ import { Component, DestroyRef, OnInit, inject, ChangeDetectionStrategy } from '
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
@@ -83,6 +84,10 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
   pendingGalleryPreviews: string[] = [];
   /** One message per file the last gallery pick turned away. */
   galleryErrors: string[] = [];
+  /** Bumped on every icon or banner pick, so only the latest pick for a slot may act. */
+  private readonly slotPicks: Record<ImageSlot, number> = { icon: 0, banner: 0 };
+  /** Each slot's in-flight upload, cancelled when a newer pick replaces it. */
+  private readonly slotUploads: Partial<Record<ImageSlot, Subscription>> = {};
   loading = false;
   saving = false;
   error = '';
@@ -297,11 +302,19 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
       });
   }
 
+  /**
+   * Uploads a pick into the icon or banner slot. The drop zone stays live during an upload so a
+   * user can change their mind, so picks can overlap: only the latest one for a slot may act, or a
+   * late result from an earlier pick would leave the slot previewing one image and saving another.
+   */
   private async uploadFile(file: File, target: ImageSlot): Promise<void> {
+    const pick = ++this.slotPicks[target];
     this.error = '';
     this.success = '';
 
     const screened = await screenImageFile(file);
+    // Screening takes longer for some files than others, so a newer pick may already be ahead.
+    if (pick !== this.slotPicks[target]) return;
     if (!screened.ok) {
       this.error = screened.message;
       return;
@@ -310,10 +323,12 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
     const setUploading = (value: boolean) =>
       target === 'banner' ? (this.bannerUploading = value) : (this.imageUploading = value);
 
+    // Cancelling runs the replaced upload's finalize, so it cannot clear the flag set below.
+    this.slotUploads[target]?.unsubscribe();
     this.setSlotPreview(target, createPreviewUrl(file));
     setUploading(true);
     // clubId is 0 for a not-yet-created club; the backend issues a pending upload URL.
-    this.eventsManagement
+    this.slotUploads[target] = this.eventsManagement
       .uploadImage(this.clubId, file)
       .pipe(
         takeUntilDestroyed(this.destroyRef),

@@ -282,6 +282,74 @@ describe('ClubEditorComponent', () => {
       expect(revoke).toHaveBeenCalledOnceWith(first!);
     });
 
+    describe('overlapping picks for one slot', () => {
+      let first: Subject<string>;
+      let second: Subject<string>;
+
+      beforeEach(() => {
+        first = new Subject<string>();
+        second = new Subject<string>();
+        uploads.uploadImage.and.returnValues(first, second);
+      });
+
+      it('keeps the latest pick when the earlier upload finishes last', async () => {
+        await component.onDrop(drag([await imageFile('a.png')]));
+        await component.onDrop(drag([await imageFile('b.png')]));
+        const latest = component.slotPreviews.icon;
+
+        expect(component.imageUploading).toBeTrue();
+
+        second.next('https://cdn/b.png');
+        second.complete();
+        first.next('https://cdn/a.png');
+        first.complete();
+
+        expect(component.imageUrl).toBe('https://cdn/b.png');
+        expect(component.slotPreviews.icon).toBe(latest);
+        expect(component.imageUploading).toBeFalse();
+      });
+
+      it('ignores a failure from the upload a newer pick replaced', async () => {
+        await component.onDrop(drag([await imageFile('a.png')]), 'banner');
+        await component.onDrop(drag([await imageFile('b.png')]), 'banner');
+        const latest = component.slotPreviews.banner;
+        const revoke = spyOn(URL, 'revokeObjectURL').and.callThrough();
+
+        first.error(new Error('upload refused'));
+
+        expect(component.slotPreviews.banner).toBe(latest);
+        expect(component.bannerUploading).toBeTrue();
+        expect(component.error).toBe('');
+        expect(revoke).not.toHaveBeenCalled();
+
+        second.next('https://cdn/b.png');
+        second.complete();
+
+        expect(component.bannerUrl).toBe('https://cdn/b.png');
+        expect(component.bannerUploading).toBeFalse();
+      });
+
+      it('drops an earlier pick whose screening finishes after a newer one', async () => {
+        const [a, b] = [await imageFile('a.png'), await imageFile('b.png')];
+
+        await Promise.all([component.onDrop(drag([a])), component.onDrop(drag([b]))]);
+
+        expect(uploads.uploadImage).toHaveBeenCalledOnceWith(0, b);
+      });
+
+      it('does not let a superseded rejection overwrite the latest pick', async () => {
+        const svg = new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' });
+        const png = await imageFile('b.png');
+
+        const stale = component.onDrop(drag([svg]));
+        await component.onDrop(drag([png]));
+        await stale;
+
+        expect(component.error).toBe('');
+        expect(uploads.uploadImage).toHaveBeenCalledOnceWith(0, png);
+      });
+    });
+
     it('drops the preview and reports a failed upload', async () => {
       uploads.uploadImage.and.returnValue(throwError(() => new Error('upload refused')));
 

@@ -553,6 +553,7 @@
               <input
                 type="file"
                 [accept]="imageAccept"
+                [disabled]="uploading"
                 multiple
                 class="hidden"
                 (change)="onFilesSelected($event)"
