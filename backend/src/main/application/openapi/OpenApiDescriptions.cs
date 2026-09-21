@@ -342,7 +342,7 @@ namespace backend.main.application.openapi
                 ),
                 ["POST /api/profile/avatar"] = new(
                     "Update the current user's avatar",
-                    "Accepts a multipart `image` field up to 5 MB. The stored content type and file extension are derived from the file's own bytes: JPEG, PNG, WEBP, and GIF are accepted and anything else is rejected, whatever the declared `Content-Type` or file name claims."
+                    "Accepts a multipart `image` field up to 5 MB. The format is read from the file's own bytes: JPEG, PNG, WEBP, and GIF are accepted and anything else is rejected with 415, whatever the declared `Content-Type` or file name claims. The image is decoded and re-encoded before it is stored, so the stored avatar is always `image/webp` with a `.webp` URL, at most 512 pixels on its long edge, oriented from its EXIF tag, and stripped of EXIF (including GPS), IPTC, XMP, and ICC metadata. Animated images, and images over 8000 pixels on a side or 50 megapixels in total, are rejected with 400."
                 ),
                 ["POST /api/profile/change-password"] = new("Change the current user's password"),
                 ["DELETE /api/profile"] = new("Delete the current user's account"),
