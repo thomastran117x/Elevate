@@ -300,10 +300,12 @@ public class EventEndpointsTests
 
         // The SAS content type only overrides reads made through the SAS. The stored type comes
         // from the client's own PUT headers, and the container is anonymously readable, so a
-        // genuine GIF stored as text/html would be executed by a browser fetching the public URL.
+        // genuine PNG stored as text/html would be executed by a browser fetching the public URL.
+        // The bytes match what the upload was issued for, so every other check passes: the stored
+        // label is the only thing wrong, and it is the uploader's to choose.
         var pending = await CreatePendingImageAsync(app, ownerSession.AccessToken, club.Id, ev.Id);
         app.BlobStorage.StagedBlobs[pending.PublicUrl] = new StagedBlob(
-            2048, "text/html", FakeAzureBlobService.HeaderFor("image/gif"));
+            2048, "text/html", FakeAzureBlobService.HeaderFor("image/png"));
 
         var response = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Post,
@@ -315,7 +317,7 @@ public class EventEndpointsTests
         // match them rather than left as the uploader chose.
         response.StatusCode.Should().Be(HttpStatusCode.Created, await app.DescribeFailureAsync(response));
         app.BlobStorage.NormalizedContentTypes.Should().ContainKey(pending.PublicUrl)
-            .WhoseValue.Should().Be("image/gif");
+            .WhoseValue.Should().Be("image/png");
     }
 
     [Fact]
