@@ -11,7 +11,6 @@ import {
   isApiClientErrorCode,
 } from '../../../../../../core/api/models/api-client-error.model';
 import { AuthTokenService } from '../../../../../../core/api/services/auth-token.service';
-import { looksLikeImage } from '../../../../../../core/models/image-file';
 import { setUser } from '../../../../../../core/stores/user.actions';
 import { User } from '../../../../../../core/stores/user.model';
 import { AuthService, UsernameSuggestion } from '../../../../../auth/services/auth.service';
@@ -30,8 +29,9 @@ import {
   ProfileService,
 } from '../../../../services/profile.service';
 import { MfaGateComponent } from '../../mfa-gate/mfa-gate.component';
+import { IMAGE_ACCEPT, screenImageFile } from '@shared/upload/image-file-validation';
+import { createPreviewUrl, revokePreviewUrl } from '@shared/upload/image-preview';
 
-const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
 
 import { UsernameSuggestionsComponent } from '../../../../../auth/components/username-suggestions/username-suggestions.component';
@@ -101,6 +101,9 @@ export class ProfileTabComponent implements OnInit {
   editing = false;
   saving = false;
   avatarUploading = false;
+  /** The picked avatar, rendered from the local file until the next pick replaces it. */
+  avatarPreview: string | null = null;
+  readonly imageAccept = IMAGE_ACCEPT;
   usernameChangeRequested = false;
   usernameMfaVerified = false;
   usernameSaving = false;
@@ -115,7 +118,9 @@ export class ProfileTabComponent implements OnInit {
   constructor(
     private store: Store,
     private profileService: ProfileService,
-  ) {}
+  ) {
+    this.destroyRef.onDestroy(() => this.setAvatarPreview(null));
+  }
 
   ngOnInit(): void {
     this.loadProfile();
@@ -469,7 +474,7 @@ export class ProfileTabComponent implements OnInit {
       });
   }
 
-  onAvatarSelected(event: Event): void {
+  async onAvatarSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
@@ -478,15 +483,13 @@ export class ProfileTabComponent implements OnInit {
     this.error = '';
     this.success = '';
 
-    if (!looksLikeImage(file)) {
-      this.error = 'Please choose an image file.';
-      return;
-    }
-    if (file.size > MAX_AVATAR_BYTES) {
-      this.error = 'Image must be smaller than 5MB.';
+    const screened = await screenImageFile(file);
+    if (!screened.ok) {
+      this.error = screened.message;
       return;
     }
 
+    this.setAvatarPreview(createPreviewUrl(file));
     this.avatarUploading = true;
     this.profileService
       .uploadAvatar(file)
@@ -501,9 +504,16 @@ export class ProfileTabComponent implements OnInit {
           this.success = 'Profile photo updated.';
         },
         error: (err) => {
+          // The preview would otherwise show a photo the account does not have.
+          this.setAvatarPreview(null);
           this.error = getApiClientMessage(err, 'Unable to upload profile photo.');
         },
       });
+  }
+
+  private setAvatarPreview(url: string | null): void {
+    revokePreviewUrl(this.avatarPreview);
+    this.avatarPreview = url;
   }
 
   private syncStore(profile: MyProfile): void {

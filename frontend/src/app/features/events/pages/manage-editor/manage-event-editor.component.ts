@@ -1,12 +1,11 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, DestroyRef, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, catchError, debounceTime, firstValueFrom, map, of, switchMap } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { requireEnvelopeData } from '../../../../core/api/models/api-envelope.model';
-import { looksLikeImage } from '../../../../core/models/image-file';
 import {
   ALL_CATEGORIES,
   ALL_RECURRENCE_FREQUENCIES,
@@ -26,10 +25,10 @@ import { OccurrenceScopeDialogComponent } from '../../components/occurrence-scop
 import { EventLifecycleActionsComponent } from '../../components/lifecycle-actions/lifecycle-actions.component';
 import { EventGalleryManagerComponent } from '../../components/event-gallery-manager/event-gallery-manager.component';
 import { lifecycleBadgeClass, lifecycleHint } from '../../models/event-lifecycle';
+import { IMAGE_ACCEPT, screenImageFile } from '@shared/upload/image-file-validation';
+import { LocalPreviews, createPreviewUrl, revokePreviewUrl } from '@shared/upload/image-preview';
 
-// Matches the server's ImageUpload:MaxBytes. The server is what enforces it — the browser PUTs
-// straight to storage — but checking here saves the user a pointless multi-megabyte upload.
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_EVENT_IMAGES = 5;
 
 @Component({
   selector: 'app-manage-event-editor',
@@ -48,6 +47,7 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export class ManageEventEditorComponent {
   private readonly fb = new FormBuilder();
   private readonly seriesService = inject(EventSeriesService);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly categories = ALL_CATEGORIES;
   readonly frequencies = ALL_RECURRENCE_FREQUENCIES;
@@ -120,6 +120,15 @@ export class ManageEventEditorComponent {
   saving = false;
   uploading = false;
   error = '';
+  /** One message per file the last pick turned away. */
+  imageErrors: string[] = [];
+  /** Previews of picked images still waiting on their upload. */
+  pendingPreviews: string[] = [];
+  readonly imageAccept = IMAGE_ACCEPT;
+  /** Local previews standing in for uploaded images, keyed by their public URL. */
+  private readonly imagePreviews = new LocalPreviews();
+  /** What an image renders from: its local preview while one exists, else its public URL. */
+  readonly srcForImage = (url: string): string => this.imagePreviews.srcFor(url);
   successMessage = '';
 
   // Wizard state. Repeat sits right after Schedule, while the timing context is fresh.
@@ -179,6 +188,11 @@ export class ManageEventEditorComponent {
     private router: Router,
     private managementService: EventsManagementService,
   ) {
+    this.destroyRef.onDestroy(() => {
+      this.imagePreviews.releaseAll();
+      this.pendingPreviews.forEach(revokePreviewUrl);
+    });
+
     // Debounced so dragging the interval spinner does not fire a request per tick.
     this.previewRequests
       .pipe(
@@ -480,7 +494,9 @@ export class ManageEventEditorComponent {
     const input = event.target as HTMLInputElement | null;
     const files = Array.from(input?.files ?? []);
 
-    if (!files.length) {
+    // The picker is disabled while a batch uploads. Two batches at once would each claim the
+    // same free slots and revoke each other's pending previews.
+    if (!files.length || this.uploading) {
       return;
     }
 
@@ -492,28 +508,38 @@ export class ManageEventEditorComponent {
 
     this.uploading = true;
     this.error = '';
+    this.imageErrors = [];
 
     try {
+      // Screen the whole pick before uploading any of it, so every rejection is listed by name
+      // and a rejected file does not take up one of the free slots.
+      const accepted: File[] = [];
       for (const file of files) {
-        if (this.imageUrls.length >= 5) {
-          break;
-        }
+        const screened = await screenImageFile(file);
+        if (screened.ok) accepted.push(file);
+        else this.imageErrors.push(screened.message);
+      }
 
-        if (!looksLikeImage(file)) {
-          this.error = 'Please choose image files.';
-          continue;
-        }
+      const remaining = Math.max(MAX_EVENT_IMAGES - this.imageUrls.length, 0);
+      for (const file of accepted.slice(remaining)) {
+        this.imageErrors.push(`"${file.name}" wasn't added — an event holds ${MAX_EVENT_IMAGES}.`);
+      }
 
-        if (file.size > MAX_IMAGE_BYTES) {
-          this.error = 'Each image must be smaller than 5MB.';
-          continue;
-        }
+      const queue = accepted
+        .slice(0, remaining)
+        .map((file) => ({ file, preview: createPreviewUrl(file) }));
+      this.pendingPreviews = queue
+        .map(({ preview }) => preview)
+        .filter((preview): preview is string => preview !== null);
 
+      for (const { file, preview } of queue) {
         const publicUrl = await firstValueFrom(
           this.managementService.uploadImage(targetClubId, file, this.event?.id),
         );
 
         this.imageUrls = [...this.imageUrls, publicUrl];
+        this.imagePreviews.adopt(publicUrl, preview);
+        this.pendingPreviews = this.pendingPreviews.filter((pending) => pending !== preview);
 
         // A saved event attaches through the gallery endpoint so the image gets a row — and so
         // an id to reorder, describe or make the cover. An unsaved draft has nothing to attach
@@ -529,6 +555,9 @@ export class ManageEventEditorComponent {
       this.error =
         error instanceof Error ? error.message : 'We could not upload one or more images.';
     } finally {
+      // Whatever is still pending failed or never started, so nothing will show its preview.
+      this.pendingPreviews.forEach(revokePreviewUrl);
+      this.pendingPreviews = [];
       this.uploading = false;
       if (input) {
         input.value = '';
@@ -537,6 +566,7 @@ export class ManageEventEditorComponent {
   }
 
   removeImage(index: number): void {
+    this.imagePreviews.release(this.imageUrls[index]);
     this.imageUrls = this.imageUrls.filter((_, currentIndex) => currentIndex !== index);
   }
 
@@ -544,6 +574,7 @@ export class ManageEventEditorComponent {
   onGalleryChanged(images: EventImage[]): void {
     this.images = images;
     this.imageUrls = images.map((image) => image.url);
+    this.imagePreviews.retainOnly(this.imageUrls);
   }
 
   saveDraft(): void {

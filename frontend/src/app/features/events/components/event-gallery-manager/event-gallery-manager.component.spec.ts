@@ -51,6 +51,10 @@ describe('EventGalleryManagerComponent', () => {
     component.imagesChange.subscribe((images) => emitted.push(images));
   });
 
+  it('renders each image from its public URL unless the host supplies a preview', () => {
+    expect(component.previewSrc('https://cdn.test/a.png')).toBe('https://cdn.test/a.png');
+  });
+
   it('counts the images still needing a description', () => {
     expect(component.imagesNeedingAltText).toBe(3);
 

@@ -24,6 +24,11 @@ export class EventGalleryManagerComponent implements OnChanges {
   @Input({ required: true }) eventId!: number;
   @Input() images: EventImage[] = [];
   @Input() maxImages = 5;
+  /**
+   * Resolves the source an image renders from, so the host can show a just-uploaded image from
+   * its local file rather than waiting on the public URL.
+   */
+  @Input() previewSrc: (url: string) => string = (url) => url;
 
   @Output() imagesChange = new EventEmitter<EventImage[]>();
 

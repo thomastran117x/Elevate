@@ -3,23 +3,26 @@ import { Component, DestroyRef, OnInit, inject, ChangeDetectionStrategy } from '
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
-import { looksLikeImage } from '../../../../../core/models/image-file';
 import { EventsManagementService } from '../../../../events/services/events-management.service';
 import { CanComponentDeactivate } from '../../../guards/unsaved-changes.guard';
 import { ALL_CLUB_TYPES, ClubType } from '../../../models/club.types';
 import { toClubtypeAlias } from '../../../models/club-management.types';
 import { ClubManagementService } from '../../../services/club-management.service';
 import { ClubsService } from '../../../services/clubs.service';
+import { IMAGE_ACCEPT, screenImageFile } from '@shared/upload/image-file-validation';
+import { LocalPreviews, createPreviewUrl, revokePreviewUrl } from '@shared/upload/image-preview';
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const NAME_MAX = 30;
 const DESCRIPTION_MAX = 30;
 const LOCATION_MAX = 100;
 const MAX_GALLERY = 5;
 const MAX_MEMBERS = 100000;
+
+type ImageSlot = 'icon' | 'banner';
 
 @Component({
   selector: 'app-club-editor',
@@ -72,6 +75,19 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
   galleryUploading = false;
   galleryDragActive = false;
   readonly maxGallery = MAX_GALLERY;
+  readonly imageAccept = IMAGE_ACCEPT;
+  /** Local previews of the picked icon and banner, shown until the next pick replaces them. */
+  readonly slotPreviews: Record<ImageSlot, string | null> = { icon: null, banner: null };
+  /** Local previews standing in for uploaded gallery photos, keyed by their public URL. */
+  readonly galleryPreviews = new LocalPreviews();
+  /** Previews of gallery photos still uploading. */
+  pendingGalleryPreviews: string[] = [];
+  /** One message per file the last gallery pick turned away. */
+  galleryErrors: string[] = [];
+  /** Bumped on every icon or banner pick, so only the latest pick for a slot may act. */
+  private readonly slotPicks: Record<ImageSlot, number> = { icon: 0, banner: 0 };
+  /** Each slot's in-flight upload, cancelled when a newer pick replaces it. */
+  private readonly slotUploads: Partial<Record<ImageSlot, Subscription>> = {};
   loading = false;
   saving = false;
   error = '';
@@ -83,7 +99,14 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
     private management: ClubManagementService,
     private clubsService: ClubsService,
     private eventsManagement: EventsManagementService,
-  ) {}
+  ) {
+    // Pending gallery previews are released by their upload's finalize, which destroy triggers.
+    this.destroyRef.onDestroy(() => {
+      this.setSlotPreview('icon', null);
+      this.setSlotPreview('banner', null);
+      this.galleryPreviews.releaseAll();
+    });
+  }
 
   ngOnInit(): void {
     const snap = this.route.snapshot;
@@ -156,35 +179,36 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
       });
   }
 
-  onDragOver(event: DragEvent, target: 'icon' | 'banner' = 'icon'): void {
+  onDragOver(event: DragEvent, target: ImageSlot = 'icon'): void {
     event.preventDefault();
     if (target === 'banner') this.bannerDragActive = true;
     else this.dragActive = true;
   }
 
-  onDragLeave(event: DragEvent, target: 'icon' | 'banner' = 'icon'): void {
+  onDragLeave(event: DragEvent, target: ImageSlot = 'icon'): void {
     event.preventDefault();
     if (target === 'banner') this.bannerDragActive = false;
     else this.dragActive = false;
   }
 
-  onDrop(event: DragEvent, target: 'icon' | 'banner' = 'icon'): void {
+  async onDrop(event: DragEvent, target: ImageSlot = 'icon'): Promise<void> {
     event.preventDefault();
     if (target === 'banner') this.bannerDragActive = false;
     else this.dragActive = false;
     const file = event.dataTransfer?.files?.[0];
-    if (file) this.uploadFile(file, target);
+    if (file) await this.uploadFile(file, target);
   }
 
-  onImageSelected(event: Event, target: 'icon' | 'banner' = 'icon'): void {
+  async onImageSelected(event: Event, target: ImageSlot = 'icon'): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
-    if (file) this.uploadFile(file, target);
+    if (file) await this.uploadFile(file, target);
   }
 
   removeBanner(): void {
     this.bannerUrl = '';
+    this.setSlotPreview('banner', null);
     this.bannerDirty = true;
   }
 
@@ -198,27 +222,29 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
     this.galleryDragActive = false;
   }
 
-  onGalleryDrop(event: DragEvent): void {
+  async onGalleryDrop(event: DragEvent): Promise<void> {
     event.preventDefault();
     this.galleryDragActive = false;
-    if (event.dataTransfer?.files) this.uploadGalleryFiles(event.dataTransfer.files);
+    if (event.dataTransfer?.files) await this.uploadGalleryFiles(event.dataTransfer.files);
   }
 
-  onGallerySelected(event: Event): void {
+  async onGallerySelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const files = input.files;
     input.value = '';
-    if (files) this.uploadGalleryFiles(files);
+    if (files) await this.uploadGalleryFiles(files);
   }
 
   removeGalleryImage(index: number): void {
+    this.galleryPreviews.release(this.galleryUrls[index]);
     this.galleryUrls = this.galleryUrls.filter((_, i) => i !== index);
     this.galleryDirty = true;
   }
 
-  private uploadGalleryFiles(files: FileList): void {
+  private async uploadGalleryFiles(files: FileList): Promise<void> {
     this.error = '';
     this.success = '';
+    this.galleryErrors = [];
 
     const remaining = MAX_GALLERY - this.galleryUrls.length;
     if (remaining <= 0) {
@@ -226,60 +252,83 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
       return;
     }
 
-    for (const file of Array.from(files).slice(0, remaining)) {
-      if (!looksLikeImage(file)) {
-        this.error = 'Please choose image files.';
-        continue;
-      }
-      if (file.size > MAX_IMAGE_BYTES) {
-        this.error = 'Each image must be smaller than 5MB.';
-        continue;
-      }
+    // Screen the whole batch first, so every rejection is reported by name rather than the last
+    // one overwriting the rest, and a rejected file does not take up one of the free slots.
+    const accepted: File[] = [];
+    for (const file of Array.from(files)) {
+      const screened = await screenImageFile(file);
+      if (screened.ok) accepted.push(file);
+      else this.galleryErrors.push(screened.message);
+    }
+    for (const file of accepted.slice(remaining)) {
+      this.galleryErrors.push(`"${file.name}" wasn't added — the gallery holds ${MAX_GALLERY}.`);
+    }
 
-      this.galleryPending++;
-      this.galleryUploading = true;
-      this.eventsManagement
-        .uploadImage(this.clubId, file)
-        .pipe(
-          takeUntilDestroyed(this.destroyRef),
-          finalize(() => {
-            this.galleryPending--;
-            this.galleryUploading = this.galleryPending > 0;
-          }),
-        )
-        .subscribe({
-          next: (publicUrl) => {
-            if (this.galleryUrls.length < MAX_GALLERY) {
-              this.galleryUrls = [...this.galleryUrls, publicUrl];
-              this.galleryDirty = true;
-            }
-          },
-          error: (err) => {
-            this.error = getApiClientMessage(err, 'The image upload failed.');
-          },
-        });
+    for (const file of accepted.slice(0, remaining)) {
+      this.uploadGalleryFile(file);
     }
   }
 
-  private uploadFile(file: File, target: 'icon' | 'banner'): void {
+  private uploadGalleryFile(file: File): void {
+    const preview = createPreviewUrl(file);
+    let adopted = false;
+    if (preview) this.pendingGalleryPreviews = [...this.pendingGalleryPreviews, preview];
+
+    this.galleryPending++;
+    this.galleryUploading = true;
+    this.eventsManagement
+      .uploadImage(this.clubId, file)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => {
+          this.galleryPending--;
+          this.galleryUploading = this.galleryPending > 0;
+          this.pendingGalleryPreviews = this.pendingGalleryPreviews.filter((p) => p !== preview);
+          if (!adopted) revokePreviewUrl(preview);
+        }),
+      )
+      .subscribe({
+        next: (publicUrl) => {
+          if (this.galleryUrls.length < MAX_GALLERY) {
+            this.galleryUrls = [...this.galleryUrls, publicUrl];
+            this.galleryPreviews.adopt(publicUrl, preview);
+            adopted = true;
+            this.galleryDirty = true;
+          }
+        },
+        error: (err) => {
+          this.error = getApiClientMessage(err, 'The image upload failed.');
+        },
+      });
+  }
+
+  /**
+   * Uploads a pick into the icon or banner slot. The drop zone stays live during an upload so a
+   * user can change their mind, so picks can overlap: only the latest one for a slot may act, or a
+   * late result from an earlier pick would leave the slot previewing one image and saving another.
+   */
+  private async uploadFile(file: File, target: ImageSlot): Promise<void> {
+    const pick = ++this.slotPicks[target];
     this.error = '';
     this.success = '';
 
-    if (!looksLikeImage(file)) {
-      this.error = 'Please choose an image file.';
-      return;
-    }
-    if (file.size > MAX_IMAGE_BYTES) {
-      this.error = 'Image must be smaller than 5MB.';
+    const screened = await screenImageFile(file);
+    // Screening takes longer for some files than others, so a newer pick may already be ahead.
+    if (pick !== this.slotPicks[target]) return;
+    if (!screened.ok) {
+      this.error = screened.message;
       return;
     }
 
     const setUploading = (value: boolean) =>
       target === 'banner' ? (this.bannerUploading = value) : (this.imageUploading = value);
 
+    // Cancelling runs the replaced upload's finalize, so it cannot clear the flag set below.
+    this.slotUploads[target]?.unsubscribe();
+    this.setSlotPreview(target, createPreviewUrl(file));
     setUploading(true);
     // clubId is 0 for a not-yet-created club; the backend issues a pending upload URL.
-    this.eventsManagement
+    this.slotUploads[target] = this.eventsManagement
       .uploadImage(this.clubId, file)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
@@ -296,9 +345,16 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
           }
         },
         error: (err) => {
+          // Fall back to whatever image the slot really holds.
+          this.setSlotPreview(target, null);
           this.error = getApiClientMessage(err, 'The image upload failed.');
         },
       });
+  }
+
+  private setSlotPreview(target: ImageSlot, url: string | null): void {
+    revokePreviewUrl(this.slotPreviews[target]);
+    this.slotPreviews[target] = url;
   }
 
   save(): void {
