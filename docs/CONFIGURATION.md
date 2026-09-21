@@ -82,6 +82,8 @@ Appsettings sections configure CORS, forwarded headers, request timeouts, rate l
 
 `ImageUpload:MaxBytes` caps an uploaded image at 5 MB by default. It is enforced when the image is attached to an event, draft, club, or recurrence series rather than when it is uploaded: presigned uploads go from the browser straight to Azure, and a SAS has no content-length field, so nothing on the request path ever sees the bytes. At attach time the server reads the stored blob's length and leading bytes, rejects anything empty, over the cap, not a supported image, or whose bytes disagree with the declared type, and deletes the blob. Re-attaching an image an event or club already holds skips the check, so a later edit costs no storage round trip.
 
+The presigned URL grants Azure's `Create` permission without `Write`, which makes it usable exactly once: `Put Blob` accepts either permission to create a new blob but requires `Write` to overwrite one, so the bytes that pass inspection are the bytes that stay there. The stored content type is restamped from those bytes on attach, because the SAS content type overrides only reads made through the SAS, while the anonymously readable public URL is served with whatever type the uploader set on its own PUT.
+
 Raising the cap affects only what is accepted from that point on; images already attached are unaffected. The multipart avatar upload has its own compiled-in 5 MB limit in `AvatarUploadRequest` and does not read this setting. `RateLimiter:ImageUploadPermitLimit` (30 presigned URLs per 10 minutes per account) bounds how many blobs one account can create, which the size cap does not.
 
 ### Bloom filters and identity probes

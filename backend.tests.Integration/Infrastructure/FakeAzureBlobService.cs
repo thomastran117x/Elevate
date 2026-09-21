@@ -19,6 +19,7 @@ public sealed class FakeAzureBlobService : IAzureBlobService
     private readonly Dictionary<string, DateTimeOffset> _ownedUrls = [];
     private readonly Dictionary<string, StagedBlob> _stagedBlobs = [];
     private readonly List<string> _inspectedUrls = [];
+    private readonly Dictionary<string, string> _normalizedContentTypes = [];
 
     public long MaxImageBytes { get; set; } = 5 * 1024 * 1024;
 
@@ -35,11 +36,18 @@ public sealed class FakeAzureBlobService : IAzureBlobService
     /// </summary>
     public IReadOnlyList<string> InspectedUrls => _inspectedUrls;
 
+    /// <summary>
+    /// The content type each blob was restamped with when it was attached. The stored type comes
+    /// from the uploader's own PUT headers, so the server overwrites it from the bytes.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> NormalizedContentTypes => _normalizedContentTypes;
+
     public void Clear()
     {
         _ownedUrls.Clear();
         _stagedBlobs.Clear();
         _inspectedUrls.Clear();
+        _normalizedContentTypes.Clear();
     }
 
     /// <summary>
@@ -148,6 +156,19 @@ public sealed class FakeAzureBlobService : IAzureBlobService
 
         return Task.FromResult<BlobInspection?>(
             new BlobInspection(staged.ContentLength, staged.ContentType, header));
+    }
+
+    public Task NormalizeBlobHeadersAsync(
+        string blobUrl,
+        string contentType,
+        CancellationToken cancellationToken = default)
+    {
+        _normalizedContentTypes[blobUrl] = contentType;
+
+        if (_stagedBlobs.TryGetValue(blobUrl, out var staged))
+            _stagedBlobs[blobUrl] = staged with { ContentType = contentType };
+
+        return Task.CompletedTask;
     }
 
     public async IAsyncEnumerable<BlobListItem> ListBlobsAsync(

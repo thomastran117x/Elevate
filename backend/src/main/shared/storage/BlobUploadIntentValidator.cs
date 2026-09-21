@@ -153,18 +153,27 @@ internal static class BlobUploadIntentValidator
                 "Only JPEG, PNG, WEBP, and GIF images are supported.");
         }
 
-        // The declared type is cross-checked against the bytes so a blob cannot be served as
-        // something it is not. The blob's own stored type is the fallback because the browser
-        // sends "application/octet-stream" when it cannot determine a file's type, and the
-        // presigned endpoint then derives the stored type from the file extension instead.
-        if ((TryResolveDeclaredFormat(intent.ContentType, out var declaredFormat) ||
-             TryResolveDeclaredFormat(blob.ContentType, out declaredFormat)) &&
+        // The type the uploader asked for is cross-checked against the bytes. It is skipped when
+        // unrecognised, because the browser sends "application/octet-stream" for a file whose
+        // type it cannot determine, and the presigned endpoint derived the stored type from the
+        // file extension in that case.
+        if (TryResolveDeclaredFormat(intent.ContentType, out var declaredFormat) &&
             signature.Format != declaredFormat)
         {
             await blobService.DeleteBlobAsync(imageUrl);
 
             throw new BadRequestException(
                 "The uploaded file does not match the image type that was selected.");
+        }
+
+        // The stored content type is whatever the client put on its own PUT — the SAS content
+        // type only overrides reads made through that SAS, not the anonymous public URL. So it is
+        // restamped from the bytes rather than checked: matching bytes against a caller-chosen
+        // label still leaves the label deciding what the world is served, and a real GIF labelled
+        // text/html would pass every check above and then be executed by a browser.
+        if (blob.ContentType != signature.ContentType)
+        {
+            await blobService.NormalizeBlobHeadersAsync(imageUrl, signature.ContentType);
         }
     }
 

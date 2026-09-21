@@ -39,6 +39,22 @@ namespace backend.main.shared.storage
             string blobUrl,
             int prefixByteCount = ImageSignatureInspector.HeaderByteCount,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Replaces a stored blob's HTTP headers with a content type derived from its own bytes,
+        /// discarding whatever the uploader set. No-op when the URL is not one of ours, storage is
+        /// not configured, or the blob is gone.
+        /// </summary>
+        /// <remarks>
+        /// The SAS content type is a response-header override that applies only to reads through
+        /// that SAS. The stored content type — the one the anonymously readable public URL is
+        /// served with — comes from the client's own PUT headers, so it cannot be trusted and is
+        /// restamped once the bytes have been inspected.
+        /// </remarks>
+        Task NormalizeBlobHeadersAsync(
+            string blobUrl,
+            string contentType,
+            CancellationToken cancellationToken = default);
     }
 
     public readonly record struct BlobListItem(string Url, DateTimeOffset? LastModified);

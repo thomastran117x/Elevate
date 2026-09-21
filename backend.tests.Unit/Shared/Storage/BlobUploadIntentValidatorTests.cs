@@ -136,25 +136,10 @@ public class BlobUploadIntentValidatorTests
     }
 
     [Fact]
-    public async Task RequireIntentAsync_ShouldFallBackToTheStoredType_WhenTheBrowserCouldNotDetermineOne()
+    public async Task RequireIntentAsync_ShouldAcceptAnySupportedImage_WhenTheBrowserCouldNotDetermineAType()
     {
-        // The frontend sends "application/octet-stream" when the file has no type of its own, and
-        // the presigned endpoint then derives the stored type from the file extension.
-        var harness = new Harness(
-            new BlobInspection(2048, "image/png", BlobInspectionStubs.HeaderFor("image/gif")),
-            intentContentType: "application/octet-stream");
-
-        await harness.Invoking(h => h.ValidateAsync())
-            .Should()
-            .ThrowAsync<BadRequestException>()
-            .WithMessage("The uploaded file does not match the image type that was selected.");
-
-        harness.VerifyDeletedOnce();
-    }
-
-    [Fact]
-    public async Task RequireIntentAsync_ShouldAcceptAnySupportedImage_WhenNeitherTypeIsRecognised()
-    {
+        // The frontend sends "application/octet-stream" when the file has no type of its own, so
+        // there is nothing meaningful to cross-check the bytes against — the bytes decide.
         var harness = new Harness(
             new BlobInspection(2048, "application/octet-stream", BlobInspectionStubs.HeaderFor("image/webp")),
             intentContentType: "application/octet-stream");
@@ -163,6 +148,38 @@ public class BlobUploadIntentValidatorTests
 
         intent.PublicUrl.Should().Be(ImageUrl);
         harness.BlobService.Verify(service => service.DeleteBlobAsync(It.IsAny<string>()), Times.Never);
+        harness.VerifyNormalizedTo("image/webp");
+    }
+
+    [Fact]
+    public async Task RequireIntentAsync_ShouldRestampAStoredTypeThatTheUploaderChose()
+    {
+        // The SAS content type only overrides reads made through that SAS. The stored type — what
+        // the anonymously readable public URL is served with — comes from the client's own PUT
+        // headers, so a genuine GIF can be stored as text/html and executed by a browser. The
+        // bytes are what decide, and the label is rewritten to match them.
+        var harness = new Harness(
+            new BlobInspection(2048, "text/html", BlobInspectionStubs.HeaderFor("image/gif")),
+            intentContentType: "image/gif");
+
+        var intent = await harness.ValidateAsync();
+
+        intent.PublicUrl.Should().Be(ImageUrl);
+        harness.BlobService.Verify(service => service.DeleteBlobAsync(It.IsAny<string>()), Times.Never);
+        harness.VerifyNormalizedTo("image/gif");
+    }
+
+    [Fact]
+    public async Task RequireIntentAsync_ShouldLeaveAnAlreadyCanonicalStoredTypeAlone()
+    {
+        var harness = new Harness(BlobInspectionStubs.Image());
+
+        await harness.ValidateAsync();
+
+        harness.BlobService.Verify(
+            service => service.NormalizeBlobHeadersAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]
@@ -205,6 +222,10 @@ public class BlobUploadIntentValidatorTests
             BlobService
                 .Setup(service => service.DeleteBlobAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
+            BlobService
+                .Setup(service => service.NormalizeBlobHeadersAsync(
+                    It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
 
             Cache.Setup(cache => cache.GetValueAsync(It.IsAny<string>())).ReturnsAsync(() => _intentPayload);
         }
@@ -219,5 +240,11 @@ public class BlobUploadIntentValidatorTests
 
         public void VerifyDeletedOnce() =>
             BlobService.Verify(service => service.DeleteBlobAsync(ImageUrl), Times.Once);
+
+        public void VerifyNormalizedTo(string contentType) =>
+            BlobService.Verify(
+                service => service.NormalizeBlobHeadersAsync(
+                    ImageUrl, contentType, It.IsAny<CancellationToken>()),
+                Times.Once);
     }
 }

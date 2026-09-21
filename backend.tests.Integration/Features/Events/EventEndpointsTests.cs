@@ -287,6 +287,35 @@ public class EventEndpointsTests
     }
 
     [Fact]
+    public async Task EventImageEndpoints_ShouldRestampAStoredContentTypeChosenByTheUploader()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (ownerSession, _) = await CreateUserSessionAsync(app, "events-images-restamp@example.com", "Organizer");
+
+        var club = await CreateClubAsync(app, ownerSession.AccessToken, "Restamp Club");
+        var ev = await CreateEventAsync(app, ownerSession.AccessToken, club.Id, "Restamp Event");
+
+        // The SAS content type only overrides reads made through the SAS. The stored type comes
+        // from the client's own PUT headers, and the container is anonymously readable, so a
+        // genuine GIF stored as text/html would be executed by a browser fetching the public URL.
+        var pending = await CreatePendingImageAsync(app, ownerSession.AccessToken, club.Id, ev.Id);
+        app.BlobStorage.StagedBlobs[pending.PublicUrl] = new StagedBlob(
+            2048, "text/html", FakeAzureBlobService.HeaderFor("image/gif"));
+
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/images",
+            ownerSession.AccessToken,
+            JsonContent.Create(new { imageUrl = pending.PublicUrl })));
+
+        // The bytes are a real image, so the upload is accepted — but the label is rewritten to
+        // match them rather than left as the uploader chose.
+        response.StatusCode.Should().Be(HttpStatusCode.Created, await app.DescribeFailureAsync(response));
+        app.BlobStorage.NormalizedContentTypes.Should().ContainKey(pending.PublicUrl)
+            .WhoseValue.Should().Be("image/gif");
+    }
+
+    [Fact]
     public async Task DraftEvent_ShouldRejectAnOversizedImage_AndDeleteTheBlob()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
