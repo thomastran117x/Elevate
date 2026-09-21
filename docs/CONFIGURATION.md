@@ -76,7 +76,7 @@ Backend gates remove disabled MVC actions/controllers from discovery and OpenAPI
 
 Use strong deployment-specific JWT secrets and a valid `AUTH_TOTP_ENCRYPTION_KEY` rather than development fallbacks. Production validation rejects missing/default critical values. SMS enrollment, enforcement, and step-up are controlled by `AUTH_SMS_MFA_ENROLLMENT_ENABLED`, `AUTH_SMS_MFA_ENFORCEMENT_ENABLED`, and `AUTH_SMS_MFA_STEP_UP_SMS_ENABLED`. TOTP has `AUTH_TOTP_MFA_ENROLLMENT_ENABLED` and `AUTH_TOTP_MFA_STEP_UP_ENABLED`.
 
-Appsettings sections configure CORS, forwarded headers, request timeouts, rate limiting, profile username cooldown, version retention, recurrence, image upload limits, and orphan-blob cleanup. `Profile__UsernameChangeCooldownDays` is the normal nested override; Compose maps the template's uppercase `PROFILE__USERNAMECHANGECOOLDOWNDAYS` into it. Inspect options classes for accepted names and defaults rather than assuming all keys are flattened template variables.
+Appsettings sections configure CORS, forwarded headers, request timeouts, rate limiting, profile username cooldown, version retention, recurrence, image upload limits, image processing, and orphan-blob cleanup. `Profile__UsernameChangeCooldownDays` is the normal nested override; Compose maps the template's uppercase `PROFILE__USERNAMECHANGECOOLDOWNDAYS` into it. Inspect options classes for accepted names and defaults rather than assuming all keys are flattened template variables.
 
 ### Image uploads
 
@@ -85,6 +85,22 @@ Appsettings sections configure CORS, forwarded headers, request timeouts, rate l
 The presigned URL grants Azure's `Create` permission without `Write`, which makes it usable exactly once: `Put Blob` accepts either permission to create a new blob but requires `Write` to overwrite one, so the bytes that pass inspection are the bytes that stay there. The stored content type is restamped from those bytes on attach, because the SAS content type overrides only reads made through the SAS, while the anonymously readable public URL is served with whatever type the uploader set on its own PUT.
 
 Raising the cap affects only what is accepted from that point on; images already attached are unaffected. The multipart avatar upload has its own compiled-in 5 MB limit in `AvatarUploadRequest` and does not read this setting. `RateLimiter:ImageUploadPermitLimit` (30 presigned URLs per 10 minutes per account) bounds how many blobs one account can create, which the size cap does not.
+
+### Image processing
+
+Multipart avatar uploads are decoded to pixels and re-encoded before anything is stored, so EXIF (including phone GPS), IPTC, XMP, ICC profiles, and any non-pixel payload hidden in the file are gone. The pipeline reads the header first, rejecting oversized dimensions and animated images before any pixel buffer is allocated. It then decodes a single frame, shrinks the image to the size cap, applies the EXIF orientation (after shrinking, so the rotation never needs a second full-size buffer), strips the metadata, and encodes lossy WebP. Presigned uploads are not processed yet: the bytes go from the browser to Azure, so the server has nowhere to run this until uploads land in a quarantine container.
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `ImageProcessing:MaxDimension` | `8000` | Largest width or height accepted, read from the header alone. |
+| `ImageProcessing:MaxPixels` | `50000000` | Largest total pixel count; catches a size that is within `MaxDimension` on each side but still decodes to hundreds of megabytes. |
+| `ImageProcessing:AvatarMaxEdge` | `512` | Long-edge cap for avatars. Smaller images are never upscaled. |
+| `ImageProcessing:GalleryMaxEdge` | `2048` | Long-edge cap for gallery images, matching the largest input Azure AI Content Safety accepts. |
+| `ImageProcessing:WebpQuality` | `82` | Lossy WebP quality, 1–100. |
+| `ImageProcessing:MaxAllocationMegabytes` | `256` | Largest buffer the decoder may allocate for one image; 50 MP of RGBA is about 200 MB. |
+| `ImageProcessing:MaxConcurrentOperations` | `2` | Images processed at once across the process; further requests wait. |
+
+Values are validated on startup. Processing uses [SixLabors.ImageSharp](https://github.com/SixLabors/ImageSharp) under the Six Labors Split License, which is free for open-source projects and for organisations under roughly $1M USD annual gross revenue; above that a commercial licence is required. The package is held on 3.x because 4.x fails Release builds without a Six Labors licence key. The CI backend audit fails on high or critical NuGet advisories, so ImageSharp patch releases need to be taken promptly.
 
 ### Bloom filters and identity probes
 

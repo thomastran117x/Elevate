@@ -77,4 +77,9 @@ updates:
       # major is binary-incompatible (every backend test failed on it). It moves with the next
       # ASP.NET Core major, never on its own.
       - dependency-name: "Microsoft.OpenApi"
+        update-types: ["version-update:semver-major"]
+      # ImageSharp 4.x fails every Release build without a Six Labors license key (an MSBuild
+      # check that runs before compile). Moving to it means provisioning a key in CI and the
+      # Docker build first; 3.x patch releases still arrive through the group above.
+      - dependency-name: "SixLabors.ImageSharp"
         update-types: ["version-update:semver-major"]

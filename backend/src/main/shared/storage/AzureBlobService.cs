@@ -6,6 +6,7 @@ using Azure.Storage.Sas;
 using backend.main.application.environment;
 using backend.main.features.events.contracts.responses;
 using backend.main.shared.exceptions.http;
+using backend.main.shared.storage.imaging;
 using backend.main.shared.utilities.logger;
 
 using Microsoft.Extensions.Options;
@@ -61,40 +62,34 @@ namespace backend.main.shared.storage
             _container = new BlobContainerClient(connectionString, containerName);
         }
 
-        public async Task<string> UploadImageAsync(IFormFile image, string blobPathPrefix)
+        public async Task<string> UploadProcessedImageAsync(
+            ProcessedImage image,
+            string blobPathPrefix,
+            CancellationToken cancellationToken = default)
         {
-            if (image == null || image.Length == 0)
+            if (image == null || image.Content.Length == 0)
                 throw new ArgumentException("Image is null or empty");
 
-            // The declared content type and the file name are both caller-controlled, and this
-            // container is created with anonymous read access, so whatever content type is
-            // stamped here is what the world is later served. Derive both it and the extension
-            // from the bytes rather than checking the caller's values and then trusting them:
-            // a polyglot is stored as what it actually is, not as what the uploader chose.
-            // Sniffed before any storage call so a rejected upload never creates the container.
-            if (!ImageSignatureInspector.TryDetect(image, out var signature))
-            {
-                throw new UnsupportedMediaTypeException(
-                    "Only JPEG, PNG, WEBP, and GIF images are supported.");
-            }
-
+            // This container is created with anonymous read access, so the content type stamped
+            // here is what the world is served. It and the extension come from the processed
+            // output — always WebP — not from the caller's file name or declared type.
             var container = GetRequiredContainer();
-            await container.CreateIfNotExistsAsync(PublicAccessType.Blob);
+            await container.CreateIfNotExistsAsync(PublicAccessType.Blob, cancellationToken: cancellationToken);
 
             var normalizedPrefix = NormalizeBlobPathPrefix(blobPathPrefix, "uploads");
-            var blobName = $"{normalizedPrefix}/{Guid.NewGuid():N}{signature.FileExtension}";
+            var blobName = $"{normalizedPrefix}/{Guid.NewGuid():N}{image.FileExtension}";
             var blobClient = container.GetBlobClient(blobName);
 
-            await using var stream = image.OpenReadStream();
             await blobClient.UploadAsync(
-                stream,
+                BinaryData.FromBytes(image.Content),
                 new BlobUploadOptions
                 {
                     HttpHeaders = new BlobHttpHeaders
                     {
-                        ContentType = signature.ContentType
+                        ContentType = image.ContentType
                     }
-                });
+                },
+                cancellationToken);
 
             return blobClient.Uri.ToString();
         }

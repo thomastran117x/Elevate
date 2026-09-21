@@ -1,4 +1,5 @@
 using backend.main.features.events.contracts.responses;
+using backend.main.shared.storage.imaging;
 
 namespace backend.main.shared.storage
 {
@@ -13,7 +14,20 @@ namespace backend.main.shared.storage
             get;
         }
 
-        Task<string> UploadImageAsync(IFormFile image, string blobPathPrefix);
+        /// <summary>
+        /// Stores an image the <see cref="imaging.IImageProcessor"/> has already re-encoded and
+        /// returns its public URL. The blob is named and typed from the processed output, never
+        /// from anything the uploader supplied.
+        /// </summary>
+        /// <remarks>
+        /// There is deliberately no way to store raw upload bytes through this service: the
+        /// container is anonymously readable, and unprocessed bytes carry EXIF and anything else
+        /// the uploader hid after the image header.
+        /// </remarks>
+        Task<string> UploadProcessedImageAsync(
+            ProcessedImage image,
+            string blobPathPrefix,
+            CancellationToken cancellationToken = default);
         Task<PresignedUploadResponse> GenerateUploadUrlAsync(string blobPathPrefix, string fileName, string contentType);
         bool IsOwnedBlobUrl(string blobUrl);
         Task DeleteBlobAsync(string blobUrl);

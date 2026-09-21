@@ -188,12 +188,17 @@ namespace backend.main.features.profile
         // file at exactly the advertised limit still reaches the file-level validator.
         [RequestSizeLimit(AvatarUploadRequest.MaxRequestBytes)]
         [ProducesResponseType(typeof(ApiResponse<MyProfileResponse>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> UploadAvatar([FromForm] AvatarUploadRequest request)
+        public async Task<IActionResult> UploadAvatar(
+            [FromForm] AvatarUploadRequest request,
+            CancellationToken cancellationToken)
         {
             try
             {
                 var userPayload = User.GetUserPayload();
-                var updatedUser = await _userService.UpdateAvatarAsync(userPayload.Id, request.Image);
+                var updatedUser = await _userService.UpdateAvatarAsync(
+                    userPayload.Id,
+                    request.Image,
+                    cancellationToken);
 
                 if (updatedUser == null)
                     throw new ResourceNotFoundException("User not found.");
@@ -202,6 +207,12 @@ namespace backend.main.features.profile
                     "Avatar updated successfully.",
                     MapToMyProfile(updatedUser)
                 ));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The client disconnected. Not a failure worth an error log or a 500; the host
+                // records the aborted request itself.
+                throw;
             }
             catch (Exception e)
             {

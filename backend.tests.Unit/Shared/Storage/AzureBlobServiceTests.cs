@@ -7,6 +7,7 @@ using Azure.Storage.Sas;
 
 using backend.main.shared.exceptions.http;
 using backend.main.shared.storage;
+using backend.main.shared.storage.imaging;
 
 using backend.tests.Unit.Support;
 
@@ -277,45 +278,25 @@ public class AzureBlobServiceTests
     }
 
     [Fact]
-    public async Task UploadImageAsync_ShouldThrowUnsupportedMediaType_WhenBytesAreNotAnImage()
-    {
-        // The service has no container, so reaching storage would throw InvalidOperationException
-        // instead. Getting the media-type failure proves the sniff runs before any storage call
-        // and that a rejected upload never creates the container.
-        var service = CreateServiceWithoutContainer("AZURE_STORAGE_CONNECTION_STRING is not configured.");
-        var file = CreateFormFile("avatar.png", [0x01, 0x02, 0x03, 0x04], "image/png");
-
-        await service.Invoking(svc => svc.UploadImageAsync(file, "users"))
-            .Should()
-            .ThrowAsync<UnsupportedMediaTypeException>()
-            .WithMessage("*JPEG, PNG, WEBP, and GIF*");
-    }
-
-    [Fact]
-    public async Task UploadImageAsync_ShouldSniffPastTheFileName_ForRealImageBytes()
-    {
-        // PNG bytes carrying a .jpg name: the declared values disagree with the content, which
-        // the old extension check rejected. Failing on the missing container rather than on the
-        // media type is what says the bytes were accepted and the upload reached storage.
-        var service = CreateServiceWithoutContainer("AZURE_STORAGE_CONNECTION_STRING is not configured.");
-        var file = CreateFormFile("avatar.jpg", PngBytes(), "image/jpeg");
-
-        await service.Invoking(svc => svc.UploadImageAsync(file, "users"))
-            .Should()
-            .ThrowAsync<InvalidOperationException>()
-            .WithMessage("*AZURE_STORAGE_CONNECTION_STRING is not configured.*");
-    }
-
-    [Fact]
-    public async Task UploadImageAsync_ShouldThrowArgumentException_ForEmptyFiles()
+    public async Task UploadProcessedImageAsync_ShouldThrowArgumentException_ForEmptyContent()
     {
         var service = CreateServiceWithoutContainer("missing config");
-        var file = CreateFormFile("avatar.png", [], "image/png");
 
-        await service.Invoking(svc => svc.UploadImageAsync(file, "users"))
+        await service.Invoking(svc => svc.UploadProcessedImageAsync(new ProcessedImage([], 0, 0), "users"))
             .Should()
             .ThrowAsync<ArgumentException>()
             .WithMessage("*Image is null or empty*");
+    }
+
+    [Fact]
+    public async Task UploadProcessedImageAsync_ShouldRequireConfiguredStorage()
+    {
+        var service = CreateServiceWithoutContainer("AZURE_STORAGE_CONNECTION_STRING is not configured.");
+
+        await service.Invoking(svc => svc.UploadProcessedImageAsync(new ProcessedImage([0x52, 0x49, 0x46, 0x46], 1, 1), "users"))
+            .Should()
+            .ThrowAsync<InvalidOperationException>()
+            .WithMessage("*AZURE_STORAGE_CONNECTION_STRING is not configured.*");
     }
 
     [Fact]
@@ -376,19 +357,6 @@ public class AzureBlobServiceTests
         var service = CreateServiceWithContainer(new ImageUploadOptions { MaxBytes = 1234 });
 
         service.MaxImageBytes.Should().Be(1234);
-    }
-
-    private static byte[] PngBytes() =>
-        [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52];
-
-    private static FormFile CreateFormFile(string fileName, byte[] content, string contentType)
-    {
-        var stream = new MemoryStream(content);
-        return new FormFile(stream, 0, content.Length, "image", fileName)
-        {
-            Headers = new HeaderDictionary(),
-            ContentType = contentType
-        };
     }
 
     private static AzureBlobService CreateServiceWithContainer(ImageUploadOptions? imageUploadOptions = null)
