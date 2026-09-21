@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
+
+import { bytesFile, imageFile } from '@testing';
 
 import { ManageEventEditorComponent } from './manage-event-editor.component';
 import { EventsManagementService } from '../../services/events-management.service';
@@ -606,7 +608,17 @@ describe('ManageEventEditorComponent', () => {
       return { target: input } as unknown as Event;
     }
 
-    const file = (name: string) => new File(['bytes'], name, { type: 'image/png' });
+    /** Screening is async (it reads and decodes the file), so poll for the state it leads to. */
+    async function waitUntil(condition: () => boolean): Promise<void> {
+      for (let i = 0; i < 200 && !condition(); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+    }
+
+    // Real PNG bytes: the screening sniffs and decodes each file before it may upload.
+    let png: Blob;
+    beforeAll(async () => (png = await imageFile()));
+    const file = (name: string) => new File([png], name, { type: 'image/png' });
 
     it('appends each uploaded URL and clears the input', async () => {
       setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
@@ -658,43 +670,70 @@ describe('ManageEventEditorComponent', () => {
       expect(component.imageUrls).toEqual(existing);
     });
 
-    it('skips a file larger than the 5MB cap and keeps going', async () => {
+    it('names a file past the five-image cap instead of dropping it silently', async () => {
+      const existing = ['1', '2', '3', '4'].map((n) => `https://cdn/${n}.png`);
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: existing }));
+      managementService.uploadImage.and.returnValue(of('https://cdn/5.png'));
+
+      await component.onFilesSelected(fileInput([file('5.png'), file('6.png')]));
+
+      expect(managementService.uploadImage).toHaveBeenCalledTimes(1);
+      expect(component.imageErrors).toEqual([`"6.png" wasn't added — an event holds 5.`]);
+    });
+
+    it('reports every rejected file in a mixed batch and uploads the rest', async () => {
       // A presigned SAS cannot bound an upload's size, so the server rejects an oversized blob
       // only after it has been stored. Catching it here saves the round trip entirely.
       setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
+      const svg = new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' });
       const oversized = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'huge.png', {
         type: 'image/png',
       });
       managementService.uploadImage.and.returnValue(of('https://cdn/ok.png'));
 
-      await component.onFilesSelected(fileInput([oversized, file('ok.png')]));
+      await component.onFilesSelected(fileInput([svg, oversized, file('ok.png')]));
 
       expect(managementService.uploadImage).toHaveBeenCalledTimes(1);
       expect(component.imageUrls).toEqual(['https://cdn/ok.png']);
-      expect(component.error).toBe('Each image must be smaller than 5MB.');
+      expect(component.imageErrors).toEqual([
+        `"logo.svg" isn't a supported image. Use JPG, PNG, WEBP or GIF.`,
+        '"huge.png" is larger than 5MB.',
+      ]);
+      expect(component.error).toBe('');
     });
 
-    it('skips a file that is not an image', async () => {
+    it('clears the previous rejections on the next pick', async () => {
       setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
-      const document = new File(['bytes'], 'notes.pdf', { type: 'application/pdf' });
+      managementService.uploadImage.and.returnValue(of('https://cdn/ok.png'));
+      await component.onFilesSelected(fileInput([new File(['x'], 'a.bmp', { type: 'image/bmp' })]));
 
-      await component.onFilesSelected(fileInput([document]));
+      await component.onFilesSelected(fileInput([file('ok.png')]));
+
+      expect(component.imageErrors).toEqual([]);
+    });
+
+    it('rejects a text file posing as a PNG without uploading it', async () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
+
+      await component.onFilesSelected(
+        fileInput([bytesFile('fake.png', 'image/png', 'plain text')]),
+      );
 
       expect(managementService.uploadImage).not.toHaveBeenCalled();
-      expect(component.error).toBe('Please choose image files.');
+      expect(component.imageErrors).toEqual([`"fake.png" isn't a JPG, PNG, WEBP or GIF image.`]);
     });
 
-    it('uploads an image the browser could not type, going by its extension', async () => {
+    it('uploads an image the browser could not type, going by its bytes', async () => {
       // An empty type is not "not an image": the upload service sends it as
-      // application/octet-stream and the server works the type out from the extension.
+      // application/octet-stream and the server works the type out itself.
       setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
-      const untyped = new File(['bytes'], 'photo.WEBP', { type: '' });
+      const untyped = await imageFile('photo.WEBP', '', { format: 'webp' });
       managementService.uploadImage.and.returnValue(of('https://cdn/photo.webp'));
 
       await component.onFilesSelected(fileInput([untyped]));
 
       expect(managementService.uploadImage).toHaveBeenCalledOnceWith(4, untyped, 12);
-      expect(component.error).toBe('');
+      expect(component.imageErrors).toEqual([]);
     });
 
     it('skips an untyped file whose name is not a supported image', async () => {
@@ -704,7 +743,78 @@ describe('ManageEventEditorComponent', () => {
       await component.onFilesSelected(fileInput([untyped]));
 
       expect(managementService.uploadImage).not.toHaveBeenCalled();
-      expect(component.error).toBe('Please choose image files.');
+      expect(component.imageErrors).toEqual([
+        `"notes" isn't a supported image. Use JPG, PNG, WEBP or GIF.`,
+      ]);
+    });
+
+    it('previews each picked image locally before its upload completes', async () => {
+      setup({});
+      const upload = new Subject<string>();
+      managementService.uploadImage.and.returnValue(upload);
+
+      const done = component.onFilesSelected(fileInput([file('a.png')]));
+      await waitUntil(() => component.pendingPreviews.length > 0);
+
+      expect(component.pendingPreviews[0]).toMatch(/^blob:/);
+      const preview = component.pendingPreviews[0];
+
+      upload.next('https://cdn/a.png');
+      upload.complete();
+      await done;
+
+      expect(component.pendingPreviews).toEqual([]);
+      expect(component.srcForImage('https://cdn/a.png')).toBe(preview);
+    });
+
+    it('revokes the previews of uploads that failed or never started', async () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
+      managementService.uploadImage.and.returnValue(throwError(() => new Error('refused')));
+      const revoke = spyOn(URL, 'revokeObjectURL').and.callThrough();
+
+      await component.onFilesSelected(fileInput([file('a.png'), file('b.png')]));
+
+      expect(revoke).toHaveBeenCalledTimes(2);
+      expect(component.pendingPreviews).toEqual([]);
+    });
+
+    it('uploads without previews where object URLs are unavailable', async () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
+      managementService.uploadImage.and.returnValue(of('https://cdn/a.png'));
+      const original = Object.getOwnPropertyDescriptor(URL, 'createObjectURL')!;
+      Object.defineProperty(URL, 'createObjectURL', { value: undefined, configurable: true });
+
+      try {
+        await component.onFilesSelected(fileInput([file('a.png')]));
+      } finally {
+        Object.defineProperty(URL, 'createObjectURL', original);
+      }
+
+      expect(component.imageUrls).toEqual(['https://cdn/a.png']);
+      expect(component.srcForImage('https://cdn/a.png')).toBe('https://cdn/a.png');
+    });
+
+    it('revokes previews when images are removed, replaced by the gallery, or destroyed', async () => {
+      setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
+      managementService.uploadImage.and.returnValues(
+        of('https://cdn/a.png'),
+        of('https://cdn/b.png'),
+        of('https://cdn/c.png'),
+      );
+      await component.onFilesSelected(fileInput([file('a.png'), file('b.png'), file('c.png')]));
+      const [a, b, c] = ['a', 'b', 'c'].map((n) => component.srcForImage(`https://cdn/${n}.png`));
+      const revoke = spyOn(URL, 'revokeObjectURL').and.callThrough();
+
+      component.removeImage(0);
+      expect(revoke).toHaveBeenCalledOnceWith(a);
+
+      component.onGalleryChanged(
+        component.images.filter((image) => image.url !== 'https://cdn/b.png'),
+      );
+      expect(revoke).toHaveBeenCalledWith(b);
+
+      fixture.destroy();
+      expect(revoke.calls.allArgs()).toEqual([[a], [b], [c]]);
     });
 
     it('reports an upload failure and still stops the spinner', async () => {
