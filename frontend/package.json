@@ -33,14 +33,14 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@angular/cdk": "^22.1.6",
-    "@angular/common": "^22.1.6",
-    "@angular/compiler": "^22.1.6",
-    "@angular/core": "^22.1.6",
-    "@angular/forms": "^22.1.6",
-    "@angular/platform-browser": "^22.1.6",
-    "@angular/platform-server": "^22.1.6",
-    "@angular/router": "^22.1.6",
+    "@angular/cdk": "^22.1.7",
+    "@angular/common": "^22.1.7",
+    "@angular/compiler": "^22.1.7",
+    "@angular/core": "^22.1.7",
+    "@angular/forms": "^22.1.7",
+    "@angular/platform-browser": "^22.1.7",
+    "@angular/platform-server": "^22.1.7",
+    "@angular/router": "^22.1.7",
     "@angular/ssr": "^22.1.8",
     "@microsoft/signalr": "^10.0.11",
     "@ngrx/effects": "^22.0.1",
@@ -58,12 +58,12 @@
   "devDependencies": {
     "@angular/build": "^22.1.8",
     "@angular/cli": "^22.1.8",
-    "@angular/compiler-cli": "^22.1.6",
-    "@playwright/mcp": "^0.0.80",
+    "@angular/compiler-cli": "^22.1.7",
+    "@playwright/mcp": "^0.0.81",
     "@types/express": "^5.0.3",
     "@types/jasmine": "^6.0.0",
-    "@types/node": "^24.13.4",
-    "dotenv": "^17.2.3",
+    "@types/node": "^24.13.5",
+    "dotenv": "^18.0.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "istanbul-lib-instrument": "^6.0.3",
@@ -74,7 +74,7 @@
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "^2.3.0",
     "playwright": "^1.63.0",
-    "prettier": "^3.7.4",
+    "prettier": "^3.9.8",
     "typescript": "~6.0.3"
   }
 }
