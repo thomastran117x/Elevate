@@ -30,12 +30,14 @@ namespace backend.main.shared.storage.imaging
         internal const string TooLargeMessage = "The image dimensions are too large.";
         internal const string AnimatedMessage = "Animated images are not supported. Upload a single-frame image.";
         internal const string UnreadableMessage = "The image could not be read.";
+        internal const string BusyMessage = "Image processing is busy. Try again shortly.";
 
         private readonly ImageProcessingOptions _options;
         private readonly DecoderOptions _identifyOptions;
         private readonly DecoderOptions _decodeOptions;
         private readonly WebpEncoder _encoder;
         private readonly SemaphoreSlim _slots;
+        private readonly TimeSpan _slotWaitTimeout;
 
         public ImageSharpImageProcessor(IOptions<ImageProcessingOptions> options)
         {
@@ -76,11 +78,11 @@ namespace backend.main.shared.storage.imaging
             };
 
             _slots = new SemaphoreSlim(_options.MaxConcurrentOperations, _options.MaxConcurrentOperations);
+            _slotWaitTimeout = TimeSpan.FromSeconds(_options.SlotWaitTimeoutSeconds);
         }
 
         public async Task<ProcessedImage> ProcessAsync(
             Stream source,
-            ImageProcessingProfile profile,
             CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(source);
@@ -92,7 +94,13 @@ namespace backend.main.shared.storage.imaging
             // limiter is a fixed window rather than a concurrency gate, so requests can queue here;
             // copying before taking a slot would let each one hold its own megabytes of upload
             // while only MaxConcurrentOperations of them are being worked on.
-            await _slots.WaitAsync(cancellationToken);
+            //
+            // The wait is bounded because that queue has no other limit: the rate limit is per
+            // account, so enough accounts uploading at once would each hold a buffered body and a
+            // request slot until the client gave up. Shedding load says so immediately instead.
+            if (!await _slots.WaitAsync(_slotWaitTimeout, cancellationToken))
+                throw new NotAvailableException(BusyMessage);
+
             try
             {
                 // Buffer once. ImageSharp's async decoders copy a non-seekable or non-memory stream
@@ -115,19 +123,17 @@ namespace backend.main.shared.storage.imaging
                     throw new BadRequestException(AnimatedMessage);
                 }
 
-                return await DecodeAndEncodeAsync(buffered, MaxEdgeFor(profile), cancellationToken);
+                return await DecodeAndEncodeAsync(buffered, cancellationToken);
             }
-            catch (Exception ex) when (
-                ex is ImageFormatException or
-                      InvalidMemoryOperationException or
-                      ImageProcessingException or
-                      NotSupportedException)
+            catch (Exception ex) when (ex is not AppException and not OperationCanceledException)
             {
-                // UnknownImageFormatException and InvalidImageContentException derive from
-                // ImageFormatException; an unsupported PNG colour type or bit depth raises
-                // NotSupportedException; a failure inside Mutate arrives wrapped in
-                // ImageProcessingException. A file the decoder cannot read is the uploader's
-                // problem, never a 500.
+                // Deliberately broad. A crafted file reaches the decoders as whatever the parser
+                // that choked on it happened to throw: ImageFormatException and NotSupportedException
+                // are the documented ones, but ImageSharp 3.1 also surfaces IndexOutOfRange,
+                // ArgumentOutOfRange, EndOfStream and InvalidOperation from malformed GIF, WebP and
+                // JPEG streams. Every one of them is the uploader's file being wrong, never a fault
+                // worth a 500, and listing types has already missed cases twice. Cancellation and
+                // the rejections raised above are not decoder failures, so they pass through.
                 Logger.Warn(ex, "[ImageSharpImageProcessor] Rejected an image that could not be decoded.");
                 throw new BadRequestException(UnreadableMessage);
             }
@@ -146,9 +152,10 @@ namespace backend.main.shared.storage.imaging
         /// </remarks>
         private async Task<ProcessedImage> DecodeAndEncodeAsync(
             MemoryStream source,
-            int maxEdge,
             CancellationToken cancellationToken)
         {
+            var maxEdge = _options.AvatarMaxEdge;
+
             // 1. Header only. Identify reads dimensions and frame descriptors without allocating
             // a pixel buffer, so a 100 KB file declaring 100000x100000 is refused here, before
             // it can ask for 40 GB.
@@ -195,7 +202,7 @@ namespace backend.main.shared.storage.imaging
             using var output = new MemoryStream();
             await image.SaveAsync(output, _encoder, cancellationToken);
 
-            return new ProcessedImage(output.ToArray(), image.Width, image.Height);
+            return new ProcessedImage(output.ToArray());
         }
 
         /// <summary>
@@ -253,12 +260,5 @@ namespace backend.main.shared.storage.imaging
 
             return false;
         }
-
-        private int MaxEdgeFor(ImageProcessingProfile profile) => profile switch
-        {
-            ImageProcessingProfile.Avatar => _options.AvatarMaxEdge,
-            ImageProcessingProfile.Gallery => _options.GalleryMaxEdge,
-            _ => throw new ArgumentOutOfRangeException(nameof(profile), profile, null)
-        };
     }
 }

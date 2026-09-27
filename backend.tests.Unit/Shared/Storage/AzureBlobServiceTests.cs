@@ -282,7 +282,7 @@ public class AzureBlobServiceTests
     {
         var service = CreateServiceWithoutContainer("missing config");
 
-        await service.Invoking(svc => svc.UploadProcessedImageAsync(new ProcessedImage([], 0, 0), "users"))
+        await service.Invoking(svc => svc.UploadProcessedImageAsync(new ProcessedImage([]), "users"))
             .Should()
             .ThrowAsync<ArgumentException>()
             .WithMessage("*Image is null or empty*");
@@ -293,7 +293,7 @@ public class AzureBlobServiceTests
     {
         var service = CreateServiceWithoutContainer("AZURE_STORAGE_CONNECTION_STRING is not configured.");
 
-        await service.Invoking(svc => svc.UploadProcessedImageAsync(new ProcessedImage([0x52, 0x49, 0x46, 0x46], 1, 1), "users"))
+        await service.Invoking(svc => svc.UploadProcessedImageAsync(new ProcessedImage([0x52, 0x49, 0x46, 0x46]), "users"))
             .Should()
             .ThrowAsync<InvalidOperationException>()
             .WithMessage("*AZURE_STORAGE_CONNECTION_STRING is not configured.*");

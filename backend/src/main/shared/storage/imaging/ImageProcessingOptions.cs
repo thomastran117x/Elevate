@@ -25,19 +25,6 @@ namespace backend.main.shared.storage.imaging
         [Range(16, 8000)]
         public int AvatarMaxEdge { get; set; } = 512;
 
-        /// <summary>
-        /// Long-edge cap for gallery images. 2048 matches the largest image Azure AI Content Safety
-        /// accepts, so moderating this pipeline's output never needs a second encode.
-        /// </summary>
-        /// <remarks>
-        /// Reserved, and inert today: only the multipart avatar path is processed. Presigned
-        /// uploads go straight from the browser to storage, so nothing requests
-        /// <see cref="ImageProcessingProfile.Gallery"/> until the quarantine container and media
-        /// worker land and re-encode those blobs.
-        /// </remarks>
-        [Range(16, 8000)]
-        public int GalleryMaxEdge { get; set; } = 2048;
-
         /// <summary>Lossy WebP quality, 0-100.</summary>
         [Range(1, 100)]
         public int WebpQuality { get; set; } = 82;
@@ -67,5 +54,13 @@ namespace backend.main.shared.storage.imaging
         /// </summary>
         [Range(1, 64)]
         public int MaxConcurrentOperations { get; set; } = 2;
+
+        /// <summary>
+        /// How long an upload waits for a free slot before the request is shed with 503. Nothing
+        /// else bounds that queue — the rate limit is per account — so without this, uploads from
+        /// enough accounts pile up, each holding its buffered body until the client gives up.
+        /// </summary>
+        [Range(1, 120)]
+        public int SlotWaitTimeoutSeconds { get; set; } = 10;
     }
 }
