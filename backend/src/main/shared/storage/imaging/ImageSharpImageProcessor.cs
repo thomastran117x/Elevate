@@ -88,26 +88,33 @@ namespace backend.main.shared.storage.imaging
             if (!source.CanRead)
                 throw new ArgumentException("The image stream must be readable.", nameof(source));
 
-            // Buffer once, before taking a slot. ImageSharp's async decoders copy a non-seekable or
-            // non-memory stream into a scratch buffer on every call, so identifying and decoding
-            // the raw form stream would copy the upload twice while holding one of the few slots.
-            using var buffered = await BufferAsync(source, cancellationToken);
-
-            // The cheap byte check first: it keeps anything that is not one of the four formats
-            // away from every decoder, and it is the same gate the presigned path applies.
-            if (!ImageSignatureInspector.TryDetect(buffered, out var signature))
-                throw new BadRequestException(UnsupportedFormatMessage);
-
-            // ImageSharp 3.x cannot decode an APNG at all: it reports the file as invalid PNG
-            // data, which would surface as "could not be read" rather than saying the image is
-            // animated. The animation control chunk is what makes a PNG an APNG, so finding it
-            // here keeps the message accurate and matches the GIF and WebP behaviour.
-            if (signature.Format == ImageFormat.Png && HasApngAnimationChunk(buffered.GetBuffer().AsSpan(0, (int)buffered.Length)))
-                throw new BadRequestException(AnimatedMessage);
-
+            // Everything that holds memory happens under the slot, buffering included. The request
+            // limiter is a fixed window rather than a concurrency gate, so requests can queue here;
+            // copying before taking a slot would let each one hold its own megabytes of upload
+            // while only MaxConcurrentOperations of them are being worked on.
             await _slots.WaitAsync(cancellationToken);
             try
             {
+                // Buffer once. ImageSharp's async decoders copy a non-seekable or non-memory stream
+                // into a scratch buffer on every call, so identifying and decoding the raw form
+                // stream would copy the upload twice over.
+                using var buffered = await BufferAsync(source, cancellationToken);
+
+                // The cheap byte check first: it keeps anything that is not one of the four formats
+                // away from every decoder, and it is the same gate the presigned path applies.
+                if (!ImageSignatureInspector.TryDetect(buffered, out var signature))
+                    throw new BadRequestException(UnsupportedFormatMessage);
+
+                // ImageSharp 3.x cannot decode an APNG at all: it reports the file as invalid PNG
+                // data, which would surface as "could not be read" rather than saying the image is
+                // animated. The animation control chunk is what makes a PNG an APNG, so finding it
+                // here keeps the message accurate and matches the GIF and WebP behaviour.
+                if (signature.Format == ImageFormat.Png &&
+                    HasApngAnimationChunk(buffered.GetBuffer().AsSpan(0, (int)buffered.Length)))
+                {
+                    throw new BadRequestException(AnimatedMessage);
+                }
+
                 return DecodeAndEncode(buffered, MaxEdgeFor(profile), cancellationToken);
             }
             catch (Exception ex) when (
@@ -228,12 +235,16 @@ namespace backend.main.shared.storage.imaging
                 if (type.SequenceEqual("IDAT"u8) || type.SequenceEqual("IEND"u8))
                     return false;
 
-                // length + type + data + CRC. A declared length that overflows the buffer means a
-                // malformed file; leave it to the decoder to reject with its own message.
-                if (length > int.MaxValue - 12)
+                // length + type + data + CRC, in arithmetic that cannot overflow: a chunk declaring
+                // a length near int.MaxValue would otherwise wrap the offset negative and make the
+                // next slice throw, turning a tiny malformed file into a 500. A length that runs
+                // past the buffer means a malformed file either way, so stop and let the decoder
+                // reject it with its own message.
+                var nextOffset = (long)offset + 12 + length;
+                if (nextOffset > png.Length)
                     return false;
 
-                offset += 12 + (int)length;
+                offset = (int)nextOffset;
             }
 
             return false;

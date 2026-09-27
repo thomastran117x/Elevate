@@ -360,6 +360,27 @@ public class ImageSharpImageProcessorTests
         result.Width.Should().Be(64);
     }
 
+    [Fact]
+    public async Task ProcessAsync_ShouldRejectAPngWhoseChunkLengthWouldOverflowTheScan()
+    {
+        // A chunk declaring a length near int.MaxValue: walking it with 32-bit arithmetic wraps
+        // the offset negative and makes the next slice throw, which would escape the decoder's
+        // exception filter as a 500 from a 30-byte file.
+        using var stream = new MemoryStream();
+        stream.Write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        Span<byte> header = stackalloc byte[8];
+        BinaryPrimitives.WriteInt32BigEndian(header, int.MaxValue - 4);
+        "IHDR"u8.CopyTo(header[4..]);
+        stream.Write(header);
+        stream.Write([0x00, 0x00, 0x00, 0x00]);
+
+        var act = () => CreateProcessor().ProcessAsync(
+            new MemoryStream(stream.ToArray()), ImageProcessingProfile.Avatar);
+
+        await act.Should().ThrowAsync<BadRequestException>()
+            .WithMessage(ImageSharpImageProcessor.UnreadableMessage);
+    }
+
     [Theory]
     [InlineData((byte)8, (byte)5)]   // colour type 5 does not exist
     [InlineData((byte)3, (byte)6)]   // bit depth 3 is not valid for RGBA
