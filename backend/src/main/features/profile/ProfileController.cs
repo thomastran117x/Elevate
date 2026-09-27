@@ -23,6 +23,13 @@ namespace backend.main.features.profile
     [Authorize]
     public class ProfileController : ControllerBase
     {
+        /// <summary>
+        /// nginx's "client closed request". Not in <see cref="StatusCodes"/>, and never actually
+        /// transmitted: it marks an aborted request in the access log rather than reporting a
+        /// fault, which is what a disconnect would otherwise look like.
+        /// </summary>
+        private const int ClientClosedRequestStatusCode = 499;
+
         private readonly IUserService _userService;
         private readonly IAuthService _authService;
         private readonly ITokenService _tokenService;
@@ -188,6 +195,11 @@ namespace backend.main.features.profile
         // file at exactly the advertised limit still reaches the file-level validator.
         [RequestSizeLimit(AvatarUploadRequest.MaxRequestBytes)]
         [ProducesResponseType(typeof(ApiResponse<MyProfileResponse>), StatusCodes.Status200OK)]
+        // 400 comes from the shared convention, which describes it better than an attribute here
+        // would. These two are specific to the image pipeline: 409 when concurrent uploads for this
+        // account keep beating each other, 503 when no processing slot comes free in time.
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status503ServiceUnavailable)]
         public async Task<IActionResult> UploadAvatar(
             [FromForm] AvatarUploadRequest request,
             CancellationToken cancellationToken)
@@ -210,9 +222,11 @@ namespace backend.main.features.profile
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                // The client disconnected. Not a failure worth an error log or a 500; the host
-                // records the aborted request itself.
-                throw;
+                // The client disconnected. Rethrowing would reach GlobalExceptionHandler, which
+                // treats anything that is not an AppException as a 500 and logs it as a critical
+                // server error, so every abandoned upload would look like a fault. 499 is nginx's
+                // "client closed request"; nothing is transmitted, since the connection is gone.
+                return StatusCode(ClientClosedRequestStatusCode);
             }
             catch (Exception e)
             {

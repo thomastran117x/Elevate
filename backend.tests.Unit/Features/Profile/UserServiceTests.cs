@@ -102,6 +102,8 @@ public class UserServiceTests
             .ReturnsAsync("https://cdn.test/users/avatar.webp");
 
         var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.GetUserAsync(7))
+            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
         repository.Setup(repo => repo.SwapAvatarAsync(7, "https://cdn.test/users/avatar.webp"))
             .ReturnsAsync((int id, string url) => new AvatarSwapRecord(
                 new TestUserBuilder().WithId(id).WithEmail("user@example.com").WithAvatar(url).Build(),
@@ -245,6 +247,8 @@ public class UserServiceTests
             .ReturnsAsync("https://cdn.test/users/new.webp");
 
         var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.GetUserAsync(7))
+            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
         repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
             .ThrowsAsync(new InvalidOperationException("db down"));
 
@@ -262,6 +266,56 @@ public class UserServiceTests
     }
 
     [Fact]
+    public async Task UpdateAvatarAsync_ShouldRejectAMissingAccount_BeforeProcessingOrUploading()
+    {
+        // A token can outlive its account. Without this check the request would take one of the few
+        // processing slots, decode a full-size image and write a blob, only to be told 404.
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.GetUserAsync(7)).ReturnsAsync((User?)null);
+
+        var blobService = new Mock<IAzureBlobService>();
+        var processor = new Mock<IImageProcessor>();
+        var service = CreateService(userRepository: repository, blobService: blobService, imageProcessor: processor);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
+
+        var act = () => service.UpdateAvatarAsync(7, formFile);
+
+        await act.Should().ThrowAsync<ResourceNotFoundException>();
+        processor.Verify(
+            p => p.ProcessAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        blobService.Verify(
+            b => b.UploadProcessedImageAsync(It.IsAny<ProcessedImage>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateAvatarAsync_WhenPersistFailsAmbiguously_ShouldStillEvictTheCachedUser()
+    {
+        // The swap may have committed, so a cached profile may now carry the old avatar URL.
+        // Evicting is safe whichever way it went.
+        var blobService = new Mock<IAzureBlobService>();
+        blobService.Setup(service => service.UploadProcessedImageAsync(
+                It.IsAny<ProcessedImage>(), "users", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://cdn.test/users/new.webp");
+
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.GetUserAsync(7))
+            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
+        repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("connection reset"));
+
+        var refreshCache = new Mock<IRefreshAheadCache>();
+        var service = CreateService(userRepository: repository, blobService: blobService, refreshCache: refreshCache);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
+
+        var act = () => service.UpdateAvatarAsync(7, formFile);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        refreshCache.Verify(c => c.RemoveAsync("user:7"), Times.Once);
+    }
+
+    [Fact]
     public async Task UpdateAvatarAsync_WhenEveryAttemptLosesTheRace_ShouldDeleteTheUpload()
     {
         // A conflict means the swap wrote nothing at all, so the upload is unreferenced for
@@ -272,6 +326,8 @@ public class UserServiceTests
             .ReturnsAsync("https://cdn.test/users/contended.webp");
 
         var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.GetUserAsync(7))
+            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
         repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
             .ThrowsAsync(new ConflictException("The avatar was changed by another request. Try again."));
 
@@ -315,6 +371,8 @@ public class UserServiceTests
             .ReturnsAsync("https://cdn.test/users/avatar.webp");
 
         var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.GetUserAsync(7))
+            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
         repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
             .ReturnsAsync((int id, string url) => new AvatarSwapRecord(
                 new TestUserBuilder().WithId(id).WithEmail("user@example.com").WithAvatar(url).Build(),
@@ -347,6 +405,8 @@ public class UserServiceTests
             .ReturnsAsync("https://cdn.test/users/avatar.webp");
 
         var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.GetUserAsync(7))
+            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
         repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
             .ReturnsAsync((int id, string url) => new AvatarSwapRecord(
                 new TestUserBuilder().WithId(id).WithEmail("user@example.com").WithAvatar(url).Build(),
@@ -369,6 +429,8 @@ public class UserServiceTests
     {
         var blobService = new Mock<IAzureBlobService>();
         var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.GetUserAsync(7))
+            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
 
         var processor = new Mock<IImageProcessor>();
         processor.Setup(p => p.ProcessAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
@@ -396,6 +458,8 @@ public class UserServiceTests
             .ReturnsAsync("https://cdn.test/users/third.webp");
 
         var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.GetUserAsync(7))
+            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
         repository.Setup(repo => repo.SwapAvatarAsync(7, "https://cdn.test/users/third.webp"))
             .ReturnsAsync((int id, string url) => new AvatarSwapRecord(
                 new TestUserBuilder().WithId(id).WithEmail("user@example.com").WithAvatar(url).Build(),
@@ -422,6 +486,8 @@ public class UserServiceTests
             .ReturnsAsync("https://cdn.test/users/avatar.webp");
 
         var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.GetUserAsync(7))
+            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
         repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
             .ReturnsAsync((int id, string url) => new AvatarSwapRecord(
                 new TestUserBuilder().WithId(id).WithEmail("user@example.com").WithAvatar(url).Build(),
@@ -432,8 +498,9 @@ public class UserServiceTests
 
         await service.UpdateAvatarAsync(7, formFile);
 
+        // The row is read once to check the account exists, and never written through the
+        // whole-User path that would carry stale name, address and phone values back.
         repository.Verify(repo => repo.UpdatePartialAsync(It.IsAny<User>()), Times.Never);
-        repository.Verify(repo => repo.GetUserAsync(It.IsAny<int>()), Times.Never);
     }
 
     [Fact]
@@ -445,6 +512,8 @@ public class UserServiceTests
             .ReturnsAsync("https://cdn.test/users/orphan.webp");
 
         var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.GetUserAsync(7))
+            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
         repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
             .ReturnsAsync((AvatarSwapRecord?)null);
 

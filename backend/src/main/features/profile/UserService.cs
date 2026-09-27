@@ -178,12 +178,17 @@ namespace backend.main.features.profile
             IFormFile image,
             CancellationToken cancellationToken = default)
         {
-            // Decode and re-encode first: the stored avatar is WebP pixels only, with no EXIF (GPS
-            // included) and nothing hidden past the image header. This writes nothing anywhere, so
-            // it runs before the row is read and keeps the window between reading and writing that
-            // row short — decoding can otherwise sit waiting for one of the few processing slots.
-            // The token matters: those slots are process-wide, so an abandoned upload has to give
-            // its slot back rather than finish decoding for a client that has gone.
+            // Cheap existence check before any of the expensive work. A token outliving its account
+            // would otherwise take one of the few processing slots, decode a full-size image and
+            // write a blob, all to be told 404 at the end. Deliberately not kept: the write below
+            // reads the row again, because anything read here is stale by the time decoding ends.
+            if (await _userRepository.GetUserAsync(id) == null)
+                throw new ResourceNotFoundException($"User with the id {id} is not found");
+
+            // Decode and re-encode before touching storage: the stored avatar is WebP pixels only,
+            // with no EXIF (GPS included) and nothing hidden past the image header. The token
+            // matters: processing slots are process-wide, so an abandoned upload has to give its
+            // slot back rather than finish decoding for a client that has gone.
             ProcessedImage processed;
             await using (var source = image.OpenReadStream())
             {
@@ -220,10 +225,23 @@ namespace backend.main.features.profile
                 // Anything else — a dropped connection, a retry limit — leaves it unknown whether
                 // the swap committed. Deleting here would break the avatar of an account that now
                 // points at this blob, so leave it to OrphanBlobCleanupRunner, which deletes only
-                // blobs no row references.
+                // blobs no row references. That sweeper is opt-in, so deployments that process
+                // avatars should enable it; the alternative is risking a live avatar.
                 Logger.Warn(
                     exception,
                     $"[UserService] Avatar swap for user {id} failed after upload; leaving {filePath} for orphan cleanup.");
+
+                // The swap may have committed, so anything cached for this user may now be stale.
+                // Evicting is safe either way, and a cache fault must not replace the real error.
+                try
+                {
+                    await _refreshCache.RemoveAsync(GetUserCacheKey(id));
+                }
+                catch (Exception cacheException)
+                {
+                    Logger.Warn(cacheException, $"[UserService] Cache eviction for user {id} failed.");
+                }
+
                 throw;
             }
 
