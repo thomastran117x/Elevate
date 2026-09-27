@@ -57,6 +57,9 @@ namespace backend.main.application.bootstrap
     {
         private static readonly Uri GoogleCaptchaBaseAddress = new("https://www.google.com/");
 
+        /// <summary>Images decode to RGBA32, which is what the pixel buffer costs per pixel.</summary>
+        private const int BytesPerPixel = 4;
+
         public static IServiceCollection AddElasticsearchInfrastructure(this IServiceCollection services, IConfiguration config)
         {
             services.AddAppElasticsearch(config);
@@ -166,6 +169,12 @@ namespace backend.main.application.bootstrap
             services.AddOptions<ImageProcessingOptions>()
                 .Bind(config.GetSection("ImageProcessing"))
                 .ValidateDataAnnotations()
+                // Each limit is valid on its own but they constrain each other: an allocation cap
+                // below the pixel buffer MaxPixels admits turns every large photo into a confusing
+                // "could not be read" at runtime. Fail at startup instead.
+                .Validate(
+                    options => options.MaxPixels * BytesPerPixel <= (long)options.MaxAllocationMegabytes * 1024 * 1024,
+                    "ImageProcessing:MaxAllocationMegabytes must cover ImageProcessing:MaxPixels at 4 bytes per pixel.")
                 .ValidateOnStart();
             services.Configure<OrphanBlobCleanupOptions>(config.GetSection("OrphanBlobCleanup"));
             services.Configure<RecentlyViewedOptions>(config.GetSection("RecentlyViewed"));

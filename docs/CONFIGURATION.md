@@ -88,19 +88,22 @@ Raising the cap affects only what is accepted from that point on; images already
 
 ### Image processing
 
-Multipart avatar uploads are decoded to pixels and re-encoded before anything is stored, so EXIF (including phone GPS), IPTC, XMP, ICC profiles, and any non-pixel payload hidden in the file are gone. The pipeline reads the header first, rejecting oversized dimensions and animated images before any pixel buffer is allocated. It then decodes a single frame, shrinks the image to the size cap, applies the EXIF orientation (after shrinking, so the rotation never needs a second full-size buffer), strips the metadata, and encodes lossy WebP. Presigned uploads are not processed yet: the bytes go from the browser to Azure, so the server has nowhere to run this until uploads land in a quarantine container.
+Multipart avatar uploads are decoded to pixels and re-encoded before anything is stored, so EXIF (including phone GPS), IPTC, XMP, ICC profiles, and any non-pixel payload hidden in the file are gone. The pipeline reads the header first, rejecting oversized dimensions and animated images (GIF, WebP and APNG) before any pixel buffer is allocated. It then decodes a single frame, shrinks the image to the size cap, applies the EXIF orientation (after shrinking, so the rotation never needs a second full-size buffer), strips the metadata, and encodes lossy WebP. Presigned uploads are not processed yet: the bytes go from the browser to Azure, so the server has nowhere to run this until uploads land in a quarantine container.
 
 | Key | Default | Purpose |
 | --- | --- | --- |
 | `ImageProcessing:MaxDimension` | `8000` | Largest width or height accepted, read from the header alone. |
 | `ImageProcessing:MaxPixels` | `50000000` | Largest total pixel count; catches a size that is within `MaxDimension` on each side but still decodes to hundreds of megabytes. |
 | `ImageProcessing:AvatarMaxEdge` | `512` | Long-edge cap for avatars. Smaller images are never upscaled. |
-| `ImageProcessing:GalleryMaxEdge` | `2048` | Long-edge cap for gallery images, matching the largest input Azure AI Content Safety accepts. |
+| `ImageProcessing:GalleryMaxEdge` | `2048` | **Reserved, no effect yet.** Long-edge cap for gallery images, matching the largest input Azure AI Content Safety accepts. Nothing requests this profile until presigned uploads are re-encoded by the media worker. |
 | `ImageProcessing:WebpQuality` | `82` | Lossy WebP quality, 1–100. |
-| `ImageProcessing:MaxAllocationMegabytes` | `256` | Largest buffer the decoder may allocate for one image; 50 MP of RGBA is about 200 MB. |
+| `ImageProcessing:MaxAllocationMegabytes` | `256` | Largest **single** allocation the decoder may make. This is not a per-image budget; see the sizing note below. |
+| `ImageProcessing:MaxPoolMegabytes` | `128` | Bound on the allocator's reusable buffer pool, so idle memory does not stay at the high-water mark of the largest upload ever handled. |
 | `ImageProcessing:MaxConcurrentOperations` | `2` | Images processed at once across the process; further requests wait. |
 
-Values are validated on startup. Processing uses [SixLabors.ImageSharp](https://github.com/SixLabors/ImageSharp) under the Six Labors Split License, which is free for open-source projects and for organisations under roughly $1M USD annual gross revenue; above that a commercial licence is required. The package is held on 3.x because 4.x fails Release builds without a Six Labors licence key. The CI backend audit fails on high or critical NuGet advisories, so ImageSharp patch releases need to be taken promptly.
+**Sizing a container.** `MaxAllocationMegabytes` caps one allocation, not one image. A 50 MP photo needs a ~200 MB RGBA pixel buffer, and a decode also takes scratch buffers that are each counted separately: spectral and colour buffers per component for a progressive JPEG, the resize target, and the buffered upload. Peak resident memory for a single image at the `MaxPixels` limit is therefore several hundred megabytes, not 256 MB, and `MaxConcurrentOperations` multiplies it. At the defaults, budget roughly 1 GB of headroom for image processing on top of the rest of the application, or lower `MaxPixels` to cut the per-image peak in proportion.
+
+Values are validated on startup, including against each other: a `MaxAllocationMegabytes` too small to hold `MaxPixels` at 4 bytes per pixel fails at boot rather than turning every large photo into a confusing "could not be read" at runtime. Processing uses [SixLabors.ImageSharp](https://github.com/SixLabors/ImageSharp) under the Six Labors Split License, which is free for open-source projects and for organisations under roughly $1M USD annual gross revenue; above that a commercial licence is required. The package is held on 3.x because 4.x fails Release builds without a Six Labors licence key. The CI backend audit fails on high or critical NuGet advisories, so ImageSharp patch releases need to be taken promptly.
 
 ### Bloom filters and identity probes
 
