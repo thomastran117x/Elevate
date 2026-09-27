@@ -9,7 +9,10 @@ namespace backend.main.shared.storage.imaging
         /// <summary>
         /// Validates, orients, resizes, strips and re-encodes <paramref name="source"/> to WebP.
         /// </summary>
-        /// <param name="source">A readable stream; it is read from wherever it stands, once.</param>
+        /// <param name="source">
+        /// A readable stream holding the whole upload. It is buffered once: from the start if it
+        /// can seek, otherwise from its current position.
+        /// </param>
         /// <param name="cancellationToken">Cancels waiting for a processing slot and decoding.</param>
         /// <exception cref="exceptions.http.BadRequestException">
         /// The bytes are not a supported image format, or the image is too large, animated, or

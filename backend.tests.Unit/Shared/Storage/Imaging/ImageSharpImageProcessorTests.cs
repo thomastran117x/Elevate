@@ -443,6 +443,20 @@ public class ImageSharpImageProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_ShouldNotReportAServerFaultAsABadImage()
+    {
+        // A broken stream is our problem, not the uploader's. Reporting it as "could not be read"
+        // would tell the user their good photo is broken and keep a real fault out of the 500-level
+        // alerting.
+        using var input = new Image<Rgba32>(64, 64, new Rgba32(1, 2, 3));
+        using var failing = new FailingStream(EncodePng(input));
+
+        var act = () => CreateProcessor().ProcessAsync(failing);
+
+        await act.Should().ThrowAsync<IOException>();
+    }
+
+    [Fact]
     public async Task ProcessAsync_ShouldSurfaceCancellation_RatherThanCallingItAnUnreadableImage()
     {
         using var input = new Image<Rgba32>(64, 64, new Rgba32(1, 2, 3));
@@ -621,6 +635,17 @@ public class ImageSharpImageProcessorTests
     private sealed class ForwardOnlyStream(byte[] content) : MemoryStream(content)
     {
         public override bool CanSeek => false;
+    }
+
+    /// <summary>A stream that faults part-way through, standing in for a broken disk buffer.</summary>
+    private sealed class FailingStream(byte[] content) : MemoryStream(content)
+    {
+        public override int Read(Span<byte> buffer) => throw new IOException("disk buffer went away");
+
+        public override ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default) =>
+            throw new IOException("disk buffer went away");
     }
 
     /// <summary>Holds its processing slot by taking its time to be read.</summary>

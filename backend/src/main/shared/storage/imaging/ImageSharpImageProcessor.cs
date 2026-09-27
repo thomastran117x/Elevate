@@ -123,19 +123,22 @@ namespace backend.main.shared.storage.imaging
                     throw new BadRequestException(AnimatedMessage);
                 }
 
-                return await DecodeAndEncodeAsync(buffered, cancellationToken);
-            }
-            catch (Exception ex) when (ex is not AppException and not OperationCanceledException)
-            {
-                // Deliberately broad. A crafted file reaches the decoders as whatever the parser
-                // that choked on it happened to throw: ImageFormatException and NotSupportedException
-                // are the documented ones, but ImageSharp 3.1 also surfaces IndexOutOfRange,
-                // ArgumentOutOfRange, EndOfStream and InvalidOperation from malformed GIF, WebP and
-                // JPEG streams. Every one of them is the uploader's file being wrong, never a fault
-                // worth a 500, and listing types has already missed cases twice. Cancellation and
-                // the rejections raised above are not decoder failures, so they pass through.
-                Logger.Warn(ex, "[ImageSharpImageProcessor] Rejected an image that could not be decoded.");
-                throw new BadRequestException(UnreadableMessage);
+                try
+                {
+                    return await DecodeAndEncodeAsync(buffered, cancellationToken);
+                }
+                catch (Exception ex) when (IsDecoderFailure(ex))
+                {
+                    // Deliberately broad, but only around decoding. A crafted file reaches the
+                    // decoders as whatever the parser that choked on it happened to throw:
+                    // ImageFormatException and NotSupportedException are the documented ones, but
+                    // ImageSharp 3.1 also surfaces IndexOutOfRange, ArgumentOutOfRange,
+                    // EndOfStream and InvalidOperation from malformed GIF, WebP and JPEG streams.
+                    // Listing types has missed cases twice, so the filter names what is *not* the
+                    // uploader's fault instead.
+                    Logger.Warn(ex, "[ImageSharpImageProcessor] Rejected an image that could not be decoded.");
+                    throw new BadRequestException(UnreadableMessage);
+                }
             }
             finally
             {
@@ -206,7 +209,26 @@ namespace backend.main.shared.storage.imaging
         }
 
         /// <summary>
-        /// Copies the upload into a single seekable buffer that every later step reads.
+        /// Whether an exception raised while decoding says the uploaded file is wrong, as opposed
+        /// to something being wrong here.
+        /// </summary>
+        /// <remarks>
+        /// Cancellation and the pipeline's own rejections are not decoder failures. Neither are
+        /// resource and lifetime faults: reporting an exhausted heap, a broken stream or a disposed
+        /// object as "your image is unreadable" tells the user their good photo is broken and keeps
+        /// a real server fault out of the 500-level alerting.
+        /// </remarks>
+        private static bool IsDecoderFailure(Exception exception) =>
+            exception is not AppException
+            and not OperationCanceledException
+            and not OutOfMemoryException
+            and not IOException
+            and not ObjectDisposedException;
+
+        /// <summary>
+        /// Copies the upload into a single seekable buffer that every later step reads. A stream
+        /// that can seek is read from its start, so the whole upload is buffered however the caller
+        /// left the position.
         /// </summary>
         private static async Task<MemoryStream> BufferAsync(Stream source, CancellationToken cancellationToken)
         {
