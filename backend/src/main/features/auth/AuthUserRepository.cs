@@ -28,13 +28,19 @@ namespace backend.main.features.auth
         /// What one attempt of <see cref="SwapAvatarAsync"/> settled on: the account is gone, the
         /// avatar changed underneath the attempt, or the swap committed.
         /// </summary>
-        private readonly record struct AvatarSwapAttempt(bool IsMissing, AvatarSwapRecord? Record)
+        private readonly record struct AvatarSwapAttempt(
+            bool IsMissing,
+            bool IsSuperseded,
+            AvatarSwapRecord? Record)
         {
-            public static AvatarSwapAttempt Missing => new(true, null);
+            public static AvatarSwapAttempt Missing => new(true, false, null);
 
-            public static AvatarSwapAttempt Contended => new(false, null);
+            public static AvatarSwapAttempt Contended => new(false, false, null);
 
-            public static AvatarSwapAttempt Swapped(AvatarSwapRecord record) => new(false, record);
+            /// <summary>A re-run that cannot tell whether its own commit landed; see the caller.</summary>
+            public static AvatarSwapAttempt Superseded => new(false, true, null);
+
+            public static AvatarSwapAttempt Swapped(AvatarSwapRecord record) => new(false, false, record);
         }
 
         public AuthUserRepository(AppDatabaseContext context) => _context = context;
@@ -165,6 +171,11 @@ namespace backend.main.features.auth
 
             for (var attempt = 1; attempt <= AvatarSwapAttempts; attempt++)
             {
+                // Counts entries into the delegate for this attempt. Anything past the first is the
+                // execution strategy re-running it after a failure that may or may not have
+                // committed, which is the one case where writing again is unsafe.
+                var delegateEntries = 0;
+
                 // The update and the reload that reports its result commit together. Left apart, a
                 // transient failure on the reload would let the retry wrapper re-enter this method
                 // with the new URL already committed: it would then read its own write as the
@@ -172,6 +183,7 @@ namespace backend.main.features.auth
                 // would have the caller delete a blob the database already points at.
                 var swapped = await strategy.ExecuteAsync(async () =>
                 {
+                    var isStrategyRetry = ++delegateEntries > 1;
                     await using var transaction = await _context.Database.BeginTransactionAsync();
 
                     var current = await _context.Users
@@ -198,6 +210,14 @@ namespace backend.main.features.auth
                         await transaction.CommitAsync();
                         return AvatarSwapAttempt.Swapped(new AvatarSwapRecord(reloaded, observedPrevious));
                     }
+
+                    // A re-run that finds some third URL cannot tell whether its own commit rolled
+                    // back or landed and was then replaced by another upload. Writing again would
+                    // resurrect a URL that other request has already deleted, leaving the account
+                    // pointing at a blob that is gone. Give up instead: the caller deletes the blob
+                    // it uploaded, whatever is stored now is real, and the user can upload again.
+                    if (isStrategyRetry)
+                        return AvatarSwapAttempt.Superseded;
 
                     observedPrevious = previousAvatar;
                     hasObservedPrevious = true;
@@ -226,13 +246,17 @@ namespace backend.main.features.auth
                 if (swapped.IsMissing)
                     return null;
 
+                if (swapped.IsSuperseded)
+                    break;
+
                 if (swapped.Record != null)
                     return swapped.Record;
             }
 
-            // Only reachable if the avatar changed underneath every attempt, which needs a burst of
-            // concurrent uploads for one account. Failing here is safe: the caller deletes the blob
-            // it just uploaded, so nothing is left behind.
+            // Reached when the avatar changed underneath every attempt, or when a re-run could not
+            // establish whether its own commit landed. Both need concurrent uploads for one
+            // account. Failing here is safe: the caller deletes the blob it just uploaded, so
+            // nothing is left behind.
             throw new ConflictException("The avatar was changed by another request. Try again.");
         }
 

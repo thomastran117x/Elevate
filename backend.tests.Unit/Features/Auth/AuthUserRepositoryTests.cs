@@ -1,5 +1,6 @@
 using backend.main.features.auth;
 using backend.main.features.profile;
+using backend.main.shared.exceptions.http;
 using backend.main.features.profile.contracts;
 using backend.main.infrastructure.database.core;
 
@@ -193,6 +194,34 @@ public class AuthUserRepositoryTests
         swap.Should().NotBeNull();
         swap!.PreviousAvatar.Should().Be("https://cdn.test/users/original.webp");
         swap.User.Avatar.Should().Be("https://cdn.test/users/next.webp");
+    }
+
+    [Fact]
+    public async Task SwapAvatarAsync_ShouldGiveUp_WhenAnAmbiguousCommitWasSupersededByAnotherUpload()
+    {
+        // The nastiest interleaving: this call commits, loses the acknowledgement, and before the
+        // retry runs another upload replaces its URL and deletes that blob. The retry cannot tell
+        // whether its own commit rolled back or landed and was replaced, so it must not write
+        // again -- doing so would point the account at a blob the other request already deleted.
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync(
+            loseFirstCommitAcknowledgement: true);
+        var userId = await harness.SeedUserAsync();
+        await harness.Db.Users.Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.Avatar, "https://cdn.test/users/original.webp"));
+
+        await using var other = harness.CreateSeparateScopeRepository();
+        harness.CommitInterceptor!.WhileAcknowledgementIsLost = () =>
+            other.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/other.webp")
+                .GetAwaiter().GetResult();
+
+        var act = () => harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/mine.webp");
+
+        await act.Should().ThrowAsync<ConflictException>();
+
+        // The other upload URL is what the account holds, and it is a blob that exists.
+        var stored = await harness.Db.Users.AsNoTracking()
+            .Where(u => u.Id == userId).Select(u => u.Avatar).SingleAsync();
+        stored.Should().Be("https://cdn.test/users/other.webp");
     }
 
     [Fact]
@@ -861,12 +890,18 @@ public class AuthUserRepositoryTests
         public AppDatabaseContext Db { get; }
         public AuthUserRepository Repository { get; }
 
-        private AuthUserRepositoryHarness(SqliteConnection connection, AppDatabaseContext db)
+        private AuthUserRepositoryHarness(
+            SqliteConnection connection,
+            AppDatabaseContext db,
+            CommitAcknowledgementLosingInterceptor? commitInterceptor = null)
         {
             _connection = connection;
             Db = db;
             Repository = new AuthUserRepository(db);
+            CommitInterceptor = commitInterceptor;
         }
+
+        public CommitAcknowledgementLosingInterceptor? CommitInterceptor { get; }
 
         public static async Task<AuthUserRepositoryHarness> CreateAsync(
             bool retryingExecutionStrategy = false,
@@ -898,7 +933,7 @@ public class AuthUserRepositoryTests
             // EnsureCreated against tables that already exist.
             commitInterceptor?.Arm();
 
-            return new AuthUserRepositoryHarness(connection, db);
+            return new AuthUserRepositoryHarness(connection, db, commitInterceptor);
         }
 
         public async Task<int> SeedUserAsync(
@@ -983,6 +1018,9 @@ public class AuthUserRepositoryTests
         private bool _armed;
         private bool _alreadyLost;
 
+        /// <summary>Runs after the commit landed and before the failure is reported.</summary>
+        public Action? WhileAcknowledgementIsLost { get; set; }
+
         public void Arm() => _armed = true;
 
         public override void TransactionCommitted(DbTransaction transaction, TransactionEndEventData eventData)
@@ -1006,6 +1044,7 @@ public class AuthUserRepositoryTests
                 return;
 
             _alreadyLost = true;
+            WhileAcknowledgementIsLost?.Invoke();
             throw new LostCommitAcknowledgementException();
         }
     }
