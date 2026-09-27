@@ -7,6 +7,8 @@ using FluentAssertions;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -171,6 +173,26 @@ public class AuthUserRepositoryTests
 
         changed.Status.Should().Be(UsernameChangeStatus.Changed);
         changed.User!.Username.Should().Be("strategy-renamed");
+    }
+
+    [Fact]
+    public async Task SwapAvatarAsync_ShouldReportTheRealPredecessor_WhenACommitAcknowledgementIsLost()
+    {
+        // The commit reaches the database and then reports a transient failure, so the execution
+        // strategy re-runs the delegate. That re-run finds this call own URL already stored; it
+        // must still report what the first attempt replaced, or the caller never deletes the real
+        // predecessor and it stays in storage referenced by nothing.
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync(
+            loseFirstCommitAcknowledgement: true);
+        var userId = await harness.SeedUserAsync();
+        await harness.Db.Users.Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.Avatar, "https://cdn.test/users/original.webp"));
+
+        var swap = await harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/next.webp");
+
+        swap.Should().NotBeNull();
+        swap!.PreviousAvatar.Should().Be("https://cdn.test/users/original.webp");
+        swap.User.Avatar.Should().Be("https://cdn.test/users/next.webp");
     }
 
     [Fact]
@@ -847,22 +869,34 @@ public class AuthUserRepositoryTests
         }
 
         public static async Task<AuthUserRepositoryHarness> CreateAsync(
-            bool retryingExecutionStrategy = false)
+            bool retryingExecutionStrategy = false,
+            bool loseFirstCommitAcknowledgement = false)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
 
             var optionsBuilder = new DbContextOptionsBuilder<AppDatabaseContext>()
                 .UseSqlite(connection);
-            if (retryingExecutionStrategy)
+            if (retryingExecutionStrategy || loseFirstCommitAcknowledgement)
             {
                 optionsBuilder.ReplaceService<
                     IExecutionStrategyFactory,
                     RetryingExecutionStrategyFactory>();
             }
 
+            CommitAcknowledgementLosingInterceptor? commitInterceptor = null;
+            if (loseFirstCommitAcknowledgement)
+            {
+                commitInterceptor = new CommitAcknowledgementLosingInterceptor();
+                optionsBuilder.AddInterceptors(commitInterceptor);
+            }
+
             var db = new AppDatabaseContext(optionsBuilder.Options);
             await db.Database.EnsureCreatedAsync();
+
+            // Armed only now: schema creation commits too, and losing that commit would re-run
+            // EnsureCreated against tables that already exist.
+            commitInterceptor?.Arm();
 
             return new AuthUserRepositoryHarness(connection, db);
         }
@@ -934,6 +968,45 @@ public class AuthUserRepositoryTests
         ExecutionStrategyDependencies dependencies)
         : ExecutionStrategy(dependencies, 3, TimeSpan.Zero)
     {
-        protected override bool ShouldRetryOn(Exception exception) => false;
+        protected override bool ShouldRetryOn(Exception exception) =>
+            exception is LostCommitAcknowledgementException;
+    }
+
+    /// <summary>
+    /// Stands in for the commit that reaches the database and then fails to report back, which is
+    /// what <c>EnableRetryOnFailure</c> turns into a re-run of the whole delegate.
+    /// </summary>
+    private sealed class LostCommitAcknowledgementException() : Exception("Simulated lost commit acknowledgement.");
+
+    private sealed class CommitAcknowledgementLosingInterceptor : DbTransactionInterceptor
+    {
+        private bool _armed;
+        private bool _alreadyLost;
+
+        public void Arm() => _armed = true;
+
+        public override void TransactionCommitted(DbTransaction transaction, TransactionEndEventData eventData)
+        {
+            ThrowOnce();
+            base.TransactionCommitted(transaction, eventData);
+        }
+
+        public override Task TransactionCommittedAsync(
+            DbTransaction transaction,
+            TransactionEndEventData eventData,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowOnce();
+            return base.TransactionCommittedAsync(transaction, eventData, cancellationToken);
+        }
+
+        private void ThrowOnce()
+        {
+            if (!_armed || _alreadyLost)
+                return;
+
+            _alreadyLost = true;
+            throw new LostCommitAcknowledgementException();
+        }
     }
 }

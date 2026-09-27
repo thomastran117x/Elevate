@@ -156,6 +156,13 @@ namespace backend.main.features.auth
             // so exactly one of them matches and the other retries against the winner's value.
             var strategy = _context.Database.CreateExecutionStrategy();
 
+            // What the first attempt of this call saw in the column. A commit can succeed and
+            // still report a transient failure, and the execution strategy then re-runs the whole
+            // delegate; that re-run finds this call's own URL already stored and would otherwise
+            // report it as the predecessor, leaving the real one referenced by nothing.
+            var observedPrevious = default(string?);
+            var hasObservedPrevious = false;
+
             for (var attempt = 1; attempt <= AvatarSwapAttempts; attempt++)
             {
                 // The update and the reload that reports its result commit together. Left apart, a
@@ -178,6 +185,23 @@ namespace backend.main.features.auth
                         return AvatarSwapAttempt.Missing;
 
                     var previousAvatar = current.Avatar;
+
+                    // The URL carries a fresh GUID, so finding it already stored means an earlier
+                    // attempt of this same call committed after all. Report what that attempt
+                    // replaced rather than this call's own write.
+                    if (hasObservedPrevious && previousAvatar == avatarUrl)
+                    {
+                        var reloaded = await GetUserAsync(id);
+                        if (reloaded == null)
+                            return AvatarSwapAttempt.Missing;
+
+                        await transaction.CommitAsync();
+                        return AvatarSwapAttempt.Swapped(new AvatarSwapRecord(reloaded, observedPrevious));
+                    }
+
+                    observedPrevious = previousAvatar;
+                    hasObservedPrevious = true;
+
                     var affected = previousAvatar == null
                         ? await _context.Users
                             .Where(u => u.Id == id && u.Avatar == null)
