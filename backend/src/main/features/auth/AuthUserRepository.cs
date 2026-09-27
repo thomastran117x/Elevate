@@ -5,6 +5,7 @@ using backend.main.features.auth.contracts;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 using backend.main.infrastructure.database.core;
+using backend.main.shared.exceptions.http;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,12 @@ namespace backend.main.features.auth
     public class AuthUserRepository : IAuthUserRepository, IUserRepository
     {
         private readonly AppDatabaseContext _context;
+
+        /// <summary>
+        /// How many times an avatar swap re-reads and retries when another request replaced the
+        /// avatar first. Each retry means a concurrent upload for the same account.
+        /// </summary>
+        private const int AvatarSwapAttempts = 3;
 
         public AuthUserRepository(AppDatabaseContext context) => _context = context;
 
@@ -128,19 +135,44 @@ namespace backend.main.features.auth
 
         public async Task<AvatarSwapRecord?> SwapAvatarAsync(int id, string avatarUrl)
         {
-            var existing = await _context.Users.FindAsync(id);
-            if (existing == null)
-                return null;
+            // Compare-and-swap, because two uploads for the same account run in separate scopes
+            // with their own DbContext. A read followed by an unconditional write would let both
+            // observe the same predecessor: last write wins, both callers delete that shared
+            // predecessor, and the losing request's freshly uploaded blob is orphaned with nothing
+            // holding its URL. The update carries the observed value in its WHERE clause instead,
+            // so exactly one of them matches and the other retries against the winner's value.
+            for (var attempt = 1; attempt <= AvatarSwapAttempts; attempt++)
+            {
+                var current = await _context.Users
+                    .AsNoTracking()
+                    .Where(u => u.Id == id)
+                    .Select(u => new { u.Avatar })
+                    .FirstOrDefaultAsync();
 
-            // Read and replace in one unit of work. The caller has been holding its own User copy
-            // across image processing, so writing anything else from it would revert edits made in
-            // the meantime, and reading the previous avatar any earlier would let two concurrent
-            // uploads see the same value and orphan a blob.
-            var previousAvatar = existing.Avatar;
-            existing.Avatar = avatarUrl;
-            await _context.SaveChangesAsync();
+                // No row: the account was deleted, most likely while its image was being processed.
+                if (current == null)
+                    return null;
 
-            return new AvatarSwapRecord(existing, previousAvatar);
+                var previousAvatar = current.Avatar;
+                var affected = previousAvatar == null
+                    ? await _context.Users
+                        .Where(u => u.Id == id && u.Avatar == null)
+                        .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.Avatar, avatarUrl))
+                    : await _context.Users
+                        .Where(u => u.Id == id && u.Avatar == previousAvatar)
+                        .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.Avatar, avatarUrl));
+
+                if (affected == 0)
+                    continue;
+
+                var updated = await GetUserAsync(id);
+                return updated == null ? null : new AvatarSwapRecord(updated, previousAvatar);
+            }
+
+            // Only reachable if the avatar changed underneath every attempt, which needs a burst of
+            // concurrent uploads for one account. Failing here is safe: the caller deletes the blob
+            // it just uploaded, so nothing is left behind.
+            throw new ConflictException("The avatar was changed by another request. Try again.");
         }
 
         public async Task<UserOAuthRecord?> UpdateProviderIdsAsync(int id, string? googleId, string? microsoftId)

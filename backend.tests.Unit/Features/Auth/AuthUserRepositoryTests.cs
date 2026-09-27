@@ -230,6 +230,98 @@ public class AuthUserRepositoryTests
     }
 
     [Fact]
+    public async Task SwapAvatarAsync_ShouldReplaceTheAvatarAndReportThePreviousOne()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync();
+        await harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/first.webp");
+
+        var swap = await harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/second.webp");
+
+        swap.Should().NotBeNull();
+        swap!.PreviousAvatar.Should().Be("https://cdn.test/users/first.webp");
+        swap.User.Avatar.Should().Be("https://cdn.test/users/second.webp");
+    }
+
+    [Fact]
+    public async Task SwapAvatarAsync_ShouldReportNoPreviousAvatar_ForAnAccountThatNeverHadOne()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync();
+
+        // The seeded user carries an avatar; clear it so the null branch of the conditional
+        // update is the one under test.
+        var seeded = await harness.Db.Users.FindAsync(userId);
+        seeded!.Avatar = null;
+        await harness.Db.SaveChangesAsync();
+
+        var swap = await harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/first.webp");
+
+        swap.Should().NotBeNull();
+        swap!.PreviousAvatar.Should().BeNull();
+        swap.User.Avatar.Should().Be("https://cdn.test/users/first.webp");
+    }
+
+    [Fact]
+    public async Task SwapAvatarAsync_ShouldWriteOnlyTheAvatarColumn()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync();
+
+        // Stands in for a profile edit saved while the image was being processed: it must survive.
+        await harness.Repository.UpdatePartialAsync(new User
+        {
+            Id = userId,
+            Email = "seed@example.com",
+            Usertype = "participant",
+            Name = "Renamed Meanwhile",
+            Phone = "555-9999"
+        });
+
+        var swap = await harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/first.webp");
+
+        swap.Should().NotBeNull();
+        swap!.User.Name.Should().Be("Renamed Meanwhile");
+        swap.User.Phone.Should().Be("555-9999");
+    }
+
+    [Fact]
+    public async Task SwapAvatarAsync_ShouldReturnNull_WhenTheAccountIsGone()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+
+        var swap = await harness.Repository.SwapAvatarAsync(4242, "https://cdn.test/users/first.webp");
+
+        swap.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SwapAvatarAsync_ShouldNotOrphanABlob_WhenAnotherRequestSwapsFirst()
+    {
+        // Two uploads for one account run in separate scopes with their own DbContext, so both can
+        // read the same predecessor. The conditional update makes the loser retry and report the
+        // winner's URL, so between them every superseded blob is reported exactly once and none is
+        // left unreferenced.
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync();
+        await harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/original.webp");
+
+        await using var other = harness.CreateSeparateScopeRepository();
+
+        var first = await harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/first.webp");
+        var second = await other.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/second.webp");
+
+        first!.PreviousAvatar.Should().Be("https://cdn.test/users/original.webp");
+        second!.PreviousAvatar.Should().Be("https://cdn.test/users/first.webp");
+        second.User.Avatar.Should().Be("https://cdn.test/users/second.webp");
+
+        // Every URL that is no longer current was reported to exactly one caller for deletion.
+        new[] { first.PreviousAvatar, second.PreviousAvatar }
+            .Should().OnlyHaveUniqueItems()
+            .And.NotContain(second.User.Avatar);
+    }
+
+    [Fact]
     public async Task UpdateProviderIdsAsync_ShouldUpdateProviderValues_AndReturnOAuthRecord()
     {
         await using var harness = await AuthUserRepositoryHarness.CreateAsync();
@@ -790,11 +882,30 @@ public class AuthUserRepositoryTests
             return user.Id;
         }
 
+        /// <summary>
+        /// A second repository over its own <see cref="AppDatabaseContext"/>, sharing this
+        /// harness's database. It stands in for a concurrent request, which gets its own scoped
+        /// context and therefore its own change tracker and reads.
+        /// </summary>
+        public SeparateScope CreateSeparateScopeRepository()
+        {
+            var db = new AppDatabaseContext(
+                new DbContextOptionsBuilder<AppDatabaseContext>().UseSqlite(_connection).Options);
+            return new SeparateScope(db);
+        }
+
         public async ValueTask DisposeAsync()
         {
             await Db.DisposeAsync();
             await _connection.DisposeAsync();
         }
+    }
+
+    private sealed class SeparateScope(AppDatabaseContext db) : IAsyncDisposable
+    {
+        public AuthUserRepository Repository { get; } = new(db);
+
+        public ValueTask DisposeAsync() => db.DisposeAsync();
     }
 
     private sealed class RetryingExecutionStrategyFactory(
