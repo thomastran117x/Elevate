@@ -12,9 +12,11 @@ namespace backend.main.shared.storage.imaging
         /// <param name="source">A readable, seekable stream positioned anywhere; it is read from the start.</param>
         /// <param name="profile">Which size cap applies.</param>
         /// <param name="cancellationToken">Cancels waiting for a processing slot and decoding.</param>
-        /// <exception cref="exceptions.http.UnsupportedMediaTypeException">The bytes are not a supported image format.</exception>
         /// <exception cref="exceptions.http.BadRequestException">
-        /// The image is too large, animated, or cannot be decoded.
+        /// The bytes are not a supported image format, or the image is too large, animated, or
+        /// cannot be decoded. Everything the uploader can get wrong is a 400, which is what the
+        /// avatar endpoint already returns from <c>[ImageContent]</c> model validation and what
+        /// the published API contract promises.
         /// </exception>
         Task<ProcessedImage> ProcessAsync(
             Stream source,

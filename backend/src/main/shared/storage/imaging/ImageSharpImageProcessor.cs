@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+
 using backend.main.shared.exceptions.http;
 using backend.main.shared.utilities.logger;
 
@@ -50,17 +52,22 @@ namespace backend.main.shared.storage.imaging
             {
                 MemoryAllocator = MemoryAllocator.Create(new MemoryAllocatorOptions
                 {
-                    AllocationLimitMegabytes = _options.MaxAllocationMegabytes
+                    AllocationLimitMegabytes = _options.MaxAllocationMegabytes,
+
+                    // The allocator pools buffers, and an unbounded pool keeps the high-water mark
+                    // of the largest image resident for the life of the process. Bounding it keeps
+                    // idle memory close to what a container is sized for.
+                    MaximumPoolSizeMegabytes = _options.MaxPoolMegabytes
                 })
             };
 
             _identifyOptions = new DecoderOptions { Configuration = configuration };
             _decodeOptions = new DecoderOptions { Configuration = configuration, MaxFrames = 1 };
 
-            // SkipMetadata keeps EXIF, XMP and ICC out of the output even if a profile survived
-            // the explicit clearing below. ImageSharp 3.x cannot convert an ICC profile to sRGB,
-            // so a wide-gamut photo loses a little saturation; that is the price of not carrying
-            // arbitrary profile bytes through to a public URL.
+            // SkipMetadata is the single place metadata is dropped: EXIF (GPS included), IPTC, XMP
+            // and ICC are all left out of the encoded output. ImageSharp 3.x cannot convert an ICC
+            // profile to sRGB, so a wide-gamut photo loses a little saturation; that is the price
+            // of not carrying arbitrary profile bytes through to a public URL.
             _encoder = new WebpEncoder
             {
                 FileFormat = WebpFileFormatType.Lossy,
@@ -78,24 +85,42 @@ namespace backend.main.shared.storage.imaging
         {
             ArgumentNullException.ThrowIfNull(source);
 
-            if (!source.CanRead || !source.CanSeek)
-                throw new ArgumentException("The image stream must be readable and seekable.", nameof(source));
+            if (!source.CanRead)
+                throw new ArgumentException("The image stream must be readable.", nameof(source));
+
+            // Buffer once, before taking a slot. ImageSharp's async decoders copy a non-seekable or
+            // non-memory stream into a scratch buffer on every call, so identifying and decoding
+            // the raw form stream would copy the upload twice while holding one of the few slots.
+            using var buffered = await BufferAsync(source, cancellationToken);
 
             // The cheap byte check first: it keeps anything that is not one of the four formats
             // away from every decoder, and it is the same gate the presigned path applies.
-            if (!ImageSignatureInspector.TryDetect(source, out _))
-                throw new UnsupportedMediaTypeException(UnsupportedFormatMessage);
+            if (!ImageSignatureInspector.TryDetect(buffered, out var signature))
+                throw new BadRequestException(UnsupportedFormatMessage);
+
+            // ImageSharp 3.x cannot decode an APNG at all: it reports the file as invalid PNG
+            // data, which would surface as "could not be read" rather than saying the image is
+            // animated. The animation control chunk is what makes a PNG an APNG, so finding it
+            // here keeps the message accurate and matches the GIF and WebP behaviour.
+            if (signature.Format == ImageFormat.Png && HasApngAnimationChunk(buffered.GetBuffer().AsSpan(0, (int)buffered.Length)))
+                throw new BadRequestException(AnimatedMessage);
 
             await _slots.WaitAsync(cancellationToken);
             try
             {
-                return await DecodeAndEncodeAsync(source, MaxEdgeFor(profile), cancellationToken);
+                return DecodeAndEncode(buffered, MaxEdgeFor(profile), cancellationToken);
             }
-            catch (Exception ex) when (ex is ImageFormatException or InvalidMemoryOperationException)
+            catch (Exception ex) when (
+                ex is ImageFormatException or
+                      InvalidMemoryOperationException or
+                      ImageProcessingException or
+                      NotSupportedException)
             {
-                // UnknownImageFormatException and InvalidImageContentException both derive from
-                // ImageFormatException. A file the decoder cannot read is the uploader's problem,
-                // never a 500.
+                // UnknownImageFormatException and InvalidImageContentException derive from
+                // ImageFormatException; an unsupported PNG colour type or bit depth raises
+                // NotSupportedException; a failure inside Mutate arrives wrapped in
+                // ImageProcessingException. A file the decoder cannot read is the uploader's
+                // problem, never a 500.
                 Logger.Warn(ex, "[ImageSharpImageProcessor] Rejected an image that could not be decoded.");
                 throw new BadRequestException(UnreadableMessage);
             }
@@ -105,16 +130,17 @@ namespace backend.main.shared.storage.imaging
             }
         }
 
-        private async Task<ProcessedImage> DecodeAndEncodeAsync(
-            Stream source,
+        private ProcessedImage DecodeAndEncode(
+            MemoryStream source,
             int maxEdge,
             CancellationToken cancellationToken)
         {
             // 1. Header only. Identify reads dimensions and frame descriptors without allocating
             // a pixel buffer, so a 100 KB file declaring 100000x100000 is refused here, before
             // it can ask for 40 GB.
+            cancellationToken.ThrowIfCancellationRequested();
             source.Position = 0;
-            var info = await Image.IdentifyAsync(_identifyOptions, source, cancellationToken);
+            var info = Image.Identify(_identifyOptions, source);
 
             if (info.Width > _options.MaxDimension ||
                 info.Height > _options.MaxDimension ||
@@ -123,19 +149,21 @@ namespace backend.main.shared.storage.imaging
                 throw new BadRequestException(TooLargeMessage);
             }
 
-            // An animated GIF, WebP or APNG is a frame-count bomb, and flattening it to its first
-            // frame silently destroys what the user meant to upload. Refusing says so.
+            // An animated GIF or WebP is a frame-count bomb, and flattening it to its first frame
+            // silently destroys what the user meant to upload. Refusing says so.
             if (info.FrameMetadataCollection.Count > 1)
                 throw new BadRequestException(AnimatedMessage);
 
             // 2. Full decode, capped at one frame and bounded by the configured allocator.
+            cancellationToken.ThrowIfCancellationRequested();
             source.Position = 0;
-            using var image = await Image.LoadAsync<Rgba32>(_decodeOptions, source, cancellationToken);
+            using var image = Image.Load<Rgba32>(_decodeOptions, source);
 
             // 3. Shrink first, then orient. Rotating at full resolution would allocate a second
             // full-size buffer — another ~200 MB for a 50 MP photo — before the original is freed.
             // The cap is a square box, so the result is the same in either order, and Resize
             // keeps the EXIF profile, so AutoOrient still sees the tag afterwards.
+            cancellationToken.ThrowIfCancellationRequested();
             if (Math.Max(image.Width, image.Height) > maxEdge)
             {
                 image.Mutate(context => context.Resize(new ResizeOptions
@@ -145,19 +173,70 @@ namespace backend.main.shared.storage.imaging
                 }));
             }
 
-            // ImageSharp does not apply the EXIF orientation tag on load, and the tag lives in the
-            // EXIF profile cleared below, so skipping this would store every portrait phone photo
-            // on its side.
+            // ImageSharp does not apply the EXIF orientation tag on load, and the tag is dropped
+            // with the rest of the metadata at encode time, so skipping this would store every
+            // portrait phone photo on its side.
             image.Mutate(context => context.AutoOrient());
 
-            // 4. Strip. Only pixels leave this method.
-            StripMetadata(image);
-
-            // 5. Always WebP: one encoder path, and a format the uploader did not choose.
+            // 4. Always WebP: one encoder path, a format the uploader did not choose, and
+            // SkipMetadata means only pixels are written.
+            cancellationToken.ThrowIfCancellationRequested();
             using var output = new MemoryStream();
-            await _encoder.EncodeAsync(image, output, cancellationToken);
+            image.Save(output, _encoder);
 
             return new ProcessedImage(output.ToArray(), image.Width, image.Height);
+        }
+
+        /// <summary>
+        /// Copies the upload into a single seekable buffer that every later step reads.
+        /// </summary>
+        private static async Task<MemoryStream> BufferAsync(Stream source, CancellationToken cancellationToken)
+        {
+            // Always a copy the caller does not own: this stream is disposed here, and the caller's
+            // is not ours to close.
+            var capacity = source.CanSeek ? checked((int)source.Length) : 0;
+            var buffer = new MemoryStream(capacity);
+
+            if (source.CanSeek)
+                source.Position = 0;
+
+            await source.CopyToAsync(buffer, cancellationToken);
+            buffer.Position = 0;
+            return buffer;
+        }
+
+        /// <summary>
+        /// Reports whether a PNG carries the <c>acTL</c> animation control chunk, which is what
+        /// distinguishes an APNG from a still PNG. Only the chunk headers before the first
+        /// <c>IDAT</c> are walked, so this reads a few dozen bytes rather than the pixel data.
+        /// </summary>
+        private static bool HasApngAnimationChunk(ReadOnlySpan<byte> png)
+        {
+            const int SignatureLength = 8;
+            const int ChunkHeaderLength = 8;
+
+            var offset = SignatureLength;
+            while (offset + ChunkHeaderLength <= png.Length)
+            {
+                var length = BinaryPrimitives.ReadUInt32BigEndian(png[offset..]);
+                var type = png.Slice(offset + 4, 4);
+
+                if (type.SequenceEqual("acTL"u8))
+                    return true;
+
+                // acTL must precede the first IDAT, so there is nothing to find past it.
+                if (type.SequenceEqual("IDAT"u8) || type.SequenceEqual("IEND"u8))
+                    return false;
+
+                // length + type + data + CRC. A declared length that overflows the buffer means a
+                // malformed file; leave it to the decoder to reject with its own message.
+                if (length > int.MaxValue - 12)
+                    return false;
+
+                offset += 12 + (int)length;
+            }
+
+            return false;
         }
 
         private int MaxEdgeFor(ImageProcessingProfile profile) => profile switch
@@ -166,21 +245,5 @@ namespace backend.main.shared.storage.imaging
             ImageProcessingProfile.Gallery => _options.GalleryMaxEdge,
             _ => throw new ArgumentOutOfRangeException(nameof(profile), profile, null)
         };
-
-        private static void StripMetadata(Image image)
-        {
-            image.Metadata.ExifProfile = null;
-            image.Metadata.IptcProfile = null;
-            image.Metadata.XmpProfile = null;
-            image.Metadata.IccProfile = null;
-
-            foreach (var frame in image.Frames)
-            {
-                frame.Metadata.ExifProfile = null;
-                frame.Metadata.IptcProfile = null;
-                frame.Metadata.XmpProfile = null;
-                frame.Metadata.IccProfile = null;
-            }
-        }
     }
 }

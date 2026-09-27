@@ -10,7 +10,9 @@ using FluentAssertions;
 using Microsoft.Extensions.Options;
 
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.Metadata.Profiles.Iptc;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace backend.tests.Unit.Shared.Storage.Imaging;
@@ -44,6 +46,7 @@ public class ImageSharpImageProcessorTests
         stored.Metadata.ExifProfile.Should().BeNull();
         stored.Metadata.XmpProfile.Should().BeNull();
         stored.Metadata.IccProfile.Should().BeNull();
+        stored.Metadata.IptcProfile.Should().BeNull();
     }
 
     [Fact]
@@ -218,8 +221,10 @@ public class ImageSharpImageProcessorTests
         var act = () => CreateProcessor().ProcessAsync(
             new MemoryStream([0x01, 0x02, 0x03, 0x04]), ImageProcessingProfile.Avatar);
 
-        await act.Should().ThrowAsync<UnsupportedMediaTypeException>()
-            .WithMessage("*JPEG, PNG, WEBP, and GIF*");
+        // 400, not 415: [ImageContent] model validation already answers 400 for the same file,
+        // and the published contract documents that.
+        await act.Should().ThrowAsync<BadRequestException>()
+            .WithMessage(ImageSharpImageProcessor.UnsupportedFormatMessage);
     }
 
     [Fact]
@@ -232,7 +237,8 @@ public class ImageSharpImageProcessorTests
 
         var act = () => CreateProcessor().ProcessAsync(bmp, ImageProcessingProfile.Avatar);
 
-        await act.Should().ThrowAsync<UnsupportedMediaTypeException>();
+        await act.Should().ThrowAsync<BadRequestException>()
+            .WithMessage(ImageSharpImageProcessor.UnsupportedFormatMessage);
     }
 
     [Fact]
@@ -245,14 +251,6 @@ public class ImageSharpImageProcessorTests
 
         await act.Should().ThrowAsync<BadRequestException>()
             .WithMessage(ImageSharpImageProcessor.UnreadableMessage);
-    }
-
-    [Fact]
-    public async Task ProcessAsync_ShouldRejectStreamsThatCannotSeek()
-    {
-        var act = () => CreateProcessor().ProcessAsync(new NonSeekableStream(), ImageProcessingProfile.Avatar);
-
-        await act.Should().ThrowAsync<ArgumentException>();
     }
 
     [Fact]
@@ -284,6 +282,109 @@ public class ImageSharpImageProcessorTests
         var next = processor.ProcessAsync(new MemoryStream(png), ImageProcessingProfile.Avatar);
         (await Task.WhenAny(next, Task.Delay(TimeSpan.FromSeconds(10)))).Should().BeSameAs(next);
         (await next).Width.Should().Be(32);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldStripEveryMetadataProfile_EvenWhenTheInputCarriesThemAll()
+    {
+        // The encoder's SkipMetadata is the only mechanism that drops metadata, so this asserts
+        // the encoded output directly rather than trusting an in-memory clean-up step.
+        using var input = new Image<Rgba32>(40, 30, new Rgba32(90, 140, 190));
+        input.Metadata.ExifProfile = new ExifProfile();
+        input.Metadata.ExifProfile.SetValue(ExifTag.Software, "definitely-not-wanted");
+        input.Metadata.IptcProfile = new IptcProfile();
+        input.Metadata.IptcProfile.SetValue(IptcTag.Byline, "someone");
+
+        var result = await CreateProcessor().ProcessAsync(
+            new MemoryStream(EncodeJpeg(input)), ImageProcessingProfile.Avatar);
+
+        var stored = Image.Identify(result.Content);
+        stored.Metadata.ExifProfile.Should().BeNull();
+        stored.Metadata.XmpProfile.Should().BeNull();
+        stored.Metadata.IptcProfile.Should().BeNull();
+        stored.Metadata.IccProfile.Should().BeNull();
+        result.Content.AsSpan().IndexOf("definitely-not-wanted"u8).Should().Be(-1, "the EXIF string must not survive anywhere in the encoded bytes");
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldRejectAnimatedWebp()
+    {
+        using var input = new Image<Rgba32>(32, 32, new Rgba32(255, 0, 0));
+        using (var second = new Image<Rgba32>(32, 32, new Rgba32(0, 0, 255)))
+        {
+            input.Frames.AddFrame(second.Frames.RootFrame);
+        }
+
+        using var webp = new MemoryStream();
+        input.Save(webp, new WebpEncoder());
+        webp.Position = 0;
+
+        var act = () => CreateProcessor().ProcessAsync(webp, ImageProcessingProfile.Avatar);
+
+        await act.Should().ThrowAsync<BadRequestException>()
+            .WithMessage(ImageSharpImageProcessor.AnimatedMessage);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldRejectApngAsAnimated_NotAsUnreadable()
+    {
+        // ImageSharp 3.x cannot decode an APNG at all: left to the decoder it fails as invalid
+        // PNG data, which would tell the user their file is broken rather than animated. The
+        // acTL chunk is checked before decoding so the message matches GIF and WebP.
+        var act = () => CreateProcessor().ProcessAsync(
+            new MemoryStream(CraftApng()), ImageProcessingProfile.Avatar);
+
+        await act.Should().ThrowAsync<BadRequestException>()
+            .WithMessage(ImageSharpImageProcessor.AnimatedMessage);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldAcceptAStillPngWhateverItsPixelBytesContain()
+    {
+        // Guards the acTL scan against matching bytes inside pixel data: the scan walks chunk
+        // headers and stops at IDAT rather than searching the whole file.
+        using var input = new Image<Rgba32>(64, 64);
+        input.ProcessPixelRows(rows =>
+        {
+            for (var y = 0; y < rows.Height; y++)
+            {
+                var row = rows.GetRowSpan(y);
+                for (var x = 0; x < row.Length; x++)
+                    row[x] = new Rgba32((byte)(x * 7), (byte)(y * 5), (byte)(x ^ y));
+            }
+        });
+
+        var result = await CreateProcessor().ProcessAsync(
+            new MemoryStream(EncodePng(input)), ImageProcessingProfile.Avatar);
+
+        result.Width.Should().Be(64);
+    }
+
+    [Theory]
+    [InlineData((byte)8, (byte)5)]   // colour type 5 does not exist
+    [InlineData((byte)3, (byte)6)]   // bit depth 3 is not valid for RGBA
+    public async Task ProcessAsync_ShouldReturnBadRequest_ForUnsupportedPngVariants(byte bitDepth, byte colorType)
+    {
+        // ImageSharp raises NotSupportedException rather than an ImageFormatException for these,
+        // which would otherwise escape the filter and surface as a 500.
+        var act = () => CreateProcessor().ProcessAsync(
+            new MemoryStream(CraftPng(8, 8, bitDepth, colorType)), ImageProcessingProfile.Avatar);
+
+        await act.Should().ThrowAsync<BadRequestException>()
+            .WithMessage(ImageSharpImageProcessor.UnreadableMessage);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldAcceptAStreamThatCannotSeek()
+    {
+        // The upload is buffered once up front, so a forward-only stream is fine.
+        using var input = new Image<Rgba32>(24, 24, new Rgba32(7, 8, 9));
+        var png = EncodePng(input);
+
+        var result = await CreateProcessor().ProcessAsync(
+            new ForwardOnlyStream(png), ImageProcessingProfile.Avatar);
+
+        result.Width.Should().Be(24);
     }
 
     [Fact]
@@ -335,7 +436,7 @@ public class ImageSharpImageProcessorTests
     /// A structurally valid PNG that declares the given size, 8-bit RGBA, over an empty IDAT.
     /// Tiny on disk; enormous once decoded.
     /// </summary>
-    private static byte[] CraftPng(int width, int height)
+    private static byte[] CraftPng(int width, int height, byte bitDepth = 8, byte colorType = 6)
     {
         using var stream = new MemoryStream();
         stream.Write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
@@ -343,8 +444,8 @@ public class ImageSharpImageProcessorTests
         var ihdr = new byte[13];
         BinaryPrimitives.WriteInt32BigEndian(ihdr.AsSpan(0), width);
         BinaryPrimitives.WriteInt32BigEndian(ihdr.AsSpan(4), height);
-        ihdr[8] = 8;  // bit depth
-        ihdr[9] = 6;  // colour type: RGBA
+        ihdr[8] = bitDepth;
+        ihdr[9] = colorType;
         WriteChunk(stream, "IHDR"u8, ihdr);
 
         // zlib header plus an empty final stored block.
@@ -352,6 +453,70 @@ public class ImageSharpImageProcessorTests
         WriteChunk(stream, "IEND"u8, []);
 
         return stream.ToArray();
+    }
+
+    /// <summary>
+    /// A two-frame APNG, assembled from a real single-frame PNG's IDAT payload plus the acTL,
+    /// fcTL and fdAT chunks that make it animated. ImageSharp 3.x cannot write one, so the chunks
+    /// are laid out here rather than checking a binary fixture into the repository.
+    /// </summary>
+    private static byte[] CraftApng()
+    {
+        using var source = new Image<Rgba32>(8, 8, new Rgba32(255, 0, 0));
+        var png = EncodePng(source);
+
+        var idat = new List<byte>();
+        var ihdr = Array.Empty<byte>();
+        var offset = 8;
+        while (offset < png.Length)
+        {
+            var length = BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(offset));
+            var type = System.Text.Encoding.ASCII.GetString(png, offset + 4, 4);
+            var data = png.AsSpan(offset + 8, length).ToArray();
+
+            if (type == "IHDR")
+                ihdr = data;
+            if (type == "IDAT")
+                idat.AddRange(data);
+
+            offset += 12 + length;
+        }
+
+        using var stream = new MemoryStream();
+        stream.Write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        WriteChunk(stream, "IHDR"u8, ihdr);
+
+        var actl = new byte[8];
+        BinaryPrimitives.WriteUInt32BigEndian(actl.AsSpan(0), 2); // frame count
+        BinaryPrimitives.WriteUInt32BigEndian(actl.AsSpan(4), 0); // play count: infinite
+        WriteChunk(stream, "acTL"u8, actl);
+
+        WriteChunk(stream, "fcTL"u8, FrameControl(sequence: 0));
+        WriteChunk(stream, "IDAT"u8, idat.ToArray());
+        WriteChunk(stream, "fcTL"u8, FrameControl(sequence: 1));
+
+        var fdat = new byte[4 + idat.Count];
+        BinaryPrimitives.WriteUInt32BigEndian(fdat.AsSpan(0), 2);
+        idat.CopyTo(fdat, 4);
+        WriteChunk(stream, "fdAT"u8, fdat);
+        WriteChunk(stream, "IEND"u8, []);
+
+        return stream.ToArray();
+    }
+
+    private static byte[] FrameControl(uint sequence)
+    {
+        var fctl = new byte[26];
+        BinaryPrimitives.WriteUInt32BigEndian(fctl.AsSpan(0), sequence);
+        BinaryPrimitives.WriteUInt32BigEndian(fctl.AsSpan(4), 8);   // width
+        BinaryPrimitives.WriteUInt32BigEndian(fctl.AsSpan(8), 8);   // height
+        BinaryPrimitives.WriteUInt32BigEndian(fctl.AsSpan(12), 0);  // x offset
+        BinaryPrimitives.WriteUInt32BigEndian(fctl.AsSpan(16), 0);  // y offset
+        BinaryPrimitives.WriteUInt16BigEndian(fctl.AsSpan(20), 1);  // delay numerator
+        BinaryPrimitives.WriteUInt16BigEndian(fctl.AsSpan(22), 10); // delay denominator
+        fctl[24] = 0; // dispose operation
+        fctl[25] = 0; // blend operation
+        return fctl;
     }
 
     private static void WriteChunk(Stream stream, ReadOnlySpan<byte> type, ReadOnlySpan<byte> data)
@@ -382,7 +547,8 @@ public class ImageSharpImageProcessorTests
         return ~crc;
     }
 
-    private sealed class NonSeekableStream : MemoryStream
+    /// <summary>A forward-only stream, like the body of a streamed multipart upload.</summary>
+    private sealed class ForwardOnlyStream(byte[] content) : MemoryStream(content)
     {
         public override bool CanSeek => false;
     }
