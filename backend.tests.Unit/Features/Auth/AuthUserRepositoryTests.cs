@@ -197,12 +197,13 @@ public class AuthUserRepositoryTests
     }
 
     [Fact]
-    public async Task SwapAvatarAsync_ShouldGiveUp_WhenAnAmbiguousCommitWasSupersededByAnotherUpload()
+    public async Task SwapAvatarAsync_ShouldSwapOverTheWinner_WhenAnAmbiguousCommitWasSuperseded()
     {
-        // The nastiest interleaving: this call commits, loses the acknowledgement, and before the
-        // retry runs another upload replaces its URL and deletes that blob. The retry cannot tell
-        // whether its own commit rolled back or landed and was replaced, so it must not write
-        // again -- doing so would point the account at a blob the other request already deleted.
+        // This call commits, loses the acknowledgement, and another upload replaces its URL before
+        // the retry. EF asks whether the write is still there, finds it is not, and re-runs the
+        // operation, which swaps over the winner and reports that as the predecessor. Nothing a
+        // live account points at is deleted; the URL this call briefly stored is left to the
+        // orphan sweeper, which only removes blobs no row references.
         await using var harness = await AuthUserRepositoryHarness.CreateAsync(
             loseFirstCommitAcknowledgement: true);
         var userId = await harness.SeedUserAsync();
@@ -214,17 +215,39 @@ public class AuthUserRepositoryTests
             other.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/other.webp")
                 .GetAwaiter().GetResult();
 
-        var act = () => harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/mine.webp");
+        var swap = await harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/mine.webp");
 
-        // The conflict carries what the ambiguous attempt read: if that attempt did commit, this
-        // is the only report of that URL anyone will get, and it has to be deleted.
-        (await act.Should().ThrowAsync<AvatarSwapSupersededException>())
-            .Which.ReplacedAvatarUrl.Should().Be("https://cdn.test/users/original.webp");
+        swap.Should().NotBeNull();
+        swap!.PreviousAvatar.Should().Be("https://cdn.test/users/other.webp");
+        swap.User.Avatar.Should().Be("https://cdn.test/users/mine.webp");
 
-        // The other upload URL is what the account holds, and it is a blob that exists.
         var stored = await harness.Db.Users.AsNoTracking()
             .Where(u => u.Id == userId).Select(u => u.Avatar).SingleAsync();
-        stored.Should().Be("https://cdn.test/users/other.webp");
+        stored.Should().Be("https://cdn.test/users/mine.webp");
+    }
+
+    [Fact]
+    public async Task SwapAvatarAsync_ShouldSwapNormally_AfterATransientFailureRollsTheFirstAttemptBack()
+    {
+        // The update fails and the transaction rolls back, so nothing was written. A re-run must
+        // treat this as an ordinary first attempt: the avatar it reads is still the live one, and
+        // reporting it as replaced without writing would have the caller delete a blob the account
+        // is still using.
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync(
+            failFirstAvatarUpdate: true);
+        var userId = await harness.SeedUserAsync();
+        await harness.Db.Users.Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.Avatar, "https://cdn.test/users/live.webp"));
+
+        var swap = await harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/new.webp");
+
+        swap.Should().NotBeNull();
+        swap!.PreviousAvatar.Should().Be("https://cdn.test/users/live.webp");
+        swap.User.Avatar.Should().Be("https://cdn.test/users/new.webp");
+
+        var stored = await harness.Db.Users.AsNoTracking()
+            .Where(u => u.Id == userId).Select(u => u.Avatar).SingleAsync();
+        stored.Should().Be("https://cdn.test/users/new.webp");
     }
 
     [Fact]
@@ -908,14 +931,15 @@ public class AuthUserRepositoryTests
 
         public static async Task<AuthUserRepositoryHarness> CreateAsync(
             bool retryingExecutionStrategy = false,
-            bool loseFirstCommitAcknowledgement = false)
+            bool loseFirstCommitAcknowledgement = false,
+            bool failFirstAvatarUpdate = false)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
 
             var optionsBuilder = new DbContextOptionsBuilder<AppDatabaseContext>()
                 .UseSqlite(connection);
-            if (retryingExecutionStrategy || loseFirstCommitAcknowledgement)
+            if (retryingExecutionStrategy || loseFirstCommitAcknowledgement || failFirstAvatarUpdate)
             {
                 optionsBuilder.ReplaceService<
                     IExecutionStrategyFactory,
@@ -929,12 +953,20 @@ public class AuthUserRepositoryTests
                 optionsBuilder.AddInterceptors(commitInterceptor);
             }
 
+            AvatarUpdateFailingInterceptor? updateInterceptor = null;
+            if (failFirstAvatarUpdate)
+            {
+                updateInterceptor = new AvatarUpdateFailingInterceptor();
+                optionsBuilder.AddInterceptors(updateInterceptor);
+            }
+
             var db = new AppDatabaseContext(optionsBuilder.Options);
             await db.Database.EnsureCreatedAsync();
 
             // Armed only now: schema creation commits too, and losing that commit would re-run
             // EnsureCreated against tables that already exist.
             commitInterceptor?.Arm();
+            updateInterceptor?.Arm();
 
             return new AuthUserRepositoryHarness(connection, db, commitInterceptor);
         }
@@ -1015,6 +1047,33 @@ public class AuthUserRepositoryTests
     /// what <c>EnableRetryOnFailure</c> turns into a re-run of the whole delegate.
     /// </summary>
     private sealed class LostCommitAcknowledgementException() : Exception("Simulated lost commit acknowledgement.");
+
+    /// <summary>
+    /// Fails the first UPDATE of the avatar column, so the surrounding transaction rolls back with
+    /// nothing written: the ordinary transient-failure shape, as opposed to a lost commit.
+    /// </summary>
+    private sealed class AvatarUpdateFailingInterceptor : DbCommandInterceptor
+    {
+        private bool _armed;
+        private bool _alreadyFailed;
+
+        public void Arm() => _armed = true;
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (_armed && !_alreadyFailed && command.CommandText.Contains("Avatar", StringComparison.Ordinal))
+            {
+                _alreadyFailed = true;
+                throw new LostCommitAcknowledgementException();
+            }
+
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
 
     private sealed class CommitAcknowledgementLosingInterceptor : DbTransactionInterceptor
     {

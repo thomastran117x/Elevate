@@ -8,6 +8,7 @@ using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.storage;
 using backend.main.shared.storage.imaging;
+using backend.main.shared.utilities.logger;
 
 using Microsoft.Extensions.Options;
 
@@ -186,10 +187,7 @@ namespace backend.main.features.profile
             ProcessedImage processed;
             await using (var source = image.OpenReadStream())
             {
-                processed = await _imageProcessor.ProcessAsync(
-                    source,
-                    ImageProcessingProfile.Avatar,
-                    cancellationToken);
+                processed = await _imageProcessor.ProcessAsync(source, cancellationToken);
             }
 
             // Deliberately not cancellable. Once the image is processed, the upload is the commit
@@ -210,27 +208,22 @@ namespace backend.main.features.profile
                 swap = await _userRepository.SwapAvatarAsync(id, filePath)
                     ?? throw new ResourceNotFoundException($"User with the id {id} is not found");
             }
-            catch (AvatarSwapSupersededException superseded)
+            catch (Exception exception) when (exception is ResourceNotFoundException or ConflictException)
             {
-                // A swap that could not tell whether its own commit landed. Both this upload and
-                // the avatar that attempt read are now unreferenced whichever way it went, and no
-                // other caller will be told about either.
+                // These two say the swap wrote nothing: the account is gone, or every attempt lost
+                // its race. The upload is unreferenced for certain, so delete it.
                 await _blobService.DeleteBlobAsync(filePath);
-
-                if (!string.IsNullOrEmpty(superseded.ReplacedAvatarUrl) &&
-                    superseded.ReplacedAvatarUrl != filePath)
-                {
-                    await _blobService.DeleteBlobAsync(superseded.ReplacedAvatarUrl);
-                }
-
                 throw;
             }
-            catch
+            catch (Exception exception)
             {
-                // The new blob was uploaded but never persisted — best-effort delete it so the
-                // failed update doesn't leave an orphan behind, then surface the original error.
-                // This also covers an account deleted while the image was being processed.
-                await _blobService.DeleteBlobAsync(filePath);
+                // Anything else — a dropped connection, a retry limit — leaves it unknown whether
+                // the swap committed. Deleting here would break the avatar of an account that now
+                // points at this blob, so leave it to OrphanBlobCleanupRunner, which deletes only
+                // blobs no row references.
+                Logger.Warn(
+                    exception,
+                    $"[UserService] Avatar swap for user {id} failed after upload; leaving {filePath} for orphan cleanup.");
                 throw;
             }
 

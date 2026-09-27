@@ -1,5 +1,6 @@
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
+using backend.main.shared.attributes.repository;
 
 namespace backend.main.features.profile
 {
@@ -15,7 +16,14 @@ namespace backend.main.features.profile
         /// Deliberately not <see cref="UpdatePartialAsync"/>: that copies Name, Address and Phone
         /// from the caller's <see cref="User"/>, and the avatar flow holds that copy across image
         /// decoding, so it would revert any profile edit saved in the meantime.
+        /// <para>
+        /// <see cref="NoRetryAttribute"/> because this method already retries internally, through
+        /// the execution strategy for transient faults and its own loop for lost races. Re-running
+        /// the whole method on top of that would read the avatar it just wrote as the value it
+        /// replaced, and report that instead of the real predecessor.
+        /// </para>
         /// </remarks>
+        [NoRetry]
         Task<AvatarSwapRecord?> SwapAvatarAsync(int id, string avatarUrl);
         Task<bool> UsernameExistsAsync(string username, int excludeUserId);
         /// <summary>

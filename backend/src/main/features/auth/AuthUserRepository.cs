@@ -24,23 +24,27 @@ namespace backend.main.features.auth
         /// </summary>
         private const int AvatarSwapAttempts = 3;
 
-        /// <summary>
-        /// What one attempt of <see cref="SwapAvatarAsync"/> settled on: the account is gone, the
-        /// avatar changed underneath the attempt, or the swap committed.
-        /// </summary>
-        private readonly record struct AvatarSwapAttempt(
-            bool IsMissing,
-            bool IsSuperseded,
-            AvatarSwapRecord? Record)
+        /// <summary>What one attempt of <see cref="SwapAvatarAsync"/> settled on.</summary>
+        private enum AvatarSwapKind
         {
-            public static AvatarSwapAttempt Missing => new(true, false, null);
+            /// <summary>The account no longer exists.</summary>
+            Missing,
 
-            public static AvatarSwapAttempt Contended => new(false, false, null);
+            /// <summary>Another request replaced the avatar first; the attempt wrote nothing.</summary>
+            Contended,
 
-            /// <summary>A re-run that cannot tell whether its own commit landed; see the caller.</summary>
-            public static AvatarSwapAttempt Superseded => new(false, true, null);
+            /// <summary>The avatar column now holds this call's URL.</summary>
+            Swapped
+        }
 
-            public static AvatarSwapAttempt Swapped(AvatarSwapRecord record) => new(false, false, record);
+        private readonly record struct AvatarSwapAttempt(AvatarSwapKind Kind, AvatarSwapRecord? Record)
+        {
+            public static AvatarSwapAttempt Missing => new(AvatarSwapKind.Missing, null);
+
+            public static AvatarSwapAttempt Contended => new(AvatarSwapKind.Contended, null);
+
+            public static AvatarSwapAttempt Swapped(AvatarSwapRecord record) =>
+                new(AvatarSwapKind.Swapped, record);
         }
 
         public AuthUserRepository(AppDatabaseContext context) => _context = context;
@@ -157,111 +161,76 @@ namespace backend.main.features.auth
             // Compare-and-swap, because two uploads for the same account run in separate scopes
             // with their own DbContext. A read followed by an unconditional write would let both
             // observe the same predecessor: last write wins, both callers delete that shared
-            // predecessor, and the losing request's freshly uploaded blob is orphaned with nothing
+            // predecessor, and the losing request's freshly uploaded blob is left with nothing
             // holding its URL. The update carries the observed value in its WHERE clause instead,
             // so exactly one of them matches and the other retries against the winner's value.
             var strategy = _context.Database.CreateExecutionStrategy();
 
-            // What the first attempt of this call saw in the column. A commit can succeed and
-            // still report a transient failure, and the execution strategy then re-runs the whole
-            // delegate; that re-run finds this call's own URL already stored and would otherwise
-            // report it as the predecessor, leaving the real one referenced by nothing.
-            var observedPrevious = default(string?);
-            var hasObservedPrevious = false;
-
             for (var attempt = 1; attempt <= AvatarSwapAttempts; attempt++)
             {
-                // Counts entries into the delegate for this attempt. Anything past the first is the
-                // execution strategy re-running it after a failure that may or may not have
-                // committed, which is the one case where writing again is unsafe.
-                var delegateEntries = 0;
-
-                // The update and the reload that reports its result commit together. Left apart, a
-                // transient failure on the reload would let the retry wrapper re-enter this method
-                // with the new URL already committed: it would then read its own write as the
-                // predecessor and never report the real one, and a run that failed every attempt
-                // would have the caller delete a blob the database already points at.
-                var swapped = await strategy.ExecuteAsync(async () =>
-                {
-                    var isStrategyRetry = ++delegateEntries > 1;
-                    await using var transaction = await _context.Database.BeginTransactionAsync();
-
-                    var current = await _context.Users
-                        .AsNoTracking()
-                        .Where(u => u.Id == id)
-                        .Select(u => new { u.Avatar })
-                        .FirstOrDefaultAsync();
-
-                    // No row: the account was deleted, most likely while its image was processed.
-                    if (current == null)
-                        return AvatarSwapAttempt.Missing;
-
-                    var previousAvatar = current.Avatar;
-
-                    // The URL carries a fresh GUID, so finding it already stored means an earlier
-                    // attempt of this same call committed after all. Report what that attempt
-                    // replaced rather than this call's own write.
-                    if (hasObservedPrevious && previousAvatar == avatarUrl)
+                // The read, the update and the reload that reports the result commit together, and
+                // verifySucceeded settles the one case the transaction cannot: a commit that lands
+                // and then fails to report back. EF asks it whether the write is there, and on a
+                // yes hands back this run's result — the real predecessor included — rather than
+                // running the operation a second time against the state it just wrote.
+                var outcome = await strategy.ExecuteInTransactionAsync(
+                    operation: async cancellationToken =>
                     {
-                        var reloaded = await GetUserAsync(id);
-                        if (reloaded == null)
+                        var current = await _context.Users
+                            .AsNoTracking()
+                            .Where(u => u.Id == id)
+                            .Select(u => new { u.Avatar })
+                            .FirstOrDefaultAsync(cancellationToken);
+
+                        // No row: the account was deleted, most likely while its image was being
+                        // processed.
+                        if (current == null)
                             return AvatarSwapAttempt.Missing;
 
-                        await transaction.CommitAsync();
-                        return AvatarSwapAttempt.Swapped(new AvatarSwapRecord(reloaded, observedPrevious));
-                    }
+                        var previousAvatar = current.Avatar;
+                        var affected = previousAvatar == null
+                            ? await _context.Users
+                                .Where(u => u.Id == id && u.Avatar == null)
+                                .ExecuteUpdateAsync(
+                                    setters => setters.SetProperty(u => u.Avatar, avatarUrl),
+                                    cancellationToken)
+                            : await _context.Users
+                                .Where(u => u.Id == id && u.Avatar == previousAvatar)
+                                .ExecuteUpdateAsync(
+                                    setters => setters.SetProperty(u => u.Avatar, avatarUrl),
+                                    cancellationToken);
 
-                    // A re-run that finds some third URL cannot tell whether its own commit rolled
-                    // back or landed and was then replaced by another upload. Writing again would
-                    // resurrect a URL that other request has already deleted, leaving the account
-                    // pointing at a blob that is gone. Give up instead: the caller deletes the blob
-                    // it uploaded, whatever is stored now is real, and the user can upload again.
-                    if (isStrategyRetry)
-                        return AvatarSwapAttempt.Superseded;
+                        // Another request swapped the avatar between the read and the update. The
+                        // transaction commits nothing, and the outer loop starts again from the
+                        // value that request wrote.
+                        if (affected == 0)
+                            return AvatarSwapAttempt.Contended;
 
-                    observedPrevious = previousAvatar;
-                    hasObservedPrevious = true;
+                        var updated = await GetUserAsync(id);
+                        return updated == null
+                            ? AvatarSwapAttempt.Missing
+                            : AvatarSwapAttempt.Swapped(new AvatarSwapRecord(updated, previousAvatar));
+                    },
+                    verifySucceeded: async cancellationToken => await _context.Users
+                        .AsNoTracking()
+                        .AnyAsync(u => u.Id == id && u.Avatar == avatarUrl, cancellationToken),
+                    cancellationToken: default);
 
-                    var affected = previousAvatar == null
-                        ? await _context.Users
-                            .Where(u => u.Id == id && u.Avatar == null)
-                            .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.Avatar, avatarUrl))
-                        : await _context.Users
-                            .Where(u => u.Id == id && u.Avatar == previousAvatar)
-                            .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.Avatar, avatarUrl));
-
-                    // Another request swapped the avatar between the read and the update. Roll back
-                    // and let the outer loop start again from its value.
-                    if (affected == 0)
-                        return AvatarSwapAttempt.Contended;
-
-                    var updated = await GetUserAsync(id);
-                    if (updated == null)
-                        return AvatarSwapAttempt.Missing;
-
-                    await transaction.CommitAsync();
-                    return AvatarSwapAttempt.Swapped(new AvatarSwapRecord(updated, previousAvatar));
-                });
-
-                if (swapped.IsMissing)
-                    return null;
-
-                if (swapped.IsSuperseded)
+                switch (outcome.Kind)
                 {
-                    // The ambiguous attempt may have committed, in which case it replaced
-                    // observedPrevious and nothing else will ever report that URL. Hand it to the
-                    // caller so it can be deleted rather than left in storage unreferenced.
-                    throw new AvatarSwapSupersededException(observedPrevious);
+                    case AvatarSwapKind.Missing:
+                        return null;
+                    case AvatarSwapKind.Swapped:
+                        return outcome.Record;
+                    case AvatarSwapKind.Contended:
+                    default:
+                        continue;
                 }
-
-                if (swapped.Record != null)
-                    return swapped.Record;
             }
 
-            // Reached when the avatar changed underneath every attempt, or when a re-run could not
-            // establish whether its own commit landed. Both need concurrent uploads for one
-            // account. Failing here is safe: the caller deletes the blob it just uploaded, so
-            // nothing is left behind.
+            // Every attempt lost its race, which needs a burst of concurrent uploads for one
+            // account. Nothing of this call was committed, so the caller can delete the blob it
+            // uploaded without risk of removing one the account still points at.
             throw new ConflictException("The avatar was changed by another request. Try again.");
         }
 
