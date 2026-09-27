@@ -177,18 +177,12 @@ namespace backend.main.features.profile
             IFormFile image,
             CancellationToken cancellationToken = default)
         {
-            // Verify the user exists before writing anything to blob storage, so a
-            // deleted/missing account can't leave an orphaned upload behind.
-            User user = await _userRepository.GetUserAsync(id)
-                ?? throw new ResourceNotFoundException($"User with the id {id} is not found");
-
-            string? previousAvatar = user.Avatar;
-
-            // Decode and re-encode before anything reaches the public container: the stored
-            // avatar is WebP pixels only, with no EXIF (GPS included) and nothing hidden past the
-            // image header. A rejected image never touches storage. The token matters: processing
-            // slots are process-wide, so an abandoned upload has to give its slot back rather than
-            // finish decoding for a client that has gone.
+            // Decode and re-encode first: the stored avatar is WebP pixels only, with no EXIF (GPS
+            // included) and nothing hidden past the image header. This writes nothing anywhere, so
+            // it runs before the row is read and keeps the window between reading and writing that
+            // row short — decoding can otherwise sit waiting for one of the few processing slots.
+            // The token matters: those slots are process-wide, so an abandoned upload has to give
+            // its slot back rather than finish decoding for a client that has gone.
             ProcessedImage processed;
             await using (var source = image.OpenReadStream())
             {
@@ -206,23 +200,31 @@ namespace backend.main.features.profile
                 processed,
                 "users",
                 CancellationToken.None);
-            user.Avatar = filePath;
 
-            User updatedUser;
+            AvatarSwapRecord swap;
             try
             {
-                updatedUser = await _userRepository.UpdatePartialAsync(user)
+                // Writes the avatar column only, and reports the URL it replaced as read in that
+                // same unit of work. Sending the whole User back would revert any name, address or
+                // phone change saved while the image was being processed.
+                swap = await _userRepository.SwapAvatarAsync(id, filePath)
                     ?? throw new ResourceNotFoundException($"User with the id {id} is not found");
             }
             catch
             {
                 // The new blob was uploaded but never persisted — best-effort delete it so the
                 // failed update doesn't leave an orphan behind, then surface the original error.
+                // This also covers an account deleted while the image was being processed.
                 await _blobService.DeleteBlobAsync(filePath);
                 throw;
             }
 
-            // Best-effort cleanup of the replaced image (no-op for external/legacy URLs).
+            var updatedUser = swap.User;
+            var previousAvatar = swap.PreviousAvatar;
+
+            // Best-effort cleanup of the replaced image (no-op for external/legacy URLs). Racing
+            // uploads each replace a different predecessor, so neither leaves the other's blob
+            // behind.
             if (!string.IsNullOrEmpty(previousAvatar) && previousAvatar != filePath)
                 await _blobService.DeleteBlobAsync(previousAvatar);
 

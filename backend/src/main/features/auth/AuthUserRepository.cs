@@ -126,6 +126,23 @@ namespace backend.main.features.auth
             return existing;
         }
 
+        public async Task<AvatarSwapRecord?> SwapAvatarAsync(int id, string avatarUrl)
+        {
+            var existing = await _context.Users.FindAsync(id);
+            if (existing == null)
+                return null;
+
+            // Read and replace in one unit of work. The caller has been holding its own User copy
+            // across image processing, so writing anything else from it would revert edits made in
+            // the meantime, and reading the previous avatar any earlier would let two concurrent
+            // uploads see the same value and orphan a blob.
+            var previousAvatar = existing.Avatar;
+            existing.Avatar = avatarUrl;
+            await _context.SaveChangesAsync();
+
+            return new AvatarSwapRecord(existing, previousAvatar);
+        }
+
         public async Task<UserOAuthRecord?> UpdateProviderIdsAsync(int id, string? googleId, string? microsoftId)
         {
             var user = await _context.Users.FindAsync(id);
