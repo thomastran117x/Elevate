@@ -197,13 +197,12 @@ public class AuthUserRepositoryTests
     }
 
     [Fact]
-    public async Task SwapAvatarAsync_ShouldSwapOverTheWinner_WhenAnAmbiguousCommitWasSuperseded()
+    public async Task SwapAvatarAsync_ShouldRefuseToWriteAgain_WhenAnAmbiguousCommitWasSuperseded()
     {
-        // This call commits, loses the acknowledgement, and another upload replaces its URL before
-        // the retry. EF asks whether the write is still there, finds it is not, and re-runs the
-        // operation, which swaps over the winner and reports that as the predecessor. Nothing a
-        // live account points at is deleted; the URL this call briefly stored is left to the
-        // orphan sweeper, which only removes blobs no row references.
+        // The worst interleaving: this call commits, loses the acknowledgement, and another upload
+        // replaces its URL and deletes that blob before the re-run. Writing the URL again would
+        // point the account at bytes that no longer exist, so the swap gives up. The caller then
+        // deletes the blob it uploaded, and the account keeps the other request's avatar.
         await using var harness = await AuthUserRepositoryHarness.CreateAsync(
             loseFirstCommitAcknowledgement: true);
         var userId = await harness.SeedUserAsync();
@@ -215,15 +214,14 @@ public class AuthUserRepositoryTests
             other.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/other.webp")
                 .GetAwaiter().GetResult();
 
-        var swap = await harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/mine.webp");
+        var act = () => harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/mine.webp");
 
-        swap.Should().NotBeNull();
-        swap!.PreviousAvatar.Should().Be("https://cdn.test/users/other.webp");
-        swap.User.Avatar.Should().Be("https://cdn.test/users/mine.webp");
+        await act.Should().ThrowAsync<ConflictException>();
 
+        // The other request's avatar stands, and its blob is one that exists.
         var stored = await harness.Db.Users.AsNoTracking()
             .Where(u => u.Id == userId).Select(u => u.Avatar).SingleAsync();
-        stored.Should().Be("https://cdn.test/users/mine.webp");
+        stored.Should().Be("https://cdn.test/users/other.webp");
     }
 
     [Fact]

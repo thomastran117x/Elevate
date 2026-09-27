@@ -24,6 +24,8 @@ namespace backend.main.features.auth
         /// </summary>
         private const int AvatarSwapAttempts = 3;
 
+        private const string AvatarChangedMessage = "The avatar was changed by another request. Try again.";
+
         /// <summary>What one attempt of <see cref="SwapAvatarAsync"/> settled on.</summary>
         private enum AvatarSwapKind
         {
@@ -34,7 +36,13 @@ namespace backend.main.features.auth
             Contended,
 
             /// <summary>The avatar column now holds this call's URL.</summary>
-            Swapped
+            Swapped,
+
+            /// <summary>
+            /// A re-run found the column holding neither what it read nor this call's own URL, so
+            /// another request owns the avatar and writing again could resurrect a deleted blob.
+            /// </summary>
+            Superseded
         }
 
         private readonly record struct AvatarSwapAttempt(AvatarSwapKind Kind, AvatarSwapRecord? Record)
@@ -45,6 +53,8 @@ namespace backend.main.features.auth
 
             public static AvatarSwapAttempt Swapped(AvatarSwapRecord record) =>
                 new(AvatarSwapKind.Swapped, record);
+
+            public static AvatarSwapAttempt Superseded => new(AvatarSwapKind.Superseded, null);
         }
 
         public AuthUserRepository(AppDatabaseContext context) => _context = context;
@@ -168,6 +178,12 @@ namespace backend.main.features.auth
 
             for (var attempt = 1; attempt <= AvatarSwapAttempts; attempt++)
             {
+                // What this attempt's first run read, so a re-run can tell what happened to it.
+                // Scoped to the attempt: the next one round the loop starts from whatever the
+                // request that beat it wrote.
+                string? observedAvatar = null;
+                var hasObservedAvatar = false;
+
                 // The read, the update and the reload that reports the result commit together, and
                 // verifySucceeded settles the one case the transaction cannot: a commit that lands
                 // and then fails to report back. EF asks it whether the write is there, and on a
@@ -188,17 +204,39 @@ namespace backend.main.features.auth
                             return AvatarSwapAttempt.Missing;
 
                         var previousAvatar = current.Avatar;
-                        var affected = previousAvatar == null
-                            ? await _context.Users
-                                .Where(u => u.Id == id && u.Avatar == null)
-                                .ExecuteUpdateAsync(
-                                    setters => setters.SetProperty(u => u.Avatar, avatarUrl),
-                                    cancellationToken)
-                            : await _context.Users
-                                .Where(u => u.Id == id && u.Avatar == previousAvatar)
-                                .ExecuteUpdateAsync(
-                                    setters => setters.SetProperty(u => u.Avatar, avatarUrl),
-                                    cancellationToken);
+
+                        if (hasObservedAvatar && previousAvatar != observedAvatar)
+                        {
+                            // A re-run, and the column no longer holds what this attempt read.
+                            //
+                            // Finding this call's own URL means the commit landed after all and
+                            // verification could not see it; report what it replaced.
+                            if (previousAvatar == avatarUrl)
+                            {
+                                var committed = await GetUserAsync(id);
+                                return committed == null
+                                    ? AvatarSwapAttempt.Missing
+                                    : AvatarSwapAttempt.Swapped(new AvatarSwapRecord(committed, observedAvatar));
+                            }
+
+                            // Any other value means either the commit rolled back and another
+                            // request wrote, or it landed and another request has already replaced
+                            // it — and in that second case that request has deleted this call's
+                            // blob. Writing the URL again would point the account at bytes that no
+                            // longer exist, so give up instead.
+                            return AvatarSwapAttempt.Superseded;
+                        }
+
+                        observedAvatar = previousAvatar;
+                        hasObservedAvatar = true;
+
+                        // A null previousAvatar is fine as a parameter: EF compiles the comparison
+                        // to IS NULL when the value is null, and caches the two shapes separately.
+                        var affected = await _context.Users
+                            .Where(u => u.Id == id && u.Avatar == previousAvatar)
+                            .ExecuteUpdateAsync(
+                                setters => setters.SetProperty(u => u.Avatar, avatarUrl),
+                                cancellationToken);
 
                         // Another request swapped the avatar between the read and the update. The
                         // transaction commits nothing, and the outer loop starts again from the
@@ -222,6 +260,10 @@ namespace backend.main.features.auth
                         return null;
                     case AvatarSwapKind.Swapped:
                         return outcome.Record;
+                    case AvatarSwapKind.Superseded:
+                        // Another request owns the avatar and this call cannot safely write again.
+                        // Retrying would only race the same way, so stop here.
+                        throw new ConflictException(AvatarChangedMessage);
                     case AvatarSwapKind.Contended:
                     default:
                         continue;
@@ -231,7 +273,7 @@ namespace backend.main.features.auth
             // Every attempt lost its race, which needs a burst of concurrent uploads for one
             // account. Nothing of this call was committed, so the caller can delete the blob it
             // uploaded without risk of removing one the account still points at.
-            throw new ConflictException("The avatar was changed by another request. Try again.");
+            throw new ConflictException(AvatarChangedMessage);
         }
 
         public async Task<UserOAuthRecord?> UpdateProviderIdsAsync(int id, string? googleId, string? microsoftId)
