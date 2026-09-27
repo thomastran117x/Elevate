@@ -174,6 +174,22 @@ public class AuthUserRepositoryTests
     }
 
     [Fact]
+    public async Task SwapAvatarAsync_ShouldRunInsideConfiguredRetryingExecutionStrategy()
+    {
+        // The swap commits its update and the reload that reports the result together, so it opens
+        // a transaction. Starting one outside the configured execution strategy throws, which is
+        // what this pins.
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync(
+            retryingExecutionStrategy: true);
+        var userId = await harness.SeedUserAsync();
+
+        var swap = await harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/first.webp");
+
+        swap.Should().NotBeNull();
+        swap!.User.Avatar.Should().Be("https://cdn.test/users/first.webp");
+    }
+
+    [Fact]
     public async Task UpdateUserAsync_ShouldUpdateKnownFields_AndNormalizeRole()
     {
         await using var harness = await AuthUserRepositoryHarness.CreateAsync();

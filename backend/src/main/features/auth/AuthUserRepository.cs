@@ -24,6 +24,19 @@ namespace backend.main.features.auth
         /// </summary>
         private const int AvatarSwapAttempts = 3;
 
+        /// <summary>
+        /// What one attempt of <see cref="SwapAvatarAsync"/> settled on: the account is gone, the
+        /// avatar changed underneath the attempt, or the swap committed.
+        /// </summary>
+        private readonly record struct AvatarSwapAttempt(bool IsMissing, AvatarSwapRecord? Record)
+        {
+            public static AvatarSwapAttempt Missing => new(true, null);
+
+            public static AvatarSwapAttempt Contended => new(false, null);
+
+            public static AvatarSwapAttempt Swapped(AvatarSwapRecord record) => new(false, record);
+        }
+
         public AuthUserRepository(AppDatabaseContext context) => _context = context;
 
         public async Task<User> CreateUserAsync(User user)
@@ -141,32 +154,56 @@ namespace backend.main.features.auth
             // predecessor, and the losing request's freshly uploaded blob is orphaned with nothing
             // holding its URL. The update carries the observed value in its WHERE clause instead,
             // so exactly one of them matches and the other retries against the winner's value.
+            var strategy = _context.Database.CreateExecutionStrategy();
+
             for (var attempt = 1; attempt <= AvatarSwapAttempts; attempt++)
             {
-                var current = await _context.Users
-                    .AsNoTracking()
-                    .Where(u => u.Id == id)
-                    .Select(u => new { u.Avatar })
-                    .FirstOrDefaultAsync();
+                // The update and the reload that reports its result commit together. Left apart, a
+                // transient failure on the reload would let the retry wrapper re-enter this method
+                // with the new URL already committed: it would then read its own write as the
+                // predecessor and never report the real one, and a run that failed every attempt
+                // would have the caller delete a blob the database already points at.
+                var swapped = await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _context.Database.BeginTransactionAsync();
 
-                // No row: the account was deleted, most likely while its image was being processed.
-                if (current == null)
+                    var current = await _context.Users
+                        .AsNoTracking()
+                        .Where(u => u.Id == id)
+                        .Select(u => new { u.Avatar })
+                        .FirstOrDefaultAsync();
+
+                    // No row: the account was deleted, most likely while its image was processed.
+                    if (current == null)
+                        return AvatarSwapAttempt.Missing;
+
+                    var previousAvatar = current.Avatar;
+                    var affected = previousAvatar == null
+                        ? await _context.Users
+                            .Where(u => u.Id == id && u.Avatar == null)
+                            .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.Avatar, avatarUrl))
+                        : await _context.Users
+                            .Where(u => u.Id == id && u.Avatar == previousAvatar)
+                            .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.Avatar, avatarUrl));
+
+                    // Another request swapped the avatar between the read and the update. Roll back
+                    // and let the outer loop start again from its value.
+                    if (affected == 0)
+                        return AvatarSwapAttempt.Contended;
+
+                    var updated = await GetUserAsync(id);
+                    if (updated == null)
+                        return AvatarSwapAttempt.Missing;
+
+                    await transaction.CommitAsync();
+                    return AvatarSwapAttempt.Swapped(new AvatarSwapRecord(updated, previousAvatar));
+                });
+
+                if (swapped.IsMissing)
                     return null;
 
-                var previousAvatar = current.Avatar;
-                var affected = previousAvatar == null
-                    ? await _context.Users
-                        .Where(u => u.Id == id && u.Avatar == null)
-                        .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.Avatar, avatarUrl))
-                    : await _context.Users
-                        .Where(u => u.Id == id && u.Avatar == previousAvatar)
-                        .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.Avatar, avatarUrl));
-
-                if (affected == 0)
-                    continue;
-
-                var updated = await GetUserAsync(id);
-                return updated == null ? null : new AvatarSwapRecord(updated, previousAvatar);
+                if (swapped.Record != null)
+                    return swapped.Record;
             }
 
             // Only reachable if the avatar changed underneath every attempt, which needs a burst of
