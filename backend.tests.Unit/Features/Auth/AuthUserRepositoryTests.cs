@@ -216,7 +216,10 @@ public class AuthUserRepositoryTests
 
         var act = () => harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/mine.webp");
 
-        await act.Should().ThrowAsync<ConflictException>();
+        // The conflict carries what the ambiguous attempt read: if that attempt did commit, this
+        // is the only report of that URL anyone will get, and it has to be deleted.
+        (await act.Should().ThrowAsync<AvatarSwapSupersededException>())
+            .Which.ReplacedAvatarUrl.Should().Be("https://cdn.test/users/original.webp");
 
         // The other upload URL is what the account holds, and it is a blob that exists.
         var stored = await harness.Db.Users.AsNoTracking()

@@ -210,6 +210,21 @@ namespace backend.main.features.profile
                 swap = await _userRepository.SwapAvatarAsync(id, filePath)
                     ?? throw new ResourceNotFoundException($"User with the id {id} is not found");
             }
+            catch (AvatarSwapSupersededException superseded)
+            {
+                // A swap that could not tell whether its own commit landed. Both this upload and
+                // the avatar that attempt read are now unreferenced whichever way it went, and no
+                // other caller will be told about either.
+                await _blobService.DeleteBlobAsync(filePath);
+
+                if (!string.IsNullOrEmpty(superseded.ReplacedAvatarUrl) &&
+                    superseded.ReplacedAvatarUrl != filePath)
+                {
+                    await _blobService.DeleteBlobAsync(superseded.ReplacedAvatarUrl);
+                }
+
+                throw;
+            }
             catch
             {
                 // The new blob was uploaded but never persisted — best-effort delete it so the

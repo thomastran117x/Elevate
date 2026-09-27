@@ -412,6 +412,31 @@ public class UserServiceTests
     }
 
     [Fact]
+    public async Task UpdateAvatarAsync_WhenTheSwapWasSuperseded_ShouldDeleteBothUnreferencedBlobs()
+    {
+        // The swap could not tell whether its own commit landed, and another upload has replaced
+        // it since. Whichever way it went, this upload and the avatar that attempt read are both
+        // unreferenced now, and no other caller is told about either.
+        var blobService = new Mock<IAzureBlobService>();
+        blobService.Setup(service => service.UploadProcessedImageAsync(
+                It.IsAny<ProcessedImage>(), "users", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://cdn.test/users/mine.webp");
+
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
+            .ThrowsAsync(new AvatarSwapSupersededException("https://cdn.test/users/original.webp"));
+
+        var service = CreateService(userRepository: repository, blobService: blobService);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
+
+        var act = () => service.UpdateAvatarAsync(7, formFile);
+
+        await act.Should().ThrowAsync<AvatarSwapSupersededException>();
+        blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/users/mine.webp"), Times.Once);
+        blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/users/original.webp"), Times.Once);
+    }
+
+    [Fact]
     public async Task UpdateAvatarAsync_WhenTheAccountDisappearsDuringProcessing_ShouldDeleteTheUpload()
     {
         var blobService = new Mock<IAzureBlobService>();

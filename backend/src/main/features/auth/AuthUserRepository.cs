@@ -247,7 +247,12 @@ namespace backend.main.features.auth
                     return null;
 
                 if (swapped.IsSuperseded)
-                    break;
+                {
+                    // The ambiguous attempt may have committed, in which case it replaced
+                    // observedPrevious and nothing else will ever report that URL. Hand it to the
+                    // caller so it can be deleted rather than left in storage unreferenced.
+                    throw new AvatarSwapSupersededException(observedPrevious);
+                }
 
                 if (swapped.Record != null)
                     return swapped.Record;
