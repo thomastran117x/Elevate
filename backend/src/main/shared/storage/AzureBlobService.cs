@@ -21,7 +21,7 @@ namespace backend.main.shared.storage
                 ["image/jpeg"] = new[] { ".jpg", ".jpeg" },
                 ["image/jpg"] = new[] { ".jpg", ".jpeg" },
                 ["image/png"] = new[] { ".png" },
-                ["image/webp"] = new[] { ".webp" },
+                [WebpMedia.ContentType] = new[] { WebpMedia.FileExtension },
                 ["image/gif"] = new[] { ".gif" }
             };
         private static readonly Dictionary<string, string> CanonicalContentTypesByExtension =
@@ -30,7 +30,7 @@ namespace backend.main.shared.storage
                 [".jpg"] = "image/jpeg",
                 [".jpeg"] = "image/jpeg",
                 [".png"] = "image/png",
-                [".webp"] = "image/webp",
+                [WebpMedia.FileExtension] = WebpMedia.ContentType,
                 [".gif"] = "image/gif"
             };
 

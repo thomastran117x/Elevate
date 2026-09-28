@@ -195,7 +195,7 @@ internal static class BlobUploadIntentValidator
             case "image/png":
                 format = ImageFormat.Png;
                 return true;
-            case "image/webp":
+            case WebpMedia.ContentType:
                 format = ImageFormat.Webp;
                 return true;
             case "image/gif":

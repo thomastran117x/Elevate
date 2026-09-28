@@ -81,7 +81,7 @@ namespace backend.main.shared.storage
                 header[..RiffMagic.Length].SequenceEqual(RiffMagic) &&
                 header.Slice(8, WebpMagic.Length).SequenceEqual(WebpMagic))
             {
-                signature = new ImageSignature(ImageFormat.Webp, "image/webp", ".webp");
+                signature = new ImageSignature(ImageFormat.Webp, WebpMedia.ContentType, WebpMedia.FileExtension);
                 return true;
             }
 

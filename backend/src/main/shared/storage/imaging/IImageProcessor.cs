@@ -31,11 +31,8 @@ namespace backend.main.shared.storage.imaging
     /// </summary>
     public sealed record ProcessedImage(byte[] Content)
     {
-        public const string WebpContentType = "image/webp";
-        public const string WebpFileExtension = ".webp";
+        public string ContentType => WebpMedia.ContentType;
 
-        public string ContentType => WebpContentType;
-
-        public string FileExtension => WebpFileExtension;
+        public string FileExtension => WebpMedia.FileExtension;
     }
 }
