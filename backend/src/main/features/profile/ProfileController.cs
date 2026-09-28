@@ -23,13 +23,6 @@ namespace backend.main.features.profile
     [Authorize]
     public class ProfileController : ControllerBase
     {
-        /// <summary>
-        /// nginx's "client closed request". Not in <see cref="StatusCodes"/>, and never actually
-        /// transmitted: it marks an aborted request in the access log rather than reporting a
-        /// fault, which is what a disconnect would otherwise look like.
-        /// </summary>
-        private const int ClientClosedRequestStatusCode = 499;
-
         private readonly IUserService _userService;
         private readonly IAuthService _authService;
         private readonly ITokenService _tokenService;
@@ -220,13 +213,12 @@ namespace backend.main.features.profile
                     MapToMyProfile(updatedUser)
                 ));
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
-                // The client disconnected. Rethrowing would reach GlobalExceptionHandler, which
-                // treats anything that is not an AppException as a 500 and logs it as a critical
-                // server error, so every abandoned upload would look like a fault. 499 is nginx's
-                // "client closed request"; nothing is transmitted, since the connection is gone.
-                return StatusCode(ClientClosedRequestStatusCode);
+                // Not handled here on purpose. A disconnect becomes 499 in GlobalExceptionHandler,
+                // and a request that outran the timeout policy is turned into 504 by the timeout
+                // middleware — but only if this does not swallow it first.
+                throw;
             }
             catch (Exception e)
             {

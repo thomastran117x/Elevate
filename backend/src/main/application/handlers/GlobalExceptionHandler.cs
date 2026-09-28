@@ -9,6 +9,9 @@ namespace backend.main.application.handlers
 {
     public class GlobalExceptionHandler
     {
+        /// <summary>nginx's "client closed request"; not a member of <see cref="StatusCodes"/>.</summary>
+        private const int ClientClosedRequestStatusCode = 499;
+
         private readonly RequestDelegate _next;
 
         public GlobalExceptionHandler(RequestDelegate next)
@@ -37,6 +40,19 @@ namespace backend.main.application.handlers
                         }
                     )
                 );
+            }
+            catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+            {
+                // The client went away. Nothing can be written to a closed connection, and this is
+                // not a fault: reporting it as 500 would log a critical server error for every
+                // abandoned upload or navigation. 499 is nginx's "client closed request", recorded
+                // for the access log only.
+                //
+                // The filter matters. The request-timeout middleware runs inside this one and
+                // cancels through its own linked token, catching the result itself to write 504,
+                // so a server timeout never reaches here. Only a genuine disconnect does.
+                if (!context.Response.HasStarted)
+                    context.Response.StatusCode = ClientClosedRequestStatusCode;
             }
             catch (Exception ex)
             {
