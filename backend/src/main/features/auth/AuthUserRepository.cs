@@ -39,13 +39,16 @@ namespace backend.main.features.auth
             Swapped,
 
             /// <summary>
-            /// A re-run found the column holding neither what it read nor this call's own URL, so
+            /// A re-run of an attempt that had already written found the column moved on, so
             /// another request owns the avatar and writing again could resurrect a deleted blob.
             /// </summary>
             Superseded
         }
 
-        private readonly record struct AvatarSwapAttempt(AvatarSwapKind Kind, AvatarSwapRecord? Record)
+        private readonly record struct AvatarSwapAttempt(
+            AvatarSwapKind Kind,
+            AvatarSwapRecord? Record,
+            string? ReplacedAvatar = null)
         {
             public static AvatarSwapAttempt Missing => new(AvatarSwapKind.Missing, null);
 
@@ -54,7 +57,12 @@ namespace backend.main.features.auth
             public static AvatarSwapAttempt Swapped(AvatarSwapRecord record) =>
                 new(AvatarSwapKind.Swapped, record);
 
-            public static AvatarSwapAttempt Superseded => new(AvatarSwapKind.Superseded, null);
+            /// <param name="replacedAvatar">
+            /// What the attempt read before writing. Carried on the record so the caller can clean
+            /// it up; the user is never loaded on this path.
+            /// </param>
+            public static AvatarSwapAttempt Superseded(string? replacedAvatar) =>
+                new(AvatarSwapKind.Superseded, null, replacedAvatar);
         }
 
         public AuthUserRepository(AppDatabaseContext context) => _context = context;
@@ -166,6 +174,9 @@ namespace backend.main.features.auth
             return existing;
         }
 
+        public async Task<bool> ExistsAsync(int id) =>
+            await _context.Users.AsNoTracking().AnyAsync(u => u.Id == id);
+
         public async Task<AvatarSwapRecord?> SwapAvatarAsync(int id, string avatarUrl)
         {
             // Compare-and-swap, because two uploads for the same account run in separate scopes
@@ -178,11 +189,11 @@ namespace backend.main.features.auth
 
             for (var attempt = 1; attempt <= AvatarSwapAttempts; attempt++)
             {
-                // What this attempt's first run read, so a re-run can tell what happened to it.
+                // What this attempt's first run read, and whether it got as far as writing.
                 // Scoped to the attempt: the next one round the loop starts from whatever the
                 // request that beat it wrote.
                 string? observedAvatar = null;
-                var hasObservedAvatar = false;
+                var attemptWrote = false;
 
                 // The read, the update and the reload that reports the result commit together, and
                 // verifySucceeded settles the one case the transaction cannot: a commit that lands
@@ -205,30 +216,20 @@ namespace backend.main.features.auth
 
                         var previousAvatar = current.Avatar;
 
-                        if (hasObservedAvatar && previousAvatar != observedAvatar)
-                        {
-                            // A re-run, and the column no longer holds what this attempt read.
-                            //
-                            // Finding this call's own URL means the commit landed after all and
-                            // verification could not see it; report what it replaced.
-                            if (previousAvatar == avatarUrl)
-                            {
-                                var committed = await GetUserAsync(id);
-                                return committed == null
-                                    ? AvatarSwapAttempt.Missing
-                                    : AvatarSwapAttempt.Swapped(new AvatarSwapRecord(committed, observedAvatar));
-                            }
-
-                            // Any other value means either the commit rolled back and another
-                            // request wrote, or it landed and another request has already replaced
-                            // it — and in that second case that request has deleted this call's
-                            // blob. Writing the URL again would point the account at bytes that no
-                            // longer exist, so give up instead.
-                            return AvatarSwapAttempt.Superseded;
-                        }
+                        // A re-run of an attempt that already issued its write, finding the column
+                        // moved on. The write either rolled back and another request got in, or it
+                        // committed and that request has since replaced it — and in that second
+                        // case the request has already deleted this call's blob. Writing the URL
+                        // again would point the account at bytes that no longer exist, so give up
+                        // and report what this attempt replaced, which is now referenced by
+                        // nothing either way.
+                        //
+                        // Only when it wrote: a re-run of an attempt whose update matched no rows
+                        // committed nothing, so it is free to try again against the new value.
+                        if (attemptWrote && previousAvatar != observedAvatar)
+                            return AvatarSwapAttempt.Superseded(observedAvatar);
 
                         observedAvatar = previousAvatar;
-                        hasObservedAvatar = true;
 
                         // A null previousAvatar is fine as a parameter: EF compiles the comparison
                         // to IS NULL when the value is null, and caches the two shapes separately.
@@ -243,6 +244,8 @@ namespace backend.main.features.auth
                         // value that request wrote.
                         if (affected == 0)
                             return AvatarSwapAttempt.Contended;
+
+                        attemptWrote = true;
 
                         var updated = await GetUserAsync(id);
                         return updated == null
@@ -262,8 +265,11 @@ namespace backend.main.features.auth
                         return outcome.Record;
                     case AvatarSwapKind.Superseded:
                         // Another request owns the avatar and this call cannot safely write again.
-                        // Retrying would only race the same way, so stop here.
-                        throw new ConflictException(AvatarChangedMessage);
+                        // Retrying would only race the same way, so stop here. The URL this
+                        // attempt replaced goes with the conflict: if its write did commit, this
+                        // is the only report of that URL anyone gets, and the account no longer
+                        // points at it either way.
+                        throw new AvatarSwapSupersededException(outcome.ReplacedAvatar);
                     case AvatarSwapKind.Contended:
                     default:
                         continue;

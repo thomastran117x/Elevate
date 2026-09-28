@@ -36,6 +36,11 @@ namespace backend.main.features.profile
         /// Returns a sanitized User aggregate for non-auth workflows. Password is always null.
         /// </summary>
         Task<User?> GetUserAsync(int id);
+        /// <summary>
+        /// Whether the account exists, without projecting the row. For the callers that only need
+        /// to refuse work early, such as an avatar upload whose token may outlive its account.
+        /// </summary>
+        Task<bool> ExistsAsync(int id);
         Task<UserProfileRecord?> GetProfileByUsernameAsync(string username);
         Task<UserProfileRecord?> GetPublicProfileByUsernameOrReservationAsync(
             string username,

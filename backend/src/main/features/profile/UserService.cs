@@ -182,7 +182,7 @@ namespace backend.main.features.profile
             // would otherwise take one of the few processing slots, decode a full-size image and
             // write a blob, all to be told 404 at the end. Deliberately not kept: the write below
             // reads the row again, because anything read here is stale by the time decoding ends.
-            if (await _userRepository.GetUserAsync(id) == null)
+            if (!await _userRepository.ExistsAsync(id))
                 throw new ResourceNotFoundException($"User with the id {id} is not found");
 
             // Decode and re-encode before touching storage: the stored avatar is WebP pixels only,
@@ -212,6 +212,21 @@ namespace backend.main.features.profile
                 // phone change saved while the image was being processed.
                 swap = await _userRepository.SwapAvatarAsync(id, filePath)
                     ?? throw new ResourceNotFoundException($"User with the id {id} is not found");
+            }
+            catch (AvatarSwapSupersededException superseded)
+            {
+                // The swap wrote, could not confirm it, and found another upload in charge. This
+                // upload is unreferenced, and so is the URL that write replaced — nothing else will
+                // ever report it, and the sweeper that would have caught it is opt-in.
+                await _blobService.DeleteBlobAsync(filePath);
+
+                if (!string.IsNullOrEmpty(superseded.ReplacedAvatarUrl) &&
+                    superseded.ReplacedAvatarUrl != filePath)
+                {
+                    await _blobService.DeleteBlobAsync(superseded.ReplacedAvatarUrl);
+                }
+
+                throw;
             }
             catch (Exception exception) when (exception is ResourceNotFoundException or ConflictException)
             {

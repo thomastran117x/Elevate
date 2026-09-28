@@ -216,12 +216,36 @@ public class AuthUserRepositoryTests
 
         var act = () => harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/mine.webp");
 
-        await act.Should().ThrowAsync<ConflictException>();
+        // The conflict carries what this attempt replaced. If its write did commit, this is the
+        // only report of that URL anyone gets, and OrphanBlobCleanup is opt-in.
+        (await act.Should().ThrowAsync<AvatarSwapSupersededException>())
+            .Which.ReplacedAvatarUrl.Should().Be("https://cdn.test/users/original.webp");
 
         // The other request's avatar stands, and its blob is one that exists.
         var stored = await harness.Db.Users.AsNoTracking()
             .Where(u => u.Id == userId).Select(u => u.Avatar).SingleAsync();
         stored.Should().Be("https://cdn.test/users/other.webp");
+    }
+
+    [Fact]
+    public async Task SwapAvatarAsync_ShouldRetryNormally_WhenAWriteFreeAttemptFaultsOnCommit()
+    {
+        // The attempt's update matches no rows because another request got there first, and the
+        // commit of that empty transaction then faults. Nothing was written, so the re-run must
+        // swap normally rather than report a conflict the user did not cause.
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync(
+            loseFirstCommitAcknowledgement: true,
+            suppressFirstAvatarUpdate: true);
+        var userId = await harness.SeedUserAsync();
+        await harness.Db.Users.Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.Avatar, "https://cdn.test/users/live.webp"));
+        harness.UpdateSuppressor!.Arm();
+
+        var swap = await harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/mine.webp");
+
+        swap.Should().NotBeNull();
+        swap!.PreviousAvatar.Should().Be("https://cdn.test/users/live.webp");
+        swap.User.Avatar.Should().Be("https://cdn.test/users/mine.webp");
     }
 
     [Fact]
@@ -236,6 +260,7 @@ public class AuthUserRepositoryTests
         var userId = await harness.SeedUserAsync();
         await harness.Db.Users.Where(u => u.Id == userId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.Avatar, "https://cdn.test/users/live.webp"));
+        harness.UpdateFailer!.Arm();
 
         var swap = await harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/new.webp");
 
@@ -927,17 +952,25 @@ public class AuthUserRepositoryTests
 
         public CommitAcknowledgementLosingInterceptor? CommitInterceptor { get; }
 
+        public AvatarUpdateFailingInterceptor? UpdateFailer { get; private set; }
+
+        public AvatarUpdateSuppressingInterceptor? UpdateSuppressor { get; private set; }
+
         public static async Task<AuthUserRepositoryHarness> CreateAsync(
             bool retryingExecutionStrategy = false,
             bool loseFirstCommitAcknowledgement = false,
-            bool failFirstAvatarUpdate = false)
+            bool failFirstAvatarUpdate = false,
+            bool suppressFirstAvatarUpdate = false)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
 
             var optionsBuilder = new DbContextOptionsBuilder<AppDatabaseContext>()
                 .UseSqlite(connection);
-            if (retryingExecutionStrategy || loseFirstCommitAcknowledgement || failFirstAvatarUpdate)
+            if (retryingExecutionStrategy
+                || loseFirstCommitAcknowledgement
+                || failFirstAvatarUpdate
+                || suppressFirstAvatarUpdate)
             {
                 optionsBuilder.ReplaceService<
                     IExecutionStrategyFactory,
@@ -958,15 +991,28 @@ public class AuthUserRepositoryTests
                 optionsBuilder.AddInterceptors(updateInterceptor);
             }
 
+            AvatarUpdateSuppressingInterceptor? suppressInterceptor = null;
+            if (suppressFirstAvatarUpdate)
+            {
+                suppressInterceptor = new AvatarUpdateSuppressingInterceptor();
+                optionsBuilder.AddInterceptors(suppressInterceptor);
+            }
+
             var db = new AppDatabaseContext(optionsBuilder.Options);
             await db.Database.EnsureCreatedAsync();
 
             // Armed only now: schema creation commits too, and losing that commit would re-run
             // EnsureCreated against tables that already exist.
+            // Only the commit interceptor is armed here. The command interceptors would
+            // otherwise swallow or fail a test's own setup writes, so tests arm them once the row
+            // is in the state they want.
             commitInterceptor?.Arm();
-            updateInterceptor?.Arm();
 
-            return new AuthUserRepositoryHarness(connection, db, commitInterceptor);
+            return new AuthUserRepositoryHarness(connection, db, commitInterceptor)
+            {
+                UpdateFailer = updateInterceptor,
+                UpdateSuppressor = suppressInterceptor
+            };
         }
 
         public async Task<int> SeedUserAsync(
@@ -1067,6 +1113,33 @@ public class AuthUserRepositoryTests
             {
                 _alreadyFailed = true;
                 throw new LostCommitAcknowledgementException();
+            }
+
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Makes the first UPDATE of the avatar column report that it matched no rows, which is what a
+    /// request that lost the race sees, without needing a second connection to interleave on.
+    /// </summary>
+    private sealed class AvatarUpdateSuppressingInterceptor : DbCommandInterceptor
+    {
+        private bool _armed;
+        private bool _alreadySuppressed;
+
+        public void Arm() => _armed = true;
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (_armed && !_alreadySuppressed && command.CommandText.Contains("Avatar", StringComparison.Ordinal))
+            {
+                _alreadySuppressed = true;
+                return ValueTask.FromResult(InterceptionResult<int>.SuppressWithResult(0));
             }
 
             return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
