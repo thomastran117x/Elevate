@@ -123,22 +123,11 @@ namespace backend.main.shared.storage.imaging
                     throw new BadRequestException(AnimatedMessage);
                 }
 
-                try
-                {
-                    return await DecodeAndEncodeAsync(buffered, cancellationToken);
-                }
-                catch (Exception ex) when (IsDecoderFailure(ex))
-                {
-                    // Deliberately broad, but only around decoding. A crafted file reaches the
-                    // decoders as whatever the parser that choked on it happened to throw:
-                    // ImageFormatException and NotSupportedException are the documented ones, but
-                    // ImageSharp 3.1 also surfaces IndexOutOfRange, ArgumentOutOfRange,
-                    // EndOfStream and InvalidOperation from malformed GIF, WebP and JPEG streams.
-                    // Listing types has missed cases twice, so the filter names what is *not* the
-                    // uploader's fault instead.
-                    Logger.Warn(ex, "[ImageSharpImageProcessor] Rejected an image that could not be decoded.");
-                    throw new BadRequestException(UnreadableMessage);
-                }
+                // Only the decode is forgiven. Resizing, orienting and encoding run on pixels that
+                // already decoded, so a failure there is ours, not the uploader's, and belongs in
+                // the 500s where alerting can see it.
+                using var image = await DecodeAsync(buffered, cancellationToken);
+                return await ResizeOrientAndEncodeAsync(image, cancellationToken);
             }
             finally
             {
@@ -153,33 +142,55 @@ namespace backend.main.shared.storage.imaging
         /// directly, so the async path costs no extra copy (measured: ~200 bytes over the
         /// synchronous call for a 5 MB upload).
         /// </remarks>
-        private async Task<ProcessedImage> DecodeAndEncodeAsync(
+        private async Task<Image<Rgba32>> DecodeAsync(
             MemoryStream source,
             CancellationToken cancellationToken)
         {
-            var maxEdge = _options.AvatarMaxEdge;
-
-            // 1. Header only. Identify reads dimensions and frame descriptors without allocating
-            // a pixel buffer, so a 100 KB file declaring 100000x100000 is refused here, before
-            // it can ask for 40 GB.
-            source.Position = 0;
-            var info = await Image.IdentifyAsync(_identifyOptions, source, cancellationToken);
-
-            if (info.Width > _options.MaxDimension ||
-                info.Height > _options.MaxDimension ||
-                (long)info.Width * info.Height > _options.MaxPixels)
+            try
             {
-                throw new BadRequestException(TooLargeMessage);
+                // 1. Header only. Identify reads dimensions and frame descriptors without
+                // allocating a pixel buffer, so a 100 KB file declaring 100000x100000 is refused
+                // here, before it can ask for 40 GB.
+                source.Position = 0;
+                var info = await Image.IdentifyAsync(_identifyOptions, source, cancellationToken);
+
+                if (info.Width > _options.MaxDimension ||
+                    info.Height > _options.MaxDimension ||
+                    (long)info.Width * info.Height > _options.MaxPixels)
+                {
+                    throw new BadRequestException(TooLargeMessage);
+                }
+
+                // An animated GIF or WebP is a frame-count bomb, and flattening it to its first
+                // frame silently destroys what the user meant to upload. Refusing says so.
+                if (info.FrameMetadataCollection.Count > 1)
+                    throw new BadRequestException(AnimatedMessage);
+
+                // 2. Full decode, capped at one frame and bounded by the configured allocator.
+                source.Position = 0;
+                return await Image.LoadAsync<Rgba32>(_decodeOptions, source, cancellationToken);
             }
+            catch (Exception ex) when (IsDecoderFailure(ex))
+            {
+                // Deliberately broad. A crafted file reaches the decoders as whatever the parser
+                // that choked on it happened to throw: ImageFormatException and
+                // NotSupportedException are the documented ones, but ImageSharp 3.1 also surfaces
+                // IndexOutOfRange, ArgumentOutOfRange, EndOfStream and InvalidOperation from
+                // malformed GIF, WebP and JPEG streams. Listing types has missed cases twice, so
+                // the filter names what is *not* the uploader's fault instead.
+                //
+                // Logged without the stack: any client can produce these at will, so they are
+                // ordinary 400 validation rather than something to fill the log with.
+                Logger.Info($"[ImageSharpImageProcessor] Rejected an undecodable image ({ex.GetType().Name}).");
+                throw new BadRequestException(UnreadableMessage);
+            }
+        }
 
-            // An animated GIF or WebP is a frame-count bomb, and flattening it to its first frame
-            // silently destroys what the user meant to upload. Refusing says so.
-            if (info.FrameMetadataCollection.Count > 1)
-                throw new BadRequestException(AnimatedMessage);
-
-            // 2. Full decode, capped at one frame and bounded by the configured allocator.
-            source.Position = 0;
-            using var image = await Image.LoadAsync<Rgba32>(_decodeOptions, source, cancellationToken);
+        private async Task<ProcessedImage> ResizeOrientAndEncodeAsync(
+            Image<Rgba32> image,
+            CancellationToken cancellationToken)
+        {
+            var maxEdge = _options.AvatarMaxEdge;
 
             // 3. Shrink first, then orient. Rotating at full resolution would allocate a second
             // full-size buffer — another ~200 MB for a 50 MP photo — before the original is freed.
@@ -214,16 +225,23 @@ namespace backend.main.shared.storage.imaging
         /// </summary>
         /// <remarks>
         /// Cancellation and the pipeline's own rejections are not decoder failures. Neither are
-        /// resource and lifetime faults: reporting an exhausted heap, a broken stream or a disposed
-        /// object as "your image is unreadable" tells the user their good photo is broken and keeps
-        /// a real server fault out of the 500-level alerting.
+        /// resource and lifetime faults: reporting an exhausted heap or a disposed object as "your
+        /// image is unreadable" tells the user their good photo is broken and keeps a real server
+        /// fault out of the 500-level alerting.
+        /// <para>
+        /// <see cref="EndOfStreamException"/> is the exception to that: it derives from
+        /// <see cref="IOException"/>, but the decoders read a <see cref="MemoryStream"/> here, so
+        /// the only way to run out of stream is a truncated upload — the uploader's file, not a
+        /// device.
+        /// </para>
         /// </remarks>
-        private static bool IsDecoderFailure(Exception exception) =>
-            exception is not AppException
-            and not OperationCanceledException
-            and not OutOfMemoryException
-            and not IOException
-            and not ObjectDisposedException;
+        private static bool IsDecoderFailure(Exception exception) => exception switch
+        {
+            AppException or OperationCanceledException or OutOfMemoryException or ObjectDisposedException => false,
+            EndOfStreamException => true,
+            IOException => false,
+            _ => true
+        };
 
         /// <summary>
         /// Copies the upload into a single seekable buffer that every later step reads. A stream

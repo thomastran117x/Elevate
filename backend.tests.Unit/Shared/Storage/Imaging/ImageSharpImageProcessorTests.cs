@@ -442,6 +442,33 @@ public class ImageSharpImageProcessorTests
             .WithMessage(ImageSharpImageProcessor.UnreadableMessage);
     }
 
+    [Theory]
+    [InlineData(0.3)]
+    [InlineData(0.9)]
+    public async Task ProcessAsync_ShouldReturnBadRequest_ForAPngTruncatedMidDecode(double keep)
+    {
+        // Failing inside the decoder rather than before it: the header is intact and the pixel
+        // data runs out part-way. Whatever the decoder raises, the uploader gets a 400.
+        using var input = new Image<Rgba32>(320, 240);
+        input.ProcessPixelRows(rows =>
+        {
+            for (var y = 0; y < rows.Height; y++)
+            {
+                var row = rows.GetRowSpan(y);
+                for (var x = 0; x < row.Length; x++)
+                    row[x] = new Rgba32((byte)(x % 251), (byte)(y % 241), (byte)((x * y) % 239));
+            }
+        });
+
+        var png = EncodePng(input);
+        var truncated = png[..(int)(png.Length * keep)];
+
+        var act = () => CreateProcessor().ProcessAsync(new MemoryStream(truncated));
+
+        await act.Should().ThrowAsync<BadRequestException>()
+            .WithMessage(ImageSharpImageProcessor.UnreadableMessage);
+    }
+
     [Fact]
     public async Task ProcessAsync_ShouldNotReportAServerFaultAsABadImage()
     {
