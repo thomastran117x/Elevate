@@ -28,6 +28,7 @@ namespace backend.main.application.environment
         private static readonly string? _paypalApi;
         private static readonly string? _azureStorageConnectionString;
         private static readonly string? _azureStorageContainerName;
+        private static readonly string _azureStorageQuarantineContainerName;
         private static readonly string? _elasticsearchUrl;
         private static readonly string _kafkaBootstrapServers;
         private static readonly string _clubIndexTopic;
@@ -107,6 +108,11 @@ namespace backend.main.application.environment
 
             _azureStorageConnectionString = GetOptional(["AZURE_STORAGE_CONNECTION_STRING"]);
             _azureStorageContainerName = GetOptional(["AZURE_STORAGE_CONTAINER_NAME"]);
+            // Private: presigned uploads land here and are only copied to the public container
+            // once validated. Same storage account and connection string as the public one.
+            _azureStorageQuarantineContainerName = GetOrDefault(
+                ["AZURE_STORAGE_QUARANTINE_CONTAINER_NAME"],
+                "event-assets-quarantine");
 
             _elasticsearchUrl = GetOptional(["ELASTICSEARCH_URL"]);
             _kafkaBootstrapServers = GetOrDefault(
@@ -256,6 +262,7 @@ namespace backend.main.application.environment
         public static string? MicrosoftTenantId => _microsoftTenantId;
         public static string? AzureStorageConnectionString => _azureStorageConnectionString;
         public static string? AzureStorageContainerName => _azureStorageContainerName;
+        public static string AzureStorageQuarantineContainerName => _azureStorageQuarantineContainerName;
         public static string? ElasticsearchUrl => _elasticsearchUrl;
         public static string KafkaBootstrapServers => _kafkaBootstrapServers;
         public static string ClubIndexTopic => _clubIndexTopic;

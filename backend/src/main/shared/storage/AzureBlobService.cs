@@ -35,6 +35,7 @@ namespace backend.main.shared.storage
             };
 
         private readonly BlobContainerClient? _container;
+        private readonly BlobContainerClient? _quarantine;
         private readonly string? _configurationError;
         private readonly ImageUploadOptions _imageUploadOptions;
 
@@ -60,6 +61,9 @@ namespace backend.main.shared.storage
             }
 
             _container = new BlobContainerClient(connectionString, containerName);
+            _quarantine = new BlobContainerClient(
+                connectionString,
+                EnvironmentSetting.AzureStorageQuarantineContainerName);
         }
 
         public async Task<string> UploadProcessedImageAsync(
@@ -70,28 +74,35 @@ namespace backend.main.shared.storage
             if (image == null || image.Content.Length == 0)
                 throw new ArgumentException("Image is null or empty");
 
-            // This container is created with anonymous read access, so the content type stamped
-            // here is what the world is served. It and the extension come from the processed
-            // output — always WebP — not from the caller's file name or declared type.
+            // This container is anonymously readable, so the content type stamped here is what
+            // the world is served. It and the extension come from the processed output — always
+            // WebP — not from the caller's file name or declared type.
             var container = GetRequiredContainer();
-            await container.CreateIfNotExistsAsync(PublicAccessType.Blob, cancellationToken: cancellationToken);
 
             var normalizedPrefix = NormalizeBlobPathPrefix(blobPathPrefix, "uploads");
             var blobName = $"{normalizedPrefix}/{Guid.NewGuid():N}{image.FileExtension}";
             var blobClient = container.GetBlobClient(blobName);
 
-            await blobClient.UploadAsync(
-                BinaryData.FromBytes(image.Content),
-                new BlobUploadOptions
-                {
-                    HttpHeaders = new BlobHttpHeaders
-                    {
-                        ContentType = image.ContentType
-                    }
-                },
-                cancellationToken);
+            await UploadProcessedAsync(blobClient, image, cancellationToken);
 
             return blobClient.Uri.ToString();
+        }
+
+        public async Task UploadProcessedImageToAsync(
+            ProcessedImage image,
+            string publicUrl,
+            CancellationToken cancellationToken = default)
+        {
+            if (image == null || image.Content.Length == 0)
+                throw new ArgumentException("Image is null or empty");
+
+            var container = GetRequiredContainer();
+            if (!TryGetBlobPath(container, publicUrl, out var blobPath))
+                throw new ArgumentException("The target URL is not in the public container.", nameof(publicUrl));
+
+            // Overwrites: the name was reserved by this service when the upload was issued, so
+            // the only earlier write it can meet is this same promotion, retried.
+            await UploadProcessedAsync(container.GetBlobClient(blobPath), image, cancellationToken);
         }
 
         public async Task<PresignedUploadResponse> GenerateUploadUrlAsync(
@@ -99,9 +110,10 @@ namespace backend.main.shared.storage
             string fileName,
             string contentType)
         {
+            // No CreateIfNotExists: both containers are provisioned out of band (the DevTasks
+            // storage-provision command, or infrastructure), so the request path neither pays a
+            // round trip for it nor needs a credential allowed to create containers.
             var container = GetRequiredContainer();
-
-            await container.CreateIfNotExistsAsync(PublicAccessType.Blob);
 
             var normalizedContentType = ResolveImageContentType(fileName, contentType);
             var extension = ValidateAndNormalizeImageExtension(fileName, normalizedContentType);
@@ -120,6 +132,37 @@ namespace backend.main.shared.storage
                 PublicUrl = blobClient.Uri.ToString(),
                 ExpiresAt = expiresAt
             };
+        }
+
+        public Task<QuarantineUpload> GenerateQuarantineUploadUrlAsync(
+            string blobPathPrefix,
+            string fileName,
+            string contentType)
+        {
+            var container = GetRequiredContainer();
+            var quarantine = GetRequiredQuarantine();
+
+            var normalizedContentType = ResolveImageContentType(fileName, contentType);
+            var extension = ValidateAndNormalizeImageExtension(fileName, normalizedContentType);
+            var normalizedPrefix = NormalizeBlobPathPrefix(blobPathPrefix, "events");
+            var id = Guid.NewGuid().ToString("N");
+
+            // One id names both blobs. The quarantine copy keeps the uploader's extension; the
+            // public one is reserved with the processor's, because whatever format arrives, what
+            // is published is WebP.
+            var quarantineBlobPath = $"{normalizedPrefix}/{id}{extension}";
+            var publicBlobClient = container.GetBlobClient($"{normalizedPrefix}/{id}{WebpMedia.FileExtension}");
+
+            var expiresAt = DateTimeOffset.UtcNow.AddMinutes(15);
+            var sasBuilder = BuildUploadSas(quarantine.Name, quarantineBlobPath, expiresAt, normalizedContentType);
+            var uploadUrl = quarantine.GetBlobClient(quarantineBlobPath).GenerateSasUri(sasBuilder);
+
+            return Task.FromResult(new QuarantineUpload(
+                uploadUrl.ToString(),
+                quarantineBlobPath,
+                publicBlobClient.Uri.ToString(),
+                normalizedContentType,
+                expiresAt));
         }
 
         public bool IsOwnedBlobUrl(string blobUrl) =>
@@ -175,8 +218,14 @@ namespace backend.main.shared.storage
             if (container == null)
                 return null;
 
-            var blobClient = container.GetBlobClient(blobPath);
+            return await InspectAsync(container.GetBlobClient(blobPath), prefixByteCount, cancellationToken);
+        }
 
+        private static async Task<BlobInspection?> InspectAsync(
+            BlobClient blobClient,
+            int prefixByteCount,
+            CancellationToken cancellationToken)
+        {
             try
             {
                 var properties = await blobClient.GetPropertiesAsync(cancellationToken: cancellationToken);
@@ -213,6 +262,62 @@ namespace backend.main.shared.storage
             }
         }
 
+        public async Task<BlobInspection?> InspectQuarantineBlobAsync(
+            string quarantineBlobPath,
+            int prefixByteCount = ImageSignatureInspector.HeaderByteCount,
+            CancellationToken cancellationToken = default)
+        {
+            if (_quarantine == null || string.IsNullOrWhiteSpace(quarantineBlobPath))
+                return null;
+
+            return await InspectAsync(
+                _quarantine.GetBlobClient(quarantineBlobPath), prefixByteCount, cancellationToken);
+        }
+
+        public async Task<Stream?> OpenQuarantineBlobReadAsync(
+            string quarantineBlobPath,
+            CancellationToken cancellationToken = default)
+        {
+            var quarantine = GetRequiredQuarantine();
+
+            try
+            {
+                var download = await quarantine.GetBlobClient(quarantineBlobPath)
+                    .DownloadStreamingAsync(cancellationToken: cancellationToken);
+                return download.Value.Content;
+            }
+            catch (RequestFailedException ex) when (ex.Status == StatusCodes.Status404NotFound)
+            {
+                return null;
+            }
+        }
+
+        public async Task DeleteQuarantineBlobAsync(string quarantineBlobPath)
+        {
+            try
+            {
+                if (_quarantine == null || string.IsNullOrWhiteSpace(quarantineBlobPath))
+                    return;
+
+                await _quarantine.GetBlobClient(quarantineBlobPath).DeleteIfExistsAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, $"[AzureBlobService] Best-effort quarantine deletion failed for: {quarantineBlobPath}");
+            }
+        }
+
+        public async IAsyncEnumerable<QuarantineBlobItem> ListQuarantineBlobsAsync(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var quarantine = _quarantine;
+            if (quarantine == null)
+                yield break;
+
+            await foreach (var blob in quarantine.GetBlobsAsync(BlobTraits.None, BlobStates.None, null, cancellationToken))
+                yield return new QuarantineBlobItem(blob.Name, blob.Properties.LastModified);
+        }
+
         public async Task NormalizeBlobHeadersAsync(
             string blobUrl,
             string contentType,
@@ -241,6 +346,33 @@ namespace backend.main.shared.storage
             {
                 // Swept or deleted between the inspection and here; there is nothing to stamp.
             }
+        }
+
+        private static async Task UploadProcessedAsync(
+            BlobClient blobClient,
+            ProcessedImage image,
+            CancellationToken cancellationToken)
+        {
+            await blobClient.UploadAsync(
+                BinaryData.FromBytes(image.Content),
+                new BlobUploadOptions
+                {
+                    HttpHeaders = new BlobHttpHeaders
+                    {
+                        ContentType = image.ContentType
+                    }
+                },
+                cancellationToken);
+        }
+
+        private BlobContainerClient GetRequiredQuarantine()
+        {
+            if (_quarantine != null)
+                return _quarantine;
+
+            throw new InvalidOperationException(
+                _configurationError ?? "Azure Blob Storage is not configured."
+            );
         }
 
         private BlobContainerClient GetRequiredContainer()
@@ -362,8 +494,12 @@ namespace backend.main.shared.storage
         {
             blobPath = string.Empty;
 
-            if (_container == null)
-                return false;
+            return _container != null && TryGetBlobPath(_container, blobUrl, out blobPath);
+        }
+
+        private static bool TryGetBlobPath(BlobContainerClient container, string blobUrl, out string blobPath)
+        {
+            blobPath = string.Empty;
 
             if (!Uri.TryCreate(blobUrl, UriKind.Absolute, out var blobUri))
                 return false;
@@ -371,7 +507,7 @@ namespace backend.main.shared.storage
             if (!string.Equals(blobUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
                 return false;
 
-            var containerUri = _container.Uri;
+            var containerUri = container.Uri;
             if (!string.Equals(blobUri.Host, containerUri.Host, StringComparison.OrdinalIgnoreCase))
                 return false;
 

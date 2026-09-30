@@ -275,6 +275,139 @@ public class AzureBlobServiceTests
 
         harness.GetConfigurationError().Should().BeNull();
         harness.GetContainerName().Should().Be("images");
+        harness.GetContainerName("_quarantine").Should().Be("event-assets-quarantine");
+    }
+
+    [Fact]
+    public void Constructor_ShouldUseTheConfiguredQuarantineContainer()
+    {
+        using var scope = new EnvironmentVariableScope(new Dictionary<string, string?>
+        {
+            ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
+            ["AZURE_STORAGE_CONNECTION_STRING"] = "DefaultEndpointsProtocol=https;AccountName=eventassets;AccountKey=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=;EndpointSuffix=core.windows.net",
+            ["AZURE_STORAGE_CONTAINER_NAME"] = "images",
+            ["AZURE_STORAGE_QUARANTINE_CONTAINER_NAME"] = "images-private"
+        });
+        using var harness = AzureBlobServiceHarness.Load();
+
+        harness.CreateInstance();
+
+        harness.GetContainerName("_quarantine").Should().Be("images-private");
+    }
+
+    [Fact]
+    public async Task GenerateQuarantineUploadUrlAsync_ShouldSignAWriteOnceUrlIntoQuarantine_AndReserveAWebpPublicUrl()
+    {
+        var service = CreateServiceWithContainer();
+
+        var upload = await service.GenerateQuarantineUploadUrlAsync("events/clubs/7/pending", "Poster.PNG", "image/png");
+
+        var uploadUri = new Uri(upload.UploadUrl);
+        uploadUri.AbsolutePath.Should().Be($"/quarantine/{upload.QuarantineBlobPath}");
+        var query = System.Web.HttpUtility.ParseQueryString(uploadUri.Query);
+        query["sp"].Should().Be("c", "the SAS must not be able to overwrite what was inspected");
+        query["rsct"].Should().Be("image/png");
+
+        upload.QuarantineBlobPath.Should().MatchRegex("^events/clubs/7/pending/[0-9a-f]{32}\\.png$");
+        var id = Path.GetFileNameWithoutExtension(upload.QuarantineBlobPath);
+        upload.PublicUrl.Should().Be(
+            $"https://eventassets.blob.core.windows.net/media/events/clubs/7/pending/{id}.webp");
+        upload.PublicUrl.Should().NotContain("quarantine");
+        upload.ContentType.Should().Be("image/png");
+        service.IsOwnedBlobUrl(upload.PublicUrl).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GenerateQuarantineUploadUrlAsync_ShouldInferTheTypeFromTheExtension_ForOctetStream()
+    {
+        var service = CreateServiceWithContainer();
+
+        var upload = await service.GenerateQuarantineUploadUrlAsync("clubs/pending/3", "photo.jpg", "application/octet-stream");
+
+        upload.ContentType.Should().Be("image/jpeg");
+        upload.QuarantineBlobPath.Should().EndWith(".jpg");
+    }
+
+    [Fact]
+    public async Task GenerateQuarantineUploadUrlAsync_ShouldRejectUnsupportedTypes()
+    {
+        var service = CreateServiceWithContainer();
+
+        await service.Invoking(svc => svc.GenerateQuarantineUploadUrlAsync("events", "x.bmp", "image/bmp"))
+            .Should().ThrowAsync<UnsupportedMediaTypeException>();
+    }
+
+    [Fact]
+    public async Task GenerateQuarantineUploadUrlAsync_ShouldRequireConfiguredStorage()
+    {
+        var service = CreateServiceWithoutContainer("AZURE_STORAGE_CONNECTION_STRING is not configured.");
+
+        await service.Invoking(svc => svc.GenerateQuarantineUploadUrlAsync("events", "x.png", "image/png"))
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*AZURE_STORAGE_CONNECTION_STRING is not configured.*");
+    }
+
+    [Fact]
+    public async Task GenerateUploadUrlAsync_ShouldStillSignIntoThePublicContainer_WithoutCreatingIt()
+    {
+        // The flag-off path. It no longer calls CreateIfNotExists, which is what lets this run
+        // with no storage account behind it at all.
+        var service = CreateServiceWithContainer();
+
+        var upload = await service.GenerateUploadUrlAsync("events", "poster.png", "image/png");
+
+        new Uri(upload.UploadUrl).AbsolutePath.Should().StartWith("/media/events/").And.EndWith(".png");
+        upload.PublicUrl.Should().StartWith("https://eventassets.blob.core.windows.net/media/events/");
+        upload.MediaAssetId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UploadProcessedImageToAsync_ShouldRefuseATargetOutsideThePublicContainer()
+    {
+        var service = CreateServiceWithContainer();
+
+        await service.Invoking(svc => svc.UploadProcessedImageToAsync(
+                new ProcessedImage([0x52, 0x49, 0x46, 0x46]),
+                "https://eventassets.blob.core.windows.net/quarantine/events/x.webp"))
+            .Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*not in the public container*");
+    }
+
+    [Fact]
+    public async Task UploadProcessedImageToAsync_ShouldThrowArgumentException_ForEmptyContent()
+    {
+        var service = CreateServiceWithContainer();
+
+        await service.Invoking(svc => svc.UploadProcessedImageToAsync(
+                new ProcessedImage([]),
+                "https://eventassets.blob.core.windows.net/media/events/x.webp"))
+            .Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*Image is null or empty*");
+    }
+
+    [Fact]
+    public async Task QuarantineReads_ShouldBeInert_WhenStorageIsNotConfigured()
+    {
+        var service = CreateServiceWithoutContainer("AZURE_STORAGE_CONNECTION_STRING is not configured.");
+
+        (await service.InspectQuarantineBlobAsync("events/x.png")).Should().BeNull();
+        await service.Invoking(svc => svc.DeleteQuarantineBlobAsync("events/x.png")).Should().NotThrowAsync();
+
+        var items = new List<QuarantineBlobItem>();
+        await foreach (var item in service.ListQuarantineBlobsAsync())
+            items.Add(item);
+        items.Should().BeEmpty();
+
+        await service.Invoking(svc => svc.OpenQuarantineBlobReadAsync("events/x.png"))
+            .Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task InspectQuarantineBlobAsync_ShouldReturnNull_ForABlankPath()
+    {
+        var service = CreateServiceWithContainer();
+
+        (await service.InspectQuarantineBlobAsync("  ")).Should().BeNull();
     }
 
     [Fact]
@@ -365,8 +498,13 @@ public class AzureBlobServiceTests
             "DefaultEndpointsProtocol=https;AccountName=eventassets;AccountKey=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=;EndpointSuffix=core.windows.net",
             "media");
 
+        var quarantine = new BlobContainerClient(
+            "DefaultEndpointsProtocol=https;AccountName=eventassets;AccountKey=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=;EndpointSuffix=core.windows.net",
+            "quarantine");
+
         var service = (AzureBlobService)RuntimeHelpers.GetUninitializedObject(typeof(AzureBlobService));
         SetPrivateField(service, "_container", container);
+        SetPrivateField(service, "_quarantine", quarantine);
         SetPrivateField(service, "_configurationError", null);
         SetPrivateField(service, "_imageUploadOptions", imageUploadOptions ?? new ImageUploadOptions());
         return service;
@@ -376,6 +514,7 @@ public class AzureBlobServiceTests
     {
         var service = (AzureBlobService)RuntimeHelpers.GetUninitializedObject(typeof(AzureBlobService));
         SetPrivateField(service, "_container", null);
+        SetPrivateField(service, "_quarantine", null);
         SetPrivateField(service, "_configurationError", configurationError);
         SetPrivateField(service, "_imageUploadOptions", new ImageUploadOptions());
         return service;
@@ -449,9 +588,9 @@ public class AzureBlobServiceTests
 
         public object? GetContainer() => GetField("_container");
 
-        public string? GetContainerName()
+        public string? GetContainerName(string fieldName = "_container")
         {
-            var container = GetField("_container");
+            var container = GetField(fieldName);
             container.Should().NotBeNull();
             return (string?)container!.GetType().GetProperty("Name")!.GetValue(container);
         }

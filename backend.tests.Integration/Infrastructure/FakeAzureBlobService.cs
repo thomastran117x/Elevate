@@ -4,6 +4,10 @@ using backend.main.features.events.contracts.responses;
 using backend.main.shared.storage;
 using backend.main.shared.storage.imaging;
 
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Webp;
+using SixLabors.ImageSharp.PixelFormats;
+
 namespace backend.tests.Integration.Infrastructure;
 
 /// <summary>
@@ -24,10 +28,20 @@ public sealed record StagedBlob(
     string? ContentEncoding = null,
     string? ContentLanguage = null);
 
+/// <summary>
+/// Bytes a client PUT into the quarantine container. Whole files rather than a header, because
+/// the validation pipeline decodes them with the real image processor.
+/// </summary>
+public sealed record QuarantinedBlob(byte[] Content, string ContentType, DateTimeOffset LastModified);
+
 public sealed class FakeAzureBlobService : IAzureBlobService
 {
     private const string BaseUrl = "https://storage.test/event-assets";
+    private const string QuarantineBaseUrl = "https://storage.test/event-assets-quarantine";
     private const long DefaultStagedLength = 1024;
+
+    private readonly Dictionary<string, QuarantinedBlob> _quarantined = [];
+    private readonly Dictionary<string, string> _reservedPublicUrls = [];
 
     private readonly Dictionary<string, DateTimeOffset> _ownedUrls = [];
     private readonly Dictionary<string, StagedBlob> _stagedBlobs = [];
@@ -62,8 +76,17 @@ public sealed class FakeAzureBlobService : IAzureBlobService
     /// </summary>
     public IReadOnlyDictionary<string, ProcessedImage> UploadedImages => _uploadedImages;
 
+    /// <summary>
+    /// The quarantine container, by blob path. Issuing a quarantine upload stages a real, valid
+    /// image of the declared type here, as if the client had PUT it; a test that wants the
+    /// pipeline to reject something replaces it with <see cref="StageQuarantineUpload"/>.
+    /// </summary>
+    public IReadOnlyDictionary<string, QuarantinedBlob> Quarantine => _quarantined;
+
     public void Clear()
     {
+        _quarantined.Clear();
+        _reservedPublicUrls.Clear();
         _ownedUrls.Clear();
         _uploadedImages.Clear();
         _stagedBlobs.Clear();
@@ -161,11 +184,157 @@ public sealed class FakeAzureBlobService : IAzureBlobService
         });
     }
 
-    public bool IsOwnedBlobUrl(string blobUrl) => _ownedUrls.ContainsKey(blobUrl);
+    /// <remarks>
+    /// Mirrors the real check, which only proves a URL points into our container: a public URL
+    /// reserved for a quarantined upload counts before anything is stored there.
+    /// </remarks>
+    public bool IsOwnedBlobUrl(string blobUrl) =>
+        _ownedUrls.ContainsKey(blobUrl) || _reservedPublicUrls.ContainsKey(blobUrl);
+
+    public Task<QuarantineUpload> GenerateQuarantineUploadUrlAsync(
+        string blobPathPrefix,
+        string fileName,
+        string contentType)
+    {
+        var safePrefix = string.Join(
+            '/',
+            blobPathPrefix
+                .Replace(' ', '-')
+                .Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(segment => segment is not "." and not ".."));
+        var safeFileName = Path.GetFileName(fileName);
+        var resolvedType = ResolveContentType(contentType, safeFileName);
+        var id = Guid.NewGuid().ToString("N");
+        var quarantinePath = $"{safePrefix}/{id}{Path.GetExtension(safeFileName).ToLowerInvariant()}";
+        var publicUrl = $"{BaseUrl}/{safePrefix}/{id}{WebpMedia.FileExtension}";
+
+        _reservedPublicUrls[publicUrl] = quarantinePath;
+        _quarantined[quarantinePath] = new QuarantinedBlob(
+            RealImageBytes(resolvedType), resolvedType, DateTimeOffset.UtcNow);
+
+        return Task.FromResult(new QuarantineUpload(
+            $"{QuarantineBaseUrl}/{quarantinePath}?signature=test-upload",
+            quarantinePath,
+            publicUrl,
+            resolvedType,
+            DateTimeOffset.UtcNow.AddMinutes(15)));
+    }
+
+    /// <summary>
+    /// Replaces what the client "uploaded" for a quarantined image, identified by the public URL
+    /// it was issued with — the only handle a test that went through the API holds.
+    /// </summary>
+    public void StageQuarantineUpload(
+        string reservedPublicUrl,
+        byte[] content,
+        string contentType = "image/png",
+        DateTimeOffset? lastModified = null)
+    {
+        _quarantined[QuarantinePathFor(reservedPublicUrl)] =
+            new QuarantinedBlob(content, contentType, lastModified ?? DateTimeOffset.UtcNow);
+    }
+
+    /// <summary>Makes a quarantined upload look as if its PUT never happened.</summary>
+    public void RemoveQuarantineUpload(string reservedPublicUrl) =>
+        _quarantined.Remove(QuarantinePathFor(reservedPublicUrl));
+
+    public string QuarantinePathFor(string reservedPublicUrl) =>
+        _reservedPublicUrls.TryGetValue(reservedPublicUrl, out var path)
+            ? path
+            : throw new InvalidOperationException($"No quarantine upload was issued for {reservedPublicUrl}.");
+
+    /// <summary>
+    /// Plants a blob straight into quarantine by path, for tests of the reaper that need blobs no
+    /// asset knows about.
+    /// </summary>
+    public void PlantQuarantineBlob(string path, DateTimeOffset lastModified) =>
+        _quarantined[path] = new QuarantinedBlob(RealImageBytes("image/png"), "image/png", lastModified);
+
+    public Task UploadProcessedImageToAsync(
+        ProcessedImage image,
+        string publicUrl,
+        CancellationToken cancellationToken = default)
+    {
+        if (!publicUrl.StartsWith(BaseUrl + "/", StringComparison.Ordinal))
+            throw new ArgumentException("The target URL is not in the public container.", nameof(publicUrl));
+
+        _ownedUrls[publicUrl] = DateTimeOffset.UtcNow;
+        _stagedBlobs[publicUrl] = ImageBlob(image.ContentType, image.Content.Length);
+        _uploadedImages[publicUrl] = image;
+        return Task.CompletedTask;
+    }
+
+    public Task<BlobInspection?> InspectQuarantineBlobAsync(
+        string quarantineBlobPath,
+        int prefixByteCount = ImageSignatureInspector.HeaderByteCount,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_quarantined.TryGetValue(quarantineBlobPath, out var blob))
+            return Task.FromResult<BlobInspection?>(null);
+
+        var header = blob.Content.Length <= prefixByteCount ? blob.Content : blob.Content[..prefixByteCount];
+        return Task.FromResult<BlobInspection?>(
+            new BlobInspection(blob.Content.LongLength, blob.ContentType, header));
+    }
+
+    public Task<Stream?> OpenQuarantineBlobReadAsync(
+        string quarantineBlobPath,
+        CancellationToken cancellationToken = default)
+    {
+        Stream? stream = _quarantined.TryGetValue(quarantineBlobPath, out var blob)
+            ? new MemoryStream(blob.Content, writable: false)
+            : null;
+        return Task.FromResult(stream);
+    }
+
+    public Task DeleteQuarantineBlobAsync(string quarantineBlobPath)
+    {
+        _quarantined.Remove(quarantineBlobPath);
+        return Task.CompletedTask;
+    }
+
+    public async IAsyncEnumerable<QuarantineBlobItem> ListQuarantineBlobsAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        foreach (var entry in _quarantined.ToList())
+            yield return new QuarantineBlobItem(entry.Key, entry.Value.LastModified);
+
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// A small, genuinely decodable image of the given type, so the validation pipeline's real
+    /// decoder accepts what a well-behaved client would have uploaded.
+    /// </summary>
+    public static byte[] RealImageBytes(string contentType = "image/png", int width = 16, int height = 12)
+    {
+        using var image = new Image<Rgba32>(width, height, new Rgba32(40, 120, 200));
+        using var stream = new MemoryStream();
+
+        switch ((contentType ?? string.Empty).Trim().ToLowerInvariant())
+        {
+            case "image/jpeg":
+            case "image/jpg":
+                image.SaveAsJpeg(stream);
+                break;
+            case "image/gif":
+                image.SaveAsGif(stream);
+                break;
+            case "image/webp":
+                image.Save(stream, new WebpEncoder());
+                break;
+            default:
+                image.SaveAsPng(stream);
+                break;
+        }
+
+        return stream.ToArray();
+    }
 
     public Task DeleteBlobAsync(string blobUrl)
     {
         _ownedUrls.Remove(blobUrl);
+        _reservedPublicUrls.Remove(blobUrl);
         _stagedBlobs.Remove(blobUrl);
         _uploadedImages.Remove(blobUrl);
         return Task.CompletedTask;
