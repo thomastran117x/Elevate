@@ -4,7 +4,11 @@ import { Subject, of, throwError } from 'rxjs';
 
 import { bytesFile, envelope, imageFile, makeClub } from '@testing';
 
-import { EventsManagementService } from '../../../../events/services/events-management.service';
+import {
+  EventsManagementService,
+  UploadedImage,
+} from '../../../../events/services/events-management.service';
+import { MediaAssetService, MediaAssetWatchEvent } from '@shared/upload/media-asset.service';
 import { Club } from '../../../models/club.types';
 import { ClubManagementService } from '../../../services/club-management.service';
 import { ClubsService } from '../../../services/clubs.service';
@@ -14,12 +18,19 @@ type ClubsStub = Pick<ClubsService, 'getClub'>;
 type ManagementStub = Pick<ClubManagementService, 'createClub' | 'updateClub'>;
 type UploadStub = Pick<EventsManagementService, 'uploadImage'>;
 
+/** What an upload emits: the URL to attach, and the asset to follow when uploads are quarantined. */
+const uploaded = (publicUrl: string, mediaAssetId: string | null = null): UploadedImage => ({
+  publicUrl,
+  mediaAssetId,
+});
+
 describe('ClubEditorComponent', () => {
   let fixture: ComponentFixture<ClubEditorComponent>;
   let component: ClubEditorComponent;
   let clubs: jasmine.SpyObj<ClubsStub>;
   let management: jasmine.SpyObj<ManagementStub>;
   let uploads: jasmine.SpyObj<UploadStub>;
+  let media: jasmine.SpyObj<Pick<MediaAssetService, 'watch'>>;
   let router: Router;
 
   function setup(params: Params = {}, parentParams: Params | null = null): void {
@@ -38,6 +49,7 @@ describe('ClubEditorComponent', () => {
         { provide: ClubsService, useValue: clubs },
         { provide: ClubManagementService, useValue: management },
         { provide: EventsManagementService, useValue: uploads },
+        { provide: MediaAssetService, useValue: media },
       ],
     });
 
@@ -66,6 +78,8 @@ describe('ClubEditorComponent', () => {
       'updateClub',
     ]);
     uploads = jasmine.createSpyObj<UploadStub>('EventsManagementService', ['uploadImage']);
+    media = jasmine.createSpyObj<Pick<MediaAssetService, 'watch'>>('MediaAssetService', ['watch']);
+    media.watch.and.returnValue(new Subject<MediaAssetWatchEvent>());
     clubs.getClub.and.returnValue(of(envelope(makeClub())));
   });
 
@@ -233,7 +247,7 @@ describe('ClubEditorComponent', () => {
     });
 
     it('previews the icon locally while it uploads, then keeps the preview', async () => {
-      const upload = new Subject<string>();
+      const upload = new Subject<UploadedImage>();
       uploads.uploadImage.and.returnValue(upload);
 
       await component.onDrop(drag([await imageFile('icon.png')]));
@@ -245,7 +259,7 @@ describe('ClubEditorComponent', () => {
       expect(img.src).toBe(component.slotPreviews.icon!);
       expect(component.imageUploading).toBeTrue();
 
-      upload.next('https://cdn/icon.png');
+      upload.next(uploaded('https://cdn/icon.png'));
       upload.complete();
 
       expect(uploads.uploadImage).toHaveBeenCalledWith(0, jasmine.any(File));
@@ -255,7 +269,7 @@ describe('ClubEditorComponent', () => {
     });
 
     it('uploads a banner and revokes its preview when removed', async () => {
-      uploads.uploadImage.and.returnValue(of('https://cdn/banner.png'));
+      uploads.uploadImage.and.returnValue(of(uploaded('https://cdn/banner.png')));
       const revoke = spyOn(URL, 'revokeObjectURL').and.callThrough();
 
       await component.onImageSelected(input([await imageFile('banner.png')]).event, 'banner');
@@ -272,7 +286,7 @@ describe('ClubEditorComponent', () => {
     });
 
     it('revokes the previous preview when the slot is re-picked', async () => {
-      uploads.uploadImage.and.returnValue(of('https://cdn/icon.png'));
+      uploads.uploadImage.and.returnValue(of(uploaded('https://cdn/icon.png')));
       const revoke = spyOn(URL, 'revokeObjectURL').and.callThrough();
 
       await component.onDrop(drag([await imageFile('one.png')]));
@@ -283,12 +297,12 @@ describe('ClubEditorComponent', () => {
     });
 
     describe('overlapping picks for one slot', () => {
-      let first: Subject<string>;
-      let second: Subject<string>;
+      let first: Subject<UploadedImage>;
+      let second: Subject<UploadedImage>;
 
       beforeEach(() => {
-        first = new Subject<string>();
-        second = new Subject<string>();
+        first = new Subject<UploadedImage>();
+        second = new Subject<UploadedImage>();
         uploads.uploadImage.and.returnValues(first, second);
       });
 
@@ -299,9 +313,9 @@ describe('ClubEditorComponent', () => {
 
         expect(component.imageUploading).toBeTrue();
 
-        second.next('https://cdn/b.png');
+        second.next(uploaded('https://cdn/b.png'));
         second.complete();
-        first.next('https://cdn/a.png');
+        first.next(uploaded('https://cdn/a.png'));
         first.complete();
 
         expect(component.imageUrl).toBe('https://cdn/b.png');
@@ -322,7 +336,7 @@ describe('ClubEditorComponent', () => {
         expect(component.error).toBe('');
         expect(revoke).not.toHaveBeenCalled();
 
-        second.next('https://cdn/b.png');
+        second.next(uploaded('https://cdn/b.png'));
         second.complete();
 
         expect(component.bannerUrl).toBe('https://cdn/b.png');
@@ -381,7 +395,7 @@ describe('ClubEditorComponent', () => {
     });
 
     it('reports every rejected file in a mixed batch and uploads the rest', async () => {
-      uploads.uploadImage.and.returnValue(of('https://cdn/ok.png'));
+      uploads.uploadImage.and.returnValue(of(uploaded('https://cdn/ok.png')));
       const batch = [
         new File(['x'], 'logo.svg', { type: 'image/svg+xml' }),
         new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'huge.png', { type: 'image/png' }),
@@ -405,7 +419,7 @@ describe('ClubEditorComponent', () => {
 
     it('names each valid file that does not fit', async () => {
       component.galleryUrls = ['1', '2', '3', '4'];
-      uploads.uploadImage.and.returnValue(of('https://cdn/new.png'));
+      uploads.uploadImage.and.returnValue(of(uploaded('https://cdn/new.png')));
 
       await component.onGallerySelected(
         input([await imageFile('a.png'), await imageFile('b.png')]).event,
@@ -416,7 +430,7 @@ describe('ClubEditorComponent', () => {
     });
 
     it('shows a pending tile from the local file until the upload lands', async () => {
-      const upload = new Subject<string>();
+      const upload = new Subject<UploadedImage>();
       uploads.uploadImage.and.returnValue(upload);
 
       await component.onGallerySelected(input([await imageFile('a.png')]).event);
@@ -427,7 +441,7 @@ describe('ClubEditorComponent', () => {
       const tile: HTMLImageElement = fixture.nativeElement.querySelector('img[alt=""]');
       expect(tile.src).toBe(component.pendingGalleryPreviews[0]);
 
-      upload.next('https://cdn/a.png');
+      upload.next(uploaded('https://cdn/a.png'));
       upload.complete();
 
       expect(component.pendingGalleryPreviews).toEqual([]);
@@ -436,14 +450,14 @@ describe('ClubEditorComponent', () => {
     });
 
     it('discards an upload that lands after the gallery filled up', async () => {
-      const upload = new Subject<string>();
+      const upload = new Subject<UploadedImage>();
       uploads.uploadImage.and.returnValue(upload);
       const revoke = spyOn(URL, 'revokeObjectURL').and.callThrough();
 
       await component.onGallerySelected(input([await imageFile('late.png')]).event);
       const preview = component.pendingGalleryPreviews[0];
       component.galleryUrls = ['1', '2', '3', '4', '5'];
-      upload.next('https://cdn/late.png');
+      upload.next(uploaded('https://cdn/late.png'));
       upload.complete();
 
       expect(component.galleryUrls).not.toContain('https://cdn/late.png');
@@ -462,7 +476,7 @@ describe('ClubEditorComponent', () => {
     });
 
     it('uploads without a pending tile where previews are unavailable', async () => {
-      uploads.uploadImage.and.returnValue(of('https://cdn/a.png'));
+      uploads.uploadImage.and.returnValue(of(uploaded('https://cdn/a.png')));
       const file = await imageFile('a.png');
       const original = Object.getOwnPropertyDescriptor(URL, 'createObjectURL')!;
       Object.defineProperty(URL, 'createObjectURL', { value: undefined, configurable: true });
@@ -478,7 +492,7 @@ describe('ClubEditorComponent', () => {
     });
 
     it('revokes a photo preview when the photo is removed', async () => {
-      uploads.uploadImage.and.returnValue(of('https://cdn/a.png'));
+      uploads.uploadImage.and.returnValue(of(uploaded('https://cdn/a.png')));
       await component.onGallerySelected(input([await imageFile('a.png')]).event);
       const preview = component.galleryPreviews.srcFor('https://cdn/a.png');
       const revoke = spyOn(URL, 'revokeObjectURL').and.callThrough();
@@ -492,7 +506,10 @@ describe('ClubEditorComponent', () => {
 
   it('revokes every preview on destroy', async () => {
     setup();
-    uploads.uploadImage.and.returnValues(of('https://cdn/icon.png'), of('https://cdn/g.png'));
+    uploads.uploadImage.and.returnValues(
+      of(uploaded('https://cdn/icon.png')),
+      of(uploaded('https://cdn/g.png')),
+    );
     await component.onDrop(drag([await imageFile('icon.png')]));
     await component.onGallerySelected(input([await imageFile('g.png')]).event);
     const revoke = spyOn(URL, 'revokeObjectURL').and.callThrough();
@@ -584,6 +601,98 @@ describe('ClubEditorComponent', () => {
       );
       expect(component.success).toBe('Club details saved.');
       expect(component.canDeactivate()).toBeTrue();
+    });
+
+    describe('quarantined uploads', () => {
+      const iconUrl = 'https://cdn/clubs/icon.webp';
+      const photoUrl = 'https://cdn/clubs/photo.webp';
+      let checks: Record<string, Subject<MediaAssetWatchEvent>>;
+
+      const settled = (
+        status: 'ready' | 'rejected',
+        rejectionReason: string | null = null,
+      ): MediaAssetWatchEvent => ({
+        kind: 'status',
+        asset: { id: 'x', status, url: null, rejectionReason },
+      });
+
+      async function uploadIconAndPhotoThenSave(): Promise<void> {
+        setup({ clubId: '7' });
+        checks = { 'asset-icon': new Subject(), 'asset-photo': new Subject() };
+        media.watch.and.callFake((id: string) => checks[id]);
+        uploads.uploadImage.and.returnValues(
+          of(uploaded(iconUrl, 'asset-icon')),
+          of(uploaded(photoUrl, 'asset-photo')),
+        );
+        await component.onDrop(drag([await imageFile('icon.png')]));
+        await component.onGallerySelected(input([await imageFile('photo.png')]).event);
+        management.updateClub.and.returnValue(of(envelope(makeClub({ id: 7 }))));
+
+        component.save();
+      }
+
+      it('follows new uploads only once the save has attached them', async () => {
+        setup({ clubId: '7' });
+        uploads.uploadImage.and.returnValue(of(uploaded(iconUrl, 'asset-icon')));
+        await component.onDrop(drag([await imageFile('icon.png')]));
+
+        expect(media.watch).not.toHaveBeenCalled();
+      });
+
+      it('labels each tile while it is checked, then shows the published image', async () => {
+        await uploadIconAndPhotoThenSave();
+
+        expect(media.watch.calls.allArgs()).toEqual([['asset-icon'], ['asset-photo']]);
+        expect(component.checkLabelFor(iconUrl)).toBe('Checking image…');
+        expect(component.checkLabelFor(photoUrl)).toBe('Checking image…');
+        fixture.detectChanges();
+        expect(fixture.nativeElement.textContent).toContain('Checking image…');
+
+        checks['asset-icon'].next(settled('ready'));
+        checks['asset-photo'].next(settled('ready'));
+
+        expect(component.slotPreviews.icon).toBeNull();
+        expect(component.galleryPreviews.srcFor(photoUrl)).toBe(photoUrl);
+        expect(component.checkLabelFor(iconUrl)).toBeNull();
+      });
+
+      it('drops a photo rejected after the save and says why', async () => {
+        await uploadIconAndPhotoThenSave();
+
+        checks['asset-photo'].next(settled('rejected', 'The image could not be read.'));
+
+        expect(component.galleryUrls).not.toContain(photoUrl);
+        expect(component.error).toBe('The image could not be read.');
+      });
+
+      it('does not follow an upload replaced before the save', async () => {
+        setup({ clubId: '7' });
+        uploads.uploadImage.and.returnValues(
+          of(uploaded('https://cdn/clubs/first.webp', 'asset-first')),
+          of(uploaded(iconUrl, 'asset-icon')),
+        );
+        await component.onDrop(drag([await imageFile('one.png')]));
+        await component.onDrop(drag([await imageFile('two.png')]));
+        management.updateClub.and.returnValue(of(envelope(makeClub({ id: 7 }))));
+
+        component.save();
+
+        expect(media.watch).toHaveBeenCalledOnceWith('asset-icon');
+      });
+
+      it('has no label for a slot without an image', () => {
+        setup({ clubId: '7' });
+
+        expect(component.checkLabelFor('')).toBeNull();
+      });
+
+      it('stops following a photo that is removed', async () => {
+        await uploadIconAndPhotoThenSave();
+
+        component.removeGalleryImage(0);
+
+        expect(checks['asset-photo'].observed).toBeFalse();
+      });
     });
 
     it('reports a failed save', () => {

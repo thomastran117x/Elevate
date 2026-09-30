@@ -13,8 +13,12 @@ import { ALL_CLUB_TYPES, ClubType } from '../../../models/club.types';
 import { toClubtypeAlias } from '../../../models/club-management.types';
 import { ClubManagementService } from '../../../services/club-management.service';
 import { ClubsService } from '../../../services/clubs.service';
+import { PillComponent } from '@shared/common/pill/pill.component';
+import { ImageFallbackDirective } from '@shared/upload/image-fallback.directive';
 import { IMAGE_ACCEPT, screenImageFile } from '@shared/upload/image-file-validation';
 import { LocalPreviews, createPreviewUrl, revokePreviewUrl } from '@shared/upload/image-preview';
+import { MediaAssetTracker } from '@shared/upload/media-asset-tracker';
+import { MediaAssetService } from '@shared/upload/media-asset.service';
 
 const NAME_MAX = 30;
 const DESCRIPTION_MAX = 30;
@@ -27,7 +31,7 @@ type ImageSlot = 'icon' | 'banner';
 @Component({
   selector: 'app-club-editor',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, PillComponent, ImageFallbackDirective],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './club-editor.component.html',
 })
@@ -82,6 +86,13 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
   readonly galleryPreviews = new LocalPreviews();
   /** Previews of gallery photos still uploading. */
   pendingGalleryPreviews: string[] = [];
+  /**
+   * Follows images attached by the last save until the server has validated them. A quarantined
+   * upload has nothing at its public URL until then, so each tile keeps its local preview.
+   */
+  private readonly mediaChecks = new MediaAssetTracker(inject(MediaAssetService));
+  /** Media asset ids of uploads the club does not hold yet, by public URL; attached on save. */
+  private readonly unattachedAssetIds = new Map<string, string | null>();
   /** One message per file the last gallery pick turned away. */
   galleryErrors: string[] = [];
   /** Bumped on every icon or banner pick, so only the latest pick for a slot may act. */
@@ -102,6 +113,7 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
   ) {
     // Pending gallery previews are released by their upload's finalize, which destroy triggers.
     this.destroyRef.onDestroy(() => {
+      this.mediaChecks.stopAll();
       this.setSlotPreview('icon', null);
       this.setSlotPreview('banner', null);
       this.galleryPreviews.releaseAll();
@@ -235,7 +247,14 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
     if (files) await this.uploadGalleryFiles(files);
   }
 
+  /** The label a tile overlays while its image is being checked, or null. */
+  checkLabelFor(url: string | null | undefined): string | null {
+    return url ? this.mediaChecks.labelFor(url) : null;
+  }
+
   removeGalleryImage(index: number): void {
+    this.mediaChecks.stop(this.galleryUrls[index]);
+    this.unattachedAssetIds.delete(this.galleryUrls[index]);
     this.galleryPreviews.release(this.galleryUrls[index]);
     this.galleryUrls = this.galleryUrls.filter((_, i) => i !== index);
     this.galleryDirty = true;
@@ -288,8 +307,9 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
         }),
       )
       .subscribe({
-        next: (publicUrl) => {
+        next: ({ publicUrl, mediaAssetId }) => {
           if (this.galleryUrls.length < MAX_GALLERY) {
+            this.unattachedAssetIds.set(publicUrl, mediaAssetId);
             this.galleryUrls = [...this.galleryUrls, publicUrl];
             this.galleryPreviews.adopt(publicUrl, preview);
             adopted = true;
@@ -335,7 +355,8 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
         finalize(() => setUploading(false)),
       )
       .subscribe({
-        next: (publicUrl) => {
+        next: ({ publicUrl, mediaAssetId }) => {
+          this.unattachedAssetIds.set(publicUrl, mediaAssetId);
           if (target === 'banner') {
             this.bannerUrl = publicUrl;
             this.bannerDirty = true;
@@ -418,11 +439,46 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
             return;
           }
           this.success = 'Club details saved.';
+          this.followSavedUploads();
         },
         error: (err) => {
           this.error = getApiClientMessage(err, 'Unable to save the club.');
         },
       });
+  }
+
+  /** The save just attached every new upload the club holds; follow each until it is live. */
+  private followSavedUploads(): void {
+    const held = [this.imageUrl, this.bannerUrl, ...this.galleryUrls].filter(Boolean);
+    for (const url of held) {
+      if (!this.unattachedAssetIds.has(url)) continue;
+      this.mediaChecks.watch(url, this.unattachedAssetIds.get(url), {
+        ready: (readyUrl) => this.onImagePublished(readyUrl),
+        rejected: (rejectedUrl, reason) => this.onImageRejected(rejectedUrl, reason),
+      });
+    }
+    // Anything left was replaced before the save and was never attached.
+    this.unattachedAssetIds.clear();
+  }
+
+  /** The image is live at its URL, so the tile can stop standing in with the local file. */
+  private onImagePublished(url: string): void {
+    if (url === this.imageUrl) this.setSlotPreview('icon', null);
+    if (url === this.bannerUrl) this.setSlotPreview('banner', null);
+    this.galleryPreviews.release(url);
+  }
+
+  private onImageRejected(url: string, reason: string): void {
+    if (url === this.imageUrl) this.setSlotPreview('icon', null);
+    if (url === this.bannerUrl) {
+      this.setSlotPreview('banner', null);
+      this.bannerUrl = '';
+    }
+    if (this.galleryUrls.includes(url)) {
+      this.galleryPreviews.release(url);
+      this.galleryUrls = this.galleryUrls.filter((current) => current !== url);
+    }
+    this.error = reason;
   }
 
   get nameControl() {

@@ -94,19 +94,28 @@ type ManagedEventApiPayload = ApiEnvelope<ManagedEventPayload> & {
   Data?: ManagedEventPayload | null;
 };
 
-type PresignedUploadPayload = ApiEnvelope<{
+type PresignedUploadData = {
   uploadUrl?: string;
   UploadUrl?: string;
   publicUrl?: string;
   PublicUrl?: string;
-}> & {
-  Data?: {
-    uploadUrl?: string;
-    UploadUrl?: string;
-    publicUrl?: string;
-    PublicUrl?: string;
-  } | null;
+  mediaAssetId?: string | null;
+  MediaAssetId?: string | null;
 };
+
+type PresignedUploadPayload = ApiEnvelope<PresignedUploadData> & {
+  Data?: PresignedUploadData | null;
+};
+
+/**
+ * An image the browser has finished uploading. `publicUrl` is what gets attached. When uploads
+ * are quarantined nothing is served there until the image has been attached and validated, and
+ * `mediaAssetId` is how to follow that; otherwise it is null and the image is live already.
+ */
+export interface UploadedImage {
+  publicUrl: string;
+  mediaAssetId: string | null;
+}
 
 type EventImagesPayload = ApiEnvelope<EventImagePayload[]> & {
   Data?: EventImagePayload[] | null;
@@ -203,7 +212,7 @@ export class EventsManagementService {
     return this.http.delete(`${this.base}/${eventId}`);
   }
 
-  uploadImage(clubId: number, file: File, eventId?: number): Observable<string> {
+  uploadImage(clubId: number, file: File, eventId?: number): Observable<UploadedImage> {
     return this.http
       .post<PresignedUploadPayload>(`${this.base}/images/presigned-url`, {
         clubId,
@@ -216,12 +225,13 @@ export class EventsManagementService {
           const payload = response.data ?? response.Data;
           const uploadUrl = payload?.uploadUrl ?? payload?.UploadUrl;
           const publicUrl = payload?.publicUrl ?? payload?.PublicUrl;
+          const mediaAssetId = payload?.mediaAssetId ?? payload?.MediaAssetId ?? null;
 
           if (!uploadUrl || !publicUrl) {
             throw new Error('The upload URL could not be prepared.');
           }
 
-          return new Observable<string>((subscriber) => {
+          return new Observable<UploadedImage>((subscriber) => {
             void fetch(uploadUrl, {
               method: 'PUT',
               headers: {
@@ -237,7 +247,7 @@ export class EventsManagementService {
                   throw new Error('The image upload failed.');
                 }
 
-                subscriber.next(publicUrl);
+                subscriber.next({ publicUrl, mediaAssetId });
                 subscriber.complete();
               })
               .catch((error) => subscriber.error(error));

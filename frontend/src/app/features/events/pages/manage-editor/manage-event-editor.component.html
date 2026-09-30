@@ -584,6 +584,7 @@
                 [eventId]="event!.id"
                 [images]="images"
                 [previewSrc]="srcForImage"
+                [checkLabel]="checkLabelForImage"
                 (imagesChange)="onGalleryChanged($event)"
               />
             } @else if (imageUrls.length === 0) {
@@ -596,7 +597,12 @@
               <div class="grid gap-4 sm:grid-cols-2">
                 @for (imageUrl of imageUrls; track imageUrl; let index = $index) {
                   <div class="overflow-hidden rounded-2xl border border-line bg-glass">
-                    <img [src]="srcForImage(imageUrl)" alt="" class="h-40 w-full object-cover" />
+                    <img
+                      appImageFallback
+                      [src]="srcForImage(imageUrl)"
+                      alt=""
+                      class="h-40 w-full object-cover"
+                    />
                     <div class="flex items-center justify-end p-2">
                       <button
                         type="button"

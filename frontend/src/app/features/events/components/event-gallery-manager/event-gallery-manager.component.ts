@@ -3,6 +3,9 @@ import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 
+import { PillComponent } from '@shared/common/pill/pill.component';
+import { ImageFallbackDirective } from '@shared/upload/image-fallback.directive';
+
 import { EventImage } from '../../models/event.types';
 import { EventsManagementService } from '../../services/events-management.service';
 
@@ -17,7 +20,7 @@ import { EventsManagementService } from '../../services/events-management.servic
 @Component({
   selector: 'app-event-gallery-manager',
   standalone: true,
-  imports: [DragDropModule, FormsModule],
+  imports: [DragDropModule, FormsModule, PillComponent, ImageFallbackDirective],
   templateUrl: './event-gallery-manager.component.html',
 })
 export class EventGalleryManagerComponent implements OnChanges {
@@ -29,6 +32,11 @@ export class EventGalleryManagerComponent implements OnChanges {
    * its local file rather than waiting on the public URL.
    */
   @Input() previewSrc: (url: string) => string = (url) => url;
+  /**
+   * The label to overlay on an image the server is still checking, or null. Lets the host say
+   * "Checking image…" over a just-attached upload that is not yet published.
+   */
+  @Input() checkLabel: (url: string) => string | null = () => null;
 
   @Output() imagesChange = new EventEmitter<EventImage[]>();
 
