@@ -889,6 +889,58 @@ paths:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
         - { }
+  '/api/media/{publicId}':
+    get:
+      tags:
+        - media
+      summary: Get the validation status of an uploaded image
+      description: 'Reports where an upload issued by `POST /api/events/images/presigned-url` is in validation, by its `mediaAssetId`. `status` is a number: 0 pending upload, 1 uploaded, 2 processing, 3 ready, 4 rejected, 5 needs review. `url` is set only once the image is ready, and `rejectionReason` only once it has been rejected. Visible to the uploader and to managers of the club the upload was issued for; everyone else gets 404, whether or not the id exists. Meant for polling while an editor waits on an attached image, so it is limited only by the global per-user rate limit.'
+      operationId: Media_GetMediaAsset_get
+      parameters:
+        - name: publicId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Guid'
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfMediaAssetResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfMediaAssetResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfMediaAssetResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - { }
   '/api/events/{clubId}':
     post:
       tags:
@@ -2381,7 +2433,7 @@ paths:
       tags:
         - events
       summary: Get a presigned URL for image upload
-      description: 'Returns a short-lived presigned URL for direct upload to Azure Blob Storage. After uploading, call `POST /api/events/{eventId}/images` with the resulting image URL to attach the image to an event.'
+      description: 'Returns a short-lived, write-once presigned URL for direct upload to Azure Blob Storage, and the `publicUrl` to attach once the upload finishes (for example with `POST /api/events/{eventId}/images`, or in an event, draft, series or club payload). When uploads are quarantined, the bytes land in a private container and nothing exists at `publicUrl` until the image has been attached and validated: attaching decodes and re-encodes it to WebP, strips its metadata, and publishes it there. The response then carries `mediaAssetId`, which `GET /api/media/{publicId}` reports on. Without quarantine, `mediaAssetId` is null and the upload itself is what `publicUrl` serves.'
       operationId: Events_GetPresignedUploadUrl_post
       requestBody:
         content:
@@ -13532,6 +13584,31 @@ components:
           description: Optional metadata such as pagination or response source details.
           $ref: '#/components/schemas/Object'
       description: Standard JSON envelope returned by all API endpoints.
+    ApiResponseOfMediaAssetResponse:
+      type: object
+      properties:
+        success:
+          description: Indicates whether the request succeeded.
+          $ref: '#/components/schemas/Boolean'
+        message:
+          description: Human-readable message summarizing the outcome.
+          $ref: '#/components/schemas/String'
+        data:
+          oneOf:
+            - type: 'null'
+            - description: Endpoint-specific response payload.
+              $ref: '#/components/schemas/MediaAssetResponse'
+          description: Endpoint-specific response payload. `null` on error responses.
+        error:
+          oneOf:
+            - type: 'null'
+            - description: Structured error details when the request fails.
+              $ref: '#/components/schemas/ApiError'
+          description: Structured error details. Present only when `success` is `false`.
+        meta:
+          description: Optional metadata such as pagination or response source details.
+          $ref: '#/components/schemas/Object'
+      description: Standard JSON envelope returned by all API endpoints.
     ApiResponseOfMfaChallengeResponse:
       type: object
       properties:
@@ -17005,6 +17082,9 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/String'
+    Guid:
+      type: string
+      format: uuid
     IEnumerableOfClubDiscussionResponse:
       type: array
       items:
@@ -17402,6 +17482,29 @@ components:
         availableTransitions:
           description: Every lifecycle move available from the current state.
           $ref: '#/components/schemas/ListOfEventLifecycleTransitionResponse'
+    MediaAssetResponse:
+      type: object
+      properties:
+        id:
+          description: 'The asset''s public id, as returned with the presigned upload.'
+          $ref: '#/components/schemas/Guid'
+        status:
+          description: "Serialised as a number and decoded by position on the client, so its members are only\r\never appended."
+          $ref: '#/components/schemas/MediaAssetStatus'
+        url:
+          oneOf:
+            - type: 'null'
+            - description: The published image. Set only once the asset is Ready; nothing is there before.
+              $ref: '#/components/schemas/String'
+        rejectionReason:
+          oneOf:
+            - type: 'null'
+            - description: 'Why the upload was refused, when it was.'
+              $ref: '#/components/schemas/String'
+      description: 'Where an upload is in validation, for the editor that is waiting on it.'
+    MediaAssetStatus:
+      type: integer
+      description: Where an uploaded image is in its trip from the private quarantine container to a public URL.
     MergeRecentlyViewedItem:
       type: object
       properties:
@@ -18042,6 +18145,11 @@ components:
           $ref: '#/components/schemas/String'
         expiresAt:
           $ref: '#/components/schemas/DateTimeOffset'
+        mediaAssetId:
+          oneOf:
+            - type: 'null'
+            - description: "The media asset tracking this upload, for polling its validation status. Null when\r\nuploads are not quarantined, in which case the image is usable as soon as it is\r\nattached."
+              $ref: '#/components/schemas/Guid'
     PresignedUrlRequest:
       required:
         - fileName
@@ -18663,6 +18771,8 @@ tags:
     description: 'Club management, discovery, membership, reviews, staff, and club content.'
   - name: events
     description: 'Event CRUD, search, drafts, invitations, registrations, analytics, and assets.'
+  - name: media
+    description: Validation status of uploaded images.
   - name: payments
     description: 'Stripe checkout, payment retrieval, refunds, and webhook processing.'
   - name: users

@@ -4,9 +4,11 @@ using System.Net.Http.Json;
 
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
+using backend.main.features.clubs.staff;
 using backend.main.features.events;
 using backend.main.features.events.contracts.responses;
 using backend.main.features.media;
+using backend.main.features.media.contracts.responses;
 
 using backend.tests.Integration.Infrastructure;
 
@@ -22,9 +24,10 @@ namespace backend.tests.Integration.Features.Storage;
 
 /// <summary>
 /// Presigned uploads with <c>storage.quarantine</c> on (the default): bytes land in a private
-/// container and reach a public URL only once they have been validated and re-encoded.
+/// container and reach a public URL only once they have been validated and re-encoded, and
+/// <c>GET /api/media/{publicId}</c> reports where an upload is in that.
 /// </summary>
-public class QuarantinedUploadTests
+public class MediaAssetEndpointsTests
 {
     [Fact]
     public async Task PresignedUpload_ShouldTargetQuarantine_AndPublishNothingUntilAttached()
@@ -169,6 +172,113 @@ public class QuarantinedUploadTests
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await FindAssetAsync(app, issuedForA.MediaAssetId!.Value)).Status.Should().Be(MediaAssetStatus.PendingUpload);
         app.BlobStorage.Quarantine.Should().ContainKey(app.BlobStorage.QuarantinePathFor(issuedForA.PublicUrl));
+    }
+
+    [Fact]
+    public async Task GetMediaAsset_ShouldTrackAnUploadFromPendingToReady_ForItsUploader()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var session = await SignUpAsync(app, "media-status-owner@example.com");
+        var club = await CreateClubAsync(app, session.AccessToken, "Media Status Club");
+        var ev = await CreateEventAsync(app, session.AccessToken, club.Id, "Media Status Event");
+        var upload = await PresignAsync(app, session.AccessToken, club.Id, ev.Id);
+
+        var pending = await GetStatusAsync(app, session.AccessToken, upload.MediaAssetId!.Value);
+        pending.Status.Should().Be(MediaAssetStatus.PendingUpload);
+        pending.Url.Should().BeNull();
+
+        var attach = await app.Client.SendAsync(Authorized(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/images",
+            session.AccessToken,
+            JsonContent.Create(new { imageUrl = upload.PublicUrl })));
+        attach.StatusCode.Should().Be(HttpStatusCode.Created, await app.DescribeFailureAsync(attach));
+
+        var ready = await GetStatusAsync(app, session.AccessToken, upload.MediaAssetId!.Value);
+        ready.Id.Should().Be(upload.MediaAssetId!.Value);
+        ready.Status.Should().Be(MediaAssetStatus.Ready);
+        ready.Url.Should().Be(upload.PublicUrl);
+        ready.RejectionReason.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetMediaAsset_ShouldReportTheReason_ForARejectedUpload()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var session = await SignUpAsync(app, "media-status-rejected@example.com");
+        var club = await CreateClubAsync(app, session.AccessToken, "Media Rejected Club");
+        var ev = await CreateEventAsync(app, session.AccessToken, club.Id, "Media Rejected Event");
+        var upload = await PresignAsync(app, session.AccessToken, club.Id, ev.Id);
+        app.BlobStorage.StageQuarantineUpload(upload.PublicUrl, [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B]);
+
+        await app.Client.SendAsync(Authorized(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/images",
+            session.AccessToken,
+            JsonContent.Create(new { imageUrl = upload.PublicUrl })));
+
+        var rejected = await GetStatusAsync(app, session.AccessToken, upload.MediaAssetId!.Value);
+        rejected.Status.Should().Be(MediaAssetStatus.Rejected);
+        rejected.RejectionReason.Should().Be("Only JPEG, PNG, WEBP, and GIF images are supported.");
+        rejected.Url.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetMediaAsset_ShouldShowAClubManager_ButAnswerNotFoundToEveryoneElse()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var ownerSession = await SignUpAsync(app, "media-status-club-owner@example.com");
+        var managerSession = await SignUpAsync(app, "media-status-manager@example.com");
+        var strangerSession = await SignUpAsync(app, "media-status-stranger@example.com");
+        var owner = (await app.FindUserByEmailAsync("media-status-club-owner@example.com"))!;
+        var manager = (await app.FindUserByEmailAsync("media-status-manager@example.com"))!;
+
+        var club = await CreateClubAsync(app, ownerSession.AccessToken, "Media Managed Club");
+        await app.AddClubStaffAsync(club.Id, manager.Id, owner.Id, ClubStaffRole.Manager);
+        var upload = await PresignAsync(app, ownerSession.AccessToken, club.Id);
+
+        var asManager = await app.GetWithBearerAsync($"/api/media/{upload.MediaAssetId}", managerSession.AccessToken);
+        asManager.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(asManager));
+
+        // 404, not 403: a stranger must not learn that the id exists.
+        var asStranger = await app.GetWithBearerAsync($"/api/media/{upload.MediaAssetId}", strangerSession.AccessToken);
+        asStranger.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var unknown = await app.GetWithBearerAsync($"/api/media/{Guid.NewGuid()}", strangerSession.AccessToken);
+        unknown.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await unknown.Content.ReadAsStringAsync()).Should().Be(await asStranger.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task GetMediaAsset_ShouldRequireSignIn()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+
+        var response = await app.Client.GetAsync($"/api/media/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetMediaAsset_ShouldNotExist_WhenQuarantineIsOff()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync(configurationOverrides: AuthApiTestApp.WithoutQuarantine);
+        var session = await SignUpAsync(app, "media-status-flag-off@example.com");
+        var club = await CreateClubAsync(app, session.AccessToken, "Media Flag Off Club");
+
+        var upload = await PresignAsync(app, session.AccessToken, club.Id);
+        upload.MediaAssetId.Should().BeNull("with quarantine off there is nothing to poll");
+        upload.PublicUrl.Should().EndWith(".png", "the pre-quarantine upload keeps the uploader's format");
+
+        var response = await app.GetWithBearerAsync($"/api/media/{Guid.NewGuid()}", session.AccessToken);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    private static async Task<MediaAssetResponse> GetStatusAsync(AuthApiTestApp app, string accessToken, Guid mediaAssetId)
+    {
+        var response = await app.GetWithBearerAsync($"/api/media/{mediaAssetId}", accessToken);
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(response));
+        return (await app.ReadApiResponseAsync<MediaAssetResponse>(response)).Data!;
     }
 
     private static async Task<AuthenticatedSessionResponse> SignUpAsync(AuthApiTestApp app, string email) =>

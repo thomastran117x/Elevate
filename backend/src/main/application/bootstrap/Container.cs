@@ -277,6 +277,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<OrphanBlobCleanupRunner>();
             services.AddScoped<MediaValidationPipeline>();
             services.AddScoped<QuarantineReaperRunner>();
+            services.AddScoped<IMediaAssetQueryService, MediaAssetQueryService>();
 
             // Off reverts uploads to the presigned-into-public-container path that preceded
             // quarantine, attach-time byte checks included.

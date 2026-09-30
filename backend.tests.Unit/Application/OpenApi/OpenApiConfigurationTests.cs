@@ -35,7 +35,7 @@ public class OpenApiConfigurationTests
         document.Components!.SecuritySchemes.Should().ContainKey("bearerAuth");
         document.Components.SecuritySchemes["bearerAuth"].Scheme.Should().Be("bearer");
         document.Components.SecuritySchemes["bearerAuth"].BearerFormat.Should().Be("JWT");
-        document.Tags.Select(tag => tag.Name).Should().Equal("auth", "clubs", "events", "payments", "users", "admin");
+        document.Tags.Select(tag => tag.Name).Should().Equal("auth", "clubs", "events", "media", "payments", "users", "admin");
     }
 
     [Fact]
