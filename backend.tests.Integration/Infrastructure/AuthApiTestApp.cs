@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
+using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
@@ -21,6 +22,7 @@ using backend.main.features.clubs.staff;
 using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
+using backend.main.features.media;
 using backend.main.features.payment;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
@@ -34,6 +36,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace backend.tests.Integration.Infrastructure;
 
@@ -79,11 +82,28 @@ public sealed class AuthApiTestApp : IAsyncDisposable
     }
 
     /// <summary>
-    /// Configuration for an app with <c>storage.quarantine</c> off, where presigned uploads go
-    /// straight into the public container as they did before quarantine existed.
+    /// An app with <c>storage.quarantine</c> off, where presigned uploads go straight into the
+    /// public container as they did before quarantine existed.
     /// </summary>
-    public static IReadOnlyDictionary<string, string?> WithoutQuarantine { get; } =
-        new Dictionary<string, string?> { ["FeatureFlags:storage.quarantine"] = "false" };
+    /// <remarks>
+    /// The flag has to be turned off twice. The configuration override reaches everything that
+    /// reads flags at runtime — MVC discovery, so <c>/api/media</c> disappears. But
+    /// <c>AddApplicationServices</c> chooses flag-gated implementations while <c>Program</c> is
+    /// registering services, before <see cref="Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory{TEntryPoint}"/>
+    /// layers test configuration in, so the registration is swapped here as well. A real
+    /// deployment sets the flag through the environment, which both see.
+    /// </remarks>
+    public static Task<AuthApiTestApp> CreateWithoutQuarantineAsync() =>
+        CreateAsync(
+            serviceOverrides: services =>
+            {
+                services.RemoveAll<IMediaAssetService>();
+                services.AddScoped<IMediaAssetService, DisabledMediaAssetService>();
+            },
+            configurationOverrides: new Dictionary<string, string?>
+            {
+                ["FeatureFlags:storage.quarantine"] = "false"
+            });
 
     public static async Task<AuthApiTestApp> CreateAsync(
         Action<IServiceCollection>? serviceOverrides = null,

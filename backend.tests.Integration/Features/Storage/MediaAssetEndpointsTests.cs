@@ -262,7 +262,7 @@ public class MediaAssetEndpointsTests
     [Fact]
     public async Task GetMediaAsset_ShouldNotExist_WhenQuarantineIsOff()
     {
-        await using var app = await AuthApiTestApp.CreateAsync(configurationOverrides: AuthApiTestApp.WithoutQuarantine);
+        await using var app = await AuthApiTestApp.CreateWithoutQuarantineAsync();
         var session = await SignUpAsync(app, "media-status-flag-off@example.com");
         var club = await CreateClubAsync(app, session.AccessToken, "Media Flag Off Club");
 

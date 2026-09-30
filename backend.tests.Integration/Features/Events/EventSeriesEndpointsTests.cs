@@ -208,7 +208,7 @@ public class EventSeriesEndpointsTests
         // the same attach-time checks a single-event update does.
         // Pins the behaviour storage.quarantine=false must keep: presigned straight into the
         // public container, bytes checked in place. MediaAssetEndpointsTests covers quarantine.
-        await using var app = await AuthApiTestApp.CreateAsync(configurationOverrides: AuthApiTestApp.WithoutQuarantine);
+        await using var app = await AuthApiTestApp.CreateWithoutQuarantineAsync();
         var (organizer, _) = await CreateUserSessionAsync(app, "series-image-bytes@example.com", "Organizer");
         var club = await CreateClubAsync(app, organizer.AccessToken, "Series Upload Limits Club");
         var series = await CreateSeriesAsync(app, organizer.AccessToken, club.Id, occurrenceCount: 3);

@@ -1028,7 +1028,7 @@ public class ClubEndpointsTests
         // path there is — and the one a SAS leaves entirely unbounded.
         // Pins the behaviour storage.quarantine=false must keep: presigned straight into the
         // public container, bytes checked in place. MediaAssetEndpointsTests covers quarantine.
-        await using var app = await AuthApiTestApp.CreateAsync(configurationOverrides: AuthApiTestApp.WithoutQuarantine);
+        await using var app = await AuthApiTestApp.CreateWithoutQuarantineAsync();
         var (ownerSession, _) = await CreateUserSessionAsync(app, "clubs-image-oversized@example.com", "Organizer");
 
         var oversized = await app.CreateClubImageUrlAsync(ownerSession.AccessToken, "oversized.png");
@@ -1058,7 +1058,7 @@ public class ClubEndpointsTests
     {
         // Pins the behaviour storage.quarantine=false must keep: presigned straight into the
         // public container, bytes checked in place. MediaAssetEndpointsTests covers quarantine.
-        await using var app = await AuthApiTestApp.CreateAsync(configurationOverrides: AuthApiTestApp.WithoutQuarantine);
+        await using var app = await AuthApiTestApp.CreateWithoutQuarantineAsync();
         var (ownerSession, _) = await CreateUserSessionAsync(app, "clubs-image-bytes@example.com", "Organizer");
 
         var club = await CreateClubAsync(app, ownerSession.AccessToken, "Byte Checked Club");
@@ -1090,7 +1090,7 @@ public class ClubEndpointsTests
     {
         // Pins the behaviour storage.quarantine=false must keep: presigned straight into the
         // public container, bytes checked in place. MediaAssetEndpointsTests covers quarantine.
-        await using var app = await AuthApiTestApp.CreateAsync(configurationOverrides: AuthApiTestApp.WithoutQuarantine);
+        await using var app = await AuthApiTestApp.CreateWithoutQuarantineAsync();
         var (ownerSession, _) = await CreateUserSessionAsync(app, "clubs-image-reattach@example.com", "Organizer");
 
         var club = await CreateClubAsync(app, ownerSession.AccessToken, "Reattach Image Club");

@@ -188,34 +188,35 @@ describe('MediaAssetService', () => {
       httpMock.expectNone(url);
     });
   });
+});
 
-  describe('helpers', () => {
-    it('treats only ready and rejected as settled', () => {
-      expect(isSettled('ready')).toBeTrue();
-      expect(isSettled('rejected')).toBeTrue();
-      expect(isSettled('processing')).toBeFalse();
-      expect(isSettled('needsReview')).toBeFalse();
-    });
+// Pure helpers: no TestBed, so they sit outside the service's HTTP verification.
+describe('MediaAssetService helpers', () => {
+  it('treats only ready and rejected as settled', () => {
+    expect(isSettled('ready')).toBeTrue();
+    expect(isSettled('rejected')).toBeTrue();
+    expect(isSettled('processing')).toBeFalse();
+    expect(isSettled('needsReview')).toBeFalse();
+  });
 
-    it('schedules fast reads for ten seconds, slow ones after, and none past a minute', () => {
-      expect(nextPollDelay(0)).toBe(1500);
-      expect(nextPollDelay(9000)).toBe(1500);
-      expect(nextPollDelay(10_500)).toBe(4000);
-      expect(nextPollDelay(56_000)).toBe(4000);
-      expect(nextPollDelay(58_500)).toBeNull();
-    });
+  it('schedules fast reads for ten seconds, slow ones after, and none past a minute', () => {
+    expect(nextPollDelay(0)).toBe(1500);
+    expect(nextPollDelay(9000)).toBe(1500);
+    expect(nextPollDelay(10_500)).toBe(4000);
+    expect(nextPollDelay(56_000)).toBe(4000);
+    expect(nextPollDelay(58_500)).toBeNull();
+  });
 
-    it('rejects payloads without an id or a known status', () => {
-      expect(normalizeMediaAsset(null)).toBeNull();
-      expect(normalizeMediaAsset({ status: 3 })).toBeNull();
-      expect(normalizeMediaAsset({ id: 'a', status: -1 })).toBeNull();
-      expect(normalizeMediaAsset({ id: 'a', status: 1.5 })).toBeNull();
-      expect(normalizeMediaAsset({ id: 'a', status: 5 })).toEqual({
-        id: 'a',
-        status: 'needsReview',
-        url: null,
-        rejectionReason: null,
-      });
+  it('rejects payloads without an id or a known status', () => {
+    expect(normalizeMediaAsset(null)).toBeNull();
+    expect(normalizeMediaAsset({ status: 3 })).toBeNull();
+    expect(normalizeMediaAsset({ id: 'a', status: -1 })).toBeNull();
+    expect(normalizeMediaAsset({ id: 'a', status: 1.5 })).toBeNull();
+    expect(normalizeMediaAsset({ id: 'a', status: 5 })).toEqual({
+      id: 'a',
+      status: 'needsReview',
+      url: null,
+      rejectionReason: null,
     });
   });
 });

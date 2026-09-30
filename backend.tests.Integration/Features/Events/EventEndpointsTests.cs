@@ -250,7 +250,7 @@ public class EventEndpointsTests
     {
         // Pins the behaviour storage.quarantine=false must keep: presigned straight into the
         // public container, bytes checked in place. MediaAssetEndpointsTests covers quarantine.
-        await using var app = await AuthApiTestApp.CreateAsync(configurationOverrides: AuthApiTestApp.WithoutQuarantine);
+        await using var app = await AuthApiTestApp.CreateWithoutQuarantineAsync();
         var (ownerSession, _) = await CreateUserSessionAsync(app, "events-images-bytes@example.com", "Organizer");
 
         var club = await CreateClubAsync(app, ownerSession.AccessToken, "Upload Limits Club");
@@ -296,7 +296,7 @@ public class EventEndpointsTests
     {
         // Pins the behaviour storage.quarantine=false must keep: presigned straight into the
         // public container, bytes checked in place. MediaAssetEndpointsTests covers quarantine.
-        await using var app = await AuthApiTestApp.CreateAsync(configurationOverrides: AuthApiTestApp.WithoutQuarantine);
+        await using var app = await AuthApiTestApp.CreateWithoutQuarantineAsync();
         var (ownerSession, _) = await CreateUserSessionAsync(app, "events-images-restamp@example.com", "Organizer");
 
         var club = await CreateClubAsync(app, ownerSession.AccessToken, "Restamp Club");
@@ -329,7 +329,7 @@ public class EventEndpointsTests
     {
         // Pins the behaviour storage.quarantine=false must keep: presigned straight into the
         // public container, bytes checked in place. MediaAssetEndpointsTests covers quarantine.
-        await using var app = await AuthApiTestApp.CreateAsync(configurationOverrides: AuthApiTestApp.WithoutQuarantine);
+        await using var app = await AuthApiTestApp.CreateWithoutQuarantineAsync();
         var (ownerSession, _) = await CreateUserSessionAsync(app, "events-images-headers@example.com", "Organizer");
 
         var club = await CreateClubAsync(app, ownerSession.AccessToken, "Header Reset Club");
@@ -368,7 +368,7 @@ public class EventEndpointsTests
     {
         // Pins the behaviour storage.quarantine=false must keep: presigned straight into the
         // public container, bytes checked in place. MediaAssetEndpointsTests covers quarantine.
-        await using var app = await AuthApiTestApp.CreateAsync(configurationOverrides: AuthApiTestApp.WithoutQuarantine);
+        await using var app = await AuthApiTestApp.CreateWithoutQuarantineAsync();
         var (ownerSession, _) = await CreateUserSessionAsync(app, "events-draft-bytes@example.com", "Organizer");
 
         var club = await CreateClubAsync(app, ownerSession.AccessToken, "Draft Limits Club");
@@ -404,7 +404,7 @@ public class EventEndpointsTests
     {
         // Pins the behaviour storage.quarantine=false must keep: presigned straight into the
         // public container, bytes checked in place. MediaAssetEndpointsTests covers quarantine.
-        await using var app = await AuthApiTestApp.CreateAsync(configurationOverrides: AuthApiTestApp.WithoutQuarantine);
+        await using var app = await AuthApiTestApp.CreateWithoutQuarantineAsync();
         var (ownerSession, _) = await CreateUserSessionAsync(app, "events-reattach@example.com", "Organizer");
 
         var club = await CreateClubAsync(app, ownerSession.AccessToken, "Reattach Club");
