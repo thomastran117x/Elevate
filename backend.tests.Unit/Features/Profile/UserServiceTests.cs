@@ -8,6 +8,7 @@ using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.storage;
+using backend.main.shared.storage.imaging;
 
 using backend.tests.Unit.Support;
 
@@ -97,14 +98,15 @@ public class UserServiceTests
     public async Task UpdateAvatarAsync_ShouldUploadAndPersistAvatarAndInvalidateCache()
     {
         var blobService = new Mock<IAzureBlobService>();
-        blobService.Setup(service => service.UploadImageAsync(It.IsAny<IFormFile>(), "users"))
-            .ReturnsAsync("https://cdn.test/users/avatar.png");
+        blobService.Setup(service => service.UploadProcessedImageAsync(ProcessedAvatar, "users", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://cdn.test/users/avatar.webp");
 
         var repository = new Mock<IUserRepository>();
-        repository.Setup(repo => repo.GetUserAsync(7))
-            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
-        repository.Setup(repo => repo.UpdatePartialAsync(It.Is<User>(user => user.Avatar == "https://cdn.test/users/avatar.png")))
-            .ReturnsAsync((User user) => user);
+        repository.Setup(repo => repo.ExistsAsync(7, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        repository.Setup(repo => repo.SwapAvatarAsync(7, "https://cdn.test/users/avatar.webp"))
+            .ReturnsAsync((int id, string url) => new AvatarSwapRecord(
+                new TestUserBuilder().WithId(id).WithEmail("user@example.com").WithAvatar(url).Build(),
+                null));
 
         var refreshCache = new Mock<IRefreshAheadCache>();
         var service = CreateService(userRepository: repository, blobService: blobService, refreshCache: refreshCache);
@@ -112,7 +114,7 @@ public class UserServiceTests
 
         var updated = await service.UpdateAvatarAsync(7, formFile);
 
-        updated!.Avatar.Should().Be("https://cdn.test/users/avatar.png");
+        updated!.Avatar.Should().Be("https://cdn.test/users/avatar.webp");
         refreshCache.Verify(c => c.RemoveAsync("user:7"), Times.Once);
     }
 
@@ -237,16 +239,15 @@ public class UserServiceTests
     }
 
     [Fact]
-    public async Task UpdateAvatarAsync_WhenPersistFails_ShouldDeleteUploadedBlobAndRethrow()
+    public async Task UpdateAvatarAsync_WhenPersistFailsAmbiguously_ShouldLeaveTheBlobForOrphanCleanup()
     {
         var blobService = new Mock<IAzureBlobService>();
-        blobService.Setup(service => service.UploadImageAsync(It.IsAny<IFormFile>(), "users"))
-            .ReturnsAsync("https://cdn.test/users/new.png");
+        blobService.Setup(service => service.UploadProcessedImageAsync(ProcessedAvatar, "users", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://cdn.test/users/new.webp");
 
         var repository = new Mock<IUserRepository>();
-        repository.Setup(repo => repo.GetUserAsync(7))
-            .ReturnsAsync(new TestUserBuilder().WithId(7).WithEmail("user@example.com").Build());
-        repository.Setup(repo => repo.UpdatePartialAsync(It.IsAny<User>()))
+        repository.Setup(repo => repo.ExistsAsync(7, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
             .ThrowsAsync(new InvalidOperationException("db down"));
 
         var service = CreateService(userRepository: repository, blobService: blobService);
@@ -254,9 +255,111 @@ public class UserServiceTests
 
         var act = () => service.UpdateAvatarAsync(7, formFile);
 
-        // The persist failure surfaces, but the just-uploaded blob is cleaned up first.
+        // A dropped connection or an exhausted retry leaves it unknown whether the swap committed.
+        // Deleting here would break the avatar of an account that now points at this blob, so the
+        // failure surfaces and OrphanBlobCleanupRunner decides: it removes only blobs no row
+        // references.
         await act.Should().ThrowAsync<InvalidOperationException>();
-        blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/users/new.png"), Times.Once);
+        blobService.Verify(b => b.DeleteBlobAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateAvatarAsync_ShouldRejectAMissingAccount_BeforeProcessingOrUploading()
+    {
+        // A token can outlive its account. Without this check the request would take one of the few
+        // processing slots, decode a full-size image and write a blob, only to be told 404.
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.ExistsAsync(7, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+
+        var blobService = new Mock<IAzureBlobService>();
+        var processor = new Mock<IImageProcessor>();
+        var service = CreateService(userRepository: repository, blobService: blobService, imageProcessor: processor);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
+
+        var act = () => service.UpdateAvatarAsync(7, formFile);
+
+        await act.Should().ThrowAsync<ResourceNotFoundException>();
+        processor.Verify(
+            p => p.ProcessAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        blobService.Verify(
+            b => b.UploadProcessedImageAsync(It.IsAny<ProcessedImage>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateAvatarAsync_WhenPersistFailsAmbiguously_ShouldStillEvictTheCachedUser()
+    {
+        // The swap may have committed, so a cached profile may now carry the old avatar URL.
+        // Evicting is safe whichever way it went.
+        var blobService = new Mock<IAzureBlobService>();
+        blobService.Setup(service => service.UploadProcessedImageAsync(
+                It.IsAny<ProcessedImage>(), "users", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://cdn.test/users/new.webp");
+
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.ExistsAsync(7, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("connection reset"));
+
+        var refreshCache = new Mock<IRefreshAheadCache>();
+        var service = CreateService(userRepository: repository, blobService: blobService, refreshCache: refreshCache);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
+
+        var act = () => service.UpdateAvatarAsync(7, formFile);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        refreshCache.Verify(c => c.RemoveAsync("user:7"), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateAvatarAsync_WhenTheSwapWasSuperseded_ShouldDeleteBothUnreferencedBlobs()
+    {
+        // The swap wrote, could not confirm it, and another upload took over. This upload is
+        // unreferenced, and so is the URL that write replaced: nothing else reports it, and the
+        // sweeper that would have caught it is opt-in.
+        var blobService = new Mock<IAzureBlobService>();
+        blobService.Setup(service => service.UploadProcessedImageAsync(
+                It.IsAny<ProcessedImage>(), "users", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://cdn.test/users/mine.webp");
+
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.ExistsAsync(7, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
+            .ThrowsAsync(new AvatarSwapSupersededException("https://cdn.test/users/original.webp"));
+
+        var service = CreateService(userRepository: repository, blobService: blobService);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
+
+        var act = () => service.UpdateAvatarAsync(7, formFile);
+
+        await act.Should().ThrowAsync<AvatarSwapSupersededException>();
+        blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/users/mine.webp"), Times.Once);
+        blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/users/original.webp"), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateAvatarAsync_WhenEveryAttemptLosesTheRace_ShouldDeleteTheUpload()
+    {
+        // A conflict means the swap wrote nothing at all, so the upload is unreferenced for
+        // certain and deleting it cannot break anyone's avatar.
+        var blobService = new Mock<IAzureBlobService>();
+        blobService.Setup(service => service.UploadProcessedImageAsync(
+                It.IsAny<ProcessedImage>(), "users", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://cdn.test/users/contended.webp");
+
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.ExistsAsync(7, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
+            .ThrowsAsync(new ConflictException("The avatar was changed by another request. Try again."));
+
+        var service = CreateService(userRepository: repository, blobService: blobService);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
+
+        var act = () => service.UpdateAvatarAsync(7, formFile);
+
+        await act.Should().ThrowAsync<ConflictException>();
+        blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/users/contended.webp"), Times.Once);
     }
 
     [Fact]
@@ -281,10 +384,179 @@ public class UserServiceTests
         result[0].ClubId.Should().Be(9);
     }
 
+    [Fact]
+    public async Task UpdateAvatarAsync_ShouldStoreOnlyTheProcessedImage()
+    {
+        var blobService = new Mock<IAzureBlobService>();
+        blobService.Setup(service => service.UploadProcessedImageAsync(
+                It.IsAny<ProcessedImage>(), "users", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://cdn.test/users/avatar.webp");
+
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.ExistsAsync(7, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
+            .ReturnsAsync((int id, string url) => new AvatarSwapRecord(
+                new TestUserBuilder().WithId(id).WithEmail("user@example.com").WithAvatar(url).Build(),
+                null));
+
+        var processor = ProcessorReturning(ProcessedAvatar);
+        var service = CreateService(userRepository: repository, blobService: blobService, imageProcessor: processor);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
+
+        await service.UpdateAvatarAsync(7, formFile);
+
+        processor.Verify(
+            p => p.ProcessAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+        blobService.Verify(b => b.UploadProcessedImageAsync(
+            ProcessedAvatar, "users", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateAvatarAsync_ShouldCancelProcessingButNeverTheUpload()
+    {
+        // Processing slots are process-wide, so an abandoned upload must be cancellable rather
+        // than decoding to completion for a client that has disconnected. The upload is not: a
+        // cancelled Put Blob can still commit, and without its URL nothing could delete it.
+        using var cts = new CancellationTokenSource();
+        var token = cts.Token;
+
+        var blobService = new Mock<IAzureBlobService>();
+        blobService.Setup(service => service.UploadProcessedImageAsync(ProcessedAvatar, "users", CancellationToken.None))
+            .ReturnsAsync("https://cdn.test/users/avatar.webp");
+
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.ExistsAsync(7, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
+            .ReturnsAsync((int id, string url) => new AvatarSwapRecord(
+                new TestUserBuilder().WithId(id).WithEmail("user@example.com").WithAvatar(url).Build(),
+                null));
+
+        var processor = ProcessorReturning(ProcessedAvatar);
+        var service = CreateService(userRepository: repository, blobService: blobService, imageProcessor: processor);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
+
+        await service.UpdateAvatarAsync(7, formFile, token);
+
+        processor.Verify(p => p.ProcessAsync(It.IsAny<Stream>(), token), Times.Once);
+        blobService.Verify(
+            b => b.UploadProcessedImageAsync(ProcessedAvatar, "users", CancellationToken.None),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateAvatarAsync_WhenProcessingRejectsTheImage_ShouldStoreNothing()
+    {
+        var blobService = new Mock<IAzureBlobService>();
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.ExistsAsync(7, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+
+        var processor = new Mock<IImageProcessor>();
+        processor.Setup(p => p.ProcessAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new BadRequestException("Animated images are not supported."));
+
+        var service = CreateService(userRepository: repository, blobService: blobService, imageProcessor: processor);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.gif");
+
+        var act = () => service.UpdateAvatarAsync(7, formFile);
+
+        await act.Should().ThrowAsync<BadRequestException>();
+        blobService.Verify(b => b.UploadProcessedImageAsync(
+            It.IsAny<ProcessedImage>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        repository.Verify(repo => repo.SwapAvatarAsync(It.IsAny<int>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateAvatarAsync_ShouldDeleteTheAvatarTheSwapReplaced()
+    {
+        // The previous URL comes from the swap itself, not from a User read taken before image
+        // processing: two uploads racing each other must each delete what they actually replaced.
+        var blobService = new Mock<IAzureBlobService>();
+        blobService.Setup(service => service.UploadProcessedImageAsync(
+                It.IsAny<ProcessedImage>(), "users", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://cdn.test/users/third.webp");
+
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.ExistsAsync(7, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        repository.Setup(repo => repo.SwapAvatarAsync(7, "https://cdn.test/users/third.webp"))
+            .ReturnsAsync((int id, string url) => new AvatarSwapRecord(
+                new TestUserBuilder().WithId(id).WithEmail("user@example.com").WithAvatar(url).Build(),
+                "https://cdn.test/users/second.webp"));
+
+        var service = CreateService(userRepository: repository, blobService: blobService);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
+
+        await service.UpdateAvatarAsync(7, formFile);
+
+        blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/users/second.webp"), Times.Once);
+        blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/users/third.webp"), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateAvatarAsync_ShouldNotWriteProfileFieldsAlongsideTheAvatar()
+    {
+        // Image processing can take a while, so anything read before it is stale by the time the
+        // row is written. Only the avatar column may be touched, or a name or phone saved in
+        // another tab meanwhile would be reverted.
+        var blobService = new Mock<IAzureBlobService>();
+        blobService.Setup(service => service.UploadProcessedImageAsync(
+                It.IsAny<ProcessedImage>(), "users", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://cdn.test/users/avatar.webp");
+
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.ExistsAsync(7, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
+            .ReturnsAsync((int id, string url) => new AvatarSwapRecord(
+                new TestUserBuilder().WithId(id).WithEmail("user@example.com").WithAvatar(url).Build(),
+                null));
+
+        var service = CreateService(userRepository: repository, blobService: blobService);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
+
+        await service.UpdateAvatarAsync(7, formFile);
+
+        // The row is read once to check the account exists, and never written through the
+        // whole-User path that would carry stale name, address and phone values back.
+        repository.Verify(repo => repo.UpdatePartialAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateAvatarAsync_WhenTheAccountDisappearsDuringProcessing_ShouldDeleteTheUpload()
+    {
+        var blobService = new Mock<IAzureBlobService>();
+        blobService.Setup(service => service.UploadProcessedImageAsync(
+                It.IsAny<ProcessedImage>(), "users", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://cdn.test/users/orphan.webp");
+
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.ExistsAsync(7, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        repository.Setup(repo => repo.SwapAvatarAsync(7, It.IsAny<string>()))
+            .ReturnsAsync((AvatarSwapRecord?)null);
+
+        var service = CreateService(userRepository: repository, blobService: blobService);
+        var formFile = new FormFile(new MemoryStream("avatar"u8.ToArray()), 0, 6, "avatar", "avatar.png");
+
+        var act = () => service.UpdateAvatarAsync(7, formFile);
+
+        await act.Should().ThrowAsync<ResourceNotFoundException>();
+        blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/users/orphan.webp"), Times.Once);
+    }
+
+    private static readonly ProcessedImage ProcessedAvatar = new([0x52, 0x49, 0x46, 0x46]);
+
+    private static Mock<IImageProcessor> ProcessorReturning(ProcessedImage result)
+    {
+        var processor = new Mock<IImageProcessor>();
+        processor.Setup(p => p.ProcessAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(result);
+        return processor;
+    }
+
     private static UserService CreateService(
         Mock<IUserRepository>? userRepository = null,
         Mock<IAuthUserRepository>? authRepository = null,
         Mock<IAzureBlobService>? blobService = null,
+        Mock<IImageProcessor>? imageProcessor = null,
         Mock<IFollowService>? followService = null,
         Mock<ITokenService>? tokenService = null,
         Mock<IRefreshAheadCache>? refreshCache = null,
@@ -302,6 +574,7 @@ public class UserServiceTests
             userRepository.Object,
             authRepository.Object,
             blobService.Object,
+            (imageProcessor ?? ProcessorReturning(ProcessedAvatar)).Object,
             followService.Object,
             tokenService.Object,
             refreshCache.Object,

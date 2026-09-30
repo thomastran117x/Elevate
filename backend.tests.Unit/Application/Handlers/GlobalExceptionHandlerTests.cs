@@ -56,6 +56,39 @@ public class GlobalExceptionHandlerTests
         json.RootElement.GetProperty("error").GetProperty("code").GetString().Should().Be("INTERNAL_SERVER_ERROR");
     }
 
+    [Fact]
+    public async Task InvokeAsync_ShouldReturn499_WhenTheClientDisconnected()
+    {
+        // Every endpoint that passes RequestAborted gets this, rather than each one catching
+        // cancellation itself: a disconnect is not a fault and must not be logged as one.
+        var context = CreateContext();
+        var aborted = new CancellationTokenSource();
+        await aborted.CancelAsync();
+        context.RequestAborted = aborted.Token;
+
+        var handler = new GlobalExceptionHandler(_ => throw new OperationCanceledException());
+
+        await handler.InvokeAsync(context);
+
+        context.Response.StatusCode.Should().Be(499);
+        context.Response.Body.Length.Should().Be(0, "there is no connection left to write to");
+    }
+
+    [Fact]
+    public async Task InvokeAsync_ShouldReturn500_WhenCancellationDidNotComeFromTheClient()
+    {
+        // A timeout the middleware could not answer, or an internal token. HandleError rethrows
+        // this type rather than resolving it, so the envelope has to be built here.
+        var context = CreateContext();
+        var handler = new GlobalExceptionHandler(_ => throw new OperationCanceledException());
+
+        await handler.InvokeAsync(context);
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status500InternalServerError);
+        using var json = await ReadJsonAsync(context);
+        json.RootElement.GetProperty("error").GetProperty("code").GetString().Should().Be("INTERNAL_SERVER_ERROR");
+    }
+
     private static DefaultHttpContext CreateContext()
     {
         var context = new DefaultHttpContext();

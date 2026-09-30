@@ -31,6 +31,12 @@ internal sealed class TestUserBuilder
         return this;
     }
 
+    public TestUserBuilder WithAvatar(string? avatar)
+    {
+        _user.Avatar = avatar;
+        return this;
+    }
+
     public TestUserBuilder Disabled(string reason = "disabled")
     {
         _user.IsDisabled = true;

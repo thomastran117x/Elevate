@@ -188,22 +188,32 @@ namespace backend.main.features.profile
         // file at exactly the advertised limit still reaches the file-level validator.
         [RequestSizeLimit(AvatarUploadRequest.MaxRequestBytes)]
         [ProducesResponseType(typeof(ApiResponse<MyProfileResponse>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> UploadAvatar([FromForm] AvatarUploadRequest request)
+        // 400 comes from the shared convention, which describes it better than an attribute here
+        // would. These two are specific to the image pipeline: 409 when concurrent uploads for this
+        // account keep beating each other, 503 when no processing slot comes free in time.
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status503ServiceUnavailable)]
+        public async Task<IActionResult> UploadAvatar(
+            [FromForm] AvatarUploadRequest request,
+            CancellationToken cancellationToken)
         {
             try
             {
                 var userPayload = User.GetUserPayload();
-                var updatedUser = await _userService.UpdateAvatarAsync(userPayload.Id, request.Image);
-
-                if (updatedUser == null)
-                    throw new ResourceNotFoundException("User not found.");
+                var updatedUser = await _userService.UpdateAvatarAsync(
+                    userPayload.Id,
+                    request.Image,
+                    cancellationToken);
 
                 return Ok(new ApiResponse<MyProfileResponse>(
                     "Avatar updated successfully.",
                     MapToMyProfile(updatedUser)
                 ));
             }
-            catch (Exception e)
+            // Cancellation is filtered out rather than caught: a disconnect becomes 499 in
+            // GlobalExceptionHandler and a request that outran the timeout policy becomes 504 in
+            // the timeout middleware, neither of which happens if this swallows it first.
+            catch (Exception e) when (e is not OperationCanceledException)
             {
                 if (e is AppException)
                     return HandleError.Resolve(e);

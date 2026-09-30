@@ -42,6 +42,16 @@ Some operations require MFA step-up as well as a signed-in session. SMS and TOTP
 
 Captcha and external provider credentials are needed for their corresponding auth flows. Anonymous availability and suggestion endpoints are rate limited; integration tests suppress the normal request limiter, so their success does not verify production rate budgets.
 
+## Image uploads
+
+`POST /api/profile/avatar` decodes the uploaded image and re-encodes it before storing it. The stored avatar is always WebP, and its URL ends in `.webp` whatever the uploaded file was called or what format it was in. By default the long edge is reduced to at most 512 pixels (smaller images are not enlarged), the EXIF orientation is applied, and EXIF (including GPS), IPTC, XMP, and ICC metadata are removed.
+
+JPEG, PNG, WebP, and GIF are accepted. A static GIF is converted to WebP. **Animated images (GIF, WebP, or APNG) are rejected with 400** and the message "Animated images are not supported. Upload a single-frame image." Converting them would keep only the first frame. Images wider or taller than 8000 pixels, or larger than 50 megapixels, are also rejected with 400. That check reads only the file header, so an oversized image is never decoded. Every size limit here is a default that a deployment can change; the settings are listed under [image processing](CONFIGURATION.md#image-processing).
+
+Processing runs on a small number of slots shared by the whole process. An upload that waits longer than the configured slot timeout is rejected with 503 and can be retried. Uploads racing each other for one account can end in 409 when each keeps replacing the other; that is retryable as well. A request that outlives the server's request-timeout policy gets the usual 504. A client that disconnects part-way is recorded as 499 for the access log; nothing is sent, because the connection is already gone.
+
+Presigned uploads for events, clubs, and series are not re-encoded yet. The browser sends those bytes straight to storage, and they are checked only for size and file signature when attached.
+
 ## Feature flags and realtime
 
 Disabled MVC features are removed during discovery, return the shared JSON 404, and disappear from OpenAPI. Frontend flags hide entry points and prevent disabled lazy routes from loading; frontend hiding does not replace backend authorization. See [configuration](CONFIGURATION.md).
