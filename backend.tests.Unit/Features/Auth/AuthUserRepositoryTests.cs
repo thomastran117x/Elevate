@@ -228,6 +228,27 @@ public class AuthUserRepositoryTests
     }
 
     [Fact]
+    public async Task SwapAvatarAsync_ShouldRetryNormally_WhenTheReloadFaultsBeforeAnyCommit()
+    {
+        // The update matched, but the reload that reports the result faulted, so the transaction
+        // rolled back without a commit ever being attempted. Nothing was written, so the re-run
+        // must swap normally: treating it as ambiguous would answer 409 to a user who did nothing
+        // wrong, and have the caller delete a blob the account still points at.
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync(
+            failFirstAvatarReload: true);
+        var userId = await harness.SeedUserAsync();
+        await harness.Db.Users.Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.Avatar, "https://cdn.test/users/live.webp"));
+        harness.ReloadFailer!.Arm();
+
+        var swap = await harness.Repository.SwapAvatarAsync(userId, "https://cdn.test/users/mine.webp");
+
+        swap.Should().NotBeNull();
+        swap!.PreviousAvatar.Should().Be("https://cdn.test/users/live.webp");
+        swap.User.Avatar.Should().Be("https://cdn.test/users/mine.webp");
+    }
+
+    [Fact]
     public async Task SwapAvatarAsync_ShouldRetryNormally_WhenAWriteFreeAttemptFaultsOnCommit()
     {
         // The attempt's update matches no rows because another request got there first, and the
@@ -956,11 +977,14 @@ public class AuthUserRepositoryTests
 
         public AvatarUpdateSuppressingInterceptor? UpdateSuppressor { get; private set; }
 
+        public AvatarReloadFailingInterceptor? ReloadFailer { get; private set; }
+
         public static async Task<AuthUserRepositoryHarness> CreateAsync(
             bool retryingExecutionStrategy = false,
             bool loseFirstCommitAcknowledgement = false,
             bool failFirstAvatarUpdate = false,
-            bool suppressFirstAvatarUpdate = false)
+            bool suppressFirstAvatarUpdate = false,
+            bool failFirstAvatarReload = false)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
@@ -970,7 +994,8 @@ public class AuthUserRepositoryTests
             if (retryingExecutionStrategy
                 || loseFirstCommitAcknowledgement
                 || failFirstAvatarUpdate
-                || suppressFirstAvatarUpdate)
+                || suppressFirstAvatarUpdate
+                || failFirstAvatarReload)
             {
                 optionsBuilder.ReplaceService<
                     IExecutionStrategyFactory,
@@ -998,6 +1023,13 @@ public class AuthUserRepositoryTests
                 optionsBuilder.AddInterceptors(suppressInterceptor);
             }
 
+            AvatarReloadFailingInterceptor? reloadInterceptor = null;
+            if (failFirstAvatarReload)
+            {
+                reloadInterceptor = new AvatarReloadFailingInterceptor();
+                optionsBuilder.AddInterceptors(reloadInterceptor);
+            }
+
             var db = new AppDatabaseContext(optionsBuilder.Options);
             await db.Database.EnsureCreatedAsync();
 
@@ -1011,7 +1043,8 @@ public class AuthUserRepositoryTests
             return new AuthUserRepositoryHarness(connection, db, commitInterceptor)
             {
                 UpdateFailer = updateInterceptor,
-                UpdateSuppressor = suppressInterceptor
+                UpdateSuppressor = suppressInterceptor,
+                ReloadFailer = reloadInterceptor
             };
         }
 
@@ -1143,6 +1176,46 @@ public class AuthUserRepositoryTests
             }
 
             return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Fails the first SELECT that runs after an avatar UPDATE, which is the in-transaction reload:
+    /// the transaction rolls back with no commit attempted.
+    /// </summary>
+    private sealed class AvatarReloadFailingInterceptor : DbCommandInterceptor
+    {
+        private bool _armed;
+        private bool _sawUpdate;
+        private bool _alreadyFailed;
+
+        public void Arm() => _armed = true;
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (_armed && command.CommandText.Contains("Avatar", StringComparison.Ordinal))
+                _sawUpdate = true;
+
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (_armed && _sawUpdate && !_alreadyFailed)
+            {
+                _alreadyFailed = true;
+                throw new LostCommitAcknowledgementException();
+            }
+
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
         }
     }
 
