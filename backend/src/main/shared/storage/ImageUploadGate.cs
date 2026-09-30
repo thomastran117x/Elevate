@@ -20,6 +20,9 @@ internal static class ImageUploadGate
     /// <summary>
     /// Returns why <paramref name="blob"/> is unacceptable, or null when it passes.
     /// </summary>
+    /// <param name="blob">What storage reports about the uploaded bytes.</param>
+    /// <param name="declaredContentType">The type the uploader declared when the upload was issued.</param>
+    /// <param name="maxBytes">The size cap.</param>
     /// <param name="subject">
     /// Names the thing being uploaded in the size message — "Event images" or "Club images".
     /// </param>

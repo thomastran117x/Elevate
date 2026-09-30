@@ -32,7 +32,11 @@ public sealed class MediaValidationPipeline
     /// <summary>
     /// Validates the quarantined blob and, if it passes, publishes the re-encoded image.
     /// </summary>
+    /// <param name="quarantineBlobPath">Where the client's bytes are in the quarantine container.</param>
+    /// <param name="publicUrl">The public URL reserved for this upload when it was issued.</param>
+    /// <param name="declaredContentType">The type the client asked to upload, checked against the bytes.</param>
     /// <param name="subject">Names the upload in the size message — "Event images" or "Club images".</param>
+    /// <param name="cancellationToken">Cancels the download, the decode, and the publish.</param>
     /// <exception cref="NotAvailableException">No processing slot came free in time. Retryable.</exception>
     /// <remarks>
     /// Anything other than a verdict about the uploaded bytes — a storage fault, cancellation, a
