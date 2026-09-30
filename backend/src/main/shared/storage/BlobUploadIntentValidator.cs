@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -15,29 +14,34 @@ namespace backend.main.shared.storage;
 /// <remarks>
 /// <c>ClubId</c> is 0 for a club-creation upload, which is issued before the club exists. The
 /// JSON shape is load-bearing: intents written by earlier builds are still live in the cache for
-/// their TTL, so property names must not change.
+/// their TTL, so property names must not change and new properties may only be appended with a
+/// default. <c>MediaAssetId</c> is such an addition — an intent cached before it existed, or
+/// issued while <c>storage.quarantine</c> is off, deserializes with it null.
 /// </remarks>
-internal sealed record BlobUploadIntent(
+public sealed record BlobUploadIntent(
     int ClubId,
     int? EventId,
     int UserId,
     string PublicUrl,
-    string ContentType
+    string ContentType,
+    Guid? MediaAssetId = null
 );
 
 /// <summary>
 /// Proves that an image URL came from a presigned upload this service issued, to this user —
-/// rather than being any URL a caller pasted in — and that what was actually uploaded is an image
-/// within the configured size cap.
+/// rather than being any URL a caller pasted in — and, for uploads that went straight to the
+/// public container, that what was actually uploaded is an image within the configured size cap.
 /// <para>
-/// Shared by the event and club attach paths so both enforce the same checks. Without the intent
-/// check, an owned-container URL belonging to another user is indistinguishable from one's own:
-/// <c>IsOwnedBlobUrl</c> only proves the blob lives in our container, not who uploaded it.
+/// Without the intent check, an owned-container URL belonging to another user is
+/// indistinguishable from one's own: <c>IsOwnedBlobUrl</c> only proves the blob lives in our
+/// container, not who uploaded it.
 /// </para>
 /// <para>
-/// Static rather than injected because <c>EventsServiceHarness</c> constructs <c>EventsService</c>
-/// positionally, so its constructor must not gain dependencies. The size cap therefore travels on
-/// <see cref="IAzureBlobService.MaxImageBytes"/>, which every caller already passes in.
+/// Static, and shared by both implementations of <c>IMediaAssetService</c>: the pass-through one
+/// used while <c>storage.quarantine</c> is off calls <see cref="RequireIntentAsync"/> exactly as
+/// the attach paths used to, and the quarantine one resolves the intent here and then validates
+/// the quarantined bytes itself. The attach paths reach both through the injected service, which
+/// is what lets the flag choose between them.
 /// </para>
 /// </summary>
 internal static class BlobUploadIntentValidator
@@ -64,6 +68,24 @@ internal static class BlobUploadIntentValidator
     /// Names the thing being attached in the error message — "Event images" or "Club images".
     /// </param>
     internal static async Task<BlobUploadIntent> RequireIntentAsync(
+        IAzureBlobService blobService,
+        ICacheService cache,
+        int userId,
+        string imageUrl,
+        string subject)
+    {
+        var intent = await ResolveIntentAsync(blobService, cache, userId, imageUrl, subject);
+
+        await RequireAcceptableBlobAsync(blobService, imageUrl, intent, subject);
+
+        return intent;
+    }
+
+    /// <summary>
+    /// The ownership half of <see cref="RequireIntentAsync"/>: the URL is ours and a live intent
+    /// issued to <paramref name="userId"/> stands behind it. Touches no blob.
+    /// </summary>
+    internal static async Task<BlobUploadIntent> ResolveIntentAsync(
         IAzureBlobService blobService,
         ICacheService cache,
         int userId,
@@ -98,15 +120,13 @@ internal static class BlobUploadIntentValidator
                 "Image upload is invalid or does not belong to this organizer.");
         }
 
-        await RequireAcceptableBlobAsync(blobService, imageUrl, intent, subject);
-
         return intent;
     }
 
     /// <summary>
-    /// Checks what actually landed in storage. A SAS bounds neither the size nor the content of
-    /// an upload, and the container is publicly readable, so attach time is the only moment where
-    /// the bytes exist and we still hold a handle to them.
+    /// Checks what actually landed in the public container. A SAS bounds neither the size nor the
+    /// content of an upload, and without quarantine the container is publicly readable, so attach
+    /// time is the only moment where the bytes exist and we still hold a handle to them.
     /// </summary>
     /// <remarks>
     /// A rejected blob is deleted here rather than left to <c>OrphanBlobCleanupRunner</c>, which
@@ -114,7 +134,7 @@ internal static class BlobUploadIntentValidator
     /// <c>MinAgeHours</c> floor. Deletion is best-effort and swallows its own failures, so it
     /// cannot mask the rejection.
     /// </remarks>
-    private static async Task RequireAcceptableBlobAsync(
+    internal static async Task RequireAcceptableBlobAsync(
         IAzureBlobService blobService,
         string imageUrl,
         BlobUploadIntent intent,
@@ -122,48 +142,15 @@ internal static class BlobUploadIntentValidator
     {
         var inspection = await blobService.InspectBlobAsync(imageUrl);
         if (inspection == null)
-        {
-            throw new BadRequestException(
-                "Image upload did not complete. Please upload the image again.");
-        }
+            throw new BadRequestException(ImageUploadGate.DidNotCompleteMessage);
 
-        var blob = inspection.Value;
+        var rejection = ImageUploadGate.Evaluate(
+            inspection.Value, intent.ContentType, blobService.MaxImageBytes, subject, out var signature);
 
-        if (blob.ContentLength <= 0)
+        if (rejection != null)
         {
             await blobService.DeleteBlobAsync(imageUrl);
-
-            throw new BadRequestException(
-                "Image upload did not complete. Please upload the image again.");
-        }
-
-        if (blob.ContentLength > blobService.MaxImageBytes)
-        {
-            await blobService.DeleteBlobAsync(imageUrl);
-
-            throw new BadRequestException(
-                $"{subject} must be smaller than {DescribeLimit(blobService.MaxImageBytes)}.");
-        }
-
-        if (!ImageSignatureInspector.TryDetect(blob.HeaderBytes, out var signature))
-        {
-            await blobService.DeleteBlobAsync(imageUrl);
-
-            throw new BadRequestException(
-                "Only JPEG, PNG, WEBP, and GIF images are supported.");
-        }
-
-        // The type the uploader asked for is cross-checked against the bytes. It is skipped when
-        // unrecognised, because the browser sends "application/octet-stream" for a file whose
-        // type it cannot determine, and the presigned endpoint derived the stored type from the
-        // file extension in that case.
-        if (TryResolveDeclaredFormat(intent.ContentType, out var declaredFormat) &&
-            signature.Format != declaredFormat)
-        {
-            await blobService.DeleteBlobAsync(imageUrl);
-
-            throw new BadRequestException(
-                "The uploaded file does not match the image type that was selected.");
+            throw new BadRequestException(rejection);
         }
 
         // Every header on the blob is whatever the client put on its own PUT — the SAS content
@@ -177,42 +164,5 @@ internal static class BlobUploadIntentValidator
         // ("attachment; filename=invoice.exe"), Cache-Control or Content-Encoding, and skipping
         // the rewrite when the type matches would leave exactly those in place.
         await blobService.NormalizeBlobHeadersAsync(imageUrl, signature.ContentType);
-    }
-
-    /// <remarks>
-    /// Matched by format rather than by string: the presigned endpoint accepts <c>image/jpg</c>
-    /// as well as <c>image/jpeg</c>, while the inspector only ever reports the canonical
-    /// <c>image/jpeg</c>.
-    /// </remarks>
-    private static bool TryResolveDeclaredFormat(string? contentType, out ImageFormat format)
-    {
-        switch ((contentType ?? string.Empty).Trim().ToLowerInvariant())
-        {
-            case "image/jpeg":
-            case "image/jpg":
-                format = ImageFormat.Jpeg;
-                return true;
-            case "image/png":
-                format = ImageFormat.Png;
-                return true;
-            case WebpMedia.ContentType:
-                format = ImageFormat.Webp;
-                return true;
-            case "image/gif":
-                format = ImageFormat.Gif;
-                return true;
-            default:
-                format = default;
-                return false;
-        }
-    }
-
-    private static string DescribeLimit(long maxBytes)
-    {
-        var megabytes = maxBytes / (double)(1024 * 1024);
-
-        return megabytes >= 1
-            ? $"{megabytes.ToString("0.#", CultureInfo.InvariantCulture)}MB"
-            : $"{Math.Max(maxBytes, 0).ToString(CultureInfo.InvariantCulture)} bytes";
     }
 }

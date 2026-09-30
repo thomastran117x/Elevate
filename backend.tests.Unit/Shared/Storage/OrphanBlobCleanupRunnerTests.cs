@@ -1,3 +1,4 @@
+using backend.main.features.media;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
 using backend.main.shared.storage;
@@ -39,6 +40,37 @@ public class OrphanBlobCleanupRunnerTests
         harness.BlobService.Verify(b => b.DeleteBlobAsync(OrphanOldUrl), Times.Once);
         harness.BlobService.Verify(b => b.DeleteBlobAsync(ReferencedUrl), Times.Never);
         harness.BlobService.Verify(b => b.DeleteBlobAsync(OrphanRecentUrl), Times.Never);
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_ShouldTreatAMediaAssetsPublicUrlAsAReference()
+    {
+        // A published upload whose owning row has not been written — the attach that promoted it
+        // failed afterwards, or the uploader has not saved yet — is still live. Leaving this
+        // column out of the sweep would delete it.
+        await using var harness = await Harness.CreateAsync();
+        const string publishedUrl = "https://cdn.test/users/published.webp";
+        harness.Db.MediaAssets.Add(new MediaAsset
+        {
+            PublicId = Guid.NewGuid(),
+            Status = MediaAssetStatus.Ready,
+            Origin = MediaAssetOrigin.Upload,
+            PublicUrl = publishedUrl,
+            DeclaredContentType = "image/png"
+        });
+        await harness.Db.SaveChangesAsync();
+
+        var old = DateTimeOffset.UtcNow.AddDays(-2);
+        harness.BlobService
+            .Setup(b => b.ListBlobsAsync("users", It.IsAny<CancellationToken>()))
+            .Returns(ToAsyncEnumerable(
+                new BlobListItem(publishedUrl, old),
+                new BlobListItem(OrphanOldUrl, old)));
+
+        await harness.CreateRunner(prefixes: ["users"]).RunOnceAsync();
+
+        harness.BlobService.Verify(b => b.DeleteBlobAsync(publishedUrl), Times.Never);
+        harness.BlobService.Verify(b => b.DeleteBlobAsync(OrphanOldUrl), Times.Once);
     }
 
     [Fact]

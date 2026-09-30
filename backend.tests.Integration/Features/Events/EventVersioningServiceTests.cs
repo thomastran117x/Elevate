@@ -601,6 +601,7 @@ public class EventVersioningServiceTests
                 new EventImageRepository(db),
                 clubService.Object,
                 blobService.Object,
+                new backend.main.application.features.DisabledMediaAssetService(blobService.Object, cache.Object),
                 cache.Object,
                 new RefreshAheadCache(cache.Object),
                 Mock.Of<IEventAnalyticsRepository>(),

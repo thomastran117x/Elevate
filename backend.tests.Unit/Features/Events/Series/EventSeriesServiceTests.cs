@@ -1225,6 +1225,7 @@ public class EventSeriesServiceTests
                 ImageRepositoryMock.Object,
                 ClubServiceMock.Object,
                 BlobServiceMock.Object,
+                new backend.main.application.features.DisabledMediaAssetService(BlobServiceMock.Object, CacheMock.Object),
                 CacheMock.Object,
                 RefreshCacheMock.Object,
                 OutboxWriterMock.Object,

@@ -78,6 +78,13 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         Publisher = new KafkaBackedPublisher(this);
     }
 
+    /// <summary>
+    /// Configuration for an app with <c>storage.quarantine</c> off, where presigned uploads go
+    /// straight into the public container as they did before quarantine existed.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string?> WithoutQuarantine { get; } =
+        new Dictionary<string, string?> { ["FeatureFlags:storage.quarantine"] = "false" };
+
     public static async Task<AuthApiTestApp> CreateAsync(
         Action<IServiceCollection>? serviceOverrides = null,
         IReadOnlyDictionary<string, string?>? configurationOverrides = null)

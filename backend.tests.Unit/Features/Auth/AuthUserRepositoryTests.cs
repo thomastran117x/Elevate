@@ -1,4 +1,6 @@
 using backend.main.features.auth;
+using backend.main.features.clubs;
+using backend.main.features.media;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
 using backend.main.features.profile.contracts;
@@ -508,6 +510,62 @@ public class AuthUserRepositoryTests
         (await harness.Repository.DeleteUserAsync(userId)).Should().Contain("/avatars/seed.png");
         (await harness.Repository.DeleteUserAsync(userId)).Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task DeleteUserAsync_ShouldReturnBannerAndGalleryUrls_AndRemoveTheMediaAssetsGoingWithThem()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync();
+        var otherUserId = await harness.SeedUserAsync(email: "other@example.com", username: "other-user");
+
+        harness.Db.Clubs.Add(new Club
+        {
+            Name = "Owned",
+            Description = "Owned club",
+            Clubtype = ClubType.Social,
+            ClubImage = "https://cdn.test/clubs/icon.webp",
+            BannerImage = "https://cdn.test/clubs/banner.webp",
+            GalleryImages = ["https://cdn.test/clubs/g1.webp", "https://cdn.test/clubs/g2.webp"],
+            UserId = userId
+        });
+        await harness.Db.SaveChangesAsync();
+
+        // The owned club's published banner goes with the account; so does the user's upload
+        // that never finished; an image they published into someone else's club stays, ownerless.
+        var bannerAsset = Asset("https://cdn.test/clubs/banner.webp", MediaAssetStatus.Ready, userId);
+        var unfinished = Asset("https://cdn.test/clubs/pending.webp", MediaAssetStatus.PendingUpload, userId);
+        var elsewhere = Asset("https://cdn.test/clubs/theirs.webp", MediaAssetStatus.Ready, userId);
+        var unrelated = Asset("https://cdn.test/clubs/unrelated.webp", MediaAssetStatus.PendingUpload, otherUserId);
+        harness.Db.MediaAssets.AddRange(bannerAsset, unfinished, elsewhere, unrelated);
+        await harness.Db.SaveChangesAsync();
+
+        // A delete runs in its own request scope, with none of these rows tracked.
+        harness.Db.ChangeTracker.Clear();
+
+        var orphaned = await harness.Repository.DeleteUserAsync(userId);
+
+        orphaned.Should().Contain([
+            "https://cdn.test/clubs/icon.webp",
+            "https://cdn.test/clubs/banner.webp",
+            "https://cdn.test/clubs/g1.webp",
+            "https://cdn.test/clubs/g2.webp"]);
+
+        harness.Db.ChangeTracker.Clear();
+        var remaining = await harness.Db.MediaAssets.AsNoTracking().ToListAsync();
+        remaining.Select(asset => asset.PublicId).Should().BeEquivalentTo([elsewhere.PublicId, unrelated.PublicId]);
+        remaining.Single(asset => asset.PublicId == elsewhere.PublicId).OwnerUserId.Should().BeNull();
+        remaining.Single(asset => asset.PublicId == unrelated.PublicId).OwnerUserId.Should().Be(otherUserId);
+    }
+
+    private static MediaAsset Asset(string publicUrl, MediaAssetStatus status, int ownerUserId) => new()
+    {
+        PublicId = Guid.NewGuid(),
+        OwnerUserId = ownerUserId,
+        Status = status,
+        Origin = MediaAssetOrigin.Upload,
+        PublicUrl = publicUrl,
+        DeclaredContentType = "image/png"
+    };
 
     [Fact]
     public async Task GetUserAsync_AndCredentialLookups_ShouldProjectSanitizedAndAuthViews()

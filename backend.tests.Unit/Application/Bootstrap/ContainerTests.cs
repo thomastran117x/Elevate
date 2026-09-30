@@ -18,6 +18,7 @@ using backend.main.features.events.invitations;
 using backend.main.features.events.registration;
 using backend.main.features.events.search;
 using backend.main.features.events.waitlist;
+using backend.main.features.media;
 using backend.main.features.payment;
 using backend.main.infrastructure.database.core;
 using backend.main.infrastructure.elasticsearch;
@@ -167,6 +168,68 @@ public class ContainerTests
         services.Should().Contain(descriptor =>
             descriptor.ServiceType == typeof(IHostedService)
             && descriptor.ImplementationType == typeof(BloomFilterMaintenanceService));
+    }
+
+    [Fact]
+    public void AddApplicationServices_ShouldQuarantineUploads_ByDefault()
+    {
+        var config = new ConfigurationBuilder().Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);
+
+        services.AddApplicationServices(config, includeHostedServices: true);
+
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IMediaAssetService)
+            && descriptor.ImplementationType == typeof(MediaAssetService));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IHostedService)
+            && descriptor.ImplementationType == typeof(QuarantineReaper));
+    }
+
+    [Fact]
+    public void AddApplicationServices_ShouldPassUploadsThrough_ButStillReapQuarantine_WhenQuarantineIsOff()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["FeatureFlags:storage.quarantine"] = "false"
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);
+
+        services.AddApplicationServices(config, includeHostedServices: true);
+
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IMediaAssetService)
+            && descriptor.ImplementationType == typeof(DisabledMediaAssetService));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IHostedService)
+            && descriptor.ImplementationType == typeof(QuarantineReaper),
+            "turning quarantine off must not strand what it was already holding");
+    }
+
+    [Fact]
+    public void AddApplicationServices_ShouldNotReapQuarantine_WhenStorageIsOff()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["FeatureFlags:storage"] = "false"
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);
+
+        services.AddApplicationServices(config, includeHostedServices: true);
+
+        services.Should().NotContain(descriptor =>
+            descriptor.ServiceType == typeof(IHostedService)
+            && descriptor.ImplementationType == typeof(QuarantineReaper));
     }
 
     [Fact]

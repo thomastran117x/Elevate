@@ -8,7 +8,7 @@ namespace backend.main.shared.storage.cleanup
     /// <summary>
     /// Sweeps the blob container for images no longer referenced by any live row
     /// (User.Avatar, Club.ClubImage, Club.BannerImage, Club.GalleryImages,
-    /// ClubVersion.ClubImage, EventImage.ImageUrl) and deletes them. Reclaims blobs orphaned by
+    /// ClubVersion.ClubImage, EventImage.ImageUrl, MediaAsset.PublicUrl) and deletes them. Reclaims blobs orphaned by
     /// cascade-deleted accounts/clubs whose rows no longer exist, so a reference-check against
     /// surviving rows can't find them inline.
     /// <para>
@@ -84,6 +84,12 @@ namespace backend.main.shared.storage.cleanup
                 return true;
 
             if (await _db.EventImages.AsNoTracking().AnyAsync(i => i.ImageUrl == url, cancellationToken))
+                return true;
+
+            // A published upload is a reference in its own right. The attach that promoted it
+            // may not have committed its owning row yet, and a Ready asset's URL is what its
+            // uploader was told they can use.
+            if (await _db.MediaAssets.AsNoTracking().AnyAsync(a => a.PublicUrl == url, cancellationToken))
                 return true;
 
             return false;

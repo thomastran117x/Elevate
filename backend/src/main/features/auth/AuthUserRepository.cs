@@ -2,6 +2,7 @@ using System.Data;
 
 using backend.main.application.security;
 using backend.main.features.auth.contracts;
+using backend.main.features.media;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 using backend.main.infrastructure.database.core;
@@ -369,6 +370,22 @@ namespace backend.main.features.auth
                         .Select(club => club.ClubImage!)
                         .ToListAsync());
 
+                    orphanedBlobUrls.AddRange(await _context.Clubs
+                        .Where(club => ownedClubIds.Contains(club.Id)
+                            && club.BannerImage != null && club.BannerImage != string.Empty)
+                        .Select(club => club.BannerImage!)
+                        .ToListAsync());
+
+                    // A JSON column behind a value converter: materialize the lists and flatten
+                    // them here, since there is nothing in SQL to select the URLs out of.
+                    var galleries = await _context.Clubs
+                        .Where(club => ownedClubIds.Contains(club.Id))
+                        .Select(club => club.GalleryImages)
+                        .ToListAsync();
+                    orphanedBlobUrls.AddRange(galleries
+                        .SelectMany(gallery => gallery ?? [])
+                        .Where(url => !string.IsNullOrEmpty(url)));
+
                     orphanedBlobUrls.AddRange(await _context.ClubVersions
                         .Where(version => ownedClubIds.Contains(version.ClubId)
                             && version.ClubImage != null && version.ClubImage != string.Empty)
@@ -414,6 +431,19 @@ namespace backend.main.features.auth
 
                     await _context.SaveChangesAsync();
                 }
+
+                // Media assets are an upload ledger with no cascade from the rows above. Those
+                // whose image is going away with this account go too: left behind, a Ready row's
+                // PublicUrl would shield the blob from the orphan sweeper forever if the delete
+                // below failed. So do the uploader's unfinished uploads; the quarantine reaper
+                // removes their bytes. Ready images the user put in other people's clubs survive,
+                // with the owner set to null by the foreign key.
+                var deletedUrls = orphanedBlobUrls.Distinct(StringComparer.Ordinal).ToList();
+                await _context.MediaAssets
+                    .Where(asset =>
+                        (asset.PublicUrl != null && deletedUrls.Contains(asset.PublicUrl)) ||
+                        (asset.OwnerUserId == id && asset.Status != MediaAssetStatus.Ready))
+                    .ExecuteDeleteAsync();
 
                 _context.Users.Remove(user);
                 await _context.SaveChangesAsync();

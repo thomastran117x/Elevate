@@ -1,9 +1,11 @@
+using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.clubs.search;
 using backend.main.features.events;
+using backend.main.features.events.contracts.responses;
 using backend.main.features.events.favourites;
 using backend.main.features.events.favourites.contracts.responses;
 using backend.main.features.events.invitations;
@@ -21,10 +23,12 @@ using backend.main.features.events.series.contracts.responses;
 using backend.main.features.events.waitlist;
 using backend.main.features.events.waitlist.contracts.requests;
 using backend.main.features.events.waitlist.contracts.responses;
+using backend.main.features.media;
 using backend.main.features.payment;
 using backend.main.features.profile.contracts;
 using backend.main.infrastructure.elasticsearch;
 using backend.main.shared.exceptions.http;
+using backend.main.shared.storage;
 
 namespace backend.main.application.features;
 
@@ -135,6 +139,44 @@ public sealed class DisabledEventWaitlistPromoter : IEventWaitlistPromoter
     public Task<int> PromoteStandaloneAsync(int eventId) => Task.FromResult(0);
     public Task PublishPromotionEmailsAsync(IReadOnlyList<WaitlistPromotion> promotions, int eventId, string? eventName, DateTime? startsAtUtc) => Task.CompletedTask;
     public Task InvalidateForPromotedAsync(IReadOnlyList<WaitlistPromotion> promotions, int eventId) => Task.CompletedTask;
+}
+
+/// <summary>
+/// <c>storage.quarantine</c> off. Like the waitlist promoter above, this one MUST NOT throw: it is
+/// the whole upload path while the flag is off, reproducing exactly what uploads did before
+/// quarantine existed — a presigned URL straight into the public container, and the byte checks
+/// run against it at attach time.
+/// </summary>
+public sealed class DisabledMediaAssetService : IMediaAssetService
+{
+    private readonly IAzureBlobService _blobService;
+    private readonly ICacheService _cache;
+
+    public DisabledMediaAssetService(IAzureBlobService blobService, ICacheService cache)
+    {
+        _blobService = blobService;
+        _cache = cache;
+    }
+
+    public Task<PresignedUploadResponse> IssueUploadAsync(
+        MediaUploadRequest request,
+        CancellationToken cancellationToken = default) =>
+        _blobService.GenerateUploadUrlAsync(request.BlobPathPrefix, request.FileName, request.ContentType);
+
+    public async Task<BlobUploadIntent> AttachAsync(
+        int userId,
+        string imageUrl,
+        string subject,
+        Action<BlobUploadIntent>? checkScope = null,
+        CancellationToken cancellationToken = default)
+    {
+        // Bytes before scope, which is the order the attach paths have always used.
+        var intent = await BlobUploadIntentValidator.RequireIntentAsync(
+            _blobService, _cache, userId, imageUrl, subject);
+
+        checkScope?.Invoke(intent);
+        return intent;
+    }
 }
 
 public sealed class DisabledPaymentService : IPaymentService
