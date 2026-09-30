@@ -173,7 +173,7 @@ namespace backend.main.features.profile
             return user;
         }
 
-        public async Task<User?> UpdateAvatarAsync(
+        public async Task<User> UpdateAvatarAsync(
             int id,
             IFormFile image,
             CancellationToken cancellationToken = default)
@@ -182,7 +182,7 @@ namespace backend.main.features.profile
             // would otherwise take one of the few processing slots, decode a full-size image and
             // write a blob, all to be told 404 at the end. Deliberately not kept: the write below
             // reads the row again, because anything read here is stale by the time decoding ends.
-            if (!await _userRepository.ExistsAsync(id))
+            if (!await _userRepository.ExistsAsync(id, cancellationToken))
                 throw new ResourceNotFoundException($"User with the id {id} is not found");
 
             // Decode and re-encode before touching storage: the stored avatar is WebP pixels only,
@@ -242,8 +242,9 @@ namespace backend.main.features.profile
                 // points at this blob, so leave it to OrphanBlobCleanupRunner, which deletes only
                 // blobs no row references. That sweeper is opt-in, so deployments that process
                 // avatars should enable it; the alternative is risking a live avatar.
+                // Without the exception: the controller's catch-all logs that, and two entries
+                // per failure double the alert noise on a path this treats as expected.
                 Logger.Warn(
-                    exception,
                     $"[UserService] Avatar swap for user {id} failed after upload; leaving {filePath} for orphan cleanup.");
 
                 // The swap may have committed, so anything cached for this user may now be stale.

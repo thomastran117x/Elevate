@@ -15,7 +15,11 @@ namespace backend.main.features.profile
         Task<UserProfileRecord> GetPublicProfileByUsernameAsync(string username);
         Task<User?> UpdateUserAsync(int id, User updatedUser);
         Task<User> ChangeUsernameAsync(int id, string username);
-        Task<User?> UpdateAvatarAsync(int id, IFormFile image, CancellationToken cancellationToken = default);
+        /// <summary>
+        /// Replaces the avatar, returning the updated user. Never returns null: a missing account
+        /// raises <see cref="shared.exceptions.http.ResourceNotFoundException"/>.
+        /// </summary>
+        Task<User> UpdateAvatarAsync(int id, IFormFile image, CancellationToken cancellationToken = default);
         Task<bool> DeleteUserAsync(int id);
         Task<UserStatusRecord> UpdateUserStatusAsync(int id, bool isDisabled, string? reason);
         Task<IEnumerable<FollowClub>> GetUserFollowingsAsync(int id, int page = 1, int pageSize = 20);

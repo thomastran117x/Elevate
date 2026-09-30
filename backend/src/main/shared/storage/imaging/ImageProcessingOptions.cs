@@ -25,7 +25,7 @@ namespace backend.main.shared.storage.imaging
         [Range(16, 8000)]
         public int AvatarMaxEdge { get; set; } = 512;
 
-        /// <summary>Lossy WebP quality, 0-100.</summary>
+        /// <summary>Lossy WebP quality, 1-100.</summary>
         [Range(1, 100)]
         public int WebpQuality { get; set; } = 82;
 

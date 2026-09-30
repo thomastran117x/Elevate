@@ -29,8 +29,23 @@ namespace backend.main.shared.storage.imaging
     /// <summary>
     /// A re-encoded image ready to store. Always WebP, whatever format came in.
     /// </summary>
-    public sealed record ProcessedImage(byte[] Content)
+    /// <remarks>
+    /// The constructor is internal so that holding one of these means the bytes came out of the
+    /// processor. <see cref="IAzureBlobService.UploadProcessedImageAsync"/> stores them in an
+    /// anonymously readable container without sniffing them again, so a caller able to wrap raw
+    /// upload bytes in this type could publish EXIF, GPS or a polyglot payload as image/webp.
+    /// Within this assembly that is a convention rather than a guarantee; the compiler enforces it
+    /// against every other one, and the tests reach it through InternalsVisibleTo.
+    /// </remarks>
+    public sealed record ProcessedImage
     {
+        internal ProcessedImage(byte[] content) => Content = content;
+
+        public byte[] Content
+        {
+            get;
+        }
+
         public string ContentType => WebpMedia.ContentType;
 
         public string FileExtension => WebpMedia.FileExtension;
