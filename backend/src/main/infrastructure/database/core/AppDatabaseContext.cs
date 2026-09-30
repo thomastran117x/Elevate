@@ -25,6 +25,7 @@ using backend.main.features.events.search;
 using backend.main.features.events.series;
 using backend.main.features.events.versions;
 using backend.main.features.events.waitlist;
+using backend.main.features.media;
 using backend.main.features.payment;
 using backend.main.features.profile;
 
@@ -68,6 +69,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<EventSearchOutbox> EventSearchOutbox { get; set; } = null!;
         public DbSet<ClubSearchOutbox> ClubSearchOutbox { get; set; } = null!;
         public DbSet<ClubPostSearchOutbox> ClubPostSearchOutbox { get; set; } = null!;
+        public DbSet<MediaAsset> MediaAssets { get; set; } = null!;
         public AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : base(options) { }
 
         /// <summary>
@@ -475,6 +477,77 @@ namespace backend.main.infrastructure.database.core
                 .HasIndex(ei => ei.EventId, "UX_EventImages_EventId_Cover")
                 .HasFilter("\"IsCover\"")
                 .IsUnique();
+
+            // No foreign key from EventImages.ImageUrl or the club and user image columns yet:
+            // six code paths write ImageUrl, and a required reference on day one turns every one
+            // of them that was missed into a 500. See the mediaassets migration for the plan.
+            modelBuilder.Entity<MediaAsset>()
+                .HasIndex(a => a.PublicId)
+                .IsUnique();
+
+            // Unique because a URL is minted from a fresh GUID for every upload and the legacy
+            // backfill takes distinct URLs; the orphan sweeper looks blobs up by it.
+            modelBuilder.Entity<MediaAsset>()
+                .HasIndex(a => a.PublicUrl)
+                .HasFilter("\"PublicUrl\" IS NOT NULL")
+                .IsUnique();
+
+            modelBuilder.Entity<MediaAsset>()
+                .HasIndex(a => a.QuarantineBlobPath)
+                .HasFilter("\"QuarantineBlobPath\" IS NOT NULL");
+
+            // The quarantine reaper's scan for uploads that were issued and never attached.
+            modelBuilder.Entity<MediaAsset>()
+                .HasIndex(a => new { a.Status, a.CreatedAt });
+
+            // Strings rather than ints so a row reads as "Rejected" in psql during an incident
+            // instead of as a number someone has to look up.
+            modelBuilder.Entity<MediaAsset>()
+                .Property(a => a.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<MediaAsset>()
+                .Property(a => a.Origin)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<MediaAsset>()
+                .Property(a => a.DeclaredContentType)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<MediaAsset>()
+                .Property(a => a.ContentType)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<MediaAsset>()
+                .Property(a => a.QuarantineBlobPath)
+                .HasMaxLength(1024);
+
+            modelBuilder.Entity<MediaAsset>()
+                .Property(a => a.RejectionReason)
+                .HasMaxLength(500);
+
+            // SetNull throughout: an asset outlives the account, club or event it was uploaded
+            // for, because the same image can be live somewhere else (a recurrence occurrence, or
+            // a club the uploader was staff of).
+            modelBuilder.Entity<MediaAsset>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(a => a.OwnerUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<MediaAsset>()
+                .HasOne<Club>()
+                .WithMany()
+                .HasForeignKey(a => a.ClubId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<MediaAsset>()
+                .HasOne<Events>()
+                .WithMany()
+                .HasForeignKey(a => a.EventId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<EventInvitation>()
                 .HasOne(i => i.Event)

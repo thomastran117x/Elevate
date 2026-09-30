@@ -36,6 +36,7 @@ using backend.main.features.events.search;
 using backend.main.features.events.series;
 using backend.main.features.events.versions;
 using backend.main.features.events.waitlist;
+using backend.main.features.media;
 using backend.main.features.payment;
 using backend.main.features.profile;
 using backend.main.features.profile.email;
@@ -211,6 +212,7 @@ namespace backend.main.application.bootstrap
             services.AddRepositoryWithProxy<IEventRegistrationRepository, EventRegistrationRepository>();
             services.AddRepositoryWithProxy<IEventAnalyticsRepository, EventAnalyticsRepository>();
             services.AddRepositoryWithProxy<IEventImageRepository, EventImageRepository>();
+            services.AddRepositoryWithProxy<IMediaAssetRepository, MediaAssetRepository>();
             services.AddRepositoryWithProxy<IEventWaitlistRepository, EventWaitlistRepository>();
             services.AddRepositoryWithProxy<IEventFavouriteRepository, EventFavouriteRepository>();
             services.AddRepositoryWithProxy<IRecentlyViewedRepository, RecentlyViewedRepository>();
