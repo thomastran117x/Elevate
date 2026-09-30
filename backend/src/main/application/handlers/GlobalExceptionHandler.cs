@@ -54,6 +54,23 @@ namespace backend.main.application.handlers
                 if (!context.Response.HasStarted)
                     context.Response.StatusCode = ClientClosedRequestStatusCode;
             }
+            catch (OperationCanceledException ex)
+            {
+                // Cancelled, but not by the client: an internal token, or a timeout whose
+                // middleware could not answer. Nothing sensible to return, and HandleError
+                // deliberately rethrows this type rather than resolving it, so the envelope is
+                // built here instead of calling it.
+                Logger.Error("A request was cancelled without the client disconnecting.");
+                Logger.Error(ex);
+
+                if (context.Response.HasStarted)
+                    return;
+
+                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsJsonAsync(
+                    ApiResponse<object?>.Failure("An unexpected error occurred.", "INTERNAL_SERVER_ERROR"));
+            }
             catch (Exception ex)
             {
                 var result = HandleError.Resolve(ex) as ObjectResult;

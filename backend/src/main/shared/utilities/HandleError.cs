@@ -1,3 +1,5 @@
+using System.Runtime.ExceptionServices;
+
 using backend.main.shared.exceptions.http;
 using backend.main.shared.responses;
 
@@ -11,6 +13,13 @@ namespace backend.main.utilities
         {
             if (ex is AppException appEx)
                 return HandleAppException(appEx);
+
+            // A cancelled request has no answer to give: the client is gone, or the request-timeout
+            // middleware is waiting to turn this into its 504. Controllers catch broadly and call
+            // this, so resolving it to a 500 envelope here is what made every disconnect look like
+            // a server fault. Rethrowing hands it back to the middleware that knows which it is.
+            if (ex is OperationCanceledException)
+                ExceptionDispatchInfo.Capture(ex).Throw();
 
             var response = ApiResponse<object?>.Failure(
                 "An unexpected error occurred.",

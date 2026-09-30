@@ -205,22 +205,15 @@ namespace backend.main.features.profile
                     request.Image,
                     cancellationToken);
 
-                if (updatedUser == null)
-                    throw new ResourceNotFoundException("User not found.");
-
                 return Ok(new ApiResponse<MyProfileResponse>(
                     "Avatar updated successfully.",
                     MapToMyProfile(updatedUser)
                 ));
             }
-            catch (OperationCanceledException)
-            {
-                // Not handled here on purpose. A disconnect becomes 499 in GlobalExceptionHandler,
-                // and a request that outran the timeout policy is turned into 504 by the timeout
-                // middleware — but only if this does not swallow it first.
-                throw;
-            }
-            catch (Exception e)
+            // Cancellation is filtered out rather than caught: a disconnect becomes 499 in
+            // GlobalExceptionHandler and a request that outran the timeout policy becomes 504 in
+            // the timeout middleware, neither of which happens if this swallows it first.
+            catch (Exception e) when (e is not OperationCanceledException)
             {
                 if (e is AppException)
                     return HandleError.Resolve(e);
