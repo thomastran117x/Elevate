@@ -13,6 +13,10 @@ namespace backend.main.shared.storage.imaging
         /// A readable stream holding the whole upload. It is buffered once: from the start if it
         /// can seek, otherwise from its current position.
         /// </param>
+        /// <param name="profile">
+        /// What the image is for, which decides the long-edge cap. Required rather than defaulted
+        /// so a new caller has to choose instead of silently inheriting the avatar size.
+        /// </param>
         /// <param name="cancellationToken">Cancels waiting for a processing slot and decoding.</param>
         /// <exception cref="exceptions.http.BadRequestException">
         /// The bytes are not a supported image format, or the image is too large, animated, or
@@ -23,7 +27,26 @@ namespace backend.main.shared.storage.imaging
         /// <exception cref="exceptions.http.NotAvailableException">
         /// No processing slot became free within the configured wait.
         /// </exception>
-        Task<ProcessedImage> ProcessAsync(Stream source, CancellationToken cancellationToken = default);
+        Task<ProcessedImage> ProcessAsync(
+            Stream source,
+            ImageProcessingProfile profile,
+            CancellationToken cancellationToken = default);
+    }
+
+    /// <summary>
+    /// What a processed image will be used for. Each profile has its own long-edge cap in
+    /// <see cref="ImageProcessingOptions"/>; every other step of the pipeline is shared.
+    /// </summary>
+    public enum ImageProcessingProfile
+    {
+        /// <summary>A profile picture, shown small: <see cref="ImageProcessingOptions.AvatarMaxEdge"/>.</summary>
+        Avatar,
+
+        /// <summary>
+        /// An event or club image uploaded through a presigned URL — gallery tiles, covers, club
+        /// icons and banners: <see cref="ImageProcessingOptions.GalleryMaxEdge"/>.
+        /// </summary>
+        Gallery
     }
 
     /// <summary>
@@ -39,9 +62,26 @@ namespace backend.main.shared.storage.imaging
     /// </remarks>
     public sealed record ProcessedImage
     {
-        internal ProcessedImage(byte[] content) => Content = content;
+        internal ProcessedImage(byte[] content, int width = 0, int height = 0)
+        {
+            Content = content;
+            Width = width;
+            Height = height;
+        }
 
         public byte[] Content
+        {
+            get;
+        }
+
+        /// <summary>Width of the encoded output in pixels, after resizing and orienting.</summary>
+        public int Width
+        {
+            get;
+        }
+
+        /// <summary>Height of the encoded output in pixels, after resizing and orienting.</summary>
+        public int Height
         {
             get;
         }

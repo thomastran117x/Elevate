@@ -192,7 +192,7 @@ namespace backend.main.features.profile
             ProcessedImage processed;
             await using (var source = image.OpenReadStream())
             {
-                processed = await _imageProcessor.ProcessAsync(source, cancellationToken);
+                processed = await _imageProcessor.ProcessAsync(source, ImageProcessingProfile.Avatar, cancellationToken);
             }
 
             // Deliberately not cancellable. Once the image is processed, the upload is the commit
