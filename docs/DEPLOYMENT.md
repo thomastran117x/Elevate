@@ -41,6 +41,40 @@ Public environment values and frontend flags are baked into the build. Rebuild f
 
 Use `docker compose logs` for API and worker diagnostics. Query a documented read endpoint to check API behavior and test an actual search update and hub connection. There is no dedicated API health endpoint mapped in the current entry point. Empty SMTP/Twilio settings disable their consumers; a running worker container does not prove messages are being delivered. See individual [worker READMEs](../backend/README.md#workers).
 
+## Blob storage
+
+Images live in two containers in the storage account named by `AZURE_STORAGE_CONNECTION_STRING`:
+
+| Container | Setting | Access | Holds |
+| --- | --- | --- | --- |
+| Public | `AZURE_STORAGE_CONTAINER_NAME` | Anonymous read for blobs | Every image the application serves |
+| Quarantine | `AZURE_STORAGE_QUARANTINE_CONTAINER_NAME` (default `event-assets-quarantine`) | Private | Browser uploads that have not been validated yet |
+
+**The API does not create containers.** Create both before deploying a version that includes quarantine. `storage.quarantine` is on by default, and presigned uploads fail until the quarantine container exists. Use the DevTasks command with a connection string allowed to create containers:
+
+```powershell
+dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- storage-provision
+```
+
+Or use the Azure CLI:
+
+```powershell
+az storage container create --name <public-container> --public-access blob --connection-string "<connection-string>"
+az storage container create --name event-assets-quarantine --public-access off --connection-string "<connection-string>"
+```
+
+The command reports containers that already exist without changing them. It fails if the quarantine container allows anonymous access, because that would publish unvalidated uploads.
+
+Nothing on the request path needs container-create rights any more. The app still signs upload URLs with the account key, though, so its connection string cannot be narrowed below account-key access yet.
+
+Browsers upload directly to the quarantine container. The storage account's Blob service CORS rules must allow `PUT` from the frontend origin with the `x-ms-blob-type` and `Content-Type` headers. Those rules are set for the whole account, so a configuration that already allowed uploads to the public container covers quarantine as well.
+
+The API's hourly quarantine reaper deletes uploads that were never attached. As defence in depth you can also add a lifecycle management rule that deletes blobs in the quarantine container more than two days after creation. That does not interfere with the application, because an upload older than 24 hours can no longer be attached.
+
+The `mediaassets` migration runs at startup like every other migration. It backfills one `Legacy` asset per existing image URL, without touching the blobs themselves.
+
+**To roll back quarantine**, set `FEATURE_STORAGE_QUARANTINE=false`. Uploads then go straight to the public container and are checked in place, exactly as before. Uploads issued while quarantine was on but not yet attached need to be uploaded again. The reaper keeps running and deletes what quarantine held.
+
 ## Kubernetes assets and gaps
 
 [`eventxperience.yml`](../eventxperience.yml) supplies namespace, service, deployment, and storage resources for a local cluster. [`bin/k8.ps1`](../bin/k8.ps1), exposed by `.\app.ps1 k8`, builds local images, applies the manifest, waits for core deployments, and starts port forwarding. It builds for `linux/arm64` and assumes those image tags are available to the target cluster; it does not publish them to a registry.

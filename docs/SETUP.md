@@ -28,6 +28,14 @@ Copy-Item .env.example frontend/.env
 
 Use the [configuration guide](CONFIGURATION.md) to align frontend public values/flags with the API. Existing process variables take precedence over dotenv values.
 
+To exercise image uploads, point `AZURE_STORAGE_CONNECTION_STRING` and `AZURE_STORAGE_CONTAINER_NAME` at a storage account. Then create the public and quarantine containers once; the API does not create them:
+
+```powershell
+dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- storage-provision
+```
+
+It reads the storage settings from the root `.env` and reports containers that already exist without changing them. See [blob storage](DEPLOYMENT.md#blob-storage).
+
 ## Full Docker stack
 
 ```powershell

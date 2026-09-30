@@ -45,5 +45,47 @@ Normal startup validates settings, verifies the database connection, applies EF 
 - **Elasticsearch:** Event, club, and club-post search documents. Search code includes database fallback behavior; index updates are eventually consistent.
 - **Kafka Connect:** Debezium captures PostgreSQL outbox rows and routes search messages to Kafka. The three connector definitions and registration script live in `docker/kafka-connect/`.
 - **Workers:** Three indexers apply search updates/deletes, the email worker sends SMTP messages and publishes invitation status, and the SMS worker sends Twilio MFA messages. Read their [READMEs](../backend/README.md#workers) for configuration and differing failure policies.
+- **Azure Blob Storage:** Two containers in one storage account. The public container, which allows anonymous blob reads, serves every image. The private quarantine container receives browser uploads until they have been validated. The API never creates containers; see [deployment](DEPLOYMENT.md#blob-storage).
+
+## Image uploads
+
+Avatars are posted to the API, which decodes and re-encodes them before storing anything. Event, club, and series images are uploaded by the browser straight to storage through a presigned URL, so the server first sees those bytes when they are attached.
+
+With `storage.quarantine` on (the default), a presigned upload lands in the quarantine container, and a `MediaAssets` row tracks it through this lifecycle:
+
+```mermaid
+stateDiagram-v2
+    [*] --> PendingUpload: presigned URL issued
+    PendingUpload --> Uploaded: attach finds the bytes
+    Uploaded --> Processing: attach claims the asset
+    Processing --> Ready: validated, re-encoded, published
+    Processing --> Rejected: bytes refused
+    Processing --> Uploaded: retryable fault, or stale claim
+    Processing --> NeedsReview: reserved for moderation
+    NeedsReview --> Ready
+    NeedsReview --> Rejected
+    PendingUpload --> Rejected: expired after 24 h
+    Uploaded --> Rejected: expired after 24 h
+```
+
+The presigned endpoint reserves the image's public URL with a `.webp` name. The client attaches that URL exactly as it did before quarantine, so none of the attach paths changed shape. Attaching the URL runs the validation pipeline (`MediaValidationPipeline`), synchronously inside the attach request. The pipeline:
+
+1. Checks the size and byte signature.
+2. Decodes one frame and resizes it to the gallery edge.
+3. Applies the EXIF orientation, strips all metadata, and encodes WebP.
+4. Writes the result to the reserved URL.
+
+The quarantine copy is deleted only after the outcome is recorded, so a crash in between retries from intact bytes. The pipeline has no database access, so it can move into a worker without changing its logic. Every state change is a conditional update, and an illegal move, such as Ready back to Processing, throws.
+
+**Public reads never see an unvalidated image, by construction.** An attach path writes a URL onto an event, club, or user only after its asset is Ready. A rejected or unfinished upload therefore never reaches a row a public page reads, and no read path filters on asset status. That invariant holds while the pipeline runs inside the attach request. Moving it into a worker will make attach return before the asset is Ready, and public reads will then need an explicit `Status = Ready` filter. The recommended publish rule for that change has two parts:
+
+- Allow an event to be published while its cover is still Processing; the image appears once it is ready.
+- Block publishing when the cover is Rejected.
+
+`QuarantineReaper` runs hourly. It expires uploads that were issued and never attached within 24 hours, and deletes quarantined blobs older than a day that no asset is working on. The orphan sweeper cannot see the quarantine container, and nothing else removes a blob a client uploaded and never attached. The reaper is gated on the `storage` parent flag, so turning quarantine off still drains what it holds. The orphan sweeper treats `MediaAssets.PublicUrl` as a reference.
+
+`MediaAssets` is an upload ledger, not a reference count. Nothing references it by foreign key yet. Deleting an event deletes its blobs but leaves their asset rows, and one URL can be shared by several recurrence occurrences. Existing images were backfilled as `Legacy` assets with `ValidatedAt` null, which marks the backlog that was never re-checked.
+
+With `storage.quarantine` off, uploads go straight to the public container and are checked in place for size and signature when attached, as they were before quarantine.
 
 Feature flags control backend endpoint discovery, selected service registrations and hosted services, and frontend navigation/lazy matching. Backend-only flags and shared frontend flags differ; see [configuration](CONFIGURATION.md). See [testing](TESTING.md) for isolated container-backed fixtures and [deployment](DEPLOYMENT.md) for operational limitations.

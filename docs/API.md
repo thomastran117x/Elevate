@@ -50,7 +50,19 @@ JPEG, PNG, WebP, and GIF are accepted. A static GIF is converted to WebP. **Anim
 
 Processing runs on a small number of slots shared by the whole process. An upload that waits longer than the configured slot timeout is rejected with 503 and can be retried. Uploads racing each other for one account can end in 409 when each keeps replacing the other; that is retryable as well. A request that outlives the server's request-timeout policy gets the usual 504. A client that disconnects part-way is recorded as 499 for the access log; nothing is sent, because the connection is already gone.
 
-Presigned uploads for events, clubs, and series are not re-encoded yet. The browser sends those bytes straight to storage, and they are checked only for size and file signature when attached.
+Event, club, and series images use a presigned upload instead:
+
+1. `POST /api/events/images/presigned-url` returns a write-once `uploadUrl`, the `publicUrl` to attach, and a `mediaAssetId`.
+2. The browser PUTs the file to `uploadUrl` with an `x-ms-blob-type: BlockBlob` header.
+3. The client attaches `publicUrl`, through `POST /api/events/{eventId}/images` or in an event, draft, series, or club payload.
+
+When uploads are quarantined (`storage.quarantine`, on by default), the bytes land in a private container and nothing exists at `publicUrl` until the image has been attached. Attaching it validates the bytes and re-encodes them exactly as for avatars, but with a 2048-pixel long edge by default. The result is published at `publicUrl`, which therefore always ends in `.webp`. A refused image makes the attach request fail with 400 and the reason, for example "Animated images are not supported. Upload a single-frame image." Two other attach failures are retryable: 503 means no processing slot came free in time, and 409 means another request is checking the same upload. An upload that is never attached is expired after 24 hours. Clients should keep showing the file they uploaded until the image is live, rather than loading `publicUrl` early.
+
+`GET /api/media/{publicId}` reports where an upload is, by its `mediaAssetId`, as `{ id, status, url, rejectionReason }`. `status` is a number, decoded by position: 0 pending upload, 1 uploaded, 2 processing, 3 ready, 4 rejected, 5 needs review. New values are only ever appended. `url` is set only when the image is ready, and `rejectionReason` only when it is rejected. The endpoint answers the uploader and managers of the club the upload was issued for; anyone else gets 404, whether or not the id exists.
+
+It exists for an editor waiting on an image it just attached. It uses the global per-user rate limit rather than the image-upload policy, so polling does not use up upload allowance. The frontend polls every 1.5 seconds for the first 10 seconds, then every 4 seconds up to a minute. Attach currently completes validation before it returns, so the first read after a successful attach already reports ready.
+
+When quarantine is off, `mediaAssetId` is null, `GET /api/media/{publicId}` does not exist, and the uploaded bytes are what `publicUrl` serves. Those bytes are checked only for size and file signature when attached, and they are not re-encoded.
 
 ## Feature flags and realtime
 
