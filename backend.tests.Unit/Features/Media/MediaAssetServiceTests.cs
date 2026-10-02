@@ -418,7 +418,9 @@ public class MediaAssetServiceTests
                 harness.Repository,
                 harness.Blobs,
                 cache.Object,
-                new MediaValidationPipeline(harness.Blobs, processor),
+                new InlineMediaValidationDispatcher(
+                    new MediaValidationPipeline(harness.Blobs, processor),
+                    new MediaValidationRecorder(harness.Repository, harness.Blobs, database.Time)),
                 database.Time);
 
             return harness;
