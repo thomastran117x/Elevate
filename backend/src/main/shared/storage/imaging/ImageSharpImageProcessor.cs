@@ -165,7 +165,9 @@ namespace backend.main.shared.storage.imaging
                 }
 
                 // An animated GIF or WebP is a frame-count bomb, and flattening it to its first
-                // frame silently destroys what the user meant to upload. Refusing says so.
+                // frame silently destroys what the user meant to upload. Refusing says so. The
+                // frontend's image-file-validation.ts mirrors this rule (and the APNG one above)
+                // to warn when the file is picked; a change to either must change both.
                 if (info.FrameMetadataCollection.Count > 1)
                     throw new BadRequestException(AnimatedMessage);
 

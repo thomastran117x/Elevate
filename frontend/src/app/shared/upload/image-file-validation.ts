@@ -33,7 +33,14 @@ export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const MAX_IMAGE_DIMENSION = 8192;
 
 export type ImageFileRejection =
-  'type' | 'empty' | 'too-large' | 'signature' | 'mismatch' | 'undecodable' | 'dimensions';
+  | 'type'
+  | 'empty'
+  | 'too-large'
+  | 'signature'
+  | 'mismatch'
+  | 'animated'
+  | 'undecodable'
+  | 'dimensions';
 
 export type ImageFileResult =
   { ok: true } | { ok: false; reason: ImageFileRejection; message: string };
@@ -62,6 +69,7 @@ const MESSAGES: Record<ImageFileRejection, (name: string) => string> = {
   'too-large': (name) => `"${name}" is larger than ${MAX_IMAGE_BYTES / (1024 * 1024)}MB.`,
   signature: (name) => `"${name}" isn't a ${SUPPORTED_LIST} image.`,
   mismatch: (name) => `"${name}" doesn't match its file type.`,
+  animated: (name) => `"${name}" is animated. Upload a single-frame image.`,
   undecodable: (name) => `"${name}" couldn't be read as an image.`,
   dimensions: (name) =>
     `"${name}" is larger than ${MAX_IMAGE_DIMENSION} × ${MAX_IMAGE_DIMENSION} pixels.`,
@@ -138,6 +146,90 @@ export async function sniffImageFormat(file: Blob): Promise<ImageFormat | null> 
   return null;
 }
 
+/**
+ * Whether an image of the given format holds more than one frame. Mirrors the server's
+ * `ImageSharpImageProcessor`, which refuses animated GIF, WebP and APNG because re-encoding keeps
+ * only the first frame: saying so when the file is picked beats a refusal after the upload.
+ *
+ * Reads structure only — block, chunk and header markers — never pixel data. A file too malformed
+ * to walk counts as not animated here; the decode probe and the server judge it.
+ */
+export async function isAnimatedImage(file: Blob, format: ImageFormat): Promise<boolean> {
+  if (format === 'jpeg') return false;
+
+  let bytes: Uint8Array;
+  try {
+    // WebP declares animation in its first header; GIF and PNG have to be walked.
+    bytes = new Uint8Array(await (format === 'webp' ? file.slice(0, 32) : file).arrayBuffer());
+  } catch {
+    return false;
+  }
+
+  if (format === 'gif') return gifHasSeveralFrames(bytes);
+  if (format === 'png') return pngHasAnimationControl(bytes);
+  return webpIsAnimated(bytes);
+}
+
+/** Counts image descriptors past the header, stopping at the second. */
+function gifHasSeveralFrames(bytes: Uint8Array): boolean {
+  if (bytes.length < 13) return false;
+
+  let offset = 13 + colorTableLength(bytes[10]);
+  let frames = 0;
+  while (offset < bytes.length) {
+    const block = bytes[offset];
+    if (block === 0x3b) break; // trailer
+    if (block === 0x21) {
+      // Extension: introducer, label, then data sub-blocks.
+      offset = skipSubBlocks(bytes, offset + 2);
+    } else if (block === 0x2c) {
+      if (++frames > 1) return true;
+      // Descriptor (10 bytes), optional local colour table, LZW code size, then image data.
+      const flags = bytes[offset + 9] ?? 0;
+      offset = skipSubBlocks(bytes, offset + 10 + colorTableLength(flags) + 1);
+    } else {
+      break; // malformed; leave it to the decoder
+    }
+  }
+  return false;
+}
+
+/** Bytes in a GIF colour table described by a packed-fields byte, or 0 when there is none. */
+function colorTableLength(flags: number): number {
+  return flags & 0x80 ? 3 * (1 << ((flags & 0x07) + 1)) : 0;
+}
+
+function skipSubBlocks(bytes: Uint8Array, offset: number): number {
+  while (offset < bytes.length) {
+    const size = bytes[offset];
+    offset += 1 + size;
+    if (size === 0) break;
+  }
+  return offset;
+}
+
+/** Whether an `acTL` chunk precedes the first `IDAT`, which is what makes a PNG an APNG. */
+function pngHasAnimationControl(bytes: Uint8Array): boolean {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const acTL = ascii('acTL');
+  const IDAT = ascii('IDAT');
+  const IEND = ascii('IEND');
+
+  let offset = 8;
+  while (offset + 8 <= bytes.length) {
+    if (startsWith(bytes, acTL, offset + 4)) return true;
+    if (startsWith(bytes, IDAT, offset + 4) || startsWith(bytes, IEND, offset + 4)) return false;
+    // Length, type, data, CRC.
+    offset += 12 + view.getUint32(offset);
+  }
+  return false;
+}
+
+/** Whether an extended (`VP8X`) WebP header sets its animation flag. */
+function webpIsAnimated(bytes: Uint8Array): boolean {
+  return startsWith(bytes, ascii('VP8X'), 12) && bytes.length > 20 && (bytes[20] & 0x02) !== 0;
+}
+
 /** Decodes the image to read its size. Rejects when the browser cannot decode it. */
 export async function probeImageDimensions(file: Blob): Promise<{ width: number; height: number }> {
   const bitmap = await createImageBitmap(file);
@@ -150,7 +242,7 @@ export async function probeImageDimensions(file: Blob): Promise<{ width: number;
 
 /**
  * Every check, in the order the server applies its own: type and size, then the bytes, then the
- * declared type against the bytes, then whether the image decodes at a sane size. The decode also
+ * declared type against the bytes, then animation, then whether the image decodes at a sane size. The decode also
  * catches a file with a valid header and a corrupt body before any upload starts.
  *
  * The declared-type cross-check is skipped for an untyped file, as it is on the server. Where the
@@ -166,6 +258,8 @@ export async function screenImageFile(file: File): Promise<ImageFileResult> {
 
   const declared = DECLARED_FORMATS[declaredType(file)];
   if (declared && declared !== format) return reject(file, 'mismatch');
+
+  if (await isAnimatedImage(file, format)) return reject(file, 'animated');
 
   if (typeof createImageBitmap !== 'function') return ACCEPTED;
 
