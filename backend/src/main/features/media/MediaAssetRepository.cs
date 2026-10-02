@@ -40,7 +40,8 @@ public class MediaAssetRepository : IMediaAssetRepository
         MediaAssetStatus from,
         MediaAssetStatus to,
         MediaAssetChanges? changes = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int? whenAttempt = null)
     {
         MediaAssetTransitions.EnsureAllowed(from, to);
 
@@ -49,6 +50,7 @@ public class MediaAssetRepository : IMediaAssetRepository
 
         var affected = await _context.MediaAssets
             .Where(asset => asset.Id == id && asset.Status == from)
+            .Where(asset => whenAttempt == null || asset.AttemptCount == whenAttempt)
             .ExecuteUpdateAsync(
                 setters =>
                 {

@@ -79,6 +79,27 @@ public class MediaAssetRepositoryTests
     }
 
     [Fact]
+    public async Task TryTransitionAsync_ShouldRequireTheExpectedAttempt_WhenOneIsGiven()
+    {
+        // The attempt count identifies a claim, so a holder whose claim was taken over (and the
+        // count bumped) cannot finish it.
+        await using var database = await MediaTestDatabase.CreateAsync();
+        var asset = await database.SeedAssetAsync(MediaAssetStatus.Uploaded);
+        var repository = database.CreateRepository();
+        await repository.TryTransitionAsync(
+            asset.Id, MediaAssetStatus.Uploaded, MediaAssetStatus.Processing, new MediaAssetChanges { CountAttempt = true });
+
+        var stale = await repository.TryTransitionAsync(
+            asset.Id, MediaAssetStatus.Processing, MediaAssetStatus.Ready, whenAttempt: 0);
+        var current = await repository.TryTransitionAsync(
+            asset.Id, MediaAssetStatus.Processing, MediaAssetStatus.Ready, whenAttempt: 1);
+
+        stale.Should().BeFalse();
+        current.Should().BeTrue();
+        (await database.ReloadAsync(asset.Id)).Status.Should().Be(MediaAssetStatus.Ready);
+    }
+
+    [Fact]
     public async Task TryTransitionAsync_ShouldThrowBeforeTouchingTheDatabase_WhenTheMoveIsIllegal()
     {
         await using var database = await MediaTestDatabase.CreateAsync();

@@ -40,6 +40,18 @@ internal sealed class InMemoryBlobStore : IAzureBlobService
         get; set;
     }
 
+    /// <summary>Runs inside every quarantine inspection, to interleave another request.</summary>
+    public Func<Task>? OnQuarantineInspect
+    {
+        get; set;
+    }
+
+    /// <summary>Runs inside every public write, before it lands, to interleave another request.</summary>
+    public Func<Task>? OnPublish
+    {
+        get; set;
+    }
+
     /// <summary>Thrown from quarantine listing, to simulate an unprovisioned container.</summary>
     public Exception? FailListing
     {
@@ -74,17 +86,20 @@ internal sealed class InMemoryBlobStore : IAzureBlobService
 
     public bool IsOwnedBlobUrl(string blobUrl) => blobUrl.StartsWith(PublicBase + "/", StringComparison.Ordinal);
 
-    public Task<BlobInspection?> InspectQuarantineBlobAsync(
+    public async Task<BlobInspection?> InspectQuarantineBlobAsync(
         string quarantineBlobPath,
         int prefixByteCount = ImageSignatureInspector.HeaderByteCount,
         CancellationToken cancellationToken = default)
     {
         QuarantineInspections++;
+        if (OnQuarantineInspect is { } hook)
+            await hook();
+
         if (!Quarantine.TryGetValue(quarantineBlobPath, out var blob))
-            return Task.FromResult<BlobInspection?>(null);
+            return null;
 
         var header = blob.Content.Length <= prefixByteCount ? blob.Content : blob.Content[..prefixByteCount];
-        return Task.FromResult<BlobInspection?>(new BlobInspection(blob.Content.LongLength, blob.ContentType, header));
+        return new BlobInspection(blob.Content.LongLength, blob.ContentType, header);
     }
 
     public Task<Stream?> OpenQuarantineBlobReadAsync(string quarantineBlobPath, CancellationToken cancellationToken = default) =>
@@ -92,8 +107,11 @@ internal sealed class InMemoryBlobStore : IAzureBlobService
             ? new MemoryStream(blob.Content, writable: false)
             : null);
 
-    public Task UploadProcessedImageToAsync(ProcessedImage image, string publicUrl, CancellationToken cancellationToken = default)
+    public async Task UploadProcessedImageToAsync(ProcessedImage image, string publicUrl, CancellationToken cancellationToken = default)
     {
+        if (OnPublish is { } hook)
+            await hook();
+
         if (FailNextPublish is { } failure)
         {
             FailNextPublish = null;
@@ -104,7 +122,6 @@ internal sealed class InMemoryBlobStore : IAzureBlobService
             throw new ArgumentException("The target URL is not in the public container.", nameof(publicUrl));
 
         Published[publicUrl] = image;
-        return Task.CompletedTask;
     }
 
     public Task DeleteQuarantineBlobAsync(string quarantineBlobPath)

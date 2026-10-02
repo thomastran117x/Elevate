@@ -28,6 +28,11 @@ public interface IMediaAssetRepository
     /// Callers reload and act on the current status instead.
     /// </para>
     /// </remarks>
+    /// <param name="whenAttempt">
+    /// Also require <see cref="MediaAsset.AttemptCount"/> to equal this. Each claim bumps the
+    /// count, so it identifies the claim: a holder that passes its own attempt cannot finish or
+    /// release a claim someone else has since taken over.
+    /// </param>
     /// <exception cref="InvalidOperationException">The move is illegal.</exception>
     [NoRetry]
     Task<bool> TryTransitionAsync(
@@ -35,7 +40,8 @@ public interface IMediaAssetRepository
         MediaAssetStatus from,
         MediaAssetStatus to,
         MediaAssetChanges? changes = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        int? whenAttempt = null);
 
     /// <summary>
     /// Assets still waiting in <see cref="MediaAssetStatus.PendingUpload"/> or

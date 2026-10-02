@@ -180,20 +180,41 @@ public sealed class MediaAssetService : IMediaAssetService
                         MediaAssetStatus.Uploaded,
                         MediaAssetStatus.Processing,
                         new MediaAssetChanges { CountAttempt = true },
-                        cancellationToken);
+                        cancellationToken,
+                        whenAttempt: asset.AttemptCount);
 
                     if (!claimed)
                         continue;
 
-                    await ProcessClaimedAsync(asset, subject, cancellationToken);
-                    return;
+                    // The claim bumped the count, so this number is the claim from here on.
+                    if (await ProcessClaimedAsync(asset, asset.AttemptCount + 1, subject, cancellationToken))
+                        return;
+
+                    // The claim was taken over before the outcome was recorded. Whoever holds it
+                    // now decides; the next lap reports their result, or that they are still on it.
+                    continue;
             }
         }
 
         throw new ConflictException(StillProcessingMessage);
     }
 
-    private async Task ProcessClaimedAsync(MediaAsset asset, string subject, CancellationToken cancellationToken)
+    /// <summary>
+    /// Runs the pipeline under claim <paramref name="attempt"/> and records the outcome.
+    /// </summary>
+    /// <returns>
+    /// True once an acceptance is recorded. False when the claim was lost first — released as
+    /// stale and taken over, or the row deleted with its account — in which case nothing is
+    /// recorded and the quarantined bytes are left for the current holder. Whatever this attempt
+    /// already published at the reserved URL is the same bytes the holder will publish, and if
+    /// no holder ever does, nothing references the blob and the orphan sweeper reclaims it.
+    /// </returns>
+    /// <exception cref="BadRequestException">The bytes were refused, and that was recorded.</exception>
+    private async Task<bool> ProcessClaimedAsync(
+        MediaAsset asset,
+        int attempt,
+        string subject,
+        CancellationToken cancellationToken)
     {
         MediaValidationOutcome outcome;
         try
@@ -211,13 +232,13 @@ public sealed class MediaAssetService : IMediaAssetService
             // request. Hand the asset back so the user's retry can claim it straight away rather
             // than waiting out the stale-claim window. CancellationToken.None: the release must
             // happen even when it was the request's own token that fired.
-            await ReleaseClaimAsync(asset);
+            await ReleaseClaimAsync(asset, attempt);
             throw;
         }
 
         if (outcome.Accepted)
         {
-            await _repository.TryTransitionAsync(
+            var recorded = await _repository.TryTransitionAsync(
                 asset.Id,
                 MediaAssetStatus.Processing,
                 MediaAssetStatus.Ready,
@@ -230,24 +251,39 @@ public sealed class MediaAssetService : IMediaAssetService
                     ValidatedAt = UtcNow(),
                     ClearQuarantineBlobPath = true
                 },
-                CancellationToken.None);
+                CancellationToken.None,
+                whenAttempt: attempt);
+
+            if (!recorded)
+                return ClaimLost(asset, attempt);
 
             // Only now: had the Ready write failed, the retry would need these bytes.
             await _blobService.DeleteQuarantineBlobAsync(asset.QuarantineBlobPath ?? string.Empty);
-            return;
+            return true;
         }
 
         var reason = outcome.RejectionReason ?? GenericRejectionMessage;
-        await _repository.TryTransitionAsync(
+        var rejected = await _repository.TryTransitionAsync(
             asset.Id,
             MediaAssetStatus.Processing,
             MediaAssetStatus.Rejected,
             new MediaAssetChanges { RejectionReason = reason, ClearQuarantineBlobPath = true },
-            CancellationToken.None);
+            CancellationToken.None,
+            whenAttempt: attempt);
+
+        if (!rejected)
+            return ClaimLost(asset, attempt);
 
         await _blobService.DeleteQuarantineBlobAsync(asset.QuarantineBlobPath ?? string.Empty);
 
         throw new BadRequestException(reason);
+    }
+
+    private static bool ClaimLost(MediaAsset asset, int attempt)
+    {
+        Logger.Warn(
+            $"[MediaAssetService] Claim {attempt} on media asset {asset.PublicId} was taken over before its outcome was recorded.");
+        return false;
     }
 
     /// <remarks>
@@ -255,12 +291,17 @@ public sealed class MediaAssetService : IMediaAssetService
     /// that one says what actually went wrong. An asset left in Processing is recovered by the
     /// stale-claim path anyway.
     /// </remarks>
-    private async Task ReleaseClaimAsync(MediaAsset asset)
+    private async Task ReleaseClaimAsync(MediaAsset asset, int attempt)
     {
         try
         {
+            // Only this claim: one that was already taken over is not ours to hand back.
             await _repository.TryTransitionAsync(
-                asset.Id, MediaAssetStatus.Processing, MediaAssetStatus.Uploaded, cancellationToken: CancellationToken.None);
+                asset.Id,
+                MediaAssetStatus.Processing,
+                MediaAssetStatus.Uploaded,
+                cancellationToken: CancellationToken.None,
+                whenAttempt: attempt);
         }
         catch (Exception ex)
         {

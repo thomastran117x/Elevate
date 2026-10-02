@@ -201,6 +201,63 @@ public class MediaAssetServiceTests
     }
 
     [Fact]
+    public async Task AttachAsync_ShouldNotRecordReady_OrDeleteTheBytes_WhenItsClaimWasTakenOver()
+    {
+        // This attach is slow; meanwhile another request releases its claim as stale and takes
+        // the asset over. Finishing anyway would mark the asset Ready under the new holder and
+        // delete the bytes the new holder is about to read.
+        await using var harness = await Harness.CreateAsync();
+        var upload = await harness.IssueAndUploadAsync(InMemoryBlobStore.Image());
+        var quarantinePath = (await harness.AssetAsync(upload)).QuarantineBlobPath!;
+        harness.Blobs.OnPublish = () => harness.TakeOverClaimAsync(upload);
+
+        var act = () => harness.Service.AttachAsync(harness.UserId, upload.PublicUrl, "Event images");
+
+        await act.Should().ThrowAsync<ConflictException>().WithMessage(MediaAssetService.StillProcessingMessage);
+        var asset = await harness.AssetAsync(upload);
+        asset.Status.Should().Be(MediaAssetStatus.Processing, "the asset is the new holder's to finish");
+        asset.AttemptCount.Should().Be(2);
+        asset.ValidatedAt.Should().BeNull();
+        harness.Blobs.Quarantine.Should().ContainKey(quarantinePath);
+    }
+
+    [Fact]
+    public async Task AttachAsync_ShouldNotRecordARejection_OrDeleteTheBytes_WhenItsClaimWasTakenOver()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var upload = await harness.IssueAndUploadAsync([0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B]);
+        var asset = await harness.AssetAsync(upload);
+        await harness.Repository.TryTransitionAsync(asset.Id, MediaAssetStatus.PendingUpload, MediaAssetStatus.Uploaded);
+        harness.Blobs.OnQuarantineInspect = () => harness.TakeOverClaimAsync(upload);
+
+        var act = () => harness.Service.AttachAsync(harness.UserId, upload.PublicUrl, "Event images");
+
+        await act.Should().ThrowAsync<ConflictException>();
+        var stored = await harness.AssetAsync(upload);
+        stored.Status.Should().Be(MediaAssetStatus.Processing);
+        stored.RejectionReason.Should().BeNull();
+        harness.Blobs.Quarantine.Should().ContainKey(asset.QuarantineBlobPath!);
+    }
+
+    [Fact]
+    public async Task AttachAsync_ShouldNotReleaseAClaimItNoLongerHolds_WhenItsPipelineFails()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var upload = await harness.IssueAndUploadAsync(InMemoryBlobStore.Image());
+        harness.Blobs.OnPublish = async () =>
+        {
+            await harness.TakeOverClaimAsync(upload);
+            throw new IOException("storage went away");
+        };
+
+        var act = () => harness.Service.AttachAsync(harness.UserId, upload.PublicUrl, "Event images");
+
+        await act.Should().ThrowAsync<IOException>();
+        (await harness.AssetAsync(upload)).Status.Should().Be(MediaAssetStatus.Processing,
+            "the claim belongs to the request that took it over");
+    }
+
+    [Fact]
     public async Task AttachAsync_ShouldReleaseTheClaim_WhenNoProcessingSlotIsFree()
     {
         var busy = new Mock<IImageProcessor>();
@@ -399,6 +456,18 @@ public class MediaAssetServiceTests
 
         public async Task<MediaAsset> AssetAsync(PresignedUploadResponse upload) =>
             (await Repository.GetByPublicIdAsync(upload.MediaAssetId!.Value))!;
+
+        /// <summary>
+        /// What another request does to a claim it judges stale: release it, then claim it for
+        /// itself, which bumps the attempt count.
+        /// </summary>
+        public async Task TakeOverClaimAsync(PresignedUploadResponse upload)
+        {
+            var asset = await AssetAsync(upload);
+            await Repository.TryTransitionAsync(asset.Id, MediaAssetStatus.Processing, MediaAssetStatus.Uploaded);
+            await Repository.TryTransitionAsync(
+                asset.Id, MediaAssetStatus.Uploaded, MediaAssetStatus.Processing, new MediaAssetChanges { CountAttempt = true });
+        }
 
         public ValueTask DisposeAsync() => Database.DisposeAsync();
     }
