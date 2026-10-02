@@ -57,8 +57,8 @@ Keep the pull request focused and structure its description with:
 - **Summary:** a concise overview of the outcome.
 - **Context:** the issue, bug, or user need that prompted the change, including a link or identifier when available.
 - **Changes made:** the important implementation and documentation changes.
-- **How to test:** clear verification steps and the checks that were run, distinguishing passed checks from checks that could not be run.
+- **How to test:** reproducible end-to-end setup and verification steps, including applicable prerequisites, configuration or test data, API or UI actions, and expected results.
 - **Screenshots:** before-and-after or resulting UI evidence for frontend changes.
 - **Reviewer notes:** migrations, configuration changes, known limitations, follow-up work, or anything else that will help the reviewer.
 
-Screenshots and reviewer notes may be omitted when they are not relevant. See [CONTRIBUTING.md](../CONTRIBUTING.md) for the complete contribution workflow.
+Do not repeat routine formatting, build, typecheck, unit, coverage, integration, or audit commands already reported by CI. Mention validation commands only when CI does not run them, they could not be completed, or reviewers need special context. Screenshots and reviewer notes may be omitted when they are not relevant. See [CONTRIBUTING.md](../CONTRIBUTING.md) for the complete contribution workflow.
