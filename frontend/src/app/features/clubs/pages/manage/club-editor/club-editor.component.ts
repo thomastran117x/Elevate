@@ -242,9 +242,10 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
 
   async onGallerySelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
-    const files = input.files;
+    // Copied out first: a browser's FileList is live, and clearing the input empties it.
+    const files = Array.from(input.files ?? []);
     input.value = '';
-    if (files) await this.uploadGalleryFiles(files);
+    if (files.length) await this.uploadGalleryFiles(files);
   }
 
   /** The label a tile overlays while its image is being checked, or null. */
@@ -260,7 +261,7 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
     this.galleryDirty = true;
   }
 
-  private async uploadGalleryFiles(files: FileList): Promise<void> {
+  private async uploadGalleryFiles(files: ArrayLike<File>): Promise<void> {
     this.error = '';
     this.success = '';
     this.galleryErrors = [];

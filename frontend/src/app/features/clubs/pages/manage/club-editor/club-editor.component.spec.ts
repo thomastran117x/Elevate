@@ -385,6 +385,23 @@ describe('ClubEditorComponent', () => {
       expect(uploads.uploadImage).not.toHaveBeenCalled();
     });
 
+    it('uploads what a real file input picked, even though it clears the input', async () => {
+      // A browser FileList is live: clearing the input empties it. The stub inputs above hold a
+      // plain array and cannot show that, so this uses a real element.
+      uploads.uploadImage.and.returnValue(of(uploaded('https://cdn/real.png')));
+      const element = document.createElement('input');
+      element.type = 'file';
+      const picked = new DataTransfer();
+      picked.items.add(await imageFile('real.png'));
+      element.files = picked.files;
+
+      await component.onGallerySelected({ target: element } as unknown as Event);
+
+      expect(uploads.uploadImage).toHaveBeenCalledTimes(1);
+      expect(component.galleryUrls).toEqual(['https://cdn/real.png']);
+      expect(element.value).toBe('');
+    });
+
     it('refuses more photos once the gallery is full', async () => {
       component.galleryUrls = ['1', '2', '3', '4', '5'];
 
