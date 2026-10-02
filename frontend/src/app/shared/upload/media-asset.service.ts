@@ -4,6 +4,7 @@ import {
   EMPTY,
   Observable,
   catchError,
+  concat,
   expand,
   filter,
   map,
@@ -43,17 +44,26 @@ export interface MediaAsset {
   rejectionReason: string | null;
 }
 
-/** What {@link MediaAssetService.watch} reports: each status it reads, then `slow` if it gives up. */
+/**
+ * What {@link MediaAssetService.watch} reports: each status it reads, and `slow` once, when the
+ * check has taken long enough that the editor should say so.
+ */
 export type MediaAssetWatchEvent = { kind: 'status'; asset: MediaAsset } | { kind: 'slow' };
 
 /**
- * Poll cadence while waiting on a check: quickly at first, when the answer usually arrives,
- * then more slowly, then not at all. Offsets are milliseconds after the first read.
+ * Poll cadence while waiting on a check: quickly at first, when the answer usually arrives, then
+ * more slowly for the rest of the first minute. After that the editor says the image is still
+ * processing, and reads are spaced out but keep going, so a late answer still swaps the image in.
+ * Offsets are milliseconds after the first read.
  */
 export const MEDIA_POLL_FAST_INTERVAL_MS = 1500;
 export const MEDIA_POLL_FAST_WINDOW_MS = 10_000;
 export const MEDIA_POLL_SLOW_INTERVAL_MS = 4000;
-export const MEDIA_POLL_CEILING_MS = 60_000;
+/** When the check counts as slow, and the reads move to the backed-off interval. */
+export const MEDIA_POLL_SLOW_AFTER_MS = 60_000;
+export const MEDIA_POLL_BACKOFF_INTERVAL_MS = 15_000;
+/** When the watch stops for good. */
+export const MEDIA_POLL_GIVE_UP_MS = 10 * 60_000;
 
 function decodeStatus(value: number | undefined): MediaAssetStatus | null {
   return value !== undefined && Number.isInteger(value)
@@ -83,15 +93,17 @@ export function isSettled(status: MediaAssetStatus): boolean {
 }
 
 /**
- * The delay before the next read, given how long the watch has been running; null once the
- * ceiling is reached.
+ * The delay before the next read, given how long the watch has been running; null once it is
+ * time to give up.
  */
 export function nextPollDelay(elapsedMs: number): number | null {
   const interval =
     elapsedMs < MEDIA_POLL_FAST_WINDOW_MS
       ? MEDIA_POLL_FAST_INTERVAL_MS
-      : MEDIA_POLL_SLOW_INTERVAL_MS;
-  return elapsedMs + interval > MEDIA_POLL_CEILING_MS ? null : interval;
+      : elapsedMs < MEDIA_POLL_SLOW_AFTER_MS
+        ? MEDIA_POLL_SLOW_INTERVAL_MS
+        : MEDIA_POLL_BACKOFF_INTERVAL_MS;
+  return elapsedMs + interval > MEDIA_POLL_GIVE_UP_MS ? null : interval;
 }
 
 type PollStep = { asset: MediaAsset | null; elapsedMs: number } | { slow: true };
@@ -120,10 +132,11 @@ export class MediaAssetService {
   }
 
   /**
-   * Reads the status now, then on the poll schedule until the asset is ready or rejected, or
-   * until the ceiling, when it emits `slow` and completes. A failed read is skipped rather than
-   * ending the watch — except a 404, which means the asset is gone or not the viewer's, and ends
-   * it quietly. Emits nothing during server-side rendering, where there is no one to watch.
+   * Reads the status now, then on the poll schedule until the asset is ready or rejected. Emits
+   * `slow` once the check passes a minute, and keeps reading at a backed-off pace until it gives
+   * up and completes. A failed read is skipped rather than ending the watch — except a 404,
+   * which means the asset is gone or not the viewer's, and ends it quietly. Emits nothing during
+   * server-side rendering, where there is no one to watch.
    */
   watch(mediaAssetId: string): Observable<MediaAssetWatchEvent> {
     if (!this.isBrowser) return EMPTY;
@@ -144,9 +157,16 @@ export class MediaAssetService {
         if (step.asset && isSettled(step.asset.status)) return EMPTY;
 
         const delay = nextPollDelay(step.elapsedMs);
-        if (delay === null) return of<PollStep>({ slow: true });
+        if (delay === null) return EMPTY;
 
-        return timer(delay).pipe(switchMap(() => read(step.elapsedMs + delay)));
+        const next = step.elapsedMs + delay;
+        const turnsSlow =
+          step.elapsedMs < MEDIA_POLL_SLOW_AFTER_MS && next >= MEDIA_POLL_SLOW_AFTER_MS;
+        return timer(delay).pipe(
+          switchMap(() =>
+            turnsSlow ? concat(of<PollStep>({ slow: true }), read(next)) : read(next),
+          ),
+        );
       }),
       filter((step) => 'slow' in step || step.asset !== null),
       map((step): MediaAssetWatchEvent =>

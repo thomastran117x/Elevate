@@ -7,7 +7,8 @@ import { environment } from '@environments/environment';
 import { envelope, errorEnvelope, pascalEnvelope, setupService } from '@testing';
 
 import {
-  MEDIA_POLL_CEILING_MS,
+  MEDIA_POLL_GIVE_UP_MS,
+  MEDIA_POLL_SLOW_AFTER_MS,
   MediaAssetService,
   MediaAssetWatchEvent,
   isSettled,
@@ -86,7 +87,7 @@ describe('MediaAssetService', () => {
       ]);
       expect(completed).toBeTrue();
 
-      tick(MEDIA_POLL_CEILING_MS);
+      tick(MEDIA_POLL_GIVE_UP_MS);
       httpMock.expectNone(url);
     }));
 
@@ -109,11 +110,11 @@ describe('MediaAssetService', () => {
           },
         },
       ]);
-      tick(MEDIA_POLL_CEILING_MS);
+      tick(MEDIA_POLL_GIVE_UP_MS);
       httpMock.expectNone(url);
     }));
 
-    it('slows down after ten seconds, then gives up at the ceiling with a slow event', fakeAsync(() => {
+    it('says the check is slow after a minute, keeps reading at a backed-off pace, then gives up', fakeAsync(() => {
       const events: MediaAssetWatchEvent[] = [];
       let completed = false;
       service
@@ -121,22 +122,56 @@ describe('MediaAssetService', () => {
         .subscribe({ next: (e) => events.push(e), complete: () => (completed = true) });
 
       const readTimes: number[] = [];
+      let slowAt: number | null = null;
       let elapsed = 0;
-      while (!completed && elapsed <= MEDIA_POLL_CEILING_MS + 5000) {
+      while (!completed && elapsed <= MEDIA_POLL_GIVE_UP_MS + 30_000) {
         for (const request of httpMock.match(url)) {
           readTimes.push(elapsed);
           request.flush(statusBody(2));
         }
+        if (slowAt === null && events.some((e) => e.kind === 'slow')) slowAt = elapsed;
         tick(500);
         elapsed += 500;
       }
 
-      // Every 1.5 s until ten seconds have passed, then every 4 s, never past a minute.
+      // Every 1.5 s until ten seconds have passed, then every 4 s for the rest of the minute.
       expect(readTimes.slice(0, 8)).toEqual([0, 1500, 3000, 4500, 6000, 7500, 9000, 10500]);
       expect(readTimes[8]).toBe(14500);
-      expect(readTimes[readTimes.length - 1]).toBeLessThanOrEqual(MEDIA_POLL_CEILING_MS);
-      expect(events[events.length - 1]).toEqual({ kind: 'slow' });
+
+      // Slow is said once, with the first read past a minute, and reading carries on every 15 s.
+      expect(events.filter((e) => e.kind === 'slow').length).toBe(1);
+      expect(slowAt).toBeGreaterThanOrEqual(MEDIA_POLL_SLOW_AFTER_MS);
+      const afterSlow = readTimes.filter((t) => t >= MEDIA_POLL_SLOW_AFTER_MS);
+      expect(afterSlow.length).toBeGreaterThan(30);
+      expect(afterSlow[1] - afterSlow[0]).toBe(15_000);
+
+      // And it stops for good at the give-up point.
+      expect(readTimes[readTimes.length - 1]).toBeLessThanOrEqual(MEDIA_POLL_GIVE_UP_MS);
       expect(completed).toBeTrue();
+    }));
+
+    it('still reports an answer that arrives after the check went slow', fakeAsync(() => {
+      const events: MediaAssetWatchEvent[] = [];
+      let completed = false;
+      service
+        .watch(assetId)
+        .subscribe({ next: (e) => events.push(e), complete: () => (completed = true) });
+
+      let elapsed = 0;
+      while (!events.some((e) => e.kind === 'slow')) {
+        httpMock.match(url).forEach((request) => request.flush(statusBody(2)));
+        tick(500);
+        elapsed += 500;
+      }
+      tick(15_000);
+      httpMock
+        .match(url)
+        .forEach((request) => request.flush(statusBody(3, { url: 'https://cdn/late.webp' })));
+
+      const last = events[events.length - 1];
+      expect(last.kind === 'status' && last.asset.status).toBe('ready');
+      expect(completed).toBeTrue();
+      expect(elapsed).toBeGreaterThanOrEqual(MEDIA_POLL_SLOW_AFTER_MS - 5000);
     }));
 
     it('keeps polling through a failed read', fakeAsync(() => {
@@ -168,7 +203,7 @@ describe('MediaAssetService', () => {
 
       expect(events).toEqual([]);
       expect(completed).toBeTrue();
-      tick(MEDIA_POLL_CEILING_MS);
+      tick(MEDIA_POLL_GIVE_UP_MS);
       httpMock.expectNone(url);
     }));
   });
@@ -204,7 +239,10 @@ describe('MediaAssetService helpers', () => {
     expect(nextPollDelay(9000)).toBe(1500);
     expect(nextPollDelay(10_500)).toBe(4000);
     expect(nextPollDelay(56_000)).toBe(4000);
-    expect(nextPollDelay(58_500)).toBeNull();
+    expect(nextPollDelay(58_500)).toBe(4000);
+    expect(nextPollDelay(62_500)).toBe(15_000);
+    expect(nextPollDelay(584_999)).toBe(15_000);
+    expect(nextPollDelay(590_000)).toBeNull();
   });
 
   it('rejects payloads without an id or a known status', () => {

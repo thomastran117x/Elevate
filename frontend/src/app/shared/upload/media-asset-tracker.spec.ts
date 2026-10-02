@@ -72,14 +72,34 @@ describe('MediaAssetTracker', () => {
     expect(rejected).toHaveBeenCalledOnceWith(url, MEDIA_REJECTED_FALLBACK);
   });
 
-  it('says the image is still processing once polling gives up, and keeps saying so', () => {
+  it('says the image is still processing once the check is slow', () => {
+    tracker.watch(url, 'asset-1');
+
+    events.next({ kind: 'slow' });
+
+    expect(tracker.stateOf(url)).toBe('slow');
+    expect(tracker.labelFor(url)).toBe(MEDIA_SLOW_LABEL);
+  });
+
+  it('still swaps the image in when the answer comes after the check went slow', () => {
+    const ready = jasmine.createSpy('ready');
+    tracker.watch(url, 'asset-1', { ready });
+
+    events.next({ kind: 'slow' });
+    events.next(status('ready'));
+
+    expect(ready).toHaveBeenCalledOnceWith(url);
+    expect(tracker.labelFor(url)).toBeNull();
+  });
+
+  it('stops promising an image once the watch gives up without an answer', () => {
     tracker.watch(url, 'asset-1');
 
     events.next({ kind: 'slow' });
     events.complete();
 
-    expect(tracker.stateOf(url)).toBe('slow');
-    expect(tracker.labelFor(url)).toBe(MEDIA_SLOW_LABEL);
+    expect(tracker.stateOf(url)).toBeNull();
+    expect(tracker.labelFor(url)).toBeNull();
   });
 
   it('stops labelling a tile whose watch ends without an answer', () => {

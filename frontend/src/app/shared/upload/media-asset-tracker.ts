@@ -70,9 +70,11 @@ export class MediaAssetTracker {
             this.setState(publicUrl, 'checking');
         }
       },
-      // A watch that ends without an answer (the asset vanished) simply stops labelling the tile.
+      // A watch that ends without an answer (the asset vanished, or it gave up after minutes of
+      // silence) stops labelling the tile rather than promising an image it no longer watches
+      // for. The tile keeps the local preview, the user's own file, until it is removed.
       complete: () => {
-        if (this.stateOf(publicUrl) === 'checking') this.stop(publicUrl);
+        if (this.stateOf(publicUrl) !== null) this.stop(publicUrl);
       },
     });
 
