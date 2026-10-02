@@ -469,8 +469,17 @@ export class ClubEditorComponent implements OnInit, CanComponentDeactivate {
     this.galleryPreviews.release(url);
   }
 
+  /**
+   * Validation refused an image after the save that attached it. Unreachable while attach
+   * validates synchronously — the save itself fails instead — but it is what keeps a move to
+   * asynchronous validation a backend-only change. Each slot drops the image entirely, so nothing
+   * is left pointing at a URL that will never be published.
+   */
   private onImageRejected(url: string, reason: string): void {
-    if (url === this.imageUrl) this.setSlotPreview('icon', null);
+    if (url === this.imageUrl) {
+      this.setSlotPreview('icon', null);
+      this.imageUrl = '';
+    }
     if (url === this.bannerUrl) {
       this.setSlotPreview('banner', null);
       this.bannerUrl = '';

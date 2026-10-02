@@ -1,5 +1,4 @@
 import { CommonModule } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -7,7 +6,7 @@ import { Subject, catchError, debounceTime, firstValueFrom, map, of, switchMap }
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { requireEnvelopeData } from '../../../../core/api/models/api-envelope.model';
-import { asRecord, readString } from '../../../../core/models/payload-casing';
+import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import {
   ALL_CATEGORIES,
   ALL_RECURRENCE_FREQUENCIES,
@@ -34,22 +33,6 @@ import { MediaAssetTracker } from '@shared/upload/media-asset-tracker';
 import { MediaAssetService } from '@shared/upload/media-asset.service';
 
 const MAX_EVENT_IMAGES = 5;
-
-/**
- * What to tell the organizer when an upload or attach fails: the server's own words when it gave
- * some — a rejected image says exactly what was wrong with the file — else a generic fallback.
- */
-function describeUploadError(error: unknown): string {
-  if (error instanceof HttpErrorResponse) {
-    const body = asRecord(error.error);
-    const message = body ? readString(body, 'Message', 'message') : undefined;
-    if (message) return message;
-  } else if (error instanceof Error) {
-    return error.message;
-  }
-
-  return 'We could not upload one or more images.';
-}
 
 @Component({
   selector: 'app-manage-event-editor',
@@ -599,7 +582,8 @@ export class ManageEventEditorComponent {
         }
       }
     } catch (error: unknown) {
-      this.error = describeUploadError(error);
+      // The server's own words when it gave some — a refused image says exactly what was wrong.
+      this.error = getApiClientMessage(error, 'We could not upload one or more images.');
     } finally {
       // Whatever is still pending failed or never started, so nothing will show its preview.
       this.pendingPreviews.forEach(revokePreviewUrl);

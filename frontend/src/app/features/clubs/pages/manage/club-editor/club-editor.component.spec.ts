@@ -682,6 +682,16 @@ describe('ClubEditorComponent', () => {
         expect(component.error).toBe('The image could not be read.');
       });
 
+      it('drops a rejected icon entirely, so nothing points at an unpublished image', async () => {
+        await uploadIconAndPhotoThenSave();
+
+        checks['asset-icon'].next(settled('rejected', 'The image could not be read.'));
+
+        expect(component.imageUrl).toBe('');
+        expect(component.slotPreviews.icon).toBeNull();
+        expect(component.error).toBe('The image could not be read.');
+      });
+
       it('does not follow an upload replaced before the save', async () => {
         setup({ clubId: '7' });
         uploads.uploadImage.and.returnValues(
