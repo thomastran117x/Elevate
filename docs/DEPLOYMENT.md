@@ -65,6 +65,8 @@ az storage container create --name event-assets-quarantine --public-access off -
 
 The command reports containers that already exist without changing them. It fails if the quarantine container allows anonymous access, because that would publish unvalidated uploads.
 
+At startup, the API checks that the containers it needs exist. That is the public one, plus the quarantine one while `storage.quarantine` is on. For any that are missing it logs an error naming this command; it keeps running, since everything except images still works. Until the containers exist, avatar uploads and attaches return 503, "Image storage is not available right now", rather than a 500. A browser upload into a missing quarantine container is refused by Azure itself.
+
 Nothing on the request path needs container-create rights any more. The app still signs upload URLs with the account key, though, so its connection string cannot be narrowed below account-key access yet.
 
 Browsers upload directly to the quarantine container. The storage account's Blob service CORS rules must allow `PUT` from the frontend origin with the `x-ms-blob-type` and `Content-Type` headers. Those rules are set for the whole account, so a configuration that already allowed uploads to the public container covers quarantine as well.

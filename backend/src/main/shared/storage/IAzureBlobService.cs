@@ -118,6 +118,16 @@ namespace backend.main.shared.storage
         /// configured.
         /// </summary>
         IAsyncEnumerable<QuarantineBlobItem> ListQuarantineBlobsAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// The names of the containers this service needs that do not exist: the public one, and
+        /// the quarantine one when <paramref name="includeQuarantine"/>. Empty when storage is
+        /// not configured, which is reported elsewhere. Needs read access only; nothing is
+        /// created.
+        /// </summary>
+        Task<IReadOnlyList<string>> FindMissingContainersAsync(
+            bool includeQuarantine,
+            CancellationToken cancellationToken = default);
     }
 
     /// <summary>

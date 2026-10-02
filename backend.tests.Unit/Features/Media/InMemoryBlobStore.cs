@@ -176,6 +176,11 @@ internal sealed class InMemoryBlobStore : IAzureBlobService
         yield break;
     }
 
+    public List<string> MissingContainers { get; } = [];
+
+    public Task<IReadOnlyList<string>> FindMissingContainersAsync(bool includeQuarantine, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<string>>(includeQuarantine ? MissingContainers.ToList() : MissingContainers.Where(c => !c.Contains("quarantine")).ToList());
+
     /// <summary>A real, decodable image of the given type.</summary>
     public static byte[] Image(string contentType = "image/png", int width = 40, int height = 30, int frames = 1)
     {

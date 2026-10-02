@@ -403,6 +403,35 @@ public class AzureBlobServiceTests
     }
 
     [Fact]
+    public async Task FindMissingContainersAsync_ShouldReportNothing_WhenStorageIsNotConfigured()
+    {
+        // A missing connection string is reported by configuration validation, not here.
+        var service = CreateServiceWithoutContainer("AZURE_STORAGE_CONNECTION_STRING is not configured.");
+
+        (await service.FindMissingContainersAsync(includeQuarantine: true)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void StorageNotProvisioned_ShouldBeA503TellingTheUserToRetryLater()
+    {
+        var error = AzureBlobService.StorageNotProvisioned("images");
+
+        error.StatusCode.Should().Be(503);
+        error.Message.Should().Contain("not available");
+    }
+
+    [Theory]
+    [InlineData("ContainerNotFound", true)]
+    [InlineData("BlobNotFound", false)]
+    [InlineData("AuthorizationFailure", false)]
+    public void IsContainerMissing_ShouldMatchOnlyAMissingContainer(string errorCode, bool expected)
+    {
+        var failure = new Azure.RequestFailedException(404, "failed", errorCode, null);
+
+        AzureBlobService.IsContainerMissing(failure).Should().Be(expected);
+    }
+
+    [Fact]
     public async Task InspectQuarantineBlobAsync_ShouldReturnNull_ForABlankPath()
     {
         var service = CreateServiceWithContainer();

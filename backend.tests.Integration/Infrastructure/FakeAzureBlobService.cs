@@ -85,6 +85,7 @@ public sealed class FakeAzureBlobService : IAzureBlobService
 
     public void Clear()
     {
+        MissingContainers.Clear();
         _quarantined.Clear();
         _reservedPublicUrls.Clear();
         _ownedUrls.Clear();
@@ -292,6 +293,14 @@ public sealed class FakeAzureBlobService : IAzureBlobService
         _quarantined.Remove(quarantineBlobPath);
         return Task.CompletedTask;
     }
+
+    /// <summary>Containers the fake reports as missing; none unless a test says otherwise.</summary>
+    public List<string> MissingContainers { get; } = [];
+
+    public Task<IReadOnlyList<string>> FindMissingContainersAsync(
+        bool includeQuarantine,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<string>>(MissingContainers.ToList());
 
     public async IAsyncEnumerable<QuarantineBlobItem> ListQuarantineBlobsAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)

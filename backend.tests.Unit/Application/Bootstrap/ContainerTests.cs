@@ -186,6 +186,9 @@ public class ContainerTests
         services.Should().Contain(descriptor =>
             descriptor.ServiceType == typeof(IHostedService)
             && descriptor.ImplementationType == typeof(QuarantineReaper));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IHostedService)
+            && descriptor.ImplementationType == typeof(backend.main.shared.storage.BlobStorageStartupCheck));
     }
 
     [Fact]

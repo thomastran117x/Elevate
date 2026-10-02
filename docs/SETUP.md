@@ -34,7 +34,7 @@ To exercise image uploads, point `AZURE_STORAGE_CONNECTION_STRING` and `AZURE_ST
 dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- storage-provision
 ```
 
-It reads the storage settings from the root `.env` and reports containers that already exist without changing them. See [blob storage](DEPLOYMENT.md#blob-storage).
+It reads the storage settings from the root `.env` and reports containers that already exist without changing them. If you skip this, the API logs a "Missing blob container(s)" error at startup, and uploads fail with 503 until the containers exist. See [blob storage](DEPLOYMENT.md#blob-storage).
 
 ## Full Docker stack
 

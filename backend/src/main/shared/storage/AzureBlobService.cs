@@ -105,6 +105,23 @@ namespace backend.main.shared.storage
             await UploadProcessedAsync(container.GetBlobClient(blobPath), image, cancellationToken);
         }
 
+        public async Task<IReadOnlyList<string>> FindMissingContainersAsync(
+            bool includeQuarantine,
+            CancellationToken cancellationToken = default)
+        {
+            if (_container == null)
+                return [];
+
+            var missing = new List<string>();
+            if (!(await _container.ExistsAsync(cancellationToken)).Value)
+                missing.Add(_container.Name);
+
+            if (includeQuarantine && _quarantine != null && !(await _quarantine.ExistsAsync(cancellationToken)).Value)
+                missing.Add(_quarantine.Name);
+
+            return missing;
+        }
+
         public async Task<PresignedUploadResponse> GenerateUploadUrlAsync(
             string blobPathPrefix,
             string fileName,
@@ -353,16 +370,39 @@ namespace backend.main.shared.storage
             ProcessedImage image,
             CancellationToken cancellationToken)
         {
-            await blobClient.UploadAsync(
-                BinaryData.FromBytes(image.Content),
-                new BlobUploadOptions
-                {
-                    HttpHeaders = new BlobHttpHeaders
+            try
+            {
+                await blobClient.UploadAsync(
+                    BinaryData.FromBytes(image.Content),
+                    new BlobUploadOptions
                     {
-                        ContentType = image.ContentType
-                    }
-                },
-                cancellationToken);
+                        HttpHeaders = new BlobHttpHeaders
+                        {
+                            ContentType = image.ContentType
+                        }
+                    },
+                    cancellationToken);
+            }
+            catch (RequestFailedException ex) when (IsContainerMissing(ex))
+            {
+                throw StorageNotProvisioned(blobClient.BlobContainerName);
+            }
+        }
+
+        internal static bool IsContainerMissing(RequestFailedException ex) =>
+            ex.ErrorCode == BlobErrorCode.ContainerNotFound;
+
+        /// <summary>
+        /// What a write into a container that was never created becomes: a 503 that says what
+        /// to do, rather than a 500. Containers are provisioned out of band now, so this is a
+        /// deployment step that was missed, not a request the client got wrong.
+        /// </summary>
+        internal static NotAvailableException StorageNotProvisioned(string containerName)
+        {
+            Logger.Error(
+                $"[AzureBlobService] Blob container '{containerName}' does not exist. Create it with " +
+                "'dotnet run --project tools/Event.DevTasks -- storage-provision' or see docs/DEPLOYMENT.md#blob-storage.");
+            return new NotAvailableException("Image storage is not available right now. Please try again later.");
         }
 
         private BlobContainerClient GetRequiredQuarantine()

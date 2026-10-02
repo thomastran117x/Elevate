@@ -377,7 +377,10 @@ namespace backend.main.application.bootstrap
                 // The storage parent rather than storage.quarantine, so turning quarantine off
                 // still drains what it was holding.
                 if (featureFlags.IsEnabled(FeatureFlagKeys.Storage))
+                {
                     services.AddHostedService<QuarantineReaper>();
+                    services.AddHostedService<BlobStorageStartupCheck>();
+                }
 
                 // Named after the surfaces that actually produce typing rather than the club
                 // parent, so the sweeper's lifetime tracks what it reaps.
