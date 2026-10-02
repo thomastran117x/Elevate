@@ -139,6 +139,46 @@ public class MediaAssetEndpointsTests
     }
 
     [Fact]
+    public async Task AttachingPastTheImageCap_ShouldPublishNothing()
+    {
+        // The event refuses a sixth image. Checking that only after validating would leave the
+        // upload published with nothing pointing at it.
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var session = await SignUpAsync(app, "quarantine-cap@example.com");
+        var club = await CreateClubAsync(app, session.AccessToken, "Quarantine Cap Club");
+        var ev = await CreateEventAsync(app, session.AccessToken, club.Id, "Quarantine Cap Event");
+        await app.QueryDbAsync(async db =>
+        {
+            var existing = await db.EventImages.CountAsync(i => i.EventId == ev.Id);
+            for (var i = existing; i < 5; i++)
+            {
+                db.EventImages.Add(new backend.main.features.events.images.EventImage
+                {
+                    EventId = ev.Id,
+                    ImageUrl = $"https://storage.test/event-assets/events/filler-{ev.Id}-{i}.webp",
+                    SortOrder = i
+                });
+            }
+            await db.SaveChangesAsync();
+            return true;
+        });
+
+        var upload = await PresignAsync(app, session.AccessToken, club.Id, ev.Id);
+        var quarantinePath = app.BlobStorage.QuarantinePathFor(upload.PublicUrl);
+
+        var response = await app.Client.SendAsync(Authorized(
+            HttpMethod.Post,
+            $"/api/events/{ev.Id}/images",
+            session.AccessToken,
+            JsonContent.Create(new { imageUrl = upload.PublicUrl })));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        app.BlobStorage.UploadedImages.Should().NotContainKey(upload.PublicUrl);
+        (await FindAssetAsync(app, upload.MediaAssetId!.Value)).Status.Should().Be(MediaAssetStatus.PendingUpload);
+        app.BlobStorage.Quarantine.Should().ContainKey(quarantinePath, "the reaper expires it in a day");
+    }
+
+    [Fact]
     public async Task ClubCreate_ShouldPublishAQuarantinedIcon()
     {
         await using var app = await AuthApiTestApp.CreateAsync();

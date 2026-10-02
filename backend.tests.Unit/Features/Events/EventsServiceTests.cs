@@ -677,6 +677,11 @@ public class EventsServiceTests
         await action.Should()
             .ThrowAsync<BadRequestException>()
             .WithMessage("An event cannot have more than 5 images.");
+
+        // Refused before the upload is validated: with quarantine on, validating publishes it.
+        harness.BlobServiceMock.Verify(
+            service => service.InspectBlobAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]

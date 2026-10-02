@@ -1425,11 +1425,13 @@ namespace backend.main.features.events
                 var ev = await GetEvent(eventId);
                 await EnsureCanManageEventMediaAsync(ev, userId, userRole);
 
-                await ValidateUploadedImageUrlsAsync(ev.ClubId, userId, new[] { imageUrl }, eventId);
-
+                // Before validating: validation publishes the upload, and an image the event then
+                // turns away would be left in the public container with nothing pointing at it.
                 var count = await _imageRepository.CountByEventIdAsync(eventId);
                 if (count >= 5)
                     throw new BadRequestException("An event cannot have more than 5 images.");
+
+                await ValidateUploadedImageUrlsAsync(ev.ClubId, userId, new[] { imageUrl }, eventId);
 
                 var image = await _imageRepository.AddImageAsync(
                     eventId, imageUrl, altText, isDecorative);
