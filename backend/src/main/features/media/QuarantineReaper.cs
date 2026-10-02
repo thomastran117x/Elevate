@@ -30,10 +30,10 @@ public sealed class QuarantineReaper : BackgroundService
                 var runner = scope.ServiceProvider.GetRequiredService<QuarantineReaperRunner>();
                 var result = await runner.RunOnceAsync(stoppingToken);
 
-                if (result.ExpiredAssets > 0 || result.DeletedBlobs > 0)
+                if (result.ExpiredAssets > 0 || result.DeletedBlobs > 0 || result.ReleasedClaims > 0)
                 {
                     Logger.Info(
-                        $"[QuarantineReaper] Expired {result.ExpiredAssets} unattached uploads and deleted {result.DeletedBlobs} quarantined blobs.");
+                        $"[QuarantineReaper] Released {result.ReleasedClaims} stale claims, expired {result.ExpiredAssets} unattached uploads and deleted {result.DeletedBlobs} quarantined blobs.");
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

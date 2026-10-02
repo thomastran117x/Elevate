@@ -48,6 +48,15 @@ public interface IMediaAssetRepository
         DateTime createdBefore,
         int limit,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Assets in <see cref="MediaAssetStatus.Processing"/> whose claim was last touched before
+    /// <paramref name="updatedBefore"/>: their attach died without releasing it.
+    /// </summary>
+    Task<List<MediaAsset>> GetProcessingClaimedBeforeAsync(
+        DateTime updatedBefore,
+        int limit,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

@@ -6,8 +6,9 @@ using backend.main.shared.utilities.logger;
 namespace backend.main.features.media;
 
 /// <summary>
-/// Keeps the quarantine container from growing without bound. Expires uploads that were issued
-/// and never attached, and deletes quarantined blobs a day old that no live asset is waiting on.
+/// Keeps the quarantine container from growing without bound. Releases claims whose attach died
+/// mid-pipeline, expires uploads that were issued and never attached, and deletes quarantined
+/// blobs a day old that no live asset is waiting on.
 /// </summary>
 /// <remarks>
 /// <c>OrphanBlobCleanupRunner</c> cannot do this: it lists only the public container, under its
@@ -50,8 +51,11 @@ public sealed class QuarantineReaperRunner
 
     public async Task<QuarantineReapResult> RunOnceAsync(CancellationToken cancellationToken = default)
     {
-        var cutoff = _timeProvider.GetUtcNow() - MaxAge;
+        var now = _timeProvider.GetUtcNow();
+        var cutoff = now - MaxAge;
 
+        var released = await ReleaseStaleClaimsAsync(
+            (now - MediaAssetService.StaleProcessingAfter).UtcDateTime, cancellationToken);
         var expired = await ExpireUnattachedAsync(cutoff.UtcDateTime, cancellationToken);
 
         int deleted;
@@ -73,7 +77,34 @@ public sealed class QuarantineReaperRunner
             deleted = 0;
         }
 
-        return new QuarantineReapResult(expired, deleted);
+        return new QuarantineReapResult(expired, deleted, released);
+    }
+
+    /// <summary>
+    /// Hands back claims whose attach died before it could release them — the process was killed
+    /// mid-pipeline, so no exception handler ran. Released to Uploaded rather than expired here:
+    /// the user may still retry within the intent's lifetime, and an upload nobody retries is
+    /// expired by the pass below once it is a day old, its bytes with it.
+    /// </summary>
+    /// <remarks>
+    /// Uses the same threshold an attach does before taking over a claim, so the reaper never
+    /// releases one a live request could still be working on.
+    /// </remarks>
+    private async Task<int> ReleaseStaleClaimsAsync(DateTime claimedBefore, CancellationToken cancellationToken)
+    {
+        var released = 0;
+        var stale = await _repository.GetProcessingClaimedBeforeAsync(claimedBefore, BatchSize, cancellationToken);
+
+        foreach (var asset in stale)
+        {
+            if (await _repository.TryTransitionAsync(
+                    asset.Id, MediaAssetStatus.Processing, MediaAssetStatus.Uploaded, cancellationToken: cancellationToken))
+            {
+                released++;
+            }
+        }
+
+        return released;
     }
 
     /// <summary>
@@ -125,9 +156,10 @@ public sealed class QuarantineReaperRunner
 
             var owner = await _repository.GetByQuarantineBlobPathAsync(blob.Path, cancellationToken);
 
-            // Processing means an attach is decoding these bytes right now. Pending and Uploaded
-            // owners belong to the expiry pass, which may simply have hit its batch limit; it
-            // deletes their bytes when it expires them, and not before.
+            // Processing means an attach is decoding these bytes right now — a stale claim was
+            // released above, so one still Processing here is fresh. Pending and Uploaded owners
+            // belong to the expiry pass, which may simply have hit its batch limit; it deletes
+            // their bytes when it expires them, and not before.
             if (owner is { Status: MediaAssetStatus.Processing or MediaAssetStatus.PendingUpload or MediaAssetStatus.Uploaded })
                 continue;
 
@@ -139,4 +171,4 @@ public sealed class QuarantineReaperRunner
     }
 }
 
-public readonly record struct QuarantineReapResult(int ExpiredAssets, int DeletedBlobs);
+public readonly record struct QuarantineReapResult(int ExpiredAssets, int DeletedBlobs, int ReleasedClaims = 0);

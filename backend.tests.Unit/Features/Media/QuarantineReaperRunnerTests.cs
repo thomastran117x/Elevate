@@ -69,17 +69,67 @@ public class QuarantineReaperRunnerTests
     [Fact]
     public async Task RunOnceAsync_ShouldNeverDeleteBytesAnAttachIsProcessing()
     {
+        // Issued a day ago, but claimed a moment ago: a live request is decoding these bytes.
         await using var database = await MediaTestDatabase.CreateAsync();
         var blobs = new InMemoryBlobStore();
-        var old = database.Time.GetUtcNow().AddHours(-30);
-        await database.SeedAssetAsync(
-            MediaAssetStatus.Processing, quarantineBlobPath: "events/busy.png", createdAt: old.UtcDateTime);
-        blobs.Put("events/busy.png", InMemoryBlobStore.Image(), lastModified: old);
+        var now = database.Time.GetUtcNow();
+        var asset = await database.SeedAssetAsync(
+            MediaAssetStatus.Processing,
+            quarantineBlobPath: "events/busy.png",
+            createdAt: now.UtcDateTime.AddHours(-30),
+            updatedAt: now.UtcDateTime.AddSeconds(-20));
+        blobs.Put("events/busy.png", InMemoryBlobStore.Image(), lastModified: now.AddHours(-30));
 
         var result = await CreateRunner(database, blobs).RunOnceAsync();
 
-        result.DeletedBlobs.Should().Be(0);
+        result.Should().Be(new QuarantineReapResult(ExpiredAssets: 0, DeletedBlobs: 0, ReleasedClaims: 0));
+        (await database.ReloadAsync(asset.Id)).Status.Should().Be(MediaAssetStatus.Processing);
         blobs.Quarantine.Should().ContainKey("events/busy.png");
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_ShouldReleaseAClaimWhoseAttachDied_AndKeepItsBytesForARetry()
+    {
+        // The process was killed mid-pipeline, so nothing released the claim. Recently issued, so
+        // the user can still retry, and the retry needs the quarantined bytes.
+        await using var database = await MediaTestDatabase.CreateAsync();
+        var blobs = new InMemoryBlobStore();
+        var now = database.Time.GetUtcNow();
+        var asset = await database.SeedAssetAsync(
+            MediaAssetStatus.Processing,
+            quarantineBlobPath: "events/abandoned.png",
+            createdAt: now.UtcDateTime.AddMinutes(-15),
+            updatedAt: now.UtcDateTime - MediaAssetService.StaleProcessingAfter - TimeSpan.FromSeconds(1));
+        blobs.Put("events/abandoned.png", InMemoryBlobStore.Image(), lastModified: now.AddMinutes(-15));
+
+        var result = await CreateRunner(database, blobs).RunOnceAsync();
+
+        result.ReleasedClaims.Should().Be(1);
+        result.ExpiredAssets.Should().Be(0);
+        var stored = await database.ReloadAsync(asset.Id);
+        stored.Status.Should().Be(MediaAssetStatus.Uploaded);
+        stored.QuarantineBlobPath.Should().Be("events/abandoned.png");
+        blobs.Quarantine.Should().ContainKey("events/abandoned.png");
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_ShouldReapAClaimThatDiedADayAgo_RowAndBytes()
+    {
+        // Nobody retried: the claim is released and, being a day old, expired in the same run.
+        await using var database = await MediaTestDatabase.CreateAsync();
+        var blobs = new InMemoryBlobStore();
+        var dayAgo = database.Time.GetUtcNow().AddHours(-30);
+        var asset = await database.SeedAssetAsync(
+            MediaAssetStatus.Processing, quarantineBlobPath: "events/stuck.png", createdAt: dayAgo.UtcDateTime);
+        blobs.Put("events/stuck.png", InMemoryBlobStore.Image(), lastModified: dayAgo);
+
+        var result = await CreateRunner(database, blobs).RunOnceAsync();
+
+        result.Should().Be(new QuarantineReapResult(ExpiredAssets: 1, DeletedBlobs: 0, ReleasedClaims: 1));
+        var stored = await database.ReloadAsync(asset.Id);
+        stored.Status.Should().Be(MediaAssetStatus.Rejected);
+        stored.RejectionReason.Should().Be(QuarantineReaperRunner.ExpiredMessage);
+        blobs.Quarantine.Should().BeEmpty();
     }
 
     [Fact]

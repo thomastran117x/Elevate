@@ -82,7 +82,11 @@ The quarantine copy is deleted only after the outcome is recorded, so a crash in
 - Allow an event to be published while its cover is still Processing; the image appears once it is ready.
 - Block publishing when the cover is Rejected.
 
-`QuarantineReaper` runs hourly. It expires uploads that were issued and never attached within 24 hours, and deletes quarantined blobs older than a day that no asset is working on. The orphan sweeper cannot see the quarantine container, and nothing else removes a blob a client uploaded and never attached. The reaper is gated on the `storage` parent flag, so turning quarantine off still drains what it holds. The orphan sweeper treats the public URL of an upload still in flight (not yet Ready or Rejected) as a reference, so a promotion awaiting its Ready write is never swept. Once an asset has settled, only the owning columns count. An image removed from its event, or promoted by an attach whose save then failed, is therefore reclaimed like any other orphan, and its ledger row is deleted with the blob.
+`QuarantineReaper` runs hourly. It does three things:
+
+- It releases claims stuck in Processing for more than five minutes, back to Uploaded. That covers an attach killed mid-pipeline, where no exception handler ran.
+- It expires uploads that were issued and never attached within 24 hours.
+- It deletes quarantined blobs older than a day that no asset is working on. The orphan sweeper cannot see the quarantine container, and nothing else removes a blob a client uploaded and never attached. The reaper is gated on the `storage` parent flag, so turning quarantine off still drains what it holds. The orphan sweeper treats the public URL of an upload still in flight (not yet Ready or Rejected) as a reference, so a promotion awaiting its Ready write is never swept. Once an asset has settled, only the owning columns count. An image removed from its event, or promoted by an attach whose save then failed, is therefore reclaimed like any other orphan, and its ledger row is deleted with the blob.
 
 `MediaAssets` is an upload ledger, not a reference count. Nothing references it by foreign key yet. Deleting an event deletes its blobs but leaves their asset rows, and one URL can be shared by several recurrence occurrences. Existing images were backfilled as `Legacy` assets with `ValidatedAt` null, which marks the backlog that was never re-checked.
 
