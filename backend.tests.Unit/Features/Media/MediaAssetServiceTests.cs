@@ -4,6 +4,8 @@ using backend.main.features.cache;
 using backend.main.features.events.contracts.responses;
 using backend.main.features.media;
 using backend.main.shared.exceptions.http;
+using backend.main.shared.providers;
+using backend.main.shared.providers.messages;
 using backend.main.shared.storage;
 using backend.main.shared.storage.imaging;
 
@@ -375,6 +377,121 @@ public class MediaAssetServiceTests
     }
 
     [Fact]
+    public async Task AttachAsync_WithTheWorker_ShouldRequestValidation_AndReturnOnceTheVerdictIsRecorded()
+    {
+        var publisher = new RecordingPublisher();
+        await using var harness = await Harness.CreateAsync(dispatcher: _ => WorkerDispatcher(publisher));
+        var upload = await harness.IssueAndUploadAsync(InMemoryBlobStore.Image());
+        var quarantinePath = (await harness.AssetAsync(upload)).QuarantineBlobPath!;
+        var reads = harness.SettleOnRead(upload, read: 5);
+
+        await harness.Service.AttachAsync(harness.UserId, upload.PublicUrl, "Club images");
+
+        var (topic, message) = publisher.Published.Should().ContainSingle().Subject;
+        topic.Should().Be("media-validation");
+        var request = message.Should().BeOfType<MediaValidationRequestMessage>().Subject;
+        request.MediaAssetId.Should().Be(upload.MediaAssetId!.Value);
+        request.Attempt.Should().Be(1);
+        request.QuarantineBlobPath.Should().Be(quarantinePath);
+        request.PublicUrl.Should().Be(upload.PublicUrl);
+        request.DeclaredContentType.Should().Be("image/png");
+        request.Subject.Should().Be("Club images");
+
+        reads().Should().BeGreaterThanOrEqualTo(5, "the attach waited for the verdict rather than returning early");
+        (await harness.AssetAsync(upload)).Status.Should().Be(MediaAssetStatus.Ready);
+        harness.Blobs.Published.Should().ContainKey(upload.PublicUrl);
+    }
+
+    [Fact]
+    public async Task AttachAsync_WithTheWorker_ShouldReportTheWorkersRejection()
+    {
+        var publisher = new RecordingPublisher();
+        await using var harness = await Harness.CreateAsync(dispatcher: _ => WorkerDispatcher(publisher));
+        var upload = await harness.IssueAndUploadAsync(InMemoryBlobStore.Image("image/gif", frames: 2), "image/gif");
+        harness.SettleOnRead(upload, read: 4);
+
+        var act = () => harness.Service.AttachAsync(harness.UserId, upload.PublicUrl, "Event images");
+
+        await act.Should().ThrowAsync<BadRequestException>().WithMessage(ImageSharpImageProcessor.AnimatedMessage);
+        (await harness.AssetAsync(upload)).Status.Should().Be(MediaAssetStatus.Rejected);
+    }
+
+    [Fact]
+    public async Task AttachAsync_WithTheWorker_ShouldReportStillProcessing_WhenNoVerdictArrivesInTime()
+    {
+        var publisher = new RecordingPublisher();
+        await using var harness = await Harness.CreateAsync(dispatcher: _ => WorkerDispatcher(publisher));
+        var upload = await harness.IssueAndUploadAsync(InMemoryBlobStore.Image());
+
+        var act = () => harness.Service.AttachAsync(harness.UserId, upload.PublicUrl, "Event images");
+
+        await act.Should().ThrowAsync<ConflictException>().WithMessage(MediaAssetService.StillProcessingMessage);
+        var asset = await harness.AssetAsync(upload);
+        asset.Status.Should().Be(MediaAssetStatus.Processing,
+            "the claim stays with the worker, and the reconciler re-drives it if it never answers");
+        asset.AttemptCount.Should().Be(1);
+        publisher.Published.Should().ContainSingle();
+        harness.Blobs.Quarantine.Should().ContainKey(asset.QuarantineBlobPath!);
+    }
+
+    [Fact]
+    public async Task AttachAsync_WithTheWorker_ShouldReleaseTheClaim_WhenTheRequestCannotBePublished()
+    {
+        var publisher = new RecordingPublisher { Failure = new InvalidOperationException("broker down") };
+        await using var harness = await Harness.CreateAsync(dispatcher: _ => WorkerDispatcher(publisher));
+        var upload = await harness.IssueAndUploadAsync(InMemoryBlobStore.Image());
+
+        var act = () => harness.Service.AttachAsync(harness.UserId, upload.PublicUrl, "Event images");
+
+        await act.Should().ThrowAsync<NotAvailableException>()
+            .WithMessage(KafkaMediaValidationDispatcher.UnavailableMessage);
+        (await harness.AssetAsync(upload)).Status.Should().Be(MediaAssetStatus.Uploaded, "a retry can claim it straight away");
+    }
+
+    [Fact]
+    public async Task AttachAsync_WithTheWorker_ShouldWaitOnAClaimAnotherAttachHolds_WithoutRequestingItAgain()
+    {
+        // The user retried the save while the first attach's request was still with the worker.
+        var publisher = new RecordingPublisher();
+        await using var harness = await Harness.CreateAsync(dispatcher: _ => WorkerDispatcher(publisher));
+        var upload = await harness.IssueAndUploadAsync(InMemoryBlobStore.Image());
+        var asset = await harness.AssetAsync(upload);
+        await harness.Repository.TryTransitionAsync(asset.Id, MediaAssetStatus.PendingUpload, MediaAssetStatus.Uploaded);
+        await harness.Repository.TryTransitionAsync(
+            asset.Id, MediaAssetStatus.Uploaded, MediaAssetStatus.Processing, new MediaAssetChanges { CountAttempt = true });
+        harness.SettleOnRead(upload, read: 3);
+
+        await harness.Service.AttachAsync(harness.UserId, upload.PublicUrl, "Event images");
+
+        publisher.Published.Should().BeEmpty();
+        (await harness.AssetAsync(upload)).Status.Should().Be(MediaAssetStatus.Ready);
+    }
+
+    [Theory]
+    [InlineData(0, 250, 0)]
+    [InlineData(10_000, 0, 0)]
+    [InlineData(10_000, 250, 40)]
+    [InlineData(1_000, 300, 4)]
+    public void PollsWithin_ShouldCoverTheWholeWait(int waitMs, int intervalMs, int expected)
+    {
+        MediaAssetService.PollsWithin(TimeSpan.FromMilliseconds(waitMs), TimeSpan.FromMilliseconds(intervalMs))
+            .Should().Be(expected);
+    }
+
+    [Fact]
+    public void KafkaMediaValidationDispatcher_ShouldWaitLongEnoughForTheWorker_ButWellInsideTheRequestTimeout()
+    {
+        var dispatcher = new KafkaMediaValidationDispatcher(Mock.Of<IPublisher>());
+
+        dispatcher.SettleWait.Should().Be(TimeSpan.FromSeconds(10));
+        dispatcher.PollInterval.Should().Be(TimeSpan.FromMilliseconds(250));
+        new InlineMediaValidationDispatcher(null!, null!).SettleWait.Should().Be(TimeSpan.Zero);
+    }
+
+    private static KafkaMediaValidationDispatcher WorkerDispatcher(IPublisher publisher) =>
+        new(publisher, "media-validation", TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(5));
+
+    [Fact]
     public void BlobUploadIntent_ShouldReadIntentsCachedBeforeMediaAssetIdExisted()
     {
         // Intents live in Redis across a deploy, so the old JSON shape must still deserialize.
@@ -395,9 +512,19 @@ public class MediaAssetServiceTests
         public InMemoryBlobStore Blobs { get; } = new();
         public MediaAssetRepository Repository { get; private init; } = null!;
         public MediaAssetService Service { get; private set; } = null!;
+        public MediaValidationPipeline Pipeline { get; private set; } = null!;
+        public MediaValidationRecorder Recorder { get; private set; } = null!;
         public int UserId { get; private init; }
 
-        public static async Task<Harness> CreateAsync(IImageProcessor? processor = null)
+        /// <summary>
+        /// Runs before the service reads the asset, in line with it. Lets a test record a
+        /// worker's verdict mid-wait without touching the context from a second thread.
+        /// </summary>
+        public Func<Task>? BeforeRead { get; set; }
+
+        public static async Task<Harness> CreateAsync(
+            IImageProcessor? processor = null,
+            Func<Harness, IMediaValidationDispatcher>? dispatcher = null)
         {
             var database = await MediaTestDatabase.CreateAsync();
             var user = await database.SeedUserAsync();
@@ -413,14 +540,14 @@ public class MediaAssetServiceTests
                 .ReturnsAsync((string key) => harness._intents.TryGetValue(key, out var value) ? value : null);
 
             processor ??= new ImageSharpImageProcessor(Options.Create(new ImageProcessingOptions()));
+            harness.Pipeline = new MediaValidationPipeline(harness.Blobs, processor);
+            harness.Recorder = new MediaValidationRecorder(harness.Repository, harness.Blobs, database.Time);
             harness.Service = new MediaAssetService(
                 database.Db,
-                harness.Repository,
+                new ReadHookRepository(harness.Repository, () => harness.BeforeRead?.Invoke() ?? Task.CompletedTask),
                 harness.Blobs,
                 cache.Object,
-                new InlineMediaValidationDispatcher(
-                    new MediaValidationPipeline(harness.Blobs, processor),
-                    new MediaValidationRecorder(harness.Repository, harness.Blobs, database.Time)),
+                dispatcher?.Invoke(harness) ?? new InlineMediaValidationDispatcher(harness.Pipeline, harness.Recorder),
                 database.Time);
 
             return harness;
@@ -471,6 +598,80 @@ public class MediaAssetServiceTests
                 asset.Id, MediaAssetStatus.Uploaded, MediaAssetStatus.Processing, new MediaAssetChanges { CountAttempt = true });
         }
 
+        /// <summary>
+        /// Plays media-worker and the status consumer: validates the asset's bytes and records
+        /// the verdict under <paramref name="attempt"/>, as the API does when the result arrives.
+        /// </summary>
+        public async Task SettleAsync(PresignedUploadResponse upload, int attempt, string subject = "Event images")
+        {
+            var asset = await AssetAsync(upload);
+            var outcome = await Pipeline.RunAsync(
+                asset.QuarantineBlobPath!, asset.PublicUrl!, asset.DeclaredContentType, subject);
+            await Recorder.RecordAsync(asset, attempt, outcome);
+        }
+
+        /// <summary>
+        /// Settles the asset just before the service's <paramref name="read"/>th read of it, and
+        /// returns how many reads the service has made.
+        /// </summary>
+        public Func<int> SettleOnRead(PresignedUploadResponse upload, int read, int attempt = 1)
+        {
+            var reads = 0;
+            BeforeRead = async () =>
+            {
+                if (++reads == read)
+                    await SettleAsync(upload, attempt);
+            };
+            return () => reads;
+        }
+
         public ValueTask DisposeAsync() => Database.DisposeAsync();
+    }
+
+    private sealed class RecordingPublisher : IPublisher
+    {
+        public List<(string Topic, object? Message)> Published { get; } = [];
+        public Exception? Failure { get; set; }
+
+        public Task PublishAsync<T>(string topic, T message)
+        {
+            if (Failure != null)
+                throw Failure;
+
+            Published.Add((topic, message));
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ReadHookRepository(IMediaAssetRepository inner, Func<Task> beforeRead) : IMediaAssetRepository
+    {
+        public Task AddAsync(MediaAsset asset) => inner.AddAsync(asset);
+
+        public async Task<MediaAsset?> GetByPublicIdAsync(Guid publicId, CancellationToken cancellationToken = default)
+        {
+            await beforeRead();
+            return await inner.GetByPublicIdAsync(publicId, cancellationToken);
+        }
+
+        public Task<MediaAsset?> GetByQuarantineBlobPathAsync(string quarantineBlobPath, CancellationToken cancellationToken = default) =>
+            inner.GetByQuarantineBlobPathAsync(quarantineBlobPath, cancellationToken);
+
+        public Task<bool> TryTransitionAsync(
+            int id,
+            MediaAssetStatus from,
+            MediaAssetStatus to,
+            MediaAssetChanges? changes = null,
+            CancellationToken cancellationToken = default,
+            int? whenAttempt = null) =>
+            inner.TryTransitionAsync(id, from, to, changes, cancellationToken, whenAttempt);
+
+        public Task<List<MediaAsset>> GetUnattachedIssuedBeforeAsync(DateTime createdBefore, int limit, CancellationToken cancellationToken = default) =>
+            inner.GetUnattachedIssuedBeforeAsync(createdBefore, limit, cancellationToken);
+
+        public Task<List<MediaAsset>> GetProcessingClaimedBeforeAsync(DateTime updatedBefore, int limit, CancellationToken cancellationToken = default) =>
+            inner.GetProcessingClaimedBeforeAsync(updatedBefore, limit, cancellationToken);
+
+        public Task<List<MediaAsset>> GetStalledBeforeAsync(DateTime updatedBefore, int limit, CancellationToken cancellationToken = default) =>
+            inner.GetStalledBeforeAsync(updatedBefore, limit, cancellationToken);
     }
 }

@@ -106,4 +106,19 @@ public class MediaAssetRepository : IMediaAssetRepository
             .Take(limit)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<List<MediaAsset>> GetStalledBeforeAsync(
+        DateTime updatedBefore,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.MediaAssets
+            .AsNoTracking()
+            .Where(asset =>
+                (asset.Status == MediaAssetStatus.Uploaded || asset.Status == MediaAssetStatus.Processing) &&
+                asset.UpdatedAt < updatedBefore)
+            .OrderBy(asset => asset.UpdatedAt)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+    }
 }

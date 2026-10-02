@@ -160,8 +160,17 @@ public sealed class QuarantineReaperRunner
             // released above, so one still Processing here is fresh. Pending and Uploaded owners
             // belong to the expiry pass, which may simply have hit its batch limit; it deletes
             // their bytes when it expires them, and not before.
-            if (owner is { Status: MediaAssetStatus.Processing or MediaAssetStatus.PendingUpload or MediaAssetStatus.Uploaded })
+            // NeedsReview can still become Ready, and a reviewer needs the bytes to decide.
+            if (owner is
+                {
+                    Status: MediaAssetStatus.Processing
+                    or MediaAssetStatus.PendingUpload
+                    or MediaAssetStatus.Uploaded
+                    or MediaAssetStatus.NeedsReview
+                })
+            {
                 continue;
+            }
 
             await _blobService.DeleteQuarantineBlobAsync(blob.Path);
             deleted++;

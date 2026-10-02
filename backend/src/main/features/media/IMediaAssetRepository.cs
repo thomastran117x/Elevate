@@ -63,6 +63,17 @@ public interface IMediaAssetRepository
         DateTime updatedBefore,
         int limit,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Assets attached but not yet settled — <see cref="MediaAssetStatus.Uploaded"/> or
+    /// <see cref="MediaAssetStatus.Processing"/> — that nothing has moved since
+    /// <paramref name="updatedBefore"/>, oldest first: work media-worker was asked for and never
+    /// reported on, or was never asked for.
+    /// </summary>
+    Task<List<MediaAsset>> GetStalledBeforeAsync(
+        DateTime updatedBefore,
+        int limit,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

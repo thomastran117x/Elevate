@@ -216,6 +216,99 @@ public class ContainerTests
     }
 
     [Fact]
+    public void AddApplicationServices_ShouldValidateInline_AndRunNoMediaConsumers_ByDefault()
+    {
+        var config = new ConfigurationBuilder().Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);
+
+        services.AddApplicationServices(config, includeHostedServices: true);
+
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IMediaValidationDispatcher)
+            && descriptor.ImplementationType == typeof(InlineMediaValidationDispatcher));
+        services.Should().NotContain(descriptor =>
+            descriptor.ImplementationType == typeof(MediaValidationStatusConsumer)
+            || descriptor.ImplementationType == typeof(MediaValidationReconciler));
+    }
+
+    [Fact]
+    public void AddApplicationServices_ShouldHandValidationToMediaWorker_WhenInlineValidationIsOff()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["FeatureFlags:storage.quarantine.inline"] = "false"
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);
+
+        services.AddApplicationServices(config, includeHostedServices: true);
+
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IMediaValidationDispatcher)
+            && descriptor.ImplementationType == typeof(KafkaMediaValidationDispatcher));
+        services.Should().Contain(descriptor => descriptor.ServiceType == typeof(MediaValidationReconcilerRunner));
+        services.Should().Contain(descriptor => descriptor.ServiceType == typeof(MediaValidationStatusConsumerOptions));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IHostedService)
+            && descriptor.ImplementationType == typeof(MediaValidationStatusConsumer));
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IHostedService)
+            && descriptor.ImplementationType == typeof(MediaValidationReconciler));
+    }
+
+    [Fact]
+    public void AddApplicationServices_ShouldNotStartMediaConsumers_WithoutHostedServices()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["FeatureFlags:storage.quarantine.inline"] = "false"
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);
+
+        services.AddApplicationServices(config, includeHostedServices: false);
+
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IMediaValidationDispatcher)
+            && descriptor.ImplementationType == typeof(KafkaMediaValidationDispatcher));
+        services.Should().NotContain(descriptor =>
+            descriptor.ImplementationType == typeof(MediaValidationStatusConsumer)
+            || descriptor.ImplementationType == typeof(MediaValidationReconciler));
+    }
+
+    [Fact]
+    public void AddApplicationServices_ShouldNotUseMediaWorker_WhenQuarantineIsOff()
+    {
+        // Inline is a child of quarantine, so switching quarantine off turns it off too; that
+        // must not be read as "hand validation to the worker".
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["FeatureFlags:storage.quarantine"] = "false"
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);
+
+        services.AddApplicationServices(config, includeHostedServices: true);
+
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IMediaValidationDispatcher)
+            && descriptor.ImplementationType == typeof(InlineMediaValidationDispatcher));
+        services.Should().NotContain(descriptor =>
+            descriptor.ImplementationType == typeof(MediaValidationStatusConsumer));
+    }
+
+    [Fact]
     public void AddApplicationServices_ShouldNotReapQuarantine_WhenStorageIsOff()
     {
         var config = new ConfigurationBuilder()

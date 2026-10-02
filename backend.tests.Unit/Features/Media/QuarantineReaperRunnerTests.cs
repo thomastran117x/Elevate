@@ -88,6 +88,27 @@ public class QuarantineReaperRunnerTests
     }
 
     [Fact]
+    public async Task RunOnceAsync_ShouldKeepTheBytesOfAnAssetAwaitingReview()
+    {
+        // Parked by the media validation reconciler. A reviewer can still move it to Ready, and
+        // needs the original bytes to decide.
+        await using var database = await MediaTestDatabase.CreateAsync();
+        var blobs = new InMemoryBlobStore();
+        var now = database.Time.GetUtcNow();
+        await database.SeedAssetAsync(
+            MediaAssetStatus.NeedsReview,
+            quarantineBlobPath: "events/held.png",
+            createdAt: now.UtcDateTime.AddDays(-3),
+            updatedAt: now.UtcDateTime.AddDays(-2));
+        blobs.Put("events/held.png", InMemoryBlobStore.Image(), lastModified: now.AddDays(-3));
+
+        var result = await CreateRunner(database, blobs).RunOnceAsync();
+
+        result.DeletedBlobs.Should().Be(0);
+        blobs.Quarantine.Should().ContainKey("events/held.png");
+    }
+
+    [Fact]
     public async Task RunOnceAsync_ShouldReleaseAClaimWhoseAttachDied_AndKeepItsBytesForARetry()
     {
         // The process was killed mid-pipeline, so nothing released the claim. Recently issued, so

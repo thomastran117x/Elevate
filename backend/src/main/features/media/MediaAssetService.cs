@@ -30,6 +30,7 @@ public sealed class MediaAssetService : IMediaAssetService
 
     // Reloads after a lost race. Each lap means another request moved the asset first, so a
     // handful covers every real interleaving; running out is reported as still processing.
+    // Waiting on a live claim (see IMediaValidationDispatcher.SettleWait) is not counted here.
     private const int MaxStateReads = 5;
 
     private readonly AppDatabaseContext _db;
@@ -128,7 +129,10 @@ public sealed class MediaAssetService : IMediaAssetService
         string subject,
         CancellationToken cancellationToken)
     {
-        for (var read = 0; read < MaxStateReads; read++)
+        var readsLeft = MaxStateReads;
+        var pollsLeft = PollsWithin(_dispatcher.SettleWait, _dispatcher.PollInterval);
+
+        while (readsLeft-- > 0)
         {
             var asset = await _repository.GetByPublicIdAsync(mediaAssetId, cancellationToken)
                 ?? throw new BadRequestException("Image upload is invalid or expired. Please upload the image again.");
@@ -149,10 +153,21 @@ public sealed class MediaAssetService : IMediaAssetService
                 case MediaAssetStatus.NeedsReview:
                     throw new ConflictException(UnderReviewMessage);
 
-                case MediaAssetStatus.Processing:
-                    if (asset.UpdatedAt > UtcNow() - StaleProcessingAfter)
+                case MediaAssetStatus.Processing when asset.UpdatedAt > UtcNow() - StaleProcessingAfter:
+                    // A live claim: this attach's own, handed to media-worker a moment ago, or
+                    // another request's. Its outcome arrives without anyone's help, so wait a
+                    // short while for it rather than send the user away at once. Inline
+                    // validation settles the asset before it returns, so it never waits here.
+                    if (pollsLeft-- <= 0)
                         throw new ConflictException(StillProcessingMessage);
 
+                    await Task.Delay(_dispatcher.PollInterval, cancellationToken);
+
+                    // Waiting is not losing a race, so it does not use up a read.
+                    readsLeft++;
+                    continue;
+
+                case MediaAssetStatus.Processing:
                     // The request that claimed it is presumed dead. Releasing rather than
                     // re-claiming in one step keeps AttemptCount honest and lets the next lap
                     // go through the same claim as everyone else.
@@ -237,4 +252,9 @@ public sealed class MediaAssetService : IMediaAssetService
     }
 
     private DateTime UtcNow() => _timeProvider.GetUtcNow().UtcDateTime;
+
+    internal static int PollsWithin(TimeSpan settleWait, TimeSpan pollInterval) =>
+        settleWait <= TimeSpan.Zero || pollInterval <= TimeSpan.Zero
+            ? 0
+            : (int)Math.Ceiling(settleWait / pollInterval);
 }
