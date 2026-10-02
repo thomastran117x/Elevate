@@ -2,7 +2,7 @@
 
 EventXperience is a web application for discovering and organizing events and building club communities. It supports accounts and MFA, public profiles, clubs and discussions, event invitations, recurring events, registration and waitlists, favourites, analytics, and payment integration.
 
-The frontend uses Angular 22, TypeScript, NgRx, Tailwind CSS, and Angular SSR. The API and five background workers use .NET 10. PostgreSQL stores application data; Redis supports caching and shared state; Kafka carries notifications and search updates; Elasticsearch powers search.
+The frontend uses Angular 22, TypeScript, NgRx, Tailwind CSS, and Angular SSR. The API and six background workers use .NET 10. PostgreSQL stores application data; Redis supports caching and shared state; Kafka carries notifications, search updates, and image validation; Elasticsearch powers search.
 
 ## Quick start with Docker
 
@@ -30,6 +30,7 @@ See [setup](docs/SETUP.md) for prerequisites, local development, infrastructure 
 | [Club-post indexer](backend/src/worker/clubpost-indexer/README.md) | Club-post search updates                                   |
 | [Email worker](backend/src/worker/email-worker/README.md)          | SMTP notifications and invitation delivery status          |
 | [SMS worker](backend/src/worker/sms-worker/README.md)              | Twilio MFA messages                                        |
+| [Media worker](backend/src/worker/media-worker/README.md)          | Image upload validation and re-encoding                    |
 | [Backend unit tests](backend.tests.Unit/README.md)                 | Isolated behavior tests                                    |
 | [Backend integration tests](backend.tests.Integration/README.md)   | Real API and container-backed infrastructure tests         |
 | [Development tasks](tools/Event.DevTasks/README.md)                | Formatting, coverage, integration runs, and OpenAPI export |
