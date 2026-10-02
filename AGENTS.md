@@ -17,11 +17,11 @@ When asked to open a pull request, keep it focused and include:
 - **Summary:** a concise overview of the outcome.
 - **Context:** the issue, bug, or user need that prompted the change, including a link or identifier when available.
 - **Changes made:** the important implementation and documentation changes.
-- **How to test:** clear verification steps and the checks that were run, distinguishing passed checks from checks that could not be run.
+- **How to test:** reproducible end-to-end setup and verification steps, including applicable prerequisites, configuration or test data, API or UI actions, and expected results.
 - **Screenshots:** before-and-after or resulting UI evidence for frontend changes.
 - **Reviewer notes:** migrations, configuration changes, known limitations, follow-up work, or anything else that will help the reviewer.
 
-Screenshots and reviewer notes may be omitted when they are not relevant.
+Do not repeat routine formatting, build, typecheck, unit, coverage, integration, or audit commands already reported by CI. Mention validation commands only when CI does not run them, they could not be completed, or reviewers need special context. Screenshots and reviewer notes may be omitted when they are not relevant.
 
 When reviewing a pull request, assess both behavioral correctness and code quality. In addition to defects and regressions, consider maintainability, clarity, unnecessary complexity, duplication, consistency with the established architecture, and the quality of the tests. Treat material correctness risks, architectural violations, and maintainability problems as blocking findings. Present minor improvements as non-blocking suggestions, and avoid blocking solely on personal style preferences that are not established project conventions.
 
@@ -56,6 +56,10 @@ References: [ASP.NET Core best practices](https://learn.microsoft.com/en-us/aspn
 ## Validation and documentation
 
 Run appropriate checks before each logical commit. From the root, use `git diff --check`, `dotnet format backend.sln --verify-no-changes`, relevant unit tests, and `Event.DevTasks` coverage/integration/endpoint-audit commands. From `frontend/`, generate the environment, then run relevant formatting, type, build, Karma, and Playwright checks. See [testing](docs/TESTING.md) and [CONTRIBUTING](CONTRIBUTING.md) for exact commands/prerequisites.
+
+For a browser-testable UI change, ask the user before finalizing or opening the pull request whether the agent should exercise the affected journey with Playwright MCP or the user will test it manually. When the agent owns the check, test the running application end to end. When the user owns it, provide reproducible manual steps and identify the browser verification as not run by the agent.
+
+For backend changes, exercise the affected API behavior end to end against a running application. Verify applicable authentication or authorization, request data, response behavior, persistence, and side effects. Test non-API backend changes through their closest observable behavior. If required infrastructure, credentials, or provider configuration prevents testing, document the limitation and provide reproducible manual steps instead. Never claim browser E2E or API coverage that was not completed.
 
 Do not weaken coverage floors (backend filtered lines 90%; frontend all four metrics 90%), tests, audits, or build budgets. Report what ran, what passed, and what could not run accurately. Documentation-only changes need links/paths/commands and whitespace verification; do not run full application suites without a reason.
 
