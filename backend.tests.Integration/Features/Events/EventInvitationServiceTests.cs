@@ -226,6 +226,7 @@ public sealed class EventInvitationServiceTests
                 new EventImageRepository(db),
                 clubService.Object,
                 Mock.Of<backend.main.shared.storage.IAzureBlobService>(),
+                new backend.main.application.features.DisabledMediaAssetService(Mock.Of<backend.main.shared.storage.IAzureBlobService>(), noOpCache),
                 noOpCache,
                 new RefreshAheadCache(noOpCache),
                 Mock.Of<backend.main.features.events.analytics.IEventAnalyticsRepository>(),

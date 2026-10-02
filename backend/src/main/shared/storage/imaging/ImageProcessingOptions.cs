@@ -25,6 +25,14 @@ namespace backend.main.shared.storage.imaging
         [Range(16, 8000)]
         public int AvatarMaxEdge { get; set; } = 512;
 
+        /// <summary>
+        /// Long-edge cap for event and club images uploaded through a presigned URL. Smaller
+        /// images are never upscaled. 2048 keeps a full-width banner sharp and stays inside the
+        /// input limits of the image-moderation API that screens these later.
+        /// </summary>
+        [Range(16, 8000)]
+        public int GalleryMaxEdge { get; set; } = 2048;
+
         /// <summary>Lossy WebP quality, 1-100.</summary>
         [Range(1, 100)]
         public int WebpQuality { get; set; } = 82;

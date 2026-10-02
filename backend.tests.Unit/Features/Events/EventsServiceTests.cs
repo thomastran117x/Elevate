@@ -677,6 +677,11 @@ public class EventsServiceTests
         await action.Should()
             .ThrowAsync<BadRequestException>()
             .WithMessage("An event cannot have more than 5 images.");
+
+        // Refused before the upload is validated: with quarantine on, validating publishes it.
+        harness.BlobServiceMock.Verify(
+            service => service.InspectBlobAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]
@@ -2953,6 +2958,9 @@ public class EventsServiceTests
                 ImageRepositoryMock.Object,
                 ClubServiceMock.Object,
                 BlobServiceMock.Object,
+                // The pass-through service, so these tests keep exercising the attach-time
+                // checks exactly as they ran before quarantine; that path has its own tests.
+                new backend.main.application.features.DisabledMediaAssetService(BlobServiceMock.Object, CacheMock.Object),
                 CacheMock.Object,
                 RefreshCacheMock.Object,
                 AnalyticsRepositoryMock.Object,

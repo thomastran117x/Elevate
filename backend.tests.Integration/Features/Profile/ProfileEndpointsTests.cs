@@ -6,6 +6,7 @@ using backend.main.application.security;
 using backend.main.features.clubs;
 using backend.main.features.clubs.versions;
 using backend.main.features.events.images;
+using backend.main.features.media;
 
 using EventEntity = backend.main.features.events.Events;
 using backend.main.features.profile.contracts.requests;
@@ -14,6 +15,8 @@ using backend.main.features.profile.contracts.responses;
 using backend.tests.Integration.Infrastructure;
 
 using FluentAssertions;
+
+using Microsoft.EntityFrameworkCore;
 
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
@@ -366,6 +369,8 @@ public class ProfileEndpointsTests
         // every one of these carries a blob URL that the delete cascade would orphan.
         var avatarUrl = app.BlobStorage.CreateOwnedBlobUrl("users", "avatar.png");
         var clubImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club.png");
+        var bannerImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "banner.png");
+        var galleryImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "gallery.png");
         var versionImageUrl = app.BlobStorage.CreateOwnedBlobUrl("clubs", "club-v1.png");
         var eventImageUrl1 = app.BlobStorage.CreateOwnedBlobUrl("events", "event-1.png");
         var eventImageUrl2 = app.BlobStorage.CreateOwnedBlobUrl("events", "event-2.png");
@@ -381,10 +386,35 @@ public class ProfileEndpointsTests
                 Description = "Club with an image",
                 Clubtype = ClubType.Social,
                 ClubImage = clubImageUrl,
+                BannerImage = bannerImageUrl,
+                GalleryImages = [galleryImageUrl],
                 UserId = user.Id
             };
             db.Clubs.Add(club);
             await db.SaveChangesAsync();
+
+            // A published asset for one of the images going away, and an upload the user never
+            // finished. Left behind, the first would shield its blob from the orphan sweeper.
+            db.MediaAssets.Add(new MediaAsset
+            {
+                PublicId = Guid.NewGuid(),
+                OwnerUserId = user.Id,
+                ClubId = club.Id,
+                Status = MediaAssetStatus.Ready,
+                Origin = MediaAssetOrigin.Upload,
+                PublicUrl = bannerImageUrl,
+                DeclaredContentType = "image/png"
+            });
+            db.MediaAssets.Add(new MediaAsset
+            {
+                PublicId = Guid.NewGuid(),
+                OwnerUserId = user.Id,
+                Status = MediaAssetStatus.PendingUpload,
+                Origin = MediaAssetOrigin.Upload,
+                PublicUrl = "https://storage.test/event-assets/clubs/never-attached.webp",
+                QuarantineBlobPath = "clubs/never-attached.png",
+                DeclaredContentType = "image/png"
+            });
 
             db.ClubVersions.Add(new ClubVersion
             {
@@ -423,9 +453,17 @@ public class ProfileEndpointsTests
         // Every blob the deleted account (and its cascaded clubs/events) referenced is gone.
         app.BlobStorage.IsOwnedBlobUrl(avatarUrl).Should().BeFalse();
         app.BlobStorage.IsOwnedBlobUrl(clubImageUrl).Should().BeFalse();
+        app.BlobStorage.IsOwnedBlobUrl(bannerImageUrl).Should().BeFalse();
+        app.BlobStorage.IsOwnedBlobUrl(galleryImageUrl).Should().BeFalse();
         app.BlobStorage.IsOwnedBlobUrl(versionImageUrl).Should().BeFalse();
         app.BlobStorage.IsOwnedBlobUrl(eventImageUrl1).Should().BeFalse();
         app.BlobStorage.IsOwnedBlobUrl(eventImageUrl2).Should().BeFalse();
+
+        // And no media asset survives to point at any of them, or at the unfinished upload.
+        (await app.QueryDbAsync(db => db.MediaAssets.CountAsync(a => a.OwnerUserId == user.Id)))
+            .Should().Be(0);
+        (await app.QueryDbAsync(db => db.MediaAssets.CountAsync(a => a.PublicUrl == bannerImageUrl)))
+            .Should().Be(0);
     }
 
     [Fact]

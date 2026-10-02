@@ -200,6 +200,11 @@ namespace backend.main.application.openapi
                 },
                 new OpenApiTag
                 {
+                    Name = "media",
+                    Description = "Validation status of uploaded images."
+                },
+                new OpenApiTag
+                {
                     Name = "payments",
                     Description = "Stripe checkout, payment retrieval, refunds, and webhook processing."
                 },

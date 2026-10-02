@@ -83,9 +83,12 @@ namespace backend.main.shared.storage.imaging
 
         public async Task<ProcessedImage> ProcessAsync(
             Stream source,
+            ImageProcessingProfile profile,
             CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(source);
+
+            var maxEdge = MaxEdgeFor(profile);
 
             if (!source.CanRead)
                 throw new ArgumentException("The image stream must be readable.", nameof(source));
@@ -127,7 +130,7 @@ namespace backend.main.shared.storage.imaging
                 // already decoded, so a failure there is ours, not the uploader's, and belongs in
                 // the 500s where alerting can see it.
                 using var image = await DecodeAsync(buffered, cancellationToken);
-                return await ResizeOrientAndEncodeAsync(image, cancellationToken);
+                return await ResizeOrientAndEncodeAsync(image, maxEdge, cancellationToken);
             }
             finally
             {
@@ -162,7 +165,9 @@ namespace backend.main.shared.storage.imaging
                 }
 
                 // An animated GIF or WebP is a frame-count bomb, and flattening it to its first
-                // frame silently destroys what the user meant to upload. Refusing says so.
+                // frame silently destroys what the user meant to upload. Refusing says so. The
+                // frontend's image-file-validation.ts mirrors this rule (and the APNG one above)
+                // to warn when the file is picked; a change to either must change both.
                 if (info.FrameMetadataCollection.Count > 1)
                     throw new BadRequestException(AnimatedMessage);
 
@@ -186,12 +191,18 @@ namespace backend.main.shared.storage.imaging
             }
         }
 
+        private int MaxEdgeFor(ImageProcessingProfile profile) => profile switch
+        {
+            ImageProcessingProfile.Avatar => _options.AvatarMaxEdge,
+            ImageProcessingProfile.Gallery => _options.GalleryMaxEdge,
+            _ => throw new ArgumentOutOfRangeException(nameof(profile), profile, "Unknown image processing profile.")
+        };
+
         private async Task<ProcessedImage> ResizeOrientAndEncodeAsync(
             Image<Rgba32> image,
+            int maxEdge,
             CancellationToken cancellationToken)
         {
-            var maxEdge = _options.AvatarMaxEdge;
-
             // 3. Shrink first, then orient. Rotating at full resolution would allocate a second
             // full-size buffer — another ~200 MB for a 50 MP photo — before the original is freed.
             // The cap is a square box, so the result is the same in either order, and Resize
@@ -216,7 +227,7 @@ namespace backend.main.shared.storage.imaging
             using var output = new MemoryStream();
             await image.SaveAsync(output, _encoder, cancellationToken);
 
-            return new ProcessedImage(output.ToArray());
+            return new ProcessedImage(output.ToArray(), image.Width, image.Height);
         }
 
         /// <summary>

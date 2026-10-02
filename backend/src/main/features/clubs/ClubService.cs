@@ -6,6 +6,7 @@ using backend.main.features.clubs.follow;
 using backend.main.features.clubs.search;
 using backend.main.features.clubs.staff;
 using backend.main.features.clubs.versions;
+using backend.main.features.media;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
 using backend.main.infrastructure.elasticsearch;
@@ -26,6 +27,7 @@ namespace backend.main.features.clubs
         private readonly IUserService _userService;
         private readonly IFollowService _followService;
         private readonly IAzureBlobService _blobService;
+        private readonly IMediaAssetService _mediaAssets;
         private readonly ICacheService _cache;
         private readonly IRefreshAheadCache _refreshCache;
         private readonly IClubSearchService _searchService;
@@ -47,6 +49,7 @@ namespace backend.main.features.clubs
             IClubRepository clubRepository,
             IUserService userService,
             IAzureBlobService blobService,
+            IMediaAssetService mediaAssets,
             IFollowService followService,
             ICacheService cache,
             IRefreshAheadCache refreshCache,
@@ -60,6 +63,7 @@ namespace backend.main.features.clubs
             _followService = followService;
             _userService = userService;
             _blobService = blobService;
+            _mediaAssets = mediaAssets;
             _cache = cache;
             _refreshCache = refreshCache;
             _searchService = searchService;
@@ -482,16 +486,20 @@ namespace backend.main.features.clubs
             if (existingUrls?.Contains(clubImageUrl) == true)
                 return;
 
-            var intent = await BlobUploadIntentValidator.RequireIntentAsync(
-                _blobService, _cache, userId, clubImageUrl, "Club images");
-
-            // A club-creation upload is issued before the club has an id, so it carries 0. Once
-            // the club exists, its uploads are pinned to it.
-            if (intent.ClubId != 0 && intent.ClubId != clubId)
-            {
-                throw new BadRequestException(
-                    "Image upload is invalid or does not belong to this club.");
-            }
+            await _mediaAssets.AttachAsync(
+                userId,
+                clubImageUrl,
+                "Club images",
+                intent =>
+                {
+                    // A club-creation upload is issued before the club has an id, so it carries
+                    // 0. Once the club exists, its uploads are pinned to it.
+                    if (intent.ClubId != 0 && intent.ClubId != clubId)
+                    {
+                        throw new BadRequestException(
+                            "Image upload is invalid or does not belong to this club.");
+                    }
+                });
         }
 
         /// <summary>Validates the banner URL only when one is supplied; an empty value clears the banner.</summary>

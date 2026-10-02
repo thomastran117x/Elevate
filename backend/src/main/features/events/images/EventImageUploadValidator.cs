@@ -1,4 +1,4 @@
-using backend.main.features.cache;
+using backend.main.features.media;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.storage;
 
@@ -28,8 +28,7 @@ internal static class EventImageUploadValidator
     /// since expired, and re-submitting an image the event already has is not a new upload.
     /// </param>
     internal static async Task ValidateAsync(
-        IAzureBlobService blobService,
-        ICacheService cache,
+        IMediaAssetService mediaAssets,
         int clubId,
         int userId,
         IEnumerable<string> imageUrls,
@@ -41,21 +40,16 @@ internal static class EventImageUploadValidator
             if (existingUrls?.Contains(imageUrl) == true)
                 continue;
 
-            await ValidateOneAsync(blobService, cache, clubId, userId, imageUrl, eventId);
+            await mediaAssets.AttachAsync(
+                userId,
+                imageUrl,
+                "Event images",
+                intent => RequireEventScope(intent, clubId, eventId));
         }
     }
 
-    private static async Task ValidateOneAsync(
-        IAzureBlobService blobService,
-        ICacheService cache,
-        int clubId,
-        int userId,
-        string imageUrl,
-        int? eventId)
+    private static void RequireEventScope(BlobUploadIntent intent, int clubId, int? eventId)
     {
-        var intent = await BlobUploadIntentValidator.RequireIntentAsync(
-            blobService, cache, userId, imageUrl, "Event images");
-
         if (intent.ClubId != clubId)
         {
             throw new BadRequestException(

@@ -6,6 +6,7 @@ import { Subject, catchError, debounceTime, firstValueFrom, map, of, switchMap }
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { requireEnvelopeData } from '../../../../core/api/models/api-envelope.model';
+import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import {
   ALL_CATEGORIES,
   ALL_RECURRENCE_FREQUENCIES,
@@ -27,6 +28,9 @@ import { EventGalleryManagerComponent } from '../../components/event-gallery-man
 import { lifecycleBadgeClass, lifecycleHint } from '../../models/event-lifecycle';
 import { IMAGE_ACCEPT, screenImageFile } from '@shared/upload/image-file-validation';
 import { LocalPreviews, createPreviewUrl, revokePreviewUrl } from '@shared/upload/image-preview';
+import { ImageFallbackDirective } from '@shared/upload/image-fallback.directive';
+import { MediaAssetTracker } from '@shared/upload/media-asset-tracker';
+import { MediaAssetService } from '@shared/upload/media-asset.service';
 
 const MAX_EVENT_IMAGES = 5;
 
@@ -40,6 +44,7 @@ const MAX_EVENT_IMAGES = 5;
     OccurrenceScopeDialogComponent,
     EventLifecycleActionsComponent,
     EventGalleryManagerComponent,
+    ImageFallbackDirective,
   ],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './manage-event-editor.component.html',
@@ -129,6 +134,18 @@ export class ManageEventEditorComponent {
   private readonly imagePreviews = new LocalPreviews();
   /** What an image renders from: its local preview while one exists, else its public URL. */
   readonly srcForImage = (url: string): string => this.imagePreviews.srcFor(url);
+  /**
+   * Follows attached images until the server has validated them. A quarantined upload has
+   * nothing at its public URL until then, so its tile keeps the local preview meanwhile.
+   */
+  private readonly mediaChecks = new MediaAssetTracker(inject(MediaAssetService));
+  /** The label a tile overlays while its image is being checked, or null. */
+  readonly checkLabelForImage = (url: string): string | null => this.mediaChecks.labelFor(url);
+  /**
+   * Media asset ids of uploads not yet attached, by public URL. A draft attaches them on save,
+   * which is when there is something to follow.
+   */
+  private readonly unattachedAssetIds = new Map<string, string | null>();
   successMessage = '';
 
   // Wizard state. Repeat sits right after Schedule, while the timing context is fresh.
@@ -189,6 +206,7 @@ export class ManageEventEditorComponent {
     private managementService: EventsManagementService,
   ) {
     this.destroyRef.onDestroy(() => {
+      this.mediaChecks.stopAll();
       this.imagePreviews.releaseAll();
       this.pendingPreviews.forEach(revokePreviewUrl);
     });
@@ -412,6 +430,7 @@ export class ManageEventEditorComponent {
     this.seriesService.updateFutureOccurrences(seriesId, payload).subscribe({
       next: (response) => {
         const result = requireEnvelopeData(response, 'The series could not be updated.');
+        this.followSavedUploads();
         this.saving = false;
         this.successMessage = `Updated ${result.affectedCount} ${
           result.affectedCount === 1 ? 'occurrence' : 'occurrences'
@@ -533,7 +552,7 @@ export class ManageEventEditorComponent {
         .filter((preview): preview is string => preview !== null);
 
       for (const { file, preview } of queue) {
-        const publicUrl = await firstValueFrom(
+        const { publicUrl, mediaAssetId } = await firstValueFrom(
           this.managementService.uploadImage(targetClubId, file, this.event?.id),
         );
 
@@ -544,16 +563,27 @@ export class ManageEventEditorComponent {
         // A saved event attaches through the gallery endpoint so the image gets a row — and so
         // an id to reorder, describe or make the cover. An unsaved draft has nothing to attach
         // to yet, so its URLs ride along in the draft payload until the first save.
-        if (this.event?.id) {
+        if (!this.event?.id) {
+          this.unattachedAssetIds.set(publicUrl, mediaAssetId);
+          continue;
+        }
+
+        try {
           const attached = await firstValueFrom(
             this.managementService.addEventImage(this.event.id, { imageUrl: publicUrl }),
           );
           this.images = [...this.images, attached];
+          this.followCheck(publicUrl, mediaAssetId);
+        } catch (error: unknown) {
+          // Refused on attach — most often because validation rejected the bytes. Nothing will
+          // ever be published at this URL, so keeping its tile would only keep a dead image.
+          this.dropImage(publicUrl);
+          throw error;
         }
       }
     } catch (error: unknown) {
-      this.error =
-        error instanceof Error ? error.message : 'We could not upload one or more images.';
+      // The server's own words when it gave some — a refused image says exactly what was wrong.
+      this.error = getApiClientMessage(error, 'We could not upload one or more images.');
     } finally {
       // Whatever is still pending failed or never started, so nothing will show its preview.
       this.pendingPreviews.forEach(revokePreviewUrl);
@@ -566,15 +596,51 @@ export class ManageEventEditorComponent {
   }
 
   removeImage(index: number): void {
-    this.imagePreviews.release(this.imageUrls[index]);
-    this.imageUrls = this.imageUrls.filter((_, currentIndex) => currentIndex !== index);
+    this.dropImage(this.imageUrls[index]);
   }
 
   /** Keeps the draft payload's URL list in step with whatever the gallery editor just saved. */
   onGalleryChanged(images: EventImage[]): void {
+    const kept = new Set(images.map((image) => image.url));
+    for (const url of this.imageUrls) {
+      if (!kept.has(url)) this.mediaChecks.stop(url);
+    }
+
     this.images = images;
     this.imageUrls = images.map((image) => image.url);
     this.imagePreviews.retainOnly(this.imageUrls);
+  }
+
+  /** Forgets an image everywhere the editor tracks one. */
+  private dropImage(url: string): void {
+    this.mediaChecks.stop(url);
+    this.unattachedAssetIds.delete(url);
+    this.imagePreviews.release(url);
+    this.imageUrls = this.imageUrls.filter((current) => current !== url);
+    this.images = this.images.filter((image) => image.url !== url);
+  }
+
+  /**
+   * Follows one attached upload until it is published. Its tile keeps the local preview
+   * meanwhile; once the image is live the preview is released and the tile renders the real URL.
+   */
+  private followCheck(url: string, mediaAssetId: string | null | undefined): void {
+    this.mediaChecks.watch(url, mediaAssetId, {
+      ready: (readyUrl) => this.imagePreviews.release(readyUrl),
+      rejected: (rejectedUrl, reason) => {
+        this.dropImage(rejectedUrl);
+        this.imageErrors = [...this.imageErrors, reason];
+      },
+    });
+  }
+
+  /** A save just attached every image still waiting in the draft payload; follow them now. */
+  private followSavedUploads(): void {
+    for (const url of this.imageUrls) {
+      if (!this.unattachedAssetIds.has(url)) continue;
+      this.followCheck(url, this.unattachedAssetIds.get(url));
+      this.unattachedAssetIds.delete(url);
+    }
   }
 
   saveDraft(): void {
@@ -604,6 +670,7 @@ export class ManageEventEditorComponent {
       next: (response) => {
         const managedEvent = requireEnvelopeData(response, 'The draft could not be saved.');
         this.applyEvent(managedEvent);
+        this.followSavedUploads();
         this.successMessage = this.eventId
           ? 'Draft saved.'
           : 'Draft created. You can keep iterating before publishing.';

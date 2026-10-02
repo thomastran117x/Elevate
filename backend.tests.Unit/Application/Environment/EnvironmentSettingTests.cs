@@ -115,6 +115,29 @@ public class EnvironmentSettingTests
 
 
     [Fact]
+    public void AzureStorageQuarantineContainerName_ShouldDefault_AndRespectConfiguredOverride()
+    {
+        using (new EnvironmentVariableScope(new Dictionary<string, string?>
+        {
+            ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
+            ["AZURE_STORAGE_QUARANTINE_CONTAINER_NAME"] = null
+        }))
+        using (var defaultHarness = EnvironmentSettingHarness.Load())
+        {
+            defaultHarness.GetString("AzureStorageQuarantineContainerName").Should().Be("event-assets-quarantine");
+        }
+
+        using var configuredScope = new EnvironmentVariableScope(new Dictionary<string, string?>
+        {
+            ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
+            ["AZURE_STORAGE_QUARANTINE_CONTAINER_NAME"] = "uploads-private"
+        });
+        using var configuredHarness = EnvironmentSettingHarness.Load();
+
+        configuredHarness.GetString("AzureStorageQuarantineContainerName").Should().Be("uploads-private");
+    }
+
+    [Fact]
     public void AuthSmsMfaEnrollmentEnabled_ShouldDefaultToTrue_AndRespectConfiguredOverrides()
     {
         using var defaultScope = new EnvironmentVariableScope(new Dictionary<string, string?>

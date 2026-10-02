@@ -17,7 +17,7 @@ namespace backend.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.11")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "citext");
@@ -930,11 +930,11 @@ namespace backend.Migrations
 
                     b.HasIndex("EventId");
 
+                    b.HasIndex("EventId", "SortOrder");
+
                     b.HasIndex(new[] { "EventId" }, "UX_EventImages_EventId_Cover")
                         .IsUnique()
                         .HasFilter("\"IsCover\"");
-
-                    b.HasIndex("EventId", "SortOrder");
 
                     b.ToTable("EventImages");
                 });
@@ -1416,6 +1416,100 @@ namespace backend.Migrations
                     b.HasIndex("EventId", "Status", "JoinedAtUtc", "Id");
 
                     b.ToTable("EventWaitlistEntries");
+                });
+
+            modelBuilder.Entity("backend.main.features.media.MediaAsset", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("ByteSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("ClubId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeclaredContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("EventId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Height")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int?>("OwnerUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PublicUrl")
+                        .HasColumnType("text");
+
+                    b.Property<string>("QuarantineBlobPath")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ValidatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("Width")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClubId");
+
+                    b.HasIndex("EventId");
+
+                    b.HasIndex("OwnerUserId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("PublicUrl")
+                        .IsUnique()
+                        .HasFilter("\"PublicUrl\" IS NOT NULL");
+
+                    b.HasIndex("QuarantineBlobPath")
+                        .HasFilter("\"QuarantineBlobPath\" IS NOT NULL");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("MediaAssets");
                 });
 
             modelBuilder.Entity("backend.main.features.payment.Payment", b =>
@@ -1936,6 +2030,24 @@ namespace backend.Migrations
                         .IsRequired();
 
                     b.Navigation("Event");
+                });
+
+            modelBuilder.Entity("backend.main.features.media.MediaAsset", b =>
+                {
+                    b.HasOne("backend.main.features.clubs.Club", null)
+                        .WithMany()
+                        .HasForeignKey("ClubId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("backend.main.features.events.Events", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("backend.main.features.profile.User", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("backend.main.features.payment.Payment", b =>

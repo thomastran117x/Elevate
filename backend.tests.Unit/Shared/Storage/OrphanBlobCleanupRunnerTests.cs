@@ -1,3 +1,4 @@
+using backend.main.features.media;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
 using backend.main.shared.storage;
@@ -39,6 +40,72 @@ public class OrphanBlobCleanupRunnerTests
         harness.BlobService.Verify(b => b.DeleteBlobAsync(OrphanOldUrl), Times.Once);
         harness.BlobService.Verify(b => b.DeleteBlobAsync(ReferencedUrl), Times.Never);
         harness.BlobService.Verify(b => b.DeleteBlobAsync(OrphanRecentUrl), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(MediaAssetStatus.PendingUpload)]
+    [InlineData(MediaAssetStatus.Uploaded)]
+    [InlineData(MediaAssetStatus.Processing)]
+    [InlineData(MediaAssetStatus.NeedsReview)]
+    public async Task RunOnceAsync_ShouldProtectThePublicUrlOfAnUploadStillInFlight(MediaAssetStatus status)
+    {
+        // A crash between promotion and the Ready write leaves a public blob under an asset that
+        // is still Processing; the retry that finishes it must find the blob there.
+        await using var harness = await Harness.CreateAsync();
+        const string inFlightUrl = "https://cdn.test/users/in-flight.webp";
+        await harness.SeedAssetAsync(inFlightUrl, status);
+
+        var old = DateTimeOffset.UtcNow.AddDays(-2);
+        harness.BlobService
+            .Setup(b => b.ListBlobsAsync("users", It.IsAny<CancellationToken>()))
+            .Returns(ToAsyncEnumerable(new BlobListItem(inFlightUrl, old)));
+
+        await harness.CreateRunner(prefixes: ["users"]).RunOnceAsync();
+
+        harness.BlobService.Verify(b => b.DeleteBlobAsync(inFlightUrl), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(MediaAssetStatus.Ready)]
+    [InlineData(MediaAssetStatus.Rejected)]
+    public async Task RunOnceAsync_ShouldReclaimASettledUploadNothingReferences_AndRetireItsRow(MediaAssetStatus status)
+    {
+        // An image removed from its event whose inline delete failed, or one promoted by an attach
+        // whose save then failed: only the ledger still knows the URL. Treating that as a reference
+        // would keep the blob forever, which is the one case the sweeper exists for.
+        await using var harness = await Harness.CreateAsync();
+        const string settledUrl = "https://cdn.test/users/removed.webp";
+        await harness.SeedAssetAsync(settledUrl, status);
+
+        var old = DateTimeOffset.UtcNow.AddDays(-2);
+        harness.BlobService
+            .Setup(b => b.ListBlobsAsync("users", It.IsAny<CancellationToken>()))
+            .Returns(ToAsyncEnumerable(new BlobListItem(settledUrl, old)));
+
+        await harness.CreateRunner(prefixes: ["users"]).RunOnceAsync();
+
+        harness.BlobService.Verify(b => b.DeleteBlobAsync(settledUrl), Times.Once);
+        (await harness.Db.MediaAssets.AsNoTracking().AnyAsync(a => a.PublicUrl == settledUrl))
+            .Should().BeFalse("no Ready row should advertise a URL with nothing behind it");
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_ShouldKeepASettledUploadThatIsStillAttached()
+    {
+        await using var harness = await Harness.CreateAsync();
+        const string attachedUrl = "https://cdn.test/users/attached.webp";
+        await harness.SeedAssetAsync(attachedUrl, MediaAssetStatus.Ready);
+        await harness.SeedUserWithAvatarAsync(attachedUrl);
+
+        var old = DateTimeOffset.UtcNow.AddDays(-2);
+        harness.BlobService
+            .Setup(b => b.ListBlobsAsync("users", It.IsAny<CancellationToken>()))
+            .Returns(ToAsyncEnumerable(new BlobListItem(attachedUrl, old)));
+
+        await harness.CreateRunner(prefixes: ["users"]).RunOnceAsync();
+
+        harness.BlobService.Verify(b => b.DeleteBlobAsync(attachedUrl), Times.Never);
+        (await harness.Db.MediaAssets.AsNoTracking().AnyAsync(a => a.PublicUrl == attachedUrl)).Should().BeTrue();
     }
 
     [Fact]
@@ -108,6 +175,20 @@ public class OrphanBlobCleanupRunnerTests
             await db.Database.EnsureCreatedAsync();
 
             return new Harness(connection, db);
+        }
+
+        public async Task SeedAssetAsync(string publicUrl, MediaAssetStatus status)
+        {
+            Db.MediaAssets.Add(new MediaAsset
+            {
+                PublicId = Guid.NewGuid(),
+                Status = status,
+                Origin = MediaAssetOrigin.Upload,
+                PublicUrl = publicUrl,
+                DeclaredContentType = "image/png"
+            });
+            await Db.SaveChangesAsync();
+            Db.ChangeTracker.Clear();
         }
 
         public async Task SeedUserWithAvatarAsync(string avatarUrl)

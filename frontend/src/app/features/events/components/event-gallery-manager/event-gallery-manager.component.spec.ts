@@ -55,6 +55,10 @@ describe('EventGalleryManagerComponent', () => {
     expect(component.previewSrc('https://cdn.test/a.png')).toBe('https://cdn.test/a.png');
   });
 
+  it('labels no image as being checked unless the host says so', () => {
+    expect(component.checkLabel('https://cdn.test/a.png')).toBeNull();
+  });
+
   it('counts the images still needing a description', () => {
     expect(component.imagesNeedingAltText).toBe(3);
 

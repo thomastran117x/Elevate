@@ -1584,6 +1584,9 @@ public class ClubServiceTests
                 ClubRepositoryMock.Object,
                 UserServiceMock.Object,
                 BlobServiceMock.Object,
+                // The pass-through service, so these tests keep exercising the attach-time
+                // checks exactly as they ran before quarantine; that path has its own tests.
+                new backend.main.application.features.DisabledMediaAssetService(BlobServiceMock.Object, CacheMock.Object),
                 FollowServiceMock.Object,
                 CacheMock.Object,
                 RefreshCacheMock.Object,

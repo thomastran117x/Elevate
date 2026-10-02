@@ -222,7 +222,7 @@ namespace backend.main.application.openapi
                 ["POST /api/events/clubs/{clubId}/drafts"] = new("Create a draft event"),
                 ["POST /api/events/images/presigned-url"] = new(
                     "Get a presigned URL for image upload",
-                    "Returns a short-lived presigned URL for direct upload to Azure Blob Storage. After uploading, call `POST /api/events/{eventId}/images` with the resulting image URL to attach the image to an event."
+                    "Returns a short-lived, write-once presigned URL for direct upload to Azure Blob Storage, and the `publicUrl` to attach once the upload finishes (for example with `POST /api/events/{eventId}/images`, or in an event, draft, series or club payload). When uploads are quarantined, the bytes land in a private container and nothing exists at `publicUrl` until the image has been attached and validated: attaching decodes and re-encodes it to WebP, strips its metadata, and publishes it there. The response then carries `mediaAssetId`, which `GET /api/media/{publicId}` reports on. Without quarantine, `mediaAssetId` is null and the upload itself is what `publicUrl` serves."
                 ),
                 ["GET /api/events/{eventId}"] = new("Get an event"),
                 ["PUT /api/events/{eventId}"] = new("Update an event"),
@@ -312,6 +312,13 @@ namespace backend.main.application.openapi
                 ["GET /api/events/me/pinned"] = new(
                     "List the current user's pinned events",
                     "The union of the events the user registered for and the events they starred, ordered registered-first then by start time. Rows the user can no longer view are returned redacted with `accessRevoked` set, so the star can still be removed."
+                ),
+
+                // ── Media ────────────────────────────────────────────────────────────────
+
+                ["GET /api/media/{publicId}"] = new(
+                    "Get the validation status of an uploaded image",
+                    "Reports where an upload issued by `POST /api/events/images/presigned-url` is in validation, by its `mediaAssetId`. `status` is a number: 0 pending upload, 1 uploaded, 2 processing, 3 ready, 4 rejected, 5 needs review. `url` is set only once the image is ready, and `rejectionReason` only once it has been rejected. Visible to the uploader and to managers of the club the upload was issued for; everyone else gets 404, whether or not the id exists. Meant for polling while an editor waits on an attached image, so it is limited only by the global per-user rate limit."
                 ),
 
                 // ── Payments ─────────────────────────────────────────────────────────────

@@ -35,7 +35,7 @@ public class ImageSharpImageProcessorTests
         var jpeg = EncodeJpeg(input);
         Image.Identify(jpeg).Metadata.ExifProfile.Should().NotBeNull("the fixture has to carry GPS to prove anything");
 
-        var result = await CreateProcessor().ProcessAsync(new MemoryStream(jpeg));
+        var result = await CreateProcessor().ProcessAsync(new MemoryStream(jpeg), ImageProcessingProfile.Avatar);
 
         ImageSignatureInspector.TryDetect(result.Content, out var signature).Should().BeTrue();
         signature.Format.Should().Be(ImageFormat.Webp);
@@ -55,7 +55,7 @@ public class ImageSharpImageProcessorTests
         using var input = new Image<Rgba32>(4000, 3000, new Rgba32(10, 20, 30));
         var jpeg = EncodeJpeg(input);
 
-        var result = await CreateProcessor().ProcessAsync(new MemoryStream(jpeg));
+        var result = await CreateProcessor().ProcessAsync(new MemoryStream(jpeg), ImageProcessingProfile.Avatar);
 
         Decoded(result).Width.Should().Be(512);
         Decoded(result).Height.Should().Be(384);
@@ -65,12 +65,65 @@ public class ImageSharpImageProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_ShouldCapGalleryImagesAtTheirOwnLongEdge()
+    {
+        using var input = new Image<Rgba32>(4000, 3000, new Rgba32(10, 20, 30));
+        var jpeg = EncodeJpeg(input);
+
+        var result = await CreateProcessor().ProcessAsync(new MemoryStream(jpeg), ImageProcessingProfile.Gallery);
+
+        Decoded(result).Width.Should().Be(2048);
+        Decoded(result).Height.Should().Be(1536);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldHonourAConfiguredGalleryEdge()
+    {
+        using var input = new Image<Rgba32>(1000, 500, new Rgba32(10, 20, 30));
+
+        var result = await CreateProcessor(new ImageProcessingOptions { GalleryMaxEdge = 300 })
+            .ProcessAsync(new MemoryStream(EncodePng(input)), ImageProcessingProfile.Gallery);
+
+        Decoded(result).Width.Should().Be(300);
+        Decoded(result).Height.Should().Be(150);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldReportTheDimensionsOfTheEncodedOutput_AfterOrienting()
+    {
+        // Stored landscape and tagged "rotate 90": the reported size is the upright one that was
+        // encoded, which is what a MediaAsset records.
+        using var input = new Image<Rgba32>(80, 40, new Rgba32(1, 2, 3));
+        input.Metadata.ExifProfile = new ExifProfile();
+        input.Metadata.ExifProfile.SetValue(ExifTag.Orientation, (ushort)6);
+
+        var result = await CreateProcessor().ProcessAsync(
+            new MemoryStream(EncodeJpeg(input)), ImageProcessingProfile.Gallery);
+
+        result.Width.Should().Be(40);
+        result.Height.Should().Be(80);
+        Decoded(result).Width.Should().Be(result.Width);
+        Decoded(result).Height.Should().Be(result.Height);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldRejectAnUnknownProfile()
+    {
+        using var input = new Image<Rgba32>(8, 8);
+
+        var act = () => CreateProcessor().ProcessAsync(
+            new MemoryStream(EncodePng(input)), (ImageProcessingProfile)99);
+
+        await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
     public async Task ProcessAsync_ShouldNotUpscaleSmallImages()
     {
         using var input = new Image<Rgba32>(100, 80, new Rgba32(10, 20, 30));
 
         var result = await CreateProcessor().ProcessAsync(
-            new MemoryStream(EncodePng(input)));
+            new MemoryStream(EncodePng(input)), ImageProcessingProfile.Avatar);
 
         Decoded(result).Width.Should().Be(100);
         Decoded(result).Height.Should().Be(80);
@@ -97,7 +150,7 @@ public class ImageSharpImageProcessorTests
         input.Metadata.ExifProfile.SetValue(ExifTag.Orientation, (ushort)6);
 
         var result = await CreateProcessor().ProcessAsync(
-            new MemoryStream(EncodeJpeg(input)));
+            new MemoryStream(EncodeJpeg(input)), ImageProcessingProfile.Avatar);
 
         Decoded(result).Width.Should().Be(40);
         Decoded(result).Height.Should().Be(80);
@@ -127,7 +180,7 @@ public class ImageSharpImageProcessorTests
         input.Metadata.ExifProfile.SetValue(ExifTag.Orientation, (ushort)6);
 
         var result = await CreateProcessor().ProcessAsync(
-            new MemoryStream(EncodeJpeg(input)));
+            new MemoryStream(EncodeJpeg(input)), ImageProcessingProfile.Avatar);
 
         Decoded(result).Width.Should().Be(256);
         Decoded(result).Height.Should().Be(512);
@@ -147,11 +200,11 @@ public class ImageSharpImageProcessorTests
         var bomb = CraftPng(100_000, 100_000);
 
         // Warm up so JIT and ImageSharp's one-time static setup are not counted against the probe.
-        await processor.Invoking(p => p.ProcessAsync(new MemoryStream(bomb)))
+        await processor.Invoking(p => p.ProcessAsync(new MemoryStream(bomb), ImageProcessingProfile.Avatar))
             .Should().ThrowAsync<BadRequestException>();
 
         var before = GC.GetAllocatedBytesForCurrentThread();
-        var act = () => processor.ProcessAsync(new MemoryStream(bomb));
+        var act = () => processor.ProcessAsync(new MemoryStream(bomb), ImageProcessingProfile.Avatar);
         await act.Should().ThrowAsync<BadRequestException>()
             .WithMessage(ImageSharpImageProcessor.TooLargeMessage);
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
@@ -164,7 +217,7 @@ public class ImageSharpImageProcessorTests
     {
         // 7000 x 7500: both sides under 8000, but 52.5 MP is over the 50 MP cap.
         var act = () => CreateProcessor().ProcessAsync(
-            new MemoryStream(CraftPng(7000, 7500)));
+            new MemoryStream(CraftPng(7000, 7500)), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
             .WithMessage(ImageSharpImageProcessor.TooLargeMessage);
@@ -183,7 +236,7 @@ public class ImageSharpImageProcessorTests
         input.SaveAsGif(gif);
         gif.Position = 0;
 
-        var act = () => CreateProcessor().ProcessAsync(gif);
+        var act = () => CreateProcessor().ProcessAsync(gif, ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
             .WithMessage(ImageSharpImageProcessor.AnimatedMessage);
@@ -197,7 +250,7 @@ public class ImageSharpImageProcessorTests
         input.SaveAsGif(gif);
         gif.Position = 0;
 
-        var result = await CreateProcessor().ProcessAsync(gif);
+        var result = await CreateProcessor().ProcessAsync(gif, ImageProcessingProfile.Avatar);
 
         ImageSignatureInspector.TryDetect(result.Content, out var signature).Should().BeTrue();
         signature.Format.Should().Be(ImageFormat.Webp);
@@ -207,7 +260,7 @@ public class ImageSharpImageProcessorTests
     public async Task ProcessAsync_ShouldRejectBytesThatAreNotAnImage()
     {
         var act = () => CreateProcessor().ProcessAsync(
-            new MemoryStream([0x01, 0x02, 0x03, 0x04]));
+            new MemoryStream([0x01, 0x02, 0x03, 0x04]), ImageProcessingProfile.Avatar);
 
         // 400, not 415: [ImageContent] model validation already answers 400 for the same file,
         // and the published contract documents that.
@@ -223,7 +276,7 @@ public class ImageSharpImageProcessorTests
         input.SaveAsBmp(bmp);
         bmp.Position = 0;
 
-        var act = () => CreateProcessor().ProcessAsync(bmp);
+        var act = () => CreateProcessor().ProcessAsync(bmp, ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
             .WithMessage(ImageSharpImageProcessor.UnsupportedFormatMessage);
@@ -235,7 +288,7 @@ public class ImageSharpImageProcessorTests
         // A PNG signature followed by nothing a decoder can use.
         byte[] corrupt = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48];
 
-        var act = () => CreateProcessor().ProcessAsync(new MemoryStream(corrupt));
+        var act = () => CreateProcessor().ProcessAsync(new MemoryStream(corrupt), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
             .WithMessage(ImageSharpImageProcessor.UnreadableMessage);
@@ -249,7 +302,7 @@ public class ImageSharpImageProcessorTests
         var png = EncodePng(input);
 
         var results = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ =>
-            Task.Run(() => processor.ProcessAsync(new MemoryStream(png)))));
+            Task.Run(() => processor.ProcessAsync(new MemoryStream(png), ImageProcessingProfile.Avatar))));
 
         results.Should().AllSatisfy(result => Decoded(result).Width.Should().Be(32));
     }
@@ -263,11 +316,11 @@ public class ImageSharpImageProcessorTests
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
-        var cancelled = () => processor.ProcessAsync(new MemoryStream(png), cts.Token);
+        var cancelled = () => processor.ProcessAsync(new MemoryStream(png), ImageProcessingProfile.Avatar, cts.Token);
         await cancelled.Should().ThrowAsync<OperationCanceledException>();
 
         // With a single slot, a leaked one would make this wait forever.
-        var next = processor.ProcessAsync(new MemoryStream(png));
+        var next = processor.ProcessAsync(new MemoryStream(png), ImageProcessingProfile.Avatar);
         (await Task.WhenAny(next, Task.Delay(TimeSpan.FromSeconds(10)))).Should().BeSameAs(next);
         Decoded(await next).Width.Should().Be(32);
     }
@@ -284,7 +337,7 @@ public class ImageSharpImageProcessorTests
         input.Metadata.IptcProfile.SetValue(IptcTag.Byline, "someone");
 
         var result = await CreateProcessor().ProcessAsync(
-            new MemoryStream(EncodeJpeg(input)));
+            new MemoryStream(EncodeJpeg(input)), ImageProcessingProfile.Avatar);
 
         var stored = Image.Identify(result.Content);
         stored.Metadata.ExifProfile.Should().BeNull();
@@ -307,7 +360,7 @@ public class ImageSharpImageProcessorTests
         input.Save(webp, new WebpEncoder());
         webp.Position = 0;
 
-        var act = () => CreateProcessor().ProcessAsync(webp);
+        var act = () => CreateProcessor().ProcessAsync(webp, ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
             .WithMessage(ImageSharpImageProcessor.AnimatedMessage);
@@ -320,7 +373,7 @@ public class ImageSharpImageProcessorTests
         // PNG data, which would tell the user their file is broken rather than animated. The
         // acTL chunk is checked before decoding so the message matches GIF and WebP.
         var act = () => CreateProcessor().ProcessAsync(
-            new MemoryStream(CraftApng()));
+            new MemoryStream(CraftApng()), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
             .WithMessage(ImageSharpImageProcessor.AnimatedMessage);
@@ -343,7 +396,7 @@ public class ImageSharpImageProcessorTests
         });
 
         var result = await CreateProcessor().ProcessAsync(
-            new MemoryStream(EncodePng(input)));
+            new MemoryStream(EncodePng(input)), ImageProcessingProfile.Avatar);
 
         Decoded(result).Width.Should().Be(64);
     }
@@ -363,7 +416,7 @@ public class ImageSharpImageProcessorTests
         stream.Write([0x00, 0x00, 0x00, 0x00]);
 
         var act = () => CreateProcessor().ProcessAsync(
-            new MemoryStream(stream.ToArray()));
+            new MemoryStream(stream.ToArray()), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
             .WithMessage(ImageSharpImageProcessor.UnreadableMessage);
@@ -377,7 +430,7 @@ public class ImageSharpImageProcessorTests
         // ImageSharp raises NotSupportedException rather than an ImageFormatException for these,
         // which would otherwise escape the filter and surface as a 500.
         var act = () => CreateProcessor().ProcessAsync(
-            new MemoryStream(CraftPng(8, 8, bitDepth, colorType)));
+            new MemoryStream(CraftPng(8, 8, bitDepth, colorType)), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
             .WithMessage(ImageSharpImageProcessor.UnreadableMessage);
@@ -391,7 +444,7 @@ public class ImageSharpImageProcessorTests
         var png = EncodePng(input);
 
         var result = await CreateProcessor().ProcessAsync(
-            new ForwardOnlyStream(png));
+            new ForwardOnlyStream(png), ImageProcessingProfile.Avatar);
 
         Decoded(result).Width.Should().Be(24);
     }
@@ -411,12 +464,12 @@ public class ImageSharpImageProcessorTests
         var png = EncodePng(input);
         using var blocker = new SlowStream(png, TimeSpan.FromSeconds(5));
 
-        var occupying = processor.ProcessAsync(blocker);
+        var occupying = processor.ProcessAsync(blocker, ImageProcessingProfile.Avatar);
         var shed = async () =>
         {
             // Give the first call time to take the only slot.
             await Task.Delay(200);
-            await processor.ProcessAsync(new MemoryStream(png));
+            await processor.ProcessAsync(new MemoryStream(png), ImageProcessingProfile.Avatar);
         };
 
         await shed.Should().ThrowAsync<NotAvailableException>()
@@ -436,7 +489,7 @@ public class ImageSharpImageProcessorTests
         input.SaveAsGif(gif);
         var truncated = gif.ToArray()[..(int)(gif.Length * 0.6)];
 
-        var act = () => CreateProcessor().ProcessAsync(new MemoryStream(truncated));
+        var act = () => CreateProcessor().ProcessAsync(new MemoryStream(truncated), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
             .WithMessage(ImageSharpImageProcessor.UnreadableMessage);
@@ -463,7 +516,7 @@ public class ImageSharpImageProcessorTests
         var png = EncodePng(input);
         var truncated = png[..(int)(png.Length * keep)];
 
-        var act = () => CreateProcessor().ProcessAsync(new MemoryStream(truncated));
+        var act = () => CreateProcessor().ProcessAsync(new MemoryStream(truncated), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
             .WithMessage(ImageSharpImageProcessor.UnreadableMessage);
@@ -478,7 +531,7 @@ public class ImageSharpImageProcessorTests
         using var input = new Image<Rgba32>(64, 64, new Rgba32(1, 2, 3));
         using var failing = new FailingStream(EncodePng(input));
 
-        var act = () => CreateProcessor().ProcessAsync(failing);
+        var act = () => CreateProcessor().ProcessAsync(failing, ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<IOException>();
     }
@@ -490,7 +543,7 @@ public class ImageSharpImageProcessorTests
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
-        var act = () => CreateProcessor().ProcessAsync(new MemoryStream(EncodePng(input)), cts.Token);
+        var act = () => CreateProcessor().ProcessAsync(new MemoryStream(EncodePng(input)), ImageProcessingProfile.Avatar, cts.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
     }

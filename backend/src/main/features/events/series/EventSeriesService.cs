@@ -7,6 +7,7 @@ using backend.main.features.events.search;
 using backend.main.features.events.series.contracts.requests;
 using backend.main.features.events.series.contracts.responses;
 using backend.main.features.events.versions;
+using backend.main.features.media;
 using backend.main.infrastructure.database.core;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.storage;
@@ -34,6 +35,7 @@ public class EventSeriesService : IEventSeriesService
     private readonly IEventImageRepository _imageRepository;
     private readonly IClubService _clubService;
     private readonly IAzureBlobService _blobService;
+    private readonly IMediaAssetService _mediaAssets;
     private readonly ICacheService _cache;
     private readonly IRefreshAheadCache _refreshCache;
     private readonly IEventSearchOutboxWriter _outboxWriter;
@@ -46,6 +48,7 @@ public class EventSeriesService : IEventSeriesService
         IEventImageRepository imageRepository,
         IClubService clubService,
         IAzureBlobService blobService,
+        IMediaAssetService mediaAssets,
         ICacheService cache,
         IRefreshAheadCache refreshCache,
         IEventSearchOutboxWriter outboxWriter,
@@ -57,6 +60,7 @@ public class EventSeriesService : IEventSeriesService
         _imageRepository = imageRepository;
         _clubService = clubService;
         _blobService = blobService;
+        _mediaAssets = mediaAssets;
         _cache = cache;
         _refreshCache = refreshCache;
         _outboxWriter = outboxWriter;
@@ -545,8 +549,7 @@ public class EventSeriesService : IEventSeriesService
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
                 await EventImageUploadValidator.ValidateAsync(
-                    _blobService,
-                    _cache,
+                    _mediaAssets,
                     series.ClubId,
                     userId,
                     requestedImageUrls,

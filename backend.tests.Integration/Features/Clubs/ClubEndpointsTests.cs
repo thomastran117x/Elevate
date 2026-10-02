@@ -1026,7 +1026,9 @@ public class ClubEndpointsTests
     {
         // A club-creation upload is issued before the club exists, so it is the earliest attach
         // path there is — and the one a SAS leaves entirely unbounded.
-        await using var app = await AuthApiTestApp.CreateAsync();
+        // Pins the behaviour storage.quarantine=false must keep: presigned straight into the
+        // public container, bytes checked in place. MediaAssetEndpointsTests covers quarantine.
+        await using var app = await AuthApiTestApp.CreateWithoutQuarantineAsync();
         var (ownerSession, _) = await CreateUserSessionAsync(app, "clubs-image-oversized@example.com", "Organizer");
 
         var oversized = await app.CreateClubImageUrlAsync(ownerSession.AccessToken, "oversized.png");
@@ -1054,7 +1056,9 @@ public class ClubEndpointsTests
     [Fact]
     public async Task ClubUpdate_ShouldRejectNonImageBytes_AndKeepTheExistingImage()
     {
-        await using var app = await AuthApiTestApp.CreateAsync();
+        // Pins the behaviour storage.quarantine=false must keep: presigned straight into the
+        // public container, bytes checked in place. MediaAssetEndpointsTests covers quarantine.
+        await using var app = await AuthApiTestApp.CreateWithoutQuarantineAsync();
         var (ownerSession, _) = await CreateUserSessionAsync(app, "clubs-image-bytes@example.com", "Organizer");
 
         var club = await CreateClubAsync(app, ownerSession.AccessToken, "Byte Checked Club");
@@ -1084,7 +1088,9 @@ public class ClubEndpointsTests
     [Fact]
     public async Task ClubUpdate_ShouldNotInspectStorage_WhenResubmittingTheExistingImage()
     {
-        await using var app = await AuthApiTestApp.CreateAsync();
+        // Pins the behaviour storage.quarantine=false must keep: presigned straight into the
+        // public container, bytes checked in place. MediaAssetEndpointsTests covers quarantine.
+        await using var app = await AuthApiTestApp.CreateWithoutQuarantineAsync();
         var (ownerSession, _) = await CreateUserSessionAsync(app, "clubs-image-reattach@example.com", "Organizer");
 
         var club = await CreateClubAsync(app, ownerSession.AccessToken, "Reattach Image Club");

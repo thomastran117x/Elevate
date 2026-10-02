@@ -465,7 +465,7 @@ describe('EventsManagementService', () => {
   describe('uploadImage', () => {
     const file = new File(['bytes'], 'poster.png', { type: 'image/png' });
 
-    it('requests a presigned URL, PUTs the file, then yields the public URL', async () => {
+    it('requests a presigned URL, PUTs the file, then yields the public URL and asset id', async () => {
       const fetchSpy = spyOn(window, 'fetch').and.resolveTo({ ok: true } as Response);
 
       const result = firstValueFrom(service.uploadImage(3, file, 7));
@@ -481,11 +481,15 @@ describe('EventsManagementService', () => {
       request.flush(
         envelope({
           uploadUrl: 'https://blob.example.com/put',
-          publicUrl: 'https://cdn/poster.png',
+          publicUrl: 'https://cdn/poster.webp',
+          mediaAssetId: '0199a1b2-0000-7000-8000-000000000001',
         }),
       );
 
-      await expectAsync(result).toBeResolvedTo('https://cdn/poster.png');
+      await expectAsync(result).toBeResolvedTo({
+        publicUrl: 'https://cdn/poster.webp',
+        mediaAssetId: '0199a1b2-0000-7000-8000-000000000001',
+      });
 
       const [url, init] = fetchSpy.calls.mostRecent().args as [string, RequestInit];
       expect(url).toBe('https://blob.example.com/put');
@@ -500,11 +504,37 @@ describe('EventsManagementService', () => {
 
       const result = firstValueFrom(service.uploadImage(3, file));
 
-      httpMock
-        .expectOne(`${base}/images/presigned-url`)
-        .flush(pascalEnvelope({ UploadUrl: 'https://blob/put', PublicUrl: 'https://cdn/p.png' }));
+      httpMock.expectOne(`${base}/images/presigned-url`).flush(
+        pascalEnvelope({
+          UploadUrl: 'https://blob/put',
+          PublicUrl: 'https://cdn/p.webp',
+          MediaAssetId: 'asset-7',
+        }),
+      );
 
-      await expectAsync(result).toBeResolvedTo('https://cdn/p.png');
+      await expectAsync(result).toBeResolvedTo({
+        publicUrl: 'https://cdn/p.webp',
+        mediaAssetId: 'asset-7',
+      });
+    });
+
+    it('yields a null asset id when uploads are not quarantined', async () => {
+      spyOn(window, 'fetch').and.resolveTo({ ok: true } as Response);
+
+      const result = firstValueFrom(service.uploadImage(3, file));
+
+      httpMock.expectOne(`${base}/images/presigned-url`).flush(
+        envelope({
+          uploadUrl: 'https://blob/put',
+          publicUrl: 'https://cdn/p.png',
+          mediaAssetId: null,
+        }),
+      );
+
+      await expectAsync(result).toBeResolvedTo({
+        publicUrl: 'https://cdn/p.png',
+        mediaAssetId: null,
+      });
     });
 
     it('fails when the presigned response is incomplete', async () => {

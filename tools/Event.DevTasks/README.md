@@ -15,6 +15,7 @@ dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- --help
 | `backend-integration-tests`             | `--filter`                                                                         | Runs the integration project in Release, optionally with a dotnet test filter; requires Docker.                                                                                                          |
 | `backend-integration-endpoint-coverage` | `--fail-on-missing`                                                                | Statically compares controller actions with integration request literals, prints a report by controller and missing actions, and optionally fails on uncovered actions. No containers/tests are started. |
 | `export-openapi`                        | `--output` / `-o` (default `backend/openapi.yaml`), `--port` / `-p` (default 8090) | Builds the API, starts a temporary export-mode host, writes paired JSON/YAML documents, and stops the host.                                                                                              |
+| `storage-provision`                     | `--connection-string`, `--container`, `--quarantine-container`                     | Creates the public blob container (anonymous blob read) and the private quarantine container. Settings default to the matching `AZURE_STORAGE_*` variables, read from the environment and then the root `.env`. The quarantine container defaults to `event-assets-quarantine`. Existing containers are reported without being changed. The command fails if the quarantine container allows anonymous access. |
 
 Every command supports help. Unknown commands/options, missing values, invalid numeric inputs, subprocess failures, and task exceptions return nonzero. Coverage also fails for missing/invalid reports or coverage below the selected threshold. The endpoint audit only fails on missing actions when its flag is supplied.
 
@@ -26,6 +27,7 @@ dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-unit-
 dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-integration-tests --filter "Category=EndToEnd"
 dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-integration-endpoint-coverage --fail-on-missing
 dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- export-openapi --output backend/openapi.yaml --port 8091
+dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- storage-provision
 ```
 
 ## OpenAPI export details

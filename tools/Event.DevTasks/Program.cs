@@ -38,6 +38,7 @@ internal static partial class DevTasksCli
                 "backend-integration-endpoint-coverage" =>
                     await RunBackendIntegrationEndpointCoverageAsync(args[1..]),
                 "export-openapi" => await ExportOpenApiAsync(args[1..]),
+                "storage-provision" => await RunStorageProvisionAsync(args[1..]),
                 _ => Fail($"Unknown command '{args[0]}'.")
             };
         }
@@ -904,12 +905,16 @@ internal static partial class DevTasksCli
             "  backend-integration-endpoint-coverage  Audit controller endpoints against integration requests."
         );
         Console.WriteLine("  export-openapi                         Export backend OpenAPI JSON or YAML artifacts.");
+        Console.WriteLine(
+            "  storage-provision                      Create the public and quarantine blob containers."
+        );
         Console.WriteLine();
         WriteBackendFormatHelp();
         WriteBackendUnitCoverageHelp();
         WriteBackendIntegrationTestsHelp();
         WriteBackendIntegrationEndpointCoverageHelp();
         WriteExportOpenApiHelp();
+        WriteStorageProvisionHelp();
     }
 
     private static void WriteBackendFormatHelp()

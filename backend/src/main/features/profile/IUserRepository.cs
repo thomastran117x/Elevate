@@ -46,8 +46,10 @@ namespace backend.main.features.profile
         Task<AvatarSwapRecord?> SwapAvatarAsync(int id, string avatarUrl);
         Task<bool> UsernameExistsAsync(string username, int excludeUserId);
         /// <summary>
-        /// Deletes the user and returns the blob URLs (avatar plus cascade-deleted club,
-        /// club-version and event images) that are now orphaned and should be cleaned up.
+        /// Deletes the user and returns the blob URLs (avatar plus cascade-deleted club icon,
+        /// banner, gallery, club-version and event images) that are now orphaned and should be
+        /// cleaned up. Media assets for those URLs, and the user's unfinished uploads, are
+        /// deleted with the account.
         /// Returns an empty list when the user does not exist.
         /// </summary>
         Task<IReadOnlyList<string>> DeleteUserAsync(int id);

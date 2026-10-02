@@ -44,7 +44,7 @@ Compose maps `MSAL_CLIENT_ID` to backend `MS_CLIENT_ID`. A locally run backend m
 | Captcha                 | `CAPTCHA_PROVIDER`, `GOOGLE_CAPTCHA_SECRET`; public `GOOGLE_SITE_KEY`                                       |
 | Email                   | `SMTP_SERVER`, `SMTP_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`                                                  |
 | SMS                     | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, plus messaging service SID or sender phone                       |
-| Azure blobs             | `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_CONTAINER_NAME`                                           |
+| Azure blobs             | `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_CONTAINER_NAME`, `AZURE_STORAGE_QUARANTINE_CONTAINER_NAME` (default `event-assets-quarantine`) |
 | Stripe                  | `STRIPE_API_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SUCCESS_URL`, `STRIPE_CANCEL_URL`                        |
 | Seeding                 | `RUN_SEEDERS`, `AUTH_SEED_ACCOUNT_BYPASS`, and seed account variables                                       |
 | Logging                 | `LOG_LEVEL` and backend/worker logger configuration                                                         |
@@ -64,7 +64,7 @@ The backend registry contains the following keys. Environment names are `FEATURE
 | Events            | `events`, `events.analytics`, `events.favourites`, `events.images`, `events.invitations`, `events.recurrence`, `events.registration`, `events.versioning`, `events.waitlist` |
 | Payment / profile | `payment`, `profile`, `profile.admin`                                                                                                                                        |
 | Search            | `search`, `search.reindex`                                                                                                                                                   |
-| Storage           | `storage`, `storage.orphan-cleanup`                                                                                                                                          |
+| Storage           | `storage`, `storage.orphan-cleanup`, `storage.quarantine`                                                                                                                    |
 
 Missing flags default to true. A false parent disables its descendants. Backend parsing first reads registered process variables, then `FeatureFlags` configuration entries override those values. Unknown keys in that section are rejected; unrelated unknown process variables are not scanned/rejected. Backend boolean parsing is case-insensitive.
 
@@ -80,21 +80,33 @@ Appsettings sections configure CORS, forwarded headers, request timeouts, rate l
 
 ### Image uploads
 
-`ImageUpload:MaxBytes` caps an uploaded image at 5 MB by default. It is enforced when the image is attached to an event, draft, club, or recurrence series rather than when it is uploaded: presigned uploads go from the browser straight to Azure, and a SAS has no content-length field, so nothing on the request path ever sees the bytes. At attach time the server reads the stored blob's length and leading bytes, rejects anything empty, over the cap, not a supported image, or whose bytes disagree with the declared type, and deletes the blob. Re-attaching an image an event or club already holds skips the check, so a later edit costs no storage round trip.
+`ImageUpload:MaxBytes` caps an uploaded image at 5 MB by default. It is enforced when the image is attached to an event, draft, club, or recurrence series rather than when it is uploaded. Presigned uploads go from the browser straight to Azure, and a SAS has no content-length field, so nothing on the request path ever sees the bytes. At attach time the server reads the stored blob's length and leading bytes. It rejects anything empty, over the cap, not a supported image, or whose bytes disagree with the declared type, and deletes the blob. Re-attaching an image that an event or club already holds skips the check, so a later edit costs no storage round trip.
 
-The presigned URL grants Azure's `Create` permission without `Write`, which makes it usable exactly once: `Put Blob` accepts either permission to create a new blob but requires `Write` to overwrite one, so the bytes that pass inspection are the bytes that stay there. The stored content type is restamped from those bytes on attach, because the SAS content type overrides only reads made through the SAS, while the anonymously readable public URL is served with whatever type the uploader set on its own PUT.
+What happens after those checks depends on `storage.quarantine`:
+
+- **On (the default).** The presigned URL points into the private quarantine container, and the `publicUrl` returned with it is reserved for the result. It ends in `.webp` whatever was uploaded. When the upload is attached, the server downloads at most the cap and re-encodes it (see [image processing](#image-processing)). It then writes the result to the reserved URL and deletes the quarantined original. Bytes that fail are deleted and never reach the public container. The upload's `MediaAssets` row records the outcome, and `GET /api/media/{publicId}` reports it. Nothing a client uploads is publicly readable before it has been validated.
+- **Off.** The presigned URL points straight into the public container, and the checks above run against the stored blob in place, with the header restamping described below. This is exactly how uploads behaved before quarantine. Switching the flag off does not strand anything: the quarantine reaper stays on under the `storage` parent flag and drains what quarantine was holding. An upload issued before the switch can no longer be attached, and the client simply uploads again.
+
+The presigned URL grants Azure's `Create` permission without `Write`, which makes it usable exactly once. `Put Blob` accepts either permission to create a new blob but requires `Write` to overwrite one, so the bytes that pass inspection are the bytes that stay there. Without quarantine, the stored content type is restamped from those bytes on attach. The SAS content type overrides only reads made through the SAS, while the anonymously readable public URL is served with whatever type the uploader set on its own PUT. With quarantine, the public blob is written by the server with `image/webp`, so no uploader-chosen header is ever served.
+
+Quarantined uploads that are never attached are expired after 24 hours, and their bytes are deleted, by the hourly quarantine reaper.
 
 Raising the cap affects only what is accepted from that point on; images already attached are unaffected. The multipart avatar upload has its own compiled-in 5 MB limit in `AvatarUploadRequest` and does not read this setting. `RateLimiter:ImageUploadPermitLimit` (30 presigned URLs per 10 minutes per account) bounds how many blobs one account can create, which the size cap does not.
 
 ### Image processing
 
-Multipart avatar uploads are decoded to pixels and re-encoded before anything is stored, so EXIF (including phone GPS), IPTC, XMP, ICC profiles, and any non-pixel payload hidden in the file are gone. The pipeline reads the header first, rejecting oversized dimensions and animated images (GIF, WebP and APNG) before any pixel buffer is allocated. It then decodes a single frame, shrinks the image to the size cap, applies the EXIF orientation (after shrinking, so the rotation never needs a second full-size buffer), strips the metadata, and encodes lossy WebP. Presigned uploads are not processed yet: the bytes go from the browser to Azure, so the server has nowhere to run this until uploads land in a quarantine container.
+Multipart avatar uploads are decoded to pixels and re-encoded before anything is stored. So are presigned uploads, when `storage.quarantine` is on, at the moment they are attached. EXIF (including phone GPS), IPTC, XMP, ICC profiles, and any non-pixel payload hidden in the file are gone.
+
+The pipeline reads the header first, rejecting oversized dimensions and animated images (GIF, WebP and APNG) before any pixel buffer is allocated. It then decodes a single frame and shrinks the image to the size cap for its kind. Next it applies the EXIF orientation (after shrinking, so the rotation never needs a second full-size buffer), strips the metadata, and encodes lossy WebP.
+
+Avatars and event or club images share the processing slots below, so attaching a batch of images competes with avatar uploads for them. Animated images are refused for event and club images too, now that they are processed. Without quarantine, presigned uploads are not processed at all.
 
 | Key | Default | Purpose |
 | --- | --- | --- |
 | `ImageProcessing:MaxDimension` | `8000` | Largest width or height accepted, read from the header alone. |
 | `ImageProcessing:MaxPixels` | `50000000` | Largest total pixel count; catches a size that is within `MaxDimension` on each side but still decodes to hundreds of megabytes. |
 | `ImageProcessing:AvatarMaxEdge` | `512` | Long-edge cap for avatars. Smaller images are never upscaled. |
+| `ImageProcessing:GalleryMaxEdge` | `2048` | Long-edge cap for event and club images (galleries, covers, club icons and banners). Smaller images are never upscaled. |
 | `ImageProcessing:WebpQuality` | `82` | Lossy WebP quality, 1–100. |
 | `ImageProcessing:MaxAllocationMegabytes` | `256` | Largest **single** allocation the decoder may make. This is not a per-image budget; see the sizing note below. |
 | `ImageProcessing:MaxPoolMegabytes` | `128` | Bound on the allocator's reusable buffer pool, so idle memory does not stay at the high-water mark of the largest upload ever handled. |

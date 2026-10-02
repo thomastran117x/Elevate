@@ -8,6 +8,16 @@ namespace backend.main.features.events.contracts.responses
         {
             get; set;
         }
+
+        /// <summary>
+        /// The media asset tracking this upload, for polling its validation status. Null when
+        /// uploads are not quarantined, in which case the image is usable as soon as it is
+        /// attached.
+        /// </summary>
+        public Guid? MediaAssetId
+        {
+            get; set;
+        }
     }
 }
 

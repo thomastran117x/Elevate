@@ -28,7 +28,30 @@ namespace backend.main.shared.storage
             ProcessedImage image,
             string blobPathPrefix,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Stores a processed image at a public URL this service reserved earlier with
+        /// <see cref="GenerateQuarantineUploadUrlAsync"/>, overwriting a previous attempt.
+        /// </summary>
+        /// <exception cref="ArgumentException">The URL is not in the public container.</exception>
+        Task UploadProcessedImageToAsync(
+            ProcessedImage image,
+            string publicUrl,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Mints a write-once SAS straight into the public container. Used only while
+        /// <c>storage.quarantine</c> is off; with it on, uploads go through
+        /// <see cref="GenerateQuarantineUploadUrlAsync"/> instead.
+        /// </summary>
         Task<PresignedUploadResponse> GenerateUploadUrlAsync(string blobPathPrefix, string fileName, string contentType);
+
+        /// <summary>
+        /// Mints a write-once SAS into the private quarantine container, and reserves the public
+        /// URL the image will be published at once it has been validated and re-encoded. Nothing
+        /// exists at that public URL until then.
+        /// </summary>
+        Task<QuarantineUpload> GenerateQuarantineUploadUrlAsync(string blobPathPrefix, string fileName, string contentType);
         bool IsOwnedBlobUrl(string blobUrl);
         Task DeleteBlobAsync(string blobUrl);
 
@@ -69,7 +92,56 @@ namespace backend.main.shared.storage
             string blobUrl,
             string contentType,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// <see cref="InspectBlobAsync"/> for a blob in the quarantine container, by name.
+        /// Returns null when it does not exist or storage is not configured.
+        /// </summary>
+        Task<BlobInspection?> InspectQuarantineBlobAsync(
+            string quarantineBlobPath,
+            int prefixByteCount = ImageSignatureInspector.HeaderByteCount,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Opens a quarantined blob for reading, or returns null when it does not exist. The
+        /// caller owns the stream and bounds how much of it is read.
+        /// </summary>
+        Task<Stream?> OpenQuarantineBlobReadAsync(
+            string quarantineBlobPath,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>Best-effort delete from the quarantine container; never throws.</summary>
+        Task DeleteQuarantineBlobAsync(string quarantineBlobPath);
+
+        /// <summary>
+        /// Every blob in the quarantine container, by name. Yields nothing when storage is not
+        /// configured.
+        /// </summary>
+        IAsyncEnumerable<QuarantineBlobItem> ListQuarantineBlobsAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// The names of the containers this service needs that do not exist: the public one, and
+        /// the quarantine one when <paramref name="includeQuarantine"/>. Empty when storage is
+        /// not configured, which is reported elsewhere. Needs read access only; nothing is
+        /// created.
+        /// </summary>
+        Task<IReadOnlyList<string>> FindMissingContainersAsync(
+            bool includeQuarantine,
+            CancellationToken cancellationToken = default);
     }
+
+    /// <summary>
+    /// A presigned upload into quarantine: where the client PUTs, where the bytes land, and the
+    /// public URL reserved for the validated result.
+    /// </summary>
+    public sealed record QuarantineUpload(
+        string UploadUrl,
+        string QuarantineBlobPath,
+        string PublicUrl,
+        string ContentType,
+        DateTimeOffset ExpiresAt);
+
+    public readonly record struct QuarantineBlobItem(string Path, DateTimeOffset? LastModified);
 
     public readonly record struct BlobListItem(string Url, DateTimeOffset? LastModified);
 

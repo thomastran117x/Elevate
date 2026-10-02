@@ -15,6 +15,7 @@ using backend.main.features.events.registration;
 using backend.main.features.events.search;
 using backend.main.features.events.versions;
 using backend.main.features.events.waitlist;
+using backend.main.features.media;
 using backend.main.features.payment;
 using backend.main.infrastructure.database.core;
 using backend.main.infrastructure.elasticsearch;
@@ -36,6 +37,7 @@ namespace backend.main.features.events
         private readonly IEventImageRepository _imageRepository;
         private readonly IClubService _clubService;
         private readonly IAzureBlobService _blobService;
+        private readonly IMediaAssetService _mediaAssets;
         private readonly ICacheService _cache;
         private readonly IRefreshAheadCache _refreshCache;
         private readonly IEventAnalyticsRepository _analyticsRepository;
@@ -61,6 +63,7 @@ namespace backend.main.features.events
             IEventImageRepository imageRepository,
             IClubService clubService,
             IAzureBlobService blobService,
+            IMediaAssetService mediaAssets,
             ICacheService cache,
             IRefreshAheadCache refreshCache,
             IEventAnalyticsRepository analyticsRepository,
@@ -76,6 +79,7 @@ namespace backend.main.features.events
             _imageRepository = imageRepository;
             _clubService = clubService;
             _blobService = blobService;
+            _mediaAssets = mediaAssets;
             _cache = cache;
             _refreshCache = refreshCache;
             _analyticsRepository = analyticsRepository;
@@ -1366,14 +1370,21 @@ namespace backend.main.features.events
                         ? $"clubs/pending/{userId}"
                         : $"events/clubs/{clubId}/pending";
 
-                var result = await _blobService.GenerateUploadUrlAsync(scope, fileName, contentType);
+                var result = await _mediaAssets.IssueUploadAsync(new MediaUploadRequest(
+                    userId,
+                    isNewClubUpload ? null : clubId,
+                    eventId,
+                    scope,
+                    fileName,
+                    contentType));
 
                 var intent = new BlobUploadIntent(
                     clubId,
                     eventId,
                     userId,
                     result.PublicUrl,
-                    contentType.Trim().ToLowerInvariant()
+                    contentType.Trim().ToLowerInvariant(),
+                    result.MediaAssetId
                 );
 
                 var stored = await _cache.SetValueAsync(
@@ -1414,11 +1425,13 @@ namespace backend.main.features.events
                 var ev = await GetEvent(eventId);
                 await EnsureCanManageEventMediaAsync(ev, userId, userRole);
 
-                await ValidateUploadedImageUrlsAsync(ev.ClubId, userId, new[] { imageUrl }, eventId);
-
+                // Before validating: validation publishes the upload, and an image the event then
+                // turns away would be left in the public container with nothing pointing at it.
                 var count = await _imageRepository.CountByEventIdAsync(eventId);
                 if (count >= 5)
                     throw new BadRequestException("An event cannot have more than 5 images.");
+
+                await ValidateUploadedImageUrlsAsync(ev.ClubId, userId, new[] { imageUrl }, eventId);
 
                 var image = await _imageRepository.AddImageAsync(
                     eventId, imageUrl, altText, isDecorative);
@@ -2185,8 +2198,7 @@ namespace backend.main.features.events
             int? eventId = null,
             ISet<string>? existingUrls = null) =>
             EventImageUploadValidator.ValidateAsync(
-                _blobService,
-                _cache,
+                _mediaAssets,
                 clubId,
                 userId,
                 imageUrls,

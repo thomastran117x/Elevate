@@ -36,6 +36,7 @@ using backend.main.features.events.search;
 using backend.main.features.events.series;
 using backend.main.features.events.versions;
 using backend.main.features.events.waitlist;
+using backend.main.features.media;
 using backend.main.features.payment;
 using backend.main.features.profile;
 using backend.main.features.profile.email;
@@ -211,6 +212,7 @@ namespace backend.main.application.bootstrap
             services.AddRepositoryWithProxy<IEventRegistrationRepository, EventRegistrationRepository>();
             services.AddRepositoryWithProxy<IEventAnalyticsRepository, EventAnalyticsRepository>();
             services.AddRepositoryWithProxy<IEventImageRepository, EventImageRepository>();
+            services.AddRepositoryWithProxy<IMediaAssetRepository, MediaAssetRepository>();
             services.AddRepositoryWithProxy<IEventWaitlistRepository, EventWaitlistRepository>();
             services.AddRepositoryWithProxy<IEventFavouriteRepository, EventFavouriteRepository>();
             services.AddRepositoryWithProxy<IRecentlyViewedRepository, RecentlyViewedRepository>();
@@ -273,6 +275,16 @@ namespace backend.main.application.bootstrap
             // Singleton: it owns the process-wide processing slots and the bounded allocator.
             services.AddSingleton<IImageProcessor, ImageSharpImageProcessor>();
             services.AddScoped<OrphanBlobCleanupRunner>();
+            services.AddScoped<MediaValidationPipeline>();
+            services.AddScoped<QuarantineReaperRunner>();
+            services.AddScoped<IMediaAssetQueryService, MediaAssetQueryService>();
+
+            // Off reverts uploads to the presigned-into-public-container path that preceded
+            // quarantine, attach-time byte checks included.
+            if (featureFlags.IsEnabled(FeatureFlagKeys.StorageQuarantine))
+                services.AddScoped<IMediaAssetService, MediaAssetService>();
+            else
+                services.AddScoped<IMediaAssetService, DisabledMediaAssetService>();
 
             if (featureFlags.IsEnabled(FeatureFlagKeys.ClubsFollow))
                 services.AddScoped<IFollowService, FollowService>();
@@ -361,6 +373,14 @@ namespace backend.main.application.bootstrap
 
                 if (featureFlags.IsEnabled(FeatureFlagKeys.StorageOrphanCleanup))
                     services.AddHostedService<OrphanBlobCleanupService>();
+
+                // The storage parent rather than storage.quarantine, so turning quarantine off
+                // still drains what it was holding.
+                if (featureFlags.IsEnabled(FeatureFlagKeys.Storage))
+                {
+                    services.AddHostedService<QuarantineReaper>();
+                    services.AddHostedService<BlobStorageStartupCheck>();
+                }
 
                 // Named after the surfaces that actually produce typing rather than the club
                 // parent, so the sweeper's lifetime tracks what it reaps.

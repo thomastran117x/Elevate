@@ -5,6 +5,7 @@ import {
   ALLOWED_IMAGE_TYPES,
   IMAGE_ACCEPT,
   ImageFormat,
+  isAnimatedImage,
   MAX_IMAGE_BYTES,
   MAX_IMAGE_DIMENSION,
   probeImageDimensions,
@@ -14,6 +15,66 @@ import {
 } from './image-file-validation';
 
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+const asciiBytes = (text: string) => Array.from(text, (c) => c.charCodeAt(0));
+
+/**
+ * A GIF with the given number of 1×1 frames, a global colour table, and a graphic control
+ * extension before each frame, so the walk has to skip extensions and colour tables to count.
+ */
+function gifBytes(frames: number): Uint8Array<ArrayBuffer> {
+  const bytes = [
+    ...asciiBytes('GIF89a'),
+    0x01,
+    0x00,
+    0x01,
+    0x00, // logical screen 1×1
+    0x80,
+    0x00,
+    0x00, //       global colour table of 2 entries
+    0x00,
+    0x00,
+    0x00,
+    0xff,
+    0xff,
+    0xff,
+  ];
+  for (let i = 0; i < frames; i++) {
+    bytes.push(0x21, 0xf9, 0x04, 0x00, 0x0a, 0x00, 0x00, 0x00); // graphic control extension
+    bytes.push(0x2c, 0, 0, 0, 0, 0x01, 0x00, 0x01, 0x00, 0x00); // image descriptor
+    bytes.push(0x02, 0x02, 0x4c, 0x01, 0x00); //                    LZW size, one sub-block, end
+  }
+  bytes.push(0x3b);
+  return new Uint8Array(bytes);
+}
+
+/** PNG chunk layout only; nothing here checks CRCs, so they are left zero. */
+function pngBytes(chunks: string[]): Uint8Array<ArrayBuffer> {
+  const bytes = [...PNG_MAGIC];
+  for (const type of chunks) {
+    const data = type === 'IHDR' ? 13 : type === 'acTL' ? 8 : 0;
+    bytes.push(0, 0, 0, data, ...asciiBytes(type), ...new Array(data).fill(0), 0, 0, 0, 0);
+  }
+  return new Uint8Array(bytes);
+}
+
+function webpBytes(chunk: 'VP8X' | 'VP8 ', flags = 0): Uint8Array<ArrayBuffer> {
+  const bytes = [
+    ...asciiBytes('RIFF'),
+    30,
+    0,
+    0,
+    0,
+    ...asciiBytes('WEBP'),
+    ...asciiBytes(chunk),
+    10,
+    0,
+    0,
+    0,
+  ];
+  bytes.push(flags, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  return new Uint8Array(bytes);
+}
 
 describe('image file validation', () => {
   const sized = (name: string, type: string, size: number) =>
@@ -151,6 +212,62 @@ describe('image file validation', () => {
     });
   });
 
+  describe('isAnimatedImage', () => {
+    const blob = (bytes: Uint8Array<ArrayBuffer>) => new Blob([bytes]);
+
+    it('spots a GIF with more than one frame, past its extensions and colour tables', async () => {
+      expect(await isAnimatedImage(blob(gifBytes(2)), 'gif')).toBeTrue();
+      expect(await isAnimatedImage(blob(gifBytes(1)), 'gif')).toBeFalse();
+    });
+
+    it('spots an APNG by its animation control chunk before the first IDAT', async () => {
+      expect(
+        await isAnimatedImage(blob(pngBytes(['IHDR', 'acTL', 'IDAT', 'IEND'])), 'png'),
+      ).toBeTrue();
+      expect(await isAnimatedImage(blob(pngBytes(['IHDR', 'IDAT', 'IEND'])), 'png')).toBeFalse();
+      // An acTL after the image data is not an APNG.
+      expect(
+        await isAnimatedImage(blob(pngBytes(['IHDR', 'IDAT', 'acTL', 'IEND'])), 'png'),
+      ).toBeFalse();
+    });
+
+    it('spots a WebP whose extended header sets the animation flag', async () => {
+      expect(await isAnimatedImage(blob(webpBytes('VP8X', 0x02)), 'webp')).toBeTrue();
+      expect(await isAnimatedImage(blob(webpBytes('VP8X', 0x10)), 'webp')).toBeFalse();
+      expect(await isAnimatedImage(blob(webpBytes('VP8 ')), 'webp')).toBeFalse();
+    });
+
+    it('never calls a JPEG animated', async () => {
+      expect(
+        await isAnimatedImage(blob(new Uint8Array([0xff, 0xd8, 0xff, 0xe0])), 'jpeg'),
+      ).toBeFalse();
+    });
+
+    it('leaves a file too malformed to walk to the decoder and the server', async () => {
+      expect(await isAnimatedImage(blob(gifBytes(2).slice(0, 12)), 'gif')).toBeFalse();
+      expect(
+        await isAnimatedImage(
+          blob(new Uint8Array([...asciiBytes('GIF89a'), 1, 0, 1, 0, 0, 0, 0, 0x99])),
+          'gif',
+        ),
+      ).toBeFalse();
+      expect(await isAnimatedImage(blob(new Uint8Array(PNG_MAGIC)), 'png')).toBeFalse();
+    });
+
+    it('reports a real still image as not animated', async () => {
+      expect(await isAnimatedImage(await imageFile('still.png'), 'png')).toBeFalse();
+    });
+
+    it('treats a file that cannot be read as not animated', async () => {
+      const unreadable = {
+        slice: () => unreadable,
+        arrayBuffer: () => Promise.reject(new Error('gone')),
+      } as unknown as Blob;
+
+      expect(await isAnimatedImage(unreadable, 'gif')).toBeFalse();
+    });
+  });
+
   describe('probeImageDimensions', () => {
     it('reads the decoded size and closes the bitmap', async () => {
       const close = jasmine.createSpy('close');
@@ -166,6 +283,18 @@ describe('image file validation', () => {
   });
 
   describe('screenImageFile', () => {
+    it('refuses an animated image by name, as the server would after the upload', async () => {
+      const result = await screenImageFile(
+        new File([gifBytes(3)], 'loop.gif', { type: 'image/gif' }),
+      );
+
+      expect(result).toEqual({
+        ok: false,
+        reason: 'animated',
+        message: '"loop.gif" is animated. Upload a single-frame image.',
+      });
+    });
+
     it('accepts a real image of each allowed type', async () => {
       for (const type of ALLOWED_IMAGE_TYPES) {
         expect(await screenImageFile(await imageFile('photo', type)))

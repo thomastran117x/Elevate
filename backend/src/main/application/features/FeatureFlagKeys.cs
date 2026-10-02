@@ -33,4 +33,5 @@ public static class FeatureFlagKeys
     public const string SearchReindex = "search.reindex";
     public const string Storage = "storage";
     public const string StorageOrphanCleanup = "storage.orphan-cleanup";
+    public const string StorageQuarantine = "storage.quarantine";
 }

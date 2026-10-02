@@ -280,7 +280,7 @@ public class UserServiceTests
 
         await act.Should().ThrowAsync<ResourceNotFoundException>();
         processor.Verify(
-            p => p.ProcessAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()),
+            p => p.ProcessAsync(It.IsAny<Stream>(), ImageProcessingProfile.Avatar, It.IsAny<CancellationToken>()),
             Times.Never);
         blobService.Verify(
             b => b.UploadProcessedImageAsync(It.IsAny<ProcessedImage>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
@@ -406,7 +406,7 @@ public class UserServiceTests
         await service.UpdateAvatarAsync(7, formFile);
 
         processor.Verify(
-            p => p.ProcessAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()),
+            p => p.ProcessAsync(It.IsAny<Stream>(), ImageProcessingProfile.Avatar, It.IsAny<CancellationToken>()),
             Times.Once);
         blobService.Verify(b => b.UploadProcessedImageAsync(
             ProcessedAvatar, "users", It.IsAny<CancellationToken>()), Times.Once);
@@ -438,7 +438,7 @@ public class UserServiceTests
 
         await service.UpdateAvatarAsync(7, formFile, token);
 
-        processor.Verify(p => p.ProcessAsync(It.IsAny<Stream>(), token), Times.Once);
+        processor.Verify(p => p.ProcessAsync(It.IsAny<Stream>(), ImageProcessingProfile.Avatar, token), Times.Once);
         blobService.Verify(
             b => b.UploadProcessedImageAsync(ProcessedAvatar, "users", CancellationToken.None),
             Times.Once);
@@ -452,7 +452,7 @@ public class UserServiceTests
         repository.Setup(repo => repo.ExistsAsync(7, It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
         var processor = new Mock<IImageProcessor>();
-        processor.Setup(p => p.ProcessAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+        processor.Setup(p => p.ProcessAsync(It.IsAny<Stream>(), ImageProcessingProfile.Avatar, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new BadRequestException("Animated images are not supported."));
 
         var service = CreateService(userRepository: repository, blobService: blobService, imageProcessor: processor);
@@ -547,7 +547,7 @@ public class UserServiceTests
     private static Mock<IImageProcessor> ProcessorReturning(ProcessedImage result)
     {
         var processor = new Mock<IImageProcessor>();
-        processor.Setup(p => p.ProcessAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+        processor.Setup(p => p.ProcessAsync(It.IsAny<Stream>(), ImageProcessingProfile.Avatar, It.IsAny<CancellationToken>()))
             .ReturnsAsync(result);
         return processor;
     }

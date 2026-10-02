@@ -704,6 +704,7 @@ public class ClubVersioningServiceTests
                 new ClubRepository(db),
                 userService.Object,
                 blobService.Object,
+                new backend.main.application.features.DisabledMediaAssetService(blobService.Object, cache.Object),
                 followService.Object,
                 cache.Object,
                 new RefreshAheadCache(cache.Object),
