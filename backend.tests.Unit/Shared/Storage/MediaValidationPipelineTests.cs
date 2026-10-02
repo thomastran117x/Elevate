@@ -6,6 +6,8 @@ using backend.tests.Unit.Features.Media;
 
 using FluentAssertions;
 
+using Microsoft.Extensions.Options;
+
 using Moq;
 
 namespace backend.tests.Unit.Shared.Storage;
@@ -83,15 +85,36 @@ public class MediaValidationPipelineTests
             .ReturnsAsync(new BlobInspection(16, "image/png", FakePngHeader()));
         blobs.Setup(b => b.OpenQuarantineBlobReadAsync(QuarantinePath, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new MemoryStream(new byte[4096]));
-        var processor = new Mock<IImageProcessor>(MockBehavior.Strict);
+        var processor = new ImageSharpImageProcessor(Options.Create(new ImageProcessingOptions()));
 
-        var outcome = await new MediaValidationPipeline(blobs.Object, processor.Object)
+        var outcome = await new MediaValidationPipeline(blobs.Object, processor)
             .RunAsync(QuarantinePath, PublicUrl, "image/png", "Event images");
 
         outcome.RejectionReason.Should().Be("Event images must be smaller than 1024 bytes.");
         blobs.Verify(
             b => b.UploadProcessedImageToAsync(It.IsAny<ProcessedImage>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    [Fact]
+    public async Task RunAsync_ShouldHandTheDownloadToTheProcessorUnbuffered()
+    {
+        // The processor buffers its input once, inside a processing slot. Buffering here first
+        // would hold a whole upload per request while it queued for a slot.
+        var blobs = new InMemoryBlobStore();
+        blobs.Put(QuarantinePath, InMemoryBlobStore.Image());
+        Stream? received = null;
+        var processor = new Mock<IImageProcessor>();
+        processor.Setup(p => p.ProcessAsync(It.IsAny<Stream>(), ImageProcessingProfile.Gallery, It.IsAny<CancellationToken>()))
+            .Callback<Stream, ImageProcessingProfile, CancellationToken>((stream, _, _) => received = stream)
+            .ReturnsAsync(new ProcessedImage([1, 2, 3]));
+
+        await new MediaValidationPipeline(blobs, processor.Object)
+            .RunAsync(QuarantinePath, PublicUrl, "image/png", "Event images");
+
+        received.Should().NotBeNull();
+        received.Should().NotBeOfType<MemoryStream>();
+        received!.CanSeek.Should().BeFalse();
     }
 
     [Fact]

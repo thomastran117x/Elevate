@@ -60,26 +60,30 @@ public sealed class MediaValidationPipeline
         if (rejection != null)
             return MediaValidationOutcome.Reject(rejection);
 
-        await using var source = await _blobService.OpenQuarantineBlobReadAsync(quarantineBlobPath, cancellationToken);
-        if (source == null)
+        var download = await _blobService.OpenQuarantineBlobReadAsync(quarantineBlobPath, cancellationToken);
+        if (download == null)
             return MediaValidationOutcome.Reject(ImageUploadGate.DidNotCompleteMessage);
 
-        // The inspection read the stored length, but the download is read against the cap again
-        // rather than trusting that number: nothing above the cap is ever buffered.
-        using var buffered = await ReadBoundedAsync(source, _blobService.MaxImageBytes, cancellationToken);
-        if (buffered == null)
-            return MediaValidationOutcome.Reject(ImageUploadGate.TooLargeMessage(subject, _blobService.MaxImageBytes));
+        // Handed straight to the processor, which buffers it once, inside a processing slot.
+        // Buffering here first would hold a whole upload per request while it queued for a slot
+        // and copy it twice. The wrapper enforces the cap on the bytes actually read, since the
+        // inspected length came from a separate request.
+        await using var source = new BoundedReadStream(download, _blobService.MaxImageBytes);
 
         ProcessedImage processed;
         try
         {
-            processed = await _imageProcessor.ProcessAsync(buffered, ImageProcessingProfile.Gallery, cancellationToken);
+            processed = await _imageProcessor.ProcessAsync(source, ImageProcessingProfile.Gallery, cancellationToken);
         }
         catch (BadRequestException ex)
         {
             // The processor's 400s are all about the file: undecodable, animated, too many
             // pixels. Those are the uploader's to fix, so they become the asset's reason.
             return MediaValidationOutcome.Reject(ex.Message);
+        }
+        catch (BoundedReadStream.LimitExceededException)
+        {
+            return MediaValidationOutcome.Reject(ImageUploadGate.TooLargeMessage(subject, _blobService.MaxImageBytes));
         }
 
         await _blobService.UploadProcessedImageToAsync(processed, publicUrl, cancellationToken);
@@ -89,37 +93,6 @@ public sealed class MediaValidationPipeline
             processed.Width,
             processed.Height,
             processed.Content.LongLength);
-    }
-
-    /// <summary>
-    /// Buffers at most <paramref name="maxBytes"/> of <paramref name="source"/>; returns null if
-    /// there is more than that.
-    /// </summary>
-    private static async Task<MemoryStream?> ReadBoundedAsync(
-        Stream source,
-        long maxBytes,
-        CancellationToken cancellationToken)
-    {
-        var buffered = new MemoryStream();
-        var chunk = new byte[81920];
-
-        while (true)
-        {
-            var read = await source.ReadAsync(chunk, cancellationToken);
-            if (read == 0)
-                break;
-
-            if (buffered.Length + read > maxBytes)
-            {
-                await buffered.DisposeAsync();
-                return null;
-            }
-
-            buffered.Write(chunk, 0, read);
-        }
-
-        buffered.Position = 0;
-        return buffered;
     }
 }
 
