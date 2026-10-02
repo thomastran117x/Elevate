@@ -56,7 +56,9 @@ public sealed class MediaValidationRecorder
             }
             : new MediaAssetChanges
             {
-                RejectionReason = outcome.RejectionReason ?? MediaAssetService.GenericRejectionMessage,
+                RejectionReason = string.IsNullOrWhiteSpace(outcome.RejectionReason)
+                    ? MediaAssetService.GenericRejectionMessage
+                    : outcome.RejectionReason,
                 ClearQuarantineBlobPath = true
             };
 

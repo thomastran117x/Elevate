@@ -6,6 +6,7 @@ using backend.main.shared.providers;
 using backend.main.shared.providers.messages;
 using backend.main.shared.providers.messaging;
 using backend.worker.email_worker;
+using backend.worker.media_worker;
 using backend.worker.sms_worker;
 
 using Confluent.Kafka;
@@ -129,6 +130,92 @@ public class WorkerPublisherTests
             return;
         }
     }
+
+    [Fact]
+    public async Task MediaWorkerDlqPublisher_ShouldSerializeAndPublishPayload_WhenKafkaNativeLibraryIsAvailable()
+    {
+        try
+        {
+            var publisher = new KafkaMediaWorkerDlqPublisher(MediaOptions());
+            var producer = new Mock<IProducer<string, string>>();
+            Message<string, string>? publishedMessage = null;
+            string? publishedTopic = null;
+            producer.Setup(p => p.ProduceAsync(It.IsAny<string>(), It.IsAny<Message<string, string>>(), It.IsAny<CancellationToken>()))
+                .Callback<string, Message<string, string>, CancellationToken>((topic, message, _) =>
+                {
+                    publishedTopic = topic;
+                    publishedMessage = message;
+                })
+                .ReturnsAsync(new DeliveryResult<string, string>());
+            SetProducerField(publisher, "_producer", producer.Object);
+
+            await publisher.PublishAsync(
+                new MediaWorkerEnvelope("media-topic", 0, 4, null, "{}", null, new Dictionary<string, string?>()),
+                "storage down");
+            await publisher.DisposeAsync();
+
+            publishedTopic.Should().Be("media-dlq");
+            publishedMessage.Should().NotBeNull();
+            publishedMessage!.Key.Should().Be("4", "an unkeyed message is keyed by its offset");
+            JsonSerializer.Deserialize<MediaWorkerDlqMessage>(publishedMessage.Value, JsonOptions.Default)!
+                .Error.Should().Be("storage down");
+            producer.Verify(p => p.Flush(It.IsAny<TimeSpan>()), Times.Once);
+            producer.Verify(p => p.Dispose(), Times.Once);
+        }
+        catch (DllNotFoundException)
+        {
+            return;
+        }
+    }
+
+    [Fact]
+    public async Task MediaValidationStatusPublisher_ShouldPublishTheResult_KeyedByAsset_WhenKafkaNativeLibraryIsAvailable()
+    {
+        try
+        {
+            var publisher = new KafkaMediaValidationStatusPublisher(MediaOptions());
+            var producer = new Mock<IProducer<string, string>>();
+            Message<string, string>? publishedMessage = null;
+            string? publishedTopic = null;
+            producer.Setup(p => p.ProduceAsync(It.IsAny<string>(), It.IsAny<Message<string, string>>(), It.IsAny<CancellationToken>()))
+                .Callback<string, Message<string, string>, CancellationToken>((topic, message, _) =>
+                {
+                    publishedTopic = topic;
+                    publishedMessage = message;
+                })
+                .ReturnsAsync(new DeliveryResult<string, string>());
+            SetProducerField(publisher, "_producer", producer.Object);
+            var assetId = Guid.CreateVersion7();
+
+            await publisher.PublishAsync(new MediaValidationResultMessage
+            {
+                MediaAssetId = assetId,
+                Attempt = 2,
+                Accepted = true,
+                ContentType = "image/webp",
+                Width = 10,
+                Height = 5,
+                ByteSize = 99
+            });
+            await publisher.DisposeAsync();
+
+            publishedTopic.Should().Be("media-status");
+            publishedMessage.Should().NotBeNull();
+            publishedMessage!.Key.Should().Be(assetId.ToString());
+            var result = JsonSerializer.Deserialize<MediaValidationResultMessage>(publishedMessage.Value, JsonOptions.Default)!;
+            result.MediaAssetId.Should().Be(assetId);
+            result.Attempt.Should().Be(2);
+            result.Accepted.Should().BeTrue();
+            producer.Verify(p => p.Dispose(), Times.Once);
+        }
+        catch (DllNotFoundException)
+        {
+            return;
+        }
+    }
+
+    private static MediaWorkerOptions MediaOptions() =>
+        new("kafka", "media-topic", "media-group", "media-dlq", "media-status", "conn", "public", "quarantine");
 
     private static KafkaMessageEnvelope CreateEnvelope(string topic)
     {
