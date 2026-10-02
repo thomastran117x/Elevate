@@ -27,8 +27,9 @@ namespace backend.Migrations
     /// are plain string columns with no key to point anywhere. A required reference on day one
     /// turns every write path this change missed into a 500 in production. The plan is a nullable
     /// <c>MediaAssetId</c> column in a later migration, a backfill by URL match, a check that it
-    /// reached 100%, and only then the constraint. Until then the relationship is by URL, and the
-    /// orphan sweeper treats <c>MediaAssets.PublicUrl</c> as a reference.
+    /// reached 100%, and only then the constraint. Until then the relationship is by URL. The
+    /// orphan sweeper treats the <c>PublicUrl</c> of an upload still in flight as a reference; a
+    /// settled asset's blob is reclaimed like any other once no owning column points at it.
     /// </para>
     /// <para>
     /// The foreign keys this table does carry (owner, club, event) are <c>SET NULL</c>: an asset

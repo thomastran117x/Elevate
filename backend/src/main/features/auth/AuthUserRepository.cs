@@ -433,10 +433,9 @@ namespace backend.main.features.auth
                 }
 
                 // Media assets are an upload ledger with no cascade from the rows above. Those
-                // whose image is going away with this account go too: left behind, a Ready row's
-                // PublicUrl would shield the blob from the orphan sweeper forever if the delete
-                // below failed. So do the uploader's unfinished uploads; the quarantine reaper
-                // removes their bytes. Ready images the user put in other people's clubs survive,
+                // whose image is going away with this account go too, so no Ready row is left
+                // advertising a URL with nothing behind it. So do the uploader's unfinished
+                // uploads; the quarantine reaper removes their bytes. Ready images the user put in other people's clubs survive,
                 // with the owner set to null by the foreign key.
                 var deletedUrls = orphanedBlobUrls.Distinct(StringComparer.Ordinal).ToList();
                 await _context.MediaAssets

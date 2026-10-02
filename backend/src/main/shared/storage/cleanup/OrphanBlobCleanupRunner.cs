@@ -1,3 +1,4 @@
+using backend.main.features.media;
 using backend.main.infrastructure.database.core;
 
 using Microsoft.EntityFrameworkCore;
@@ -8,7 +9,8 @@ namespace backend.main.shared.storage.cleanup
     /// <summary>
     /// Sweeps the blob container for images no longer referenced by any live row
     /// (User.Avatar, Club.ClubImage, Club.BannerImage, Club.GalleryImages,
-    /// ClubVersion.ClubImage, EventImage.ImageUrl, MediaAsset.PublicUrl) and deletes them. Reclaims blobs orphaned by
+    /// ClubVersion.ClubImage, EventImage.ImageUrl) and deletes them. An upload still in flight
+    /// — a MediaAsset not yet Ready or Rejected — also protects its public URL. Reclaims blobs orphaned by
     /// cascade-deleted accounts/clubs whose rows no longer exist, so a reference-check against
     /// surviving rows can't find them inline.
     /// <para>
@@ -64,6 +66,7 @@ namespace backend.main.shared.storage.cleanup
                     }
 
                     await _blobService.DeleteBlobAsync(blob.Url);
+                    await RetireSettledAssetsAsync(blob.Url, cancellationToken);
                     deleted++;
                 }
             }
@@ -86,13 +89,34 @@ namespace backend.main.shared.storage.cleanup
             if (await _db.EventImages.AsNoTracking().AnyAsync(i => i.ImageUrl == url, cancellationToken))
                 return true;
 
-            // A published upload is a reference in its own right. The attach that promoted it
-            // may not have committed its owning row yet, and a Ready asset's URL is what its
-            // uploader was told they can use.
-            if (await _db.MediaAssets.AsNoTracking().AnyAsync(a => a.PublicUrl == url, cancellationToken))
+            // Only an upload still in flight protects its URL: a crash between promotion and
+            // the Ready write leaves a public blob under an asset that is still Processing, and
+            // its retry must find it. A Ready or Rejected asset is a ledger entry, not a
+            // reference. Once settled, the columns above decide, so an image removed from its
+            // event, or promoted by an attach whose save then failed, is reclaimed like any
+            // other orphan.
+            if (await _db.MediaAssets.AsNoTracking().AnyAsync(
+                    a => a.PublicUrl == url &&
+                        a.Status != MediaAssetStatus.Ready &&
+                        a.Status != MediaAssetStatus.Rejected,
+                    cancellationToken))
+            {
                 return true;
+            }
 
             return false;
+        }
+
+        /// <summary>
+        /// Drops the settled ledger rows for a blob that was just reclaimed, so no Ready asset is
+        /// left advertising a URL with nothing behind it.
+        /// </summary>
+        private async Task RetireSettledAssetsAsync(string url, CancellationToken cancellationToken)
+        {
+            await _db.MediaAssets
+                .Where(a => a.PublicUrl == url &&
+                    (a.Status == MediaAssetStatus.Ready || a.Status == MediaAssetStatus.Rejected))
+                .ExecuteDeleteAsync(cancellationToken);
         }
 
         /// <summary>
