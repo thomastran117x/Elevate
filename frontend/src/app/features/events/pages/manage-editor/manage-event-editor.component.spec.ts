@@ -901,7 +901,10 @@ describe('ManageEventEditorComponent', () => {
 
         component.goToStep(5);
         fixture.detectChanges();
+        const tile = (): HTMLImageElement =>
+          fixture.nativeElement.querySelector('app-event-gallery-manager img');
         expect(fixture.nativeElement.textContent).toContain('Checking image…');
+        expect(tile().src).toBe(preview);
 
         const revoke = spyOn(URL, 'revokeObjectURL').and.callThrough();
         checks.next(settled('ready'));
@@ -909,6 +912,12 @@ describe('ManageEventEditorComponent', () => {
         expect(component.srcForImage(url)).toBe(url);
         expect(revoke).toHaveBeenCalledOnceWith(preview);
         expect(component.checkLabelForImage(url)).toBeNull();
+
+        // The gallery manager is OnPush and its inputs do not change when a check settles, so
+        // this is the part that only holds because the state behind them is signal-backed.
+        fixture.detectChanges();
+        expect(tile().src).toBe(url);
+        expect(fixture.nativeElement.textContent).not.toContain('Checking image…');
       });
 
       it('drops the tile and says why when the image is rejected after attaching', async () => {

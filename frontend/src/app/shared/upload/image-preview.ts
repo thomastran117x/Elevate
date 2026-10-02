@@ -1,3 +1,5 @@
+import { signal } from '@angular/core';
+
 /**
  * Local previews for picked images, rendered from the file itself rather than from wherever it
  * was uploaded to. The user sees the image the moment it is picked, and the editor does not
@@ -25,32 +27,41 @@ export function revokePreviewUrl(url: string | null | undefined): void {
 /**
  * Local previews for a gallery, keyed by the remote URL each upload produced, so a template can
  * render the local file in place of an uploaded image. Owns every URL it is given.
+ *
+ * Backed by a signal, so a template that calls {@link srcFor} — directly, or through a function
+ * a host passes to an OnPush child — re-renders when a preview is adopted or released. A plain map
+ * would leave such a child showing the local file after the real image is live.
  */
 export class LocalPreviews {
-  private readonly previews = new Map<string, string>();
+  private readonly previews = signal<ReadonlyMap<string, string>>(new Map());
 
   /** The local preview standing in for `remoteUrl`, or `remoteUrl` itself when there is none. */
   srcFor(remoteUrl: string): string {
-    return this.previews.get(remoteUrl) ?? remoteUrl;
+    return this.previews().get(remoteUrl) ?? remoteUrl;
   }
 
   /** Takes ownership of `previewUrl` as the stand-in for `remoteUrl`. */
   adopt(remoteUrl: string, previewUrl: string | null): void {
     if (!previewUrl) return;
     this.release(remoteUrl);
-    this.previews.set(remoteUrl, previewUrl);
+    this.previews.update((previews) => new Map(previews).set(remoteUrl, previewUrl));
   }
 
   /** Revokes the preview for one image, after it is removed. */
   release(remoteUrl: string): void {
-    revokePreviewUrl(this.previews.get(remoteUrl));
-    this.previews.delete(remoteUrl);
+    const previews = this.previews();
+    if (!previews.has(remoteUrl)) return;
+
+    revokePreviewUrl(previews.get(remoteUrl));
+    const next = new Map(previews);
+    next.delete(remoteUrl);
+    this.previews.set(next);
   }
 
   /** Revokes the preview of every image not in `remoteUrls`. */
   retainOnly(remoteUrls: readonly string[]): void {
     const keep = new Set(remoteUrls);
-    for (const remoteUrl of [...this.previews.keys()]) {
+    for (const remoteUrl of [...this.previews().keys()]) {
       if (!keep.has(remoteUrl)) this.release(remoteUrl);
     }
   }

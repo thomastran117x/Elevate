@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 
 import { MediaAssetService } from './media-asset.service';
@@ -24,10 +25,13 @@ export const MEDIA_REJECTED_FALLBACK = "This image couldn't be published.";
  * for — a public URL that has nothing behind it yet. The only thing this adds is a label while
  * the check runs, and a callback when it settles.
  *
+ * The states live in a signal, so a template that asks for a label — including an OnPush child
+ * the host hands {@link labelFor} to — re-renders when a check starts, slows, or settles.
+ *
  * Owns its polls: call {@link stopAll} when the owning component is destroyed.
  */
 export class MediaAssetTracker {
-  private readonly states = new Map<string, MediaCheckState>();
+  private readonly states = signal<ReadonlyMap<string, MediaCheckState>>(new Map());
   private readonly polls = new Map<string, Subscription>();
 
   constructor(private readonly media: MediaAssetService) {}
@@ -44,12 +48,12 @@ export class MediaAssetTracker {
     if (!mediaAssetId) return;
 
     this.stop(publicUrl);
-    this.states.set(publicUrl, 'checking');
+    this.setState(publicUrl, 'checking');
 
     const poll = this.media.watch(mediaAssetId).subscribe({
       next: (event) => {
         if (event.kind === 'slow') {
-          this.states.set(publicUrl, 'slow');
+          this.setState(publicUrl, 'slow');
           return;
         }
 
@@ -63,22 +67,22 @@ export class MediaAssetTracker {
             handlers.rejected?.(publicUrl, event.asset.rejectionReason || MEDIA_REJECTED_FALLBACK);
             break;
           default:
-            this.states.set(publicUrl, 'checking');
+            this.setState(publicUrl, 'checking');
         }
       },
       // A watch that ends without an answer (the asset vanished) simply stops labelling the tile.
       complete: () => {
-        if (this.states.get(publicUrl) === 'checking') this.stop(publicUrl);
+        if (this.stateOf(publicUrl) === 'checking') this.stop(publicUrl);
       },
     });
 
     // A watch that settled synchronously has already cleaned up after itself.
-    if (this.states.has(publicUrl)) this.polls.set(publicUrl, poll);
+    if (this.stateOf(publicUrl) !== null) this.polls.set(publicUrl, poll);
     else poll.unsubscribe();
   }
 
   stateOf(publicUrl: string): MediaCheckState | null {
-    return this.states.get(publicUrl) ?? null;
+    return this.states().get(publicUrl) ?? null;
   }
 
   /** The label to overlay on a tile, or null when there is nothing to wait for. */
@@ -93,12 +97,21 @@ export class MediaAssetTracker {
   stop(publicUrl: string): void {
     this.polls.get(publicUrl)?.unsubscribe();
     this.polls.delete(publicUrl);
-    this.states.delete(publicUrl);
+    if (!this.states().has(publicUrl)) return;
+
+    const next = new Map(this.states());
+    next.delete(publicUrl);
+    this.states.set(next);
   }
 
   /** Stops every poll; call on destroy. */
   stopAll(): void {
     for (const publicUrl of [...this.polls.keys()]) this.stop(publicUrl);
-    this.states.clear();
+    this.states.set(new Map());
+  }
+
+  private setState(publicUrl: string, state: MediaCheckState): void {
+    if (this.stateOf(publicUrl) === state) return;
+    this.states.update((states) => new Map(states).set(publicUrl, state));
   }
 }
