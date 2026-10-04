@@ -26,6 +26,16 @@ public class MediaAssetRepository : IMediaAssetRepository
             .FirstOrDefaultAsync(asset => asset.PublicId == publicId, cancellationToken);
     }
 
+    public async Task<Dictionary<Guid, MediaAsset>> GetByPublicIdsAsync(
+        IReadOnlyCollection<Guid> publicIds,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.MediaAssets
+            .AsNoTracking()
+            .Where(asset => publicIds.Contains(asset.PublicId))
+            .ToDictionaryAsync(asset => asset.PublicId, cancellationToken);
+    }
+
     public async Task<MediaAsset?> GetByQuarantineBlobPathAsync(
         string quarantineBlobPath,
         CancellationToken cancellationToken = default)

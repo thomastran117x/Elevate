@@ -9,6 +9,11 @@ public interface IMediaAssetRepository
 
     Task<MediaAsset?> GetByPublicIdAsync(Guid publicId, CancellationToken cancellationToken = default);
 
+    /// <summary>The assets among <paramref name="publicIds"/> that exist, by public id, in one read.</summary>
+    Task<Dictionary<Guid, MediaAsset>> GetByPublicIdsAsync(
+        IReadOnlyCollection<Guid> publicIds,
+        CancellationToken cancellationToken = default);
+
     Task<MediaAsset?> GetByQuarantineBlobPathAsync(
         string quarantineBlobPath,
         CancellationToken cancellationToken = default);

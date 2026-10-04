@@ -33,6 +33,13 @@ public sealed class MediaAssetService : IMediaAssetService
     // Waiting on a live claim (see IMediaValidationDispatcher.SettleWait) is not counted here.
     private const int MaxStateReads = 5;
 
+    /// <summary>
+    /// The longest gap between reads while waiting. The interval doubles from
+    /// <see cref="IMediaValidationDispatcher.PollInterval"/> to this, so a slow worker costs a
+    /// handful of reads per save rather than one every quarter second.
+    /// </summary>
+    internal static readonly TimeSpan MaxPollInterval = TimeSpan.FromSeconds(1);
+
     private readonly AppDatabaseContext _db;
     private readonly IMediaAssetRepository _repository;
     private readonly IAzureBlobService _blobService;
@@ -98,46 +105,69 @@ public sealed class MediaAssetService : IMediaAssetService
         string imageUrl,
         string subject,
         Action<BlobUploadIntent>? checkScope = null,
+        CancellationToken cancellationToken = default) =>
+        (await AttachAllAsync(userId, [new MediaAttachment(imageUrl, subject, checkScope)], cancellationToken))[0];
+
+    public async Task<IReadOnlyList<BlobUploadIntent>> AttachAllAsync(
+        int userId,
+        IReadOnlyList<MediaAttachment> attachments,
         CancellationToken cancellationToken = default)
     {
-        var intent = await BlobUploadIntentValidator.ResolveIntentAsync(
-            _blobService, _cache, userId, imageUrl, subject);
-
-        checkScope?.Invoke(intent);
-
-        if (intent.MediaAssetId is not Guid mediaAssetId)
+        // Every intent and scope check first: a save naming an upload it may not use is refused
+        // before any image of it is read or claimed.
+        var intents = new List<BlobUploadIntent>(attachments.Count);
+        foreach (var attachment in attachments)
         {
-            // Issued before quarantine was switched on, so the bytes are in the public container
-            // and get the checks they would have got then.
-            await BlobUploadIntentValidator.RequireAcceptableBlobAsync(_blobService, imageUrl, intent, subject);
-            return intent;
+            var intent = await BlobUploadIntentValidator.ResolveIntentAsync(
+                _blobService, _cache, userId, attachment.ImageUrl, attachment.Subject);
+            attachment.CheckScope?.Invoke(intent);
+            intents.Add(intent);
         }
 
-        await EnsureReadyAsync(mediaAssetId, userId, imageUrl, subject, cancellationToken);
-        return intent;
+        var waiting = new List<PendingAttach>();
+        for (var i = 0; i < attachments.Count; i++)
+        {
+            var attachment = attachments[i];
+            if (intents[i].MediaAssetId is not Guid mediaAssetId)
+            {
+                // Issued before quarantine was switched on, so the bytes are in the public
+                // container and get the checks they would have got then.
+                await BlobUploadIntentValidator.RequireAcceptableBlobAsync(
+                    _blobService, attachment.ImageUrl, intents[i], attachment.Subject);
+                continue;
+            }
+
+            var pending = new PendingAttach(mediaAssetId, attachment.ImageUrl, attachment.Subject);
+            if (!await AdvanceAsync(pending, userId, current: null, cancellationToken))
+                waiting.Add(pending);
+        }
+
+        await WaitForAllAsync(waiting, userId, cancellationToken);
+        return intents;
     }
 
     /// <summary>
-    /// Drives the asset to Ready, or throws the reason it cannot get there. Every step re-reads
-    /// the row and moves it with a conditional update, so concurrent attaches of the same upload
-    /// agree on one outcome and only one of them does the work.
+    /// Drives one asset as far as it goes without waiting on anyone. Every step re-reads the row
+    /// and moves it with a conditional update, so concurrent attaches of the same upload agree on
+    /// one outcome and only one of them does the work.
     /// </summary>
-    private async Task EnsureReadyAsync(
-        Guid mediaAssetId,
+    /// <param name="current">The row as just read, if the caller has it; otherwise it is read here.</param>
+    /// <returns>True once the asset is Ready; false while a live claim holds it.</returns>
+    /// <exception cref="BadRequestException">The upload was refused, or is not this user's.</exception>
+    private async Task<bool> AdvanceAsync(
+        PendingAttach pending,
         int userId,
-        string imageUrl,
-        string subject,
+        MediaAsset? current,
         CancellationToken cancellationToken)
     {
-        var readsLeft = MaxStateReads;
-        var pollsLeft = PollsWithin(_dispatcher.SettleWait, _dispatcher.PollInterval);
-
-        while (readsLeft-- > 0)
+        for (var read = 0; read < MaxStateReads; read++)
         {
-            var asset = await _repository.GetByPublicIdAsync(mediaAssetId, cancellationToken)
+            var asset = current
+                ?? await _repository.GetByPublicIdAsync(pending.MediaAssetId, cancellationToken)
                 ?? throw new BadRequestException("Image upload is invalid or expired. Please upload the image again.");
+            current = null;
 
-            if (asset.OwnerUserId != userId || !string.Equals(asset.PublicUrl, imageUrl, StringComparison.Ordinal))
+            if (asset.OwnerUserId != userId || !string.Equals(asset.PublicUrl, pending.ImageUrl, StringComparison.Ordinal))
                 throw new BadRequestException("Image upload is invalid or does not belong to this organizer.");
 
             switch (asset.Status)
@@ -145,7 +175,7 @@ public sealed class MediaAssetService : IMediaAssetService
                 case MediaAssetStatus.Ready:
                     // Attaching an upload twice — a retried save, or the same image on a second
                     // event within the intent's lifetime — is allowed, as it always has been.
-                    return;
+                    return true;
 
                 case MediaAssetStatus.Rejected:
                     throw new BadRequestException(asset.RejectionReason ?? GenericRejectionMessage);
@@ -153,19 +183,10 @@ public sealed class MediaAssetService : IMediaAssetService
                 case MediaAssetStatus.NeedsReview:
                     throw new ConflictException(UnderReviewMessage);
 
-                case MediaAssetStatus.Processing when asset.UpdatedAt > UtcNow() - StaleProcessingAfter:
-                    // A live claim: this attach's own, handed to media-worker a moment ago, or
-                    // another request's. Its outcome arrives without anyone's help, so wait a
-                    // short while for it rather than send the user away at once. Inline
-                    // validation settles the asset before it returns, so it never waits here.
-                    if (pollsLeft-- <= 0)
-                        throw new ConflictException(StillProcessingMessage);
-
-                    await Task.Delay(_dispatcher.PollInterval, cancellationToken);
-
-                    // Waiting is not losing a race, so it does not use up a read.
-                    readsLeft++;
-                    continue;
+                case MediaAssetStatus.Processing when HoldsLiveClaim(asset):
+                    // This attach's own claim, handed to media-worker a moment ago, or another
+                    // request's. Its outcome arrives without anyone's help.
+                    return false;
 
                 case MediaAssetStatus.Processing:
                     // The request that claimed it is presumed dead. Releasing rather than
@@ -206,7 +227,7 @@ public sealed class MediaAssetService : IMediaAssetService
                     var attempt = asset.AttemptCount + 1;
                     try
                     {
-                        await _dispatcher.DispatchAsync(asset, attempt, subject, cancellationToken);
+                        await _dispatcher.DispatchAsync(asset, attempt, pending.Subject, cancellationToken);
                     }
                     catch
                     {
@@ -223,8 +244,47 @@ public sealed class MediaAssetService : IMediaAssetService
             }
         }
 
-        throw new ConflictException(StillProcessingMessage);
+        // Every lap lost a race to another request that is still moving the asset.
+        throw new MediaStillProcessingException();
     }
+
+    /// <summary>
+    /// Waits, for one <see cref="IMediaValidationDispatcher.SettleWait"/> in all, for every asset
+    /// a live claim holds to settle, reading them together and less often as the wait goes on.
+    /// Inline validation settles an asset before its attach returns, so it has no wait: an asset
+    /// another request is validating is reported as still being checked straight away.
+    /// </summary>
+    private async Task WaitForAllAsync(List<PendingAttach> waiting, int userId, CancellationToken cancellationToken)
+    {
+        var waited = TimeSpan.Zero;
+        var interval = _dispatcher.PollInterval;
+
+        while (waiting.Count > 0)
+        {
+            if (interval <= TimeSpan.Zero || waited >= _dispatcher.SettleWait)
+                throw new MediaStillProcessingException();
+
+            await Task.Delay(interval, cancellationToken);
+            waited += interval;
+            interval = interval * 2 < MaxPollInterval ? interval * 2 : MaxPollInterval;
+
+            var assets = await _repository.GetByPublicIdsAsync(
+                waiting.Select(pending => pending.MediaAssetId).ToList(), cancellationToken);
+
+            foreach (var pending in waiting.ToList())
+            {
+                assets.TryGetValue(pending.MediaAssetId, out var asset);
+                if (asset is { Status: MediaAssetStatus.Processing } && HoldsLiveClaim(asset))
+                    continue;
+
+                // Settled, released, gone stale or deleted: the same steps as the first read.
+                if (await AdvanceAsync(pending, userId, asset, cancellationToken))
+                    waiting.Remove(pending);
+            }
+        }
+    }
+
+    private bool HoldsLiveClaim(MediaAsset asset) => asset.UpdatedAt > UtcNow() - StaleProcessingAfter;
 
     /// <remarks>
     /// Swallows its own failure: it runs while another exception is already on its way out, and
@@ -253,8 +313,5 @@ public sealed class MediaAssetService : IMediaAssetService
 
     private DateTime UtcNow() => _timeProvider.GetUtcNow().UtcDateTime;
 
-    internal static int PollsWithin(TimeSpan settleWait, TimeSpan pollInterval) =>
-        settleWait <= TimeSpan.Zero || pollInterval <= TimeSpan.Zero
-            ? 0
-            : (int)Math.Ceiling(settleWait / pollInterval);
+    private sealed record PendingAttach(Guid MediaAssetId, string ImageUrl, string Subject);
 }

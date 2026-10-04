@@ -11,6 +11,8 @@ using backend.main.shared.storage.imaging;
 
 using FluentAssertions;
 
+using Microsoft.AspNetCore.Http;
+
 using Microsoft.Extensions.Options;
 
 using Moq;
@@ -467,15 +469,120 @@ public class MediaAssetServiceTests
         (await harness.AssetAsync(upload)).Status.Should().Be(MediaAssetStatus.Ready);
     }
 
-    [Theory]
-    [InlineData(0, 250, 0)]
-    [InlineData(10_000, 0, 0)]
-    [InlineData(10_000, 250, 40)]
-    [InlineData(1_000, 300, 4)]
-    public void PollsWithin_ShouldCoverTheWholeWait(int waitMs, int intervalMs, int expected)
+    [Fact]
+    public async Task AttachAllAsync_WithTheWorker_ShouldHandEveryImageOff_ThenWaitOnceForAllOfThem()
     {
-        MediaAssetService.PollsWithin(TimeSpan.FromMilliseconds(waitMs), TimeSpan.FromMilliseconds(intervalMs))
-            .Should().Be(expected);
+        // A club save bringing in an icon, a banner and a gallery image: three round trips to the
+        // worker overlapping, not one after another.
+        var publisher = new RecordingPublisher();
+        await using var harness = await Harness.CreateAsync(dispatcher: _ => WorkerDispatcher(publisher));
+        var uploads = new[]
+        {
+            await harness.IssueAndUploadAsync(InMemoryBlobStore.Image()),
+            await harness.IssueAndUploadAsync(InMemoryBlobStore.Image()),
+            await harness.IssueAndUploadAsync(InMemoryBlobStore.Image())
+        };
+        var publishedBeforeTheFirstPoll = -1;
+        var reads = 0;
+        harness.BeforeRead = async () =>
+        {
+            // Three reads per image take it from PendingUpload to a live claim; the next read is
+            // the first poll.
+            if (++reads != 3 * uploads.Length + 1)
+                return;
+
+            publishedBeforeTheFirstPoll = publisher.Published.Count;
+            foreach (var upload in uploads)
+                await harness.SettleAsync(upload, attempt: 1);
+        };
+
+        var intents = await harness.Service.AttachAllAsync(
+            harness.UserId,
+            uploads.Select(upload => new MediaAttachment(upload.PublicUrl, "Club images")).ToList());
+
+        intents.Select(intent => intent.PublicUrl).Should().Equal(uploads.Select(upload => upload.PublicUrl));
+        publishedBeforeTheFirstPoll.Should().Be(3, "every image was handed off before the save started waiting");
+        reads.Should().Be(3 * uploads.Length + 1, "one read covers every image still being checked");
+        foreach (var upload in uploads)
+            (await harness.AssetAsync(upload)).Status.Should().Be(MediaAssetStatus.Ready);
+    }
+
+    [Fact]
+    public async Task AttachAllAsync_WithTheWorker_ShouldReportMediaProcessing_WhenAnyImageOutlastsTheWait()
+    {
+        var publisher = new RecordingPublisher();
+        await using var harness = await Harness.CreateAsync(dispatcher: _ => WorkerDispatcher(publisher));
+        var quick = await harness.IssueAndUploadAsync(InMemoryBlobStore.Image());
+        var slow = await harness.IssueAndUploadAsync(InMemoryBlobStore.Image());
+        harness.SettleOnRead(quick, read: 7);
+
+        var act = () => harness.Service.AttachAllAsync(
+            harness.UserId,
+            [new MediaAttachment(quick.PublicUrl, "Event images"), new MediaAttachment(slow.PublicUrl, "Event images")]);
+
+        var thrown = (await act.Should().ThrowAsync<MediaStillProcessingException>()).Which;
+        thrown.ErrorCode.Should().Be(MediaStillProcessingException.Code, "the editor tells this apart from a refusal");
+        thrown.StatusCode.Should().Be(StatusCodes.Status409Conflict);
+        thrown.Message.Should().Be(MediaAssetService.StillProcessingMessage);
+        (await harness.AssetAsync(quick)).Status.Should().Be(MediaAssetStatus.Ready);
+        (await harness.AssetAsync(slow)).Status.Should().Be(MediaAssetStatus.Processing);
+    }
+
+    [Fact]
+    public async Task AttachAllAsync_ShouldRefuseTheWholeSave_BeforeClaimingAnything_WhenOneImageIsOutOfScope()
+    {
+        var publisher = new RecordingPublisher();
+        await using var harness = await Harness.CreateAsync(dispatcher: _ => WorkerDispatcher(publisher));
+        var mine = await harness.IssueAndUploadAsync(InMemoryBlobStore.Image());
+        var wrongClub = await harness.IssueAndUploadAsync(InMemoryBlobStore.Image());
+
+        var act = () => harness.Service.AttachAllAsync(
+            harness.UserId,
+            [
+                new MediaAttachment(mine.PublicUrl, "Event images"),
+                new MediaAttachment(wrongClub.PublicUrl, "Event images", _ => throw new BadRequestException("wrong club"))
+            ]);
+
+        await act.Should().ThrowAsync<BadRequestException>().WithMessage("wrong club");
+        publisher.Published.Should().BeEmpty();
+        (await harness.AssetAsync(mine)).Status.Should().Be(MediaAssetStatus.PendingUpload);
+    }
+
+    [Fact]
+    public async Task AttachAllAsync_WithTheWorker_ShouldReadLessOften_AsTheWaitGoesOn()
+    {
+        // 5, 10, 20, 40 then 80 ms covers the 100 ms wait in five reads rather than twenty.
+        var publisher = new RecordingPublisher();
+        await using var harness = await Harness.CreateAsync(dispatcher: _ => WorkerDispatcher(publisher));
+        var upload = await harness.IssueAndUploadAsync(InMemoryBlobStore.Image());
+        var reads = 0;
+        harness.BeforeRead = () =>
+        {
+            reads++;
+            return Task.CompletedTask;
+        };
+
+        var act = () => harness.Service.AttachAsync(harness.UserId, upload.PublicUrl, "Event images");
+
+        await act.Should().ThrowAsync<MediaStillProcessingException>();
+        (reads - 3).Should().Be(5);
+    }
+
+    [Fact]
+    public async Task AttachAllAsync_WithTheWorker_ShouldStopWaiting_WhenTheRequestIsCancelled()
+    {
+        var publisher = new RecordingPublisher();
+        await using var harness = await Harness.CreateAsync(
+            dispatcher: _ => new KafkaMediaValidationDispatcher(
+                publisher, "media-validation", TimeSpan.FromMinutes(1), TimeSpan.FromMilliseconds(5)));
+        var upload = await harness.IssueAndUploadAsync(InMemoryBlobStore.Image());
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        var act = () => harness.Service.AttachAsync(
+            harness.UserId, upload.PublicUrl, "Event images", cancellationToken: cancellation.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        publisher.Published.Should().ContainSingle("the image was handed off before the client went away");
     }
 
     [Fact]
@@ -651,6 +758,14 @@ public class MediaAssetServiceTests
         {
             await beforeRead();
             return await inner.GetByPublicIdAsync(publicId, cancellationToken);
+        }
+
+        public async Task<Dictionary<Guid, MediaAsset>> GetByPublicIdsAsync(
+            IReadOnlyCollection<Guid> publicIds,
+            CancellationToken cancellationToken = default)
+        {
+            await beforeRead();
+            return await inner.GetByPublicIdsAsync(publicIds, cancellationToken);
         }
 
         public Task<MediaAsset?> GetByQuarantineBlobPathAsync(string quarantineBlobPath, CancellationToken cancellationToken = default) =>
