@@ -12,13 +12,14 @@ public static class MediaAssetTransitions
         {
             // Rejected here is the reaper expiring an upload nobody attached within a day.
             [MediaAssetStatus.PendingUpload] = [MediaAssetStatus.Uploaded, MediaAssetStatus.Rejected],
-            // NeedsReview here is media-worker's reconciler giving up on an asset it has re-driven
-            // too often; a released claim is back in Uploaded when it does.
+
+            // Ready and Rejected here are media-worker's verdict on a claim that was released
+            // before it arrived, recorded only while no newer claim has been taken.
             [MediaAssetStatus.Uploaded] =
             [
                 MediaAssetStatus.Processing,
-                MediaAssetStatus.Rejected,
-                MediaAssetStatus.NeedsReview
+                MediaAssetStatus.Ready,
+                MediaAssetStatus.Rejected
             ],
 
             // Back to Uploaded releases a claim: a retryable fault (no processing slot, a storage

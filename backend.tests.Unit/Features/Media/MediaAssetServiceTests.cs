@@ -671,7 +671,12 @@ public class MediaAssetServiceTests
         public Task<List<MediaAsset>> GetProcessingClaimedBeforeAsync(DateTime updatedBefore, int limit, CancellationToken cancellationToken = default) =>
             inner.GetProcessingClaimedBeforeAsync(updatedBefore, limit, cancellationToken);
 
-        public Task<List<MediaAsset>> GetStalledBeforeAsync(DateTime updatedBefore, int limit, CancellationToken cancellationToken = default) =>
-            inner.GetStalledBeforeAsync(updatedBefore, limit, cancellationToken);
+        public Task<List<MediaAsset>> GetStalledBeforeAsync(
+            DateTime updatedBefore,
+            DateTime issuedSince,
+            int limit,
+            (DateTime UpdatedAt, int Id)? after = null,
+            CancellationToken cancellationToken = default) =>
+            inner.GetStalledBeforeAsync(updatedBefore, issuedSince, limit, after, cancellationToken);
     }
 }

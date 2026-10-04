@@ -90,8 +90,8 @@ public class QuarantineReaperRunnerTests
     [Fact]
     public async Task RunOnceAsync_ShouldKeepTheBytesOfAnAssetAwaitingReview()
     {
-        // Parked by the media validation reconciler. A reviewer can still move it to Ready, and
-        // needs the original bytes to decide.
+        // Held for moderation. A reviewer can still move it to Ready, and needs the original bytes
+        // to decide.
         await using var database = await MediaTestDatabase.CreateAsync();
         var blobs = new InMemoryBlobStore();
         var now = database.Time.GetUtcNow();
@@ -131,6 +131,26 @@ public class QuarantineReaperRunnerTests
         stored.Status.Should().Be(MediaAssetStatus.Uploaded);
         stored.QuarantineBlobPath.Should().Be("events/abandoned.png");
         blobs.Quarantine.Should().ContainKey("events/abandoned.png");
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_ShouldLeaveStaleClaimsToTheReconciler_WhileMediaWorkerValidates()
+    {
+        // A queued request is behind a backlog, not a dead request thread. Releasing it would
+        // only make the worker's verdict arrive at an asset that no longer waits for it.
+        await using var database = await MediaTestDatabase.CreateAsync();
+        var now = database.Time.GetUtcNow();
+        var asset = await database.SeedAssetAsync(
+            MediaAssetStatus.Processing,
+            createdAt: now.UtcDateTime.AddMinutes(-15),
+            updatedAt: now.UtcDateTime - MediaAssetService.StaleProcessingAfter - TimeSpan.FromMinutes(1));
+        var runner = new QuarantineReaperRunner(
+            database.CreateRepository(), new InMemoryBlobStore(), database.Time, releaseStaleClaims: false);
+
+        var result = await runner.RunOnceAsync();
+
+        result.ReleasedClaims.Should().Be(0);
+        (await database.ReloadAsync(asset.Id)).Status.Should().Be(MediaAssetStatus.Processing);
     }
 
     [Fact]

@@ -288,13 +288,17 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IEmailAvailabilityService, EmailAvailabilityService>();
             services.AddScoped<IUsernameSuggestionService, UsernameSuggestionService>();
             services.AddScoped<OrphanBlobCleanupRunner>();
-            services.AddScoped<QuarantineReaperRunner>();
             services.AddScoped<IMediaAssetQueryService, MediaAssetQueryService>();
             services.AddScoped<MediaValidationRecorder>();
 
             // Inline (the default) validates inside the attach request; off hands the asset to
             // media-worker and records its verdict when the status consumer reads it.
             var mediaWorkerValidates = IsMediaWorkerValidating(featureFlags);
+            services.AddScoped(provider => new QuarantineReaperRunner(
+                provider.GetRequiredService<IMediaAssetRepository>(),
+                provider.GetRequiredService<IAzureBlobService>(),
+                provider.GetRequiredService<TimeProvider>(),
+                releaseStaleClaims: !mediaWorkerValidates));
             if (mediaWorkerValidates)
             {
                 services.AddScoped<IMediaValidationDispatcher, KafkaMediaValidationDispatcher>();

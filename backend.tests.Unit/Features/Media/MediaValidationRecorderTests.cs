@@ -90,6 +90,38 @@ public class MediaValidationRecorderTests
     }
 
     [Fact]
+    public async Task RecordAsync_ShouldAcceptTheVerdictOfAReleasedClaim_WhileNoNewerClaimExists()
+    {
+        // The claim was handed back — its publish timed out yet was delivered, or the reconciler
+        // released it — and the worker's answer for it arrives afterwards. Dropping it would only
+        // mean decoding the same bytes again.
+        await using var harness = await Harness.CreateAsync(attemptCount: 2);
+        await harness.Database.CreateRepository().TryTransitionAsync(
+            harness.Asset.Id, MediaAssetStatus.Processing, MediaAssetStatus.Uploaded, whenAttempt: 2);
+
+        var recorded = await harness.Recorder.RecordAsync(
+            harness.Asset, 2, MediaValidationOutcome.Accept("image/webp", 10, 10, 100));
+
+        recorded.Should().BeTrue();
+        (await harness.Database.ReloadAsync(harness.Asset.Id)).Status.Should().Be(MediaAssetStatus.Ready);
+        harness.Blobs.Quarantine.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RecordAsync_ShouldIgnoreAReleasedAssetsVerdict_FromAnOlderClaim()
+    {
+        await using var harness = await Harness.CreateAsync(attemptCount: 2);
+        await harness.Database.CreateRepository().TryTransitionAsync(
+            harness.Asset.Id, MediaAssetStatus.Processing, MediaAssetStatus.Uploaded, whenAttempt: 2);
+
+        var recorded = await harness.Recorder.RecordAsync(harness.Asset, 1, MediaValidationOutcome.Reject("late"));
+
+        recorded.Should().BeFalse();
+        (await harness.Database.ReloadAsync(harness.Asset.Id)).Status.Should().Be(MediaAssetStatus.Uploaded);
+        harness.Blobs.Quarantine.Should().NotBeEmpty();
+    }
+
+    [Fact]
     public async Task RecordAsync_ShouldNotOverturnARejection_WithALateAcceptance()
     {
         await using var harness = await Harness.CreateAsync(attemptCount: 1);

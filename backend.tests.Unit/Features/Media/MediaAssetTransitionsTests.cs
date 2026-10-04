@@ -12,7 +12,7 @@ public class MediaAssetTransitionsTests
         (MediaAssetStatus.PendingUpload, MediaAssetStatus.Rejected),
         (MediaAssetStatus.Uploaded, MediaAssetStatus.Processing),
         (MediaAssetStatus.Uploaded, MediaAssetStatus.Rejected),
-        (MediaAssetStatus.Uploaded, MediaAssetStatus.NeedsReview),
+        (MediaAssetStatus.Uploaded, MediaAssetStatus.Ready),
         (MediaAssetStatus.Processing, MediaAssetStatus.Ready),
         (MediaAssetStatus.Processing, MediaAssetStatus.Rejected),
         (MediaAssetStatus.Processing, MediaAssetStatus.NeedsReview),

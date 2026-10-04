@@ -19,7 +19,7 @@ public class MediaValidationReconcilerRunnerTests
 
         var result = await harness.Runner.RunOnceAsync();
 
-        result.Should().Be(new MediaValidationReconcileResult(Redriven: 1, Parked: 0));
+        result.Should().Be(new MediaValidationReconcileResult(Redriven: 1, Released: 0));
         var stored = await harness.Database.ReloadAsync(asset.Id);
         stored.Status.Should().Be(MediaAssetStatus.Processing);
         stored.AttemptCount.Should().Be(2, "the re-drive is a new claim, so the old one's late verdict is ignored");
@@ -66,22 +66,70 @@ public class MediaValidationReconcilerRunnerTests
         harness.Dispatched.Should().BeEmpty();
     }
 
-    [Theory]
-    [InlineData(MediaAssetStatus.Processing)]
-    [InlineData(MediaAssetStatus.Uploaded)]
-    public async Task RunOnceAsync_ShouldParkAnAssetForReview_AfterTheLastAttempt(MediaAssetStatus status)
+    [Fact]
+    public async Task RunOnceAsync_ShouldNeverParkAnAssetForReview_HoweverOftenItWasClaimed()
     {
+        // An unanswered claim says nothing about the image: an outage must not park good uploads.
         await using var harness = await Harness.CreateAsync();
-        var asset = await harness.SeedAsync(
-            status, attemptCount: MediaValidationReconcilerRunner.MaxAttempts, quietFor: TimeSpan.FromHours(1));
+        var asset = await harness.SeedAsync(MediaAssetStatus.Processing, attemptCount: 12, quietFor: TimeSpan.FromMinutes(9));
 
         var result = await harness.Runner.RunOnceAsync();
 
-        result.Should().Be(new MediaValidationReconcileResult(Redriven: 0, Parked: 1));
-        var stored = await harness.Database.ReloadAsync(asset.Id);
-        stored.Status.Should().Be(MediaAssetStatus.NeedsReview);
-        stored.QuarantineBlobPath.Should().NotBeNull("a reviewer needs the bytes");
+        result.Redriven.Should().Be(1);
+        (await harness.Database.ReloadAsync(asset.Id)).Status.Should().Be(MediaAssetStatus.Processing);
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_ShouldReleaseWithoutRedriving_AClaimOnAnUploadThatCanNoLongerBeAttached()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var expired = await harness.SeedAsync(
+            MediaAssetStatus.Processing,
+            attemptCount: 2,
+            quietFor: TimeSpan.FromMinutes(9),
+            issuedAgo: MediaValidationReconcilerRunner.AttachWindow + TimeSpan.FromMinutes(1));
+        var alreadyReleased = await harness.SeedAsync(
+            MediaAssetStatus.Uploaded,
+            attemptCount: 2,
+            quietFor: TimeSpan.FromMinutes(9),
+            issuedAgo: MediaValidationReconcilerRunner.AttachWindow + TimeSpan.FromMinutes(1));
+
+        var result = await harness.Runner.RunOnceAsync();
+
+        result.Should().Be(new MediaValidationReconcileResult(Redriven: 0, Released: 1));
+        var stored = await harness.Database.ReloadAsync(expired.Id);
+        stored.Status.Should().Be(MediaAssetStatus.Uploaded, "the reaper expires it, bytes and all, once it is a day old");
+        stored.AttemptCount.Should().Be(2, "a late verdict for this claim can still be recorded");
+        (await harness.Database.ReloadAsync(alreadyReleased.Id)).UpdatedAt.Should().Be(alreadyReleased.UpdatedAt);
         harness.Dispatched.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_ShouldPagePastRowsStillInBackoff_ToReachOnesThatAreDue()
+    {
+        // After an outage: a full batch of fourth claims, quieter for longer than the attempt-1
+        // asset behind them but not due for another two minutes.
+        await using var harness = await Harness.CreateAsync();
+        for (var i = 0; i < MediaValidationReconcilerRunner.BatchSize + 5; i++)
+            await harness.SeedAsync(MediaAssetStatus.Processing, attemptCount: 4, quietFor: TimeSpan.FromMinutes(6));
+        var due = await harness.SeedAsync(MediaAssetStatus.Processing, attemptCount: 1, quietFor: TimeSpan.FromMinutes(3));
+
+        var result = await harness.Runner.RunOnceAsync();
+
+        result.Redriven.Should().Be(1);
+        harness.Dispatched.Should().ContainSingle().Which.AssetId.Should().Be(due.PublicId);
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_ShouldStopAtTheBatchSize()
+    {
+        await using var harness = await Harness.CreateAsync();
+        for (var i = 0; i < MediaValidationReconcilerRunner.BatchSize + 3; i++)
+            await harness.SeedAsync(MediaAssetStatus.Uploaded, attemptCount: 0, quietFor: TimeSpan.FromMinutes(3));
+
+        var result = await harness.Runner.RunOnceAsync();
+
+        result.Redriven.Should().Be(MediaValidationReconcilerRunner.BatchSize);
     }
 
     [Fact]
@@ -94,7 +142,12 @@ public class MediaValidationReconcilerRunnerTests
         var real = harness.Database.CreateRepository();
         await real.TryTransitionAsync(asset.Id, MediaAssetStatus.Processing, MediaAssetStatus.Ready, whenAttempt: 1);
         var repository = new Mock<IMediaAssetRepository>();
-        repository.Setup(r => r.GetStalledBeforeAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        repository.Setup(r => r.GetStalledBeforeAsync(
+                It.IsAny<DateTime>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<int>(),
+                It.IsAny<(DateTime UpdatedAt, int Id)?>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync([staleRead]);
         repository.Setup(r => r.TryTransitionAsync(
                 It.IsAny<int>(),
@@ -127,19 +180,25 @@ public class MediaValidationReconcilerRunnerTests
         result.Redriven.Should().Be(0);
         var stored = await harness.Database.ReloadAsync(asset.Id);
         stored.Status.Should().Be(MediaAssetStatus.Uploaded);
-        stored.AttemptCount.Should().Be(2, "the failed claim still counts toward giving up");
+        stored.AttemptCount.Should().Be(2);
     }
 
     [Theory]
     [InlineData(0, 2)]
     [InlineData(1, 2)]
     [InlineData(2, 4)]
-    [InlineData(4, 16)]
-    [InlineData(5, 30)]
-    [InlineData(50, 30)]
+    [InlineData(3, 8)]
+    [InlineData(4, 8)]
+    [InlineData(50, 8)]
     public void BackoffFor_ShouldDoublePerClaim_UpToTheCap(int attemptCount, int minutes)
     {
         MediaValidationReconcilerRunner.BackoffFor(attemptCount).Should().Be(TimeSpan.FromMinutes(minutes));
+    }
+
+    [Fact]
+    public void AttachWindow_ShouldBeTheUploadIntentsLifetime()
+    {
+        MediaValidationReconcilerRunner.AttachWindow.Should().Be(TimeSpan.FromMinutes(20));
     }
 
     [Fact]
@@ -180,11 +239,19 @@ public class MediaValidationReconcilerRunnerTests
             return harness;
         }
 
-        public Task<MediaAsset> SeedAsync(MediaAssetStatus status, int attemptCount, TimeSpan quietFor)
+        /// <summary>An asset issued <paramref name="issuedAgo"/> (ten minutes by default, inside the attach window).</summary>
+        public Task<MediaAsset> SeedAsync(
+            MediaAssetStatus status,
+            int attemptCount,
+            TimeSpan quietFor,
+            TimeSpan? issuedAgo = null)
         {
             var now = Database.Time.GetUtcNow().UtcDateTime;
             return Database.SeedAssetAsync(
-                status, createdAt: now.AddHours(-1), updatedAt: now - quietFor, attemptCount: attemptCount);
+                status,
+                createdAt: now - (issuedAgo ?? TimeSpan.FromMinutes(10)),
+                updatedAt: now - quietFor,
+                attemptCount: attemptCount);
         }
 
         public ValueTask DisposeAsync() => Database.DisposeAsync();

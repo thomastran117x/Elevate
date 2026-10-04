@@ -33,6 +33,12 @@ public sealed class MediaValidationRecorder
     /// Records <paramref name="outcome"/> for claim <paramref name="attempt"/> on
     /// <paramref name="asset"/>, then deletes the quarantined bytes.
     /// </summary>
+    /// <remarks>
+    /// A claim that was released back to Uploaded — its publish timed out but was delivered
+    /// anyway, or it outlived the window the reconciler re-drives in — still accepts its own
+    /// verdict, as long as no newer claim has been taken: the bytes it judged are the ones any
+    /// newer claim would read, and dropping a good verdict would only mean decoding them again.
+    /// </remarks>
     /// <returns>
     /// True once the outcome is recorded. False when the claim was no longer held — taken over,
     /// already recorded, or the row deleted with its account — in which case nothing is changed
@@ -62,13 +68,12 @@ public sealed class MediaValidationRecorder
                 ClearQuarantineBlobPath = true
             };
 
-        var recorded = await _repository.TryTransitionAsync(
-            asset.Id,
-            MediaAssetStatus.Processing,
-            outcome.Accepted ? MediaAssetStatus.Ready : MediaAssetStatus.Rejected,
-            changes,
-            CancellationToken.None,
-            whenAttempt: attempt);
+        var settled = outcome.Accepted ? MediaAssetStatus.Ready : MediaAssetStatus.Rejected;
+        var recorded =
+            await _repository.TryTransitionAsync(
+                asset.Id, MediaAssetStatus.Processing, settled, changes, CancellationToken.None, whenAttempt: attempt)
+            || await _repository.TryTransitionAsync(
+                asset.Id, MediaAssetStatus.Uploaded, settled, changes, CancellationToken.None, whenAttempt: attempt);
 
         if (!recorded)
         {

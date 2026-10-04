@@ -1,3 +1,4 @@
+using backend.main.shared.storage;
 using backend.main.shared.utilities.logger;
 
 namespace backend.main.features.media;
@@ -9,9 +10,12 @@ namespace backend.main.features.media;
 /// request is published directly rather than through an outbox.
 /// </summary>
 /// <remarks>
-/// Backs off by attempt — two minutes after the first claim, then four, eight, and so on — and
-/// after <see cref="MaxAttempts"/> claims gives up and parks the asset in NeedsReview, keeping
-/// its bytes, rather than re-drive a poison image forever.
+/// Re-drives only while the upload can still be attached — within its intent's lifetime — because
+/// after that no request can use the verdict. Backs off by attempt in that window: two minutes
+/// after a claim, then four, then eight. A claim still open once the window has passed is released
+/// back to Uploaded, where the quarantine reaper expires it with its bytes once it is a day old.
+/// Nothing here gives up into NeedsReview: an unanswered claim says nothing about the image, so an
+/// outage must not park good uploads where nothing would ever release them.
 /// <para>
 /// Not leader-elected. Every step is a conditional update keyed to the claim, so two instances
 /// sweeping at once only race for the same claim, and one of them wins.
@@ -24,9 +28,16 @@ namespace backend.main.features.media;
 public sealed class MediaValidationReconcilerRunner
 {
     internal static readonly TimeSpan BaseBackoff = TimeSpan.FromMinutes(2);
-    internal static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(30);
-    internal const int MaxAttempts = 5;
+    internal static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(8);
+
+    /// <summary>Upper bound on assets re-driven or released per run.</summary>
     internal const int BatchSize = 100;
+
+    /// <summary>
+    /// Upper bound on pages read per run. Rows still inside their backoff are skipped rather than
+    /// counted, so without paging a batch full of them would hide every due row behind it.
+    /// </summary>
+    internal const int MaxPages = 20;
 
     /// <summary>
     /// The attach that knew whether this was an event or a club image is long gone, so a size
@@ -48,31 +59,50 @@ public sealed class MediaValidationReconcilerRunner
         _timeProvider = timeProvider;
     }
 
+    /// <summary>How long after it was issued an upload can still be attached.</summary>
+    internal static TimeSpan AttachWindow => BlobUploadIntentValidator.IntentTtl;
+
     public async Task<MediaValidationReconcileResult> RunOnceAsync(CancellationToken cancellationToken = default)
     {
         var now = _timeProvider.GetUtcNow().UtcDateTime;
-        var candidates = await _repository.GetStalledBeforeAsync(now - BaseBackoff, BatchSize, cancellationToken);
+        var attachableSince = now - AttachWindow;
 
         var redriven = 0;
-        var parked = 0;
+        var released = 0;
+        (DateTime UpdatedAt, int Id)? after = null;
 
-        foreach (var asset in candidates)
+        for (var page = 0; page < MaxPages && redriven + released < BatchSize; page++)
         {
-            if (asset.UpdatedAt > now - BackoffFor(asset.AttemptCount))
-                continue;
+            var rows = await _repository.GetStalledBeforeAsync(
+                now - BaseBackoff, attachableSince, BatchSize, after, cancellationToken);
 
-            switch (await ReconcileAsync(asset, cancellationToken))
+            foreach (var asset in rows)
             {
-                case Reconciled.Redriven:
+                if (redriven + released >= BatchSize)
+                    break;
+
+                if (asset.CreatedAt < attachableSince)
+                {
+                    // Only Processing rows come back past the window.
+                    if (await ReleaseAsync(asset, cancellationToken))
+                        released++;
+                    continue;
+                }
+
+                if (asset.UpdatedAt > now - BackoffFor(asset.AttemptCount))
+                    continue;
+
+                if (await RedriveAsync(asset, cancellationToken))
                     redriven++;
-                    break;
-                case Reconciled.Parked:
-                    parked++;
-                    break;
             }
+
+            if (rows.Count < BatchSize)
+                break;
+
+            after = (rows[^1].UpdatedAt, rows[^1].Id);
         }
 
-        return new MediaValidationReconcileResult(redriven, parked);
+        return new MediaValidationReconcileResult(redriven, released);
     }
 
     /// <summary>How long a claim may go unanswered before it is re-driven.</summary>
@@ -83,36 +113,40 @@ public sealed class MediaValidationReconcilerRunner
         return backoff < MaxBackoff ? backoff : MaxBackoff;
     }
 
-    private async Task<Reconciled> ReconcileAsync(MediaAsset asset, CancellationToken cancellationToken)
+    /// <summary>
+    /// Hands an expired claim back without re-driving it. Its verdict, should it still arrive, is
+    /// recorded against Uploaded; otherwise the reaper expires the asset.
+    /// </summary>
+    private async Task<bool> ReleaseAsync(MediaAsset asset, CancellationToken cancellationToken)
     {
-        var givingUp = asset.AttemptCount >= MaxAttempts;
+        var moved = await _repository.TryTransitionAsync(
+            asset.Id,
+            MediaAssetStatus.Processing,
+            MediaAssetStatus.Uploaded,
+            cancellationToken: cancellationToken,
+            whenAttempt: asset.AttemptCount);
 
-        if (asset.Status == MediaAssetStatus.Processing)
+        if (moved)
         {
-            // Only the claim that went quiet: a result recorded since, or a newer claim, wins.
-            var moved = await _repository.TryTransitionAsync(
+            Logger.Info(
+                $"[MediaValidationReconciler] Released claim {asset.AttemptCount} on media asset {asset.PublicId}; it can no longer be attached.");
+        }
+
+        return moved;
+    }
+
+    private async Task<bool> RedriveAsync(MediaAsset asset, CancellationToken cancellationToken)
+    {
+        // Only the claim that went quiet: a result recorded since, or a newer claim, wins.
+        if (asset.Status == MediaAssetStatus.Processing
+            && !await _repository.TryTransitionAsync(
                 asset.Id,
                 MediaAssetStatus.Processing,
-                givingUp ? MediaAssetStatus.NeedsReview : MediaAssetStatus.Uploaded,
+                MediaAssetStatus.Uploaded,
                 cancellationToken: cancellationToken,
-                whenAttempt: asset.AttemptCount);
-
-            if (!moved)
-                return Reconciled.Nothing;
-
-            if (givingUp)
-                return Parked(asset);
-        }
-        else if (givingUp)
+                whenAttempt: asset.AttemptCount))
         {
-            return await _repository.TryTransitionAsync(
-                    asset.Id,
-                    MediaAssetStatus.Uploaded,
-                    MediaAssetStatus.NeedsReview,
-                    cancellationToken: cancellationToken,
-                    whenAttempt: asset.AttemptCount)
-                ? Parked(asset)
-                : Reconciled.Nothing;
+            return false;
         }
 
         var claimed = await _repository.TryTransitionAsync(
@@ -125,7 +159,7 @@ public sealed class MediaValidationReconcilerRunner
 
         // An attach got there first and is driving it now.
         if (!claimed)
-            return Reconciled.Nothing;
+            return false;
 
         var attempt = asset.AttemptCount + 1;
         try
@@ -144,26 +178,12 @@ public sealed class MediaValidationReconcilerRunner
                 MediaAssetStatus.Uploaded,
                 cancellationToken: CancellationToken.None,
                 whenAttempt: attempt);
-            return Reconciled.Nothing;
+            return false;
         }
 
         Logger.Info($"[MediaValidationReconciler] Re-drove media asset {asset.PublicId} under claim {attempt}.");
-        return Reconciled.Redriven;
-    }
-
-    private static Reconciled Parked(MediaAsset asset)
-    {
-        Logger.Warn(
-            $"[MediaValidationReconciler] Gave up on media asset {asset.PublicId} after {asset.AttemptCount} claims; it needs review.");
-        return Reconciled.Parked;
-    }
-
-    private enum Reconciled
-    {
-        Nothing,
-        Redriven,
-        Parked
+        return true;
     }
 }
 
-public readonly record struct MediaValidationReconcileResult(int Redriven, int Parked);
+public readonly record struct MediaValidationReconcileResult(int Redriven, int Released);

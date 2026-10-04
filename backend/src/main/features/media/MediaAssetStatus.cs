@@ -26,8 +26,9 @@ public enum MediaAssetStatus
     Rejected,
 
     /// <summary>
-    /// Held for a person to decide. Set when media-worker's reconciler gives up on an asset it
-    /// could not get validated, and reserved for image moderation. Its quarantined bytes are kept.
+    /// Held for a person to decide. Nothing sets this yet; it is defined now so image moderation
+    /// can use it without renumbering the enum under clients that decode it by position. Its
+    /// quarantined bytes are kept, since a reviewer needs them.
     /// </summary>
     NeedsReview
 }

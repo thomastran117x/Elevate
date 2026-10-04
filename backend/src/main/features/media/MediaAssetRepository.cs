@@ -109,15 +109,29 @@ public class MediaAssetRepository : IMediaAssetRepository
 
     public async Task<List<MediaAsset>> GetStalledBeforeAsync(
         DateTime updatedBefore,
+        DateTime issuedSince,
         int limit,
+        (DateTime UpdatedAt, int Id)? after = null,
         CancellationToken cancellationToken = default)
     {
-        return await _context.MediaAssets
+        var query = _context.MediaAssets
             .AsNoTracking()
             .Where(asset =>
-                (asset.Status == MediaAssetStatus.Uploaded || asset.Status == MediaAssetStatus.Processing) &&
-                asset.UpdatedAt < updatedBefore)
+                (asset.Status == MediaAssetStatus.Processing ||
+                 (asset.Status == MediaAssetStatus.Uploaded && asset.CreatedAt >= issuedSince)) &&
+                asset.UpdatedAt < updatedBefore);
+
+        if (after is { } cursor)
+        {
+            var (afterUpdatedAt, afterId) = cursor;
+            query = query.Where(asset =>
+                asset.UpdatedAt > afterUpdatedAt ||
+                (asset.UpdatedAt == afterUpdatedAt && asset.Id > afterId));
+        }
+
+        return await query
             .OrderBy(asset => asset.UpdatedAt)
+            .ThenBy(asset => asset.Id)
             .Take(limit)
             .ToListAsync(cancellationToken);
     }

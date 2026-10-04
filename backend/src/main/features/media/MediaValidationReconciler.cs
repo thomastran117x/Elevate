@@ -27,10 +27,10 @@ public sealed class MediaValidationReconciler : BackgroundService
                 var runner = scope.ServiceProvider.GetRequiredService<MediaValidationReconcilerRunner>();
                 var result = await runner.RunOnceAsync(stoppingToken);
 
-                if (result.Redriven > 0 || result.Parked > 0)
+                if (result.Redriven > 0 || result.Released > 0)
                 {
                     Logger.Info(
-                        $"[MediaValidationReconciler] Re-drove {result.Redriven} stalled media assets and parked {result.Parked} for review.");
+                        $"[MediaValidationReconciler] Re-drove {result.Redriven} stalled media assets and released {result.Released} that can no longer be attached.");
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

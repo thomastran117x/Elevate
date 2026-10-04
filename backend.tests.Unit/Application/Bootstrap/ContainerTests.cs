@@ -32,6 +32,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
+using Moq;
+
 namespace backend.tests.Unit.Application.Bootstrap;
 
 public class ContainerTests
@@ -259,6 +261,37 @@ public class ContainerTests
         services.Should().Contain(descriptor =>
             descriptor.ServiceType == typeof(IHostedService)
             && descriptor.ImplementationType == typeof(MediaValidationReconciler));
+        ReaperReleasesStaleClaims(services).Should().BeFalse("the reconciler owns the worker's claims");
+    }
+
+    [Fact]
+    public void AddApplicationServices_ShouldLetTheReaperReleaseStaleClaims_WhenValidatingInline()
+    {
+        var config = new ConfigurationBuilder().Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);
+
+        services.AddApplicationServices(config, includeHostedServices: true);
+
+        ReaperReleasesStaleClaims(services).Should().BeTrue();
+    }
+
+    private static bool ReaperReleasesStaleClaims(IServiceCollection services)
+    {
+        var factory = services.Single(descriptor => descriptor.ServiceType == typeof(QuarantineReaperRunner))
+            .ImplementationFactory!;
+        var provider = new Mock<IServiceProvider>();
+        provider.Setup(p => p.GetService(typeof(IMediaAssetRepository))).Returns(Mock.Of<IMediaAssetRepository>());
+        provider.Setup(p => p.GetService(typeof(backend.main.shared.storage.IAzureBlobService)))
+            .Returns(Mock.Of<backend.main.shared.storage.IAzureBlobService>());
+        provider.Setup(p => p.GetService(typeof(TimeProvider))).Returns(TimeProvider.System);
+
+        var runner = (QuarantineReaperRunner)factory(provider.Object);
+
+        return (bool)typeof(QuarantineReaperRunner)
+            .GetField("_releaseStaleClaims", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(runner)!;
     }
 
     [Fact]

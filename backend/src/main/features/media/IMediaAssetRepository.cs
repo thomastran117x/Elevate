@@ -65,14 +65,18 @@ public interface IMediaAssetRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Assets attached but not yet settled — <see cref="MediaAssetStatus.Uploaded"/> or
-    /// <see cref="MediaAssetStatus.Processing"/> — that nothing has moved since
-    /// <paramref name="updatedBefore"/>, oldest first: work media-worker was asked for and never
-    /// reported on, or was never asked for.
+    /// One page of attached assets that nothing has moved since <paramref name="updatedBefore"/>,
+    /// in (<see cref="MediaAsset.UpdatedAt"/>, <see cref="MediaAsset.Id"/>) order: every
+    /// <see cref="MediaAssetStatus.Processing"/> claim, and <see cref="MediaAssetStatus.Uploaded"/>
+    /// assets issued at or after <paramref name="issuedSince"/>. Older Uploaded assets can no
+    /// longer be attached, and are left for the reaper to expire.
     /// </summary>
+    /// <param name="after">The last row of the previous page; null for the first.</param>
     Task<List<MediaAsset>> GetStalledBeforeAsync(
         DateTime updatedBefore,
+        DateTime issuedSince,
         int limit,
+        (DateTime UpdatedAt, int Id)? after = null,
         CancellationToken cancellationToken = default);
 }
 
