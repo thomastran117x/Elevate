@@ -35,6 +35,12 @@ export const MEDIA_ASSET_STATUSES = [
 
 export type MediaAssetStatus = (typeof MEDIA_ASSET_STATUSES)[number];
 
+/**
+ * The error code of an attach that is not a refusal: the image is still being checked. The
+ * upload is fine to keep; attach it again once {@link MediaAssetService.watch} reports it ready.
+ */
+export const MEDIA_PROCESSING_ERROR_CODE = 'MEDIA_PROCESSING';
+
 export interface MediaAsset {
   id: string;
   status: MediaAssetStatus;

@@ -578,6 +578,35 @@
               </div>
             }
 
+            @if (event?.id && awaitingAttach.length > 0) {
+              <!-- Still being checked, so not attached yet; each joins the gallery when it is. -->
+              <ul class="grid grid-cols-3 gap-3 sm:grid-cols-5" aria-label="Images being checked">
+                @for (url of awaitingAttach; track url) {
+                  <li class="relative aspect-square overflow-hidden rounded-xl border border-line">
+                    <img
+                      [src]="srcForImage(url)"
+                      alt=""
+                      class="h-full w-full object-cover opacity-60"
+                    />
+                    <span
+                      class="absolute inset-x-0 top-0 bg-black/50 px-2 py-1 text-center text-xs font-semibold text-white"
+                      role="status"
+                    >
+                      {{ checkLabelForImage(url) ?? 'Checking image…' }}
+                    </span>
+                    <button
+                      type="button"
+                      (click)="removeAwaitingImage(url)"
+                      class="absolute inset-x-2 bottom-2 rounded-lg bg-surface/90 px-2 py-1 text-xs font-semibold text-danger transition hover:bg-surface"
+                      [attr.aria-label]="'Remove image still being checked ' + ($index + 1)"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+
             @if (event?.id) {
               <!-- A saved event has image rows, so the full gallery editor applies. -->
               <app-event-gallery-manager
