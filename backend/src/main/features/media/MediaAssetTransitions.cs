@@ -12,7 +12,15 @@ public static class MediaAssetTransitions
         {
             // Rejected here is the reaper expiring an upload nobody attached within a day.
             [MediaAssetStatus.PendingUpload] = [MediaAssetStatus.Uploaded, MediaAssetStatus.Rejected],
-            [MediaAssetStatus.Uploaded] = [MediaAssetStatus.Processing, MediaAssetStatus.Rejected],
+
+            // Ready and Rejected here are media-worker's verdict on a claim that was released
+            // before it arrived, recorded only while no newer claim has been taken.
+            [MediaAssetStatus.Uploaded] =
+            [
+                MediaAssetStatus.Processing,
+                MediaAssetStatus.Ready,
+                MediaAssetStatus.Rejected
+            ],
 
             // Back to Uploaded releases a claim: a retryable fault (no processing slot, a storage
             // blip) or a claim so old its holder is presumed dead. The bytes are untouched either

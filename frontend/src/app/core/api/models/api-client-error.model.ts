@@ -17,7 +17,7 @@ type ApiClientErrorKind = 'client' | 'server';
 type ApiErrorPayload = {
   message?: unknown;
   Message?: unknown;
-  error?: { details?: unknown; Details?: unknown } | null;
+  error?: { code?: unknown; Code?: unknown; details?: unknown; Details?: unknown } | null;
 };
 
 /**
@@ -105,8 +105,32 @@ export function isApiClientClientError(error: unknown): error is ApiClientClient
   return isApiClientError(error) && error.kind === 'client';
 }
 
+/**
+ * Whether a client error (4xx) carries the backend error `code`. Accepts both the normalized
+ * errors `ApiClient` throws and a raw `HttpErrorResponse` from a service that calls `HttpClient`
+ * directly, which is read the same way `ApiClient` reads it.
+ */
 export function isApiClientErrorCode(error: unknown, code: string): boolean {
-  return isApiClientClientError(error) && error.code === code;
+  if (isApiClientError(error)) {
+    return error.kind === 'client' && error.code === code;
+  }
+
+  return getRawHttpErrorCode(error) === code;
+}
+
+function getRawHttpErrorCode(error: unknown): string | undefined {
+  if (!(error instanceof HttpErrorResponse) || error.status < 400 || error.status >= 500) {
+    return undefined;
+  }
+
+  const payload = error.error;
+  if (typeof payload !== 'object' || payload === null) {
+    return undefined;
+  }
+
+  const body = (payload as ApiErrorPayload).error;
+  const value = body?.code ?? body?.Code;
+  return typeof value === 'string' && value.trim() ? value : undefined;
 }
 
 export function getApiClientMessage(error: unknown, fallback: string): string {

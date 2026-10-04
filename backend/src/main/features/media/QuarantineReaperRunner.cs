@@ -38,15 +38,23 @@ public sealed class QuarantineReaperRunner
     private readonly IMediaAssetRepository _repository;
     private readonly IAzureBlobService _blobService;
     private readonly TimeProvider _timeProvider;
+    private readonly bool _releaseStaleClaims;
 
+    /// <param name="releaseStaleClaims">
+    /// False while media-worker validates. A claim then belongs to a queued request rather than a
+    /// request thread that may have died, and <see cref="MediaValidationReconcilerRunner"/> owns
+    /// re-driving it; releasing it here would only drop the worker's verdict when it arrived.
+    /// </param>
     public QuarantineReaperRunner(
         IMediaAssetRepository repository,
         IAzureBlobService blobService,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        bool releaseStaleClaims = true)
     {
         _repository = repository;
         _blobService = blobService;
         _timeProvider = timeProvider;
+        _releaseStaleClaims = releaseStaleClaims;
     }
 
     public async Task<QuarantineReapResult> RunOnceAsync(CancellationToken cancellationToken = default)
@@ -54,8 +62,9 @@ public sealed class QuarantineReaperRunner
         var now = _timeProvider.GetUtcNow();
         var cutoff = now - MaxAge;
 
-        var released = await ReleaseStaleClaimsAsync(
-            (now - MediaAssetService.StaleProcessingAfter).UtcDateTime, cancellationToken);
+        var released = _releaseStaleClaims
+            ? await ReleaseStaleClaimsAsync((now - MediaAssetService.StaleProcessingAfter).UtcDateTime, cancellationToken)
+            : 0;
         var expired = await ExpireUnattachedAsync(cutoff.UtcDateTime, cancellationToken);
 
         int deleted;
@@ -160,8 +169,17 @@ public sealed class QuarantineReaperRunner
             // released above, so one still Processing here is fresh. Pending and Uploaded owners
             // belong to the expiry pass, which may simply have hit its batch limit; it deletes
             // their bytes when it expires them, and not before.
-            if (owner is { Status: MediaAssetStatus.Processing or MediaAssetStatus.PendingUpload or MediaAssetStatus.Uploaded })
+            // NeedsReview can still become Ready, and a reviewer needs the bytes to decide.
+            if (owner is
+                {
+                    Status: MediaAssetStatus.Processing
+                    or MediaAssetStatus.PendingUpload
+                    or MediaAssetStatus.Uploaded
+                    or MediaAssetStatus.NeedsReview
+                })
+            {
                 continue;
+            }
 
             await _blobService.DeleteQuarantineBlobAsync(blob.Path);
             deleted++;

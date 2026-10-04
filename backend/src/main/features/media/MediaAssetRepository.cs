@@ -26,6 +26,16 @@ public class MediaAssetRepository : IMediaAssetRepository
             .FirstOrDefaultAsync(asset => asset.PublicId == publicId, cancellationToken);
     }
 
+    public async Task<Dictionary<Guid, MediaAsset>> GetByPublicIdsAsync(
+        IReadOnlyCollection<Guid> publicIds,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.MediaAssets
+            .AsNoTracking()
+            .Where(asset => publicIds.Contains(asset.PublicId))
+            .ToDictionaryAsync(asset => asset.PublicId, cancellationToken);
+    }
+
     public async Task<MediaAsset?> GetByQuarantineBlobPathAsync(
         string quarantineBlobPath,
         CancellationToken cancellationToken = default)
@@ -103,6 +113,35 @@ public class MediaAssetRepository : IMediaAssetRepository
             .AsNoTracking()
             .Where(asset => asset.Status == MediaAssetStatus.Processing && asset.UpdatedAt < updatedBefore)
             .OrderBy(asset => asset.UpdatedAt)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<MediaAsset>> GetStalledBeforeAsync(
+        DateTime updatedBefore,
+        DateTime issuedSince,
+        int limit,
+        (DateTime UpdatedAt, int Id)? after = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _context.MediaAssets
+            .AsNoTracking()
+            .Where(asset =>
+                (asset.Status == MediaAssetStatus.Processing ||
+                 (asset.Status == MediaAssetStatus.Uploaded && asset.CreatedAt >= issuedSince)) &&
+                asset.UpdatedAt < updatedBefore);
+
+        if (after is { } cursor)
+        {
+            var (afterUpdatedAt, afterId) = cursor;
+            query = query.Where(asset =>
+                asset.UpdatedAt > afterUpdatedAt ||
+                (asset.UpdatedAt == afterUpdatedAt && asset.Id > afterId));
+        }
+
+        return await query
+            .OrderBy(asset => asset.UpdatedAt)
+            .ThenBy(asset => asset.Id)
             .Take(limit)
             .ToListAsync(cancellationToken);
     }

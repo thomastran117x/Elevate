@@ -129,6 +129,59 @@ public class WorkerOptionsEnvironmentTests
         harness.GetString(options, "DlqTopic").Should().Be("eventxperience-email-dlq");
     }
 
+    [Fact]
+    public void MediaWorkerOptions_FromEnvironment_ShouldReadConfiguredValues()
+    {
+        using var scope = new EnvironmentVariableScope(new Dictionary<string, string?>
+        {
+            ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
+            ["KAFKA_BOOTSTRAP_SERVERS"] = "kafka:9092",
+            ["MEDIA_VALIDATION_TOPIC"] = "custom-media",
+            ["MEDIA_VALIDATION_GROUP_ID"] = "media-group",
+            ["MEDIA_VALIDATION_DLQ_TOPIC"] = "media-dlq",
+            ["MEDIA_VALIDATION_STATUS_TOPIC"] = "media-status",
+            ["AZURE_STORAGE_CONNECTION_STRING"] = "UseDevelopmentStorage=true",
+            ["AZURE_STORAGE_CONTAINER_NAME"] = "public-assets",
+            ["AZURE_STORAGE_QUARANTINE_CONTAINER_NAME"] = "held-assets"
+        });
+
+        using var harness = AssemblyOptionsHarness.Load("media-worker.dll", "backend.worker.media_worker.MediaWorkerOptions");
+        var options = harness.InvokeFromEnvironment();
+
+        harness.GetString(options, "BootstrapServers").Should().Be("kafka:9092");
+        harness.GetString(options, "Topic").Should().Be("custom-media");
+        harness.GetString(options, "GroupId").Should().Be("media-group");
+        harness.GetString(options, "DlqTopic").Should().Be("media-dlq");
+        harness.GetString(options, "StatusTopic").Should().Be("media-status");
+        harness.GetNullableString(options, "AzureStorageConnectionString").Should().Be("UseDevelopmentStorage=true");
+        harness.GetNullableString(options, "PublicContainerName").Should().Be("public-assets");
+        harness.GetNullableString(options, "QuarantineContainerName").Should().Be("held-assets");
+    }
+
+    [Fact]
+    public void MediaWorkerOptions_FromEnvironment_ShouldUseDefaultsWhenTopicSettingsAreMissing()
+    {
+        using var scope = new EnvironmentVariableScope(new Dictionary<string, string?>
+        {
+            ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
+            ["KAFKA_BOOTSTRAP_SERVERS"] = "kafka:9092",
+            ["MEDIA_VALIDATION_TOPIC"] = null,
+            ["MEDIA_VALIDATION_GROUP_ID"] = null,
+            ["MEDIA_VALIDATION_DLQ_TOPIC"] = null,
+            ["MEDIA_VALIDATION_STATUS_TOPIC"] = null,
+            ["AZURE_STORAGE_QUARANTINE_CONTAINER_NAME"] = null
+        });
+
+        using var harness = AssemblyOptionsHarness.Load("media-worker.dll", "backend.worker.media_worker.MediaWorkerOptions");
+        var options = harness.InvokeFromEnvironment();
+
+        harness.GetString(options, "Topic").Should().Be("eventxperience-media-validation");
+        harness.GetString(options, "GroupId").Should().Be("media-worker");
+        harness.GetString(options, "DlqTopic").Should().Be("eventxperience-media-validation-dlq");
+        harness.GetString(options, "StatusTopic").Should().Be("eventxperience-media-validation-status");
+        harness.GetNullableString(options, "QuarantineContainerName").Should().Be("event-assets-quarantine");
+    }
+
     private sealed class AssemblyOptionsHarness : IDisposable
     {
         private readonly AssemblyLoadContext _loadContext;

@@ -34,7 +34,8 @@ public sealed class FeatureFlagRegistry
             FeatureFlagKeys.SearchReindex,
             FeatureFlagKeys.Storage,
             FeatureFlagKeys.StorageOrphanCleanup,
-            FeatureFlagKeys.StorageQuarantine
+            FeatureFlagKeys.StorageQuarantine,
+            FeatureFlagKeys.StorageQuarantineInline
         ]);
 
     public FeatureFlagRegistry(IEnumerable<string> keys)

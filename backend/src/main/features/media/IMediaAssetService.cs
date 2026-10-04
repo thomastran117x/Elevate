@@ -39,7 +39,30 @@ public interface IMediaAssetService
         string subject,
         Action<BlobUploadIntent>? checkScope = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <see cref="AttachAsync"/> for every image one save attaches, as a unit: every intent and
+    /// scope check runs before any image is processed, and where validation is handed off, every
+    /// image is handed off before the save waits once for all of them, rather than once each.
+    /// Returns the intents in the order given; throws the first problem found.
+    /// </summary>
+    /// <exception cref="MediaStillProcessingException">
+    /// Some image was not validated within the wait. The others may already be Ready.
+    /// </exception>
+    Task<IReadOnlyList<BlobUploadIntent>> AttachAllAsync(
+        int userId,
+        IReadOnlyList<MediaAttachment> attachments,
+        CancellationToken cancellationToken = default);
 }
+
+/// <summary>One image a save attaches.</summary>
+/// <param name="ImageUrl">The public URL the upload was issued with.</param>
+/// <param name="Subject">Names the upload in messages — "Event images" or "Club images".</param>
+/// <param name="CheckScope">The caller's own checks on the intent (the right club, the right event).</param>
+public sealed record MediaAttachment(
+    string ImageUrl,
+    string Subject,
+    Action<BlobUploadIntent>? CheckScope = null);
 
 /// <summary>What a presigned upload is for and where it will be stored.</summary>
 /// <param name="UserId">The user the upload is issued to.</param>

@@ -9,10 +9,10 @@ From the repository root, prepare `.env` from `.env.example` without overwriting
 ```powershell
 docker compose up --build -d
 docker compose ps
-docker compose logs -f backend event-indexer club-indexer clubpost-indexer
+docker compose logs -f backend event-indexer club-indexer clubpost-indexer media-worker
 ```
 
-Compose provisions PostgreSQL with logical replication, Redis, Elasticsearch, Kafka, topic initialization, Kafka Connect, outbox connector registration, the API, frontend, and five workers. Application containers use service DNS names. Browser-facing URLs must be reachable from the user's browser, rather than container-only hostnames.
+Compose provisions PostgreSQL with logical replication, Redis, Elasticsearch, Kafka, topic initialization, Kafka Connect, outbox connector registration, the API, frontend, and six workers. Application containers use service DNS names. Browser-facing URLs must be reachable from the user's browser, rather than container-only hostnames.
 
 The API listens on 8090 and applies migrations before serving normal traffic. A database connection or migration failure terminates startup. Review migrations and back up persistent data before upgrades; startup migration execution is part of the current implementation and must be accounted for when scaling API replicas. Keep seeding and auth seed-account bypass disabled outside controlled demos.
 
@@ -39,7 +39,7 @@ Public environment values and frontend flags are baked into the build. Rebuild f
 - Coordinate shared feature flags between the backend and frontend build. Verify flags absent from Compose mappings explicitly rather than assuming every backend option is forwarded.
 - Provision persistent storage and backups for authoritative database data and the infrastructure state you intend to retain. Monitor database connectivity, connector state, Kafka consumer lag and DLQs, Elasticsearch updates, notification delivery, API error rates, and logs.
 
-Use `docker compose logs` for API and worker diagnostics. Query a documented read endpoint to check API behavior and test an actual search update and hub connection. There is no dedicated API health endpoint mapped in the current entry point. Empty SMTP/Twilio settings disable their consumers; a running worker container does not prove messages are being delivered. See individual [worker READMEs](../backend/README.md#workers).
+Use `docker compose logs` for API and worker diagnostics. Query a documented read endpoint to check API behavior and test an actual search update and hub connection. There is no dedicated API health endpoint mapped in the current entry point. Empty SMTP/Twilio settings disable their consumers, and empty storage settings idle the media worker; a running worker container does not prove messages are being delivered. See individual [worker READMEs](../backend/README.md#workers).
 
 ## Blob storage
 
@@ -75,10 +75,22 @@ The API's hourly quarantine reaper deletes uploads that were never attached. As 
 
 The `mediaassets` migration runs at startup like every other migration. It backfills one `Legacy` asset per existing image URL, without touching the blobs themselves.
 
+### Validating in media-worker
+
+By default the API validates an attached upload inside the attach request. Setting `FEATURE_STORAGE_QUARANTINE_INLINE=false` hands that work to [media-worker](../backend/src/worker/media-worker/README.md) instead, which is what Compose does. To switch a deployment over:
+
+1. Create the `MEDIA_VALIDATION_*` request, DLQ and status topics. Compose's `kafka-init` creates them.
+2. Deploy media-worker with Kafka, `AZURE_STORAGE_CONNECTION_STRING`, and both container names. It never connects to PostgreSQL, so the `mediaassets` migration only has to have run on the API.
+3. Set the flag to false on the API. The API then consumes the status topic and runs the reconciler.
+
+A save waits up to ten seconds, once, for the worker's verdict on all of its images. Otherwise it returns 409, "still being checked", with error code `MEDIA_PROCESSING`, and the event editor attaches the image when it is ready. A request the broker does not accept within five seconds returns 503 instead. The asset stays Processing, and the API's reconciler re-drives it with backoff for as long as the upload can still be attached, 20 minutes. After that it releases the claim, and the reaper expires the upload at 24 hours. Watch the DLQ and the reconciler's log lines. A long outage loses no uploads, but users must upload again any image whose 20-minute window passed while the worker was down.
+
+**To roll back to inline validation**, set `FEATURE_STORAGE_QUARANTINE_INLINE=true`. Assets the worker left Processing are released once their claim is five minutes old, by the next attach of the same upload or by the hourly quarantine reaper, and are then validated inline.
+
 **To roll back quarantine**, set `FEATURE_STORAGE_QUARANTINE=false`. Uploads then go straight to the public container and are checked in place, exactly as before. Uploads issued while quarantine was on but not yet attached need to be uploaded again. The reaper keeps running and deletes what quarantine held.
 
 ## Kubernetes assets and gaps
 
 [`eventxperience.yml`](../eventxperience.yml) supplies namespace, service, deployment, and storage resources for a local cluster. [`bin/k8.ps1`](../bin/k8.ps1), exposed by `.\app.ps1 k8`, builds local images, applies the manifest, waits for core deployments, and starts port forwarding. It builds for `linux/arm64` and assumes those image tags are available to the target cluster; it does not publish them to a registry.
 
-Review and adapt these assets before using them: the helper does not build the SMS image, the manifest lacks the club indexer and the Compose Kafka Connect/outbox initialization path, credentials include development defaults/empty provider values, and frontend production SSR packaging and ingress/TLS are not supplied. Do not assume Kubernetes has functional parity with Compose. Complete image delivery, secret management, persistent storage, connector/topic provisioning, rollout probes, and infrastructure security for the intended environment as a separate implementation task.
+Review and adapt these assets before using them: the helper does not build the SMS or media worker images, the manifest has no media worker deployment, the manifest lacks the club indexer and the Compose Kafka Connect/outbox initialization path, credentials include development defaults/empty provider values, and frontend production SSR packaging and ingress/TLS are not supplied. Do not assume Kubernetes has functional parity with Compose. Complete image delivery, secret management, persistent storage, connector/topic provisioning, rollout probes, and infrastructure security for the intended environment as a separate implementation task.

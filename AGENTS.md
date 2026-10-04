@@ -27,7 +27,7 @@ When reviewing a pull request, assess both behavioral correctness and code quali
 
 ## Project boundaries
 
-The frontend is Angular 22/TypeScript with SSR, NgRx, RxJS, Tailwind, and ZoneJS. All .NET projects target .NET 10; `global.json` selects the SDK. The backend uses PostgreSQL/EF Core, Redis, Elasticsearch, and Kafka. Five standalone workers handle search indexing and notifications.
+The frontend is Angular 22/TypeScript with SSR, NgRx, RxJS, Tailwind, and ZoneJS. All .NET projects target .NET 10; `global.json` selects the SDK. The backend uses PostgreSQL/EF Core, Redis, Elasticsearch, and Kafka. Six standalone workers handle search indexing, notifications, and image validation.
 
 Follow neighboring names, imports, namespaces, file placement, and formatting. Keep changes within the requested scope. Preserve established architecture and contracts; avoid incidental module/store/ZoneJS/hydration migrations or dependency upgrades. Verify conventions against code when documentation and implementation disagree, and update stale documentation in scope.
 

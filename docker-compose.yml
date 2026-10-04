@@ -93,6 +93,13 @@ services:
       # Topics the backend publishes to (consumed by the workers).
       EMAIL_TOPIC: "${EMAIL_TOPIC:-eventxperience-email}"
       SMS_TOPIC: "${SMS_TOPIC:-eventxperience-sms}"
+      MEDIA_VALIDATION_TOPIC: "${MEDIA_VALIDATION_TOPIC:-eventxperience-media-validation}"
+      # Results the backend consumes from media-worker.
+      MEDIA_VALIDATION_STATUS_TOPIC: "${MEDIA_VALIDATION_STATUS_TOPIC:-eventxperience-media-validation-status}"
+      MEDIA_VALIDATION_STATUS_GROUP_ID: "${MEDIA_VALIDATION_STATUS_GROUP_ID:-media-validation-status-updater}"
+      # Compose runs media-worker, so attach hands image validation to it instead of running
+      # the pipeline inside the request. Set true to validate inline.
+      FEATURE_STORAGE_QUARANTINE_INLINE: "${FEATURE_STORAGE_QUARANTINE_INLINE:-false}"
       FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3090}"
       # OAuth. The backend reads MS_CLIENT_ID; the single source var is MSAL_CLIENT_ID
       # (also consumed by the frontend), mapped here.
@@ -239,6 +246,30 @@ services:
     networks:
       - event-network
 
+  media-worker:
+    container_name: event-media-worker
+    build:
+      context: ./backend
+      dockerfile: src/worker/media-worker/Dockerfile
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      <<: [*common-env, *kafka-env]
+      MEDIA_VALIDATION_TOPIC: "${MEDIA_VALIDATION_TOPIC:-eventxperience-media-validation}"
+      MEDIA_VALIDATION_GROUP_ID: "${MEDIA_VALIDATION_GROUP_ID:-media-worker}"
+      MEDIA_VALIDATION_DLQ_TOPIC: "${MEDIA_VALIDATION_DLQ_TOPIC:-eventxperience-media-validation-dlq}"
+      MEDIA_VALIDATION_STATUS_TOPIC: "${MEDIA_VALIDATION_STATUS_TOPIC:-eventxperience-media-validation-status}"
+      # Same account and containers as the backend: reads quarantine, writes the public container.
+      AZURE_STORAGE_CONNECTION_STRING: "${AZURE_STORAGE_CONNECTION_STRING:-}"
+      AZURE_STORAGE_CONTAINER_NAME: "${AZURE_STORAGE_CONTAINER_NAME:-}"
+      AZURE_STORAGE_QUARANTINE_CONTAINER_NAME: "${AZURE_STORAGE_QUARANTINE_CONTAINER_NAME:-event-assets-quarantine}"
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    networks:
+      - event-network
+
   sms-worker:
     container_name: event-sms-worker
     build:
@@ -378,6 +409,9 @@ services:
         kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-email-status --partitions 1 --replication-factor 1
         kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-sms --partitions 1 --replication-factor 1
         kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-sms-dlq --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-media-validation --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-media-validation-dlq --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-media-validation-status --partitions 1 --replication-factor 1
         echo "All Kafka topics created."
     networks:
       - event-network

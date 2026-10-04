@@ -30,14 +30,18 @@ namespace backend.main.shared.providers
             }).Build();
         }
 
-        public async Task PublishAsync<T>(string topic, T message)
+        public Task PublishAsync<T>(string topic, T message) =>
+            PublishAsync(topic, message, CancellationToken.None);
+
+        public async Task PublishAsync<T>(string topic, T message, CancellationToken cancellationToken)
         {
             await _producer.ProduceAsync(
                 topic,
                 new Message<string, string>
                 {
                     Value = JsonSerializer.Serialize(message, JsonOptions.Default)
-                }
+                },
+                cancellationToken
             );
         }
 
