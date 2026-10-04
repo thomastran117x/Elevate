@@ -52,6 +52,13 @@ Use Playwright for affected browser journeys. Format only affected frontend file
 
 CI also audits dependencies: NuGet high/critical advisories, npm production high advisories, and npm moderate advisories across all dependencies. Do not weaken tests, coverage floors, build budgets, or audit gates to pass a change.
 
+The all-dependencies npm gate (`npm run audit:dependencies` in `frontend/`) reads exceptions from `frontend/audit-allowlist.json`. Use an entry only for an advisory that has no patched release and that cannot be reached from untrusted input, and never for the production gate. Each entry:
+- names one advisory id and one package
+- says why the advisory is not exploitable here
+- links an issue that tracks the real fix
+
+The script fails once an entry's advisory is no longer reported, so remove the entry together with the fix.
+
 ## Pull requests
 
 Keep the pull request focused and structure its description with:

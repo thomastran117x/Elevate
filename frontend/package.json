@@ -12,9 +12,11 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "test:e2e": "playwright test",
+    "test:scripts": "node --test \"scripts/*.test.mjs\"",
     "playwright:install": "playwright install",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "audit:dependencies": "node scripts/audit-dependencies.mjs --audit-level=moderate"
   },
   "prettier": {
     "printWidth": 100,
