@@ -83,7 +83,7 @@ By default the API validates an attached upload inside the attach request. Setti
 2. Deploy media-worker with Kafka, `AZURE_STORAGE_CONNECTION_STRING`, and both container names. It never connects to PostgreSQL, so the `mediaassets` migration only has to have run on the API.
 3. Set the flag to false on the API. The API then consumes the status topic and runs the reconciler.
 
-An attach waits up to ten seconds for the worker's verdict and otherwise returns 409, "still being checked". The asset stays Processing, and the API's reconciler re-drives it with backoff, parking it in NeedsReview after five unanswered claims. Watch the DLQ and the reconciler's log lines. A NeedsReview asset keeps its quarantined bytes for review.
+A save waits up to ten seconds, once, for the worker's verdict on all of its images. Otherwise it returns 409, "still being checked", with error code `MEDIA_PROCESSING`, and the event editor attaches the image when it is ready. A request the broker does not accept within five seconds returns 503 instead. The asset stays Processing, and the API's reconciler re-drives it with backoff for as long as the upload can still be attached, 20 minutes. After that it releases the claim, and the reaper expires the upload at 24 hours. Watch the DLQ and the reconciler's log lines. A long outage loses no uploads, but users must upload again any image whose 20-minute window passed while the worker was down.
 
 **To roll back to inline validation**, set `FEATURE_STORAGE_QUARANTINE_INLINE=true`. Assets the worker left Processing are released once their claim is five minutes old, by the next attach of the same upload or by the hourly quarantine reaper, and are then validated inline.
 

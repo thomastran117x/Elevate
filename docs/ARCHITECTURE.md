@@ -65,8 +65,9 @@ stateDiagram-v2
     Processing --> Ready: validated, re-encoded, published
     Processing --> Rejected: bytes refused
     Processing --> Uploaded: retryable fault, or stale claim
-    Processing --> NeedsReview: reconciler gives up, or moderation
-    Uploaded --> NeedsReview: reconciler gives up
+    Processing --> NeedsReview: reserved for moderation
+    Uploaded --> Ready: verdict for a released claim
+    Uploaded --> Rejected: verdict for a released claim
     NeedsReview --> Ready
     NeedsReview --> Rejected
     PendingUpload --> Rejected: expired after 24 h
@@ -86,12 +87,19 @@ The quarantine copy is deleted only after the outcome is recorded, so a crash in
 
 With `storage.quarantine.inline` off, the flow is:
 
-1. Attach claims the asset, which bumps `AttemptCount`, and publishes a request with `IPublisher`. The request carries the asset id, the claim number, the quarantine path, the reserved URL, and the declared type.
+1. Attach checks every image a save brings in (each one's intent and scope) before it claims any of them. It then claims each asset, which bumps `AttemptCount`, and publishes a request with `IPublisher`. The request carries the asset id, the claim number, the quarantine path, the reserved URL, and the declared type. A publish that takes more than five seconds counts as the broker being unavailable, and the claim is handed back.
 2. [media-worker](../backend/src/worker/media-worker/README.md) runs the unchanged pipeline and publishes the verdict on a status topic. It never connects to PostgreSQL; it needs only Kafka and the storage account.
 3. The API's `MediaValidationStatusConsumer` records the verdict. This mirrors the email worker's invitation status path.
-4. Meanwhile, attach polls the row for up to ten seconds. Ready proceeds, Rejected returns its reason, and a timeout returns 409, "still being checked". The editor already polls `GET /api/media/{publicId}` and retries.
+4. Meanwhile, the save waits once, for up to ten seconds, for all of its images together. It reads them in one query, less often as the wait goes on. Ready proceeds, and Rejected returns its reason. A timeout returns 409, "still being checked", with error code `MEDIA_PROCESSING`. That is not a refusal: the event editor keeps the image, follows `GET /api/media/{publicId}`, and attaches it once it is Ready.
 
-There is no outbox for these requests. The outbox exists to make a Kafka publish atomic with a database write when nothing else records that the work is owed. Here the `MediaAssets` row already records it: an asset in Uploaded or Processing is queryable, undelivered work. `MediaValidationReconciler` runs every minute and re-drives assets the worker never answered: a request lost before the broker, a worker killed mid-pipeline, or a dead-lettered request. It releases and re-claims each one, backing off by `AttemptCount` (2, 4, 8 minutes, up to 30). After five claims it parks the asset in NeedsReview rather than retry a poison image forever.
+There is no outbox for these requests. The outbox exists to make a Kafka publish atomic with a database write when nothing else records that the work is owed. Here the `MediaAssets` row already records it: an asset in Uploaded or Processing is queryable, undelivered work. `MediaValidationReconciler` runs every minute and re-drives assets the worker never answered: a request lost before the broker, a worker killed mid-pipeline, or a dead-lettered request.
+
+- **Each re-drive** releases and re-claims the asset, backing off by `AttemptCount`: 2, 4, then 8 minutes. The sweep pages past assets still in their backoff, so a backlog of those cannot hide assets that are due.
+- **The window:** it re-drives only while the upload can still be attached, within its 20-minute intent lifetime. After that, no request could use the verdict.
+- **After the window:** a claim still open is released to Uploaded, and the quarantine reaper expires it, bytes and all, at 24 hours.
+- **No give-up state:** nothing parks an asset in NeedsReview. An unanswered claim says nothing about the image, so an outage must not strand good uploads.
+
+While media-worker validates, the quarantine reaper does not release stale claims. They belong to queued requests, not to a request thread that may have died. A verdict that arrives after its claim was released is still recorded, as long as no newer claim has been taken.
 
 **Public reads never see an unvalidated image, by construction.** An attach path writes a URL onto an event, club, or user only after its asset is Ready, so a rejected or unfinished upload never reaches a row a public page reads, and no read path filters on asset status. That holds in both modes, because attach waits for the worker's verdict rather than returning before it.
 
@@ -104,9 +112,9 @@ That remains an option if the bounded wait proves too slow.
 
 `QuarantineReaper` runs hourly. It does three things:
 
-- It releases claims stuck in Processing for more than five minutes, back to Uploaded. That covers an attach killed mid-pipeline, where no exception handler ran. In media-worker mode the reconciler usually re-drives such claims first.
+- With inline validation, it releases claims stuck in Processing for more than five minutes, back to Uploaded. That covers an attach killed mid-pipeline, where no exception handler ran. In media-worker mode it leaves claims to the reconciler.
 - It expires uploads that were issued and never attached within 24 hours.
-- It deletes quarantined blobs older than a day that no asset is working on. The orphan sweeper cannot see the quarantine container, and nothing else removes a blob a client uploaded and never attached. It keeps the bytes of NeedsReview assets, since a reviewer can still approve them. The reaper is gated on the `storage` parent flag, so turning quarantine off still drains what it holds. The orphan sweeper treats the public URL of an upload still in flight (not yet Ready or Rejected) as a reference, so a promotion awaiting its Ready write is never swept. Once an asset has settled, only the owning columns count. An image removed from its event, or promoted by an attach whose save then failed, is therefore reclaimed like any other orphan, and its ledger row is deleted with the blob.
+- It deletes quarantined blobs older than a day that no asset is working on. The orphan sweeper cannot see the quarantine container, and nothing else removes a blob a client uploaded and never attached. It keeps the bytes of NeedsReview assets, reserved for moderation, since a reviewer can still approve them. The reaper is gated on the `storage` parent flag, so turning quarantine off still drains what it holds. The orphan sweeper treats the public URL of an upload still in flight (not yet Ready or Rejected) as a reference, so a promotion awaiting its Ready write is never swept. Once an asset has settled, only the owning columns count. An image removed from its event, or promoted by an attach whose save then failed, is therefore reclaimed like any other orphan, and its ledger row is deleted with the blob.
 
 `MediaAssets` is an upload ledger, not a reference count. Nothing references it by foreign key yet. Deleting an event deletes its blobs but leaves their asset rows, and one URL can be shared by several recurrence occurrences. Existing images were backfilled as `Legacy` assets with `ValidatedAt` null, which marks the backlog that was never re-checked.
 

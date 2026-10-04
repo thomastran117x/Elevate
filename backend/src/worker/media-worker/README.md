@@ -49,7 +49,7 @@ Use `backend/` as the build context, because the worker shares the pipeline and 
 
 - **The pipeline runs.** It retries a fault up to three times, with an exponential delay starting at 500 ms. A fault here means anything that is not a verdict on the bytes, such as no free processing slot or a storage error.
 - **A refused image** is an outcome, not a failure. It is reported like an accepted one.
-- **Malformed requests and exhausted retries** go to the DLQ. The asset stays Processing, and the API's `MediaValidationReconciler` re-drives it once the claim is stale.
+- **Malformed requests and exhausted retries** go to the DLQ. The asset stays Processing, and the API's `MediaValidationReconciler` re-drives it once the claim is stale, for as long as the upload can still be attached.
 - **A result that cannot be published** propagates. The offset stays uncommitted, the consumer reconnects after five seconds, and the request runs again.
 
 The consumer starts at the earliest offset when its group has no committed position, and it disables auto-commit. It commits after processing returns, including after a successful DLQ publication.

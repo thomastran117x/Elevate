@@ -1,7 +1,7 @@
 namespace backend.main.features.media;
 
 /// <summary>
-/// Gets a claimed asset validated. <c>storage.inlinevalidation</c> picks the implementation: run
+/// Gets a claimed asset validated. <c>storage.quarantine.inline</c> picks the implementation: run
 /// the pipeline here and now, or hand the asset to media-worker and let its result arrive later.
 /// </summary>
 public interface IMediaValidationDispatcher
