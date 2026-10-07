@@ -66,6 +66,17 @@ public class AuthRequestValidationTests
     }
 
     [Fact]
+    public void EmailAvailabilityRequest_ShouldAllowMissingCaptchaForControllerHandling()
+    {
+        var request = new EmailAvailabilityRequest
+        {
+            Email = "member@test.local"
+        };
+
+        Validate(request).Should().BeEmpty();
+    }
+
+    [Fact]
     public void ChangePasswordRequest_ShouldEnforceStrongPasswordAndCodeLength()
     {
         var request = new ChangePasswordRequest

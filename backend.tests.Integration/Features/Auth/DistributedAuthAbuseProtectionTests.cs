@@ -6,6 +6,8 @@ using backend.main.application.security;
 using backend.main.features.auth.abuse;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.token;
+using backend.main.utilities;
 using backend.tests.Integration.Infrastructure;
 
 using FluentAssertions;
@@ -95,15 +97,25 @@ public sealed class DistributedAuthAbuseProtectionTests
     {
         await using var app = await CreateRateLimitedAppAsync();
         using var peer = app.CreatePeerClient();
-        await app.SeedUserAsync("reset-login@example.com", username: "reset-login");
+        var user = await app.SeedUserAsync(
+            "reset-login@example.com",
+            username: "reset-login");
+        await app.SeedKnownDeviceAsync(user.Id, "known-device");
 
         (await LoginAsync(app, app.Client, "reset-login", "wrong-1", "203.0.113.31"))
             .StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         (await LoginAsync(app, app.Client, "reset-login", "wrong-2", "203.0.113.32"))
             .StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
-        (await LoginAsync(app, peer, "reset-login", "Password123!", "203.0.113.33"))
-            .StatusCode.Should().Be(HttpStatusCode.OK);
+        var successful = await LoginAsync(
+            app,
+            peer,
+            "reset-login",
+            "Password123!",
+            "203.0.113.33");
+        successful.StatusCode.Should().Be(
+            HttpStatusCode.OK,
+            await app.DescribeFailureAsync(successful));
 
         (await LoginAsync(app, app.Client, "reset-login", "wrong-3", "203.0.113.34"))
             .StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -206,13 +218,13 @@ public sealed class DistributedAuthAbuseProtectionTests
     [Fact]
     public async Task UnavailableSharedStore_ShouldRetainLocalIpLimiter()
     {
-        var logs = new RecordingLoggerProvider();
+        var logs = new RecordingLogger<AuthAbuseProtectionService>();
         await using var app = await AuthApiTestApp.CreateAsync(
             services =>
             {
                 services.RemoveAll<IAuthAbuseProtectionStore>();
                 services.AddSingleton<IAuthAbuseProtectionStore, UnavailableStore>();
-                services.AddSingleton<ILoggerProvider>(logs);
+                services.AddSingleton<ILogger<AuthAbuseProtectionService>>(logs);
             },
             RateLimitedConfiguration());
 
@@ -271,17 +283,22 @@ public sealed class DistributedAuthAbuseProtectionTests
         string password,
         string sourceIp)
     {
-        return await PostWithSourceAsync(
-            app,
-            client,
-            "/api/auth/login",
-            new LoginRequest
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")
+        {
+            Content = JsonContent.Create(new LoginRequest
             {
                 Username = username,
                 Password = password,
                 Captcha = "test-captcha",
-            },
-            sourceIp);
+                Transport = SessionTransportResolver.ApiValue,
+            })
+        };
+        request.Headers.Add("X-Forwarded-For", sourceIp);
+        request.Headers.Add(HttpUtility.TrustedDeviceHeaderName, "known-device");
+        request.Headers.Add(
+            CsrfConfiguration.CsrfHeaderName,
+            await app.GetCsrfTokenAsync(client));
+        return await client.SendAsync(request);
     }
 
     private static Task<HttpResponseMessage> CheckAvailabilityAsync(
@@ -358,30 +375,21 @@ public sealed class DistributedAuthAbuseProtectionTests
             CancellationToken cancellationToken = default) => Task.FromResult(false);
     }
 
-    private sealed class RecordingLoggerProvider : ILoggerProvider
+    private sealed class RecordingLogger<T> : ILogger<T>
     {
         public ConcurrentQueue<RecordedLog> Events { get; } = new();
 
-        public ILogger CreateLogger(string categoryName) => new RecordingLogger(Events);
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
-        public void Dispose()
-        {
-        }
+        public bool IsEnabled(LogLevel logLevel) => true;
 
-        private sealed class RecordingLogger(ConcurrentQueue<RecordedLog> events) : ILogger
-        {
-            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-            public bool IsEnabled(LogLevel logLevel) => true;
-
-            public void Log<TState>(
-                LogLevel logLevel,
-                EventId eventId,
-                TState state,
-                Exception? exception,
-                Func<TState, Exception?, string> formatter) =>
-                events.Enqueue(new RecordedLog(logLevel, eventId));
-        }
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            Events.Enqueue(new RecordedLog(logLevel, eventId));
     }
 
     private sealed record RecordedLog(LogLevel Level, EventId EventId);

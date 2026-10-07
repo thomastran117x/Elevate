@@ -715,6 +715,34 @@ public class AuthControllerTests
     }
 
     [Fact]
+    public async Task CheckEmailAvailabilityPost_ShouldNormalizeMissingCaptchaAfterSourceBudget()
+    {
+        var captcha = new Mock<ICaptchaService>();
+        var abuse = CreateAbuseProtection();
+        var controller = CreateController(
+            captchaService: captcha,
+            abuseProtection: abuse);
+
+        var result = await controller.CheckEmailAvailability(
+            new EmailAvailabilityRequest { Email = "ada@example.com" },
+            CancellationToken.None);
+
+        AssertErrorResult(result, 401, "Request could not be verified.");
+        abuse.Verify(service => service.EnsureSourceAllowedAsync(
+            AuthAbuseFlow.EmailAvailability,
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        captcha.Verify(service => service.VerifyCaptchaAsync(
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        abuse.Verify(service => service.EnsureTargetAllowedAsync(
+            It.IsAny<AuthAbuseFlow>(),
+            It.IsAny<AuthAbuseTargetKind>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task DeprecatedEmailAvailabilityGet_ShouldRequireCaptchaHeader()
     {
         var controller = CreateController();

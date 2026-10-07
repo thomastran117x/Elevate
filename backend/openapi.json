@@ -26681,8 +26681,7 @@
       },
       "EmailAvailabilityRequest": {
         "required": [
-          "email",
-          "captcha"
+          "email"
         ],
         "type": "object",
         "properties": {
@@ -26690,7 +26689,14 @@
             "$ref": "#/components/schemas/String"
           },
           "captcha": {
-            "$ref": "#/components/schemas/String"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ]
           }
         }
       },

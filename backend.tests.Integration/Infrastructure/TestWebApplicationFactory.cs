@@ -50,7 +50,7 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", "Testing");
         builder.ConfigureAppConfiguration((_, config) =>
         {
-            var settings = new Dictionary<string, string?>(_configurationOverrides)
+            var settings = new Dictionary<string, string?>
             {
                 ["Database:Provider"] = "postgres",
                 ["Database:ConnectionString"] = _testConnectionString,
@@ -66,8 +66,22 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
                 // can set Testing:EnableRateLimiter=true to mount the production middleware with
                 // its normal compiled/configured budgets.
                 ["RateLimiter:PermitLimit"] = "100000",
-                ["RateLimiter:AuthPermitLimit"] = "100000"
+                ["RateLimiter:AuthPermitLimit"] = "100000",
+                // The broad integration suite intentionally suppresses abuse throttles because
+                // its shared factory performs many auth operations from the same test-server IP.
+                // Focused abuse-protection tests override these values with production-like limits.
+                ["Auth:AbuseProtection:SharedIpPermitLimit"] = "100000",
+                ["Auth:AbuseProtection:LoginAccountFailureLimit"] = "100000",
+                ["Auth:AbuseProtection:RecoveryTargetPermitLimit"] = "100000",
+                ["Auth:AbuseProtection:VerificationTargetPermitLimit"] = "100000",
+                ["Auth:AbuseProtection:OAuthCompletionTargetPermitLimit"] = "100000",
+                ["Auth:AbuseProtection:MfaDeliveryTargetPermitLimit"] = "100000",
+                ["Auth:AbuseProtection:EmailAvailabilityIpPermitLimit"] = "100000",
+                ["Auth:AbuseProtection:EmailAvailabilityTargetPermitLimit"] = "100000"
             };
+
+            foreach (var (key, value) in _configurationOverrides)
+                settings[key] = value;
 
             config.AddInMemoryCollection(settings);
         });
@@ -123,4 +137,3 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
         BlobStorage.Clear();
     }
 }
-

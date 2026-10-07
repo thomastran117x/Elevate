@@ -11,8 +11,7 @@ public sealed class EmailAvailabilityRequest
         get; set;
     }
 
-    [Required]
-    public required string Captcha
+    public string? Captcha
     {
         get; set;
     }

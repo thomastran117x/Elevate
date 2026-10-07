@@ -16012,13 +16012,14 @@ components:
     EmailAvailabilityRequest:
       required:
         - email
-        - captcha
       type: object
       properties:
         email:
           $ref: '#/components/schemas/String'
         captcha:
-          $ref: '#/components/schemas/String'
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/String'
     EmailAvailabilityResponse:
       required:
         - email
