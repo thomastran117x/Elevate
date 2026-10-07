@@ -49,7 +49,7 @@ npm run test:e2e
 
 Karma/Jasmine tests are colocated `*.spec.ts` files. Chrome/Chromium is required; coverage enforces 90% for all four metrics. Use `@testing` helpers for HTTP, NgRx, flags, routes, storage, and fixtures.
 
-Playwright tests live in `tests/`; they start the E2E dev server on `http://localhost:3101`. API-backed journeys require backend state; the existing home smoke test checks rendered UI. See [testing](../docs/TESTING.md) for filters and policy.
+Playwright tests live in `tests/`; they start the E2E dev server on `http://localhost:3101`. `npm run test:e2e` runs browser tests that do not depend on a live API and skips the provisioned authentication-abuse journey. Run `npm run test:e2e:auth-abuse` only after starting its backend, seed-data, and CAPTCHA-bypass prerequisites described in [testing](../docs/TESTING.md#frontend-browser-tests).
 
 Prettier uses single quotes, semicolons, trailing commas, and width 100. Format affected paths with `npx prettier --write <paths>`; `npm run format` rewrites the whole frontend.
 

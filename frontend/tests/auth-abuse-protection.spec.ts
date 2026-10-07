@@ -9,6 +9,10 @@ type GrecaptchaWindow = Window & {
 };
 
 test.describe.serial('authentication abuse protection', () => {
+  test.skip(
+    process.env['PLAYWRIGHT_LIVE_AUTH'] !== 'true',
+    'Requires a provisioned backend with seed data and the non-production CAPTCHA bypass.',
+  );
   test.setTimeout(60_000);
 
   test.beforeEach(async ({ page }) => {

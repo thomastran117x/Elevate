@@ -12,6 +12,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "test:e2e": "playwright test",
+    "test:e2e:auth-abuse": "playwright test --config=playwright.auth-abuse.config.ts --project=chromium",
     "test:scripts": "node --test \"scripts/*.test.mjs\"",
     "playwright:install": "playwright install",
     "format": "prettier --write .",
