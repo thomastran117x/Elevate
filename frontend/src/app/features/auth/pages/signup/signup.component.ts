@@ -43,6 +43,7 @@ export class SignupComponent {
   // Injected as a field rather than a constructor parameter: the form initialiser below needs it,
   // and with ES2022 class fields those run before the constructor body assigns parameters.
   private readonly auth = inject(AuthService);
+  private readonly recaptcha = inject(RecaptchaV3Service);
 
   private readonly fb = new FormBuilder();
 
@@ -51,6 +52,7 @@ export class SignupComponent {
 
   /** The last email the API actually confirmed as unregistered; null when we did not get an answer. */
   private readonly confirmedEmailAvailable = signal<string | null>(null);
+  readonly emailAvailabilityUnavailable = signal(false);
 
   readonly siteKey = environment.googleSiteKey;
   readonly roleOptions: Array<{ value: SignupRole; label: string }> = [
@@ -63,7 +65,12 @@ export class SignupComponent {
     email: this.fb.nonNullable.control('', {
       validators: [Validators.required, Validators.email],
       asyncValidators: [
-        emailAvailabilityValidator(this.auth, (email) => this.confirmedEmailAvailable.set(email)),
+        emailAvailabilityValidator(
+          this.auth,
+          (email) => this.confirmedEmailAvailable.set(email),
+          () => this.recaptcha.execute(this.siteKey, 'email_availability'),
+          (unavailable) => this.emailAvailabilityUnavailable.set(unavailable),
+        ),
       ],
     }),
     username: this.fb.nonNullable.control('', {
@@ -132,7 +139,6 @@ export class SignupComponent {
   }
 
   constructor(
-    private recaptcha: RecaptchaV3Service,
     private route: ActivatedRoute,
     private authReturnUrl: AuthReturnUrlService,
   ) {

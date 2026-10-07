@@ -1,5 +1,6 @@
 using backend.main.application.security;
 using backend.main.features.auth;
+using backend.main.features.auth.abuse;
 using backend.main.features.profile.suggestions;
 using backend.main.features.bloom;
 using backend.main.features.auth.captcha;
@@ -87,13 +88,47 @@ public class AuthTotpStepUpControllerTests
             TestRequestInfoFactory.Browser(),
             configuration,
             new Mock<ITokenService>().Object,
-            new Mock<IEmailChangeService>().Object)
+            new Mock<IEmailChangeService>().Object,
+            CreateAbuseProtection().Object)
         {
             ControllerContext = new ControllerContext
             {
                 HttpContext = new DefaultHttpContext()
             }
         };
+    }
+
+    private static Mock<IAuthAbuseProtectionService> CreateAbuseProtection()
+    {
+        var service = new Mock<IAuthAbuseProtectionService>();
+        service.Setup(instance => instance.EnsureSourceAllowedAsync(
+                It.IsAny<AuthAbuseFlow>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        service.Setup(instance => instance.EnsureTargetAllowedAsync(
+                It.IsAny<AuthAbuseFlow>(),
+                It.IsAny<AuthAbuseTargetKind>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        service.Setup(instance => instance.EnsureLoginAllowedAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LoginAbuseState(0, false, false, true, null));
+        service.Setup(instance => instance.RecordLoginFailureAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LoginAbuseState(1, false, false, true, null));
+        service.Setup(instance => instance.DelayFailedLoginAsync(
+                It.IsAny<long>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        service.Setup(instance => instance.ResetLoginFailuresAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        return service;
     }
 
     private static UserToken CreateUserToken()

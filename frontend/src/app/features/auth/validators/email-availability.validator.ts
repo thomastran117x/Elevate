@@ -1,7 +1,12 @@
 import { AsyncValidatorFn } from '@angular/forms';
-import { map } from 'rxjs/operators';
+import { from } from 'rxjs';
+import { map, switchMap } from 'rxjs/operators';
 import { AuthService } from '../services/auth.service';
-import { AvailabilityOutcome, availabilityValidator } from './availability.validator';
+import {
+  AvailabilityOutcome,
+  AvailabilityUnavailableOutcome,
+  availabilityValidator,
+} from './availability.validator';
 
 /** Matches the server-side EmailPolicy, so the check runs on the value the API will evaluate. */
 export function normalizeEmail(value: string): string {
@@ -32,15 +37,22 @@ function looksLikeAddress(email: string): boolean {
 export function emailAvailabilityValidator(
   auth: AuthService,
   onConfirmed: EmailAvailabilityOutcome = () => {},
+  getCaptcha: () => Promise<string> = () => Promise.resolve(''),
+  onUnavailable: AvailabilityUnavailableOutcome = () => {},
 ): AsyncValidatorFn {
   return availabilityValidator(
     {
       normalize: normalizeEmail,
       isProbeable: (email) =>
         email.length > 0 && email.length <= MAX_LENGTH && looksLikeAddress(email),
-      probe: (email) => auth.checkEmailAvailability(email).pipe(map((result) => result.available)),
+      probe: (email) =>
+        from(getCaptcha()).pipe(
+          switchMap((captcha) => auth.checkEmailAvailability(email, captcha)),
+          map((result) => result.available),
+        ),
       errorKey: 'emailTaken',
     },
     onConfirmed,
+    onUnavailable,
   );
 }

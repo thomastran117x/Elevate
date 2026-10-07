@@ -11,6 +11,12 @@ import {
 import { RecaptchaV3Service } from '../../services/recaptcha.service';
 import { SignupComponent } from './signup.component';
 
+function createRecaptcha(): jasmine.SpyObj<RecaptchaV3Service> {
+  const recaptcha = jasmine.createSpyObj<RecaptchaV3Service>('RecaptchaV3Service', ['execute']);
+  recaptcha.execute.and.resolveTo('captcha-token');
+  return recaptcha;
+}
+
 describe('SignupComponent email availability', () => {
   let fixture: ComponentFixture<SignupComponent>;
   let component: SignupComponent;
@@ -40,7 +46,7 @@ describe('SignupComponent email availability', () => {
         { provide: AuthService, useValue: auth },
         {
           provide: RecaptchaV3Service,
-          useValue: jasmine.createSpyObj<RecaptchaV3Service>('RecaptchaV3Service', ['execute']),
+          useValue: createRecaptcha(),
         },
         {
           provide: AuthReturnUrlService,
@@ -104,6 +110,7 @@ describe('SignupComponent email availability', () => {
     expect(component.form.controls.email.valid).toBeTrue();
     expect(component.emailAvailable()).toBeFalse();
     expect(messageText()).not.toContain('That email is available.');
+    expect(messageText()).toContain('Availability could not be checked.');
   }));
 
   it('stops claiming availability once the address is edited again', fakeAsync(() => {
@@ -160,7 +167,7 @@ describe('SignupComponent username format', () => {
         { provide: AuthService, useValue: auth },
         {
           provide: RecaptchaV3Service,
-          useValue: jasmine.createSpyObj<RecaptchaV3Service>('RecaptchaV3Service', ['execute']),
+          useValue: createRecaptcha(),
         },
         {
           provide: AuthReturnUrlService,

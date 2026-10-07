@@ -40,7 +40,7 @@ describe('emailAvailabilityValidator', () => {
     tick(400);
 
     expect(result.errors).toBeNull();
-    expect(auth.checkEmailAvailability).toHaveBeenCalledWith('ada@example.com');
+    expect(auth.checkEmailAvailability).toHaveBeenCalledWith('ada@example.com', '');
   }));
 
   it('reports emailTaken when an account already uses the address', fakeAsync(() => {
@@ -60,7 +60,7 @@ describe('emailAvailabilityValidator', () => {
     runValidator(auth, '  Ada@Example.COM  ');
     tick(400);
 
-    expect(auth.checkEmailAvailability).toHaveBeenCalledWith('ada@example.com');
+    expect(auth.checkEmailAvailability).toHaveBeenCalledWith('ada@example.com', '');
   }));
 
   it('does not call the API before the debounce elapses', fakeAsync(() => {

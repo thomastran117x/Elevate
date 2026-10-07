@@ -292,6 +292,7 @@ namespace backend.main.application.openapi
             ApplySpecialHeaders(operation, relativePath);
             ApplySpecialResponses(operation, relativePath);
             ApplyOperationMetadata(operation, context, relativePath);
+            operation.Deprecated = metadata.OfType<ObsoleteAttribute>().Any();
 
             return Task.CompletedTask;
         }
@@ -479,6 +480,19 @@ namespace backend.main.application.openapi
                     HttpUtility.SessionBindingHeaderName,
                     "Optional session-binding header for API-token clients. If omitted, the request body value is used."
                 );
+            }
+
+            if (string.Equals(relativePath, "/api/auth/email/availability", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(operation.OperationId, "Auth_CheckEmailAvailability_get", StringComparison.Ordinal))
+            {
+                var captcha = operation.Parameters.FirstOrDefault(parameter =>
+                    parameter.In == ParameterLocation.Header
+                    && string.Equals(parameter.Name, "X-Captcha-Token", StringComparison.OrdinalIgnoreCase));
+                if (captcha is OpenApiParameter concreteCaptcha)
+                {
+                    concreteCaptcha.Required = true;
+                    concreteCaptcha.Description = "CAPTCHA token for the email_availability action. Do not put this token in the query string.";
+                }
             }
         }
 

@@ -31,8 +31,7 @@ namespace backend.main.features.auth.contracts.requests
             get; set;
         }
 
-        [Required]
-        public required string Captcha
+        public string? Captcha
         {
             get; set;
         }

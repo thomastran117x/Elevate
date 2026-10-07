@@ -1,8 +1,10 @@
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.features.auth.abuse;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.shared.exceptions.http;
+using backend.main.shared.requests;
 using backend.main.shared.responses;
 using backend.main.shared.utilities.logger;
 using backend.main.utilities;
@@ -20,14 +22,20 @@ namespace backend.main.features.auth.mfa
     {
         private readonly IMfaEnrollmentService _mfaEnrollmentService;
         private readonly IMfaSettingsBuilder _settingsBuilder;
+        private readonly IAuthAbuseProtectionService _abuseProtection;
+        private readonly ClientRequestInfo _requestInfo;
 
         public AuthMfaController(
             IMfaEnrollmentService mfaEnrollmentService,
-            IMfaSettingsBuilder settingsBuilder
+            IMfaSettingsBuilder settingsBuilder,
+            IAuthAbuseProtectionService abuseProtection,
+            ClientRequestInfo requestInfo
         )
         {
             _mfaEnrollmentService = mfaEnrollmentService;
             _settingsBuilder = settingsBuilder;
+            _abuseProtection = abuseProtection;
+            _requestInfo = requestInfo;
         }
 
         [HttpGet]
@@ -59,6 +67,7 @@ namespace backend.main.features.auth.mfa
             try
             {
                 var user = User.GetUserPayload();
+                await ProtectAsync(AuthAbuseFlow.MfaDelivery, user.Id, HttpContext.RequestAborted);
                 var challenge = await _mfaEnrollmentService.StartEnrollmentAsync(
                     user.Id,
                     request.PhoneNumber
@@ -89,6 +98,7 @@ namespace backend.main.features.auth.mfa
             try
             {
                 var user = User.GetUserPayload();
+                await ProtectAsync(AuthAbuseFlow.MfaDelivery, user.Id, HttpContext.RequestAborted);
                 var challenge = await _mfaEnrollmentService.StartEnableAsync(user.Id);
 
                 return Ok(new ApiResponse<MfaChallengeResponse>("SMS MFA re-enable code sent.", challenge));
@@ -111,6 +121,7 @@ namespace backend.main.features.auth.mfa
             try
             {
                 var user = User.GetUserPayload();
+                await ProtectAsync(AuthAbuseFlow.Verification, user.Id, HttpContext.RequestAborted);
                 await _mfaEnrollmentService.VerifyEnrollmentAsync(
                     user.Id,
                     request.Code,
@@ -189,6 +200,22 @@ namespace backend.main.features.auth.mfa
                 Logger.Error($"[AuthMfaController] Remove failed: {ex}");
                 return HandleError.Resolve(ex);
             }
+        }
+
+        private async Task ProtectAsync(
+            AuthAbuseFlow flow,
+            int accountId,
+            CancellationToken cancellationToken)
+        {
+            await _abuseProtection.EnsureSourceAllowedAsync(
+                flow,
+                _requestInfo.IpAddress,
+                cancellationToken);
+            await _abuseProtection.EnsureTargetAllowedAsync(
+                flow,
+                AuthAbuseTargetKind.AccountId,
+                accountId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                cancellationToken);
         }
     }
 }

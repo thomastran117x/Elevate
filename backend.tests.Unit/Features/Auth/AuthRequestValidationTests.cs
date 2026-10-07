@@ -47,7 +47,7 @@ public class AuthRequestValidationTests
     }
 
     [Fact]
-    public void LoginRequest_ShouldRequireUsernamePasswordAndCaptcha()
+    public void LoginRequest_ShouldRequireUsernameAndPasswordButAllowMissingCaptcha()
     {
         var request = new LoginRequest
         {
@@ -60,8 +60,9 @@ public class AuthRequestValidationTests
 
         results.Select(item => item.ErrorMessage).Should().Contain([
             "The Username field is required.",
-            "The Captcha field is required."
+            "The Password field is required."
         ]);
+        results.Select(item => item.ErrorMessage).Should().NotContain("The Captcha field is required.");
     }
 
     [Fact]

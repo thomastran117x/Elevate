@@ -33,6 +33,8 @@ type ApiDeleteOptions = ApiRequestOptions & {
 type ApiErrorPayload = {
   message?: unknown;
   Message?: unknown;
+  meta?: unknown;
+  Meta?: unknown;
   error?: {
     code?: unknown;
     Code?: unknown;
@@ -92,6 +94,7 @@ export class ApiClient {
         this.readCode(payload),
         this.readDetails(payload),
         error,
+        payload?.meta ?? payload?.Meta,
       );
     }
 

@@ -2,10 +2,12 @@ using System.Security.Claims;
 
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.features.auth.abuse;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
 using backend.main.shared.exceptions.http;
+using backend.main.shared.requests;
 using backend.main.shared.responses;
 using backend.main.shared.utilities.logger;
 using backend.main.utilities;
@@ -26,10 +28,17 @@ namespace backend.main.features.auth.mfa.session
     public sealed class AuthMfaStepUpController : ControllerBase
     {
         private readonly ISessionMfaVerificationService _sessionMfaVerificationService;
+        private readonly IAuthAbuseProtectionService _abuseProtection;
+        private readonly ClientRequestInfo _requestInfo;
 
-        public AuthMfaStepUpController(ISessionMfaVerificationService sessionMfaVerificationService)
+        public AuthMfaStepUpController(
+            ISessionMfaVerificationService sessionMfaVerificationService,
+            IAuthAbuseProtectionService abuseProtection,
+            ClientRequestInfo requestInfo)
         {
             _sessionMfaVerificationService = sessionMfaVerificationService;
+            _abuseProtection = abuseProtection;
+            _requestInfo = requestInfo;
         }
 
         [HttpGet("options")]
@@ -72,6 +81,7 @@ namespace backend.main.features.auth.mfa.session
             try
             {
                 var user = User.GetUserPayload();
+                await ProtectAsync(AuthAbuseFlow.MfaDelivery, user.Id, HttpContext.RequestAborted);
                 var result = await _sessionMfaVerificationService.StartAsync(user.Id, user.Email, request.Method);
                 return Ok(new ApiResponse<SessionMfaStartResponse>("MFA verification code sent.", result));
             }
@@ -92,6 +102,7 @@ namespace backend.main.features.auth.mfa.session
             try
             {
                 var user = User.GetUserPayload();
+                await ProtectAsync(AuthAbuseFlow.Verification, user.Id, HttpContext.RequestAborted);
                 var sessionId = User.FindFirst(TokenService.SessionIdClaimType)?.Value;
                 await _sessionMfaVerificationService.VerifyAsync(
                     user.Id,
@@ -111,6 +122,22 @@ namespace backend.main.features.auth.mfa.session
                 Logger.Error($"[AuthMfaStepUpController] Verify failed: {ex}");
                 return HandleError.Resolve(ex);
             }
+        }
+
+        private async Task ProtectAsync(
+            AuthAbuseFlow flow,
+            int accountId,
+            CancellationToken cancellationToken)
+        {
+            await _abuseProtection.EnsureSourceAllowedAsync(
+                flow,
+                _requestInfo.IpAddress,
+                cancellationToken);
+            await _abuseProtection.EnsureTargetAllowedAsync(
+                flow,
+                AuthAbuseTargetKind.AccountId,
+                accountId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                cancellationToken);
         }
     }
 }

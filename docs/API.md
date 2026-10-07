@@ -40,7 +40,9 @@ Fetch `GET /api/auth/csrf` and send its request token in `X-CSRF-TOKEN`, with th
 
 Some operations require MFA step-up as well as a signed-in session. SMS and TOTP enrollment/step-up have separate configuration switches. Role and resource ownership checks remain authoritative on the backend. Email changes additionally verify the current password when applicable, require confirmation at the new address, and invalidate sessions on completion.
 
-Captcha and external provider credentials are needed for their corresponding auth flows. Anonymous availability and suggestion endpoints are rate limited; integration tests suppress the normal request limiter, so their success does not verify production rate budgets.
+Captcha and external provider credentials are needed for their corresponding auth flows. Login omits CAPTCHA until the generic 401 envelope reports `meta.captchaRequired: true`; the next submission must include a fresh token. Login failures and sensitive delivery/verification operations use independent Redis-backed source-IP and hashed-target limits, with per-replica IP limiting retained during Redis outages.
+
+Email availability uses `POST /api/auth/email/availability` with CSRF and `{ "email": "...", "captcha": "..." }`. The response envelope is unchanged. `GET /api/auth/email/availability?email=...` remains deprecated for one compatibility release, requires the CAPTCHA token in `X-Captcha-Token`, and returns `Deprecation` plus successor `Link` headers; CAPTCHA tokens are never accepted in the query string. Availability and suggestion endpoints are rate limited; a throttled or failed availability probe is advisory and must not be interpreted as either available or taken.
 
 ## Image uploads
 

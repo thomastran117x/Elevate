@@ -387,6 +387,9 @@
               >
                 An account already uses that email address.
               </p>
+              <p *ngIf="emailAvailabilityUnavailable" class="text-sm text-faint">
+                Availability could not be checked.
+              </p>
               <p
                 *ngIf="
                   emailForm.controls.newEmail.touched &&

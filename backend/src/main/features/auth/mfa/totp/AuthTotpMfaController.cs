@@ -1,9 +1,11 @@
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.features.auth.abuse;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.mfa;
 using backend.main.shared.exceptions.http;
+using backend.main.shared.requests;
 using backend.main.shared.responses;
 using backend.main.shared.utilities.logger;
 using backend.main.utilities;
@@ -21,14 +23,20 @@ namespace backend.main.features.auth.mfa.totp
     {
         private readonly ITotpMfaEnrollmentService _totpService;
         private readonly IMfaSettingsBuilder _settingsBuilder;
+        private readonly IAuthAbuseProtectionService _abuseProtection;
+        private readonly ClientRequestInfo _requestInfo;
 
         public AuthTotpMfaController(
             ITotpMfaEnrollmentService totpService,
-            IMfaSettingsBuilder settingsBuilder
+            IMfaSettingsBuilder settingsBuilder,
+            IAuthAbuseProtectionService abuseProtection,
+            ClientRequestInfo requestInfo
         )
         {
             _totpService = totpService;
             _settingsBuilder = settingsBuilder;
+            _abuseProtection = abuseProtection;
+            _requestInfo = requestInfo;
         }
 
         [HttpPost("enroll/start")]
@@ -38,6 +46,7 @@ namespace backend.main.features.auth.mfa.totp
             try
             {
                 var user = User.GetUserPayload();
+                await ProtectAsync(AuthAbuseFlow.MfaDelivery, user.Id, HttpContext.RequestAborted);
                 var response = await _totpService.StartEnrollmentAsync(user.Id, user.Email);
 
                 return Ok(new ApiResponse<TotpEnrollmentStartResponse>(
@@ -62,6 +71,7 @@ namespace backend.main.features.auth.mfa.totp
             try
             {
                 var user = User.GetUserPayload();
+                await ProtectAsync(AuthAbuseFlow.Verification, user.Id, HttpContext.RequestAborted);
                 await _totpService.VerifyEnrollmentAsync(user.Id, request.Code);
                 var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
 
@@ -84,6 +94,7 @@ namespace backend.main.features.auth.mfa.totp
             try
             {
                 var user = User.GetUserPayload();
+                await ProtectAsync(AuthAbuseFlow.Verification, user.Id, HttpContext.RequestAborted);
                 await _totpService.EnableAsync(user.Id, request.Code);
                 var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
 
@@ -106,6 +117,7 @@ namespace backend.main.features.auth.mfa.totp
             try
             {
                 var user = User.GetUserPayload();
+                await ProtectAsync(AuthAbuseFlow.Verification, user.Id, HttpContext.RequestAborted);
                 await _totpService.DisableAsync(user.Id, request.Code);
                 var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
 
@@ -128,6 +140,7 @@ namespace backend.main.features.auth.mfa.totp
             try
             {
                 var user = User.GetUserPayload();
+                await ProtectAsync(AuthAbuseFlow.Verification, user.Id, HttpContext.RequestAborted);
                 await _totpService.RemoveAsync(user.Id, request.Code);
                 var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
 
@@ -142,7 +155,21 @@ namespace backend.main.features.auth.mfa.totp
                 return HandleError.Resolve(ex);
             }
         }
+
+        private async Task ProtectAsync(
+            AuthAbuseFlow flow,
+            int accountId,
+            CancellationToken cancellationToken)
+        {
+            await _abuseProtection.EnsureSourceAllowedAsync(
+                flow,
+                _requestInfo.IpAddress,
+                cancellationToken);
+            await _abuseProtection.EnsureTargetAllowedAsync(
+                flow,
+                AuthAbuseTargetKind.AccountId,
+                accountId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                cancellationToken);
+        }
     }
 }
-
-

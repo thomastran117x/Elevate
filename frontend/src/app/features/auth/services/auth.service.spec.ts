@@ -92,6 +92,34 @@ describe('AuthService', () => {
     });
   }));
 
+  it('posts email availability with captcha after ensuring csrf', fakeAsync(() => {
+    let responseBody: unknown;
+
+    service.checkEmailAvailability('ada@example.com', 'captcha-token').subscribe((response) => {
+      responseBody = response;
+    });
+    tick();
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/auth/email/availability'));
+    expect(authToken.ensureCsrfToken).toHaveBeenCalled();
+    expect(request.request.method).toBe('POST');
+    expect(request.request.withCredentials).toBeTrue();
+    expect(request.request.body).toEqual({
+      email: 'ada@example.com',
+      captcha: 'captcha-token',
+    });
+
+    request.flush({
+      success: true,
+      message: 'Email is available.',
+      data: { email: 'ada@example.com', available: true },
+      error: null,
+      meta: null,
+    });
+
+    expect(responseBody).toEqual({ email: 'ada@example.com', available: true });
+  }));
+
   it('posts the chosen username alongside the role when completing an OAuth signup', fakeAsync(() => {
     let responseBody: unknown;
 
