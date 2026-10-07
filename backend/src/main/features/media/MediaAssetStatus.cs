@@ -27,7 +27,8 @@ public enum MediaAssetStatus
 
     /// <summary>
     /// Held for a person to decide. Nothing sets this yet; it is defined now so image moderation
-    /// can use it without renumbering the enum under clients that decode it by position.
+    /// can use it without renumbering the enum under clients that decode it by position. Its
+    /// quarantined bytes are kept, since a reviewer needs them.
     /// </summary>
     NeedsReview
 }

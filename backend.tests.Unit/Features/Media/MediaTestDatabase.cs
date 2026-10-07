@@ -83,7 +83,8 @@ internal sealed class MediaTestDatabase : IAsyncDisposable
         string? publicUrl = null,
         string? quarantineBlobPath = null,
         DateTime? createdAt = null,
-        DateTime? updatedAt = null)
+        DateTime? updatedAt = null,
+        int attemptCount = 0)
     {
         var now = createdAt ?? Time.GetUtcNow().UtcDateTime;
         var id = Guid.NewGuid();
@@ -98,7 +99,8 @@ internal sealed class MediaTestDatabase : IAsyncDisposable
             QuarantineBlobPath = quarantineBlobPath ?? $"events/{id:N}.png",
             DeclaredContentType = "image/png",
             CreatedAt = now,
-            UpdatedAt = updatedAt ?? now
+            UpdatedAt = updatedAt ?? now,
+            AttemptCount = attemptCount
         };
         Db.MediaAssets.Add(asset);
         await Db.SaveChangesAsync();

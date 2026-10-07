@@ -34,4 +34,10 @@ public static class FeatureFlagKeys
     public const string Storage = "storage";
     public const string StorageOrphanCleanup = "storage.orphan-cleanup";
     public const string StorageQuarantine = "storage.quarantine";
+
+    /// <summary>
+    /// On (the default), attach runs the validation pipeline inside the request. Off hands it to
+    /// media-worker. Named for the inline path so that missing means on, like every other flag.
+    /// </summary>
+    public const string StorageQuarantineInline = "storage.quarantine.inline";
 }

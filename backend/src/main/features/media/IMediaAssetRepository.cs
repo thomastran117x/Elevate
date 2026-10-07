@@ -9,6 +9,11 @@ public interface IMediaAssetRepository
 
     Task<MediaAsset?> GetByPublicIdAsync(Guid publicId, CancellationToken cancellationToken = default);
 
+    /// <summary>The assets among <paramref name="publicIds"/> that exist, by public id, in one read.</summary>
+    Task<Dictionary<Guid, MediaAsset>> GetByPublicIdsAsync(
+        IReadOnlyCollection<Guid> publicIds,
+        CancellationToken cancellationToken = default);
+
     Task<MediaAsset?> GetByQuarantineBlobPathAsync(
         string quarantineBlobPath,
         CancellationToken cancellationToken = default);
@@ -62,6 +67,21 @@ public interface IMediaAssetRepository
     Task<List<MediaAsset>> GetProcessingClaimedBeforeAsync(
         DateTime updatedBefore,
         int limit,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// One page of attached assets that nothing has moved since <paramref name="updatedBefore"/>,
+    /// in (<see cref="MediaAsset.UpdatedAt"/>, <see cref="MediaAsset.Id"/>) order: every
+    /// <see cref="MediaAssetStatus.Processing"/> claim, and <see cref="MediaAssetStatus.Uploaded"/>
+    /// assets issued at or after <paramref name="issuedSince"/>. Older Uploaded assets can no
+    /// longer be attached, and are left for the reaper to expire.
+    /// </summary>
+    /// <param name="after">The last row of the previous page; null for the first.</param>
+    Task<List<MediaAsset>> GetStalledBeforeAsync(
+        DateTime updatedBefore,
+        DateTime issuedSince,
+        int limit,
+        (DateTime UpdatedAt, int Id)? after = null,
         CancellationToken cancellationToken = default);
 }
 

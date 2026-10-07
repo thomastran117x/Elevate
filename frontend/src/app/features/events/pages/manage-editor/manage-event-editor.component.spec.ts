@@ -953,6 +953,128 @@ describe('ManageEventEditorComponent', () => {
         expect(media.watch).not.toHaveBeenCalled();
       });
 
+      describe('an attach that answers the image is still being checked', () => {
+        const stillProcessing = () =>
+          throwError(
+            () =>
+              new HttpErrorResponse({
+                status: 409,
+                error: {
+                  message: 'This image is still being checked. Try again in a moment.',
+                  error: { code: 'MEDIA_PROCESSING' },
+                },
+              }),
+          );
+
+        /** The first attach finds the worker still busy; the retry, once ready, succeeds. */
+        async function uploadWhileTheWorkerIsBusy(): Promise<void> {
+          setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
+          media.watch.and.returnValue(checks);
+          managementService.uploadImage.and.returnValue(of(uploaded(url, 'asset-1')));
+          managementService.addEventImage.and.returnValues(
+            stillProcessing(),
+            of({
+              id: 41,
+              url,
+              altText: null,
+              isDecorative: false,
+              isCover: false,
+              sortOrder: 0,
+              needsAltText: true,
+              createdAt: '2026-05-01T00:00:00Z',
+              updatedAt: '2026-05-01T00:00:00Z',
+            }),
+          );
+
+          await component.onFilesSelected(fileInput([file('a.png')]));
+        }
+
+        it('keeps the tile, labelled as being checked, instead of dropping it', async () => {
+          await uploadWhileTheWorkerIsBusy();
+
+          expect(component.error).toBe('');
+          expect(component.imageUrls).toEqual([url]);
+          expect(component.awaitingAttach).toEqual([url]);
+          expect(component.images).toEqual([]);
+          expect(media.watch).toHaveBeenCalledOnceWith('asset-1');
+          expect(component.srcForImage(url)).toMatch(/^blob:/);
+
+          component.goToStep(5);
+          fixture.detectChanges();
+          const list: HTMLElement = fixture.nativeElement.querySelector(
+            '[aria-label="Images being checked"]',
+          );
+          expect(list.textContent).toContain('Checking image…');
+        });
+
+        it('attaches the image once the check finds it ready', async () => {
+          await uploadWhileTheWorkerIsBusy();
+
+          checks.next(settled('ready'));
+          await fixture.whenStable();
+
+          expect(managementService.addEventImage).toHaveBeenCalledTimes(2);
+          expect(managementService.addEventImage.calls.mostRecent().args).toEqual([
+            12,
+            { imageUrl: url },
+          ]);
+          expect(component.awaitingAttach).toEqual([]);
+          expect(component.images.map((image) => image.url)).toEqual([url]);
+          expect(component.srcForImage(url)).toBe(url);
+        });
+
+        it('drops the tile with the reason when the check refuses the image', async () => {
+          await uploadWhileTheWorkerIsBusy();
+
+          checks.next(settled('rejected', 'The image dimensions are too large.'));
+
+          expect(managementService.addEventImage).toHaveBeenCalledTimes(1);
+          expect(component.imageUrls).toEqual([]);
+          expect(component.awaitingAttach).toEqual([]);
+          expect(component.imageErrors).toEqual(['The image dimensions are too large.']);
+        });
+
+        it('drops the tile with the reason when the retried attach fails', async () => {
+          await uploadWhileTheWorkerIsBusy();
+          managementService.addEventImage.and.returnValue(
+            throwError(
+              () =>
+                new HttpErrorResponse({
+                  status: 400,
+                  error: { message: 'Image upload is invalid or expired.' },
+                }),
+            ),
+          );
+
+          checks.next(settled('ready'));
+          await fixture.whenStable();
+
+          expect(component.imageUrls).toEqual([]);
+          expect(component.awaitingAttach).toEqual([]);
+          expect(component.imageErrors).toEqual(['Image upload is invalid or expired.']);
+        });
+
+        it('stops following it when the organizer removes it', async () => {
+          await uploadWhileTheWorkerIsBusy();
+
+          component.removeAwaitingImage(url);
+
+          expect(checks.observed).toBeFalse();
+          expect(component.imageUrls).toEqual([]);
+          expect(component.awaitingAttach).toEqual([]);
+        });
+
+        it('keeps it waiting when the gallery changes around it', async () => {
+          await uploadWhileTheWorkerIsBusy();
+
+          component.onGalleryChanged([]);
+
+          expect(component.imageUrls).toEqual([url]);
+          expect(checks.observed).toBeTrue();
+          expect(component.srcForImage(url)).toMatch(/^blob:/);
+        });
+      });
+
       it('does not follow an upload that is not quarantined', async () => {
         setup({ clubId: '4', eventId: '12' }, buildEvent({ imageUrls: [] }));
         managementService.uploadImage.and.returnValue(of(uploaded('https://cdn/a.png')));

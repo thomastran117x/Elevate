@@ -60,6 +60,8 @@ When uploads are quarantined (`storage.quarantine`, on by default), the bytes la
 
 `GET /api/media/{publicId}` reports where an upload is, by its `mediaAssetId`, as `{ id, status, url, rejectionReason }`. `status` is a number, decoded by position: 0 pending upload, 1 uploaded, 2 processing, 3 ready, 4 rejected, 5 needs review. New values are only ever appended. `url` is set only when the image is ready, and `rejectionReason` only when it is rejected. The endpoint answers the uploader and managers of the club the upload was issued for; anyone else gets 404, whether or not the id exists.
 
+A save that attaches uploads can answer 409 with error code `MEDIA_PROCESSING`, "This image is still being checked". This happens when `storage.quarantine.inline` is off and media-worker has not given its verdict within the wait. It is not a refusal: validation continues. Follow the asset with this endpoint, then repeat the attach once it is ready. Any other 409 or 400 on an attach is a refusal.
+
 It exists for an editor waiting on an image it just attached. It uses the global per-user rate limit rather than the image-upload policy, so polling does not use up upload allowance. The frontend polls every 1.5 seconds for the first 10 seconds, then every 4 seconds up to a minute. After that it shows "Still processing" and polls every 15 seconds, for up to ten minutes. Attach currently completes validation before it returns, so the first read after a successful attach already reports ready.
 
 When quarantine is off, `mediaAssetId` is null, `GET /api/media/{publicId}` does not exist, and the uploaded bytes are what `publicUrl` serves. Those bytes are checked only for size and file signature when attached, and they are not re-encoded.

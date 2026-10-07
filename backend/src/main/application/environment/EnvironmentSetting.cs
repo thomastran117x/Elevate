@@ -48,6 +48,11 @@ namespace backend.main.application.environment
         private static readonly string _smsDlqTopic;
         private static readonly string _emailStatusTopic;
         private static readonly string _emailStatusGroupId;
+        private static readonly string _mediaValidationTopic;
+        private static readonly string _mediaValidationGroupId;
+        private static readonly string _mediaValidationDlqTopic;
+        private static readonly string _mediaValidationStatusTopic;
+        private static readonly string _mediaValidationStatusGroupId;
         private static readonly string? _twilioAccountSid;
         private static readonly string? _twilioAuthToken;
         private static readonly string? _twilioMessagingServiceSid;
@@ -169,6 +174,23 @@ namespace backend.main.application.environment
                 ["EMAIL_STATUS_GROUP_ID"],
                 "event-invitation-status-updater"
             );
+            _mediaValidationTopic = GetOrDefault(
+                ["MEDIA_VALIDATION_TOPIC"],
+                "eventxperience-media-validation"
+            );
+            _mediaValidationGroupId = GetOrDefault(["MEDIA_VALIDATION_GROUP_ID"], "media-worker");
+            _mediaValidationDlqTopic = GetOrDefault(
+                ["MEDIA_VALIDATION_DLQ_TOPIC"],
+                "eventxperience-media-validation-dlq"
+            );
+            _mediaValidationStatusTopic = GetOrDefault(
+                ["MEDIA_VALIDATION_STATUS_TOPIC"],
+                "eventxperience-media-validation-status"
+            );
+            _mediaValidationStatusGroupId = GetOrDefault(
+                ["MEDIA_VALIDATION_STATUS_GROUP_ID"],
+                "media-validation-status-updater"
+            );
             _twilioAccountSid = GetOptional(["TWILIO_ACCOUNT_SID"]);
             _twilioAuthToken = GetOptional(["TWILIO_AUTH_TOKEN"]);
             _twilioMessagingServiceSid = GetOptional(["TWILIO_MESSAGING_SERVICE_SID"]);
@@ -282,6 +304,11 @@ namespace backend.main.application.environment
         public static string SmsDlqTopic => _smsDlqTopic;
         public static string EmailStatusTopic => _emailStatusTopic;
         public static string EmailStatusGroupId => _emailStatusGroupId;
+        public static string MediaValidationTopic => _mediaValidationTopic;
+        public static string MediaValidationGroupId => _mediaValidationGroupId;
+        public static string MediaValidationDlqTopic => _mediaValidationDlqTopic;
+        public static string MediaValidationStatusTopic => _mediaValidationStatusTopic;
+        public static string MediaValidationStatusGroupId => _mediaValidationStatusGroupId;
         public static string? TwilioAccountSid => _twilioAccountSid;
         public static string? TwilioAuthToken => _twilioAuthToken;
         public static string? TwilioMessagingServiceSid => _twilioMessagingServiceSid;

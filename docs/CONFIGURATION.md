@@ -51,7 +51,7 @@ Compose maps `MSAL_CLIENT_ID` to backend `MS_CLIENT_ID`. A locally run backend m
 
 Default database provider is PostgreSQL. SQLite is used by OpenAPI export and selected isolated tests, not as the normal application database.
 
-Email/SMS consumers remain idle if provider configuration is incomplete. Topic/group/DLQ defaults and failure policies are documented in [worker READMEs](../backend/README.md#workers). Keep notification topic names aligned between API publishers and consumers.
+Email/SMS consumers remain idle if provider configuration is incomplete, and so does the media worker without storage settings. The media worker uses `MEDIA_VALIDATION_TOPIC`, `MEDIA_VALIDATION_GROUP_ID`, `MEDIA_VALIDATION_DLQ_TOPIC` and `MEDIA_VALIDATION_STATUS_TOPIC`. The API publishes to the first and consumes the last as `MEDIA_VALIDATION_STATUS_GROUP_ID`. Topic/group/DLQ defaults and failure policies are documented in [worker READMEs](../backend/README.md#workers). Keep notification topic names aligned between API publishers and consumers.
 
 ## Feature flags
 
@@ -64,7 +64,7 @@ The backend registry contains the following keys. Environment names are `FEATURE
 | Events            | `events`, `events.analytics`, `events.favourites`, `events.images`, `events.invitations`, `events.recurrence`, `events.registration`, `events.versioning`, `events.waitlist` |
 | Payment / profile | `payment`, `profile`, `profile.admin`                                                                                                                                        |
 | Search            | `search`, `search.reindex`                                                                                                                                                   |
-| Storage           | `storage`, `storage.orphan-cleanup`, `storage.quarantine`                                                                                                                    |
+| Storage           | `storage`, `storage.orphan-cleanup`, `storage.quarantine`, `storage.quarantine.inline`                                                                                       |
 
 Missing flags default to true. A false parent disables its descendants. Backend parsing first reads registered process variables, then `FeatureFlags` configuration entries override those values. Unknown keys in that section are rejected; unrelated unknown process variables are not scanned/rejected. Backend boolean parsing is case-insensitive.
 
@@ -85,6 +85,7 @@ Appsettings sections configure CORS, forwarded headers, request timeouts, rate l
 What happens after those checks depends on `storage.quarantine`:
 
 - **On (the default).** The presigned URL points into the private quarantine container, and the `publicUrl` returned with it is reserved for the result. It ends in `.webp` whatever was uploaded. When the upload is attached, the server downloads at most the cap and re-encodes it (see [image processing](#image-processing)). It then writes the result to the reserved URL and deletes the quarantined original. Bytes that fail are deleted and never reach the public container. The upload's `MediaAssets` row records the outcome, and `GET /api/media/{publicId}` reports it. Nothing a client uploads is publicly readable before it has been validated.
+  Where that re-encoding runs depends on `storage.quarantine.inline`. On (the default), it runs inside the attach request. Off, the API claims every image the save brings in and publishes a request for each to [media-worker](../backend/src/worker/media-worker/README.md). It then waits up to ten seconds, once, for all of their verdicts. If some do not arrive it returns 409, "still being checked", with error code `MEDIA_PROCESSING`. The event editor keeps such an image, follows `GET /api/media/{publicId}`, and attaches it once it is ready. Either way, a URL is saved onto an event, club, or series only once its asset is Ready. Compose sets the flag to false because it runs the worker.
 - **Off.** The presigned URL points straight into the public container, and the checks above run against the stored blob in place, with the header restamping described below. This is exactly how uploads behaved before quarantine. Switching the flag off does not strand anything: the quarantine reaper stays on under the `storage` parent flag and drains what quarantine was holding. An upload issued before the switch can no longer be attached, and the client simply uploads again.
 
 The presigned URL grants Azure's `Create` permission without `Write`, which makes it usable exactly once. `Put Blob` accepts either permission to create a new blob but requires `Write` to overwrite one, so the bytes that pass inspection are the bytes that stay there. Without quarantine, the stored content type is restamped from those bytes on attach. The SAS content type overrides only reads made through the SAS, while the anonymously readable public URL is served with whatever type the uploader set on its own PUT. With quarantine, the public blob is written by the server with `image/webp`, so no uploader-chosen header is ever served.
@@ -95,11 +96,11 @@ Raising the cap affects only what is accepted from that point on; images already
 
 ### Image processing
 
-Multipart avatar uploads are decoded to pixels and re-encoded before anything is stored. So are presigned uploads, when `storage.quarantine` is on, at the moment they are attached. EXIF (including phone GPS), IPTC, XMP, ICC profiles, and any non-pixel payload hidden in the file are gone.
+Multipart avatar uploads are decoded to pixels and re-encoded before anything is stored. So are presigned uploads, when `storage.quarantine` is on, at the moment they are attached: in the API, or in media-worker when `storage.quarantine.inline` is off. EXIF (including phone GPS), IPTC, XMP, ICC profiles, and any non-pixel payload hidden in the file are gone.
 
 The pipeline reads the header first, rejecting oversized dimensions and animated images (GIF, WebP and APNG) before any pixel buffer is allocated. It then decodes a single frame and shrinks the image to the size cap for its kind. Next it applies the EXIF orientation (after shrinking, so the rotation never needs a second full-size buffer), strips the metadata, and encodes lossy WebP.
 
-Avatars and event or club images share the processing slots below, so attaching a batch of images competes with avatar uploads for them. Animated images are refused for event and club images too, now that they are processed. Without quarantine, presigned uploads are not processed at all.
+Avatars and event or club images share the processing slots below, so attaching a batch of images competes with avatar uploads for them. With media-worker validating, event and club images use the worker's own slots instead. The worker reads the same `ImageUpload` and `ImageProcessing` settings, so set any overrides on both. Animated images are refused for event and club images too, now that they are processed. Without quarantine, presigned uploads are not processed at all.
 
 | Key | Default | Purpose |
 | --- | --- | --- |

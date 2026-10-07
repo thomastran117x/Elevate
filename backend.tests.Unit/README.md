@@ -12,7 +12,7 @@ dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-unit-
 
 Use `Features/`, `Infrastructure/`, `Application/`, `Shared/`, and `Workers/` to locate relevant tests. Reuse builders in `Support/`. Tests changing process environment or the shared logger belong in the corresponding isolation collections; restore state in cleanup.
 
-The project references the API, email worker, and SMS worker. Indexer parser sources are linked into the test project with test envelope types, so parser coverage does not imply execution of every standalone indexer host.
+The project references the API, email worker, SMS worker, and media worker, so all three worker assemblies are measured by the coverage gate. Indexer parser sources are linked into the test project with test envelope types, so parser coverage does not imply execution of every standalone indexer host.
 
 The coverage task runs Release tests with the first-party collector and [runsettings](../backend.coverage.runsettings), writes Cobertura below `.tmp/backend-unit-coverage/`, and enforces 90% filtered line coverage by default. Branch coverage is reported. See [testing and coverage policy](../docs/TESTING.md) for exclusions and scope limitations.
 

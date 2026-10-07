@@ -64,6 +64,23 @@ public class DisabledMediaAssetServiceTests
         blobs.PublicUploads.Should().NotContainKey(url);
     }
 
+    [Fact]
+    public async Task AttachAllAsync_ShouldAttachEachUpload_InOrder()
+    {
+        var blobs = new InMemoryBlobStore();
+        var url = $"{InMemoryBlobStore.PublicBase}/events/poster.png";
+        blobs.PublicUploads[url] = InMemoryBlobStore.Image();
+        var service = new DisabledMediaAssetService(blobs, CacheWith(url, userId: 7));
+        var scoped = 0;
+
+        var intents = await service.AttachAllAsync(
+            7,
+            [new MediaAttachment(url, "Event images", _ => scoped++), new MediaAttachment(url, "Club images")]);
+
+        intents.Should().HaveCount(2).And.OnlyContain(intent => intent.PublicUrl == url);
+        scoped.Should().Be(1);
+    }
+
     private static ICacheService CacheWith(string url, int userId)
     {
         var cache = new Mock<ICacheService>();

@@ -14,5 +14,9 @@ namespace backend.main.shared.exceptions.http
 
         public ConflictException(string message, string details)
             : base(message, code, DefaultErrorCode, details) { }
+
+        /// <summary>A conflict a client needs to tell apart from others, by its own code.</summary>
+        protected ConflictException(string message, string errorCode, object? details)
+            : base(message, code, errorCode, details) { }
     }
 }

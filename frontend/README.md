@@ -37,9 +37,13 @@ npm run format:check
 npm run typecheck
 npm run build
 npm test -- --watch=false --browsers=ChromeHeadlessCI --code-coverage
+npm run test:scripts
+npm run audit:dependencies
 npm run playwright:install
 npm run test:e2e
 ```
+
+`audit:dependencies` is CI's all-dependencies audit, minus the documented exceptions in `audit-allowlist.json` (see [CONTRIBUTING](../CONTRIBUTING.md)); `test:scripts` runs the Node tests for scripts in `scripts/`.
 
 Karma/Jasmine tests are colocated `*.spec.ts` files. Chrome/Chromium is required; coverage enforces 90% for all four metrics. Use `@testing` helpers for HTTP, NgRx, flags, routes, storage, and fixtures.
 

@@ -92,9 +92,17 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 
+      # The allowlist script uses only Node built-ins, so it needs no install either.
+      - name: Test the dependency audit script
+        if: always()
+        run: npm run test:scripts
+
+      # Same moderate gate as `npm audit`, minus the advisories in audit-allowlist.json. An
+      # entry needs a reason and a tracking issue, and fails the audit once it is no longer
+      # reported, so it cannot outlive the problem it excuses.
       - name: Audit all dependencies
         if: always()
-        run: npm audit --audit-level=moderate
+        run: npm run audit:dependencies
 
   frontend-build:
     name: Frontend Build

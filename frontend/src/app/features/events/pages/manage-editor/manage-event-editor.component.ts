@@ -6,7 +6,10 @@ import { Subject, catchError, debounceTime, firstValueFrom, map, of, switchMap }
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { requireEnvelopeData } from '../../../../core/api/models/api-envelope.model';
-import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
+import {
+  getApiClientMessage,
+  isApiClientErrorCode,
+} from '../../../../core/api/models/api-client-error.model';
 import {
   ALL_CATEGORIES,
   ALL_RECURRENCE_FREQUENCIES,
@@ -30,7 +33,7 @@ import { IMAGE_ACCEPT, screenImageFile } from '@shared/upload/image-file-validat
 import { LocalPreviews, createPreviewUrl, revokePreviewUrl } from '@shared/upload/image-preview';
 import { ImageFallbackDirective } from '@shared/upload/image-fallback.directive';
 import { MediaAssetTracker } from '@shared/upload/media-asset-tracker';
-import { MediaAssetService } from '@shared/upload/media-asset.service';
+import { MEDIA_PROCESSING_ERROR_CODE, MediaAssetService } from '@shared/upload/media-asset.service';
 
 const MAX_EVENT_IMAGES = 5;
 
@@ -129,6 +132,11 @@ export class ManageEventEditorComponent {
   imageErrors: string[] = [];
   /** Previews of picked images still waiting on their upload. */
   pendingPreviews: string[] = [];
+  /**
+   * Uploads to a saved event that the server is still checking, so they could not be attached
+   * yet. They have no gallery row, so they are shown apart until they are attached.
+   */
+  awaitingAttach: string[] = [];
   readonly imageAccept = IMAGE_ACCEPT;
   /** Local previews standing in for uploaded images, keyed by their public URL. */
   private readonly imagePreviews = new LocalPreviews();
@@ -575,6 +583,13 @@ export class ManageEventEditorComponent {
           this.images = [...this.images, attached];
           this.followCheck(publicUrl, mediaAssetId);
         } catch (error: unknown) {
+          if (mediaAssetId && isApiClientErrorCode(error, MEDIA_PROCESSING_ERROR_CODE)) {
+            // Not refused: the server is still checking it. Keep the tile and attach it when
+            // the check finishes.
+            this.attachWhenReady(this.event.id, publicUrl, mediaAssetId);
+            continue;
+          }
+
           // Refused on attach — most often because validation rejected the bytes. Nothing will
           // ever be published at this URL, so keeping its tile would only keep a dead image.
           this.dropImage(publicUrl);
@@ -599,15 +614,21 @@ export class ManageEventEditorComponent {
     this.dropImage(this.imageUrls[index]);
   }
 
+  /** Gives up on an upload that is still waiting to be attached. */
+  removeAwaitingImage(url: string): void {
+    this.dropImage(url);
+  }
+
   /** Keeps the draft payload's URL list in step with whatever the gallery editor just saved. */
   onGalleryChanged(images: EventImage[]): void {
-    const kept = new Set(images.map((image) => image.url));
+    // Uploads still waiting to be attached are not in the gallery yet, but are still wanted.
+    const kept = new Set([...images.map((image) => image.url), ...this.awaitingAttach]);
     for (const url of this.imageUrls) {
       if (!kept.has(url)) this.mediaChecks.stop(url);
     }
 
     this.images = images;
-    this.imageUrls = images.map((image) => image.url);
+    this.imageUrls = [...images.map((image) => image.url), ...this.awaitingAttach];
     this.imagePreviews.retainOnly(this.imageUrls);
   }
 
@@ -618,6 +639,41 @@ export class ManageEventEditorComponent {
     this.imagePreviews.release(url);
     this.imageUrls = this.imageUrls.filter((current) => current !== url);
     this.images = this.images.filter((image) => image.url !== url);
+    this.awaitingAttach = this.awaitingAttach.filter((current) => current !== url);
+  }
+
+  /**
+   * The attach said the image is still being checked, which is not a refusal. Keep its tile,
+   * follow the check, and attach it once the image is ready, or drop it with the reason if the
+   * check refuses it.
+   */
+  private attachWhenReady(eventId: number, url: string, mediaAssetId: string): void {
+    this.awaitingAttach = [...this.awaitingAttach, url];
+    this.mediaChecks.watch(url, mediaAssetId, {
+      ready: (readyUrl) => void this.retryAttach(eventId, readyUrl),
+      rejected: (rejectedUrl, reason) => {
+        this.dropImage(rejectedUrl);
+        this.imageErrors = [...this.imageErrors, reason];
+      },
+    });
+  }
+
+  private async retryAttach(eventId: number, url: string): Promise<void> {
+    try {
+      const attached = await firstValueFrom(
+        this.managementService.addEventImage(eventId, { imageUrl: url }),
+      );
+      this.awaitingAttach = this.awaitingAttach.filter((current) => current !== url);
+      this.images = [...this.images, attached];
+      // Published and attached: the tile can show the real image now.
+      this.imagePreviews.release(url);
+    } catch (error: unknown) {
+      this.dropImage(url);
+      this.imageErrors = [
+        ...this.imageErrors,
+        getApiClientMessage(error, 'We could not add this image. Please upload it again.'),
+      ];
+    }
   }
 
   /**

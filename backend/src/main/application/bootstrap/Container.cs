@@ -85,6 +85,32 @@ namespace backend.main.application.bootstrap
             return services;
         }
 
+        /// <summary>
+        /// Everything <see cref="MediaValidationPipeline"/> needs, and nothing that touches the
+        /// database: shared by the API, which runs it inline, and media-worker, which runs it off
+        /// a queue.
+        /// </summary>
+        public static IServiceCollection AddImageValidationPipeline(this IServiceCollection services, IConfiguration config)
+        {
+            services.Configure<ImageUploadOptions>(config.GetSection("ImageUpload"));
+            services.AddOptions<ImageProcessingOptions>()
+                .Bind(config.GetSection("ImageProcessing"))
+                .ValidateDataAnnotations()
+                // Each limit is valid on its own but they constrain each other: an allocation cap
+                // below the pixel buffer MaxPixels admits turns every large photo into a confusing
+                // "could not be read" at runtime. Fail at startup instead.
+                .Validate(
+                    options => options.MaxPixels * BytesPerPixel <= (long)options.MaxAllocationMegabytes * 1024 * 1024,
+                    "ImageProcessing:MaxAllocationMegabytes must cover ImageProcessing:MaxPixels at 4 bytes per pixel.")
+                .ValidateOnStart();
+            services.AddScoped<IAzureBlobService, AzureBlobService>();
+            // Singleton: it owns the process-wide processing slots and the bounded allocator.
+            services.AddSingleton<IImageProcessor, ImageSharpImageProcessor>();
+            services.AddScoped<MediaValidationPipeline>();
+
+            return services;
+        }
+
         public static IServiceCollection AddClubPostSearchInfrastructure(this IServiceCollection services, IConfiguration config)
         {
             var featureFlags = BuildFeatureFlagEvaluator(config);
@@ -166,17 +192,7 @@ namespace backend.main.application.bootstrap
 
             services.Configure<ClubVersioningOptions>(config.GetSection("ClubVersioning"));
             services.Configure<EventVersioningOptions>(config.GetSection("EventVersioning"));
-            services.Configure<ImageUploadOptions>(config.GetSection("ImageUpload"));
-            services.AddOptions<ImageProcessingOptions>()
-                .Bind(config.GetSection("ImageProcessing"))
-                .ValidateDataAnnotations()
-                // Each limit is valid on its own but they constrain each other: an allocation cap
-                // below the pixel buffer MaxPixels admits turns every large photo into a confusing
-                // "could not be read" at runtime. Fail at startup instead.
-                .Validate(
-                    options => options.MaxPixels * BytesPerPixel <= (long)options.MaxAllocationMegabytes * 1024 * 1024,
-                    "ImageProcessing:MaxAllocationMegabytes must cover ImageProcessing:MaxPixels at 4 bytes per pixel.")
-                .ValidateOnStart();
+            services.AddImageValidationPipeline(config);
             services.Configure<OrphanBlobCleanupOptions>(config.GetSection("OrphanBlobCleanup"));
             services.Configure<RecentlyViewedOptions>(config.GetSection("RecentlyViewed"));
             services.AddOptions<ProfileOptions>()
@@ -271,13 +287,28 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IUsernameAvailabilityService, UsernameAvailabilityService>();
             services.AddScoped<IEmailAvailabilityService, EmailAvailabilityService>();
             services.AddScoped<IUsernameSuggestionService, UsernameSuggestionService>();
-            services.AddScoped<IAzureBlobService, AzureBlobService>();
-            // Singleton: it owns the process-wide processing slots and the bounded allocator.
-            services.AddSingleton<IImageProcessor, ImageSharpImageProcessor>();
             services.AddScoped<OrphanBlobCleanupRunner>();
-            services.AddScoped<MediaValidationPipeline>();
-            services.AddScoped<QuarantineReaperRunner>();
             services.AddScoped<IMediaAssetQueryService, MediaAssetQueryService>();
+            services.AddScoped<MediaValidationRecorder>();
+
+            // Inline (the default) validates inside the attach request; off hands the asset to
+            // media-worker and records its verdict when the status consumer reads it.
+            var mediaWorkerValidates = IsMediaWorkerValidating(featureFlags);
+            services.AddScoped(provider => new QuarantineReaperRunner(
+                provider.GetRequiredService<IMediaAssetRepository>(),
+                provider.GetRequiredService<IAzureBlobService>(),
+                provider.GetRequiredService<TimeProvider>(),
+                releaseStaleClaims: !mediaWorkerValidates));
+            if (mediaWorkerValidates)
+            {
+                services.AddScoped<IMediaValidationDispatcher, KafkaMediaValidationDispatcher>();
+                services.AddScoped<MediaValidationReconcilerRunner>();
+                services.AddSingleton(MediaValidationStatusConsumerOptions.FromEnvironment());
+            }
+            else
+            {
+                services.AddScoped<IMediaValidationDispatcher, InlineMediaValidationDispatcher>();
+            }
 
             // Off reverts uploads to the presigned-into-public-container path that preceded
             // quarantine, attach-time byte checks included.
@@ -382,6 +413,12 @@ namespace backend.main.application.bootstrap
                     services.AddHostedService<BlobStorageStartupCheck>();
                 }
 
+                if (mediaWorkerValidates)
+                {
+                    services.AddHostedService<MediaValidationStatusConsumer>();
+                    services.AddHostedService<MediaValidationReconciler>();
+                }
+
                 // Named after the surfaces that actually produce typing rather than the club
                 // parent, so the sweeper's lifetime tracks what it reaps.
                 if (featureFlags.IsEnabled(FeatureFlagKeys.ClubsDiscussions)
@@ -412,6 +449,14 @@ namespace backend.main.application.bootstrap
 
             return services;
         }
+
+        /// <summary>
+        /// Whether attach hands assets to media-worker. <c>storage.quarantine.inline</c> is a child
+        /// of quarantine, so it is off whenever quarantine is, and quarantine has to be checked too.
+        /// </summary>
+        internal static bool IsMediaWorkerValidating(IFeatureFlagEvaluator featureFlags) =>
+            featureFlags.IsEnabled(FeatureFlagKeys.StorageQuarantine)
+            && !featureFlags.IsEnabled(FeatureFlagKeys.StorageQuarantineInline);
 
         private static IFeatureFlagEvaluator BuildFeatureFlagEvaluator(IConfiguration config)
         {

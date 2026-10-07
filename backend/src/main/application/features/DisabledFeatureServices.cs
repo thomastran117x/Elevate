@@ -177,6 +177,24 @@ public sealed class DisabledMediaAssetService : IMediaAssetService
         checkScope?.Invoke(intent);
         return intent;
     }
+
+    /// <remarks>
+    /// One at a time: nothing here waits on anything, so there is nothing to overlap.
+    /// </remarks>
+    public async Task<IReadOnlyList<BlobUploadIntent>> AttachAllAsync(
+        int userId,
+        IReadOnlyList<MediaAttachment> attachments,
+        CancellationToken cancellationToken = default)
+    {
+        var intents = new List<BlobUploadIntent>(attachments.Count);
+        foreach (var attachment in attachments)
+        {
+            intents.Add(await AttachAsync(
+                userId, attachment.ImageUrl, attachment.Subject, attachment.CheckScope, cancellationToken));
+        }
+
+        return intents;
+    }
 }
 
 public sealed class DisabledPaymentService : IPaymentService

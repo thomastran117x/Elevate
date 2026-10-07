@@ -21,7 +21,8 @@ internal static class EventImageUploadValidator
         BlobUploadIntentValidator.IntentKey(imageUrl);
 
     /// <summary>
-    /// Validates every URL that is not already attached to the event.
+    /// Validates every URL that is not already attached to the event, as one unit: each image is
+    /// handed off before the save waits, once, for all of them.
     /// </summary>
     /// <param name="existingUrls">
     /// URLs the event already holds. These skip validation because their upload intent has long
@@ -33,19 +34,20 @@ internal static class EventImageUploadValidator
         int userId,
         IEnumerable<string> imageUrls,
         int? eventId = null,
-        ISet<string>? existingUrls = null)
+        ISet<string>? existingUrls = null,
+        CancellationToken cancellationToken = default)
     {
-        foreach (var imageUrl in imageUrls)
-        {
-            if (existingUrls?.Contains(imageUrl) == true)
-                continue;
-
-            await mediaAssets.AttachAsync(
-                userId,
+        var attachments = imageUrls
+            .Where(imageUrl => existingUrls?.Contains(imageUrl) != true)
+            .Distinct(StringComparer.Ordinal)
+            .Select(imageUrl => new MediaAttachment(
                 imageUrl,
                 "Event images",
-                intent => RequireEventScope(intent, clubId, eventId));
-        }
+                intent => RequireEventScope(intent, clubId, eventId)))
+            .ToList();
+
+        if (attachments.Count > 0)
+            await mediaAssets.AttachAllAsync(userId, attachments, cancellationToken);
     }
 
     private static void RequireEventScope(BlobUploadIntent intent, int clubId, int? eventId)

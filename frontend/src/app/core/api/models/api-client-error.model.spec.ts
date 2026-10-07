@@ -5,6 +5,7 @@ import {
   ApiClientServerError,
   GENERIC_API_ERROR_MESSAGE,
   getApiClientMessage,
+  isApiClientErrorCode,
 } from './api-client-error.model';
 
 describe('api-client-error.model', () => {
@@ -120,6 +121,49 @@ describe('api-client-error.model', () => {
     expect(getApiClientMessage(new ApiClientClientError('   ', 400), 'Fallback message.')).toBe(
       'Fallback message.',
     );
+  });
+
+  describe('isApiClientErrorCode', () => {
+    const raw = (status: number, error: unknown) => new HttpErrorResponse({ status, error });
+
+    it('matches the code of a normalized client error', () => {
+      expect(
+        isApiClientErrorCode(
+          new ApiClientClientError('x', 409, 'MEDIA_PROCESSING'),
+          'MEDIA_PROCESSING',
+        ),
+      ).toBeTrue();
+      expect(
+        isApiClientErrorCode(new ApiClientClientError('x', 409, 'CONFLICT'), 'MEDIA_PROCESSING'),
+      ).toBeFalse();
+    });
+
+    it('never matches a server error', () => {
+      expect(
+        isApiClientErrorCode(new ApiClientServerError('x', 500), 'MEDIA_PROCESSING'),
+      ).toBeFalse();
+    });
+
+    it('reads the code of a raw client error, in either casing', () => {
+      expect(
+        isApiClientErrorCode(raw(409, { error: { code: 'MEDIA_PROCESSING' } }), 'MEDIA_PROCESSING'),
+      ).toBeTrue();
+      expect(
+        isApiClientErrorCode(raw(409, { error: { Code: 'MEDIA_PROCESSING' } }), 'MEDIA_PROCESSING'),
+      ).toBeTrue();
+    });
+
+    it('does not match a raw error without that code, or outside the 4xx range', () => {
+      expect(
+        isApiClientErrorCode(raw(409, { error: { code: 'CONFLICT' } }), 'MEDIA_PROCESSING'),
+      ).toBeFalse();
+      expect(isApiClientErrorCode(raw(409, 'plain text'), 'MEDIA_PROCESSING')).toBeFalse();
+      expect(isApiClientErrorCode(raw(409, { error: { code: '  ' } }), '  ')).toBeFalse();
+      expect(
+        isApiClientErrorCode(raw(503, { error: { code: 'MEDIA_PROCESSING' } }), 'MEDIA_PROCESSING'),
+      ).toBeFalse();
+      expect(isApiClientErrorCode(new Error('boom'), 'MEDIA_PROCESSING')).toBeFalse();
+    });
   });
 
   describe('detail flattening', () => {

@@ -923,8 +923,11 @@ namespace backend.main.features.events
                 await EnsureCanManageClubAsync(clubId, userId, userRole);
 
                 var itemList = items.ToList();
-                foreach (var item in itemList)
-                    await ValidateUploadedImageUrlsAsync(clubId, userId, item.ImageUrls.Take(5).ToList());
+
+                // One unit for the whole batch, so its images are validated together rather
+                // than item by item, each waiting in turn.
+                await ValidateUploadedImageUrlsAsync(
+                    clubId, userId, itemList.SelectMany(item => item.ImageUrls.Take(5)).ToList());
 
                 var now = GetUtcNow();
                 var entities = itemList.Select(item => new Events
