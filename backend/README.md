@@ -18,6 +18,8 @@ Use the SDK selected by `global.json`. Provision PostgreSQL, Redis, Elasticsearc
 
 Normal startup validates settings, verifies database connectivity, applies committed migrations, and optionally seeds data. API startup does not start the six separate worker executables. `PORT` defaults to 8090; controllers are under `/api` and the club hub is at `/api/hubs/clubs`.
 
+Authentication abuse counters are fixed-window Redis keys shared by API replicas, with independent hashed source-IP and target dimensions. The existing in-memory IP policies remain active as a degraded fallback. Configure budgets under `Auth:AbuseProtection`; see the [configuration guide](../docs/CONFIGURATION.md#authentication-abuse-protection).
+
 Local `.env` loading walks executable ancestors; nearer files can override root settings, while existing nonempty process values are preserved. Containers rely on injected environment values. See configuration before retaining older `backend/.env` files.
 
 ## Migrations and API reference

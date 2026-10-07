@@ -51,8 +51,12 @@ public sealed class AuthApiTestApp : IAsyncDisposable
     private readonly AuthApiTestAppPool.Lease _lease;
     private readonly KafkaTopicProbe _kafkaProbe;
     private readonly TestResourceNamespace _resources;
+    private readonly Action<IServiceCollection>? _serviceOverrides;
+    private readonly IReadOnlyDictionary<string, string?>? _configurationOverrides;
+    private readonly List<(TestWebApplicationFactory Factory, HttpClient Client)> _peers = [];
 
     public HttpClient Client { get; }
+    public IServiceProvider Services => _factory.Services;
     public ICacheService Cache => _factory.Services.GetRequiredService<ICacheService>();
     /// <summary>The running app's filter registry, for asserting what the advisory endpoints can rely on.</summary>
     public IBloomFilterRegistry BloomFilters =>
@@ -71,13 +75,17 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         HttpClient client,
         AuthApiTestAppPool.Lease lease,
         KafkaTopicProbe kafkaProbe,
-        TestResourceNamespace resources)
+        TestResourceNamespace resources,
+        Action<IServiceCollection>? serviceOverrides,
+        IReadOnlyDictionary<string, string?>? configurationOverrides)
     {
         _factory = factory;
         Client = client;
         _lease = lease;
         _kafkaProbe = kafkaProbe;
         _resources = resources;
+        _serviceOverrides = serviceOverrides;
+        _configurationOverrides = configurationOverrides;
         Publisher = new KafkaBackedPublisher(this);
     }
 
@@ -127,7 +135,9 @@ public sealed class AuthApiTestApp : IAsyncDisposable
                 client,
                 lease,
                 lease.Environment.CreateKafkaProbe(),
-                lease.Resources);
+                lease.Resources,
+                serviceOverrides,
+                configurationOverrides);
             await app.MarkNotificationBoundaryAsync();
             return app;
         }
@@ -136,6 +146,29 @@ public sealed class AuthApiTestApp : IAsyncDisposable
             await lease.DisposeAsync();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Creates another API host over the same Postgres database and Redis namespace, allowing
+    /// cross-replica behavior to be exercised without sharing process-local state.
+    /// </summary>
+    public HttpClient CreatePeerClient()
+    {
+        var factory = new TestWebApplicationFactory(
+            _lease.Environment,
+            _lease.Database.ConnectionString,
+            _resources,
+            _serviceOverrides,
+            _configurationOverrides);
+        var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36");
+        _peers.Add((factory, client));
+        return client;
     }
 
     public async Task<User> SeedUserAsync(
@@ -465,19 +498,27 @@ public sealed class AuthApiTestApp : IAsyncDisposable
     }
 
     public async Task<HttpResponseMessage> PostJsonWithCsrfAsync(string path, object payload)
+        => await PostJsonWithCsrfAsync(Client, path, payload);
+
+    public async Task<HttpResponseMessage> PostJsonWithCsrfAsync(
+        HttpClient client,
+        string path,
+        object payload)
     {
-        var token = await GetCsrfTokenAsync();
+        var token = await GetCsrfTokenAsync(client);
         var request = new HttpRequestMessage(HttpMethod.Post, path)
         {
             Content = JsonContent.Create(payload)
         };
         request.Headers.Add(CsrfConfiguration.CsrfHeaderName, token);
-        return await Client.SendAsync(request);
+        return await client.SendAsync(request);
     }
 
-    public async Task<string> GetCsrfTokenAsync()
+    public Task<string> GetCsrfTokenAsync() => GetCsrfTokenAsync(Client);
+
+    public async Task<string> GetCsrfTokenAsync(HttpClient client)
     {
-        var response = await Client.GetAsync("/api/auth/csrf");
+        var response = await client.GetAsync("/api/auth/csrf");
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadFromJsonAsync<ApiEnvelope<CsrfTokenPayload>>(JsonOptions);
@@ -583,6 +624,11 @@ public sealed class AuthApiTestApp : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        foreach (var (factory, client) in _peers)
+        {
+            client.Dispose();
+            factory.Dispose();
+        }
         Client.Dispose();
         await _lease.DisposeAsync();
     }

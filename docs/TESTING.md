@@ -93,7 +93,7 @@ npm run playwright:install
 npm run test:e2e
 ```
 
-Playwright tests live in `tests/` and use `playwright.config.ts`. They start `npm run start:e2e` at `http://127.0.0.1:3101` and can reuse a local server. The normal development port is 3090. The current home-page smoke test checks rendered UI; additional authenticated journeys require appropriate backend/test data.
+Playwright tests live in `tests/` and use `playwright.config.ts`. They start `npm run start:e2e` at `http://localhost:3101` and can reuse a local server. The normal development port is 3090. The current home-page smoke test checks rendered UI; additional authenticated journeys require appropriate backend/test data.
 
 The root `.mcp.json` configures Playwright; `frontend/.mcp.json` adds Angular CLI MCP. Launch frontend-focused tools from the Angular workspace so the CLI can resolve `angular.json`. Start the desired app server before navigating with browser tools. Equivalent frontend VS Code configuration is in `frontend/.vscode/mcp.json`.
 

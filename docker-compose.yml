@@ -101,6 +101,7 @@ services:
       # the pipeline inside the request. Set true to validate inline.
       FEATURE_STORAGE_QUARANTINE_INLINE: "${FEATURE_STORAGE_QUARANTINE_INLINE:-false}"
       FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3090}"
+      Cors__Origins__0: "${CORS_ORIGIN:-http://localhost:3090}"
       # OAuth. The backend reads MS_CLIENT_ID; the single source var is MSAL_CLIENT_ID
       # (also consumed by the frontend), mapped here.
       MS_CLIENT_ID: "${MSAL_CLIENT_ID:-}"
@@ -111,6 +112,7 @@ services:
       # Captcha.
       CAPTCHA_PROVIDER: "${CAPTCHA_PROVIDER:-google}"
       GOOGLE_CAPTCHA_SECRET: "${GOOGLE_CAPTCHA_SECRET:-}"
+      CAPTCHA_ALLOW_BYPASS: "${CAPTCHA_ALLOW_BYPASS:-false}"
       # Blob storage (Azure).
       AZURE_STORAGE_CONNECTION_STRING: "${AZURE_STORAGE_CONNECTION_STRING:-}"
       AZURE_STORAGE_CONTAINER_NAME: "${AZURE_STORAGE_CONTAINER_NAME:-}"
@@ -119,6 +121,26 @@ services:
       AUTH_TOTP_ENCRYPTION_KEY: "${AUTH_TOTP_ENCRYPTION_KEY:-}"
       AUTH_TOTP_MFA_ENROLLMENT_ENABLED: "${AUTH_TOTP_MFA_ENROLLMENT_ENABLED:-true}"
       AUTH_TOTP_MFA_STEP_UP_ENABLED: "${AUTH_TOTP_MFA_STEP_UP_ENABLED:-true}"
+      Auth__AbuseProtection__KeyPrefix: "${AUTH_ABUSE_KEY_PREFIX:-auth:abuse:v1}"
+      Auth__AbuseProtection__SharedIpPermitLimit: "${AUTH_ABUSE_SHARED_IP_LIMIT:-10}"
+      Auth__AbuseProtection__SharedIpWindow: "${AUTH_ABUSE_SHARED_IP_WINDOW:-00:05:00}"
+      Auth__AbuseProtection__LoginAccountFailureLimit: "${AUTH_ABUSE_LOGIN_ACCOUNT_LIMIT:-10}"
+      Auth__AbuseProtection__LoginAccountFailureWindow: "${AUTH_ABUSE_LOGIN_ACCOUNT_WINDOW:-00:15:00}"
+      Auth__AbuseProtection__RecoveryTargetPermitLimit: "${AUTH_ABUSE_RECOVERY_TARGET_LIMIT:-3}"
+      Auth__AbuseProtection__RecoveryTargetWindow: "${AUTH_ABUSE_RECOVERY_TARGET_WINDOW:-01:00:00}"
+      Auth__AbuseProtection__VerificationTargetPermitLimit: "${AUTH_ABUSE_VERIFICATION_TARGET_LIMIT:-5}"
+      Auth__AbuseProtection__VerificationTargetWindow: "${AUTH_ABUSE_VERIFICATION_TARGET_WINDOW:-00:15:00}"
+      Auth__AbuseProtection__OAuthCompletionTargetPermitLimit: "${AUTH_ABUSE_OAUTH_TARGET_LIMIT:-5}"
+      Auth__AbuseProtection__OAuthCompletionTargetWindow: "${AUTH_ABUSE_OAUTH_TARGET_WINDOW:-00:15:00}"
+      Auth__AbuseProtection__MfaDeliveryTargetPermitLimit: "${AUTH_ABUSE_MFA_DELIVERY_TARGET_LIMIT:-5}"
+      Auth__AbuseProtection__MfaDeliveryTargetWindow: "${AUTH_ABUSE_MFA_DELIVERY_TARGET_WINDOW:-00:15:00}"
+      Auth__AbuseProtection__EmailAvailabilityIpPermitLimit: "${AUTH_ABUSE_EMAIL_AVAILABILITY_IP_LIMIT:-15}"
+      Auth__AbuseProtection__EmailAvailabilityIpWindow: "${AUTH_ABUSE_EMAIL_AVAILABILITY_IP_WINDOW:-00:01:00}"
+      Auth__AbuseProtection__EmailAvailabilityTargetPermitLimit: "${AUTH_ABUSE_EMAIL_AVAILABILITY_TARGET_LIMIT:-5}"
+      Auth__AbuseProtection__EmailAvailabilityTargetWindow: "${AUTH_ABUSE_EMAIL_AVAILABILITY_TARGET_WINDOW:-00:15:00}"
+      Auth__AbuseProtection__CaptchaFailureThreshold: "${AUTH_ABUSE_CAPTCHA_THRESHOLD:-3}"
+      Auth__AbuseProtection__DelayBase: "${AUTH_ABUSE_DELAY_BASE:-00:00:00.500}"
+      Auth__AbuseProtection__DelayMaximum: "${AUTH_ABUSE_DELAY_MAXIMUM:-00:00:08}"
       # Payments (Stripe).
       STRIPE_API_KEY: "${STRIPE_API_KEY:-}"
       STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET:-}"

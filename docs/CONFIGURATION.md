@@ -18,6 +18,7 @@ The frontend generator runs in `frontend/` and uses dotenv's local `.env` plus p
 | --------------------------- | ---------------------------------------------------------------------- |
 | `FRONTEND_URL`              | Public frontend origin; also used in backend/email links               |
 | `BACKEND_URL`               | Browser API base baked into the frontend                               |
+| `CORS_ORIGIN`               | Browser origin accepted by the Compose backend CORS policy             |
 | `API_PROXY_TARGET`          | Backend origin used by the dev/SSR proxy; supply to the server process |
 | `FRONTEND_BACKEND_URL`      | Compose override for the frontend's browser API base                   |
 | `FRONTEND_API_PROXY_TARGET` | Compose override for its proxy upstream                                |
@@ -41,7 +42,7 @@ Compose maps `MSAL_CLIENT_ID` to backend `MS_CLIENT_ID`. A locally run backend m
 | JWT                     | `JWT_SECRET_ACCESS`, `JWT_SECRET_VERIFICATION`; legacy access-secret fallback `JWT_SECRET_KEY`              |
 | Google OAuth            | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`                                                                  |
 | Microsoft / Apple OAuth | `MS_CLIENT_ID`, `MS_TENANT_ID`, `APPLE_CLIENT_ID`                                                           |
-| Captcha                 | `CAPTCHA_PROVIDER`, `GOOGLE_CAPTCHA_SECRET`; public `GOOGLE_SITE_KEY`                                       |
+| Captcha                 | `CAPTCHA_PROVIDER`, `GOOGLE_CAPTCHA_SECRET`, non-production-only `CAPTCHA_ALLOW_BYPASS`; public `GOOGLE_SITE_KEY` |
 | Email                   | `SMTP_SERVER`, `SMTP_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`                                                  |
 | SMS                     | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, plus messaging service SID or sender phone                       |
 | Azure blobs             | `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_CONTAINER_NAME`, `AZURE_STORAGE_QUARANTINE_CONTAINER_NAME` (default `event-assets-quarantine`) |
@@ -124,7 +125,13 @@ The `BloomFilters` section controls refresh (30 seconds), rebuild (6 hours), ret
 
 Filters combine local and Redis bitmaps. They can avoid database reads for definitely absent values but never authorize a write. Rebuilds rotate generations and replay concurrent additions; deleted values persist until rebuilding. With `bloom=false`, callers fall back to database checks.
 
-Anonymous email availability exposes account existence and is intentionally rate limited: `RateLimiter:EmailAvailabilityPermitLimit` defaults to 15/minute/IP; username suggestions default to 10/minute/IP through `UsernameSuggestionsPermitLimit`. The latter bounds database/candidate-generation cost.
+Anonymous email availability exposes account existence and is intentionally protected by CAPTCHA plus independent Redis-backed source and normalized-email budgets. `Auth:AbuseProtection:EmailAvailabilityIpPermitLimit` defaults to 15/minute/IP and `EmailAvailabilityTargetPermitLimit` defaults to 5/15 minutes/email. The local `RateLimiter:EmailAvailabilityPermitLimit` remains active as a per-replica IP fallback. Username suggestions default to 10/minute/IP through `UsernameSuggestionsPermitLimit`.
+
+### Authentication abuse protection
+
+`Auth:AbuseProtection` is validated at startup and stores only SHA-256 hashes of type-tagged, normalized identifiers under the `auth:abuse:v1` prefix. Defaults are 10 shared source-IP attempts per five minutes, 10 login failures per normalized account per 15 minutes, 3 recovery sends per target per hour, and 5 verification, OAuth-completion, MFA-delivery, or email-availability attempts per target per 15 minutes. Login requires CAPTCHA after three failures and delays failed responses by 500 ms, 1, 2, 4, then 8 seconds (capped). A successful credential check clears the account failure state, including when MFA or device verification follows.
+
+Redis is the cross-replica authority. If it is unavailable, shared source and target checks fail open while the existing ASP.NET in-memory IP policies continue enforcing on each replica; the transition emits one critical operational event and recovery emits an informational event. Configure the values directly with `Auth__AbuseProtection__...` or use the `AUTH_ABUSE_*` variables mapped by Compose.
 
 ### Email changes
 

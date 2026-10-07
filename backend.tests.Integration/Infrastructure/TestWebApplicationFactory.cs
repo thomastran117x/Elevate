@@ -59,10 +59,12 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
                 [SearchIndexNames.EventsConfigurationKey] = _resources.EventsIndex,
                 [SearchIndexNames.ClubsConfigurationKey] = _resources.ClubsIndex,
                 [SearchIndexNames.ClubPostsConfigurationKey] = _resources.ClubPostsIndex,
-                // Retained for intent, but these do not actually raise the limits:
+                // Retained for the normal high-volume suite, but these do not actually raise the limits:
                 // AddInMemoryRateLimiter reads configuration at service-registration time, which
                 // happens before this source is layered in. Program.cs therefore skips
-                // UseRateLimiter entirely under the Testing environment instead.
+                // UseRateLimiter by default under the Testing environment instead. Focused tests
+                // can set Testing:EnableRateLimiter=true to mount the production middleware with
+                // its normal compiled/configured budgets.
                 ["RateLimiter:PermitLimit"] = "100000",
                 ["RateLimiter:AuthPermitLimit"] = "100000"
             };
