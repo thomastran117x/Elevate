@@ -2,6 +2,11 @@ using StackExchange.Redis;
 
 namespace backend.main.features.cache
 {
+    public readonly record struct CacheScriptResult(bool Succeeded, object? Value)
+    {
+        public static CacheScriptResult Unavailable => new(false, null);
+    }
+
     public interface ICacheService
     {
         Task<bool> SetValueAsync(string key, string value, TimeSpan? expiry = null);
@@ -62,5 +67,25 @@ namespace backend.main.features.cache
         /// <param name="values">Redis values (ARGV).</param>
         /// <returns>RedisResult from Redis, or an array of RedisResult when using no-op (allow-all).</returns>
         Task<object> EvalAsync(string script, RedisKey[] keys, RedisValue[] values);
+
+        /// <summary>
+        /// Evaluates a script while preserving the distinction between a successful Redis result
+        /// and the cache's legacy fail-open value. Security controls must use this member rather
+        /// than <see cref="EvalAsync"/> so an outage cannot look like a healthy allow decision.
+        /// </summary>
+        async Task<CacheScriptResult> TryEvalAsync(
+            string script,
+            RedisKey[] keys,
+            RedisValue[] values)
+        {
+            try
+            {
+                return new CacheScriptResult(true, await EvalAsync(script, keys, values));
+            }
+            catch
+            {
+                return CacheScriptResult.Unavailable;
+            }
+        }
     }
 }

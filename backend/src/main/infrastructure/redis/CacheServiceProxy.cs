@@ -103,5 +103,11 @@ namespace backend.main.infrastructure.redis
 
         public Task<object> EvalAsync(string script, RedisKey[] keys, RedisValue[] values) =>
             Current.EvalAsync(script, keys, values);
+
+        public Task<CacheScriptResult> TryEvalAsync(
+            string script,
+            RedisKey[] keys,
+            RedisValue[] values) =>
+            Current.TryEvalAsync(script, keys, values);
     }
 }

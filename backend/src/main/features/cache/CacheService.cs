@@ -190,5 +190,23 @@ namespace backend.main.features.cache
                 return (object)new int[] { 1, 0 };
             }
         }
+
+        public async Task<CacheScriptResult> TryEvalAsync(
+            string script,
+            RedisKey[] keys,
+            RedisValue[] values)
+        {
+            try
+            {
+                return new CacheScriptResult(
+                    true,
+                    await _db.ScriptEvaluateAsync(script, keys, values)
+                );
+            }
+            catch (Exception)
+            {
+                return CacheScriptResult.Unavailable;
+            }
+        }
     }
 }

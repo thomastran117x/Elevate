@@ -107,9 +107,18 @@ namespace backend.main.application.security
                 {
                     context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
                     context.HttpContext.Response.ContentType = "application/json";
+                    if (context.Lease.TryGetMetadata(
+                        MetadataName.RetryAfter,
+                        out var retryAfter))
+                    {
+                        context.HttpContext.Response.Headers.RetryAfter = Math.Max(
+                            1,
+                            (int)Math.Ceiling(retryAfter.TotalSeconds)
+                        ).ToString();
+                    }
                     await context.HttpContext.Response.WriteAsJsonAsync(
                         ApiResponse<object?>.Failure(
-                            "Rate limit exceeded. Please try again later.",
+                            "Too many requests. Please try again later.",
                             "TOO_MANY_REQUESTS"
                         ),
                         cancellationToken
