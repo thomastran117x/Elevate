@@ -1,12 +1,14 @@
 using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.auth;
+using backend.main.features.auth.abuse;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
 using backend.main.features.profile.contracts.requests;
 using backend.main.features.profile.contracts.responses;
 using backend.main.features.profile.email;
 using backend.main.shared.exceptions.http;
+using backend.main.shared.requests;
 using backend.main.shared.responses;
 using backend.main.shared.utilities.logger;
 using backend.main.utilities;
@@ -28,13 +30,17 @@ namespace backend.main.features.profile
         private readonly ITokenService _tokenService;
         private readonly IEmailChangeService _emailChangeService;
         private readonly TimeProvider _timeProvider;
+        private readonly IAuthAbuseProtectionService _abuseProtection;
+        private readonly ClientRequestInfo _requestInfo;
 
         public ProfileController(
             IUserService userService,
             IAuthService authService,
             ITokenService tokenService,
             IEmailChangeService emailChangeService,
-            TimeProvider timeProvider
+            TimeProvider timeProvider,
+            IAuthAbuseProtectionService abuseProtection,
+            ClientRequestInfo requestInfo
         )
         {
             _userService = userService;
@@ -42,6 +48,8 @@ namespace backend.main.features.profile
             _tokenService = tokenService;
             _emailChangeService = emailChangeService;
             _timeProvider = timeProvider;
+            _abuseProtection = abuseProtection;
+            _requestInfo = requestInfo;
         }
 
         [HttpGet]
@@ -260,6 +268,15 @@ namespace backend.main.features.profile
             try
             {
                 var userPayload = User.GetUserPayload();
+                await _abuseProtection.EnsureSourceAllowedAsync(
+                    AuthAbuseFlow.MfaDelivery,
+                    _requestInfo.IpAddress,
+                    HttpContext.RequestAborted);
+                await _abuseProtection.EnsureTargetAllowedAsync(
+                    AuthAbuseFlow.MfaDelivery,
+                    AuthAbuseTargetKind.AccountId,
+                    userPayload.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    HttpContext.RequestAborted);
                 var challenge = await _emailChangeService.RequestChangeAsync(
                     userPayload.Id,
                     request.NewEmail,

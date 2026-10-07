@@ -2,9 +2,11 @@ using System.Security.Claims;
 
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.abuse;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.totp;
 using backend.main.shared.responses;
+using backend.tests.Unit.Support;
 
 using FluentAssertions;
 
@@ -144,7 +146,11 @@ public class AuthTotpMfaControllerTests
         totpService ??= new Mock<ITotpMfaEnrollmentService>().Object;
         settingsBuilder ??= new Mock<IMfaSettingsBuilder>().Object;
 
-        return new AuthTotpMfaController(totpService, settingsBuilder)
+        return new AuthTotpMfaController(
+            totpService,
+            settingsBuilder,
+            new Mock<IAuthAbuseProtectionService>().Object,
+            TestRequestInfoFactory.Browser())
         {
             ControllerContext = new ControllerContext
             {

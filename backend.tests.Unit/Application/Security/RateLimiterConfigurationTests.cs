@@ -50,7 +50,7 @@ public class RateLimiterConfigurationTests
         rejectedContext.Response.Body.Position = 0;
         using var json = await JsonDocument.ParseAsync(rejectedContext.Response.Body);
         json.RootElement.GetProperty("message").GetString()
-            .Should().Be("Rate limit exceeded. Please try again later.");
+            .Should().Be("Too many requests. Please try again later.");
         json.RootElement.GetProperty("error").GetProperty("code").GetString()
             .Should().Be("TOO_MANY_REQUESTS");
     }

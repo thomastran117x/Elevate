@@ -1,5 +1,6 @@
 using backend.main.application.features;
 using backend.main.features.auth;
+using backend.main.features.auth.abuse;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.device;
 using backend.main.features.auth.mfa;
@@ -199,6 +200,12 @@ namespace backend.main.application.bootstrap
                 .Bind(config.GetSection("Profile"))
                 .ValidateDataAnnotations()
                 .ValidateOnStart();
+            services.AddOptions<AuthAbuseProtectionOptions>()
+                .Bind(config.GetSection(AuthAbuseProtectionOptions.SectionName))
+                .ValidateOnStart();
+            services.AddSingleton<
+                IValidateOptions<AuthAbuseProtectionOptions>,
+                AuthAbuseProtectionOptionsValidator>();
             services.AddOptions<BloomFilterOptions>()
                 .Bind(config.GetSection("BloomFilters"))
                 .ValidateDataAnnotations()
@@ -207,6 +214,8 @@ namespace backend.main.application.bootstrap
                     "BloomFilters:Targets must contain at least one target.")
                 .ValidateOnStart();
             services.AddSingleton(TimeProvider.System);
+            services.AddSingleton<IAuthAbuseProtectionStore, RedisAuthAbuseProtectionStore>();
+            services.AddSingleton<IAuthAbuseProtectionService, AuthAbuseProtectionService>();
             services.AddSearchInfrastructure(config, featureFlags);
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
             services.AddSingleton<IRepositoryAttributeResolver, RepositoryAttributeResolver>();
@@ -485,5 +494,4 @@ namespace backend.main.application.bootstrap
         }
     }
 }
-
 

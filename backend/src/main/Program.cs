@@ -147,7 +147,7 @@ app.UseAuthorization();
 // configuration when services are registered — before WebApplicationFactory layers its own
 // sources in — which is the same reason the factory re-registers AppDatabaseContext by hand
 // rather than relying on Database:ConnectionString.
-if (!isTesting)
+if (!isTesting || builder.Configuration.GetValue<bool>("Testing:EnableRateLimiter"))
 {
     app.UseRateLimiter();
 }

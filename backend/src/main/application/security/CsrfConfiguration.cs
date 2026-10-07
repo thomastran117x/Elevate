@@ -12,6 +12,7 @@ namespace backend.main.application.security
         [
             $"{RoutePaths.ApiAuthPath}/login",
             $"{RoutePaths.ApiAuthPath}/signup",
+            $"{RoutePaths.ApiAuthPath}/email/availability",
             $"{RoutePaths.ApiAuthPath}/verify",
             $"{RoutePaths.ApiAuthPath}/verify/otp",
             $"{RoutePaths.ApiAuthPath}/google",

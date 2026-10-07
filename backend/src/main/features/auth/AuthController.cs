@@ -2,6 +2,7 @@ using backend.main.application.bootstrap;
 using backend.main.application.features;
 using backend.main.application.security;
 using backend.main.features.auth;
+using backend.main.features.auth.abuse;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
@@ -43,6 +44,7 @@ namespace backend.main.features.auth
         private readonly IConfiguration _configuration;
         private readonly ITokenService _tokenService;
         private readonly IEmailChangeService _emailChangeService;
+        private readonly IAuthAbuseProtectionService _abuseProtection;
 
         public AuthController(
             IAuthService authService,
@@ -55,7 +57,8 @@ namespace backend.main.features.auth
             ClientRequestInfo requestInfo,
             IConfiguration configuration,
             ITokenService tokenService,
-            IEmailChangeService emailChangeService
+            IEmailChangeService emailChangeService,
+            IAuthAbuseProtectionService abuseProtection
         )
         {
             _authService = authService;
@@ -69,19 +72,35 @@ namespace backend.main.features.auth
             _configuration = configuration;
             _tokenService = tokenService;
             _emailChangeService = emailChangeService;
+            _abuseProtection = abuseProtection;
         }
 
         [HttpPost("login")]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<LoginAuthenticationResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status429TooManyRequests)]
         public async Task<IActionResult> LocalAuthenticate([FromBody] LoginRequest request)
         {
             try
             {
-                if (!_seedBypass.IsBypassEnabledForUsername(request.Username)
-                    && !await _captchaService.VerifyCaptchaAsync(request.Captcha))
-                    throw new BadRequestException("Invalid captcha.");
+                await _abuseProtection.EnsureSourceAllowedAsync(
+                    AuthAbuseFlow.General,
+                    _requestInfo.IpAddress,
+                    HttpContext.RequestAborted);
+                var abuseState = await _abuseProtection.EnsureLoginAllowedAsync(
+                    request.Username,
+                    HttpContext.RequestAborted);
+
+                if (abuseState.CaptchaRequired
+                    && !_seedBypass.IsBypassEnabledForUsername(request.Username)
+                    && !await _captchaService.VerifyCaptchaAsync(
+                        request.Captcha ?? string.Empty,
+                        HttpContext.RequestAborted))
+                {
+                    return await CreateFailedLoginResponseAsync(request.Username);
+                }
 
                 var result = await _authService.LoginAsync(
                     request.Username,
@@ -92,6 +111,9 @@ namespace backend.main.features.auth
                 );
 
                 var response = CreateLoginAuthenticationResponse(result);
+                await _abuseProtection.ResetLoginFailuresAsync(
+                    request.Username,
+                    HttpContext.RequestAborted);
                 return StatusCode(
                     200,
                     new ApiResponse<LoginAuthenticationResponse>(ResolveLoginMessage(response.Type), response)
@@ -99,6 +121,9 @@ namespace backend.main.features.auth
             }
             catch (Exception e)
             {
+                if (e is UnauthorizedException)
+                    return await CreateFailedLoginResponseAsync(request.Username);
+
                 if (e is AppException)
                     return HandleError.Resolve(e);
 
@@ -115,9 +140,17 @@ namespace backend.main.features.auth
         {
             try
             {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.Verification);
+
                 if (!_seedBypass.IsBypassEnabledFor(request.Email)
                     && !await _captchaService.VerifyCaptchaAsync(request.Captcha))
                     throw new BadRequestException("Invalid captcha.");
+
+                await _abuseProtection.EnsureTargetAllowedAsync(
+                    AuthAbuseFlow.Verification,
+                    AuthAbuseTargetKind.Email,
+                    request.Email,
+                    HttpContext.RequestAborted);
 
                 var challenge = await _authService.SignUpAsync(
                     request.Email,
@@ -267,29 +300,77 @@ namespace backend.main.features.auth
         /// therefore an account-existence oracle, accepted deliberately because the signup UX is
         /// judged to be worth it.
         ///
-        /// Be clear about what that costs: this is strictly cheaper to script than the signup it
-        /// serves. <c>LocalSignup</c> requires an antiforgery token and a passing captcha; this
-        /// requires neither and answers with a boolean. So existence testing that was previously
-        /// behind a captcha is now bounded only by
-        /// <see cref="RateLimiterConfiguration.EmailAvailabilityPolicyName"/>, which is why that
-        /// policy is half the username budget. Gate this endpoint, or lower that limit, if
-        /// enumeration ever matters more than the type-ahead. See the bloom filter section of
-        /// docs/CONFIGURATION.md.
+        /// The POST form requires antiforgery validation and a CAPTCHA. The deprecated GET form
+        /// requires the same CAPTCHA in <c>X-Captcha-Token</c>; it never accepts the token in the
+        /// query string. Both forms apply independent shared source-IP and normalized-email
+        /// budgets in addition to the replica-local IP fallback.
         ///
         /// The answer is advisory. An address reported free can be registered a moment later; the
         /// unique index is what actually decides.
         /// </remarks>
         [HttpGet("email/availability")]
+        [Obsolete("Use POST /api/auth/email/availability.")]
         [AllowAnonymous]
         [EnableRateLimiting(RateLimiterConfiguration.EmailAvailabilityPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<EmailAvailabilityResponse>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> CheckEmailAvailability(
+        [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status429TooManyRequests)]
+        public Task<IActionResult> CheckEmailAvailability(
             [FromQuery] string email,
+            [FromHeader(Name = "X-Captcha-Token")] string? captcha,
+            CancellationToken cancellationToken)
+        {
+            Response.Headers["Deprecation"] = "true";
+            Response.Headers.Append(
+                "Link",
+                "</api/auth/email/availability>; rel=\"successor-version\"");
+            return CheckEmailAvailabilityInternalAsync(email, captcha, cancellationToken);
+        }
+
+        [HttpPost("email/availability")]
+        [AllowAnonymous]
+        // CSRF is validated by UseRefreshCsrfValidation before authentication. This route is used
+        // by both anonymous signup and authenticated profile forms, so MVC validation after
+        // authentication would make one principal's antiforgery token invalid for the other.
+        [EnableRateLimiting(RateLimiterConfiguration.EmailAvailabilityPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<EmailAvailabilityResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status429TooManyRequests)]
+        public Task<IActionResult> CheckEmailAvailability(
+            [FromBody] EmailAvailabilityRequest request,
+            CancellationToken cancellationToken) =>
+            CheckEmailAvailabilityInternalAsync(
+                request.Email,
+                request.Captcha,
+                cancellationToken);
+
+        private async Task<IActionResult> CheckEmailAvailabilityInternalAsync(
+            string email,
+            string? captcha,
             CancellationToken cancellationToken)
         {
             try
             {
+                await _abuseProtection.EnsureSourceAllowedAsync(
+                    AuthAbuseFlow.EmailAvailability,
+                    _requestInfo.IpAddress,
+                    cancellationToken);
+
+                if (string.IsNullOrWhiteSpace(captcha)
+                    || !await _captchaService.VerifyCaptchaAsync(
+                    captcha ?? string.Empty,
+                    cancellationToken))
+                {
+                    throw new UnauthorizedException("Request could not be verified.");
+                }
+
                 var normalized = EmailPolicy.NormalizeAndValidate(email);
+
+                await _abuseProtection.EnsureTargetAllowedAsync(
+                    AuthAbuseFlow.EmailAvailability,
+                    AuthAbuseTargetKind.Email,
+                    normalized,
+                    cancellationToken);
 
                 // Advisory: this endpoint only reports, it never claims, so letting the filter
                 // answer outright is what makes a type-ahead probe cheap. The signup path that
@@ -320,6 +401,28 @@ namespace backend.main.features.auth
                 Logger.Error($"[AuthController] CheckEmailAvailability failed: {e}");
                 return HandleError.Resolve(e);
             }
+        }
+
+        private async Task<IActionResult> CreateFailedLoginResponseAsync(string username)
+        {
+            var state = await _abuseProtection.RecordLoginFailureAsync(
+                username,
+                HttpContext.RequestAborted);
+            await _abuseProtection.DelayFailedLoginAsync(
+                state.FailureCount,
+                HttpContext.RequestAborted);
+
+            return StatusCode(
+                StatusCodes.Status401Unauthorized,
+                ApiResponse<object?>.Failure(
+                    "Authentication failed. Please try again.",
+                    "AUTHENTICATION_FAILED",
+                    meta: new
+                    {
+                        captchaRequired = state.CaptchaRequired
+                    }
+                )
+            );
         }
 
         [HttpGet("verify/email-change")]
@@ -359,6 +462,13 @@ namespace backend.main.features.auth
         {
             try
             {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.Verification);
+                await _abuseProtection.EnsureTargetAllowedAsync(
+                    AuthAbuseFlow.Verification,
+                    AuthAbuseTargetKind.Challenge,
+                    request.Challenge ?? request.Token ?? string.Empty,
+                    HttpContext.RequestAborted);
+
                 PendingEmailChange pending;
 
                 if (!string.IsNullOrWhiteSpace(request.Token))
@@ -408,6 +518,13 @@ namespace backend.main.features.auth
         {
             try
             {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.Verification);
+                await _abuseProtection.EnsureTargetAllowedAsync(
+                    AuthAbuseFlow.Verification,
+                    AuthAbuseTargetKind.Challenge,
+                    request.Challenge,
+                    HttpContext.RequestAborted);
+
                 var userToken = await _authService.VerifyOtpAsync(
                     request.Code,
                     request.Challenge,
@@ -457,6 +574,13 @@ namespace backend.main.features.auth
         {
             try
             {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.Verification);
+                await _abuseProtection.EnsureTargetAllowedAsync(
+                    AuthAbuseFlow.Verification,
+                    AuthAbuseTargetKind.Challenge,
+                    request.Token,
+                    HttpContext.RequestAborted);
+
                 var userToken = await _authService.VerifyAsync(
                     request.Token,
                     SessionTransportResolver.ResolveOrDefault(request.Transport)
@@ -488,6 +612,7 @@ namespace backend.main.features.auth
         {
             try
             {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.General);
                 var result = await _authService.GoogleAsync(
                     request.Token,
                     SessionTransportResolver.ResolveOrDefault(request.Transport),
@@ -519,6 +644,7 @@ namespace backend.main.features.auth
         {
             try
             {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.General);
                 var result = await _authService.GoogleCodeAsync(
                     request.Code,
                     request.CodeVerifier,
@@ -552,6 +678,7 @@ namespace backend.main.features.auth
         {
             try
             {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.General);
                 var result = await _authService.MicrosoftAsync(
                     request.Token,
                     SessionTransportResolver.ResolveOrDefault(request.Transport),
@@ -648,6 +775,13 @@ namespace backend.main.features.auth
         {
             try
             {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.OAuthCompletion);
+                await _abuseProtection.EnsureTargetAllowedAsync(
+                    AuthAbuseFlow.OAuthCompletion,
+                    AuthAbuseTargetKind.Challenge,
+                    request.SignupToken,
+                    HttpContext.RequestAborted);
+
                 var userToken = await _authService.CompleteOAuthSignupAsync(
                     request.SignupToken,
                     request.Usertype,
@@ -824,6 +958,13 @@ namespace backend.main.features.auth
         {
             try
             {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.Verification);
+                await _abuseProtection.EnsureTargetAllowedAsync(
+                    AuthAbuseFlow.Verification,
+                    AuthAbuseTargetKind.Challenge,
+                    request.Token,
+                    HttpContext.RequestAborted);
+
                 var result = await _authService.VerifyDeviceLoginAsync(
                     request.Token,
                     SessionTransportResolver.ResolveOrDefault(request.Transport)
@@ -855,6 +996,13 @@ namespace backend.main.features.auth
         {
             try
             {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.MfaDelivery);
+                await _abuseProtection.EnsureTargetAllowedAsync(
+                    AuthAbuseFlow.MfaDelivery,
+                    AuthAbuseTargetKind.Challenge,
+                    request.Challenge,
+                    HttpContext.RequestAborted);
+
                 var response = await _authService.StartLoginStepUpAsync(request.Challenge, request.Method);
                 return Ok(new ApiResponse<StartLoginStepUpResponse>("Sign-in verification sent.", response));
             }
@@ -876,6 +1024,13 @@ namespace backend.main.features.auth
         {
             try
             {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.Verification);
+                await _abuseProtection.EnsureTargetAllowedAsync(
+                    AuthAbuseFlow.Verification,
+                    AuthAbuseTargetKind.Challenge,
+                    request.Challenge,
+                    HttpContext.RequestAborted);
+
                 var response = await _authService.VerifyLoginStepUpAsync(request.Challenge, request.Code);
                 return Ok(
                     new ApiResponse<AuthenticatedSessionResponse>(
@@ -902,6 +1057,13 @@ namespace backend.main.features.auth
         {
             try
             {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.Verification);
+                await _abuseProtection.EnsureTargetAllowedAsync(
+                    AuthAbuseFlow.Verification,
+                    AuthAbuseTargetKind.Challenge,
+                    request.Challenge,
+                    HttpContext.RequestAborted);
+
                 var response = await _authService.VerifyTotpLoginStepUpAsync(request.Challenge, request.Code);
                 return Ok(
                     new ApiResponse<AuthenticatedSessionResponse>(
@@ -940,9 +1102,17 @@ namespace backend.main.features.auth
         {
             try
             {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.Recovery);
+
                 if (!_seedBypass.IsBypassEnabledForUsername(request.Username)
                     && !await _captchaService.VerifyCaptchaAsync(request.Captcha))
                     throw new BadRequestException("Invalid captcha.");
+
+                await _abuseProtection.EnsureTargetAllowedAsync(
+                    AuthAbuseFlow.Recovery,
+                    AuthAbuseTargetKind.Username,
+                    request.Username,
+                    HttpContext.RequestAborted);
 
                 var challenge = await _authService.RecoverPasswordAsync(request.Username);
 
@@ -976,9 +1146,17 @@ namespace backend.main.features.auth
         {
             try
             {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.Recovery);
+
                 if (!_seedBypass.IsBypassEnabledFor(request.Email)
                     && !await _captchaService.VerifyCaptchaAsync(request.Captcha))
                     throw new BadRequestException("Invalid captcha.");
+
+                await _abuseProtection.EnsureTargetAllowedAsync(
+                    AuthAbuseFlow.Recovery,
+                    AuthAbuseTargetKind.Email,
+                    request.Email,
+                    HttpContext.RequestAborted);
 
                 await _authService.RecoverUsernameAsync(request.Email);
                 return Ok(new MessageResponse(
@@ -1020,6 +1198,13 @@ namespace backend.main.features.auth
         {
             try
             {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.Verification);
+                await _abuseProtection.EnsureTargetAllowedAsync(
+                    AuthAbuseFlow.Verification,
+                    AuthAbuseTargetKind.Challenge,
+                    request.Challenge ?? token ?? string.Empty,
+                    HttpContext.RequestAborted);
+
                 if (!string.IsNullOrWhiteSpace(token))
                 {
                     await _authService.ResetPasswordAsync(token, request.Password);
@@ -1049,6 +1234,12 @@ namespace backend.main.features.auth
                 return HandleError.Resolve(e);
             }
         }
+
+        private Task EnsureSharedSourceAllowedAsync(AuthAbuseFlow flow) =>
+            _abuseProtection.EnsureSourceAllowedAsync(
+                flow,
+                _requestInfo.IpAddress,
+                HttpContext.RequestAborted);
 
         private AuthenticatedSessionResponse CreateSessionResponse(
             User user,
@@ -1165,4 +1356,3 @@ namespace backend.main.features.auth
         }
     }
 }
-

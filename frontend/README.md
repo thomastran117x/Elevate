@@ -15,6 +15,8 @@ npm start
 
 `npm start` generates `src/environments/environment.ts` and serves at <http://localhost:3090>. Do not hand-edit the generated environment. Only public values are embedded: API/frontend URLs, OAuth client IDs, captcha site key, production flag, and frontend flags.
 
+Login requests omit CAPTCHA until the API returns `meta.captchaRequired`; the next manual submission obtains a fresh `login` token. Signup and profile email checks obtain an `email_availability` token and use the CSRF-protected POST availability contract. Availability checks fail open and show a neutral state when CAPTCHA, throttling, or the network prevents an answer.
+
 For same-origin API access, use `BACKEND_URL=http://localhost:3090/api` in the frontend environment. `proxy.conf.mjs` forwards `/api` and WebSockets to `http://localhost:8090`; an exported `API_PROXY_TARGET` overrides it. The generator's dotenv changes do not propagate into its parent process.
 
 ## Build and SSR
@@ -47,7 +49,7 @@ npm run test:e2e
 
 Karma/Jasmine tests are colocated `*.spec.ts` files. Chrome/Chromium is required; coverage enforces 90% for all four metrics. Use `@testing` helpers for HTTP, NgRx, flags, routes, storage, and fixtures.
 
-Playwright tests live in `tests/`; they start the E2E dev server on `http://127.0.0.1:3101`. API-backed journeys require backend state; the existing home smoke test checks rendered UI. See [testing](../docs/TESTING.md) for filters and policy.
+Playwright tests live in `tests/`; they start the E2E dev server on `http://localhost:3101`. `npm run test:e2e` runs browser tests that do not depend on a live API and skips the provisioned authentication-abuse journey. Run `npm run test:e2e:auth-abuse` only after starting its backend, seed-data, and CAPTCHA-bypass prerequisites described in [testing](../docs/TESTING.md#frontend-browser-tests).
 
 Prettier uses single quotes, semicolons, trailing commas, and width 100. Format affected paths with `npx prettier --write <paths>`; `npm run format` rewrites the whole frontend.
 

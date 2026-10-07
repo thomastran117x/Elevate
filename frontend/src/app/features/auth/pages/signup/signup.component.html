@@ -167,6 +167,8 @@
                 </div>
               } @else if (emailAvailable()) {
                 <div class="mt-2 text-sm text-success">That email is available.</div>
+              } @else if (emailAvailabilityUnavailable()) {
+                <div class="mt-2 text-sm text-muted">Availability could not be checked.</div>
               } @else if (submitted && form.controls['email'].invalid) {
                 <div class="mt-2 text-sm text-danger">A valid email is required.</div>
               }

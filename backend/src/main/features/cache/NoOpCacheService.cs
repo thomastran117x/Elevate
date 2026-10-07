@@ -97,5 +97,11 @@ namespace backend.main.features.cache
             // Allow request when Redis is unavailable (e.g. rate limiters). Return int[] so middlewares can handle without RedisResult.
             return Task.FromResult((object)new int[] { 1, 0 });
         }
+
+        public Task<CacheScriptResult> TryEvalAsync(
+            string script,
+            RedisKey[] keys,
+            RedisValue[] values) =>
+            Task.FromResult(CacheScriptResult.Unavailable);
     }
 }

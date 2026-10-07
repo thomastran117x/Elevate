@@ -17,6 +17,8 @@ type ApiClientErrorKind = 'client' | 'server';
 type ApiErrorPayload = {
   message?: unknown;
   Message?: unknown;
+  meta?: unknown;
+  Meta?: unknown;
   error?: { code?: unknown; Code?: unknown; details?: unknown; Details?: unknown } | null;
 };
 
@@ -50,6 +52,7 @@ class ApiClientRequestError extends Error {
     public readonly code?: string,
     public readonly details?: unknown,
     public readonly originalError?: unknown,
+    public readonly meta?: unknown,
   ) {
     super(message);
     this.name = kind === 'client' ? 'ApiClientClientError' : 'ApiClientServerError';
@@ -64,8 +67,9 @@ export class ApiClientClientError extends ApiClientRequestError {
     code?: string,
     details?: unknown,
     originalError?: unknown,
+    meta?: unknown,
   ) {
-    super(message, 'client', status, code, details, originalError);
+    super(message, 'client', status, code, details, originalError, meta);
   }
 }
 

@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { throwError } from 'rxjs';
 
+import { ApiClientClientError } from '../../../../core/api/models/api-client-error.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 import { AuthService } from '../../services/auth.service';
@@ -10,15 +12,21 @@ import { LoginComponent } from './login.component';
 describe('LoginComponent', () => {
   let fixture: ComponentFixture<LoginComponent>;
   let passwordInput: HTMLInputElement;
+  let auth: jasmine.SpyObj<AuthService>;
+  let recaptcha: jasmine.SpyObj<RecaptchaV3Service>;
 
   beforeEach(async () => {
+    auth = jasmine.createSpyObj<AuthService>('AuthService', ['login']);
+    recaptcha = jasmine.createSpyObj<RecaptchaV3Service>('RecaptchaV3Service', ['execute']);
+    recaptcha.execute.and.resolveTo('captcha-token');
+
     await TestBed.configureTestingModule({
       imports: [LoginComponent],
       providers: [
         provideRouter([]),
         {
           provide: AuthService,
-          useValue: jasmine.createSpyObj<AuthService>('AuthService', ['login']),
+          useValue: auth,
         },
         {
           provide: SessionManagerService,
@@ -28,7 +36,7 @@ describe('LoginComponent', () => {
         },
         {
           provide: RecaptchaV3Service,
-          useValue: jasmine.createSpyObj<RecaptchaV3Service>('RecaptchaV3Service', ['execute']),
+          useValue: recaptcha,
         },
         {
           provide: AuthReturnUrlService,
@@ -80,6 +88,37 @@ describe('LoginComponent', () => {
 
     expect(getCapsLockWarning()).toBeNull();
     expect(passwordInput.getAttribute('aria-describedby')).toBeNull();
+  });
+
+  it('omits captcha initially and obtains it only after server escalation', async () => {
+    auth.login.and.returnValue(
+      throwError(
+        () =>
+          new ApiClientClientError(
+            'Authentication failed.',
+            401,
+            'AUTHENTICATION_FAILED',
+            undefined,
+            undefined,
+            { captchaRequired: true },
+          ),
+      ),
+    );
+    fixture.componentInstance.form.patchValue({
+      username: 'Member',
+      password: 'Password123!',
+    });
+
+    await fixture.componentInstance.onSubmit();
+
+    expect(recaptcha.execute).not.toHaveBeenCalled();
+    expect(auth.login.calls.mostRecent().args[0].captcha).toBeUndefined();
+    expect(fixture.componentInstance.captchaRequired).toBeTrue();
+
+    await fixture.componentInstance.onSubmit();
+
+    expect(recaptcha.execute).toHaveBeenCalledWith(jasmine.any(String), 'login');
+    expect(auth.login.calls.mostRecent().args[0].captcha).toBe('captcha-token');
   });
 
   function getCapsLockWarning(): HTMLElement | null {

@@ -7,6 +7,7 @@ import { bytesFile, imageFile, provideTestStore } from '@testing';
 import { ApiClientClientError } from '../../../../../../core/api/models/api-client-error.model';
 import { AuthTokenService } from '../../../../../../core/api/services/auth-token.service';
 import { AuthService } from '../../../../../auth/services/auth.service';
+import { RecaptchaV3Service } from '../../../../../auth/services/recaptcha.service';
 import { MyProfile, ProfileService } from '../../../../services/profile.service';
 import { ProfileTabComponent } from './profile-tab.component';
 
@@ -82,6 +83,12 @@ describe('ProfileTabComponent', () => {
         { provide: ProfileService, useValue: profileService },
         { provide: AuthService, useValue: auth },
         { provide: AuthTokenService, useValue: authToken },
+        {
+          provide: RecaptchaV3Service,
+          useValue: jasmine.createSpyObj<RecaptchaV3Service>('RecaptchaV3Service', {
+            execute: Promise.resolve('captcha-token'),
+          }),
+        },
         provideRouter([]),
         ...provideTestStore(),
       ],

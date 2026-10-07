@@ -7,6 +7,7 @@ import { catchError, map, switchMap } from 'rxjs/operators';
  * UI can distinguish "confirmed free" from "we never found out".
  */
 export type AvailabilityOutcome = (value: string | null) => void;
+export type AvailabilityUnavailableOutcome = (unavailable: boolean) => void;
 
 export const DEBOUNCE_MS = 400;
 
@@ -36,9 +37,11 @@ export interface AvailabilityProbeConfig {
 export function availabilityValidator(
   config: AvailabilityProbeConfig,
   onConfirmed: AvailabilityOutcome = () => {},
+  onUnavailable: AvailabilityUnavailableOutcome = () => {},
 ): AsyncValidatorFn {
   return (control: AbstractControl): Observable<ValidationErrors | null> => {
     const value = config.normalize(control.value);
+    onUnavailable(false);
 
     // Let the synchronous validators own these cases; probing the API would only add noise.
     if (!config.isProbeable(value)) {
@@ -56,6 +59,7 @@ export function availabilityValidator(
       }),
       catchError(() => {
         onConfirmed(null);
+        onUnavailable(true);
         return of(null);
       }),
     );

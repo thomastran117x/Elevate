@@ -93,7 +93,21 @@ npm run playwright:install
 npm run test:e2e
 ```
 
-Playwright tests live in `tests/` and use `playwright.config.ts`. They start `npm run start:e2e` at `http://127.0.0.1:3101` and can reuse a local server. The normal development port is 3090. The current home-page smoke test checks rendered UI; additional authenticated journeys require appropriate backend/test data.
+Playwright tests live in `tests/` and use `playwright.config.ts`. They start `npm run start:e2e` at `http://localhost:3101` and can reuse a local server. The normal development port is 3090. The default command skips the live authentication-abuse journey so it does not depend on an unprovisioned API.
+
+To exercise login CAPTCHA escalation and signup/profile email availability, provision the backend from the repository root, then run the dedicated browser command from `frontend/`:
+
+```powershell
+$env:CORS_ORIGIN = "http://localhost:3101"
+$env:CAPTCHA_ALLOW_BYPASS = "true"
+$env:AUTH_SEED_ACCOUNT_BYPASS = "true"
+$env:RUN_SEEDERS = "true"
+docker compose up -d --build backend
+Set-Location frontend
+npm run test:e2e:auth-abuse
+```
+
+The backend command also starts its declared infrastructure dependencies. The dedicated Playwright configuration enables only `auth-abuse-protection.spec.ts`; that suite uses the seeded `avaparticipant` account and non-production CAPTCHA tokens through the frontend proxy.
 
 The root `.mcp.json` configures Playwright; `frontend/.mcp.json` adds Angular CLI MCP. Launch frontend-focused tools from the Angular workspace so the CLI can resolve `angular.json`. Start the desired app server before navigating with browser tools. Equivalent frontend VS Code configuration is in `frontend/.vscode/mcp.json`.
 

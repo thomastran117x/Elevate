@@ -2,8 +2,10 @@ using System.Security.Claims;
 
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.abuse;
 using backend.main.features.auth.mfa;
 using backend.main.shared.responses;
+using backend.tests.Unit.Support;
 
 using FluentAssertions;
 
@@ -156,7 +158,11 @@ public class AuthMfaControllerTests
         service ??= new Mock<IMfaEnrollmentService>().Object;
         settingsBuilder ??= new Mock<IMfaSettingsBuilder>().Object;
 
-        return new AuthMfaController(service, settingsBuilder)
+        return new AuthMfaController(
+            service,
+            settingsBuilder,
+            new Mock<IAuthAbuseProtectionService>().Object,
+            TestRequestInfoFactory.Browser())
         {
             ControllerContext = new ControllerContext
             {

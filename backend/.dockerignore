@@ -3,6 +3,10 @@ bin/
 obj/
 out/
 publish/
+**/bin/
+**/obj/
+**/out/
+**/publish/
 
 # User / editor files
 .vscode/
@@ -19,6 +23,7 @@ Thumbs.db
 # Logs
 *.log
 logs/
+**/logs/
 
 # Environment configs
 .env

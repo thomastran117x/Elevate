@@ -5,6 +5,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { finalize } from 'rxjs/operators';
+import { environment } from '@environments/environment';
 
 import {
   getApiClientMessage,
@@ -14,6 +15,7 @@ import { AuthTokenService } from '../../../../../../core/api/services/auth-token
 import { setUser } from '../../../../../../core/stores/user.actions';
 import { User } from '../../../../../../core/stores/user.model';
 import { AuthService, UsernameSuggestion } from '../../../../../auth/services/auth.service';
+import { RecaptchaV3Service } from '../../../../../auth/services/recaptcha.service';
 import { emailAvailabilityValidator } from '../../../../../auth/validators/email-availability.validator';
 import {
   normalizeUsername,
@@ -53,6 +55,7 @@ export class ProfileTabComponent implements OnInit {
   private readonly fb = new FormBuilder();
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
+  private readonly recaptcha = inject(RecaptchaV3Service);
   private readonly authToken = inject(AuthTokenService);
   private readonly router = inject(Router);
 
@@ -84,7 +87,14 @@ export class ProfileTabComponent implements OnInit {
       [Validators.required, Validators.email, Validators.maxLength(254)],
       // The same debounced probe the signup form uses. It fails open, so a probe outage never
       // blocks the form - the server re-checks authoritatively at request and confirm time.
-      [emailAvailabilityValidator(this.auth)],
+      [
+        emailAvailabilityValidator(
+          this.auth,
+          () => {},
+          () => this.recaptcha.execute(environment.googleSiteKey, 'email_availability'),
+          (unavailable) => (this.emailAvailabilityUnavailable = unavailable),
+        ),
+      ],
     ),
     currentPassword: this.fb.nonNullable.control(''),
   });
@@ -108,6 +118,7 @@ export class ProfileTabComponent implements OnInit {
   usernameMfaVerified = false;
   usernameSaving = false;
   emailChangeRequested = false;
+  emailAvailabilityUnavailable = false;
   emailMfaVerified = false;
   emailSaving = false;
   emailChallenge = '';

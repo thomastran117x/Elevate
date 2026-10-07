@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:8090"
+      "url": "http://localhost:8091"
     }
   ],
   "paths": {
@@ -15659,6 +15659,46 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
           "400": {
             "description": "Bad request, validation failure, or CSRF failure.",
             "content": {
@@ -15884,7 +15924,7 @@
           "auth"
         ],
         "summary": "Check email availability",
-        "description": "Anonymous by necessity — it serves the signup form, where there is no session yet — and\r\ntherefore an account-existence oracle, accepted deliberately because the signup UX is\r\njudged to be worth it.\r\n\r\nBe clear about what that costs: this is strictly cheaper to script than the signup it\r\nserves. `LocalSignup` requires an antiforgery token and a passing captcha; this\r\nrequires neither and answers with a boolean. So existence testing that was previously\r\nbehind a captcha is now bounded only by\r\nstring RateLimiterConfiguration.EmailAvailabilityPolicyName, which is why that\r\npolicy is half the username budget. Gate this endpoint, or lower that limit, if\r\nenumeration ever matters more than the type-ahead. See the bloom filter section of\r\ndocs/CONFIGURATION.md.\r\n\r\nThe answer is advisory. An address reported free can be registered a moment later; the\r\nunique index is what actually decides.",
+        "description": "Anonymous by necessity — it serves the signup form, where there is no session yet — and\r\ntherefore an account-existence oracle, accepted deliberately because the signup UX is\r\njudged to be worth it.\r\n\r\nThe POST form requires antiforgery validation and a CAPTCHA. The deprecated GET form\r\nrequires the same CAPTCHA in `X-Captcha-Token`; it never accepts the token in the\r\nquery string. Both forms apply independent shared source-IP and normalized-email\r\nbudgets in addition to the replica-local IP fallback.\r\n\r\nThe answer is advisory. An address reported free can be registered a moment later; the\r\nunique index is what actually decides.",
         "operationId": "Auth_CheckEmailAvailability_get",
         "parameters": [
           {
@@ -15892,6 +15932,24 @@
             "in": "query",
             "schema": {
               "$ref": "#/components/schemas/String"
+            }
+          },
+          {
+            "name": "X-Captcha-Token",
+            "in": "header",
+            "description": "CAPTCHA token for the email_availability action. Do not put this token in the query string.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/String"
+            }
+          },
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "description": "CSRF token obtained from `/api/auth/csrf`. Browser clients must send the `XSRF-TOKEN` cookie and mirror its value in this header.",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -15912,6 +15970,167 @@
               "text/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponseOfEmailAvailabilityResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true
+      },
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Check email availability",
+        "operationId": "Auth_CheckEmailAvailability_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "description": "CSRF token obtained from `/api/auth/csrf`. Browser clients must send the `XSRF-TOKEN` cookie and mirror its value in this header.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailAvailabilityRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailAvailabilityRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailAvailabilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfEmailAvailabilityResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfEmailAvailabilityResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfEmailAvailabilityResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
                 }
               }
             }
@@ -26460,6 +26679,27 @@
         ],
         "format": "double"
       },
+      "EmailAvailabilityRequest": {
+        "required": [
+          "email"
+        ],
+        "type": "object",
+        "properties": {
+          "email": {
+            "$ref": "#/components/schemas/String"
+          },
+          "captcha": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          }
+        }
+      },
       "EmailAvailabilityResponse": {
         "required": [
           "email",
@@ -29098,8 +29338,7 @@
       "LoginRequest": {
         "required": [
           "username",
-          "password",
-          "captcha"
+          "password"
         ],
         "type": "object",
         "properties": {
@@ -29133,7 +29372,14 @@
             ]
           },
           "captcha": {
-            "$ref": "#/components/schemas/String"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ]
           }
         },
         "description": "Credentials and client transport details for local sign-in."

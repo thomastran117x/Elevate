@@ -85,6 +85,25 @@ describe('ApiClient', () => {
     expect((thrown as ApiClientServerError).message).toBe(GENERIC_API_ERROR_MESSAGE);
   });
 
+  it('preserves envelope metadata for client errors', () => {
+    let thrown: unknown;
+
+    service.get('/test').subscribe({ error: (error) => (thrown = error) });
+
+    const request = httpMock.expectOne('/test');
+    request.flush(
+      {
+        success: false,
+        message: 'Authentication failed.',
+        error: { code: 'AUTHENTICATION_FAILED' },
+        meta: { captchaRequired: true },
+      },
+      { status: 401, statusText: 'Unauthorized' },
+    );
+
+    expect((thrown as ApiClientClientError).meta).toEqual({ captchaRequired: true });
+  });
+
   for (const status of [502, 503, 504]) {
     it(`uses the temporary outage message for ${status} responses`, () => {
       let thrown: unknown;

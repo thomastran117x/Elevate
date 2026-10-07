@@ -23,7 +23,7 @@ export interface LoginRequest {
   username: string;
   password: string;
   rememberMe: boolean;
-  captcha: string;
+  captcha?: string;
   transport?: 'browser';
   returnUrl?: string;
 }
@@ -262,12 +262,11 @@ export class AuthService {
    * Asks whether an email address is still unregistered. Advisory only: the address is not
    * reserved by asking, so signup can still fail with a conflict if someone registers it first.
    */
-  checkEmailAvailability(email: string): Observable<EmailAvailabilityResponse> {
-    return this.api
-      .get<ApiEnvelope<EmailAvailabilityResponse>>(`${this.baseUrl}/email/availability`, {
-        params: { email },
-      })
-      .pipe(map((res) => this.requireData(res, 'Email availability response was incomplete.')));
+  checkEmailAvailability(email: string, captcha: string): Observable<EmailAvailabilityResponse> {
+    return this.postWithCsrf<ApiEnvelope<EmailAvailabilityResponse>>(
+      `${this.baseUrl}/email/availability`,
+      { email, captcha },
+    ).pipe(map((res) => this.requireData(res, 'Email availability response was incomplete.')));
   }
 
   signup(payload: SignupRequest): Observable<ApiEnvelope<VerificationChallengeResponse>> {

@@ -1,4 +1,5 @@
 using backend.main.features.auth;
+using backend.main.features.auth.abuse;
 using backend.main.features.profile.suggestions;
 using backend.main.features.bloom;
 using backend.main.features.auth.captcha;
@@ -115,10 +116,62 @@ public class AuthControllerTests
     }
 
     [Fact]
-    public async Task LocalAuthenticate_ShouldReturnBadRequest_WhenCaptchaIsInvalid()
+    public async Task LocalAuthenticate_ShouldSkipCaptchaInitiallyAndResetFailuresForStepUp()
+    {
+        var authService = new Mock<IAuthService>();
+        authService.Setup(service => service.LoginAsync(
+                "step-up-user",
+                "Password123!",
+                SessionTransport.BrowserCookie,
+                false,
+                null))
+            .ReturnsAsync(LoginAuthenticationResult.RequiresStepUp(
+                new LoginStepUpChallengeResponse
+                {
+                    Challenge = "step-up-challenge",
+                    ExpiresAtUtc = DateTime.UtcNow.AddMinutes(15),
+                    AvailableMethods = ["email"],
+                    MaskedEmail = "s***@example.com"
+                }));
+        var captcha = new Mock<ICaptchaService>();
+        var abuse = CreateAbuseProtection();
+        var controller = CreateController(
+            authService: authService,
+            captchaService: captcha,
+            abuseProtection: abuse);
+
+        var result = await controller.LocalAuthenticate(new LoginRequest
+        {
+            Username = "step-up-user",
+            Password = "Password123!"
+        });
+
+        ExtractApiResponse<LoginAuthenticationResponse>(result, 200)
+            .Data!.Type.Should().Be("requires_step_up");
+        captcha.Verify(service => service.VerifyCaptchaAsync(
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        abuse.Verify(service => service.ResetLoginFailuresAsync(
+            "step-up-user",
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task LocalAuthenticate_ShouldReturnGenericUnauthorized_WhenRequiredCaptchaIsInvalid()
     {
         var captchaService = new Mock<ICaptchaService>();
-        var controller = CreateController(captchaService: captchaService);
+        var abuseProtection = CreateAbuseProtection();
+        abuseProtection.Setup(instance => instance.EnsureLoginAllowedAsync(
+                "user",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LoginAbuseState(3, true, false, true, null));
+        abuseProtection.Setup(instance => instance.RecordLoginFailureAsync(
+                "user",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LoginAbuseState(4, true, false, true, null));
+        var controller = CreateController(
+            captchaService: captchaService,
+            abuseProtection: abuseProtection);
         captchaService.Setup(service => service.VerifyCaptchaAsync("bad-captcha", It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
@@ -129,7 +182,12 @@ public class AuthControllerTests
             Captcha = "bad-captcha"
         });
 
-        AssertErrorResult(result, 400, "Invalid captcha.");
+        var objectResult = result.Should().BeOfType<ObjectResult>().Subject;
+        objectResult.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
+        var response = objectResult.Value.Should().BeOfType<ApiResponse<object>>().Subject;
+        response.Message.Should().Be("Authentication failed. Please try again.");
+        response.Error!.Code.Should().Be("AUTHENTICATION_FAILED");
+        response.Meta.Should().BeEquivalentTo(new { captchaRequired = true });
     }
 
     [Fact]
@@ -614,11 +672,91 @@ public class AuthControllerTests
             .ReturnsAsync(false);
         var controller = CreateController(emailAvailability: emailAvailability);
 
-        var result = await controller.CheckEmailAvailability("ada@example.com", CancellationToken.None);
+        var result = await controller.CheckEmailAvailability(
+            new EmailAvailabilityRequest { Email = "ada@example.com", Captcha = "captcha" },
+            CancellationToken.None);
 
         var body = AssertOkResult<EmailAvailabilityResponse>(result, "Email is available.");
         body.Email.Should().Be("ada@example.com");
         body.Available.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CheckEmailAvailabilityPost_ShouldRejectInvalidCaptchaBeforeTargetBudget()
+    {
+        var captcha = new Mock<ICaptchaService>();
+        captcha.Setup(service => service.VerifyCaptchaAsync(
+                "invalid-captcha",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var abuse = CreateAbuseProtection();
+        var controller = CreateController(
+            captchaService: captcha,
+            abuseProtection: abuse);
+
+        var result = await controller.CheckEmailAvailability(
+            new EmailAvailabilityRequest
+            {
+                Email = "ada@example.com",
+                Captcha = "invalid-captcha"
+            },
+            CancellationToken.None);
+
+        AssertErrorResult(result, 401, "Request could not be verified.");
+        abuse.Verify(service => service.EnsureSourceAllowedAsync(
+            AuthAbuseFlow.EmailAvailability,
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        abuse.Verify(service => service.EnsureTargetAllowedAsync(
+            It.IsAny<AuthAbuseFlow>(),
+            It.IsAny<AuthAbuseTargetKind>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CheckEmailAvailabilityPost_ShouldNormalizeMissingCaptchaAfterSourceBudget()
+    {
+        var captcha = new Mock<ICaptchaService>();
+        var abuse = CreateAbuseProtection();
+        var controller = CreateController(
+            captchaService: captcha,
+            abuseProtection: abuse);
+
+        var result = await controller.CheckEmailAvailability(
+            new EmailAvailabilityRequest { Email = "ada@example.com" },
+            CancellationToken.None);
+
+        AssertErrorResult(result, 401, "Request could not be verified.");
+        abuse.Verify(service => service.EnsureSourceAllowedAsync(
+            AuthAbuseFlow.EmailAvailability,
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        captcha.Verify(service => service.VerifyCaptchaAsync(
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        abuse.Verify(service => service.EnsureTargetAllowedAsync(
+            It.IsAny<AuthAbuseFlow>(),
+            It.IsAny<AuthAbuseTargetKind>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeprecatedEmailAvailabilityGet_ShouldRequireCaptchaHeader()
+    {
+        var controller = CreateController();
+
+#pragma warning disable CS0618
+        var result = await controller.CheckEmailAvailability(
+            "ada@example.com",
+            null,
+            CancellationToken.None);
+#pragma warning restore CS0618
+
+        AssertErrorResult(result, 401, "Request could not be verified.");
+        controller.Response.Headers["Deprecation"].Should().ContainSingle("true");
+        controller.Response.Headers.Link.ToString().Should().Contain("successor-version");
     }
 
     [Fact]
@@ -632,7 +770,9 @@ public class AuthControllerTests
             .ReturnsAsync(true);
         var controller = CreateController(emailAvailability: emailAvailability);
 
-        var result = await controller.CheckEmailAvailability("ada@example.com", CancellationToken.None);
+        var result = await controller.CheckEmailAvailability(
+            new EmailAvailabilityRequest { Email = "ada@example.com", Captcha = "captcha" },
+            CancellationToken.None);
 
         var body = AssertOkResult<EmailAvailabilityResponse>(result, "Email is already registered.");
         body.Available.Should().BeFalse();
@@ -648,7 +788,9 @@ public class AuthControllerTests
         var emailAvailability = new Mock<IEmailAvailabilityService>();
         var controller = CreateController(emailAvailability: emailAvailability);
 
-        var result = await controller.CheckEmailAvailability("  Ada@Example.COM  ", CancellationToken.None);
+        var result = await controller.CheckEmailAvailability(
+            new EmailAvailabilityRequest { Email = "  Ada@Example.COM  ", Captcha = "captcha" },
+            CancellationToken.None);
 
         AssertOkResult<EmailAvailabilityResponse>(result, "Email is available.")
             .Email.Should().Be("ada@example.com");
@@ -669,7 +811,9 @@ public class AuthControllerTests
         var emailAvailability = new Mock<IEmailAvailabilityService>();
         var controller = CreateController(emailAvailability: emailAvailability);
 
-        await controller.CheckEmailAvailability("ada@example.com", CancellationToken.None);
+        await controller.CheckEmailAvailability(
+            new EmailAvailabilityRequest { Email = "ada@example.com", Captcha = "captcha" },
+            CancellationToken.None);
 
         emailAvailability.Verify(service => service.IsRegisteredAsync(
                 It.IsAny<string>(),
@@ -687,7 +831,9 @@ public class AuthControllerTests
         var emailAvailability = new Mock<IEmailAvailabilityService>();
         var controller = CreateController(emailAvailability: emailAvailability);
 
-        var result = await controller.CheckEmailAvailability(email, CancellationToken.None);
+        var result = await controller.CheckEmailAvailability(
+            new EmailAvailabilityRequest { Email = email, Captcha = "captcha" },
+            CancellationToken.None);
 
         AssertErrorResult(result, 400, expected);
         // A malformed value never reaches the filter or the database.
@@ -702,13 +848,20 @@ public class AuthControllerTests
         Mock<IAuthService>? authService = null,
         Mock<ICaptchaService>? captchaService = null,
         Mock<IAntiforgery>? antiforgery = null,
-        Mock<IEmailAvailabilityService>? emailAvailability = null)
+        Mock<IEmailAvailabilityService>? emailAvailability = null,
+        Mock<IAuthAbuseProtectionService>? abuseProtection = null)
     {
         authService ??= new Mock<IAuthService>();
-        captchaService ??= new Mock<ICaptchaService>();
+        if (captchaService is null)
+        {
+            captchaService = new Mock<ICaptchaService>();
+            captchaService.Setup(service => service.VerifyCaptchaAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+        }
+
         antiforgery ??= new Mock<IAntiforgery>();
-        captchaService.Setup(service => service.VerifyCaptchaAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
         antiforgery.Setup(service => service.GetAndStoreTokens(It.IsAny<HttpContext>()))
             .Returns(new AntiforgeryTokenSet("csrf-default", "cookie-default", "form", "header"));
 
@@ -733,7 +886,8 @@ public class AuthControllerTests
             TestRequestInfoFactory.Browser(),
             configuration,
             new Mock<ITokenService>().Object,
-            new Mock<IEmailChangeService>().Object);
+            new Mock<IEmailChangeService>().Object,
+            (abuseProtection ?? CreateAbuseProtection()).Object);
 
         controller.ControllerContext = new ControllerContext
         {
@@ -741,6 +895,39 @@ public class AuthControllerTests
         };
 
         return controller;
+    }
+
+    private static Mock<IAuthAbuseProtectionService> CreateAbuseProtection()
+    {
+        var service = new Mock<IAuthAbuseProtectionService>();
+        service.Setup(instance => instance.EnsureSourceAllowedAsync(
+                It.IsAny<AuthAbuseFlow>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        service.Setup(instance => instance.EnsureTargetAllowedAsync(
+                It.IsAny<AuthAbuseFlow>(),
+                It.IsAny<AuthAbuseTargetKind>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        service.Setup(instance => instance.EnsureLoginAllowedAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LoginAbuseState(0, false, false, true, null));
+        service.Setup(instance => instance.RecordLoginFailureAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LoginAbuseState(1, false, false, true, null));
+        service.Setup(instance => instance.DelayFailedLoginAsync(
+                It.IsAny<long>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        service.Setup(instance => instance.ResetLoginFailuresAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        return service;
     }
 
     private static UserToken CreateUserToken(

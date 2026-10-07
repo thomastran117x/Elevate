@@ -1,5 +1,9 @@
 using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 
+using backend.main.application.security;
+using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.bloom;
 
@@ -30,8 +34,7 @@ public class EmailAvailabilityEndpointTests
     {
         await using var app = await AuthApiTestApp.CreateAsync();
 
-        var response = await app.Client.GetAsync(
-            "/api/auth/email/availability?email=never-registered@example.com");
+        var response = await CheckAvailabilityAsync(app, "never-registered@example.com");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await app.ReadApiResponseAsync<EmailAvailabilityResponse>(response);
@@ -54,8 +57,7 @@ public class EmailAvailabilityEndpointTests
         await using var app = await AuthApiTestApp.CreateAsync();
         await app.SeedUserAsync("seeded-email@example.com", username: "seeded-email-user");
 
-        var response = await app.Client.GetAsync(
-            "/api/auth/email/availability?email=seeded-email@example.com");
+        var response = await CheckAvailabilityAsync(app, "seeded-email@example.com");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await app.ReadApiResponseAsync<EmailAvailabilityResponse>(response);
@@ -67,15 +69,13 @@ public class EmailAvailabilityEndpointTests
     {
         await using var app = await AuthApiTestApp.CreateAsync();
 
-        var before = await app.Client.GetAsync(
-            "/api/auth/email/availability?email=claimed-email@example.com");
+        var before = await CheckAvailabilityAsync(app, "claimed-email@example.com");
         (await app.ReadApiResponseAsync<EmailAvailabilityResponse>(before)).Data!.Available
             .Should().BeTrue();
 
         await app.SignUpAndVerifyByTokenAsync("claimed-email@example.com", username: "claimed-email-user");
 
-        var after = await app.Client.GetAsync(
-            "/api/auth/email/availability?email=claimed-email@example.com");
+        var after = await CheckAvailabilityAsync(app, "claimed-email@example.com");
         (await app.ReadApiResponseAsync<EmailAvailabilityResponse>(after)).Data!.Available
             .Should().BeFalse();
     }
@@ -90,8 +90,7 @@ public class EmailAvailabilityEndpointTests
         await using var app = await AuthApiTestApp.CreateAsync();
         await app.SeedUserAsync("mixed-case-email@example.com", username: "mixed-case-email-user");
 
-        var response = await app.Client.GetAsync(
-            "/api/auth/email/availability?email=%20Mixed-Case-Email%40Example.COM%20");
+        var response = await CheckAvailabilityAsync(app, "  Mixed-Case-Email@Example.COM  ");
 
         var body = await app.ReadApiResponseAsync<EmailAvailabilityResponse>(response);
         body.Data!.Email.Should().Be("mixed-case-email@example.com");
@@ -106,7 +105,7 @@ public class EmailAvailabilityEndpointTests
     {
         await using var app = await AuthApiTestApp.CreateAsync();
 
-        var response = await app.Client.GetAsync($"/api/auth/email/availability?email={email}");
+        var response = await CheckAvailabilityAsync(app, email);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -117,7 +116,7 @@ public class EmailAvailabilityEndpointTests
         await using var app = await AuthApiTestApp.CreateAsync();
         var tooLong = new string('a', 250) + "@example.com";
 
-        var response = await app.Client.GetAsync($"/api/auth/email/availability?email={tooLong}");
+        var response = await CheckAvailabilityAsync(app, tooLong);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -128,11 +127,52 @@ public class EmailAvailabilityEndpointTests
         // It serves the signup form, where there is no session yet.
         await using var app = await AuthApiTestApp.CreateAsync();
 
-        var response = await app.Client.GetAsync(
-            "/api/auth/email/availability?email=anonymous-probe@example.com");
+        var response = await CheckAvailabilityAsync(app, "anonymous-probe@example.com");
 
         response.StatusCode.Should().NotBe(HttpStatusCode.Unauthorized);
         response.StatusCode.Should().NotBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task PostAvailability_ShouldRequireCsrf()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+
+        var response = await app.Client.PostAsJsonAsync(
+            "/api/auth/email/availability",
+            new EmailAvailabilityRequest
+            {
+                Email = "csrf-required@example.com",
+                Captcha = "test-captcha"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PostAvailability_ShouldAcceptAnonymousCsrfTokenFromAuthenticatedProfile()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var csrf = await app.GetCsrfTokenAsync();
+        var session = await app.SignUpAndVerifyByTokenAsync(
+            "authenticated-profile@example.com",
+            transport: "api",
+            username: "authenticated-profile");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/email/availability")
+        {
+            Content = JsonContent.Create(new EmailAvailabilityRequest
+            {
+                Email = "authenticated-profile-new@example.com",
+                Captcha = "test-captcha"
+            })
+        };
+        request.Headers.Add(CsrfConfiguration.CsrfHeaderName, csrf);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
+
+        var response = await app.Client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     /// <summary>
@@ -170,8 +210,7 @@ public class EmailAvailabilityEndpointTests
 
         await app.SignUpAndVerifyByTokenAsync("separation@example.com", username: "separation-user");
 
-        var email = await app.Client.GetAsync(
-            "/api/auth/email/availability?email=separation-user@example.com");
+        var email = await CheckAvailabilityAsync(app, "separation-user@example.com");
         (await app.ReadApiResponseAsync<EmailAvailabilityResponse>(email)).Data!.Available
             .Should().BeTrue();
 
@@ -183,4 +222,34 @@ public class EmailAvailabilityEndpointTests
         (await app.ReadApiResponseAsync<UsernameAvailabilityResponse>(username)).Data!.Available
             .Should().BeTrue();
     }
+
+    [Fact]
+    public async Task DeprecatedGet_ShouldRequireCaptchaHeaderAndAdvertiseSuccessor()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        app.Captcha.ShouldSucceed = false;
+
+        var missingCaptcha = await app.Client.GetAsync(
+            "/api/auth/email/availability?email=deprecated@example.com");
+        missingCaptcha.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        app.Captcha.ShouldSucceed = true;
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "/api/auth/email/availability?email=deprecated@example.com");
+        request.Headers.Add("X-Captcha-Token", "test-captcha");
+        var response = await app.Client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Headers.GetValues("Deprecation").Should().ContainSingle("true");
+        response.Headers.GetValues("Link").Should().ContainSingle(
+            value => value.Contains("/api/auth/email/availability", StringComparison.Ordinal));
+    }
+
+    private static Task<HttpResponseMessage> CheckAvailabilityAsync(
+        AuthApiTestApp app,
+        string email) =>
+        app.PostJsonWithCsrfAsync(
+            "/api/auth/email/availability",
+            new { email, captcha = "test-captcha" });
 }

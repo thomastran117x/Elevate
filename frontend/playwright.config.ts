@@ -8,7 +8,7 @@ export default defineConfig({
   retries: process.env['CI'] ? 2 : 0,
   workers: process.env['CI'] ? 1 : undefined,
   use: {
-    baseURL: 'http://127.0.0.1:3101',
+    baseURL: 'http://localhost:3101',
     trace: 'on-first-retry',
   },
   projects: [
@@ -16,12 +16,15 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
+        launchOptions: process.env['PLAYWRIGHT_CHROMIUM_EXECUTABLE']
+          ? { executablePath: process.env['PLAYWRIGHT_CHROMIUM_EXECUTABLE'] }
+          : undefined,
       },
     },
   ],
   webServer: {
     command: 'npm run start:e2e',
-    url: 'http://127.0.0.1:3101',
+    url: 'http://localhost:3101',
     reuseExistingServer: !process.env['CI'],
     timeout: 120_000,
   },

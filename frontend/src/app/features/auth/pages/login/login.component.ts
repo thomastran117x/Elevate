@@ -9,6 +9,7 @@ import {
   DEVICE_VERIFICATION_REQUIRED_ERROR_CODE,
   DEVICE_VERIFICATION_REQUIRED_MESSAGE,
   getApiClientMessage,
+  isApiClientClientError,
   isApiClientErrorCode,
 } from '../../../../core/api/models/api-client-error.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
@@ -40,6 +41,7 @@ export class LoginComponent {
   showPw = false;
   capsLockOn = false;
   submitted = false;
+  captchaRequired = false;
   siteKey = environment.googleSiteKey;
 
   constructor(
@@ -82,7 +84,9 @@ export class LoginComponent {
     this.notice = '';
 
     try {
-      const token = await this.recaptcha.execute(this.siteKey, 'login');
+      const token = this.captchaRequired
+        ? await this.recaptcha.execute(this.siteKey, 'login')
+        : undefined;
       const values = this.form.getRawValue();
       const username = values.username.trim().toLowerCase();
       this.form.controls['username'].setValue(username);
@@ -114,6 +118,10 @@ export class LoginComponent {
             }
           },
           error: (err) => {
+            if (isApiClientClientError(err) && this.requiresCaptcha(err.meta)) {
+              this.captchaRequired = true;
+            }
+
             if (isApiClientErrorCode(err, DEVICE_VERIFICATION_REQUIRED_ERROR_CODE)) {
               this.notice = DEVICE_VERIFICATION_REQUIRED_MESSAGE;
               this.error = '';
@@ -129,5 +137,13 @@ export class LoginComponent {
       this.error = e?.message || 'Captcha failed to initialize.';
       this.notice = '';
     }
+  }
+
+  private requiresCaptcha(meta: unknown): boolean {
+    return (
+      typeof meta === 'object' &&
+      meta !== null &&
+      (meta as Record<string, unknown>)['captchaRequired'] === true
+    );
   }
 }

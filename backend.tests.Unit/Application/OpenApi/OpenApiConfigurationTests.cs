@@ -139,6 +139,30 @@ public class OpenApiConfigurationTests
     }
 
     [Fact]
+    public void ApplySpecialHeaders_ShouldRequireCaptchaHeader_ForDeprecatedEmailAvailabilityGet()
+    {
+        var operation = new OpenApiOperation
+        {
+            OperationId = "Auth_CheckEmailAvailability_get",
+            Parameters =
+            [
+                new OpenApiParameter
+                {
+                    Name = "X-Captcha-Token",
+                    In = ParameterLocation.Header
+                }
+            ]
+        };
+
+        InvokeStatic("ApplySpecialHeaders", operation, "/api/auth/email/availability");
+
+        operation.Parameters.Should().ContainSingle(parameter =>
+            parameter.Name == "X-Captcha-Token"
+            && parameter.Required
+            && parameter.Description!.Contains("email_availability"));
+    }
+
+    [Fact]
     public void ApplySpecialResponses_AndDescriptions_ShouldDocumentSpecialRoutes()
     {
         var verifyOperation = new OpenApiOperation();
