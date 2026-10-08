@@ -39,6 +39,15 @@ namespace backend.main.features.auth.token
         private const string PlaceholderUsertype = "placeholder";
         private static readonly TimeSpan EmailChangeLockTtl = TimeSpan.FromSeconds(10);
 
+        // Writes the proof only if the session key is still present. Revocation deletes the
+        // session before the proof, so every interleaving ends with no proof for a dead session.
+        private const string StoreStepUpProofScript = @"
+if redis.call('EXISTS', KEYS[1]) == 0 then
+    return 0
+end
+redis.call('SET', KEYS[2], ARGV[1], 'PX', ARGV[2])
+return 1";
+
         public TokenService(ICacheService cacheService)
         {
             JWT_ACCESS_SECRET = EnvironmentSetting.JwtSecretKeyAccess;
@@ -865,23 +874,44 @@ namespace backend.main.features.auth.token
             return await _cacheService.SetMembersAsync(UserSessionsKey(userId));
         }
 
+        public async Task<StepUpProofWriteResult> StoreStepUpProofAsync(
+            string sessionId,
+            string proofJson,
+            TimeSpan lifetime
+        )
+        {
+            var result = await _cacheService.TryEvalAsync(
+                StoreStepUpProofScript,
+                [(StackExchange.Redis.RedisKey)SessionKey(sessionId), (StackExchange.Redis.RedisKey)StepUpProofKeys.ForSession(sessionId)],
+                [proofJson, checked((long)lifetime.TotalMilliseconds)]
+            );
+
+            if (!result.Succeeded || result.Value is null)
+                return StepUpProofWriteResult.Unavailable;
+
+            var stored = result.Value is StackExchange.Redis.RedisResult redisResult
+                ? (long)redisResult
+                : Convert.ToInt64(result.Value, System.Globalization.CultureInfo.InvariantCulture);
+            return stored == 1 ? StepUpProofWriteResult.Stored : StepUpProofWriteResult.SessionEnded;
+        }
+
         public async Task RevokeRefreshSessionAsync(string sessionId)
         {
             try
             {
-                // A step-up proof must not outlive its session, so it goes first and even
-                // when the session state itself has already expired.
-                await _cacheService.DeleteKeyAsync(StepUpProofKeys.ForSession(sessionId));
-
                 var session = await GetRefreshSessionAsync(sessionId);
-                if (session == null)
-                    return;
+                if (session != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(session.CurrentRefreshTokenHash))
+                        await _cacheService.DeleteKeyAsync(TokenKey(session.CurrentRefreshTokenHash));
 
-                if (!string.IsNullOrWhiteSpace(session.CurrentRefreshTokenHash))
-                    await _cacheService.DeleteKeyAsync(TokenKey(session.CurrentRefreshTokenHash));
+                    await _cacheService.DeleteKeyAsync(SessionKey(session.SessionId));
+                    await _cacheService.SetRemoveAsync(UserSessionsKey(session.UserId), session.SessionId);
+                }
 
-                await _cacheService.DeleteKeyAsync(SessionKey(session.SessionId));
-                await _cacheService.SetRemoveAsync(UserSessionsKey(session.UserId), session.SessionId);
+                // Only after the session key is gone: a concurrent step-up verify either wrote
+                // its proof before this delete, or now sees no session and writes nothing.
+                await _cacheService.DeleteKeyAsync(StepUpProofKeys.ForSession(sessionId));
             }
             catch (Exception e)
             {

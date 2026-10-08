@@ -36,6 +36,15 @@ namespace backend.main.features.auth.token
             ClientRequestInfo requestInfo
         );
         public Task<IReadOnlyCollection<string>> GetSessionIdsAsync(int userId);
+        /// <summary>
+        /// Stores a step-up proof only while the refresh session still exists, in one atomic
+        /// operation, so a verification that races logout cannot outlive the session.
+        /// </summary>
+        public Task<StepUpProofWriteResult> StoreStepUpProofAsync(
+            string sessionId,
+            string proofJson,
+            TimeSpan lifetime
+        );
         public Task RevokeRefreshSessionAsync(string sessionId);
         public Task RevokeAllRefreshSessionsAsync(int userId);
         public Task<string?> VerificationTokenExist(string email, VerificationPurpose purpose);

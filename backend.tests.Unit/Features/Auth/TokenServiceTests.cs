@@ -9,6 +9,8 @@ using backend.main.shared.requests;
 
 using FluentAssertions;
 
+using Moq;
+
 namespace backend.tests.Unit.Features.Auth;
 
 public class TokenServiceTests
@@ -228,6 +230,70 @@ public class TokenServiceTests
         await service.RevokeRefreshSessionAsync("gone");
 
         (await cache.KeyExistsAsync(StepUpProofKeys.ForSession("gone"))).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task StoreStepUpProofAsync_ShouldStoreWithTheLifetime_WhileTheSessionIsLive()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var issue = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.BrowserCookie);
+
+        var result = await service.StoreStepUpProofAsync(issue.SessionId, "{\"proof\":1}", TimeSpan.FromMinutes(10));
+
+        result.Should().Be(StepUpProofWriteResult.Stored);
+        (await cache.GetValueAsync(StepUpProofKeys.ForSession(issue.SessionId))).Should().Be("{\"proof\":1}");
+        (await cache.GetTTLAsync(StepUpProofKeys.ForSession(issue.SessionId)))!.Value
+            .Should().BeLessThanOrEqualTo(TimeSpan.FromMinutes(10));
+    }
+
+    [Fact]
+    public async Task StoreStepUpProofAsync_ShouldWriteNothing_AfterTheSessionWasRevoked()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var issue = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.BrowserCookie);
+        await service.RevokeRefreshSessionAsync(issue.SessionId);
+
+        // A step-up verify that finishes after logout must not resurrect a proof.
+        var result = await service.StoreStepUpProofAsync(issue.SessionId, "{}", TimeSpan.FromMinutes(10));
+
+        result.Should().Be(StepUpProofWriteResult.SessionEnded);
+        (await cache.KeyExistsAsync(StepUpProofKeys.ForSession(issue.SessionId))).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task StoreStepUpProofAsync_ShouldReportUnavailable_WhenTheCacheIsDown()
+    {
+        var cache = new Mock<backend.main.features.cache.ICacheService>();
+        cache.Setup(c => c.TryEvalAsync(
+                It.IsAny<string>(),
+                It.IsAny<StackExchange.Redis.RedisKey[]>(),
+                It.IsAny<StackExchange.Redis.RedisValue[]>()))
+            .ReturnsAsync(backend.main.features.cache.CacheScriptResult.Unavailable);
+        var service = new TokenService(cache.Object);
+
+        var result = await service.StoreStepUpProofAsync("session", "{}", TimeSpan.FromMinutes(10));
+
+        result.Should().Be(StepUpProofWriteResult.Unavailable);
+    }
+
+    [Fact]
+    public async Task RevokeRefreshSessionAsync_ShouldRemoveTheSessionBeforeTheProof()
+    {
+        var cache = new Mock<backend.main.features.cache.ICacheService>();
+        var deleted = new List<string>();
+        cache.Setup(c => c.GetValueAsync(It.IsAny<string>()))
+            .ReturnsAsync("{\"SessionId\":\"s1\",\"UserId\":8,\"CurrentRefreshTokenHash\":\"\"}");
+        cache.Setup(c => c.DeleteKeyAsync(It.IsAny<string>()))
+            .Callback<string>(deleted.Add)
+            .ReturnsAsync(true);
+        var service = new TokenService(cache.Object);
+
+        await service.RevokeRefreshSessionAsync("s1");
+
+        deleted.Should().EndWith(StepUpProofKeys.ForSession("s1"));
+        deleted.IndexOf("refresh:v2:session:s1").Should().BeLessThan(deleted.IndexOf(StepUpProofKeys.ForSession("s1")));
     }
 
     [Fact]
@@ -886,6 +952,17 @@ internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheS
     {
         lock (_gate)
         {
+            if (keys.Length == 2 && script.Contains("redis.call('EXISTS'", StringComparison.Ordinal))
+            {
+                if (!TryGetEntry(keys[0].ToString(), out _))
+                    return Task.FromResult<object>(0L);
+
+                var proof = GetOrCreateEntry(keys[1].ToString());
+                proof.StringValue = values[0].ToString();
+                proof.ExpiresAt = DateTimeOffset.UtcNow.AddMilliseconds(long.Parse(values[1].ToString()));
+                return Task.FromResult<object>(1L);
+            }
+
             if (keys.Length == 1
                 && values.Length == 2
                 && script.Contains("redis.call('GET'", StringComparison.Ordinal)

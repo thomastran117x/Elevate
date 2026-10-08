@@ -182,6 +182,37 @@ public class StepUpProofEndpointsTests
     }
 
     [Fact]
+    public async Task StepUpVerify_ShouldNotCreateAProof_AfterTheSessionLoggedOut()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var session = await app.SignUpAndVerifyByTokenAsync("proof-after-logout@example.com", transport: SessionTransportResolver.ApiValue);
+        var start = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/step-up/start",
+            new SessionMfaStartRequest { Method = "email" },
+            session.AccessToken);
+        start.StatusCode.Should().Be(HttpStatusCode.OK);
+        var code = await app.WaitForEmailAsync(message =>
+            message.Type == EmailMessageType.MfaCode && message.Email == "proof-after-logout@example.com");
+
+        // Logout lands between start and verify; the access token itself is still unexpired.
+        var logout = await app.Client.PostAsJsonAsync("/api/auth/api/logout", new RefreshTokenRequest
+        {
+            RefreshToken = session.RefreshToken,
+            SessionBindingToken = session.SessionBindingToken
+        });
+        logout.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var verify = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/step-up/verify",
+            new SessionMfaVerifyRequest { Method = "email", Code = code.Code! },
+            session.AccessToken);
+
+        verify.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await app.ReadStepUpProofAsync(session.AccessToken)).Should().BeNull();
+        await AssertMfaRequiredAsync(await app.GetWithBearerAsync("/api/auth/mfa/step-up/status", session.AccessToken));
+    }
+
+    [Fact]
     public async Task PasswordChange_ShouldLeaveNoUsableProof()
     {
         await using var app = await AuthApiTestApp.CreateAsync();

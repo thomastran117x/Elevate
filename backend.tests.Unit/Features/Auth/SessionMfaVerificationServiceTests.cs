@@ -163,21 +163,44 @@ public class SessionMfaVerificationServiceTests
     }
 
     [Fact]
-    public async Task VerifyAsync_ShouldStoreProofWithAbsoluteLifetimeTtl()
+    public async Task VerifyAsync_ShouldStoreProofAgainstTheSession_WithAbsoluteLifetime()
     {
-        var cache = new Mock<backend.main.features.cache.ICacheService>();
-        cache.Setup(c => c.SetValueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan?>()))
-            .ReturnsAsync(true);
         var totp = new Mock<ITotpMfaEnrollmentService>();
         totp.Setup(t => t.VerifyPersistedCodeAsync(UserId, "123456")).Returns(Task.CompletedTask);
+        var tokenService = new Mock<ITokenService>();
 
-        var service = CreateService(cache.Object, totp: totp, lifetimeMinutes: 7).service;
+        var (service, _, _) = CreateService(totp: totp, tokenService: tokenService, lifetimeMinutes: 7);
 
         await service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "totp", "123456");
 
-        cache.Verify(
-            c => c.SetValueAsync(StepUpProofKeys.ForSession(SessionId), It.IsAny<string>(), TimeSpan.FromMinutes(7)),
+        tokenService.Verify(
+            t => t.StoreStepUpProofAsync(SessionId, It.IsAny<string>(), TimeSpan.FromMinutes(7)),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task VerifyAsync_ShouldFail_WhenTheSessionEndedBeforeTheProofWasStored()
+    {
+        var totp = new Mock<ITotpMfaEnrollmentService>();
+        totp.Setup(t => t.VerifyPersistedCodeAsync(UserId, "123456")).Returns(Task.CompletedTask);
+        var (service, _, _) = CreateService(totp: totp, storeResult: StepUpProofWriteResult.SessionEnded);
+
+        var act = () => service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "totp", "123456");
+
+        await act.Should().ThrowAsync<UnauthorizedException>();
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task VerifyAsync_ShouldReportUnavailable_WhenTheProofCannotBeStored()
+    {
+        var totp = new Mock<ITotpMfaEnrollmentService>();
+        totp.Setup(t => t.VerifyPersistedCodeAsync(UserId, "123456")).Returns(Task.CompletedTask);
+        var (service, _, _) = CreateService(totp: totp, storeResult: StepUpProofWriteResult.Unavailable);
+
+        var act = () => service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "totp", "123456");
+
+        await act.Should().ThrowAsync<NotAvailableException>();
     }
 
     [Fact]
@@ -335,10 +358,12 @@ public class SessionMfaVerificationServiceTests
         Mock<ITotpMfaEnrollmentService>? totp = null,
         Mock<IMfaEnrollmentRepository>? smsRepository = null,
         Mock<ITokenService>? tokenService = null,
-        int lifetimeMinutes = 10)
+        int lifetimeMinutes = 10,
+        StepUpProofWriteResult? storeResult = null)
     {
         var cache = new InMemoryCacheService();
-        var (service, time) = CreateService(cache, notifications, totp, smsRepository, tokenService, lifetimeMinutes);
+        var (service, time) = CreateService(
+            cache, notifications, totp, smsRepository, tokenService, lifetimeMinutes, storeResult);
         return (service, cache, time);
     }
 
@@ -348,12 +373,25 @@ public class SessionMfaVerificationServiceTests
         Mock<ITotpMfaEnrollmentService>? totp = null,
         Mock<IMfaEnrollmentRepository>? smsRepository = null,
         Mock<ITokenService>? tokenService = null,
-        int lifetimeMinutes = 10)
+        int lifetimeMinutes = 10,
+        StepUpProofWriteResult? storeResult = null)
     {
         notifications ??= new Mock<IAuthNotificationService>();
         totp ??= new Mock<ITotpMfaEnrollmentService>();
         smsRepository ??= new Mock<IMfaEnrollmentRepository>();
         tokenService ??= new Mock<ITokenService>();
+        // Stand in for a live refresh session by storing the proof in the shared test cache,
+        // unless the test asks for a specific store outcome.
+        tokenService
+            .Setup(t => t.StoreStepUpProofAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan>()))
+            .Returns<string, string, TimeSpan>(async (sessionId, json, ttl) =>
+            {
+                if (storeResult is { } forced)
+                    return forced;
+
+                await cache.SetValueAsync(StepUpProofKeys.ForSession(sessionId), json, ttl);
+                return StepUpProofWriteResult.Stored;
+            });
         var time = new MutableTimeProvider(Start);
 
         var service = new SessionMfaVerificationService(

@@ -327,11 +327,24 @@ namespace backend.main.features.auth.mfa.session
             };
 
             // Written once with an absolute TTL; nothing re-sets it, so the window never slides.
-            await _cacheService.SetValueAsync(
-                StepUpProofKeys.ForSession(sessionId),
+            // The write is conditional on the refresh session still existing, so a verify that
+            // races logout cannot leave a proof behind for a logged-out access token.
+            var result = await _tokenService.StoreStepUpProofAsync(
+                sessionId,
                 JsonConvert.SerializeObject(proof),
                 _proofLifetime
             );
+
+            switch (result)
+            {
+                case StepUpProofWriteResult.Stored:
+                    return;
+                case StepUpProofWriteResult.SessionEnded:
+                    throw new UnauthorizedException("This session has ended. Please sign in again.");
+                default:
+                    // Reporting success without a stored proof would loop the user through verification.
+                    throw new NotAvailableException();
+            }
         }
 
         private async Task<string[]> GetAvailableMethodsAsync(int userId)
