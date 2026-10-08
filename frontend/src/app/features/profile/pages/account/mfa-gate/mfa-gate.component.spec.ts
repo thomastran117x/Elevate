@@ -1,9 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
 import { Subject, of, throwError } from 'rxjs';
 
 import { flushPromises } from '@testing';
 
 import { MfaGateComponent } from './mfa-gate.component';
+import { StepUpResumeService } from './step-up-resume.service';
 import { AuthTokenService } from '../../../../../core/api/services/auth-token.service';
 import {
   AuthService,
@@ -65,10 +67,13 @@ describe('MfaGateComponent', () => {
     await TestBed.configureTestingModule({
       imports: [MfaGateComponent],
       providers: [
+        provideRouter([]),
         { provide: AuthService, useValue: auth },
         { provide: AuthTokenService, useValue: { refreshAccessToken } },
       ],
     }).compileComponents();
+
+    sessionStorage.clear();
 
     fixture = TestBed.createComponent(MfaGateComponent);
     component = fixture.componentInstance;
@@ -367,6 +372,93 @@ describe('MfaGateComponent', () => {
       component.verifyCode();
 
       expect(auth.verifySessionMfa).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('step-up lapse and resume', () => {
+    let router: Router;
+    let resume: StepUpResumeService;
+
+    beforeEach(() => {
+      router = TestBed.inject(Router);
+      resume = TestBed.inject(StepUpResumeService);
+      spyOnProperty(router, 'url', 'get').and.returnValue('/account/security');
+      spyOn(router, 'navigateByUrl').and.resolveTo(true);
+      auth.getSessionMfaStatus.and.returnValue(throwError(gated));
+    });
+
+    afterEach(() => sessionStorage.clear());
+
+    function verifyWithTotp(): void {
+      component.openModal();
+      component.selectMethod('totp');
+      component.continueToCode();
+      component.codeForm.setValue({ code: '123456' });
+      component.verifyCode();
+    }
+
+    it('stays closed when locked unless asked to prompt', async () => {
+      fixture.detectChanges();
+      await flushPromises();
+
+      expect(component.modalOpen).toBeFalse();
+      expect(auth.getSessionMfaOptions).not.toHaveBeenCalled();
+    });
+
+    it('opens the modal as soon as it locks when autoOpen is set', async () => {
+      component.autoOpen = true;
+
+      fixture.detectChanges();
+      await flushPromises();
+
+      expect(component.modalOpen).toBeTrue();
+      expect(component.step).toBe('method');
+      expect(auth.getSessionMfaOptions).toHaveBeenCalledTimes(1);
+    });
+
+    it('still prompts when the silent refresh fails', async () => {
+      refreshAccessToken.and.returnValue(Promise.reject(new Error('refresh failed')));
+      component.autoOpen = true;
+
+      fixture.detectChanges();
+      await flushPromises();
+
+      expect(component.modalOpen).toBeTrue();
+    });
+
+    it('remembers the allowlisted route that locked', async () => {
+      fixture.detectChanges();
+      await flushPromises();
+
+      expect(resume.consume()).toBe('/account/security');
+    });
+
+    it('stays on the current route after verifying there', async () => {
+      fixture.detectChanges();
+      await flushPromises();
+
+      verifyWithTotp();
+
+      expect(verified).toHaveBeenCalledTimes(1);
+      expect(router.navigateByUrl).not.toHaveBeenCalled();
+      expect(resume.consume()).toBeNull();
+    });
+
+    it('returns to a remembered account route the user has left', () => {
+      sessionStorage.setItem('step_up_resume_path', '/account/password');
+
+      verifyWithTotp();
+
+      expect(router.navigateByUrl).toHaveBeenCalledOnceWith('/account/password');
+    });
+
+    it('never navigates to a stored path outside the allowlist', () => {
+      sessionStorage.setItem('step_up_resume_path', 'https://evil.example/account/password');
+
+      verifyWithTotp();
+
+      expect(verified).toHaveBeenCalledTimes(1);
+      expect(router.navigateByUrl).not.toHaveBeenCalled();
     });
   });
 

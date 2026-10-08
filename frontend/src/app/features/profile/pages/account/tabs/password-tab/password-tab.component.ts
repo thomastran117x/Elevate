@@ -11,10 +11,15 @@ import {
 import { Router } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 
-import { getApiClientMessage } from '../../../../../../core/api/models/api-client-error.model';
+import {
+  getApiClientMessage,
+  isApiClientErrorCode,
+} from '../../../../../../core/api/models/api-client-error.model';
 import { AuthTokenService } from '../../../../../../core/api/services/auth-token.service';
 import { ProfileService } from '../../../../services/profile.service';
 import { MfaGateComponent } from '../../mfa-gate/mfa-gate.component';
+
+const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
 
 const passwordsMatchValidator: ValidatorFn = (group: AbstractControl): ValidationErrors | null => {
   const newPassword = group.get('newPassword')?.value;
@@ -37,6 +42,10 @@ export class PasswordTabComponent {
   // The form is revealed only after the reusable gate confirms a fresh MFA
   // verification; the change-password endpoint is also [RequireMfa]-gated.
   mfaVerified = false;
+  // Set when the server refused the change because the 10-minute step-up proof had
+  // expired: the gate then prompts at once and the typed values are kept for a retry.
+  stepUpLapsed = false;
+  resumeNotice = '';
 
   readonly passwordForm = this.fb.nonNullable.group(
     {
@@ -64,6 +73,11 @@ export class PasswordTabComponent {
     );
   }
 
+  onMfaVerified(): void {
+    this.mfaVerified = true;
+    this.resumeNotice = this.stepUpLapsed ? 'Identity verified. Submit again to finish.' : '';
+  }
+
   changePassword(): void {
     if (this.passwordForm.invalid) {
       this.passwordForm.markAllAsTouched();
@@ -73,6 +87,7 @@ export class PasswordTabComponent {
     const { currentPassword, newPassword } = this.passwordForm.getRawValue();
     this.saving = true;
     this.error = '';
+    this.resumeNotice = '';
 
     this.profileService
       .changePassword(currentPassword, newPassword)
@@ -83,6 +98,11 @@ export class PasswordTabComponent {
           this.router.navigate(['/auth/login']);
         },
         error: (err) => {
+          if (isApiClientErrorCode(err, MFA_REQUIRED_ERROR_CODE)) {
+            this.stepUpLapsed = true;
+            this.mfaVerified = false;
+            return;
+          }
           this.error = getApiClientMessage(err, 'Unable to change password.');
         },
       });

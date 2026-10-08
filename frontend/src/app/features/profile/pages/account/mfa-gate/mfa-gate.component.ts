@@ -1,6 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, OnInit, Output, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  EventEmitter,
+  Input,
+  OnInit,
+  Output,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
 import { from } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
@@ -14,15 +22,18 @@ import {
   SessionMfaMethod,
   SessionMfaOptionsResponse,
 } from '../../../../auth/services/auth.service';
+import { StepUpResumeService } from './step-up-resume.service';
 
 const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
 
 /**
  * Reusable in-session MFA gate. On init it probes whether the current session
- * has completed a fresh MFA verification; if not, it shows a locked state with a
- * modal that walks the user through picking a method and entering a 6-digit code.
- * Emits {@link verified} once the session is verified (already or after the
- * modal), so the host can reveal the protected content.
+ * holds a fresh step-up proof (it lasts 10 minutes from verification); if not, it
+ * shows a locked state with a modal that walks the user through picking a method
+ * and entering a 6-digit code. Emits {@link verified} once the session is
+ * verified (already or after the modal), so the host can reveal the protected
+ * content. When it locks it remembers the allowlisted account route that asked,
+ * and returns there after verification.
  */
 @Component({
   selector: 'app-mfa-gate',
@@ -32,6 +43,13 @@ const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
   templateUrl: './mfa-gate.component.html',
 })
 export class MfaGateComponent implements OnInit {
+  /**
+   * Open the verification modal as soon as the gate locks. Hosts set this when a
+   * protected action has just been refused because the proof expired, so the user
+   * is prompted straight away instead of having to find the button.
+   */
+  @Input() autoOpen = false;
+
   @Output() verified = new EventEmitter<void>();
 
   private readonly fb = new FormBuilder();
@@ -55,6 +73,8 @@ export class MfaGateComponent implements OnInit {
   constructor(
     private auth: AuthService,
     private authToken: AuthTokenService,
+    private router: Router,
+    private stepUpResume: StepUpResumeService,
   ) {}
 
   ngOnInit(): void {
@@ -175,6 +195,7 @@ export class MfaGateComponent implements OnInit {
         next: () => {
           this.modalOpen = false;
           this.verified.emit();
+          this.resumeIntendedRoute();
         },
         error: (err) => {
           this.error = getApiClientMessage(err, 'Unable to verify the code. Please try again.');
@@ -209,8 +230,29 @@ export class MfaGateComponent implements OnInit {
       this.checking = true;
       from(this.authToken.refreshAccessToken()).subscribe({
         next: () => this.checkStatus(),
-        error: () => (this.checking = false),
+        error: () => {
+          this.checking = false;
+          this.lock();
+        },
       });
+      return;
+    }
+
+    this.lock();
+  }
+
+  private lock(): void {
+    this.stepUpResume.remember(this.router.url);
+    if (this.autoOpen && !this.modalOpen) {
+      this.openModal();
+    }
+  }
+
+  /** Navigates only to an allowlisted account route, and only if the user has left it. */
+  private resumeIntendedRoute(): void {
+    const target = this.stepUpResume.consume();
+    if (target && target !== this.stepUpResume.resolve(this.router.url)) {
+      void this.router.navigateByUrl(target);
     }
   }
 

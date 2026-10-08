@@ -65,6 +65,10 @@ export class SecurityTabComponent implements OnInit {
   // Viewing this tab requires a fresh in-session MFA verification, handled by the
   // reusable <app-mfa-gate>. Settings load only once it emits (verified).
   mfaVerified = false;
+  // Set when a change was refused because the 10-minute step-up proof expired (or a
+  // previous factor change spent it): the gate prompts at once and in-flight setup
+  // steps are kept so the user can finish them after verifying.
+  stepUpLapsed = false;
 
   constructor(private auth: AuthService) {}
 
@@ -76,6 +80,9 @@ export class SecurityTabComponent implements OnInit {
   onMfaVerified(): void {
     this.mfaVerified = true;
     this.refreshStatus();
+    if (this.stepUpLapsed) {
+      this.success = 'Identity verified. Try that again to finish.';
+    }
   }
 
   get emailSettings() {
@@ -150,7 +157,7 @@ export class SecurityTabComponent implements OnInit {
           this.success = `Verification code sent to ${challenge.MaskedDestination}.`;
         },
         error: (err) => {
-          this.error = getApiClientMessage(err, 'Unable to start SMS MFA enrollment.');
+          this.handleMutationError(err, 'Unable to start SMS MFA enrollment.', false);
         },
       });
   }
@@ -170,8 +177,7 @@ export class SecurityTabComponent implements OnInit {
           this.success = `Verification code sent to ${challenge.MaskedDestination}.`;
         },
         error: (err) => {
-          this.error = getApiClientMessage(err, 'Unable to send the SMS re-enable code.');
-          this.refreshStatus(true);
+          this.handleMutationError(err, 'Unable to send the SMS re-enable code.', true);
         },
       });
   }
@@ -204,8 +210,7 @@ export class SecurityTabComponent implements OnInit {
             flow === 'enable' ? 'SMS MFA has been re-enabled.' : 'SMS MFA is now enabled.';
         },
         error: (err) => {
-          this.error = getApiClientMessage(err, 'Unable to verify the SMS MFA code.');
-          this.refreshStatus(true);
+          this.handleMutationError(err, 'Unable to verify the SMS MFA code.', true);
         },
       });
   }
@@ -228,8 +233,7 @@ export class SecurityTabComponent implements OnInit {
           this.success = 'SMS MFA has been disabled.';
         },
         error: (err) => {
-          this.error = getApiClientMessage(err, 'Unable to disable SMS MFA.');
-          this.refreshStatus(true);
+          this.handleMutationError(err, 'Unable to disable SMS MFA.', true);
         },
       });
   }
@@ -248,8 +252,7 @@ export class SecurityTabComponent implements OnInit {
           this.success = 'SMS MFA has been removed.';
         },
         error: (err) => {
-          this.error = getApiClientMessage(err, 'Unable to remove SMS MFA.');
-          this.refreshStatus(true);
+          this.handleMutationError(err, 'Unable to remove SMS MFA.', true);
         },
       });
   }
@@ -267,8 +270,7 @@ export class SecurityTabComponent implements OnInit {
           this.totpSetupForm.reset();
         },
         error: (err) => {
-          this.error = getApiClientMessage(err, 'Unable to start TOTP enrollment.');
-          this.refreshStatus(true);
+          this.handleMutationError(err, 'Unable to start TOTP enrollment.', true);
         },
       });
   }
@@ -300,8 +302,7 @@ export class SecurityTabComponent implements OnInit {
           this.success = 'TOTP MFA is now enabled.';
         },
         error: (err) => {
-          this.error = getApiClientMessage(err, 'Unable to verify the TOTP code.');
-          this.refreshStatus(true);
+          this.handleMutationError(err, 'Unable to verify the TOTP code.', true);
         },
       });
   }
@@ -354,8 +355,7 @@ export class SecurityTabComponent implements OnInit {
               : 'TOTP MFA has been removed.';
       },
       error: (err) => {
-        this.error = getApiClientMessage(err, 'Unable to update TOTP MFA.');
-        this.refreshStatus(true);
+        this.handleMutationError(err, 'Unable to update TOTP MFA.', true);
       },
     });
   }
@@ -364,6 +364,19 @@ export class SecurityTabComponent implements OnInit {
     this.totpManageAction = null;
     this.totpManageForm.reset();
     this.clearMessages();
+  }
+
+  private handleMutationError(err: unknown, fallback: string, refresh: boolean): void {
+    if (isApiClientErrorCode(err, MFA_REQUIRED_ERROR_CODE)) {
+      this.stepUpLapsed = true;
+      this.mfaVerified = false;
+      return;
+    }
+
+    this.error = getApiClientMessage(err, fallback);
+    if (refresh) {
+      this.refreshStatus(true);
+    }
   }
 
   private resetSmsFlow(): void {

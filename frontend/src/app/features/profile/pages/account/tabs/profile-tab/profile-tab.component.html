@@ -235,6 +235,7 @@
         <div *ngIf="usernameChangeRequested" class="mt-6">
           <app-mfa-gate
             *ngIf="!usernameMfaVerified"
+            [autoOpen]="usernameStepUpLapsed"
             (verified)="usernameMfaVerified = true"
           ></app-mfa-gate>
 
@@ -357,6 +358,7 @@
         <div *ngIf="emailChangeRequested && !awaitingEmailConfirmation" class="mt-6">
           <app-mfa-gate
             *ngIf="!emailMfaVerified"
+            [autoOpen]="emailStepUpLapsed"
             (verified)="emailMfaVerified = true"
           ></app-mfa-gate>
 

@@ -272,7 +272,12 @@ describe('ProfileTabComponent', () => {
     component.changeUsername();
 
     expect(component.usernameMfaVerified).toBeFalse();
+    expect(component.usernameStepUpLapsed).toBeTrue();
     expect(component.error).toBe('Verify first');
+
+    // Starting over is a fresh request, so the gate waits for the button again.
+    component.cancelUsernameChange();
+    expect(component.usernameStepUpLapsed).toBeFalse();
   });
 
   it('keeps MFA verification for a non-MFA username API failure', () => {
@@ -513,6 +518,7 @@ describe('ProfileTabComponent', () => {
       component.requestEmailChange();
 
       expect(component.emailMfaVerified).toBeFalse();
+      expect(component.emailStepUpLapsed).toBeTrue();
       expect(component.error).toContain('Step-up required');
     });
 
