@@ -22,18 +22,21 @@ namespace backend.main.features.auth.mfa
     {
         private readonly IMfaEnrollmentService _mfaEnrollmentService;
         private readonly IMfaSettingsBuilder _settingsBuilder;
+        private readonly IMfaFactorChangeService _factorChangeService;
         private readonly IAuthAbuseProtectionService _abuseProtection;
         private readonly ClientRequestInfo _requestInfo;
 
         public AuthMfaController(
             IMfaEnrollmentService mfaEnrollmentService,
             IMfaSettingsBuilder settingsBuilder,
+            IMfaFactorChangeService factorChangeService,
             IAuthAbuseProtectionService abuseProtection,
             ClientRequestInfo requestInfo
         )
         {
             _mfaEnrollmentService = mfaEnrollmentService;
             _settingsBuilder = settingsBuilder;
+            _factorChangeService = factorChangeService;
             _abuseProtection = abuseProtection;
             _requestInfo = requestInfo;
         }
@@ -61,6 +64,7 @@ namespace backend.main.features.auth.mfa
 
         [HttpPost("enroll/start")]
         [HttpPost("sms/enroll/start")]
+        [RequireMfa]
         [ProducesResponseType(typeof(ApiResponse<MfaChallengeResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> StartEnrollment([FromBody] MfaEnrollmentStartRequest request)
         {
@@ -92,6 +96,7 @@ namespace backend.main.features.auth.mfa
 
         [HttpPost("enable/start")]
         [HttpPost("sms/enable/start")]
+        [RequireMfa]
         [ProducesResponseType(typeof(ApiResponse<MfaChallengeResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> StartEnable()
         {
@@ -115,6 +120,7 @@ namespace backend.main.features.auth.mfa
 
         [HttpPost("enroll/verify")]
         [HttpPost("sms/enroll/verify")]
+        [RequireMfa]
         [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> VerifyEnrollment([FromBody] MfaEnrollmentVerifyRequest request)
         {
@@ -127,6 +133,7 @@ namespace backend.main.features.auth.mfa
                     request.Code,
                     request.Challenge
                 );
+                await _factorChangeService.RecordAsync(user.Id, user.Email, MfaFactorKind.Sms, MfaFactorChange.Enabled);
                 var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
 
                 return Ok(
@@ -148,6 +155,7 @@ namespace backend.main.features.auth.mfa
 
         [HttpPost("disable")]
         [HttpPost("sms/disable")]
+        [RequireMfa]
         [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> Disable([FromBody] MfaDisableRequest _)
         {
@@ -155,6 +163,7 @@ namespace backend.main.features.auth.mfa
             {
                 var user = User.GetUserPayload();
                 await _mfaEnrollmentService.DisableAsync(user.Id);
+                await _factorChangeService.RecordAsync(user.Id, user.Email, MfaFactorKind.Sms, MfaFactorChange.Disabled);
                 var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
 
                 return Ok(
@@ -176,6 +185,7 @@ namespace backend.main.features.auth.mfa
 
         [HttpPost("remove")]
         [HttpPost("sms/remove")]
+        [RequireMfa]
         [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> Remove([FromBody] MfaDisableRequest _)
         {
@@ -183,6 +193,7 @@ namespace backend.main.features.auth.mfa
             {
                 var user = User.GetUserPayload();
                 await _mfaEnrollmentService.RemoveAsync(user.Id);
+                await _factorChangeService.RecordAsync(user.Id, user.Email, MfaFactorKind.Sms, MfaFactorChange.Removed);
                 var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
 
                 return Ok(

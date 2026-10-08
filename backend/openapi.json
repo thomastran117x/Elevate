@@ -182,6 +182,7 @@
           "profile"
         ],
         "summary": "Delete the current user's account",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "Profile_DeleteAccount_delete",
         "responses": {
           "200": {
@@ -318,7 +319,7 @@
           "profile"
         ],
         "summary": "Change the current user's username",
-        "description": "Requires recent MFA verification. Usernames are trimmed and lowercased; replacing an existing username starts the configured cooldown and reserves the previous username for the same period.",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes. Usernames are trimmed and lowercased; replacing an existing username starts the configured cooldown and reserves the previous username for the same period.",
         "operationId": "Profile_ChangeUsername_patch",
         "requestBody": {
           "content": {
@@ -583,6 +584,7 @@
           "profile"
         ],
         "summary": "Change the current user's password",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "Profile_ChangePassword_post",
         "requestBody": {
           "content": {
@@ -18349,6 +18351,7 @@
           "auth"
         ],
         "summary": "Start SMS MFA enrollment",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "AuthMfa_StartEnrollment_post",
         "parameters": [
           {
@@ -18454,6 +18457,7 @@
           "auth"
         ],
         "summary": "Start SMS MFA enrollment",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "AuthMfa_StartEnrollment_post",
         "parameters": [
           {
@@ -18559,6 +18563,7 @@
           "auth"
         ],
         "summary": "Start SMS MFA re-enable",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "AuthMfa_StartEnable_post",
         "parameters": [
           {
@@ -18644,6 +18649,7 @@
           "auth"
         ],
         "summary": "Start SMS MFA re-enable",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "AuthMfa_StartEnable_post",
         "parameters": [
           {
@@ -18729,6 +18735,7 @@
           "auth"
         ],
         "summary": "Verify an SMS MFA enrollment or re-enable code",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "AuthMfa_VerifyEnrollment_post",
         "parameters": [
           {
@@ -18834,6 +18841,7 @@
           "auth"
         ],
         "summary": "Verify an SMS MFA enrollment or re-enable code",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "AuthMfa_VerifyEnrollment_post",
         "parameters": [
           {
@@ -18939,6 +18947,7 @@
           "auth"
         ],
         "summary": "Disable SMS MFA",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "AuthMfa_Disable_post",
         "parameters": [
           {
@@ -19044,6 +19053,7 @@
           "auth"
         ],
         "summary": "Disable SMS MFA",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "AuthMfa_Disable_post",
         "parameters": [
           {
@@ -19149,6 +19159,7 @@
           "auth"
         ],
         "summary": "Remove SMS MFA",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "AuthMfa_Remove_post",
         "parameters": [
           {
@@ -19254,6 +19265,7 @@
           "auth"
         ],
         "summary": "Remove SMS MFA",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "AuthMfa_Remove_post",
         "parameters": [
           {
@@ -19359,6 +19371,7 @@
           "auth"
         ],
         "summary": "Start authenticator app enrollment",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "AuthTotpMfa_StartEnrollment_post",
         "parameters": [
           {
@@ -19444,6 +19457,7 @@
           "auth"
         ],
         "summary": "Verify an authenticator enrollment code",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "AuthTotpMfa_VerifyEnrollment_post",
         "parameters": [
           {
@@ -19549,6 +19563,7 @@
           "auth"
         ],
         "summary": "Re-enable authenticator app MFA",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "AuthTotpMfa_Enable_post",
         "parameters": [
           {
@@ -19654,6 +19669,7 @@
           "auth"
         ],
         "summary": "Disable authenticator app MFA",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "AuthTotpMfa_Disable_post",
         "parameters": [
           {
@@ -19759,6 +19775,7 @@
           "auth"
         ],
         "summary": "Remove authenticator app MFA",
+        "description": "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
         "operationId": "AuthTotpMfa_Remove_post",
         "parameters": [
           {

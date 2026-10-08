@@ -749,6 +749,7 @@ public class AuthEndpointsTests
     {
         await using var app = await AuthApiTestApp.CreateAsync();
         var session = await app.SignUpAndVerifyByTokenAsync("mfa-start@example.com", transport: SessionTransportResolver.ApiValue);
+        await app.GrantStepUpProofAsync(session.AccessToken);
 
         var response = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/enroll/start",
@@ -772,6 +773,7 @@ public class AuthEndpointsTests
     {
         await using var app = await AuthApiTestApp.CreateAsync();
         var session = await app.SignUpAndVerifyByTokenAsync("mfa-verify@example.com", transport: SessionTransportResolver.ApiValue);
+        await app.GrantStepUpProofAsync(session.AccessToken);
 
         var start = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/enroll/start",
@@ -811,6 +813,7 @@ public class AuthEndpointsTests
     {
         await using var app = await AuthApiTestApp.CreateAsync();
         var session = await app.SignUpAndVerifyByTokenAsync("mfa-disable@example.com", transport: SessionTransportResolver.ApiValue);
+        await app.GrantStepUpProofAsync(session.AccessToken);
 
         var start = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/enroll/start",
@@ -831,6 +834,7 @@ public class AuthEndpointsTests
             },
             session.AccessToken);
 
+        await app.GrantStepUpProofAsync(session.AccessToken);
         var disable = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/disable",
             new MfaDisableRequest(),
@@ -855,6 +859,7 @@ public class AuthEndpointsTests
     {
         await using var app = await AuthApiTestApp.CreateAsync();
         var session = await app.SignUpAndVerifyByTokenAsync("mfa-aliases@example.com", transport: SessionTransportResolver.ApiValue);
+        await app.GrantStepUpProofAsync(session.AccessToken);
 
         var aliasEnrollStart = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/sms/enroll/start",
@@ -879,6 +884,7 @@ public class AuthEndpointsTests
         var aliasEnrollmentBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(aliasEnrollmentVerify);
         aliasEnrollmentBody.Data!.Sms.IsEnabled.Should().BeTrue();
 
+        await app.GrantStepUpProofAsync(session.AccessToken);
         var aliasDisable = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/sms/disable",
             new MfaDisableRequest(),
@@ -887,6 +893,7 @@ public class AuthEndpointsTests
         var aliasDisableBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(aliasDisable);
         aliasDisableBody.Data!.Sms.IsEnabled.Should().BeFalse();
 
+        await app.GrantStepUpProofAsync(session.AccessToken);
         var aliasEnableStart = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/sms/enable/start",
             new { },
@@ -907,12 +914,14 @@ public class AuthEndpointsTests
         var aliasEnableBody = await app.ReadApiResponseAsync<MfaSettingsResponse>(aliasEnableVerify);
         aliasEnableBody.Data!.Sms.IsEnabled.Should().BeTrue();
 
+        await app.GrantStepUpProofAsync(session.AccessToken);
         var genericDisable = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/disable",
             new MfaDisableRequest(),
             session.AccessToken);
         genericDisable.StatusCode.Should().Be(HttpStatusCode.OK);
 
+        await app.GrantStepUpProofAsync(session.AccessToken);
         var genericEnableStart = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/enable/start",
             new { },
@@ -931,6 +940,7 @@ public class AuthEndpointsTests
             session.AccessToken);
         genericEnableVerify.StatusCode.Should().Be(HttpStatusCode.OK);
 
+        await app.GrantStepUpProofAsync(session.AccessToken);
         var genericRemove = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/remove",
             new MfaDisableRequest(),
@@ -945,6 +955,7 @@ public class AuthEndpointsTests
             "/api/auth/mfa/enroll/start",
             "/api/auth/mfa/enroll/verify");
 
+        await app.GrantStepUpProofAsync(session.AccessToken);
         var aliasRemove = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/sms/remove",
             new MfaDisableRequest(),
@@ -970,6 +981,7 @@ public class AuthEndpointsTests
             var session = await app.SignUpAndVerifyByTokenAsync(
                 "stepup@example.com",
                 transport: SessionTransportResolver.ApiValue);
+            await app.GrantStepUpProofAsync(session.AccessToken);
 
             var enrollStart = await app.PostJsonWithBearerAndCsrfAsync(
                 "/api/auth/mfa/enroll/start",
@@ -1073,6 +1085,7 @@ public class AuthEndpointsTests
         string verifyPath,
         string phoneNumber = "+14165550123")
     {
+        await app.GrantStepUpProofAsync(accessToken);
         var start = await app.PostJsonWithBearerAndCsrfAsync(
             startPath,
             new MfaEnrollmentStartRequest

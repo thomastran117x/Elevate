@@ -257,6 +257,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IMfaSettingsBuilder, MfaSettingsBuilder>();
             services.AddScoped<ITotpMfaEnrollmentService, TotpMfaEnrollmentService>();
             services.AddScoped<ISessionMfaVerificationService, SessionMfaVerificationService>();
+            services.AddScoped<IMfaFactorChangeService, MfaFactorChangeService>();
             services.AddScoped<IOAuthService, OAuthService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IClubService, ClubService>();

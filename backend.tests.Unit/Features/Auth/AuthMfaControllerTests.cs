@@ -151,16 +151,83 @@ public class AuthMfaControllerTests
         response.Data!.Sms.IsConfigured.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task Disable_ShouldRecordTheFactorChange()
+    {
+        var factorChanges = new Mock<IMfaFactorChangeService>();
+        var controller = CreateController(factorChangeService: factorChanges.Object);
+
+        await controller.Disable(new MfaDisableRequest());
+
+        factorChanges.Verify(
+            f => f.RecordAsync(42, "member@example.com", MfaFactorKind.Sms, MfaFactorChange.Disabled),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Remove_ShouldRecordTheFactorChange()
+    {
+        var factorChanges = new Mock<IMfaFactorChangeService>();
+        var controller = CreateController(factorChangeService: factorChanges.Object);
+
+        await controller.Remove(new MfaDisableRequest());
+
+        factorChanges.Verify(
+            f => f.RecordAsync(42, "member@example.com", MfaFactorKind.Sms, MfaFactorChange.Removed),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task VerifyEnrollment_ShouldRecordTheFactorChange()
+    {
+        var factorChanges = new Mock<IMfaFactorChangeService>();
+        var controller = CreateController(factorChangeService: factorChanges.Object);
+
+        await controller.VerifyEnrollment(new MfaEnrollmentVerifyRequest { Code = "123456", Challenge = "challenge" });
+
+        factorChanges.Verify(
+            f => f.RecordAsync(42, "member@example.com", MfaFactorKind.Sms, MfaFactorChange.Enabled),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task VerifyEnrollment_ShouldNotRecordAChange_WhenTheCodeIsRejected()
+    {
+        var service = new Mock<IMfaEnrollmentService>();
+        service.Setup(s => s.VerifyEnrollmentAsync(42, It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new backend.main.shared.exceptions.http.UnauthorizedException("Invalid code."));
+        var factorChanges = new Mock<IMfaFactorChangeService>();
+        var controller = CreateController(service.Object, factorChangeService: factorChanges.Object);
+
+        await controller.VerifyEnrollment(new MfaEnrollmentVerifyRequest { Code = "000000", Challenge = "challenge" });
+
+        factorChanges.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task StartEnrollment_ShouldNotRecordAChange()
+    {
+        var factorChanges = new Mock<IMfaFactorChangeService>();
+        var controller = CreateController(factorChangeService: factorChanges.Object);
+
+        await controller.StartEnrollment(new MfaEnrollmentStartRequest { PhoneNumber = "+14165550123" });
+
+        factorChanges.VerifyNoOtherCalls();
+    }
+
     private static AuthMfaController CreateController(
         IMfaEnrollmentService? service = null,
-        IMfaSettingsBuilder? settingsBuilder = null)
+        IMfaSettingsBuilder? settingsBuilder = null,
+        IMfaFactorChangeService? factorChangeService = null)
     {
         service ??= new Mock<IMfaEnrollmentService>().Object;
         settingsBuilder ??= new Mock<IMfaSettingsBuilder>().Object;
+        factorChangeService ??= new Mock<IMfaFactorChangeService>().Object;
 
         return new AuthMfaController(
             service,
             settingsBuilder,
+            factorChangeService,
             new Mock<IAuthAbuseProtectionService>().Object,
             TestRequestInfoFactory.Browser())
         {
