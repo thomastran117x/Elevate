@@ -233,6 +233,15 @@ public class StepUpProofEndpointsTests
 
         (await app.ReadStepUpProofAsync(first.AccessToken)).Should().BeNull();
         (await app.ReadStepUpProofAsync(second.AccessToken)).Should().BeNull();
+
+        var notice = await app.WaitForEmailAsync(message =>
+            message.Type == EmailMessageType.MfaFactorChanged
+            && message.Email == "proof-factor@example.com");
+        notice.MfaFactor.Should().Be("totp");
+        notice.MfaChange.Should().Be("enabled");
+        notice.Code.Should().BeNull();
+        notice.Token.Should().BeNull();
+        Newtonsoft.Json.JsonConvert.SerializeObject(notice).Should().NotContain(secret);
         await AssertMfaRequiredAsync(await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/totp/disable",
             new TotpDisableRequest { Code = ComputeTotp(secret) },
@@ -261,6 +270,24 @@ public class StepUpProofEndpointsTests
         (await app.ReadStepUpProofAsync(session.AccessToken))!.Method.Should().Be("totp");
         (await app.GetWithBearerAsync("/api/auth/mfa/step-up/status", session.AccessToken))
             .StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task SmsFactorChangeNotice_ShouldNotContainThePhoneNumber()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var session = await app.SignUpAndVerifyByTokenAsync("notice-sms@example.com", transport: SessionTransportResolver.ApiValue);
+        await EnrollSmsAsync(app, session.AccessToken);
+
+        var notice = await app.WaitForEmailAsync(message =>
+            message.Type == EmailMessageType.MfaFactorChanged
+            && message.Email == "notice-sms@example.com");
+
+        notice.MfaFactor.Should().Be("sms");
+        notice.MfaChange.Should().Be("enabled");
+        var serialized = Newtonsoft.Json.JsonConvert.SerializeObject(notice);
+        serialized.Should().NotContain("4165550123");
+        notice.Code.Should().BeNull();
     }
 
     [Fact]

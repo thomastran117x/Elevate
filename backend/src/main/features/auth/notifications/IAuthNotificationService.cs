@@ -57,6 +57,16 @@ namespace backend.main.features.auth.notifications
             DateTime expiresAtUtc,
             string purpose);
 
+        /// <summary>
+        /// Tells the account owner a second factor changed. Only the factor kind and the change
+        /// are sent; the message never includes a phone number, secret, or code.
+        /// </summary>
+        Task SendMfaFactorChangedAsync(
+            string email,
+            string factor,
+            string change,
+            string? recipientName = null);
+
         Task SendEmailMfaCodeAsync(
             string email,
             string code,

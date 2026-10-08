@@ -204,6 +204,20 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
                 Code: null,
                 MutedNote: "If you didn't make this change, contact support immediately."),
 
+            EmailMessageType.MfaFactorChanged => new Content(
+                Subject: "Your two-step verification settings changed",
+                Preheader: "A sign-in verification method on your account was updated.",
+                Heading: "Two-step verification updated",
+                Greeting: greeting,
+                Intro:
+                [
+                    $"{MfaFactorLabel(message)} verification was {MfaChangeLabel(message)} for your EventXperience account.",
+                    "Other signed-in sessions will need to verify again before changing security settings."
+                ],
+                Cta: new Cta($"{baseUrl}/account/security", "Review security settings"),
+                Code: null,
+                MutedNote: "If you didn't make this change, review your security settings and change your password immediately."),
+
             EmailMessageType.InvitationAccepted => new Content(
                 Subject: $"{ActorLabel(message)} accepted your invitation to {eventName}",
                 Preheader: $"{ActorLabel(message)} is coming to {eventName}.",
@@ -298,6 +312,24 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
         string.IsNullOrWhiteSpace(message.Username)
             ? throw new InvalidOperationException($"Email type '{message.Type}' requires a username.")
             : message.Username.Trim();
+
+    // Only the factor kind is ever rendered, never a phone number or secret.
+    private static string MfaFactorLabel(EmailMessage message) =>
+        message.MfaFactor?.Trim().ToLowerInvariant() switch
+        {
+            "sms" => "Text message (SMS)",
+            "totp" => "Authenticator app",
+            _ => "A two-step",
+        };
+
+    private static string MfaChangeLabel(EmailMessage message) =>
+        message.MfaChange?.Trim().ToLowerInvariant() switch
+        {
+            "enabled" => "turned on",
+            "disabled" => "turned off",
+            "removed" => "removed",
+            _ => "changed",
+        };
 
     private static string ProviderLabel(EmailMessage message)
     {

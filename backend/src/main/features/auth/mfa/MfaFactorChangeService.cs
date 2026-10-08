@@ -1,4 +1,5 @@
 using backend.main.features.auth.mfa.session;
+using backend.main.features.auth.notifications;
 using backend.main.shared.utilities.logger;
 
 namespace backend.main.features.auth.mfa
@@ -28,10 +29,14 @@ namespace backend.main.features.auth.mfa
     public sealed class MfaFactorChangeService : IMfaFactorChangeService
     {
         private readonly ISessionMfaVerificationService _sessionMfaVerificationService;
+        private readonly IAuthNotificationService _notificationService;
 
-        public MfaFactorChangeService(ISessionMfaVerificationService sessionMfaVerificationService)
+        public MfaFactorChangeService(
+            ISessionMfaVerificationService sessionMfaVerificationService,
+            IAuthNotificationService notificationService)
         {
             _sessionMfaVerificationService = sessionMfaVerificationService;
+            _notificationService = notificationService;
         }
 
         public async Task RecordAsync(int userId, string email, MfaFactorKind factor, MfaFactorChange change)
@@ -41,6 +46,19 @@ namespace backend.main.features.auth.mfa
             await _sessionMfaVerificationService.ClearUserProofsAsync(userId);
 
             Logger.Info($"[MfaFactorAudit] userId={userId} factor={factor} change={change}");
+
+            // The change is already committed; a lost notice must not turn it into an error.
+            try
+            {
+                await _notificationService.SendMfaFactorChangedAsync(
+                    email,
+                    factor.ToString().ToLowerInvariant(),
+                    change.ToString().ToLowerInvariant());
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[MfaFactorChangeService] Factor-change notice for userId={userId} failed: {ex}");
+            }
         }
     }
 }

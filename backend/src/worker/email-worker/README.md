@@ -39,6 +39,8 @@ Supply settings before starting. The standalone Docker build uses `backend/` as 
 
 The processor deserializes the shared `EmailMessage` contract, validates the recipient, renders content according to message type, and sends it. SMTP delivery retries up to three times with exponential delay starting at 500 ms. Malformed payloads and exhausted failures are published to the DLQ. For invitation-linked messages, sent/failed status is also published; failure of status publication can enter the processing-failure path.
 
+Message types travel by ordinal and are only ever appended, so deploy this worker no later than an API release that produces a new type, such as `MfaFactorChanged`. That security notice names only the factor (SMS or authenticator app) and the change. It never contains a phone number, TOTP secret, or code.
+
 Kafka auto-commit is disabled; a group without offsets starts at earliest. The consumer commits when processing returns, including successful DLQ publication. DLQ/status publication errors that escape processing leave the offset uncommitted and trigger a five-second reconnect delay. Cancellation propagates.
 
 Sending and committing are not atomic: a retry after SMTP success can send duplicate mail. Monitor notification lag, delivery/status failures, and DLQs. A successful SMTP submission is not proof of inbox delivery. Inspect status failures before replaying messages.

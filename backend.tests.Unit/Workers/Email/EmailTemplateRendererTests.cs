@@ -77,6 +77,57 @@ public class EmailTemplateRendererTests
         Assert.Contains("Go to sign in", content.Html);
     }
 
+    [Theory]
+    [InlineData("sms", "disabled", "Text message (SMS) verification was turned off")]
+    [InlineData("totp", "enabled", "Authenticator app verification was turned on")]
+    [InlineData("totp", "removed", "Authenticator app verification was removed")]
+    public void Render_MfaFactorChanged_NamesTheFactorAndChange(string factor, string change, string expected)
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Type = EmailMessageType.MfaFactorChanged,
+            MfaFactor = factor,
+            MfaChange = change
+        });
+
+        Assert.Equal("Your two-step verification settings changed", content.Subject);
+        Assert.Contains(expected, content.PlainText);
+        Assert.Contains(expected, content.Html);
+        Assert.Contains("/account/security", content.PlainText);
+    }
+
+    [Fact]
+    public void Render_MfaFactorChanged_ShouldNotRenderCodesOrSecrets_EvenWhenPresent()
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Type = EmailMessageType.MfaFactorChanged,
+            MfaFactor = "sms",
+            MfaChange = "enabled",
+            Code = "654321",
+            Token = "secret-token"
+        });
+
+        Assert.DoesNotContain("654321", content.PlainText);
+        Assert.DoesNotContain("654321", content.Html);
+        Assert.DoesNotContain("secret-token", content.PlainText);
+        Assert.DoesNotContain("secret-token", content.Html);
+    }
+
+    [Fact]
+    public void Render_MfaFactorChanged_FallsBackForUnknownValues()
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Type = EmailMessageType.MfaFactorChanged
+        });
+
+        Assert.Contains("A two-step verification was changed", content.PlainText);
+    }
+
     [Fact]
     public void Render_EventInvite_UsesFallbackTitleWhenEventNameMissing()
     {
@@ -307,7 +358,9 @@ public class EmailTemplateRendererTests
             EventName = "Sample Event",
             ClubName = "Sample Club",
             ActorName = "Sample Actor",
-            EventStartsAtUtc = DateTime.UtcNow.AddDays(1)
+            EventStartsAtUtc = DateTime.UtcNow.AddDays(1),
+            MfaFactor = "sms",
+            MfaChange = "enabled"
         });
 
         Assert.False(string.IsNullOrWhiteSpace(content.Subject));

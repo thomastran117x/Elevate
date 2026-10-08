@@ -96,6 +96,26 @@ public class AuthNotificationServiceTests
     }
 
     [Fact]
+    public async Task SendMfaFactorChangedAsync_ShouldPublishOnlyTheFactorAndChange()
+    {
+        var publisher = new Mock<IPublisher>();
+        var service = new AuthNotificationService(publisher.Object);
+
+        await service.SendMfaFactorChangedAsync("member@example.com", "sms", "disabled", "Member");
+
+        publisher.Verify(p => p.PublishAsync(
+            NotificationTopics.Email,
+            It.Is<EmailMessage>(message =>
+                message.Type == EmailMessageType.MfaFactorChanged
+                && message.Email == "member@example.com"
+                && message.MfaFactor == "sms"
+                && message.MfaChange == "disabled"
+                && message.RecipientName == "Member"
+                && message.Code == null
+                && message.Token == null)), Times.Once);
+    }
+
+    [Fact]
     public async Task SendDeviceVerificationAsync_ShouldPublishNewDeviceMessage()
     {
         var publisher = new Mock<IPublisher>();
