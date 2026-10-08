@@ -279,21 +279,42 @@ public class TokenServiceTests
     }
 
     [Fact]
-    public async Task RevokeRefreshSessionAsync_ShouldRemoveTheSessionBeforeTheProof()
+    public async Task RevokeRefreshSessionAsync_ShouldDeleteTheSessionAndProofTogether()
     {
         var cache = new Mock<backend.main.features.cache.ICacheService>();
-        var deleted = new List<string>();
         cache.Setup(c => c.GetValueAsync(It.IsAny<string>()))
             .ReturnsAsync("{\"SessionId\":\"s1\",\"UserId\":8,\"CurrentRefreshTokenHash\":\"\"}");
-        cache.Setup(c => c.DeleteKeyAsync(It.IsAny<string>()))
-            .Callback<string>(deleted.Add)
-            .ReturnsAsync(true);
+        StackExchange.Redis.RedisKey[]? deletedTogether = null;
+        cache.Setup(c => c.TryEvalAsync(
+                It.Is<string>(script => script.Contains("redis.call('DEL'")),
+                It.IsAny<StackExchange.Redis.RedisKey[]>(),
+                It.IsAny<StackExchange.Redis.RedisValue[]>()))
+            .Callback<string, StackExchange.Redis.RedisKey[], StackExchange.Redis.RedisValue[]>((_, keys, _) => deletedTogether = keys)
+            .ReturnsAsync(new backend.main.features.cache.CacheScriptResult(true, 1L));
         var service = new TokenService(cache.Object);
 
         await service.RevokeRefreshSessionAsync("s1");
 
-        deleted.Should().EndWith(StepUpProofKeys.ForSession("s1"));
-        deleted.IndexOf("refresh:v2:session:s1").Should().BeLessThan(deleted.IndexOf(StepUpProofKeys.ForSession("s1")));
+        deletedTogether!.Select(key => key.ToString())
+            .Should().Equal("refresh:v2:session:s1", StepUpProofKeys.ForSession("s1"));
+        cache.Verify(c => c.DeleteKeyAsync("refresh:v2:session:s1"), Times.Never);
+    }
+
+    [Fact]
+    public async Task RevokeRefreshSessionAsync_ShouldFail_WhenTheCacheCannotConfirmTheRevocation()
+    {
+        // Reporting a successful logout here would leave the proof usable for its full window.
+        var cache = new Mock<backend.main.features.cache.ICacheService>();
+        cache.Setup(c => c.TryEvalAsync(
+                It.IsAny<string>(),
+                It.IsAny<StackExchange.Redis.RedisKey[]>(),
+                It.IsAny<StackExchange.Redis.RedisValue[]>()))
+            .ReturnsAsync(backend.main.features.cache.CacheScriptResult.Unavailable);
+        var service = new TokenService(cache.Object);
+
+        var act = () => service.RevokeRefreshSessionAsync("s1");
+
+        await act.Should().ThrowAsync<NotAvailableException>();
     }
 
     [Fact]
@@ -953,6 +974,21 @@ internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheS
     {
         lock (_gate)
         {
+            if (keys.Length == 2 && script.Contains("redis.call('DEL'", StringComparison.Ordinal))
+            {
+                _entries.Remove(keys[0].ToString());
+                _entries.Remove(keys[1].ToString());
+                return Task.FromResult<object>(1L);
+            }
+
+            if (keys.Length == 2 && values.Length == 0 && script.Contains("or false", StringComparison.Ordinal))
+            {
+                // Atomic proof + generation read used by the step-up gate.
+                var proofValue = TryGetEntry(keys[0].ToString(), out var proofEntry) ? proofEntry.StringValue : null;
+                var generationValue = TryGetEntry(keys[1].ToString(), out var genEntry) ? genEntry.StringValue : null;
+                return Task.FromResult<object>(new object?[] { proofValue, generationValue });
+            }
+
             if (keys.Length == 3 && script.Contains("redis.call('EXISTS'", StringComparison.Ordinal))
             {
                 if (!TryGetEntry(keys[0].ToString(), out _))

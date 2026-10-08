@@ -13,6 +13,8 @@ using Moq;
 
 using Newtonsoft.Json;
 
+using StackExchange.Redis;
+
 namespace backend.tests.Unit.Features.Auth;
 
 public class SessionMfaVerificationServiceTests
@@ -206,9 +208,7 @@ public class SessionMfaVerificationServiceTests
     [Fact]
     public async Task HasFreshProofAsync_ShouldNotExtendTheWindow()
     {
-        var cache = new Mock<backend.main.features.cache.ICacheService>();
-        cache.Setup(c => c.GetValueAsync(StepUpProofKeys.ForSession(SessionId)))
-            .ReturnsAsync(SerializeProof(verifiedAt: Start.UtcDateTime));
+        var cache = ProofCache(SerializeProof(verifiedAt: Start.UtcDateTime));
 
         var service = CreateService(cache.Object).service;
 
@@ -272,9 +272,7 @@ public class SessionMfaVerificationServiceTests
     [Fact]
     public async Task HasFreshProofAsync_ShouldReject_ProofWhoseRecordedSessionDiffers()
     {
-        var cache = new Mock<backend.main.features.cache.ICacheService>();
-        cache.Setup(c => c.GetValueAsync(StepUpProofKeys.ForSession(SessionId)))
-            .ReturnsAsync(SerializeProof(verifiedAt: Start.UtcDateTime, sessionId: "copied-from-elsewhere"));
+        var cache = ProofCache(SerializeProof(verifiedAt: Start.UtcDateTime, sessionId: "copied-from-elsewhere"));
 
         var service = CreateService(cache.Object).service;
 
@@ -295,8 +293,7 @@ public class SessionMfaVerificationServiceTests
     [Fact]
     public async Task HasFreshProofAsync_ShouldReject_UnreadableProof()
     {
-        var cache = new Mock<backend.main.features.cache.ICacheService>();
-        cache.Setup(c => c.GetValueAsync(StepUpProofKeys.ForSession(SessionId))).ReturnsAsync("1");
+        var cache = ProofCache("1");
 
         var service = CreateService(cache.Object).service;
 
@@ -363,12 +360,55 @@ public class SessionMfaVerificationServiceTests
     [Fact]
     public async Task HasFreshProofAsync_ShouldReject_ProofFromAnEarlierGeneration()
     {
-        var cache = new Mock<backend.main.features.cache.ICacheService>();
-        cache.Setup(c => c.GetValueAsync(StepUpProofKeys.ForSession(SessionId)))
-            .ReturnsAsync(SerializeProof(verifiedAt: Start.UtcDateTime));
-        cache.Setup(c => c.GetValueAsync(StepUpProofKeys.GenerationForUser(UserId))).ReturnsAsync("3");
+        var cache = ProofCache(SerializeProof(verifiedAt: Start.UtcDateTime), generation: "3");
 
         var service = CreateService(cache.Object).service;
+
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HasFreshProofAsync_ShouldFailClosed_WhenTheCacheCannotAnswer()
+    {
+        var cache = new Mock<backend.main.features.cache.ICacheService>();
+        cache.Setup(c => c.TryEvalAsync(It.IsAny<string>(), It.IsAny<RedisKey[]>(), It.IsAny<RedisValue[]>()))
+            .ReturnsAsync(backend.main.features.cache.CacheScriptResult.Unavailable);
+
+        var service = CreateService(cache.Object).service;
+
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HasFreshProofAsync_ShouldReject_WhenTheGenerationIsMissingButTheProofIsLater()
+    {
+        // A proof minted at generation 2 must not pass if the generation now reads as absent.
+        var cache = ProofCache(SerializeProof(verifiedAt: Start.UtcDateTime, generation: 2), generation: null);
+
+        var service = CreateService(cache.Object).service;
+
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HasFreshProofAsync_ShouldReject_AfterACommittedFactorChange_EvenWithoutAGenerationBump()
+    {
+        // The factor change commits to the database, but the cache-side generation bump never
+        // happened (e.g. Redis was down). The durable factor state still retires the proof.
+        var smsRepository = new Mock<IMfaEnrollmentRepository>();
+        var totp = new Mock<ITotpMfaEnrollmentService>();
+        totp.Setup(t => t.VerifyPersistedCodeAsync(UserId, "123456")).Returns(Task.CompletedTask);
+        var (service, _, _) = CreateService(totp: totp, smsRepository: smsRepository);
+        await service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "totp", "123456");
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeTrue();
+
+        smsRepository.Setup(r => r.GetByUserIdAsync(UserId)).ReturnsAsync(new SmsMfaEnrollment
+        {
+            UserId = UserId,
+            PhoneNumber = "+15555550123",
+            IsSmsMfaEnabled = true,
+            UpdatedAt = Start.UtcDateTime.AddMinutes(1),
+        });
 
         (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
     }
@@ -474,7 +514,7 @@ public class SessionMfaVerificationServiceTests
         return JsonConvert.DeserializeObject<StepUpProof>(json!)!;
     }
 
-    private static string SerializeProof(DateTime verifiedAt, string sessionId = SessionId) =>
+    private static string SerializeProof(DateTime verifiedAt, string sessionId = SessionId, long generation = 0) =>
         JsonConvert.SerializeObject(new StepUpProof
         {
             UserId = UserId,
@@ -482,7 +522,19 @@ public class SessionMfaVerificationServiceTests
             AuthVersion = AuthVersion,
             Method = "email",
             VerifiedAtUtc = verifiedAt,
+            Generation = generation,
+            // Matches an account with no committed SMS or TOTP enrollment (the default mocks).
+            FactorState = StepUpFactorState.From(null, null),
         });
+
+    /// <summary>A cache whose atomic proof read returns the given proof and generation.</summary>
+    private static Mock<backend.main.features.cache.ICacheService> ProofCache(string? proofJson, string? generation = null)
+    {
+        var cache = new Mock<backend.main.features.cache.ICacheService>();
+        cache.Setup(c => c.TryEvalAsync(It.IsAny<string>(), It.IsAny<RedisKey[]>(), It.IsAny<RedisValue[]>()))
+            .ReturnsAsync(new backend.main.features.cache.CacheScriptResult(true, new object?[] { proofJson, generation }));
+        return cache;
+    }
 
     private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
     {

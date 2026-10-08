@@ -378,6 +378,9 @@ public sealed class AuthApiTestApp : IAsyncDisposable
             Method = "email",
             VerifiedAtUtc = verifiedAtUtc ?? DateTime.UtcNow,
             Generation = long.TryParse(generation, out var current) ? current : 0,
+            FactorState = StepUpFactorState.From(
+                await QueryDbAsync(db => db.SmsMfaEnrollments.AsNoTracking().FirstOrDefaultAsync(e => e.UserId == userId)),
+                await QueryDbAsync(db => db.TotpMfaEnrollments.AsNoTracking().FirstOrDefaultAsync(e => e.UserId == userId))),
         };
 
         await Cache.SetValueAsync(

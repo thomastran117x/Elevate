@@ -874,6 +874,12 @@ return 1";
             }
         }
 
+        // Session and proof go together, so revocation can never leave a proof behind a deleted
+        // session (or report success when the cache dropped half way).
+        private const string RevokeSessionAndProofScript = @"
+redis.call('DEL', KEYS[1], KEYS[2])
+return 1";
+
         public async Task<StepUpProofWriteResult> StoreStepUpProofAsync(
             string sessionId,
             int userId,
@@ -916,13 +922,23 @@ return 1";
                     if (!string.IsNullOrWhiteSpace(session.CurrentRefreshTokenHash))
                         await _cacheService.DeleteKeyAsync(TokenKey(session.CurrentRefreshTokenHash));
 
-                    await _cacheService.DeleteKeyAsync(SessionKey(session.SessionId));
                     await _cacheService.SetRemoveAsync(UserSessionsKey(session.UserId), session.SessionId);
                 }
 
-                // Only after the session key is gone: a concurrent step-up verify either wrote
-                // its proof before this delete, or now sees no session and writes nothing.
-                await _cacheService.DeleteKeyAsync(StepUpProofKeys.ForSession(sessionId));
+                // One atomic delete of the session and its proof. A concurrent step-up verify either
+                // wrote before this (and is removed with it) or now sees no session and writes nothing.
+                // An unreachable cache fails the revocation instead of reporting a logout that left
+                // the proof usable.
+                var revoked = await _cacheService.TryEvalAsync(
+                    RevokeSessionAndProofScript,
+                    [
+                        (StackExchange.Redis.RedisKey)SessionKey(sessionId),
+                        (StackExchange.Redis.RedisKey)StepUpProofKeys.ForSession(sessionId),
+                    ],
+                    []
+                );
+                if (!revoked.Succeeded)
+                    throw new NotAvailableException();
             }
             catch (Exception e)
             {

@@ -35,6 +35,27 @@ namespace backend.main.features.auth.mfa.session
         {
             get; set;
         }
+        /// <summary>
+        /// The committed SMS/TOTP enrollment state in the database when verification began.
+        /// Every committed factor change rewrites it, so the change itself retires older proofs
+        /// even if the cache-side generation could not be advanced.
+        /// </summary>
+        public string FactorState { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Formats <see cref="StepUpProof.FactorState"/> from the committed enrollments. Pending
+    /// enrollments live in the cache, so only completed factor changes move it; each of them
+    /// rewrites UpdatedAt or deletes the row.
+    /// </summary>
+    public static class StepUpFactorState
+    {
+        public static string From(SmsMfaEnrollment? sms, totp.TotpMfaEnrollment? totp) =>
+            string.Join(
+                "|",
+                $"sms:{sms?.UpdatedAt.ToUniversalTime().Ticks ?? 0}",
+                $"totp:{totp?.UpdatedAtUtc.ToUniversalTime().Ticks ?? 0}"
+            );
     }
 
     /// <summary>

@@ -15,6 +15,8 @@ using Microsoft.Extensions.Options;
 
 using Newtonsoft.Json;
 
+using StackExchange.Redis;
+
 namespace backend.main.features.auth.mfa.session
 {
     /// <summary>
@@ -33,6 +35,10 @@ namespace backend.main.features.auth.mfa.session
         private const string TotpMethod = "totp";
         private const string SmsMethod = "sms";
         private const string EmailMethod = "email";
+
+        // Returns the session's proof and the user's step-up generation in one round trip.
+        private const string ReadProofScript = @"
+return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or false }";
 
         private readonly ICacheService _cacheService;
         private readonly IAuthNotificationService _notificationService;
@@ -203,6 +209,7 @@ namespace backend.main.features.auth.mfa.session
                 // Captured before the code is checked, so a factor change that completes while this
                 // verification is in flight makes the proof write fail instead of outliving it.
                 var generation = await GetGenerationAsync(userId);
+                var factorState = await GetFactorStateAsync(userId);
 
                 if (normalizedMethod == TotpMethod)
                 {
@@ -226,7 +233,7 @@ namespace backend.main.features.auth.mfa.session
                     }
 
                     await _cacheService.DeleteKeyAsync(TotpAttemptKey(userId));
-                    await RecordProofAsync(userId, sessionId, authVersion, normalizedMethod, generation);
+                    await RecordProofAsync(userId, sessionId, authVersion, normalizedMethod, generation, factorState);
                     LogAudit(userId, normalizedMethod, true);
                     return;
                 }
@@ -255,7 +262,7 @@ namespace backend.main.features.auth.mfa.session
                 }
 
                 await DeleteStateAsync(userId);
-                await RecordProofAsync(userId, sessionId, authVersion, normalizedMethod, generation);
+                await RecordProofAsync(userId, sessionId, authVersion, normalizedMethod, generation, factorState);
                 LogAudit(userId, normalizedMethod, true);
             }
             catch (Exception ex)
@@ -273,7 +280,17 @@ namespace backend.main.features.auth.mfa.session
             if (string.IsNullOrWhiteSpace(sessionId))
                 return false;
 
-            var json = await _cacheService.GetValueAsync(StepUpProofKeys.ForSession(sessionId));
+            // Read the proof and the generation together, and refuse when the cache cannot answer:
+            // an unavailable generation must never be mistaken for generation 0.
+            var read = await _cacheService.TryEvalAsync(
+                ReadProofScript,
+                [StepUpProofKeys.ForSession(sessionId), StepUpProofKeys.GenerationForUser(userId)],
+                []
+            );
+            if (!read.Succeeded || read.Value is null)
+                return false;
+
+            var (json, currentGenerationValue) = ReadPair(read.Value);
             if (string.IsNullOrWhiteSpace(json))
                 return false;
 
@@ -291,7 +308,10 @@ namespace backend.main.features.auth.mfa.session
                 return false;
 
             // A completed factor change retires every earlier proof, on every session.
-            if (proof.Generation != await GetGenerationAsync(userId))
+            var currentGeneration = long.TryParse(currentGenerationValue, out var parsedGeneration)
+                ? parsedGeneration
+                : 0;
+            if (proof.Generation != currentGeneration)
                 return false;
 
             // A newer auth version means credentials rotated after this proof was made; it can
@@ -306,7 +326,12 @@ namespace backend.main.features.auth.mfa.session
             // verification time, so a lingering key or clock drift cannot stretch it.
             var now = _timeProvider.GetUtcNow().UtcDateTime;
             var verifiedAtUtc = DateTime.SpecifyKind(proof.VerifiedAtUtc, DateTimeKind.Utc);
-            return verifiedAtUtc <= now && now < verifiedAtUtc.Add(_proofLifetime);
+            if (verifiedAtUtc > now || now >= verifiedAtUtc.Add(_proofLifetime))
+                return false;
+
+            // The database is authoritative: a factor change committed after this proof was made
+            // retires it even if the cache-side generation was never advanced.
+            return string.Equals(proof.FactorState, await GetFactorStateAsync(userId), StringComparison.Ordinal);
         }
 
         public async Task ClearSessionProofAsync(string sessionId)
@@ -329,6 +354,29 @@ namespace backend.main.features.auth.mfa.session
             }
         }
 
+        private async Task<string> GetFactorStateAsync(int userId) =>
+            StepUpFactorState.From(
+                await _smsEnrollmentRepository.GetByUserIdAsync(userId),
+                await _totpMfaEnrollmentService.GetEnrollmentAsync(userId)
+            );
+
+        private static (string? Proof, string? Generation) ReadPair(object value)
+        {
+            if (value is RedisResult result)
+            {
+                var parts = (RedisResult[]?)result ?? [];
+                return (ReadPart(parts, 0), ReadPart(parts, 1));
+            }
+
+            if (value is object?[] items)
+                return (items.ElementAtOrDefault(0)?.ToString(), items.ElementAtOrDefault(1)?.ToString());
+
+            return (null, null);
+        }
+
+        private static string? ReadPart(RedisResult[] parts, int index) =>
+            parts.Length > index && !parts[index].IsNull ? parts[index].ToString() : null;
+
         private async Task<long> GetGenerationAsync(int userId)
         {
             var value = await _cacheService.GetValueAsync(StepUpProofKeys.GenerationForUser(userId));
@@ -340,7 +388,8 @@ namespace backend.main.features.auth.mfa.session
             string sessionId,
             int authVersion,
             string method,
-            long generation
+            long generation,
+            string factorState
         )
         {
             var proof = new StepUpProof
@@ -351,6 +400,7 @@ namespace backend.main.features.auth.mfa.session
                 Method = method,
                 VerifiedAtUtc = _timeProvider.GetUtcNow().UtcDateTime,
                 Generation = generation,
+                FactorState = factorState,
             };
 
             // Written once with an absolute TTL; nothing re-sets it, so the window never slides.
