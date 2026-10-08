@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
+using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.token;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
@@ -202,6 +203,45 @@ public class TokenServiceTests
 
         verified.Email.Should().Be("signup@example.com");
         verified.Username.Should().Be("ada");
+    }
+
+    [Fact]
+    public async Task RevokeRefreshSessionAsync_ShouldDeleteTheSessionsStepUpProof()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var issue = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.BrowserCookie);
+        await cache.SetValueAsync(StepUpProofKeys.ForSession(issue.SessionId), "{}", TimeSpan.FromMinutes(10));
+
+        await service.RevokeRefreshSessionAsync(issue.SessionId);
+
+        (await cache.KeyExistsAsync(StepUpProofKeys.ForSession(issue.SessionId))).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RevokeRefreshSessionAsync_ShouldDeleteStepUpProof_EvenAfterTheSessionExpired()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        await cache.SetValueAsync(StepUpProofKeys.ForSession("gone"), "{}", TimeSpan.FromMinutes(10));
+
+        await service.RevokeRefreshSessionAsync("gone");
+
+        (await cache.KeyExistsAsync(StepUpProofKeys.ForSession("gone"))).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetSessionIdsAsync_ShouldListTheUsersActiveSessions()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var first = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.BrowserCookie);
+        var second = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.ApiToken);
+        await service.GenerateRefreshToken(9, CreateRequestInfo(), SessionTransport.BrowserCookie);
+
+        var sessionIds = await service.GetSessionIdsAsync(8);
+
+        sessionIds.Should().BeEquivalentTo([first.SessionId, second.SessionId]);
     }
 
     [Fact]

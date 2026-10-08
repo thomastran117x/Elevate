@@ -13,9 +13,10 @@ namespace backend.main.application.security
     /// <summary>
     /// Requires the caller to have completed a fresh in-session MFA verification
     /// (see <see cref="ISessionMfaVerificationService"/>) before the route runs.
-    /// The verification is bound to the access token's <c>sid</c> claim and lasts
-    /// for the remainder of the session. Callers that have not verified receive a
-    /// <c>403</c> with the distinguishable <c>MFA_REQUIRED</c> error code.
+    /// The proof is bound to the access token's user, <c>sid</c>, and <c>auth_version</c>
+    /// claims and expires a fixed <see cref="StepUpOptions.ProofLifetime"/> after it was
+    /// made. Callers without a fresh proof receive a <c>403</c> with the distinguishable
+    /// <c>MFA_REQUIRED</c> error code.
     /// Apply after <c>[Authorize]</c> — it assumes an authenticated principal.
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
@@ -52,7 +53,9 @@ namespace backend.main.application.security
                     return;
 
                 var sessionId = user.FindFirst(TokenService.SessionIdClaimType)?.Value;
-                if (await _sessionMfaVerificationService.IsSessionVerifiedAsync(sessionId))
+                if (int.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId)
+                    && int.TryParse(user.FindFirst(TokenService.AuthVersionClaimType)?.Value, out var authVersion)
+                    && await _sessionMfaVerificationService.HasFreshProofAsync(userId, sessionId, authVersion))
                     return;
 
                 context.Result = new ObjectResult(

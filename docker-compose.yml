@@ -141,6 +141,7 @@ services:
       Auth__AbuseProtection__CaptchaFailureThreshold: "${AUTH_ABUSE_CAPTCHA_THRESHOLD:-3}"
       Auth__AbuseProtection__DelayBase: "${AUTH_ABUSE_DELAY_BASE:-00:00:00.500}"
       Auth__AbuseProtection__DelayMaximum: "${AUTH_ABUSE_DELAY_MAXIMUM:-00:00:08}"
+      Auth__StepUp__ProofLifetimeMinutes: "${AUTH_STEP_UP_PROOF_LIFETIME_MINUTES:-10}"
       # Payments (Stripe).
       STRIPE_API_KEY: "${STRIPE_API_KEY:-}"
       STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET:-}"

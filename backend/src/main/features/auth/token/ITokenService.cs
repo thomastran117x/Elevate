@@ -35,7 +35,7 @@ namespace backend.main.features.auth.token
             SessionTransport expectedTransport,
             ClientRequestInfo requestInfo
         );
-        public Task<TimeSpan?> GetRefreshSessionTtlAsync(string sessionId);
+        public Task<IReadOnlyCollection<string>> GetSessionIdsAsync(int userId);
         public Task RevokeRefreshSessionAsync(string sessionId);
         public Task RevokeAllRefreshSessionsAsync(int userId);
         public Task<string?> VerificationTokenExist(string email, VerificationPurpose purpose);

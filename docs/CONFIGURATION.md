@@ -133,6 +133,10 @@ Anonymous email availability exposes account existence and is intentionally prot
 
 Redis is the cross-replica authority. If it is unavailable, shared source and target checks fail open while the existing ASP.NET in-memory IP policies continue enforcing on each replica; the transition emits one critical operational event and recovery emits an informational event. Configure the values directly with `Auth__AbuseProtection__...` or use the `AUTH_ABUSE_*` variables mapped by Compose.
 
+### Step-up verification
+
+Sensitive account mutations (`[RequireMfa]` routes) need a step-up proof from a TOTP, SMS, or email code verified in the same session. The proof is stored transiently in Redis under `mfa:step-up-proof:{sessionId}`. It is bound to the user, the session, and the access token's auth version. `Auth:StepUp:ProofLifetimeMinutes` (Compose: `AUTH_STEP_UP_PROOF_LIFETIME_MINUTES`) defaults to 10 and is validated at startup to be between 1 and 10. The window is measured from verification and never slides. Logout and session revocation delete the proof, an auth-version change makes it unusable, and a successful MFA factor change clears it on every session the user holds.
+
 ### Email changes
 
 `POST /api/profile/email` requires MFA step-up and the current password where applicable, then sends confirmation to the new address and a notice to the old one. `RateLimiter:EmailChangePermitLimit` defaults to 3/hour/account. Confirmation increments `AuthVersion`, removes refresh sessions, and binds pending invitations to the account. Users must sign in again. Old email bloom bits remain until rebuilding, while writes still recheck the database.

@@ -11,13 +11,15 @@ using backend.main.shared.exceptions.http;
 using backend.main.shared.utilities;
 using backend.main.shared.utilities.logger;
 
+using Microsoft.Extensions.Options;
+
 using Newtonsoft.Json;
 
 namespace backend.main.features.auth.mfa.session
 {
     /// <summary>
-    /// Records a per-session "MFA verified" marker after the user proves a second
-    /// factor (TOTP, SMS, or email). Email is the universal fallback and always
+    /// Records a short-lived <see cref="StepUpProof"/> for the session after the user proves a
+    /// second factor (TOTP, SMS, or email). Email is the universal fallback and always
     /// available, so any authenticated user can satisfy a <c>[RequireMfa]</c> gate.
     /// </summary>
     public sealed class SessionMfaVerificationService : ISessionMfaVerificationService
@@ -25,7 +27,6 @@ namespace backend.main.features.auth.mfa.session
         private static readonly TimeSpan ChallengeTtl = TimeSpan.FromMinutes(10);
         private static readonly TimeSpan ResendCooldown = TimeSpan.FromSeconds(60);
         private static readonly TimeSpan StartRateLimitTtl = TimeSpan.FromMinutes(15);
-        private static readonly TimeSpan DefaultMarkerTtl = TimeSpan.FromDays(1);
         private const int MaxOtpAttempts = 5;
         private const int MaxStartRequests = 6;
 
@@ -38,6 +39,8 @@ namespace backend.main.features.auth.mfa.session
         private readonly IMfaEnrollmentRepository _smsEnrollmentRepository;
         private readonly ITotpMfaEnrollmentService _totpMfaEnrollmentService;
         private readonly ITokenService _tokenService;
+        private readonly TimeProvider _timeProvider;
+        private readonly TimeSpan _proofLifetime;
         private readonly string _proofSecret;
 
         public SessionMfaVerificationService(
@@ -45,7 +48,9 @@ namespace backend.main.features.auth.mfa.session
             IAuthNotificationService notificationService,
             IMfaEnrollmentRepository smsEnrollmentRepository,
             ITotpMfaEnrollmentService totpMfaEnrollmentService,
-            ITokenService tokenService
+            ITokenService tokenService,
+            TimeProvider timeProvider,
+            IOptions<StepUpOptions> stepUpOptions
         )
         {
             _cacheService = cacheService;
@@ -53,6 +58,8 @@ namespace backend.main.features.auth.mfa.session
             _smsEnrollmentRepository = smsEnrollmentRepository;
             _totpMfaEnrollmentService = totpMfaEnrollmentService;
             _tokenService = tokenService;
+            _timeProvider = timeProvider;
+            _proofLifetime = stepUpOptions.Value.ProofLifetime;
             _proofSecret = EnvironmentSetting.JwtSecretKeyVerification;
         }
 
@@ -177,7 +184,14 @@ namespace backend.main.features.auth.mfa.session
             }
         }
 
-        public async Task VerifyAsync(int userId, string email, string sessionId, string method, string code)
+        public async Task VerifyAsync(
+            int userId,
+            string email,
+            string sessionId,
+            int authVersion,
+            string method,
+            string code
+        )
         {
             try
             {
@@ -208,7 +222,7 @@ namespace backend.main.features.auth.mfa.session
                     }
 
                     await _cacheService.DeleteKeyAsync(TotpAttemptKey(userId));
-                    await MarkSessionVerifiedAsync(sessionId);
+                    await RecordProofAsync(userId, sessionId, authVersion, normalizedMethod);
                     LogAudit(userId, normalizedMethod, true);
                     return;
                 }
@@ -237,7 +251,7 @@ namespace backend.main.features.auth.mfa.session
                 }
 
                 await DeleteStateAsync(userId);
-                await MarkSessionVerifiedAsync(sessionId);
+                await RecordProofAsync(userId, sessionId, authVersion, normalizedMethod);
                 LogAudit(userId, normalizedMethod, true);
             }
             catch (Exception ex)
@@ -250,21 +264,74 @@ namespace backend.main.features.auth.mfa.session
             }
         }
 
-        public async Task<bool> IsSessionVerifiedAsync(string? sessionId)
+        public async Task<bool> HasFreshProofAsync(int userId, string? sessionId, int authVersion)
         {
             if (string.IsNullOrWhiteSpace(sessionId))
                 return false;
 
-            return await _cacheService.KeyExistsAsync(VerifiedMarkerKey(sessionId));
+            var json = await _cacheService.GetValueAsync(StepUpProofKeys.ForSession(sessionId));
+            if (string.IsNullOrWhiteSpace(json))
+                return false;
+
+            StepUpProof? proof;
+            try
+            {
+                proof = JsonConvert.DeserializeObject<StepUpProof>(json);
+            }
+            catch (JsonException)
+            {
+                proof = null;
+            }
+
+            if (proof == null || proof.UserId != userId || proof.SessionId != sessionId)
+                return false;
+
+            // A newer auth version means credentials rotated after this proof was made; it can
+            // never become valid again, so drop it rather than leave it for the TTL.
+            if (proof.AuthVersion != authVersion)
+            {
+                await ClearSessionProofAsync(sessionId);
+                return false;
+            }
+
+            // Redis expiry is only a backstop: the window is judged from the recorded
+            // verification time, so a lingering key or clock drift cannot stretch it.
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var verifiedAtUtc = DateTime.SpecifyKind(proof.VerifiedAtUtc, DateTimeKind.Utc);
+            return verifiedAtUtc <= now && now < verifiedAtUtc.Add(_proofLifetime);
         }
 
-        private async Task MarkSessionVerifiedAsync(string sessionId)
+        public async Task ClearSessionProofAsync(string sessionId)
         {
-            var ttl = await _tokenService.GetRefreshSessionTtlAsync(sessionId);
-            if (ttl == null || ttl <= TimeSpan.Zero)
-                ttl = DefaultMarkerTtl;
+            if (string.IsNullOrWhiteSpace(sessionId))
+                return;
 
-            await _cacheService.SetValueAsync(VerifiedMarkerKey(sessionId), "1", ttl);
+            _ = await _cacheService.DeleteKeyAsync(StepUpProofKeys.ForSession(sessionId));
+        }
+
+        public async Task ClearUserProofsAsync(int userId)
+        {
+            foreach (var sessionId in await _tokenService.GetSessionIdsAsync(userId))
+                await ClearSessionProofAsync(sessionId);
+        }
+
+        private async Task RecordProofAsync(int userId, string sessionId, int authVersion, string method)
+        {
+            var proof = new StepUpProof
+            {
+                UserId = userId,
+                SessionId = sessionId,
+                AuthVersion = authVersion,
+                Method = method,
+                VerifiedAtUtc = _timeProvider.GetUtcNow().UtcDateTime,
+            };
+
+            // Written once with an absolute TTL; nothing re-sets it, so the window never slides.
+            await _cacheService.SetValueAsync(
+                StepUpProofKeys.ForSession(sessionId),
+                JsonConvert.SerializeObject(proof),
+                _proofLifetime
+            );
         }
 
         private async Task<string[]> GetAvailableMethodsAsync(int userId)
@@ -371,7 +438,6 @@ namespace backend.main.features.auth.mfa.session
         private static string UserKey(int userId) => $"mfa:stepup:user:{userId}";
         private static string StartKey(int userId) => $"mfa:stepup:start:user:{userId}";
         private static string TotpAttemptKey(int userId) => $"mfa:stepup:totp-attempts:user:{userId}";
-        private static string VerifiedMarkerKey(string sessionId) => $"mfa:session-verified:{sessionId}";
 
         private sealed class PendingState
         {

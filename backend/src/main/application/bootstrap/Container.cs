@@ -206,6 +206,10 @@ namespace backend.main.application.bootstrap
             services.AddSingleton<
                 IValidateOptions<AuthAbuseProtectionOptions>,
                 AuthAbuseProtectionOptionsValidator>();
+            services.AddOptions<StepUpOptions>()
+                .Bind(config.GetSection(StepUpOptions.SectionName))
+                .ValidateOnStart();
+            services.AddSingleton<IValidateOptions<StepUpOptions>, StepUpOptionsValidator>();
             services.AddOptions<BloomFilterOptions>()
                 .Bind(config.GetSection("BloomFilters"))
                 .ValidateDataAnnotations()

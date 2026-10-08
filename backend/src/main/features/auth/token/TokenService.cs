@@ -5,6 +5,7 @@ using System.Text;
 
 using backend.main.application.environment;
 using backend.main.application.security;
+using backend.main.features.auth.mfa.session;
 using backend.main.features.cache;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
@@ -859,18 +860,19 @@ namespace backend.main.features.auth.token
             }
         }
 
-        public async Task<TimeSpan?> GetRefreshSessionTtlAsync(string sessionId)
+        public async Task<IReadOnlyCollection<string>> GetSessionIdsAsync(int userId)
         {
-            if (string.IsNullOrWhiteSpace(sessionId))
-                return null;
-
-            return await _cacheService.GetTTLAsync(SessionKey(sessionId));
+            return await _cacheService.SetMembersAsync(UserSessionsKey(userId));
         }
 
         public async Task RevokeRefreshSessionAsync(string sessionId)
         {
             try
             {
+                // A step-up proof must not outlive its session, so it goes first and even
+                // when the session state itself has already expired.
+                await _cacheService.DeleteKeyAsync(StepUpProofKeys.ForSession(sessionId));
+
                 var session = await GetRefreshSessionAsync(sessionId);
                 if (session == null)
                     return;
