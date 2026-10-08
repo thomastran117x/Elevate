@@ -262,8 +262,9 @@ public class StepUpProofEndpointsTests
             first.AccessToken);
         verify.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        (await app.ReadStepUpProofAsync(first.AccessToken)).Should().BeNull();
-        (await app.ReadStepUpProofAsync(second.AccessToken)).Should().BeNull();
+        // The factor change advanced the user's generation, retiring both sessions' proofs.
+        await AssertMfaRequiredAsync(await app.GetWithBearerAsync("/api/auth/mfa/step-up/status", first.AccessToken));
+        await AssertMfaRequiredAsync(await app.GetWithBearerAsync("/api/auth/mfa/step-up/status", second.AccessToken));
 
         var notice = await app.WaitForEmailAsync(message =>
             message.Type == EmailMessageType.MfaFactorChanged

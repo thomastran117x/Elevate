@@ -200,6 +200,10 @@ namespace backend.main.features.auth.mfa.session
 
                 var normalizedMethod = NormalizeMethod(method);
 
+                // Captured before the code is checked, so a factor change that completes while this
+                // verification is in flight makes the proof write fail instead of outliving it.
+                var generation = await GetGenerationAsync(userId);
+
                 if (normalizedMethod == TotpMethod)
                 {
                     try
@@ -222,7 +226,7 @@ namespace backend.main.features.auth.mfa.session
                     }
 
                     await _cacheService.DeleteKeyAsync(TotpAttemptKey(userId));
-                    await RecordProofAsync(userId, sessionId, authVersion, normalizedMethod);
+                    await RecordProofAsync(userId, sessionId, authVersion, normalizedMethod, generation);
                     LogAudit(userId, normalizedMethod, true);
                     return;
                 }
@@ -251,7 +255,7 @@ namespace backend.main.features.auth.mfa.session
                 }
 
                 await DeleteStateAsync(userId);
-                await RecordProofAsync(userId, sessionId, authVersion, normalizedMethod);
+                await RecordProofAsync(userId, sessionId, authVersion, normalizedMethod, generation);
                 LogAudit(userId, normalizedMethod, true);
             }
             catch (Exception ex)
@@ -286,6 +290,10 @@ namespace backend.main.features.auth.mfa.session
             if (proof == null || proof.UserId != userId || proof.SessionId != sessionId)
                 return false;
 
+            // A completed factor change retires every earlier proof, on every session.
+            if (proof.Generation != await GetGenerationAsync(userId))
+                return false;
+
             // A newer auth version means credentials rotated after this proof was made; it can
             // never become valid again, so drop it rather than leave it for the TTL.
             if (proof.AuthVersion != authVersion)
@@ -311,11 +319,29 @@ namespace backend.main.features.auth.mfa.session
 
         public async Task ClearUserProofsAsync(int userId)
         {
-            foreach (var sessionId in await _tokenService.GetSessionIdsAsync(userId))
-                await ClearSessionProofAsync(sessionId);
+            // One atomic counter bump retires proofs on every session, including any a concurrent
+            // verify is about to write. INCR never returns 0, so 0 means the cache was unreachable.
+            var generation = await _cacheService.IncrementAsync(StepUpProofKeys.GenerationForUser(userId));
+            if (generation <= 0)
+            {
+                Logger.Error($"[SessionMfaVerificationService] Could not retire step-up proofs for userId={userId}.");
+                throw new NotAvailableException();
+            }
         }
 
-        private async Task RecordProofAsync(int userId, string sessionId, int authVersion, string method)
+        private async Task<long> GetGenerationAsync(int userId)
+        {
+            var value = await _cacheService.GetValueAsync(StepUpProofKeys.GenerationForUser(userId));
+            return long.TryParse(value, out var generation) ? generation : 0;
+        }
+
+        private async Task RecordProofAsync(
+            int userId,
+            string sessionId,
+            int authVersion,
+            string method,
+            long generation
+        )
         {
             var proof = new StepUpProof
             {
@@ -324,6 +350,7 @@ namespace backend.main.features.auth.mfa.session
                 AuthVersion = authVersion,
                 Method = method,
                 VerifiedAtUtc = _timeProvider.GetUtcNow().UtcDateTime,
+                Generation = generation,
             };
 
             // Written once with an absolute TTL; nothing re-sets it, so the window never slides.
@@ -331,6 +358,8 @@ namespace backend.main.features.auth.mfa.session
             // races logout cannot leave a proof behind for a logged-out access token.
             var result = await _tokenService.StoreStepUpProofAsync(
                 sessionId,
+                userId,
+                generation,
                 JsonConvert.SerializeObject(proof),
                 _proofLifetime
             );
@@ -341,6 +370,8 @@ namespace backend.main.features.auth.mfa.session
                     return;
                 case StepUpProofWriteResult.SessionEnded:
                     throw new UnauthorizedException("This session has ended. Please sign in again.");
+                case StepUpProofWriteResult.Superseded:
+                    throw new ConflictException("Your security settings changed during verification. Please verify again.");
                 default:
                     // Reporting success without a stored proof would loop the user through verification.
                     throw new NotAvailableException();

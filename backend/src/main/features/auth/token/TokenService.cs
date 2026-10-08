@@ -39,11 +39,16 @@ namespace backend.main.features.auth.token
         private const string PlaceholderUsertype = "placeholder";
         private static readonly TimeSpan EmailChangeLockTtl = TimeSpan.FromSeconds(10);
 
-        // Writes the proof only if the session key is still present. Revocation deletes the
-        // session before the proof, so every interleaving ends with no proof for a dead session.
+        // Writes the proof only if the session key is still present and no factor change has
+        // advanced the user's step-up generation since verification began. Revocation deletes
+        // the session before the proof, so every interleaving ends with no proof for a dead
+        // session; a factor change either lands first (write refused) or later (proof retired).
         private const string StoreStepUpProofScript = @"
 if redis.call('EXISTS', KEYS[1]) == 0 then
     return 0
+end
+if tonumber(redis.call('GET', KEYS[3]) or '0') ~= tonumber(ARGV[3]) then
+    return 2
 end
 redis.call('SET', KEYS[2], ARGV[1], 'PX', ARGV[2])
 return 1";
@@ -869,21 +874,22 @@ return 1";
             }
         }
 
-        public async Task<IReadOnlyCollection<string>> GetSessionIdsAsync(int userId)
-        {
-            return await _cacheService.SetMembersAsync(UserSessionsKey(userId));
-        }
-
         public async Task<StepUpProofWriteResult> StoreStepUpProofAsync(
             string sessionId,
+            int userId,
+            long expectedGeneration,
             string proofJson,
             TimeSpan lifetime
         )
         {
             var result = await _cacheService.TryEvalAsync(
                 StoreStepUpProofScript,
-                [(StackExchange.Redis.RedisKey)SessionKey(sessionId), (StackExchange.Redis.RedisKey)StepUpProofKeys.ForSession(sessionId)],
-                [proofJson, checked((long)lifetime.TotalMilliseconds)]
+                [
+                    (StackExchange.Redis.RedisKey)SessionKey(sessionId),
+                    (StackExchange.Redis.RedisKey)StepUpProofKeys.ForSession(sessionId),
+                    (StackExchange.Redis.RedisKey)StepUpProofKeys.GenerationForUser(userId),
+                ],
+                [proofJson, checked((long)lifetime.TotalMilliseconds), expectedGeneration]
             );
 
             if (!result.Succeeded || result.Value is null)
@@ -892,7 +898,12 @@ return 1";
             var stored = result.Value is StackExchange.Redis.RedisResult redisResult
                 ? (long)redisResult
                 : Convert.ToInt64(result.Value, System.Globalization.CultureInfo.InvariantCulture);
-            return stored == 1 ? StepUpProofWriteResult.Stored : StepUpProofWriteResult.SessionEnded;
+            return stored switch
+            {
+                1 => StepUpProofWriteResult.Stored,
+                2 => StepUpProofWriteResult.Superseded,
+                _ => StepUpProofWriteResult.SessionEnded,
+            };
         }
 
         public async Task RevokeRefreshSessionAsync(string sessionId)

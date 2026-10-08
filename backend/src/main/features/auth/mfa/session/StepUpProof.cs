@@ -27,6 +27,14 @@ namespace backend.main.features.auth.mfa.session
         {
             get; set;
         }
+        /// <summary>
+        /// The user's step-up generation when verification began. Any completed factor change
+        /// advances the generation, which retires every proof minted before it.
+        /// </summary>
+        public long Generation
+        {
+            get; set;
+        }
     }
 
     /// <summary>
@@ -36,5 +44,8 @@ namespace backend.main.features.auth.mfa.session
     public static class StepUpProofKeys
     {
         public static string ForSession(string sessionId) => $"mfa:step-up-proof:{sessionId}";
+
+        /// <summary>Per-user counter advanced by every completed MFA factor change. Never expires.</summary>
+        public static string GenerationForUser(int userId) => $"mfa:step-up-generation:{userId}";
     }
 }

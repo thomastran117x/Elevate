@@ -174,7 +174,7 @@ public class SessionMfaVerificationServiceTests
         await service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "totp", "123456");
 
         tokenService.Verify(
-            t => t.StoreStepUpProofAsync(SessionId, It.IsAny<string>(), TimeSpan.FromMinutes(7)),
+            t => t.StoreStepUpProofAsync(SessionId, UserId, 0L, It.IsAny<string>(), TimeSpan.FromMinutes(7)),
             Times.Once);
     }
 
@@ -314,14 +314,12 @@ public class SessionMfaVerificationServiceTests
     }
 
     [Fact]
-    public async Task ClearUserProofsAsync_ShouldRemoveProofsOnEverySession()
+    public async Task ClearUserProofsAsync_ShouldRetireProofsOnEverySession()
     {
         var totp = new Mock<ITotpMfaEnrollmentService>();
         totp.Setup(t => t.VerifyPersistedCodeAsync(UserId, "123456")).Returns(Task.CompletedTask);
-        var tokenService = new Mock<ITokenService>();
-        tokenService.Setup(t => t.GetSessionIdsAsync(UserId)).ReturnsAsync([SessionId, "session-two"]);
 
-        var (service, _, _) = CreateService(totp: totp, tokenService: tokenService);
+        var (service, cache, _) = CreateService(totp: totp);
         await service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "totp", "123456");
         await service.VerifyAsync(UserId, Email, "session-two", AuthVersion, "totp", "123456");
 
@@ -329,6 +327,64 @@ public class SessionMfaVerificationServiceTests
 
         (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
         (await service.HasFreshProofAsync(UserId, "session-two", AuthVersion)).Should().BeFalse();
+        (await cache.GetValueAsync(StepUpProofKeys.GenerationForUser(UserId))).Should().Be("1");
+    }
+
+    [Fact]
+    public async Task ClearUserProofsAsync_ShouldAllowANewProof_AfterTheFactorChange()
+    {
+        var totp = new Mock<ITotpMfaEnrollmentService>();
+        totp.Setup(t => t.VerifyPersistedCodeAsync(UserId, "123456")).Returns(Task.CompletedTask);
+        var (service, _, _) = CreateService(totp: totp);
+        await service.ClearUserProofsAsync(UserId);
+
+        await service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "totp", "123456");
+
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task VerifyAsync_ShouldBeSuperseded_WhenAFactorChangeCompletesMidVerification()
+    {
+        // The code checks out, but a factor change finishes before the proof is written.
+        InMemoryCacheService? cacheRef = null;
+        var totp = new Mock<ITotpMfaEnrollmentService>();
+        totp.Setup(t => t.VerifyPersistedCodeAsync(UserId, "123456"))
+            .Returns(async () => await cacheRef!.IncrementAsync(StepUpProofKeys.GenerationForUser(UserId)));
+        var (service, cache, _) = CreateService(totp: totp);
+        cacheRef = cache;
+
+        var act = () => service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "totp", "123456");
+
+        await act.Should().ThrowAsync<ConflictException>();
+        (await cache.KeyExistsAsync(StepUpProofKeys.ForSession(SessionId))).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HasFreshProofAsync_ShouldReject_ProofFromAnEarlierGeneration()
+    {
+        var cache = new Mock<backend.main.features.cache.ICacheService>();
+        cache.Setup(c => c.GetValueAsync(StepUpProofKeys.ForSession(SessionId)))
+            .ReturnsAsync(SerializeProof(verifiedAt: Start.UtcDateTime));
+        cache.Setup(c => c.GetValueAsync(StepUpProofKeys.GenerationForUser(UserId))).ReturnsAsync("3");
+
+        var service = CreateService(cache.Object).service;
+
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ClearUserProofsAsync_ShouldFail_WhenTheGenerationCannotBeAdvanced()
+    {
+        // CacheService reports an unreachable Redis as 0; a real INCR never returns 0.
+        var cache = new Mock<backend.main.features.cache.ICacheService>();
+        cache.Setup(c => c.IncrementAsync(StepUpProofKeys.GenerationForUser(UserId), 1)).ReturnsAsync(0);
+
+        var service = CreateService(cache.Object).service;
+
+        var act = () => service.ClearUserProofsAsync(UserId);
+
+        await act.Should().ThrowAsync<NotAvailableException>();
     }
 
     [Fact]
@@ -383,11 +439,17 @@ public class SessionMfaVerificationServiceTests
         // Stand in for a live refresh session by storing the proof in the shared test cache,
         // unless the test asks for a specific store outcome.
         tokenService
-            .Setup(t => t.StoreStepUpProofAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan>()))
-            .Returns<string, string, TimeSpan>(async (sessionId, json, ttl) =>
+            .Setup(t => t.StoreStepUpProofAsync(
+                It.IsAny<string>(), It.IsAny<int>(), It.IsAny<long>(), It.IsAny<string>(), It.IsAny<TimeSpan>()))
+            .Returns<string, int, long, string, TimeSpan>(async (sessionId, userId, expectedGeneration, json, ttl) =>
             {
                 if (storeResult is { } forced)
                     return forced;
+
+                // Mirror the Redis script: refuse the write if the generation moved meanwhile.
+                var current = await cache.GetValueAsync(StepUpProofKeys.GenerationForUser(userId));
+                if ((long.TryParse(current, out var generation) ? generation : 0) != expectedGeneration)
+                    return StepUpProofWriteResult.Superseded;
 
                 await cache.SetValueAsync(StepUpProofKeys.ForSession(sessionId), json, ttl);
                 return StepUpProofWriteResult.Stored;

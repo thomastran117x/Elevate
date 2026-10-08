@@ -368,13 +368,16 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         string Claim(params string[] types) => claims.First(claim => types.Contains(claim.Type)).Value;
 
         var sessionId = Claim(TokenService.SessionIdClaimType);
+        var userId = int.Parse(Claim("nameid", System.Security.Claims.ClaimTypes.NameIdentifier));
+        var generation = await Cache.GetValueAsync(StepUpProofKeys.GenerationForUser(userId));
         var proof = new StepUpProof
         {
-            UserId = int.Parse(Claim("nameid", System.Security.Claims.ClaimTypes.NameIdentifier)),
+            UserId = userId,
             SessionId = sessionId,
             AuthVersion = int.Parse(Claim(TokenService.AuthVersionClaimType)),
             Method = "email",
             VerifiedAtUtc = verifiedAtUtc ?? DateTime.UtcNow,
+            Generation = long.TryParse(generation, out var current) ? current : 0,
         };
 
         await Cache.SetValueAsync(

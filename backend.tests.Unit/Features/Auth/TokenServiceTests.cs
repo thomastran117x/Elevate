@@ -239,7 +239,7 @@ public class TokenServiceTests
         var service = new TokenService(cache);
         var issue = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.BrowserCookie);
 
-        var result = await service.StoreStepUpProofAsync(issue.SessionId, "{\"proof\":1}", TimeSpan.FromMinutes(10));
+        var result = await service.StoreStepUpProofAsync(issue.SessionId, 8, 0, "{\"proof\":1}", TimeSpan.FromMinutes(10));
 
         result.Should().Be(StepUpProofWriteResult.Stored);
         (await cache.GetValueAsync(StepUpProofKeys.ForSession(issue.SessionId))).Should().Be("{\"proof\":1}");
@@ -256,7 +256,7 @@ public class TokenServiceTests
         await service.RevokeRefreshSessionAsync(issue.SessionId);
 
         // A step-up verify that finishes after logout must not resurrect a proof.
-        var result = await service.StoreStepUpProofAsync(issue.SessionId, "{}", TimeSpan.FromMinutes(10));
+        var result = await service.StoreStepUpProofAsync(issue.SessionId, 8, 0, "{}", TimeSpan.FromMinutes(10));
 
         result.Should().Be(StepUpProofWriteResult.SessionEnded);
         (await cache.KeyExistsAsync(StepUpProofKeys.ForSession(issue.SessionId))).Should().BeFalse();
@@ -273,7 +273,7 @@ public class TokenServiceTests
             .ReturnsAsync(backend.main.features.cache.CacheScriptResult.Unavailable);
         var service = new TokenService(cache.Object);
 
-        var result = await service.StoreStepUpProofAsync("session", "{}", TimeSpan.FromMinutes(10));
+        var result = await service.StoreStepUpProofAsync("session", 8, 0, "{}", TimeSpan.FromMinutes(10));
 
         result.Should().Be(StepUpProofWriteResult.Unavailable);
     }
@@ -297,17 +297,18 @@ public class TokenServiceTests
     }
 
     [Fact]
-    public async Task GetSessionIdsAsync_ShouldListTheUsersActiveSessions()
+    public async Task StoreStepUpProofAsync_ShouldRefuse_WhenTheGenerationMovedDuringVerification()
     {
         var cache = new InMemoryCacheService();
         var service = new TokenService(cache);
-        var first = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.BrowserCookie);
-        var second = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.ApiToken);
-        await service.GenerateRefreshToken(9, CreateRequestInfo(), SessionTransport.BrowserCookie);
+        var issue = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.BrowserCookie);
+        await cache.IncrementAsync(StepUpProofKeys.GenerationForUser(8));
 
-        var sessionIds = await service.GetSessionIdsAsync(8);
+        // Verification began at generation 0; a factor change has since advanced it to 1.
+        var result = await service.StoreStepUpProofAsync(issue.SessionId, 8, 0, "{}", TimeSpan.FromMinutes(10));
 
-        sessionIds.Should().BeEquivalentTo([first.SessionId, second.SessionId]);
+        result.Should().Be(StepUpProofWriteResult.Superseded);
+        (await cache.KeyExistsAsync(StepUpProofKeys.ForSession(issue.SessionId))).Should().BeFalse();
     }
 
     [Fact]
@@ -952,10 +953,17 @@ internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheS
     {
         lock (_gate)
         {
-            if (keys.Length == 2 && script.Contains("redis.call('EXISTS'", StringComparison.Ordinal))
+            if (keys.Length == 3 && script.Contains("redis.call('EXISTS'", StringComparison.Ordinal))
             {
                 if (!TryGetEntry(keys[0].ToString(), out _))
                     return Task.FromResult<object>(0L);
+
+                var currentGeneration = TryGetEntry(keys[2].ToString(), out var generationEntry)
+                    && long.TryParse(generationEntry.StringValue, out var parsed)
+                        ? parsed
+                        : 0;
+                if (currentGeneration != long.Parse(values[2].ToString()))
+                    return Task.FromResult<object>(2L);
 
                 var proof = GetOrCreateEntry(keys[1].ToString());
                 proof.StringValue = values[0].ToString();

@@ -33,8 +33,9 @@ namespace backend.main.features.auth.mfa.session
         Task ClearSessionProofAsync(string sessionId);
 
         /// <summary>
-        /// Clears the proof on every refresh session the user holds, so a completed
-        /// sensitive change cannot be followed by another on the same verification.
+        /// Retires the proof on every refresh session the user holds, including one a concurrent
+        /// verification is about to write, by advancing the user's step-up generation. Throws
+        /// when the cache cannot be updated rather than silently leaving proofs usable.
         /// </summary>
         Task ClearUserProofsAsync(int userId);
     }
