@@ -148,7 +148,7 @@ export async function sniffImageFormat(file: Blob): Promise<ImageFormat | null> 
 
 /**
  * Whether an image of the given format holds more than one frame. Mirrors the server's
- * `ImageSharpImageProcessor`, which refuses animated GIF, WebP and APNG because re-encoding keeps
+ * `NetVipsImageProcessor`, which refuses animated GIF, WebP and APNG because re-encoding keeps
  * only the first frame: saying so when the file is picked beats a refusal after the upload.
  *
  * Reads structure only — block, chunk and header markers — never pixel data. A file too malformed
