@@ -16,10 +16,6 @@ using FluentAssertions;
 
 using Microsoft.EntityFrameworkCore;
 
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.PixelFormats;
-
 namespace backend.tests.Integration.Features.Storage;
 
 /// <summary>
@@ -71,8 +67,7 @@ public class MediaAssetEndpointsTests
 
         var published = app.BlobStorage.UploadedImages[upload.PublicUrl];
         published.ContentType.Should().Be("image/webp");
-        var stored = Image.Identify(published.Content);
-        stored.Metadata.ExifProfile.Should().BeNull("GPS must not survive into a public URL");
+        TestImages.MetadataFields(published.Content).Should().BeEmpty("GPS must not survive into a public URL");
         app.BlobStorage.Quarantine.Should().NotContainKey(quarantinePath);
 
         var asset = await FindAssetAsync(app, upload.MediaAssetId!.Value);
@@ -397,27 +392,16 @@ public class MediaAssetEndpointsTests
 
     private static byte[] JpegWithGps()
     {
-        using var image = new Image<Rgba32>(64, 48, new Rgba32(120, 160, 200));
-        image.Metadata.ExifProfile = new ExifProfile();
-        image.Metadata.ExifProfile.SetValue(ExifTag.GPSLatitudeRef, "N");
-        image.Metadata.ExifProfile.SetValue(
-            ExifTag.GPSLatitude,
-            [new Rational(43, 1), new Rational(39, 1), new Rational(12, 1)]);
-
-        using var stream = new MemoryStream();
-        image.SaveAsJpeg(stream);
-        return stream.ToArray();
+        using var image = TestImages.Solid(64, 48, 120, 160, 200);
+        return TestImages.WithExif(TestImages.Jpeg(image), gps: true);
     }
 
     private static byte[] AnimatedGif()
     {
-        using var image = new Image<Rgba32>(16, 16, new Rgba32(255, 0, 0));
-        using (var second = new Image<Rgba32>(16, 16, new Rgba32(0, 0, 255)))
-            image.Frames.AddFrame(second.Frames.RootFrame);
-
-        using var stream = new MemoryStream();
-        image.SaveAsGif(stream);
-        return stream.ToArray();
+        using var first = TestImages.Solid(16, 16, 255, 0, 0);
+        using var second = TestImages.Solid(16, 16, 0, 0, 255);
+        using var animation = TestImages.Animation(first, second);
+        return TestImages.Gif(animation);
     }
 
     private sealed class ClubModel

@@ -18,10 +18,6 @@ using FluentAssertions;
 
 using Microsoft.EntityFrameworkCore;
 
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.PixelFormats;
-
 namespace backend.tests.Integration.Features.Profile;
 
 public class ProfileEndpointsTests
@@ -163,20 +159,15 @@ public class ProfileEndpointsTests
         await app.SeedKnownDeviceAsync(user.Id, "avatar-gps-device");
         var session = await app.LoginApiAsync("avatar-gps-user", trustedDeviceToken: "avatar-gps-device");
 
-        var photo = new Image<Rgba32>(64, 48, new Rgba32(200, 120, 40));
-        photo.Metadata.ExifProfile = new ExifProfile();
-        photo.Metadata.ExifProfile.SetValue(ExifTag.GPSLatitudeRef, "N");
-        photo.Metadata.ExifProfile.SetValue(
-            ExifTag.GPSLatitude,
-            [new Rational(43, 1), new Rational(39, 1), new Rational(12, 1)]);
-        var jpeg = EncodeImage(photo, (image, stream) => image.SaveAsJpeg(stream));
+        using var photo = TestImages.Solid(64, 48, 200, 120, 40);
+        var jpeg = TestImages.WithExif(TestImages.Jpeg(photo), gps: true);
 
         var response = await PostAvatarAsync(app, session.AccessToken, jpeg, "image/jpeg", "photo.jpg");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var updated = await app.ReadApiResponseAsync<MyProfileResponse>(response);
         var stored = app.BlobStorage.UploadedImages[updated.Data!.Avatar!];
-        Image.Identify(stored.Content).Metadata.ExifProfile.Should().BeNull();
+        TestImages.MetadataFields(stored.Content).Should().BeEmpty();
     }
 
     [Fact]
@@ -187,9 +178,8 @@ public class ProfileEndpointsTests
         await app.SeedKnownDeviceAsync(user.Id, "avatar-large-device");
         var session = await app.LoginApiAsync("avatar-large-user", trustedDeviceToken: "avatar-large-device");
 
-        var jpeg = EncodeImage(
-            new Image<Rgba32>(4000, 3000, new Rgba32(30, 60, 90)),
-            (image, stream) => image.SaveAsJpeg(stream));
+        using var photo = TestImages.Solid(4000, 3000, 30, 60, 90);
+        var jpeg = TestImages.Jpeg(photo);
 
         var response = await PostAvatarAsync(app, session.AccessToken, jpeg, "image/jpeg", "large.jpg");
 
@@ -197,8 +187,7 @@ public class ProfileEndpointsTests
         var updated = await app.ReadApiResponseAsync<MyProfileResponse>(response);
         var stored = app.BlobStorage.UploadedImages[updated.Data!.Avatar!];
         stored.ContentType.Should().Be("image/webp");
-        var info = Image.Identify(stored.Content);
-        Math.Max(info.Width, info.Height).Should().Be(512);
+        Math.Max(stored.Width, stored.Height).Should().Be(512);
     }
 
     [Fact]
@@ -227,12 +216,10 @@ public class ProfileEndpointsTests
         await app.SeedKnownDeviceAsync(user.Id, "avatar-gif-device");
         var session = await app.LoginApiAsync("avatar-gif-user", trustedDeviceToken: "avatar-gif-device");
 
-        var animation = new Image<Rgba32>(16, 16, new Rgba32(255, 0, 0));
-        using (var second = new Image<Rgba32>(16, 16, new Rgba32(0, 0, 255)))
-        {
-            animation.Frames.AddFrame(second.Frames.RootFrame);
-        }
-        var gif = EncodeImage(animation, (image, stream) => image.SaveAsGif(stream));
+        using var first = TestImages.Solid(16, 16, 255, 0, 0);
+        using var second = TestImages.Solid(16, 16, 0, 0, 255);
+        using var animation = TestImages.Animation(first, second);
+        var gif = TestImages.Gif(animation);
 
         var response = await PostAvatarAsync(app, session.AccessToken, gif, "image/gif", "wave.gif");
 
@@ -514,18 +501,12 @@ public class ProfileEndpointsTests
 
     // A real, decodable image: avatars are now decoded and re-encoded, so a bare signature is
     // no longer enough to be accepted. Generated here rather than checked in as a binary asset.
-    private static readonly byte[] MinimalPng = EncodeImage(
-        new Image<Rgba32>(4, 4, new Rgba32(40, 90, 160)),
-        (image, stream) => image.SaveAsPng(stream));
+    private static readonly byte[] MinimalPng = EncodeMinimalPng();
 
-    private static byte[] EncodeImage(Image<Rgba32> image, Action<Image<Rgba32>, Stream> save)
+    private static byte[] EncodeMinimalPng()
     {
-        using (image)
-        using (var stream = new MemoryStream())
-        {
-            save(image, stream);
-            return stream.ToArray();
-        }
+        using var image = TestImages.Solid(4, 4, 40, 90, 160);
+        return TestImages.Png(image);
     }
 
     private static async Task<HttpResponseMessage> PostAvatarAsync(

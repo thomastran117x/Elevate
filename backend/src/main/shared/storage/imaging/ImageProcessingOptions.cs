@@ -4,7 +4,7 @@ namespace backend.main.shared.storage.imaging
 {
     /// <summary>
     /// Limits and output settings for the decode-and-re-encode pipeline in
-    /// <see cref="ImageSharpImageProcessor"/>, bound from the <c>ImageProcessing</c> section.
+    /// <see cref="NetVipsImageProcessor"/>, bound from the <c>ImageProcessing</c> section.
     /// </summary>
     public sealed class ImageProcessingOptions
     {
@@ -38,27 +38,10 @@ namespace backend.main.shared.storage.imaging
         public int WebpQuality { get; set; } = 82;
 
         /// <summary>
-        /// Largest <em>single</em> allocation the decoder may make, not a budget for one image.
-        /// 50 MP of RGBA32 is one ~200 MB pixel buffer, but a decode also takes scratch buffers —
-        /// spectral and colour buffers per component for a progressive JPEG, the resize target,
-        /// the buffered upload — each counted separately against this limit. Peak resident memory
-        /// for one 50 MP image is therefore several hundred megabytes, not 256 MB.
-        /// </summary>
-        [Range(16, 4096)]
-        public int MaxAllocationMegabytes { get; set; } = 256;
-
-        /// <summary>
-        /// Bound on the allocator's internal buffer pool. Without it the pool keeps the largest
-        /// image's buffers for the life of the process, so idle memory stays at the high-water
-        /// mark of the worst upload ever handled.
-        /// </summary>
-        [Range(0, 4096)]
-        public int MaxPoolMegabytes { get; set; } = 128;
-
-        /// <summary>
-        /// Images processed at once across the process; further requests wait. Multiply the
-        /// per-image peak described on <see cref="MaxAllocationMegabytes"/> by this to size a
-        /// container: at the defaults, budget roughly 1 GB of headroom for image processing alone.
+        /// Images processed at once across the process; further requests wait. One image at the
+        /// <see cref="MaxPixels"/> limit can hold its fully decoded pixels (up to 4 bytes each, so
+        /// ~200 MB at 50 MP) plus the buffered upload while it is shrunk, and this multiplies that
+        /// peak: at the defaults, budget roughly 512 MB of headroom for image processing alone.
         /// </summary>
         [Range(1, 64)]
         public int MaxConcurrentOperations { get; set; } = 2;

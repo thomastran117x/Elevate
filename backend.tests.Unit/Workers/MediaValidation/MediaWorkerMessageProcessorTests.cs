@@ -2,6 +2,7 @@ using backend.main.shared.providers.messages;
 using backend.main.shared.storage;
 using backend.main.shared.storage.imaging;
 using backend.tests.Unit.Features.Media;
+using backend.tests.Unit.Support;
 using backend.worker.media_worker;
 
 using FluentAssertions;
@@ -9,8 +10,6 @@ using FluentAssertions;
 using Microsoft.Extensions.Options;
 
 using Moq;
-
-using SixLabors.ImageSharp;
 
 namespace backend.tests.Unit.Workers.MediaValidation;
 
@@ -27,7 +26,8 @@ public class MediaWorkerMessageProcessorTests
 
         var published = harness.Blobs.Published[request.PublicUrl];
         published.ContentType.Should().Be("image/webp");
-        Image.Identify(published.Content).Width.Should().Be(60);
+        published.Width.Should().Be(60);
+        TestImages.MetadataFields(published.Content).Should().BeEmpty();
 
         var result = harness.Results.Should().ContainSingle().Subject;
         result.MediaAssetId.Should().Be(request.MediaAssetId);
@@ -175,7 +175,7 @@ public class MediaWorkerMessageProcessorTests
             Processor = new MediaWorkerMessageProcessor(
                 new MediaValidationPipeline(
                     Blobs,
-                    new ImageSharpImageProcessor(Options.Create(new ImageProcessingOptions()))),
+                    new NetVipsImageProcessor(Options.Create(new ImageProcessingOptions()))),
                 DlqPublisher.Object,
                 StatusPublisher.Object);
         }

@@ -44,14 +44,15 @@
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.0" />
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.23.0" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.10.0" />
+    <!-- libvips for decoding and re-encoding uploaded images. NetVips.Native bundles
+         self-contained libvips builds for every supported RID, so containers need no apt
+         packages. Replaced ImageSharp, whose only patched release (4.x) needs a licence key. -->
+    <PackageReference Include="NetVips" Version="3.2.0" />
+    <PackageReference Include="NetVips.Native" Version="8.18.7" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Polly" Version="8.8.0" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
-    <!-- Held on 3.x deliberately. 4.x adds an MSBuild license-key check that fails every
-         Release build (CI, Docker) without a Six Labors key, including free-tier users.
-         Six Labors Split License: free for open source and orgs under ~$1M revenue. -->
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageReference Include="StackExchange.Redis" Version="3.3.1" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.29.2" />

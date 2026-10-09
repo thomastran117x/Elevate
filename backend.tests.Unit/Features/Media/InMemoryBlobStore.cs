@@ -3,10 +3,7 @@ using System.Runtime.CompilerServices;
 using backend.main.features.events.contracts.responses;
 using backend.main.shared.storage;
 using backend.main.shared.storage.imaging;
-
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Webp;
-using SixLabors.ImageSharp.PixelFormats;
+using backend.tests.Unit.Support;
 
 namespace backend.tests.Unit.Features.Media;
 
@@ -182,32 +179,6 @@ internal sealed class InMemoryBlobStore : IAzureBlobService
         Task.FromResult<IReadOnlyList<string>>(includeQuarantine ? MissingContainers.ToList() : MissingContainers.Where(c => !c.Contains("quarantine")).ToList());
 
     /// <summary>A real, decodable image of the given type.</summary>
-    public static byte[] Image(string contentType = "image/png", int width = 40, int height = 30, int frames = 1)
-    {
-        using var image = new Image<Rgba32>(width, height, new Rgba32(30, 90, 150));
-        for (var i = 1; i < frames; i++)
-        {
-            using var frame = new Image<Rgba32>(width, height, new Rgba32(200, 20, 20));
-            image.Frames.AddFrame(frame.Frames.RootFrame);
-        }
-
-        using var stream = new MemoryStream();
-        switch (contentType)
-        {
-            case "image/jpeg":
-                image.SaveAsJpeg(stream);
-                break;
-            case "image/gif":
-                image.SaveAsGif(stream);
-                break;
-            case "image/webp":
-                image.Save(stream, new WebpEncoder());
-                break;
-            default:
-                image.SaveAsPng(stream);
-                break;
-        }
-
-        return stream.ToArray();
-    }
+    public static byte[] Image(string contentType = "image/png", int width = 40, int height = 30, int frames = 1) =>
+        TestImages.Encoded(contentType, width, height, frames);
 }
