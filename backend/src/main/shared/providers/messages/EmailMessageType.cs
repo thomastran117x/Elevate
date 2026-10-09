@@ -25,6 +25,7 @@ namespace backend.main.shared.providers.messages
         ProviderSignInReminder,
         EmailChangeRequested,
         EmailChangeVerify,
-        EmailChanged
+        EmailChanged,
+        MfaFactorChanged
     }
 }

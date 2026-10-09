@@ -116,10 +116,13 @@ export class ProfileTabComponent implements OnInit {
   readonly imageAccept = IMAGE_ACCEPT;
   usernameChangeRequested = false;
   usernameMfaVerified = false;
+  // True once a save was refused because the step-up proof expired; the gate then prompts at once.
+  usernameStepUpLapsed = false;
   usernameSaving = false;
   emailChangeRequested = false;
   emailAvailabilityUnavailable = false;
   emailMfaVerified = false;
+  emailStepUpLapsed = false;
   emailSaving = false;
   emailChallenge = '';
   pendingEmailChange: PendingEmailChange | null = null;
@@ -272,6 +275,7 @@ export class ProfileTabComponent implements OnInit {
     if (!this.profile) return;
     this.usernameChangeRequested = true;
     this.usernameMfaVerified = false;
+    this.usernameStepUpLapsed = false;
     this.usernameForm.setValue({
       username: this.profile.UsernameDisplay || this.profile.Username,
     });
@@ -311,6 +315,7 @@ export class ProfileTabComponent implements OnInit {
   cancelUsernameChange(): void {
     this.usernameChangeRequested = false;
     this.usernameMfaVerified = false;
+    this.usernameStepUpLapsed = false;
     this.error = '';
     if (this.profile) {
       this.usernameForm.setValue({
@@ -349,6 +354,7 @@ export class ProfileTabComponent implements OnInit {
           this.syncStore(updated);
           this.usernameChangeRequested = false;
           this.usernameMfaVerified = false;
+          this.usernameStepUpLapsed = false;
           this.usernameForm.setValue({
             username: updated.UsernameDisplay || updated.Username,
           });
@@ -357,6 +363,7 @@ export class ProfileTabComponent implements OnInit {
         error: (err) => {
           if (isApiClientErrorCode(err, MFA_REQUIRED_ERROR_CODE)) {
             this.usernameMfaVerified = false;
+            this.usernameStepUpLapsed = true;
           }
           this.error = getApiClientMessage(err, 'Unable to change username.');
         },
@@ -378,6 +385,7 @@ export class ProfileTabComponent implements OnInit {
   startEmailChange(): void {
     this.emailChangeRequested = true;
     this.emailMfaVerified = false;
+    this.emailStepUpLapsed = false;
     this.emailForm.reset({ newEmail: '', currentPassword: '' });
     this.error = '';
     this.success = '';
@@ -386,6 +394,7 @@ export class ProfileTabComponent implements OnInit {
   cancelEmailChange(): void {
     this.emailChangeRequested = false;
     this.emailMfaVerified = false;
+    this.emailStepUpLapsed = false;
     this.emailForm.reset({ newEmail: '', currentPassword: '' });
     this.error = '';
   }
@@ -420,12 +429,14 @@ export class ProfileTabComponent implements OnInit {
             ExpiresAtUtc: challenge.ExpiresAtUtc,
           };
           this.emailChangeRequested = false;
+          this.emailStepUpLapsed = false;
           this.emailCodeForm.reset({ code: '' });
           this.success = `We sent a confirmation code to ${newEmail.trim()}.`;
         },
         error: (err) => {
           if (isApiClientErrorCode(err, MFA_REQUIRED_ERROR_CODE)) {
             this.emailMfaVerified = false;
+            this.emailStepUpLapsed = true;
           }
           this.error = getApiClientMessage(err, 'Unable to start the email change.');
         },

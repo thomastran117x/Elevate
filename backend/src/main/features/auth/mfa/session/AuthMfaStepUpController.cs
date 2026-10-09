@@ -63,8 +63,8 @@ namespace backend.main.features.auth.mfa.session
 
         /// <summary>
         /// Gated probe used by the frontend to decide whether a screen behind
-        /// <c>[RequireMfa]</c> can be shown. Returns 200 when the session has been
-        /// MFA-verified, otherwise the filter short-circuits with 403 MFA_REQUIRED.
+        /// <c>[RequireMfa]</c> can be shown. Returns 200 while the session holds a fresh
+        /// step-up proof, otherwise the filter short-circuits with 403 MFA_REQUIRED.
         /// </summary>
         [HttpGet("status")]
         [RequireMfa]
@@ -104,10 +104,14 @@ namespace backend.main.features.auth.mfa.session
                 var user = User.GetUserPayload();
                 await ProtectAsync(AuthAbuseFlow.Verification, user.Id, HttpContext.RequestAborted);
                 var sessionId = User.FindFirst(TokenService.SessionIdClaimType)?.Value;
+                if (!int.TryParse(User.FindFirst(TokenService.AuthVersionClaimType)?.Value, out var authVersion))
+                    throw new UnauthorizedException("This session cannot be verified. Please sign in again.");
+
                 await _sessionMfaVerificationService.VerifyAsync(
                     user.Id,
                     user.Email,
                     sessionId ?? string.Empty,
+                    authVersion,
                     request.Method,
                     request.Code
                 );

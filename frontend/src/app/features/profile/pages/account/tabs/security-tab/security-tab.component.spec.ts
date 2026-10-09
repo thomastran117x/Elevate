@@ -476,6 +476,109 @@ describe('SecurityTabComponent', () => {
     });
   });
 
+  describe('expired step-up proof', () => {
+    const mfaRequired = () => new ApiClientClientError('Verify again', 403, 'MFA_REQUIRED');
+
+    beforeEach(() => verifyGate());
+
+    it('re-locks with an immediate prompt instead of reporting an error', () => {
+      auth.disableMfa.and.returnValue(throwError(mfaRequired));
+      auth.getMfaStatus.calls.reset();
+
+      component.disableSms();
+
+      expect(component.mfaVerified).toBeFalse();
+      expect(component.stepUpLapsed).toBeTrue();
+      expect(component.error).toBe('');
+      // No status refresh: that read is gated too and would only fail again.
+      expect(auth.getMfaStatus).not.toHaveBeenCalled();
+    });
+
+    it('keeps an in-flight setup step so it can be finished after verifying', () => {
+      auth.startTotpEnrollment.and.returnValue(of(enrollment));
+      auth.verifyTotpEnrollment.and.returnValue(throwError(mfaRequired));
+      component.startTotpEnrollment();
+      component.totpSetupForm.setValue({ code: '123456' });
+
+      component.verifyTotpEnrollment();
+
+      expect(component.mfaVerified).toBeFalse();
+      expect(component.isTotpSetupStep).toBeTrue();
+    });
+
+    const lapsedActions: Array<[string, () => void]> = [
+      [
+        'SMS enrollment start',
+        () => {
+          auth.startMfaEnrollment.and.returnValue(throwError(mfaRequired));
+          component.phoneForm.setValue({ phoneNumber: '+15551234' });
+          component.startSmsEnrollment();
+        },
+      ],
+      [
+        'SMS re-enable start',
+        () => {
+          auth.startMfaEnable.and.returnValue(throwError(mfaRequired));
+          component.startSmsEnable();
+        },
+      ],
+      [
+        'SMS code verification',
+        () => {
+          auth.startMfaEnrollment.and.returnValue(of(challenge));
+          auth.verifyMfaEnrollment.and.returnValue(throwError(mfaRequired));
+          component.phoneForm.setValue({ phoneNumber: '+15551234' });
+          component.startSmsEnrollment();
+          component.smsCodeForm.setValue({ code: '123456' });
+          component.verifySmsChallenge();
+        },
+      ],
+      [
+        'SMS removal',
+        () => {
+          auth.removeMfa.and.returnValue(throwError(mfaRequired));
+          component.removeSms();
+        },
+      ],
+      [
+        'TOTP enrollment start',
+        () => {
+          auth.startTotpEnrollment.and.returnValue(throwError(mfaRequired));
+          component.startTotpEnrollment();
+        },
+      ],
+      [
+        'TOTP manage action',
+        () => {
+          auth.removeTotp.and.returnValue(throwError(mfaRequired));
+          component.beginTotpAction('remove');
+          component.totpManageForm.setValue({ code: '123456' });
+          component.submitTotpAction();
+        },
+      ],
+    ];
+
+    for (const [name, act] of lapsedActions) {
+      it(`re-locks when ${name} is refused`, () => {
+        act();
+
+        expect(component.mfaVerified).toBeFalse();
+        expect(component.stepUpLapsed).toBeTrue();
+        expect(component.error).toBe('');
+      });
+    }
+
+    it('tells the user to retry once verified again', () => {
+      auth.disableMfa.and.returnValue(throwError(mfaRequired));
+      component.disableSms();
+
+      component.onMfaVerified();
+
+      expect(component.mfaVerified).toBeTrue();
+      expect(component.success).toBe('Identity verified. Try that again to finish.');
+    });
+  });
+
   describe('message handling', () => {
     beforeEach(() => verifyGate());
 

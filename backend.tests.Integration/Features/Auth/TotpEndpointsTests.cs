@@ -26,6 +26,7 @@ public class TotpEndpointsTests
         var session = await app.SignUpAndVerifyByTokenAsync(
             "totp-enroll@example.com",
             transport: SessionTransportResolver.ApiValue);
+        await app.GrantStepUpProofAsync(session.AccessToken);
 
         var start = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/totp/enroll/start",
@@ -72,6 +73,7 @@ public class TotpEndpointsTests
         var session = await app.SignUpAndVerifyByTokenAsync(
             "totp-disable@example.com",
             transport: SessionTransportResolver.ApiValue);
+        await app.GrantStepUpProofAsync(session.AccessToken);
 
         var start = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/totp/enroll/start",
@@ -91,6 +93,7 @@ public class TotpEndpointsTests
         var user = await app.FindUserByEmailAsync("totp-disable@example.com");
         await app.Cache.DeleteKeyAsync($"totp:lastused:{user!.Id}");
 
+        await app.GrantStepUpProofAsync(session.AccessToken);
         var disable = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/totp/disable",
             new TotpDisableRequest
@@ -123,6 +126,7 @@ public class TotpEndpointsTests
         var session = await app.SignUpAndVerifyByTokenAsync(
             "totp-enable-remove@example.com",
             transport: SessionTransportResolver.ApiValue);
+        await app.GrantStepUpProofAsync(session.AccessToken);
 
         var start = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/totp/enroll/start",
@@ -142,6 +146,7 @@ public class TotpEndpointsTests
         var user = await app.FindUserByEmailAsync("totp-enable-remove@example.com");
         await app.Cache.DeleteKeyAsync($"totp:lastused:{user!.Id}");
 
+        await app.GrantStepUpProofAsync(session.AccessToken);
         var disable = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/totp/disable",
             new TotpDisableRequest
@@ -152,6 +157,7 @@ public class TotpEndpointsTests
         disable.StatusCode.Should().Be(HttpStatusCode.OK);
 
         await app.Cache.DeleteKeyAsync($"totp:lastused:{user.Id}");
+        await app.GrantStepUpProofAsync(session.AccessToken);
         var enable = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/totp/enable",
             new TotpDisableRequest
@@ -171,6 +177,7 @@ public class TotpEndpointsTests
         persistedReenabled.DisabledAtUtc.Should().BeNull();
 
         await app.Cache.DeleteKeyAsync($"totp:lastused:{user.Id}");
+        await app.GrantStepUpProofAsync(session.AccessToken);
         var remove = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/totp/remove",
             new TotpDisableRequest
@@ -201,6 +208,7 @@ public class TotpEndpointsTests
         var session = await app.SignUpAndVerifyByTokenAsync(
             "totp-stepup@example.com",
             transport: SessionTransportResolver.ApiValue);
+        await app.GrantStepUpProofAsync(session.AccessToken);
 
         var startEnrollment = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/auth/mfa/totp/enroll/start",

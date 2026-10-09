@@ -6,12 +6,17 @@ import { Router } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { finalize } from 'rxjs/operators';
 
-import { getApiClientMessage } from '../../../../../../core/api/models/api-client-error.model';
+import {
+  getApiClientMessage,
+  isApiClientErrorCode,
+} from '../../../../../../core/api/models/api-client-error.model';
 import { AuthTokenService } from '../../../../../../core/api/services/auth-token.service';
 import { User } from '../../../../../../core/stores/user.model';
 import { selectUser } from '../../../../../../core/stores/user.selectors';
 import { ProfileService } from '../../../../services/profile.service';
 import { MfaGateComponent } from '../../mfa-gate/mfa-gate.component';
+
+const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
 
 @Component({
   selector: 'app-danger-zone-tab',
@@ -26,6 +31,10 @@ export class DangerZoneTabComponent implements OnInit {
   // The delete flow is revealed only after the reusable gate confirms a fresh
   // MFA verification; the delete endpoint is also [RequireMfa]-gated.
   mfaVerified = false;
+  // Set when the server refused deletion because the step-up proof had expired; the
+  // gate then prompts at once and the typed confirmation is kept.
+  stepUpLapsed = false;
+  resumeNotice = '';
   currentUser: User | null = null;
   showConfirm = false;
   confirmationInput = '';
@@ -46,6 +55,11 @@ export class DangerZoneTabComponent implements OnInit {
       .subscribe((user) => {
         this.currentUser = user;
       });
+  }
+
+  onMfaVerified(): void {
+    this.mfaVerified = true;
+    this.resumeNotice = this.stepUpLapsed ? 'Identity verified. Submit again to finish.' : '';
   }
 
   get confirmationMatches(): boolean {
@@ -70,6 +84,7 @@ export class DangerZoneTabComponent implements OnInit {
 
     this.deleting = true;
     this.error = '';
+    this.resumeNotice = '';
 
     this.profileService
       .deleteAccount()
@@ -80,6 +95,11 @@ export class DangerZoneTabComponent implements OnInit {
           this.router.navigate(['/']);
         },
         error: (err) => {
+          if (isApiClientErrorCode(err, MFA_REQUIRED_ERROR_CODE)) {
+            this.stepUpLapsed = true;
+            this.mfaVerified = false;
+            return;
+          }
           this.error = getApiClientMessage(err, 'Unable to delete account.');
         },
       });

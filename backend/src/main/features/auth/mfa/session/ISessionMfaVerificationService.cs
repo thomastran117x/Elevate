@@ -5,8 +5,9 @@ namespace backend.main.features.auth.mfa.session
     /// <summary>
     /// In-session MFA "step-up" used by <c>[RequireMfa]</c> routes. Unlike the
     /// login-time step-up, it does not issue a new session — on success it records
-    /// a per-session "MFA verified" marker (keyed by the access token's <c>sid</c>
-    /// claim) that lasts for the remainder of the session.
+    /// a <see cref="StepUpProof"/> bound to the user, the access token's <c>sid</c>
+    /// claim, and its auth version. The proof expires a fixed
+    /// <see cref="StepUpOptions.ProofLifetime"/> after verification and never slides.
     /// </summary>
     public interface ISessionMfaVerificationService
     {
@@ -14,8 +15,28 @@ namespace backend.main.features.auth.mfa.session
 
         Task<SessionMfaStartResponse> StartAsync(int userId, string email, string method);
 
-        Task VerifyAsync(int userId, string email, string sessionId, string method, string code);
+        Task VerifyAsync(
+            int userId,
+            string email,
+            string sessionId,
+            int authVersion,
+            string method,
+            string code
+        );
 
-        Task<bool> IsSessionVerifiedAsync(string? sessionId);
+        /// <summary>
+        /// True only when the session holds an unexpired proof for this exact user and
+        /// auth version. Reading a proof never extends it.
+        /// </summary>
+        Task<bool> HasFreshProofAsync(int userId, string? sessionId, int authVersion);
+
+        Task ClearSessionProofAsync(string sessionId);
+
+        /// <summary>
+        /// Retires the proof on every refresh session the user holds, including one a concurrent
+        /// verification is about to write, by advancing the user's step-up generation. Throws
+        /// when the cache cannot be updated rather than silently leaving proofs usable.
+        /// </summary>
+        Task ClearUserProofsAsync(int userId);
     }
 }

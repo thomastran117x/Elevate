@@ -35,7 +35,18 @@ namespace backend.main.features.auth.token
             SessionTransport expectedTransport,
             ClientRequestInfo requestInfo
         );
-        public Task<TimeSpan?> GetRefreshSessionTtlAsync(string sessionId);
+        /// <summary>
+        /// Stores a step-up proof only while the refresh session still exists and the user's
+        /// step-up generation still equals <paramref name="expectedGeneration"/>, in one atomic
+        /// operation, so a verification that races logout or a factor change cannot outlive it.
+        /// </summary>
+        public Task<StepUpProofWriteResult> StoreStepUpProofAsync(
+            string sessionId,
+            int userId,
+            long expectedGeneration,
+            string proofJson,
+            TimeSpan lifetime
+        );
         public Task RevokeRefreshSessionAsync(string sessionId);
         public Task RevokeAllRefreshSessionsAsync(int userId);
         public Task<string?> VerificationTokenExist(string email, VerificationPurpose purpose);

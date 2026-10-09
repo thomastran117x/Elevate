@@ -12,6 +12,7 @@ using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.device;
 using backend.main.features.auth.mfa;
+using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
 using backend.main.features.bloom;
@@ -317,6 +318,20 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         return await Client.SendAsync(request);
     }
 
+    public async Task<HttpResponseMessage> SendWithBearerAndCsrfAsync(
+        HttpMethod method,
+        string path,
+        object? payload,
+        string accessToken)
+    {
+        var request = new HttpRequestMessage(method, path);
+        if (payload != null)
+            request.Content = JsonContent.Create(payload, payload.GetType());
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        request.Headers.Add(CsrfConfiguration.CsrfHeaderName, await GetCsrfTokenAsync());
+        return await Client.SendAsync(request);
+    }
+
     /// <summary>
     /// Satisfies a <c>[RequireMfa]</c> gate for the given session by completing an
     /// in-session email step-up (start + verify with the emitted code).
@@ -337,6 +352,52 @@ public sealed class AuthApiTestApp : IAsyncDisposable
             new SessionMfaVerifyRequest { Method = "email", Code = codeEmail.Code! },
             accessToken);
         verify.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// Writes a fresh step-up proof for the access token's session straight into Redis. Use it
+    /// only where step-up is a precondition rather than the subject: factor-management flows
+    /// spend a proof on every change and would otherwise trip the per-user code-delivery limit.
+    /// </summary>
+    public async Task GrantStepUpProofAsync(string accessToken, DateTime? verifiedAtUtc = null)
+    {
+        var claims = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler()
+            .ReadJwtToken(accessToken)
+            .Claims
+            .ToList();
+        string Claim(params string[] types) => claims.First(claim => types.Contains(claim.Type)).Value;
+
+        var sessionId = Claim(TokenService.SessionIdClaimType);
+        var userId = int.Parse(Claim("nameid", System.Security.Claims.ClaimTypes.NameIdentifier));
+        var generation = await Cache.GetValueAsync(StepUpProofKeys.GenerationForUser(userId));
+        var proof = new StepUpProof
+        {
+            UserId = userId,
+            SessionId = sessionId,
+            AuthVersion = int.Parse(Claim(TokenService.AuthVersionClaimType)),
+            Method = "email",
+            VerifiedAtUtc = verifiedAtUtc ?? DateTime.UtcNow,
+            Generation = long.TryParse(generation, out var current) ? current : 0,
+            FactorState = StepUpFactorState.From(
+                await QueryDbAsync(db => db.SmsMfaEnrollments.AsNoTracking().FirstOrDefaultAsync(e => e.UserId == userId)),
+                await QueryDbAsync(db => db.TotpMfaEnrollments.AsNoTracking().FirstOrDefaultAsync(e => e.UserId == userId))),
+        };
+
+        await Cache.SetValueAsync(
+            StepUpProofKeys.ForSession(sessionId),
+            Newtonsoft.Json.JsonConvert.SerializeObject(proof),
+            TimeSpan.FromMinutes(StepUpOptions.MaxProofLifetimeMinutes));
+    }
+
+    public async Task<StepUpProof?> ReadStepUpProofAsync(string accessToken)
+    {
+        var sessionId = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler()
+            .ReadJwtToken(accessToken)
+            .Claims
+            .First(claim => claim.Type == TokenService.SessionIdClaimType)
+            .Value;
+        var json = await Cache.GetValueAsync(StepUpProofKeys.ForSession(sessionId));
+        return json == null ? null : Newtonsoft.Json.JsonConvert.DeserializeObject<StepUpProof>(json);
     }
 
     public async Task AddClubStaffAsync(int clubId, int userId, int grantedByUserId, ClubStaffRole role = ClubStaffRole.Manager)

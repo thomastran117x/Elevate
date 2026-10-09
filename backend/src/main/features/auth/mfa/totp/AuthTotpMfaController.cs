@@ -15,26 +15,34 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace backend.main.features.auth.mfa.totp
 {
+    /// <summary>
+    /// Every action here creates or changes an authenticator factor, so the whole controller
+    /// needs a fresh step-up proof.
+    /// </summary>
     [ApiController]
     [Authorize]
+    [RequireMfa]
     [FeatureGate(FeatureFlagKeys.Auth)]
     [Route("auth/mfa/totp")]
     public sealed class AuthTotpMfaController : ControllerBase
     {
         private readonly ITotpMfaEnrollmentService _totpService;
         private readonly IMfaSettingsBuilder _settingsBuilder;
+        private readonly IMfaFactorChangeService _factorChangeService;
         private readonly IAuthAbuseProtectionService _abuseProtection;
         private readonly ClientRequestInfo _requestInfo;
 
         public AuthTotpMfaController(
             ITotpMfaEnrollmentService totpService,
             IMfaSettingsBuilder settingsBuilder,
+            IMfaFactorChangeService factorChangeService,
             IAuthAbuseProtectionService abuseProtection,
             ClientRequestInfo requestInfo
         )
         {
             _totpService = totpService;
             _settingsBuilder = settingsBuilder;
+            _factorChangeService = factorChangeService;
             _abuseProtection = abuseProtection;
             _requestInfo = requestInfo;
         }
@@ -73,6 +81,7 @@ namespace backend.main.features.auth.mfa.totp
                 var user = User.GetUserPayload();
                 await ProtectAsync(AuthAbuseFlow.Verification, user.Id, HttpContext.RequestAborted);
                 await _totpService.VerifyEnrollmentAsync(user.Id, request.Code);
+                await _factorChangeService.RecordAsync(user.Id, user.Email, MfaFactorKind.Totp, MfaFactorChange.Enabled);
                 var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
 
                 return Ok(new ApiResponse<MfaSettingsResponse>("TOTP MFA has been enabled.", settings));
@@ -96,6 +105,7 @@ namespace backend.main.features.auth.mfa.totp
                 var user = User.GetUserPayload();
                 await ProtectAsync(AuthAbuseFlow.Verification, user.Id, HttpContext.RequestAborted);
                 await _totpService.EnableAsync(user.Id, request.Code);
+                await _factorChangeService.RecordAsync(user.Id, user.Email, MfaFactorKind.Totp, MfaFactorChange.Enabled);
                 var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
 
                 return Ok(new ApiResponse<MfaSettingsResponse>("TOTP MFA has been enabled.", settings));
@@ -119,6 +129,7 @@ namespace backend.main.features.auth.mfa.totp
                 var user = User.GetUserPayload();
                 await ProtectAsync(AuthAbuseFlow.Verification, user.Id, HttpContext.RequestAborted);
                 await _totpService.DisableAsync(user.Id, request.Code);
+                await _factorChangeService.RecordAsync(user.Id, user.Email, MfaFactorKind.Totp, MfaFactorChange.Disabled);
                 var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
 
                 return Ok(new ApiResponse<MfaSettingsResponse>("TOTP MFA has been disabled.", settings));
@@ -142,6 +153,7 @@ namespace backend.main.features.auth.mfa.totp
                 var user = User.GetUserPayload();
                 await ProtectAsync(AuthAbuseFlow.Verification, user.Id, HttpContext.RequestAborted);
                 await _totpService.RemoveAsync(user.Id, request.Code);
+                await _factorChangeService.RecordAsync(user.Id, user.Email, MfaFactorKind.Totp, MfaFactorChange.Removed);
                 var settings = await _settingsBuilder.BuildAsync(user.Id, user.Email);
 
                 return Ok(new ApiResponse<MfaSettingsResponse>("TOTP MFA has been removed.", settings));

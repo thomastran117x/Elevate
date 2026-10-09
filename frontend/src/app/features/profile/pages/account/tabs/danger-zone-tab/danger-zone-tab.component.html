@@ -1,8 +1,20 @@
 <div class="flex flex-col gap-6">
   <!-- Deleting the account requires a fresh in-session MFA verification -->
-  <app-mfa-gate *ngIf="!mfaVerified" (verified)="mfaVerified = true"></app-mfa-gate>
+  <app-mfa-gate
+    *ngIf="!mfaVerified"
+    [autoOpen]="stepUpLapsed"
+    (verified)="onMfaVerified()"
+  ></app-mfa-gate>
 
   <ng-container *ngIf="mfaVerified">
+    <div
+      *ngIf="resumeNotice"
+      role="status"
+      class="rounded-2xl border border-accent/25 bg-accent/10 px-5 py-4 text-sm text-muted"
+    >
+      {{ resumeNotice }}
+    </div>
+
     <!-- Error flash -->
     <div
       *ngIf="error"

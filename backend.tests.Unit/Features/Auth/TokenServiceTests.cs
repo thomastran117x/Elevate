@@ -1,12 +1,15 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
+using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.token;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
 
 using FluentAssertions;
+
+using Moq;
 
 namespace backend.tests.Unit.Features.Auth;
 
@@ -202,6 +205,131 @@ public class TokenServiceTests
 
         verified.Email.Should().Be("signup@example.com");
         verified.Username.Should().Be("ada");
+    }
+
+    [Fact]
+    public async Task RevokeRefreshSessionAsync_ShouldDeleteTheSessionsStepUpProof()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var issue = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.BrowserCookie);
+        await cache.SetValueAsync(StepUpProofKeys.ForSession(issue.SessionId), "{}", TimeSpan.FromMinutes(10));
+
+        await service.RevokeRefreshSessionAsync(issue.SessionId);
+
+        (await cache.KeyExistsAsync(StepUpProofKeys.ForSession(issue.SessionId))).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RevokeRefreshSessionAsync_ShouldDeleteStepUpProof_EvenAfterTheSessionExpired()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        await cache.SetValueAsync(StepUpProofKeys.ForSession("gone"), "{}", TimeSpan.FromMinutes(10));
+
+        await service.RevokeRefreshSessionAsync("gone");
+
+        (await cache.KeyExistsAsync(StepUpProofKeys.ForSession("gone"))).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task StoreStepUpProofAsync_ShouldStoreWithTheLifetime_WhileTheSessionIsLive()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var issue = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.BrowserCookie);
+
+        var result = await service.StoreStepUpProofAsync(issue.SessionId, 8, 0, "{\"proof\":1}", TimeSpan.FromMinutes(10));
+
+        result.Should().Be(StepUpProofWriteResult.Stored);
+        (await cache.GetValueAsync(StepUpProofKeys.ForSession(issue.SessionId))).Should().Be("{\"proof\":1}");
+        (await cache.GetTTLAsync(StepUpProofKeys.ForSession(issue.SessionId)))!.Value
+            .Should().BeLessThanOrEqualTo(TimeSpan.FromMinutes(10));
+    }
+
+    [Fact]
+    public async Task StoreStepUpProofAsync_ShouldWriteNothing_AfterTheSessionWasRevoked()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var issue = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.BrowserCookie);
+        await service.RevokeRefreshSessionAsync(issue.SessionId);
+
+        // A step-up verify that finishes after logout must not resurrect a proof.
+        var result = await service.StoreStepUpProofAsync(issue.SessionId, 8, 0, "{}", TimeSpan.FromMinutes(10));
+
+        result.Should().Be(StepUpProofWriteResult.SessionEnded);
+        (await cache.KeyExistsAsync(StepUpProofKeys.ForSession(issue.SessionId))).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task StoreStepUpProofAsync_ShouldReportUnavailable_WhenTheCacheIsDown()
+    {
+        var cache = new Mock<backend.main.features.cache.ICacheService>();
+        cache.Setup(c => c.TryEvalAsync(
+                It.IsAny<string>(),
+                It.IsAny<StackExchange.Redis.RedisKey[]>(),
+                It.IsAny<StackExchange.Redis.RedisValue[]>()))
+            .ReturnsAsync(backend.main.features.cache.CacheScriptResult.Unavailable);
+        var service = new TokenService(cache.Object);
+
+        var result = await service.StoreStepUpProofAsync("session", 8, 0, "{}", TimeSpan.FromMinutes(10));
+
+        result.Should().Be(StepUpProofWriteResult.Unavailable);
+    }
+
+    [Fact]
+    public async Task RevokeRefreshSessionAsync_ShouldDeleteTheSessionAndProofTogether()
+    {
+        var cache = new Mock<backend.main.features.cache.ICacheService>();
+        cache.Setup(c => c.GetValueAsync(It.IsAny<string>()))
+            .ReturnsAsync("{\"SessionId\":\"s1\",\"UserId\":8,\"CurrentRefreshTokenHash\":\"\"}");
+        StackExchange.Redis.RedisKey[]? deletedTogether = null;
+        cache.Setup(c => c.TryEvalAsync(
+                It.Is<string>(script => script.Contains("redis.call('DEL'")),
+                It.IsAny<StackExchange.Redis.RedisKey[]>(),
+                It.IsAny<StackExchange.Redis.RedisValue[]>()))
+            .Callback<string, StackExchange.Redis.RedisKey[], StackExchange.Redis.RedisValue[]>((_, keys, _) => deletedTogether = keys)
+            .ReturnsAsync(new backend.main.features.cache.CacheScriptResult(true, 1L));
+        var service = new TokenService(cache.Object);
+
+        await service.RevokeRefreshSessionAsync("s1");
+
+        deletedTogether!.Select(key => key.ToString())
+            .Should().Equal("refresh:v2:session:s1", StepUpProofKeys.ForSession("s1"));
+        cache.Verify(c => c.DeleteKeyAsync("refresh:v2:session:s1"), Times.Never);
+    }
+
+    [Fact]
+    public async Task RevokeRefreshSessionAsync_ShouldFail_WhenTheCacheCannotConfirmTheRevocation()
+    {
+        // Reporting a successful logout here would leave the proof usable for its full window.
+        var cache = new Mock<backend.main.features.cache.ICacheService>();
+        cache.Setup(c => c.TryEvalAsync(
+                It.IsAny<string>(),
+                It.IsAny<StackExchange.Redis.RedisKey[]>(),
+                It.IsAny<StackExchange.Redis.RedisValue[]>()))
+            .ReturnsAsync(backend.main.features.cache.CacheScriptResult.Unavailable);
+        var service = new TokenService(cache.Object);
+
+        var act = () => service.RevokeRefreshSessionAsync("s1");
+
+        await act.Should().ThrowAsync<NotAvailableException>();
+    }
+
+    [Fact]
+    public async Task StoreStepUpProofAsync_ShouldRefuse_WhenTheGenerationMovedDuringVerification()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var issue = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.BrowserCookie);
+        await cache.IncrementAsync(StepUpProofKeys.GenerationForUser(8));
+
+        // Verification began at generation 0; a factor change has since advanced it to 1.
+        var result = await service.StoreStepUpProofAsync(issue.SessionId, 8, 0, "{}", TimeSpan.FromMinutes(10));
+
+        result.Should().Be(StepUpProofWriteResult.Superseded);
+        (await cache.KeyExistsAsync(StepUpProofKeys.ForSession(issue.SessionId))).Should().BeFalse();
     }
 
     [Fact]
@@ -846,6 +974,39 @@ internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheS
     {
         lock (_gate)
         {
+            if (keys.Length == 2 && script.Contains("redis.call('DEL'", StringComparison.Ordinal))
+            {
+                _entries.Remove(keys[0].ToString());
+                _entries.Remove(keys[1].ToString());
+                return Task.FromResult<object>(1L);
+            }
+
+            if (keys.Length == 2 && values.Length == 0 && script.Contains("or false", StringComparison.Ordinal))
+            {
+                // Atomic proof + generation read used by the step-up gate.
+                var proofValue = TryGetEntry(keys[0].ToString(), out var proofEntry) ? proofEntry.StringValue : null;
+                var generationValue = TryGetEntry(keys[1].ToString(), out var genEntry) ? genEntry.StringValue : null;
+                return Task.FromResult<object>(new object?[] { proofValue, generationValue });
+            }
+
+            if (keys.Length == 3 && script.Contains("redis.call('EXISTS'", StringComparison.Ordinal))
+            {
+                if (!TryGetEntry(keys[0].ToString(), out _))
+                    return Task.FromResult<object>(0L);
+
+                var currentGeneration = TryGetEntry(keys[2].ToString(), out var generationEntry)
+                    && long.TryParse(generationEntry.StringValue, out var parsed)
+                        ? parsed
+                        : 0;
+                if (currentGeneration != long.Parse(values[2].ToString()))
+                    return Task.FromResult<object>(2L);
+
+                var proof = GetOrCreateEntry(keys[1].ToString());
+                proof.StringValue = values[0].ToString();
+                proof.ExpiresAt = DateTimeOffset.UtcNow.AddMilliseconds(long.Parse(values[1].ToString()));
+                return Task.FromResult<object>(1L);
+            }
+
             if (keys.Length == 1
                 && values.Length == 2
                 && script.Contains("redis.call('GET'", StringComparison.Ordinal)

@@ -178,6 +178,24 @@ namespace backend.main.features.auth.notifications
                 });
         }
 
+        public Task SendMfaFactorChangedAsync(
+            string email,
+            string factor,
+            string change,
+            string? recipientName = null)
+        {
+            return _publisher.PublishAsync(
+                NotificationTopics.Email,
+                new EmailMessage
+                {
+                    Type = EmailMessageType.MfaFactorChanged,
+                    Email = email,
+                    MfaFactor = factor,
+                    MfaChange = change,
+                    RecipientName = recipientName
+                });
+        }
+
         public Task SendEmailMfaCodeAsync(
             string email,
             string code,

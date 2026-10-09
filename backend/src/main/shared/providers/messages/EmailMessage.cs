@@ -60,5 +60,18 @@ namespace backend.main.shared.providers.messages
         {
             get; init;
         }
+        /// <summary>
+        /// The second factor a <see cref="EmailMessageType.MfaFactorChanged"/> notice is about
+        /// ("sms" or "totp"). Never carries the phone number, secret, or a code.
+        /// </summary>
+        public string? MfaFactor
+        {
+            get; init;
+        }
+        /// <summary>What happened to <see cref="MfaFactor"/>: "enabled", "disabled", or "removed".</summary>
+        public string? MfaChange
+        {
+            get; init;
+        }
     }
 }

@@ -139,16 +139,96 @@ public class AuthTotpMfaControllerTests
         response.Data!.Totp.IsConfigured.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task VerifyEnrollment_ShouldRecordTheFactorChange()
+    {
+        var factorChanges = new Mock<IMfaFactorChangeService>();
+        var controller = CreateController(factorChangeService: factorChanges.Object);
+
+        await controller.VerifyEnrollment(new TotpEnrollmentVerifyRequest { Code = "123456" });
+
+        factorChanges.Verify(
+            f => f.RecordAsync(42, "member@example.com", MfaFactorKind.Totp, MfaFactorChange.Enabled),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Enable_ShouldRecordTheFactorChange()
+    {
+        var factorChanges = new Mock<IMfaFactorChangeService>();
+        var controller = CreateController(factorChangeService: factorChanges.Object);
+
+        await controller.Enable(new TotpDisableRequest { Code = "123456" });
+
+        factorChanges.Verify(
+            f => f.RecordAsync(42, "member@example.com", MfaFactorKind.Totp, MfaFactorChange.Enabled),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Disable_ShouldRecordTheFactorChange()
+    {
+        var factorChanges = new Mock<IMfaFactorChangeService>();
+        var controller = CreateController(factorChangeService: factorChanges.Object);
+
+        await controller.Disable(new TotpDisableRequest { Code = "123456" });
+
+        factorChanges.Verify(
+            f => f.RecordAsync(42, "member@example.com", MfaFactorKind.Totp, MfaFactorChange.Disabled),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Remove_ShouldRecordTheFactorChange()
+    {
+        var factorChanges = new Mock<IMfaFactorChangeService>();
+        var controller = CreateController(factorChangeService: factorChanges.Object);
+
+        await controller.Remove(new TotpDisableRequest { Code = "123456" });
+
+        factorChanges.Verify(
+            f => f.RecordAsync(42, "member@example.com", MfaFactorKind.Totp, MfaFactorChange.Removed),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task StartEnrollment_ShouldNotRecordAChange()
+    {
+        var factorChanges = new Mock<IMfaFactorChangeService>();
+        var controller = CreateController(factorChangeService: factorChanges.Object);
+
+        await controller.StartEnrollment();
+
+        factorChanges.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Disable_ShouldNotRecordAChange_WhenTheCodeIsRejected()
+    {
+        var totpService = new Mock<ITotpMfaEnrollmentService>();
+        totpService.Setup(service => service.DisableAsync(42, It.IsAny<string>()))
+            .ThrowsAsync(new backend.main.shared.exceptions.http.UnauthorizedException("Invalid code."));
+        var factorChanges = new Mock<IMfaFactorChangeService>();
+        var controller = CreateController(totpService.Object, factorChangeService: factorChanges.Object);
+
+        await controller.Disable(new TotpDisableRequest { Code = "000000" });
+
+        factorChanges.VerifyNoOtherCalls();
+    }
+
     private static AuthTotpMfaController CreateController(
         ITotpMfaEnrollmentService? totpService = null,
-        IMfaSettingsBuilder? settingsBuilder = null)
+        IMfaSettingsBuilder? settingsBuilder = null,
+        IMfaFactorChangeService? factorChangeService = null)
     {
         totpService ??= new Mock<ITotpMfaEnrollmentService>().Object;
         settingsBuilder ??= new Mock<IMfaSettingsBuilder>().Object;
+        factorChangeService ??= new Mock<IMfaFactorChangeService>().Object;
 
         return new AuthTotpMfaController(
             totpService,
             settingsBuilder,
+            factorChangeService,
             new Mock<IAuthAbuseProtectionService>().Object,
             TestRequestInfoFactory.Browser())
         {

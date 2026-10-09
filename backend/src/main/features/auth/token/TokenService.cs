@@ -5,6 +5,7 @@ using System.Text;
 
 using backend.main.application.environment;
 using backend.main.application.security;
+using backend.main.features.auth.mfa.session;
 using backend.main.features.cache;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
@@ -37,6 +38,20 @@ namespace backend.main.features.auth.token
         private const int MAX_OTP_ATTEMPTS = 5;
         private const string PlaceholderUsertype = "placeholder";
         private static readonly TimeSpan EmailChangeLockTtl = TimeSpan.FromSeconds(10);
+
+        // Writes the proof only if the session key is still present and no factor change has
+        // advanced the user's step-up generation since verification began. Revocation deletes
+        // the session before the proof, so every interleaving ends with no proof for a dead
+        // session; a factor change either lands first (write refused) or later (proof retired).
+        private const string StoreStepUpProofScript = @"
+if redis.call('EXISTS', KEYS[1]) == 0 then
+    return 0
+end
+if tonumber(redis.call('GET', KEYS[3]) or '0') ~= tonumber(ARGV[3]) then
+    return 2
+end
+redis.call('SET', KEYS[2], ARGV[1], 'PX', ARGV[2])
+return 1";
 
         public TokenService(ICacheService cacheService)
         {
@@ -859,12 +874,42 @@ namespace backend.main.features.auth.token
             }
         }
 
-        public async Task<TimeSpan?> GetRefreshSessionTtlAsync(string sessionId)
-        {
-            if (string.IsNullOrWhiteSpace(sessionId))
-                return null;
+        // Session and proof go together, so revocation can never leave a proof behind a deleted
+        // session (or report success when the cache dropped half way).
+        private const string RevokeSessionAndProofScript = @"
+redis.call('DEL', KEYS[1], KEYS[2])
+return 1";
 
-            return await _cacheService.GetTTLAsync(SessionKey(sessionId));
+        public async Task<StepUpProofWriteResult> StoreStepUpProofAsync(
+            string sessionId,
+            int userId,
+            long expectedGeneration,
+            string proofJson,
+            TimeSpan lifetime
+        )
+        {
+            var result = await _cacheService.TryEvalAsync(
+                StoreStepUpProofScript,
+                [
+                    (StackExchange.Redis.RedisKey)SessionKey(sessionId),
+                    (StackExchange.Redis.RedisKey)StepUpProofKeys.ForSession(sessionId),
+                    (StackExchange.Redis.RedisKey)StepUpProofKeys.GenerationForUser(userId),
+                ],
+                [proofJson, checked((long)lifetime.TotalMilliseconds), expectedGeneration]
+            );
+
+            if (!result.Succeeded || result.Value is null)
+                return StepUpProofWriteResult.Unavailable;
+
+            var stored = result.Value is StackExchange.Redis.RedisResult redisResult
+                ? (long)redisResult
+                : Convert.ToInt64(result.Value, System.Globalization.CultureInfo.InvariantCulture);
+            return stored switch
+            {
+                1 => StepUpProofWriteResult.Stored,
+                2 => StepUpProofWriteResult.Superseded,
+                _ => StepUpProofWriteResult.SessionEnded,
+            };
         }
 
         public async Task RevokeRefreshSessionAsync(string sessionId)
@@ -872,14 +917,28 @@ namespace backend.main.features.auth.token
             try
             {
                 var session = await GetRefreshSessionAsync(sessionId);
-                if (session == null)
-                    return;
+                if (session != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(session.CurrentRefreshTokenHash))
+                        await _cacheService.DeleteKeyAsync(TokenKey(session.CurrentRefreshTokenHash));
 
-                if (!string.IsNullOrWhiteSpace(session.CurrentRefreshTokenHash))
-                    await _cacheService.DeleteKeyAsync(TokenKey(session.CurrentRefreshTokenHash));
+                    await _cacheService.SetRemoveAsync(UserSessionsKey(session.UserId), session.SessionId);
+                }
 
-                await _cacheService.DeleteKeyAsync(SessionKey(session.SessionId));
-                await _cacheService.SetRemoveAsync(UserSessionsKey(session.UserId), session.SessionId);
+                // One atomic delete of the session and its proof. A concurrent step-up verify either
+                // wrote before this (and is removed with it) or now sees no session and writes nothing.
+                // An unreachable cache fails the revocation instead of reporting a logout that left
+                // the proof usable.
+                var revoked = await _cacheService.TryEvalAsync(
+                    RevokeSessionAndProofScript,
+                    [
+                        (StackExchange.Redis.RedisKey)SessionKey(sessionId),
+                        (StackExchange.Redis.RedisKey)StepUpProofKeys.ForSession(sessionId),
+                    ],
+                    []
+                );
+                if (!revoked.Succeeded)
+                    throw new NotAvailableException();
             }
             catch (Exception e)
             {

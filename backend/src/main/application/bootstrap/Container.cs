@@ -206,6 +206,10 @@ namespace backend.main.application.bootstrap
             services.AddSingleton<
                 IValidateOptions<AuthAbuseProtectionOptions>,
                 AuthAbuseProtectionOptionsValidator>();
+            services.AddOptions<StepUpOptions>()
+                .Bind(config.GetSection(StepUpOptions.SectionName))
+                .ValidateOnStart();
+            services.AddSingleton<IValidateOptions<StepUpOptions>, StepUpOptionsValidator>();
             services.AddOptions<BloomFilterOptions>()
                 .Bind(config.GetSection("BloomFilters"))
                 .ValidateDataAnnotations()
@@ -253,6 +257,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IMfaSettingsBuilder, MfaSettingsBuilder>();
             services.AddScoped<ITotpMfaEnrollmentService, TotpMfaEnrollmentService>();
             services.AddScoped<ISessionMfaVerificationService, SessionMfaVerificationService>();
+            services.AddScoped<IMfaFactorChangeService, MfaFactorChangeService>();
             services.AddScoped<IOAuthService, OAuthService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IClubService, ClubService>();

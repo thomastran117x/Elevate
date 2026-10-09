@@ -24,10 +24,10 @@ public class RequireMfaFilterTests
     private const string SeedEmail = "organizer@seed.eventxperience.test";
 
     [Fact]
-    public async Task OnAuthorization_ShouldAllow_WhenSessionAlreadyVerified()
+    public async Task OnAuthorization_ShouldAllow_WhenSessionHasFreshProof()
     {
         var sessionMfa = new Mock<ISessionMfaVerificationService>();
-        sessionMfa.Setup(s => s.IsSessionVerifiedAsync("session-1")).ReturnsAsync(true);
+        sessionMfa.Setup(s => s.HasFreshProofAsync(42, "session-1", 5)).ReturnsAsync(true);
 
         var filter = CreateFilter(sessionMfa.Object, bypassEnabled: false);
         var context = CreateContext(email: "member@example.com", sessionId: "session-1");
@@ -38,36 +38,61 @@ public class RequireMfaFilterTests
     }
 
     [Fact]
-    public async Task OnAuthorization_ShouldForbidWithMfaRequiredCode_WhenSessionNotVerified()
+    public async Task OnAuthorization_ShouldForbidWithMfaRequiredCode_WhenNoFreshProof()
     {
         var sessionMfa = new Mock<ISessionMfaVerificationService>();
-        sessionMfa.Setup(s => s.IsSessionVerifiedAsync(It.IsAny<string?>())).ReturnsAsync(false);
+        sessionMfa.Setup(s => s.HasFreshProofAsync(It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<int>()))
+            .ReturnsAsync(false);
 
         var filter = CreateFilter(sessionMfa.Object, bypassEnabled: false);
         var context = CreateContext(email: "member@example.com", sessionId: "session-1");
 
         await filter.OnAuthorizationAsync(context);
 
-        var result = context.Result.Should().BeOfType<ObjectResult>().Subject;
-        result.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
-        var body = result.Value.Should().BeOfType<ApiResponse<object?>>().Subject;
-        body.Success.Should().BeFalse();
-        body.Error!.Code.Should().Be("MFA_REQUIRED");
+        AssertMfaRequired(context);
+    }
+
+    [Fact]
+    public async Task OnAuthorization_ShouldPassTokenBindingClaimsToProofCheck()
+    {
+        var sessionMfa = new Mock<ISessionMfaVerificationService>();
+
+        var filter = CreateFilter(sessionMfa.Object, bypassEnabled: false);
+        var context = CreateContext(email: "member@example.com", sessionId: "session-9", authVersion: "11");
+
+        await filter.OnAuthorizationAsync(context);
+
+        sessionMfa.Verify(s => s.HasFreshProofAsync(42, "session-9", 11), Times.Once);
     }
 
     [Fact]
     public async Task OnAuthorization_ShouldForbid_WhenAccessTokenHasNoSessionId()
     {
         var sessionMfa = new Mock<ISessionMfaVerificationService>();
-        sessionMfa.Setup(s => s.IsSessionVerifiedAsync(null)).ReturnsAsync(false);
+        sessionMfa.Setup(s => s.HasFreshProofAsync(42, null, 5)).ReturnsAsync(false);
 
         var filter = CreateFilter(sessionMfa.Object, bypassEnabled: false);
         var context = CreateContext(email: "member@example.com", sessionId: null);
 
         await filter.OnAuthorizationAsync(context);
 
-        context.Result.Should().BeOfType<ObjectResult>()
-            .Which.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+        AssertMfaRequired(context);
+    }
+
+    [Fact]
+    public async Task OnAuthorization_ShouldForbid_WithoutCheckingProof_WhenAuthVersionClaimMissing()
+    {
+        var sessionMfa = new Mock<ISessionMfaVerificationService>();
+
+        var filter = CreateFilter(sessionMfa.Object, bypassEnabled: false);
+        var context = CreateContext(email: "member@example.com", sessionId: "session-1", authVersion: null);
+
+        await filter.OnAuthorizationAsync(context);
+
+        AssertMfaRequired(context);
+        sessionMfa.Verify(
+            s => s.HasFreshProofAsync(It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<int>()),
+            Times.Never);
     }
 
     [Fact]
@@ -81,16 +106,54 @@ public class RequireMfaFilterTests
         await filter.OnAuthorizationAsync(context);
 
         context.Result.Should().BeNull();
-        sessionMfa.Verify(s => s.IsSessionVerifiedAsync(It.IsAny<string?>()), Times.Never);
+        sessionMfa.Verify(
+            s => s.HasFreshProofAsync(It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<int>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task OnAuthorization_ShouldForbid_NonSeedAccount_EvenWhenBypassEnabled()
+    {
+        var sessionMfa = new Mock<ISessionMfaVerificationService>();
+
+        var filter = CreateFilter(sessionMfa.Object, bypassEnabled: true);
+        var context = CreateContext(email: "member@example.com", sessionId: "session-1");
+
+        await filter.OnAuthorizationAsync(context);
+
+        AssertMfaRequired(context);
+    }
+
+    [Fact]
+    public async Task OnAuthorization_ShouldForbid_SeedAccount_InProduction()
+    {
+        var sessionMfa = new Mock<ISessionMfaVerificationService>();
+
+        var filter = CreateFilter(sessionMfa.Object, bypassEnabled: true, environment: "production");
+        var context = CreateContext(email: SeedEmail, sessionId: "session-1");
+
+        await filter.OnAuthorizationAsync(context);
+
+        AssertMfaRequired(context);
+    }
+
+    private static void AssertMfaRequired(AuthorizationFilterContext context)
+    {
+        var result = context.Result.Should().BeOfType<ObjectResult>().Subject;
+        result.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+        var body = result.Value.Should().BeOfType<ApiResponse<object?>>().Subject;
+        body.Success.Should().BeFalse();
+        body.Error!.Code.Should().Be("MFA_REQUIRED");
     }
 
     private static RequireMfaAttribute.RequireMfaFilter CreateFilter(
         ISessionMfaVerificationService sessionMfa,
-        bool bypassEnabled)
+        bool bypassEnabled,
+        string environment = "development")
     {
         var values = new Dictionary<string, string?>
         {
-            ["ENVIRONMENT"] = "development",
+            ["ENVIRONMENT"] = environment,
         };
         if (bypassEnabled)
         {
@@ -101,7 +164,10 @@ public class RequireMfaFilterTests
         return new RequireMfaAttribute.RequireMfaFilter(sessionMfa, new SeedAccountBypassPolicy(configuration));
     }
 
-    private static AuthorizationFilterContext CreateContext(string email, string? sessionId)
+    private static AuthorizationFilterContext CreateContext(
+        string email,
+        string? sessionId,
+        string? authVersion = "5")
     {
         var claims = new List<Claim>
         {
@@ -112,6 +178,10 @@ public class RequireMfaFilterTests
         if (sessionId != null)
         {
             claims.Add(new Claim(TokenService.SessionIdClaimType, sessionId));
+        }
+        if (authVersion != null)
+        {
+            claims.Add(new Claim(TokenService.AuthVersionClaimType, authVersion));
         }
 
         var httpContext = new DefaultHttpContext

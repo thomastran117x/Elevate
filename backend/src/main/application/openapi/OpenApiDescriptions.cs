@@ -6,6 +6,9 @@ namespace backend.main.application.openapi
     /// </summary>
     internal static class OpenApiDescriptions
     {
+        private const string StepUpRequired =
+            "Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.";
+
         internal static readonly IReadOnlyDictionary<string, OperationMeta> Operations =
             new Dictionary<string, OperationMeta>(StringComparer.OrdinalIgnoreCase)
             {
@@ -67,21 +70,21 @@ namespace backend.main.application.openapi
                 ["POST /api/auth/mfa/verify"] = new("Verify an SMS sign-in code", "Validates an SMS code for an active sign-in verification challenge and completes login on success."),
                 ["POST /api/auth/mfa/verify/totp"] = new("Verify an authenticator sign-in code", "Validates a TOTP code for an active sign-in verification challenge and completes login on success."),
                 ["GET /api/auth/mfa"] = new("Get MFA security settings"),
-                ["POST /api/auth/mfa/enroll/start"] = new("Start SMS MFA enrollment"),
-                ["POST /api/auth/mfa/enroll/verify"] = new("Verify an SMS MFA enrollment or re-enable code"),
-                ["POST /api/auth/mfa/enable/start"] = new("Start SMS MFA re-enable"),
-                ["POST /api/auth/mfa/disable"] = new("Disable SMS MFA"),
-                ["POST /api/auth/mfa/remove"] = new("Remove SMS MFA"),
-                ["POST /api/auth/mfa/sms/enroll/start"] = new("Start SMS MFA enrollment"),
-                ["POST /api/auth/mfa/sms/enroll/verify"] = new("Verify an SMS MFA enrollment or re-enable code"),
-                ["POST /api/auth/mfa/sms/enable/start"] = new("Start SMS MFA re-enable"),
-                ["POST /api/auth/mfa/sms/disable"] = new("Disable SMS MFA"),
-                ["POST /api/auth/mfa/sms/remove"] = new("Remove SMS MFA"),
-                ["POST /api/auth/mfa/totp/enroll/start"] = new("Start authenticator app enrollment"),
-                ["POST /api/auth/mfa/totp/enroll/verify"] = new("Verify an authenticator enrollment code"),
-                ["POST /api/auth/mfa/totp/enable"] = new("Re-enable authenticator app MFA"),
-                ["POST /api/auth/mfa/totp/disable"] = new("Disable authenticator app MFA"),
-                ["POST /api/auth/mfa/totp/remove"] = new("Remove authenticator app MFA"),
+                ["POST /api/auth/mfa/enroll/start"] = new("Start SMS MFA enrollment", StepUpRequired),
+                ["POST /api/auth/mfa/enroll/verify"] = new("Verify an SMS MFA enrollment or re-enable code", StepUpRequired),
+                ["POST /api/auth/mfa/enable/start"] = new("Start SMS MFA re-enable", StepUpRequired),
+                ["POST /api/auth/mfa/disable"] = new("Disable SMS MFA", StepUpRequired),
+                ["POST /api/auth/mfa/remove"] = new("Remove SMS MFA", StepUpRequired),
+                ["POST /api/auth/mfa/sms/enroll/start"] = new("Start SMS MFA enrollment", StepUpRequired),
+                ["POST /api/auth/mfa/sms/enroll/verify"] = new("Verify an SMS MFA enrollment or re-enable code", StepUpRequired),
+                ["POST /api/auth/mfa/sms/enable/start"] = new("Start SMS MFA re-enable", StepUpRequired),
+                ["POST /api/auth/mfa/sms/disable"] = new("Disable SMS MFA", StepUpRequired),
+                ["POST /api/auth/mfa/sms/remove"] = new("Remove SMS MFA", StepUpRequired),
+                ["POST /api/auth/mfa/totp/enroll/start"] = new("Start authenticator app enrollment", StepUpRequired),
+                ["POST /api/auth/mfa/totp/enroll/verify"] = new("Verify an authenticator enrollment code", StepUpRequired),
+                ["POST /api/auth/mfa/totp/enable"] = new("Re-enable authenticator app MFA", StepUpRequired),
+                ["POST /api/auth/mfa/totp/disable"] = new("Disable authenticator app MFA", StepUpRequired),
+                ["POST /api/auth/mfa/totp/remove"] = new("Remove authenticator app MFA", StepUpRequired),
                 ["POST /api/auth/forgot-password"] = new("Start password recovery by username (compatibility alias)"),
                 ["POST /api/auth/change-password"] = new("Reset the account password (compatibility alias)"),
                 ["POST /api/auth/recovery/password"] = new("Start password recovery by username"),
@@ -345,14 +348,14 @@ namespace backend.main.application.openapi
                 ),
                 ["PATCH /api/profile/username"] = new(
                     "Change the current user's username",
-                    "Requires recent MFA verification. Usernames are trimmed and lowercased; replacing an existing username starts the configured cooldown and reserves the previous username for the same period."
+                    "Requires an MFA step-up verified on this session within the last 10 minutes. Usernames are trimmed and lowercased; replacing an existing username starts the configured cooldown and reserves the previous username for the same period."
                 ),
                 ["POST /api/profile/avatar"] = new(
                     "Update the current user's avatar",
                     "Accepts a multipart `image` field up to 5 MB. The format is read from the file's own bytes: JPEG, PNG, WEBP, and GIF are accepted and anything else is rejected with 400, whatever the declared `Content-Type` or file name claims. The image is decoded and re-encoded before it is stored, so the stored avatar is always `image/webp` with a `.webp` URL, oriented from its EXIF tag, and stripped of EXIF (including GPS), IPTC, XMP, and ICC metadata. Animated images are rejected with 400, as are images past the configured size limits. Those limits are deployment settings rather than fixed guarantees: by default the long edge is reduced to 512 pixels, and an image over 8000 pixels on a side or 50 megapixels in total is rejected. Processing runs on a small number of shared slots, so an upload that waits too long for one is shed with 503 and can be retried. Concurrent uploads for the same account can also end in 409 when they keep replacing each other; that is retryable too."
                 ),
-                ["POST /api/profile/change-password"] = new("Change the current user's password"),
-                ["DELETE /api/profile"] = new("Delete the current user's account"),
+                ["POST /api/profile/change-password"] = new("Change the current user's password", StepUpRequired),
+                ["DELETE /api/profile"] = new("Delete the current user's account", StepUpRequired),
 
                 // ── Users ────────────────────────────────────────────────────────────────
 
