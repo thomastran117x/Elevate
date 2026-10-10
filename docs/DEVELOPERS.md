@@ -24,7 +24,7 @@ Use asynchronous database, HTTP, storage, and messaging APIs rather than blockin
 
 Project only needed columns, paginate large reads, avoid N+1 queries, and use no-tracking reads where tracking is unnecessary. Preserve repository resilience/proxy behavior and database-authoritative validation. Coordinate transactions and search outbox writes so committed application changes and indexing events remain consistent.
 
-Use request/response DTOs and shared response/error conventions. Preserve feature gates, roles/ownership checks, CSRF, rate policies, MFA requirements, session invalidation, and validation. Do not expose secrets or personal credentials in logs.
+Use request/response DTOs and shared response/error conventions. Endpoints are authenticated by default; mark an intentionally public action with action-level `[AllowAnonymous]` and add it to the authorization audit's expected list, and use `AuthorizationPolicies` constants for role policies (see [authorization](API.md#authorization)). Preserve feature gates, roles/ownership checks, CSRF, rate policies, MFA requirements, session invalidation, and validation. Do not expose secrets or personal credentials in logs.
 
 References: [ASP.NET Core best practices](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/best-practices?view=aspnetcore-10.0), [DI lifetimes](https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection#service-lifetimes), [efficient EF queries](https://learn.microsoft.com/en-us/ef/core/performance/efficient-querying), and [EF async operations](https://learn.microsoft.com/en-us/ef/core/miscellaneous/async).
 

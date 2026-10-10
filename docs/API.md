@@ -40,6 +40,34 @@ Fetch `GET /api/auth/csrf` and send its request token in `X-CSRF-TOKEN`, with th
 
 Some operations require MFA step-up as well as a signed-in session. Username, password, and email changes, account deletion, and every SMS or TOTP enrollment, enable, disable, or remove call need a step-up proof. The proof comes from `POST /api/auth/mfa/step-up/start` and `/verify` (TOTP, SMS, or the always-available email fallback). It is bound to the session and its auth version and expires a fixed 10 minutes after verification (`Auth:StepUp:ProofLifetimeMinutes`). Without it, these routes return `403` with error code `MFA_REQUIRED`. The step-up `options`, `start`, and `verify` routes never require a proof. Logout, credential rotation, and any completed MFA factor change discard the proof. New sensitive mutations, including future provider, session, device, or recovery-code changes, must use `[RequireMfa]` and be added to the registry in `backend.tests.Unit/Application/Security/SensitiveEndpointStepUpTests.cs`. SMS and TOTP enrollment/step-up have separate configuration switches. Role and resource ownership checks remain authoritative on the backend. Email changes additionally verify the current password when applicable, require confirmation at the new address, and invalidate sessions on completion.
 
+## Authorization
+
+Every endpoint requires an authenticated bearer user unless it explicitly opts out. `AddJwtAuth` sets both the default and the fallback authorization policy to "authenticated Bearer user", so an action, hub, or minimal endpoint without an authorization attribute fails closed rather than open.
+
+- **Public endpoints** carry `[AllowAnonymous]` on the action (or `.AllowAnonymous()` on a minimal endpoint). Put it on the action, not the controller: a class-level `[AllowAnonymous]` silently overrides every `[Authorize]` beneath it. The intended public surface covers:
+  - sign-in, sign-up, verification, OAuth, session refresh and logout, and recovery;
+  - invitation resolution;
+  - public profiles;
+  - event and club reads;
+  - the Stripe webhook;
+  - the OpenAPI document routes;
+  - the club realtime hub, whose methods each re-run the REST read gate.
+- **Role-restricted endpoints** use the named policies in `AuthorizationPolicies` (`AdminOnly`, `OrganizerOnly`) instead of string literals.
+- **Resource rules** are enforced in the services and are not expressed as policies: club ownership, manager and volunteer staff roles, event registration, and invitations.
+- **Responses:**
+  - A missing, invalid, or expired token answers `401` with error code `UNAUTHORIZED`.
+  - A failed policy answers `403` with error code `FORBIDDEN` and the message "You do not have permission to access this resource". A service-level ownership denial uses the same code with its own message.
+  - A route that matched nothing, including one removed by a disabled feature flag, still answers the JSON `404` to anonymous callers.
+- **OpenAPI:**
+  - Protected operations carry the `bearerAuth` security requirement and `401`/`403` responses.
+  - Every operation carries an `x-authorization` extension: `anonymous`, `authenticated`, or the required policy name.
+- **Audit:** `backend.tests.Unit/Application/Security/EndpointAuthorizationAuditTests.cs` fails when:
+  - an action or hub method is unclassified;
+  - an `[Authorize]` action sits under a class-level `[AllowAnonymous]`;
+  - the anonymous surface differs from its reviewed `ExpectedAnonymousEndpoints` list.
+
+  Add a new public endpoint to that list in the same change.
+
 Captcha and external provider credentials are needed for their corresponding auth flows. Login omits CAPTCHA until the generic 401 envelope reports `meta.captchaRequired: true`; the next submission must include a fresh token. Login failures and sensitive delivery/verification operations use independent Redis-backed source-IP and hashed-target limits, with per-replica IP limiting retained during Redis outages.
 
 Email availability uses `POST /api/auth/email/availability` with CSRF and `{ "email": "...", "captcha": "..." }`. The response envelope is unchanged. `GET /api/auth/email/availability?email=...` remains deprecated for one compatibility release, requires the CAPTCHA token in `X-Captcha-Token`, and returns `Deprecation` plus successor `Link` headers; CAPTCHA tokens are never accepted in the query string. Availability and suggestion endpoints are rate limited; a throttled or failed availability probe is advisory and must not be interpreted as either available or taken.
