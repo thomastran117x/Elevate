@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <!-- Kept on the backend's version so the solution resolves one copy. -->
-    <PackageReference Include="Azure.Storage.Blobs" Version="12.29.2" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.30.1" />
   </ItemGroup>
 
 </Project>
