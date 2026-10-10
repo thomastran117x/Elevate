@@ -1,7 +1,7 @@
 openapi: '3.1.1'
 info:
   title: EventXperience Backend API
-  description: Generated API reference for the EventXperience backend. Responses use the shared ApiResponse envelope unless noted otherwise.
+  description: Generated API reference for the EventXperience backend. Responses use the shared ApiResponse envelope unless noted otherwise. Every operation requires a bearer token unless its `x-authorization` extension is `anonymous`; otherwise the extension is `authenticated` or the name of the required authorization policy.
   version: v1
 servers:
   - url: http://localhost:8091
@@ -50,7 +50,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     patch:
       tags:
         - profile
@@ -107,7 +108,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - profile
@@ -152,7 +154,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/profile/{username}':
     get:
       tags:
@@ -191,6 +194,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/profile/username:
     patch:
       tags:
@@ -272,7 +276,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/profile/avatar:
     post:
       tags:
@@ -351,7 +356,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/profile/change-password:
     post:
       tags:
@@ -409,7 +415,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/profile/email:
     post:
       tags:
@@ -484,7 +491,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/profile/email/pending:
     get:
       tags:
@@ -529,7 +537,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - profile
@@ -573,7 +582,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/admin/users/{id}/status':
     patch:
       tags:
@@ -637,7 +647,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: AdminOnly
   '/api/payments/{eventId}':
     post:
       tags:
@@ -693,7 +704,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/payments/{paymentId}':
     get:
       tags:
@@ -744,7 +756,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/payments/me:
     get:
       tags:
@@ -800,7 +813,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/payments/webhook:
     post:
       tags:
@@ -840,6 +854,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   '/api/payments/{paymentId}/refund':
     post:
       tags:
@@ -890,7 +905,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/media/{publicId}':
     get:
       tags:
@@ -942,7 +958,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{clubId}':
     post:
       tags:
@@ -1005,7 +1022,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}':
     put:
       tags:
@@ -1068,7 +1086,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - events
@@ -1118,7 +1137,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     get:
       tags:
         - events
@@ -1155,6 +1175,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   '/api/events/{eventId}/versions':
     get:
       tags:
@@ -1215,7 +1236,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/versions/{versionNumber}':
     get:
       tags:
@@ -1271,7 +1293,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/versions/{versionNumber}/rollback':
     post:
       tags:
@@ -1328,7 +1351,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/clubs/{clubId}':
     get:
       tags:
@@ -1384,6 +1408,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   '/api/events/clubs/{clubId}/manage':
     get:
       tags:
@@ -1453,7 +1478,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/manage':
     get:
       tags:
@@ -1504,7 +1530,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/clubs/{clubId}/drafts':
     post:
       tags:
@@ -1567,7 +1594,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/draft':
     patch:
       tags:
@@ -1630,7 +1658,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/publish':
     post:
       tags:
@@ -1681,7 +1710,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/cancel':
     post:
       tags:
@@ -1732,7 +1762,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/archive':
     post:
       tags:
@@ -1783,7 +1814,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/pause':
     post:
       tags:
@@ -1834,7 +1866,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/resume':
     post:
       tags:
@@ -1885,7 +1918,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/reinstate':
     post:
       tags:
@@ -1936,7 +1970,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/unarchive':
     post:
       tags:
@@ -1987,7 +2022,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/lifecycle/revert':
     post:
       tags:
@@ -2038,7 +2074,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/events:
     get:
       tags:
@@ -2123,6 +2160,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/events/search:
     post:
       tags:
@@ -2166,6 +2204,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/events/batch:
     get:
       tags:
@@ -2203,6 +2242,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
     put:
       tags:
         - events
@@ -2258,7 +2298,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - events
@@ -2314,7 +2355,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/batch/{clubId}':
     post:
       tags:
@@ -2378,7 +2420,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/analytics':
     get:
       tags:
@@ -2429,7 +2472,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/events/images/presigned-url:
     post:
       tags:
@@ -2487,7 +2531,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/images':
     get:
       tags:
@@ -2539,7 +2584,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     post:
       tags:
         - events
@@ -2602,7 +2648,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/images/{imageId}':
     patch:
       tags:
@@ -2671,7 +2718,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     put:
       tags:
         - events
@@ -2739,7 +2787,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - events
@@ -2795,7 +2844,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/images/order':
     put:
       tags:
@@ -2859,7 +2909,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/images/{imageId}/cover':
     put:
       tags:
@@ -2916,7 +2967,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/clubs/{clubId}/analytics':
     get:
       tags:
@@ -2967,7 +3019,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/admin/events/reindex:
     post:
       tags:
@@ -3012,7 +3065,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: AdminOnly
   '/api/events/{eventId}/waitlist':
     post:
       tags:
@@ -3080,7 +3134,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - events
@@ -3130,7 +3185,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     get:
       tags:
         - events
@@ -3190,7 +3246,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/waitlist/me':
     get:
       tags:
@@ -3241,7 +3298,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/waitlist/{entryId}':
     delete:
       tags:
@@ -3297,7 +3355,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/waitlist/promote':
     post:
       tags:
@@ -3348,7 +3407,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/events/me/waitlisted:
     get:
       tags:
@@ -3393,7 +3453,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/clubs/{clubId}/series/preview':
     post:
       tags:
@@ -3457,7 +3518,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/series':
     post:
       tags:
@@ -3521,7 +3583,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/series/{seriesId}':
     get:
       tags:
@@ -3572,7 +3635,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - events
@@ -3640,7 +3704,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/clubs/{clubId}/series':
     get:
       tags:
@@ -3701,7 +3766,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/series/{seriesId}/extend':
     post:
       tags:
@@ -3765,7 +3831,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/series/{seriesId}/publish':
     post:
       tags:
@@ -3817,7 +3884,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/series/{seriesId}/occurrences':
     patch:
       tags:
@@ -3881,7 +3949,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/series/{seriesId}/cancel':
     post:
       tags:
@@ -3950,7 +4019,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/series/detach':
     post:
       tags:
@@ -4002,7 +4072,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/register':
     post:
       tags:
@@ -4070,7 +4141,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - events
@@ -4120,7 +4192,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     patch:
       tags:
         - events
@@ -4182,7 +4255,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/registrations':
     get:
       tags:
@@ -4230,6 +4304,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   '/api/events/{eventId}/registrations/me':
     get:
       tags:
@@ -4280,7 +4355,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/events/batch/register:
     post:
       tags:
@@ -4338,7 +4414,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - events
@@ -4395,7 +4472,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/users/{userId}/events/registered':
     get:
       tags:
@@ -4456,7 +4534,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/view':
     post:
       tags:
@@ -4507,7 +4586,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/events/me/recently-viewed:
     get:
       tags:
@@ -4552,7 +4632,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - events
@@ -4596,7 +4677,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/events/me/recently-viewed/batch:
     delete:
       tags:
@@ -4653,7 +4735,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/me/recently-viewed/{eventId}':
     delete:
       tags:
@@ -4704,7 +4787,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/events/me/recently-viewed/merge:
     post:
       tags:
@@ -4761,7 +4845,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/events/me/recently-viewed/settings:
     get:
       tags:
@@ -4806,7 +4891,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     put:
       tags:
         - events
@@ -4862,7 +4948,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/invitations':
     post:
       tags:
@@ -4925,7 +5012,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     get:
       tags:
         - events
@@ -4975,7 +5063,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/invitations/{invitationId}/revoke':
     post:
       tags:
@@ -5031,7 +5120,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/invitation-links':
     post:
       tags:
@@ -5094,7 +5184,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     get:
       tags:
         - events
@@ -5144,7 +5235,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/invitation-links/{linkId}/revoke':
     post:
       tags:
@@ -5200,7 +5292,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/events/invitations/resolve:
     post:
       tags:
@@ -5245,6 +5338,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/events/invitations/accept:
     post:
       tags:
@@ -5301,7 +5395,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/invitations/{invitationId}/accept':
     post:
       tags:
@@ -5352,7 +5447,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/events/invitations/decline:
     post:
       tags:
@@ -5409,7 +5505,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/invitations/{invitationId}/decline':
     post:
       tags:
@@ -5460,7 +5557,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/events/me/invited:
     get:
       tags:
@@ -5505,7 +5603,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/favourite':
     post:
       tags:
@@ -5557,7 +5656,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - events
@@ -5608,7 +5708,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/events/{eventId}/favourite/me':
     get:
       tags:
@@ -5659,7 +5760,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/events/me/favourites/ids:
     get:
       tags:
@@ -5705,7 +5807,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/events/me/pinned:
     get:
       tags:
@@ -5751,7 +5854,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{clubId}/join':
     post:
       tags:
@@ -5802,7 +5906,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - clubs
@@ -5852,7 +5957,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/clubs:
     post:
       tags:
@@ -5909,7 +6015,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     get:
       tags:
         - clubs
@@ -5964,6 +6071,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   '/api/clubs/{id}':
     put:
       tags:
@@ -6026,7 +6134,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - clubs
@@ -6076,7 +6185,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     get:
       tags:
         - clubs
@@ -6113,6 +6223,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/clubs/search:
     post:
       tags:
@@ -6156,6 +6267,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/clubs/managed:
     get:
       tags:
@@ -6200,7 +6312,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{id}/staff':
     get:
       tags:
@@ -6255,7 +6368,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{id}/staff/managers':
     post:
       tags:
@@ -6318,7 +6432,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{id}/staff/volunteers':
     post:
       tags:
@@ -6381,7 +6496,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{id}/staff/{userId}':
     delete:
       tags:
@@ -6437,7 +6553,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{id}/transfer-ownership':
     post:
       tags:
@@ -6501,7 +6618,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{id}/versions':
     get:
       tags:
@@ -6562,7 +6680,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{id}/versions/{versionNumber}':
     get:
       tags:
@@ -6618,7 +6737,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{id}/versions/{versionNumber}/rollback':
     post:
       tags:
@@ -6675,7 +6795,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/admin/clubs/reindex:
     post:
       tags:
@@ -6720,7 +6841,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: AdminOnly
   '/api/clubs/{clubId}/reviews':
     post:
       tags:
@@ -6783,7 +6905,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     get:
       tags:
         - clubs
@@ -6830,6 +6953,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   '/api/clubs/{clubId}/reviews/{reviewId}':
     put:
       tags:
@@ -6897,7 +7021,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - clubs
@@ -6952,7 +7077,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/users/{userId}/reviews':
     get:
       tags:
@@ -7013,7 +7139,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: AdminOnly
   '/api/clubs/{clubId}/posts':
     post:
       tags:
@@ -7076,7 +7203,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     get:
       tags:
         - clubs
@@ -7132,6 +7260,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   '/api/clubs/{clubId}/posts/{id}':
     get:
       tags:
@@ -7174,6 +7303,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
     put:
       tags:
         - clubs
@@ -7240,7 +7370,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - clubs
@@ -7295,7 +7426,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/admin/clubs/posts/reindex:
     post:
       tags:
@@ -7340,7 +7472,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: AdminOnly
   /api/admin/clubs/posts:
     get:
       tags:
@@ -7405,7 +7538,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: AdminOnly
   '/api/clubs/{clubId}/posts/{postId}/comments':
     get:
       tags:
@@ -7466,6 +7600,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
     post:
       tags:
         - clubs
@@ -7532,7 +7667,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{clubId}/posts/{postId}/comments/{commentId}':
     put:
       tags:
@@ -7605,7 +7741,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - clubs
@@ -7665,7 +7802,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{clubId}/posts/{postId}/comments/{commentId}/reaction':
     put:
       tags:
@@ -7738,7 +7876,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - clubs
@@ -7798,7 +7937,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{clubId}/staff/invitations':
     post:
       tags:
@@ -7861,7 +8001,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     get:
       tags:
         - clubs
@@ -7911,7 +8052,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{clubId}/staff/invitations/{recipientUserId}/revoke':
     post:
       tags:
@@ -7967,7 +8109,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/clubs/invitations/resolve:
     post:
       tags:
@@ -8011,6 +8154,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/clubs/invitations/accept:
     post:
       tags:
@@ -8067,7 +8211,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/clubs/invitations/decline:
     post:
       tags:
@@ -8124,7 +8269,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{clubId}/members':
     get:
       tags:
@@ -8176,6 +8322,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   '/api/clubs/{clubId}/members/me':
     get:
       tags:
@@ -8226,7 +8373,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/users/{userId}/clubs/following':
     get:
       tags:
@@ -8287,7 +8435,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{clubId}/members/invitations':
     post:
       tags:
@@ -8350,7 +8499,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     get:
       tags:
         - clubs
@@ -8400,7 +8550,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{clubId}/members/invitations/{recipientUserId}/revoke':
     post:
       tags:
@@ -8456,7 +8607,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{clubId}/members/invitation-links':
     post:
       tags:
@@ -8519,7 +8671,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     get:
       tags:
         - clubs
@@ -8569,7 +8722,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{clubId}/members/invitation-links/{linkId}/revoke':
     post:
       tags:
@@ -8625,7 +8779,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/clubs/members/invitations/resolve:
     post:
       tags:
@@ -8669,6 +8824,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/clubs/members/invitations/accept:
     post:
       tags:
@@ -8725,7 +8881,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/clubs/members/invitations/decline:
     post:
       tags:
@@ -8782,7 +8939,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/clubs/members/invitation-links/redeem:
     post:
       tags:
@@ -8839,7 +8997,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{clubId}/discussions':
     post:
       tags:
@@ -8902,7 +9061,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     get:
       tags:
         - clubs
@@ -8949,6 +9109,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   '/api/clubs/{clubId}/discussions/{discussionId}':
     put:
       tags:
@@ -9016,7 +9177,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - clubs
@@ -9071,7 +9233,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{clubId}/discussions/{discussionId}/replies':
     get:
       tags:
@@ -9132,6 +9295,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
     post:
       tags:
         - clubs
@@ -9198,7 +9362,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{clubId}/discussions/{discussionId}/replies/{replyId}':
     put:
       tags:
@@ -9271,7 +9436,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - clubs
@@ -9331,7 +9497,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   '/api/clubs/{clubId}/discussions/{discussionId}/replies/{replyId}/reaction':
     put:
       tags:
@@ -9404,7 +9571,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
     delete:
       tags:
         - clubs
@@ -9464,7 +9632,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/login:
     post:
       tags:
@@ -9540,6 +9709,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/signup:
     post:
       tags:
@@ -9591,6 +9761,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/username/availability:
     get:
       tags:
@@ -9628,6 +9799,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/username/suggestions:
     get:
       tags:
@@ -9660,6 +9832,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/email/availability:
     get:
       tags:
@@ -9734,6 +9907,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       deprecated: true
+      x-authorization: anonymous
     post:
       tags:
         - auth
@@ -9807,6 +9981,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/verify/email-change:
     get:
       tags:
@@ -9845,6 +10020,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
     post:
       tags:
         - auth
@@ -9917,6 +10093,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/verify/otp:
     post:
       tags:
@@ -9967,6 +10144,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/verify:
     get:
       tags:
@@ -10012,6 +10190,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
     post:
       tags:
         - auth
@@ -10063,6 +10242,7 @@ paths:
                 $ref: '#/components/schemas/ApiResponseOfObject'
         '302':
           description: Redirects to the frontend verification screen when a token query parameter is supplied.
+      x-authorization: anonymous
   /api/auth/google:
     post:
       tags:
@@ -10114,6 +10294,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/google/code:
     post:
       tags:
@@ -10165,6 +10346,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/microsoft:
     post:
       tags:
@@ -10216,6 +10398,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/me:
     get:
       tags:
@@ -10260,7 +10443,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/refresh:
     post:
       tags:
@@ -10317,6 +10501,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/oauth/complete:
     post:
       tags:
@@ -10368,6 +10553,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/api/refresh:
     post:
       tags:
@@ -10428,6 +10614,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/csrf:
     get:
       tags:
@@ -10460,6 +10647,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/logout:
     post:
       tags:
@@ -10515,6 +10703,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/api/logout:
     post:
       tags:
@@ -10574,6 +10763,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/device/verify:
     get:
       tags:
@@ -10613,6 +10803,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
     post:
       tags:
         - auth
@@ -10657,6 +10848,7 @@ paths:
                 $ref: '#/components/schemas/ApiResponseOfObject'
         '302':
           description: Redirects to the frontend verification screen when a token query parameter is supplied.
+      x-authorization: anonymous
   /api/auth/mfa/start:
     post:
       tags:
@@ -10708,6 +10900,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/mfa/verify:
     post:
       tags:
@@ -10759,6 +10952,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/mfa/verify/totp:
     post:
       tags:
@@ -10810,6 +11004,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/recovery/password:
     post:
       tags:
@@ -10860,6 +11055,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/forgot-password:
     post:
       tags:
@@ -10910,6 +11106,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/recovery/username:
     post:
       tags:
@@ -10960,6 +11157,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/reset-password:
     post:
       tags:
@@ -11014,6 +11212,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/change-password:
     post:
       tags:
@@ -11068,6 +11267,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
+      x-authorization: anonymous
   /api/auth/mfa:
     get:
       tags:
@@ -11112,7 +11312,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/enroll/start:
     post:
       tags:
@@ -11177,7 +11378,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/sms/enroll/start:
     post:
       tags:
@@ -11242,7 +11444,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/enable/start:
     post:
       tags:
@@ -11295,7 +11498,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/sms/enable/start:
     post:
       tags:
@@ -11348,7 +11552,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/enroll/verify:
     post:
       tags:
@@ -11413,7 +11618,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/sms/enroll/verify:
     post:
       tags:
@@ -11478,7 +11684,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/disable:
     post:
       tags:
@@ -11543,7 +11750,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/sms/disable:
     post:
       tags:
@@ -11608,7 +11816,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/remove:
     post:
       tags:
@@ -11673,7 +11882,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/sms/remove:
     post:
       tags:
@@ -11738,7 +11948,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/totp/enroll/start:
     post:
       tags:
@@ -11791,7 +12002,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/totp/enroll/verify:
     post:
       tags:
@@ -11856,7 +12068,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/totp/enable:
     post:
       tags:
@@ -11921,7 +12134,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/totp/disable:
     post:
       tags:
@@ -11986,7 +12200,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/totp/remove:
     post:
       tags:
@@ -12051,7 +12266,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/step-up/options:
     get:
       tags:
@@ -12096,7 +12312,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/step-up/status:
     get:
       tags:
@@ -12141,7 +12358,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/step-up/start:
     post:
       tags:
@@ -12198,7 +12416,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa/step-up/verify:
     post:
       tags:
@@ -12255,7 +12474,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       security:
-        - { }
+        - bearerAuth: [ ]
+      x-authorization: authenticated
 components:
   schemas:
     AddEventImageRequest:

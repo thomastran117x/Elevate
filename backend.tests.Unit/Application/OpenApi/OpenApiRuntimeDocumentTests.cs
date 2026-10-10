@@ -91,7 +91,13 @@ public class OpenApiRuntimeDocumentTests
             )
             .Should()
             .BeTrue();
-        authOperation.TryGetProperty("security", out _).Should().BeTrue();
+        authOperation.GetProperty("security")[0].TryGetProperty("bearerAuth", out _).Should().BeTrue();
+        authOperation.GetProperty("x-authorization").GetString().Should().Be("authenticated");
+
+        var publicOperation = paths.GetProperty("/api/clubs").GetProperty("get");
+        publicOperation.TryGetProperty("security", out _).Should().BeFalse();
+        publicOperation.GetProperty("x-authorization").GetString().Should().Be("anonymous");
+        publicOperation.GetProperty("responses").TryGetProperty("401", out _).Should().BeFalse();
 
         var paymentOperation = paths.GetProperty("/api/payments/{eventId}").GetProperty("get");
         paymentOperation.GetProperty("tags")[0].GetString().Should().Be("payments");
@@ -145,7 +151,7 @@ public class OpenApiRuntimeDocumentTests
 
             app.MapGet("/api/admin/stats", () => Results.Ok(new { ok = true }));
             app.MapGet("/api/events", () => Results.Ok(new { ok = true }));
-            app.MapGet("/api/clubs", () => Results.Ok(new { ok = true }));
+            app.MapGet("/api/clubs", () => Results.Ok(new { ok = true })).AllowAnonymous();
             app.MapGet("/api/payments/{eventId}", (string eventId) => Results.Ok(eventId));
             app.MapGet("/api/users/profile", () => Results.Ok(new { ok = true }));
             app.MapGet("/openapi/internal", () => Results.Ok("hidden"));

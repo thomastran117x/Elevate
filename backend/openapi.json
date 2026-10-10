@@ -2,7 +2,7 @@
   "openapi": "3.1.1",
   "info": {
     "title": "EventXperience Backend API",
-    "description": "Generated API reference for the EventXperience backend. Responses use the shared ApiResponse envelope unless noted otherwise.",
+    "description": "Generated API reference for the EventXperience backend. Responses use the shared ApiResponse envelope unless noted otherwise. Every operation requires a bearer token unless its `x-authorization` extension is `anonymous`; otherwise the extension is `authenticated` or the name of the required authorization policy.",
     "version": "v1"
   },
   "servers": [
@@ -81,8 +81,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "patch": {
         "tags": [
@@ -174,8 +177,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -247,8 +253,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/profile/{username}": {
@@ -310,7 +319,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/profile/username": {
@@ -444,8 +454,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/profile/avatar": {
@@ -574,8 +587,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/profile/change-password": {
@@ -669,8 +685,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/profile/email": {
@@ -793,8 +812,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/profile/email/pending": {
@@ -867,8 +889,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -939,8 +964,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/admin/users/{id}/status": {
@@ -1044,8 +1072,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "AdminOnly"
       }
     },
     "/api/payments/{eventId}": {
@@ -1136,8 +1167,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/payments/{paymentId}": {
@@ -1220,8 +1254,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/payments/me": {
@@ -1312,8 +1349,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/payments/webhook": {
@@ -1376,7 +1416,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/payments/{paymentId}/refund": {
@@ -1459,8 +1500,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/media/{publicId}": {
@@ -1544,8 +1588,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{clubId}": {
@@ -1648,8 +1695,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}": {
@@ -1752,8 +1802,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -1834,8 +1887,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "get": {
         "tags": [
@@ -1894,7 +1950,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/events/{eventId}/versions": {
@@ -1993,8 +2050,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/versions/{versionNumber}": {
@@ -2085,8 +2145,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/versions/{versionNumber}/rollback": {
@@ -2178,8 +2241,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/clubs/{clubId}": {
@@ -2270,7 +2336,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/events/clubs/{clubId}/manage": {
@@ -2384,8 +2451,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/manage": {
@@ -2468,8 +2538,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/clubs/{clubId}/drafts": {
@@ -2572,8 +2645,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/draft": {
@@ -2676,8 +2752,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/publish": {
@@ -2760,8 +2839,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/cancel": {
@@ -2844,8 +2926,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/archive": {
@@ -2928,8 +3013,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/pause": {
@@ -3012,8 +3100,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/resume": {
@@ -3096,8 +3187,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/reinstate": {
@@ -3180,8 +3274,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/unarchive": {
@@ -3264,8 +3361,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/lifecycle/revert": {
@@ -3348,8 +3448,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events": {
@@ -3490,7 +3593,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/events/search": {
@@ -3561,7 +3665,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/events/batch": {
@@ -3622,7 +3727,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       },
       "put": {
         "tags": [
@@ -3713,8 +3819,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -3805,8 +3914,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/batch/{clubId}": {
@@ -3910,8 +4022,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/analytics": {
@@ -3994,8 +4109,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/images/presigned-url": {
@@ -4089,8 +4207,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/images": {
@@ -4174,8 +4295,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "post": {
         "tags": [
@@ -4277,8 +4401,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/images/{imageId}": {
@@ -4390,8 +4517,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "put": {
         "tags": [
@@ -4501,8 +4631,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -4592,8 +4725,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/images/order": {
@@ -4697,8 +4833,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/images/{imageId}/cover": {
@@ -4790,8 +4929,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/clubs/{clubId}/analytics": {
@@ -4874,8 +5016,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/admin/events/reindex": {
@@ -4948,8 +5093,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "AdminOnly"
       }
     },
     "/api/events/{eventId}/waitlist": {
@@ -5072,8 +5220,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -5154,8 +5305,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "get": {
         "tags": [
@@ -5252,8 +5406,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/waitlist/me": {
@@ -5336,8 +5493,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/waitlist/{entryId}": {
@@ -5428,8 +5588,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/waitlist/promote": {
@@ -5512,8 +5675,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/me/waitlisted": {
@@ -5586,8 +5752,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/clubs/{clubId}/series/preview": {
@@ -5691,8 +5860,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/series": {
@@ -5796,8 +5968,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/series/{seriesId}": {
@@ -5880,8 +6055,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -6003,8 +6181,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/clubs/{clubId}/series": {
@@ -6103,8 +6284,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/series/{seriesId}/extend": {
@@ -6208,8 +6392,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/series/{seriesId}/publish": {
@@ -6293,8 +6480,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/series/{seriesId}/occurrences": {
@@ -6398,8 +6588,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/series/{seriesId}/cancel": {
@@ -6523,8 +6716,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/series/detach": {
@@ -6608,8 +6804,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/register": {
@@ -6732,8 +6931,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -6814,8 +7016,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "patch": {
         "tags": [
@@ -6916,8 +7121,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/registrations": {
@@ -6994,7 +7202,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/events/{eventId}/registrations/me": {
@@ -7077,8 +7286,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/batch/register": {
@@ -7172,8 +7384,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -7265,8 +7480,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/users/{userId}/events/registered": {
@@ -7365,8 +7583,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/view": {
@@ -7449,8 +7670,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/me/recently-viewed": {
@@ -7523,8 +7747,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -7595,8 +7822,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/me/recently-viewed/batch": {
@@ -7689,8 +7919,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/me/recently-viewed/{eventId}": {
@@ -7773,8 +8006,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/me/recently-viewed/merge": {
@@ -7867,8 +8103,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/me/recently-viewed/settings": {
@@ -7941,8 +8180,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "put": {
         "tags": [
@@ -8033,8 +8275,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/invitations": {
@@ -8137,8 +8382,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "get": {
         "tags": [
@@ -8219,8 +8467,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/invitations/{invitationId}/revoke": {
@@ -8311,8 +8562,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/invitation-links": {
@@ -8415,8 +8669,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "get": {
         "tags": [
@@ -8497,8 +8754,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/invitation-links/{linkId}/revoke": {
@@ -8589,8 +8849,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/invitations/resolve": {
@@ -8662,7 +8925,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/events/invitations/accept": {
@@ -8755,8 +9019,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/invitations/{invitationId}/accept": {
@@ -8839,8 +9106,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/invitations/decline": {
@@ -8933,8 +9203,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/invitations/{invitationId}/decline": {
@@ -9017,8 +9290,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/me/invited": {
@@ -9091,8 +9367,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/favourite": {
@@ -9176,8 +9455,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -9259,8 +9541,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/{eventId}/favourite/me": {
@@ -9343,8 +9628,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/me/favourites/ids": {
@@ -9418,8 +9706,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/events/me/pinned": {
@@ -9493,8 +9784,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{clubId}/join": {
@@ -9577,8 +9871,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -9659,8 +9956,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs": {
@@ -9753,8 +10053,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "get": {
         "tags": [
@@ -9843,7 +10146,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/clubs/{id}": {
@@ -9946,8 +10250,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -10028,8 +10335,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "get": {
         "tags": [
@@ -10088,7 +10398,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/clubs/search": {
@@ -10159,7 +10470,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/clubs/managed": {
@@ -10232,8 +10544,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{id}/staff": {
@@ -10323,8 +10638,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{id}/staff/managers": {
@@ -10427,8 +10745,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{id}/staff/volunteers": {
@@ -10531,8 +10852,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{id}/staff/{userId}": {
@@ -10623,8 +10947,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{id}/transfer-ownership": {
@@ -10728,8 +11055,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{id}/versions": {
@@ -10828,8 +11158,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{id}/versions/{versionNumber}": {
@@ -10920,8 +11253,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{id}/versions/{versionNumber}/rollback": {
@@ -11013,8 +11349,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/admin/clubs/reindex": {
@@ -11087,8 +11426,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "AdminOnly"
       }
     },
     "/api/clubs/{clubId}/reviews": {
@@ -11191,8 +11533,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "get": {
         "tags": [
@@ -11267,7 +11612,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/clubs/{clubId}/reviews/{reviewId}": {
@@ -11378,8 +11724,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -11468,8 +11817,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/users/{userId}/reviews": {
@@ -11568,8 +11920,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "AdminOnly"
       }
     },
     "/api/clubs/{clubId}/posts": {
@@ -11672,8 +12027,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "get": {
         "tags": [
@@ -11763,7 +12121,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/clubs/{clubId}/posts/{id}": {
@@ -11832,7 +12191,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       },
       "put": {
         "tags": [
@@ -11941,8 +12301,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -12031,8 +12394,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/admin/clubs/posts/reindex": {
@@ -12105,8 +12471,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "AdminOnly"
       }
     },
     "/api/admin/clubs/posts": {
@@ -12212,8 +12581,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "AdminOnly"
       }
     },
     "/api/clubs/{clubId}/posts/{postId}/comments": {
@@ -12312,7 +12684,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       },
       "post": {
         "tags": [
@@ -12421,8 +12794,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{clubId}/posts/{postId}/comments/{commentId}": {
@@ -12541,8 +12917,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -12639,8 +13018,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{clubId}/posts/{postId}/comments/{commentId}/reaction": {
@@ -12759,8 +13141,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -12857,8 +13242,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{clubId}/staff/invitations": {
@@ -12961,8 +13349,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "get": {
         "tags": [
@@ -13043,8 +13434,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{clubId}/staff/invitations/{recipientUserId}/revoke": {
@@ -13135,8 +13529,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/invitations/resolve": {
@@ -13207,7 +13604,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/clubs/invitations/accept": {
@@ -13300,8 +13698,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/invitations/decline": {
@@ -13394,8 +13795,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{clubId}/members": {
@@ -13479,7 +13883,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/clubs/{clubId}/members/me": {
@@ -13562,8 +13967,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/users/{userId}/clubs/following": {
@@ -13662,8 +14070,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{clubId}/members/invitations": {
@@ -13766,8 +14177,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "get": {
         "tags": [
@@ -13848,8 +14262,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{clubId}/members/invitations/{recipientUserId}/revoke": {
@@ -13940,8 +14357,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{clubId}/members/invitation-links": {
@@ -14044,8 +14464,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "get": {
         "tags": [
@@ -14126,8 +14549,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{clubId}/members/invitation-links/{linkId}/revoke": {
@@ -14218,8 +14644,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/members/invitations/resolve": {
@@ -14290,7 +14719,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/clubs/members/invitations/accept": {
@@ -14383,8 +14813,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/members/invitations/decline": {
@@ -14477,8 +14910,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/members/invitation-links/redeem": {
@@ -14571,8 +15007,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{clubId}/discussions": {
@@ -14675,8 +15114,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "get": {
         "tags": [
@@ -14751,7 +15193,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/clubs/{clubId}/discussions/{discussionId}": {
@@ -14862,8 +15305,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -14952,8 +15398,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{clubId}/discussions/{discussionId}/replies": {
@@ -15052,7 +15501,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       },
       "post": {
         "tags": [
@@ -15161,8 +15611,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{clubId}/discussions/{discussionId}/replies/{replyId}": {
@@ -15281,8 +15734,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -15379,8 +15835,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/clubs/{clubId}/discussions/{discussionId}/replies/{replyId}/reaction": {
@@ -15499,8 +15958,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       },
       "delete": {
         "tags": [
@@ -15597,8 +16059,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/login": {
@@ -15721,7 +16186,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/signup": {
@@ -15804,7 +16270,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/username/availability": {
@@ -15865,7 +16332,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/username/suggestions": {
@@ -15917,7 +16385,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/email/availability": {
@@ -16037,7 +16506,8 @@
             }
           }
         },
-        "deprecated": true
+        "deprecated": true,
+        "x-authorization": "anonymous"
       },
       "post": {
         "tags": [
@@ -16157,7 +16627,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/verify/email-change": {
@@ -16220,7 +16691,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       },
       "post": {
         "tags": [
@@ -16339,7 +16811,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/verify/otp": {
@@ -16421,7 +16894,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/verify": {
@@ -16494,7 +16968,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       },
       "post": {
         "tags": [
@@ -16577,7 +17052,8 @@
           "302": {
             "description": "Redirects to the frontend verification screen when a token query parameter is supplied."
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/google": {
@@ -16660,7 +17136,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/google/code": {
@@ -16743,7 +17220,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/microsoft": {
@@ -16826,7 +17304,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/me": {
@@ -16899,8 +17378,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/refresh": {
@@ -17003,7 +17485,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/oauth/complete": {
@@ -17086,7 +17569,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/api/refresh": {
@@ -17196,7 +17680,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/csrf": {
@@ -17248,7 +17733,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/logout": {
@@ -17350,7 +17836,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/api/logout": {
@@ -17459,7 +17946,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/device/verify": {
@@ -17523,7 +18011,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       },
       "post": {
         "tags": [
@@ -17595,7 +18084,8 @@
           "302": {
             "description": "Redirects to the frontend verification screen when a token query parameter is supplied."
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/mfa/start": {
@@ -17678,7 +18168,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/mfa/verify": {
@@ -17761,7 +18252,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/mfa/verify/totp": {
@@ -17844,7 +18336,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/recovery/password": {
@@ -17926,7 +18419,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/forgot-password": {
@@ -18008,7 +18502,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/recovery/username": {
@@ -18090,7 +18585,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/reset-password": {
@@ -18179,7 +18675,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/change-password": {
@@ -18268,7 +18765,8 @@
               }
             }
           }
-        }
+        },
+        "x-authorization": "anonymous"
       }
     },
     "/api/auth/mfa": {
@@ -18341,8 +18839,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/enroll/start": {
@@ -18447,8 +18948,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/sms/enroll/start": {
@@ -18553,8 +19057,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/enable/start": {
@@ -18639,8 +19146,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/sms/enable/start": {
@@ -18725,8 +19235,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/enroll/verify": {
@@ -18831,8 +19344,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/sms/enroll/verify": {
@@ -18937,8 +19453,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/disable": {
@@ -19043,8 +19562,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/sms/disable": {
@@ -19149,8 +19671,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/remove": {
@@ -19255,8 +19780,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/sms/remove": {
@@ -19361,8 +19889,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/totp/enroll/start": {
@@ -19447,8 +19978,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/totp/enroll/verify": {
@@ -19553,8 +20087,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/totp/enable": {
@@ -19659,8 +20196,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/totp/disable": {
@@ -19765,8 +20305,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/totp/remove": {
@@ -19871,8 +20414,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/step-up/options": {
@@ -19945,8 +20491,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/step-up/status": {
@@ -20019,8 +20568,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/step-up/start": {
@@ -20113,8 +20665,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     },
     "/api/auth/mfa/step-up/verify": {
@@ -20207,8 +20762,11 @@
           }
         },
         "security": [
-          { }
-        ]
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
       }
     }
   },

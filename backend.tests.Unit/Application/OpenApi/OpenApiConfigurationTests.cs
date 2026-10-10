@@ -39,43 +39,72 @@ public class OpenApiConfigurationTests
     }
 
     [Fact]
-    public void ApplyAuthorization_ShouldAddBearerRequirement_OnlyForAuthorizedEndpoints()
+    public void ApplyAuthorization_ShouldClassifyEndpoints_TheWayTheFallbackPolicyDoes()
     {
+        var document = new OpenApiDocument();
         var authorizedOperation = new OpenApiOperation();
+        var adminOperation = new OpenApiOperation();
         var anonymousOperation = new OpenApiOperation();
-        var noAuthOperation = new OpenApiOperation();
+        var unannotatedOperation = new OpenApiOperation();
 
         InvokeStatic(
             "ApplyAuthorization",
             authorizedOperation,
-            new List<object> { new AuthorizeAttribute() });
+            new List<object> { new AuthorizeAttribute() },
+            document);
+        InvokeStatic(
+            "ApplyAuthorization",
+            adminOperation,
+            new List<object> { new AuthorizeAttribute(AuthorizationPolicies.AdminOnly) },
+            document);
         InvokeStatic(
             "ApplyAuthorization",
             anonymousOperation,
-            new List<object> { new AuthorizeAttribute(), new AllowAnonymousAttribute() });
+            new List<object> { new AuthorizeAttribute(), new AllowAnonymousAttribute() },
+            document);
         InvokeStatic(
             "ApplyAuthorization",
-            noAuthOperation,
-            new List<object>());
+            unannotatedOperation,
+            new List<object>(),
+            document);
 
-        authorizedOperation.Security.Should().NotBeNull();
-        authorizedOperation.Security.Should().ContainSingle();
-        authorizedOperation.Security![0].Keys.Single().Reference!.Id.Should().Be("bearerAuth");
+        foreach (var protectedOperation in new[] { authorizedOperation, adminOperation, unannotatedOperation })
+        {
+            protectedOperation.Security.Should().ContainSingle();
+            var scheme = protectedOperation.Security![0].Keys.Single();
+            scheme.Reference!.Id.Should().Be("bearerAuth");
+            scheme.Reference.HostDocument.Should().BeSameAs(document);
+        }
+
         // Microsoft.OpenApi 2.x leaves these collections null rather than empty when untouched.
         // With no document-level security defined, an absent `security` is equivalent to `security: []`.
         anonymousOperation.Security.Should().BeNullOrEmpty();
-        noAuthOperation.Security.Should().BeNullOrEmpty();
+
+        AuthorizationExtension(authorizedOperation).Should().Be("authenticated");
+        AuthorizationExtension(adminOperation).Should().Be(AuthorizationPolicies.AdminOnly);
+        AuthorizationExtension(anonymousOperation).Should().Be("anonymous");
+        AuthorizationExtension(unannotatedOperation).Should().Be("authenticated");
     }
 
     [Fact]
     public void ApplyStandardErrors_ShouldAddDefaultResponses_AndProtectedAuthResponses()
     {
         var operation = new OpenApiOperation();
+        var unannotatedOperation = new OpenApiOperation();
+        var anonymousOperation = new OpenApiOperation();
 
         InvokeStatic(
             "ApplyStandardErrors",
             operation,
             new List<object> { new AuthorizeAttribute() });
+        InvokeStatic(
+            "ApplyStandardErrors",
+            unannotatedOperation,
+            new List<object>());
+        InvokeStatic(
+            "ApplyStandardErrors",
+            anonymousOperation,
+            new List<object> { new AllowAnonymousAttribute() });
 
         operation.Responses.Should().ContainKeys("400", "401", "403", "500");
         operation.Responses["400"].Content["application/json"].Schema
@@ -83,6 +112,9 @@ public class OpenApiConfigurationTests
             .Which.Reference.Id.Should().Be("ApiResponseOfObject");
         operation.Responses["401"].Description.Should().Contain("Authentication is required");
         operation.Responses["403"].Description.Should().Contain("does not have permission");
+        unannotatedOperation.Responses.Should().ContainKeys("401", "403");
+        anonymousOperation.Responses.Should().ContainKeys("400", "500");
+        anonymousOperation.Responses.Should().NotContainKeys("401", "403");
     }
 
     [Fact]
@@ -363,6 +395,9 @@ public class OpenApiConfigurationTests
     {
         InvokeStatic<string>("DeriveOperationSummary", actionName).Should().Be(expected);
     }
+    private static string? AuthorizationExtension(OpenApiOperation operation) =>
+        ((JsonNodeExtension)operation.Extensions!["x-authorization"]).Node.GetValue<string>();
+
     private static object? InvokeStatic(string methodName, params object?[] arguments)
     {
         var method = typeof(OpenApiConfiguration).GetMethod(
