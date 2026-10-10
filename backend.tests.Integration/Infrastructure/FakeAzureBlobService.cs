@@ -4,10 +4,6 @@ using backend.main.features.events.contracts.responses;
 using backend.main.shared.storage;
 using backend.main.shared.storage.imaging;
 
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Webp;
-using SixLabors.ImageSharp.PixelFormats;
-
 namespace backend.tests.Integration.Infrastructure;
 
 /// <summary>
@@ -317,27 +313,8 @@ public sealed class FakeAzureBlobService : IAzureBlobService
     /// </summary>
     public static byte[] RealImageBytes(string contentType = "image/png", int width = 16, int height = 12)
     {
-        using var image = new Image<Rgba32>(width, height, new Rgba32(40, 120, 200));
-        using var stream = new MemoryStream();
-
-        switch ((contentType ?? string.Empty).Trim().ToLowerInvariant())
-        {
-            case "image/jpeg":
-            case "image/jpg":
-                image.SaveAsJpeg(stream);
-                break;
-            case "image/gif":
-                image.SaveAsGif(stream);
-                break;
-            case "image/webp":
-                image.Save(stream, new WebpEncoder());
-                break;
-            default:
-                image.SaveAsPng(stream);
-                break;
-        }
-
-        return stream.ToArray();
+        var normalized = (contentType ?? string.Empty).Trim().ToLowerInvariant();
+        return TestImages.Encoded(normalized == "image/jpg" ? "image/jpeg" : normalized, width, height);
     }
 
     public Task DeleteBlobAsync(string blobUrl)

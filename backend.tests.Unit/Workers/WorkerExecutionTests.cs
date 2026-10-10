@@ -248,7 +248,7 @@ public class WorkerExecutionTests
             services.AddScoped(_ => new MediaWorkerMessageProcessor(
                 new MediaValidationPipeline(
                     Blobs,
-                    new ImageSharpImageProcessor(Options.Create(new ImageProcessingOptions()))),
+                    new NetVipsImageProcessor(Options.Create(new ImageProcessingOptions()))),
                 DlqPublisher.Object,
                 StatusPublisher.Object));
             var provider = services.BuildServiceProvider();

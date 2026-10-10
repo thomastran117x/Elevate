@@ -8,6 +8,7 @@ using backend.main.shared.providers;
 using backend.main.shared.providers.messages;
 using backend.main.shared.storage;
 using backend.main.shared.storage.imaging;
+using backend.tests.Unit.Support;
 
 using FluentAssertions;
 
@@ -16,8 +17,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 
 using Moq;
-
-using SixLabors.ImageSharp;
 
 namespace backend.tests.Unit.Features.Media;
 
@@ -58,10 +57,13 @@ public class MediaAssetServiceTests
         intent.MediaAssetId.Should().Be(upload.MediaAssetId);
         var published = harness.Blobs.Published[upload.PublicUrl];
         published.ContentType.Should().Be("image/webp");
-        var stored = Image.Identify(published.Content);
-        stored.Width.Should().Be(2048, "gallery uploads are capped at the gallery edge, not the avatar one");
-        stored.Height.Should().Be(1024);
-        stored.Metadata.ExifProfile.Should().BeNull();
+        using (var stored = NetVips.Image.NewFromBuffer(published.Content))
+        {
+            stored.Width.Should().Be(2048, "gallery uploads are capped at the gallery edge, not the avatar one");
+            stored.Height.Should().Be(1024);
+        }
+
+        TestImages.MetadataFields(published.Content).Should().BeEmpty();
 
         var asset = await harness.AssetAsync(upload);
         asset.Status.Should().Be(MediaAssetStatus.Ready);
@@ -104,8 +106,8 @@ public class MediaAssetServiceTests
         var act = () => harness.Service.AttachAsync(harness.UserId, upload.PublicUrl, "Event images");
 
         await act.Should().ThrowAsync<BadRequestException>()
-            .WithMessage(ImageSharpImageProcessor.AnimatedMessage);
-        (await harness.AssetAsync(upload)).RejectionReason.Should().Be(ImageSharpImageProcessor.AnimatedMessage);
+            .WithMessage(NetVipsImageProcessor.AnimatedMessage);
+        (await harness.AssetAsync(upload)).RejectionReason.Should().Be(NetVipsImageProcessor.AnimatedMessage);
     }
 
     [Fact]
@@ -266,7 +268,7 @@ public class MediaAssetServiceTests
     {
         var busy = new Mock<IImageProcessor>();
         busy.Setup(p => p.ProcessAsync(It.IsAny<Stream>(), ImageProcessingProfile.Gallery, It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new NotAvailableException(ImageSharpImageProcessor.BusyMessage));
+            .ThrowsAsync(new NotAvailableException(NetVipsImageProcessor.BusyMessage));
         await using var harness = await Harness.CreateAsync(busy.Object);
         var upload = await harness.IssueAndUploadAsync(InMemoryBlobStore.Image());
 
@@ -414,7 +416,7 @@ public class MediaAssetServiceTests
 
         var act = () => harness.Service.AttachAsync(harness.UserId, upload.PublicUrl, "Event images");
 
-        await act.Should().ThrowAsync<BadRequestException>().WithMessage(ImageSharpImageProcessor.AnimatedMessage);
+        await act.Should().ThrowAsync<BadRequestException>().WithMessage(NetVipsImageProcessor.AnimatedMessage);
         (await harness.AssetAsync(upload)).Status.Should().Be(MediaAssetStatus.Rejected);
     }
 
@@ -646,7 +648,7 @@ public class MediaAssetServiceTests
             cache.Setup(c => c.GetValueAsync(It.IsAny<string>()))
                 .ReturnsAsync((string key) => harness._intents.TryGetValue(key, out var value) ? value : null);
 
-            processor ??= new ImageSharpImageProcessor(Options.Create(new ImageProcessingOptions()));
+            processor ??= new NetVipsImageProcessor(Options.Create(new ImageProcessingOptions()));
             harness.Pipeline = new MediaValidationPipeline(harness.Blobs, processor);
             harness.Recorder = new MediaValidationRecorder(harness.Repository, harness.Blobs, database.Time);
             harness.Service = new MediaAssetService(

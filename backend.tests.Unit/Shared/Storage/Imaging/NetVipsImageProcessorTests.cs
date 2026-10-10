@@ -4,36 +4,28 @@ using System.ComponentModel.DataAnnotations;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.storage;
 using backend.main.shared.storage.imaging;
+using backend.tests.Unit.Support;
 
 using FluentAssertions;
 
 using Microsoft.Extensions.Options;
 
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Webp;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.Metadata.Profiles.Iptc;
-using SixLabors.ImageSharp.PixelFormats;
+using VipsImage = NetVips.Image;
 
 namespace backend.tests.Unit.Shared.Storage.Imaging;
 
 /// <remarks>
-/// Every fixture is generated here with ImageSharp or assembled byte by byte, so no binary assets
+/// Every fixture is generated here with libvips or assembled byte by byte, so no binary assets
 /// live in the repository.
 /// </remarks>
-public class ImageSharpImageProcessorTests
+public class NetVipsImageProcessorTests
 {
     [Fact]
     public async Task ProcessAsync_ShouldRemoveGpsExif_AndOutputWebp()
     {
-        using var input = new Image<Rgba32>(64, 48, new Rgba32(120, 160, 200));
-        input.Metadata.ExifProfile = new ExifProfile();
-        input.Metadata.ExifProfile.SetValue(ExifTag.GPSLatitudeRef, "N");
-        input.Metadata.ExifProfile.SetValue(
-            ExifTag.GPSLatitude,
-            [new Rational(43, 1), new Rational(39, 1), new Rational(12, 1)]);
-        var jpeg = EncodeJpeg(input);
-        Image.Identify(jpeg).Metadata.ExifProfile.Should().NotBeNull("the fixture has to carry GPS to prove anything");
+        using var input = TestImages.Solid(64, 48, 120, 160, 200);
+        var jpeg = TestImages.WithExif(TestImages.Jpeg(input), gps: true);
+        TestImages.MetadataFields(jpeg).Should().Contain("exif-data", "the fixture has to carry GPS to prove anything");
 
         var result = await CreateProcessor().ProcessAsync(new MemoryStream(jpeg), ImageProcessingProfile.Avatar);
 
@@ -42,33 +34,29 @@ public class ImageSharpImageProcessorTests
         result.ContentType.Should().Be("image/webp");
         result.FileExtension.Should().Be(".webp");
 
-        var stored = Image.Identify(result.Content);
-        stored.Metadata.ExifProfile.Should().BeNull();
-        stored.Metadata.XmpProfile.Should().BeNull();
-        stored.Metadata.IccProfile.Should().BeNull();
-        stored.Metadata.IptcProfile.Should().BeNull();
+        TestImages.MetadataFields(result.Content).Should().BeEmpty();
+        TestImages.WebpChunks(result.Content).Should().NotContain(["EXIF", "XMP ", "ICCP"]);
     }
 
     [Fact]
     public async Task ProcessAsync_ShouldCapAvatarAtLongEdge512()
     {
-        using var input = new Image<Rgba32>(4000, 3000, new Rgba32(10, 20, 30));
-        var jpeg = EncodeJpeg(input);
+        using var input = TestImages.Solid(4000, 3000, 10, 20, 30);
+        var jpeg = TestImages.Jpeg(input);
 
         var result = await CreateProcessor().ProcessAsync(new MemoryStream(jpeg), ImageProcessingProfile.Avatar);
 
         Decoded(result).Width.Should().Be(512);
         Decoded(result).Height.Should().Be(384);
-        var stored = Image.Identify(result.Content);
-        stored.Width.Should().Be(512);
-        stored.Height.Should().Be(384);
+        result.Width.Should().Be(512);
+        result.Height.Should().Be(384);
     }
 
     [Fact]
     public async Task ProcessAsync_ShouldCapGalleryImagesAtTheirOwnLongEdge()
     {
-        using var input = new Image<Rgba32>(4000, 3000, new Rgba32(10, 20, 30));
-        var jpeg = EncodeJpeg(input);
+        using var input = TestImages.Solid(4000, 3000, 10, 20, 30);
+        var jpeg = TestImages.Jpeg(input);
 
         var result = await CreateProcessor().ProcessAsync(new MemoryStream(jpeg), ImageProcessingProfile.Gallery);
 
@@ -79,10 +67,10 @@ public class ImageSharpImageProcessorTests
     [Fact]
     public async Task ProcessAsync_ShouldHonourAConfiguredGalleryEdge()
     {
-        using var input = new Image<Rgba32>(1000, 500, new Rgba32(10, 20, 30));
+        using var input = TestImages.Solid(1000, 500, 10, 20, 30);
 
         var result = await CreateProcessor(new ImageProcessingOptions { GalleryMaxEdge = 300 })
-            .ProcessAsync(new MemoryStream(EncodePng(input)), ImageProcessingProfile.Gallery);
+            .ProcessAsync(new MemoryStream(TestImages.Png(input)), ImageProcessingProfile.Gallery);
 
         Decoded(result).Width.Should().Be(300);
         Decoded(result).Height.Should().Be(150);
@@ -93,12 +81,10 @@ public class ImageSharpImageProcessorTests
     {
         // Stored landscape and tagged "rotate 90": the reported size is the upright one that was
         // encoded, which is what a MediaAsset records.
-        using var input = new Image<Rgba32>(80, 40, new Rgba32(1, 2, 3));
-        input.Metadata.ExifProfile = new ExifProfile();
-        input.Metadata.ExifProfile.SetValue(ExifTag.Orientation, (ushort)6);
+        using var input = TestImages.Solid(80, 40, 1, 2, 3);
+        var jpeg = TestImages.WithExif(TestImages.Jpeg(input), orientation: 6);
 
-        var result = await CreateProcessor().ProcessAsync(
-            new MemoryStream(EncodeJpeg(input)), ImageProcessingProfile.Gallery);
+        var result = await CreateProcessor().ProcessAsync(new MemoryStream(jpeg), ImageProcessingProfile.Gallery);
 
         result.Width.Should().Be(40);
         result.Height.Should().Be(80);
@@ -109,10 +95,10 @@ public class ImageSharpImageProcessorTests
     [Fact]
     public async Task ProcessAsync_ShouldRejectAnUnknownProfile()
     {
-        using var input = new Image<Rgba32>(8, 8);
+        using var input = TestImages.Solid(8, 8, 0, 0, 0);
 
         var act = () => CreateProcessor().ProcessAsync(
-            new MemoryStream(EncodePng(input)), (ImageProcessingProfile)99);
+            new MemoryStream(TestImages.Png(input)), (ImageProcessingProfile)99);
 
         await act.Should().ThrowAsync<ArgumentOutOfRangeException>();
     }
@@ -120,10 +106,10 @@ public class ImageSharpImageProcessorTests
     [Fact]
     public async Task ProcessAsync_ShouldNotUpscaleSmallImages()
     {
-        using var input = new Image<Rgba32>(100, 80, new Rgba32(10, 20, 30));
+        using var input = TestImages.Solid(100, 80, 10, 20, 30);
 
         var result = await CreateProcessor().ProcessAsync(
-            new MemoryStream(EncodePng(input)), ImageProcessingProfile.Avatar);
+            new MemoryStream(TestImages.Png(input)), ImageProcessingProfile.Avatar);
 
         Decoded(result).Width.Should().Be(100);
         Decoded(result).Height.Should().Be(80);
@@ -136,58 +122,37 @@ public class ImageSharpImageProcessorTests
         // 90 degrees clockwise to display", which is how phones save portrait shots. Displayed
         // upright it is portrait with red on top. Stripping EXIF without applying the tag first
         // would store it landscape.
-        using var input = new Image<Rgba32>(80, 40);
-        input.ProcessPixelRows(rows =>
-        {
-            for (var y = 0; y < rows.Height; y++)
-            {
-                var row = rows.GetRowSpan(y);
-                for (var x = 0; x < row.Length; x++)
-                    row[x] = x < row.Length / 2 ? new Rgba32(255, 0, 0) : new Rgba32(0, 0, 255);
-            }
-        });
-        input.Metadata.ExifProfile = new ExifProfile();
-        input.Metadata.ExifProfile.SetValue(ExifTag.Orientation, (ushort)6);
+        using var input = TestImages.RedLeftBlueRight(80, 40);
+        var jpeg = TestImages.WithExif(TestImages.Jpeg(input), orientation: 6);
 
-        var result = await CreateProcessor().ProcessAsync(
-            new MemoryStream(EncodeJpeg(input)), ImageProcessingProfile.Avatar);
+        var result = await CreateProcessor().ProcessAsync(new MemoryStream(jpeg), ImageProcessingProfile.Avatar);
 
         Decoded(result).Width.Should().Be(40);
         Decoded(result).Height.Should().Be(80);
 
-        using var stored = Image.Load<Rgba32>(result.Content);
-        stored.Metadata.ExifProfile.Should().BeNull();
-        IsMostly(stored[20, 15], red: true).Should().BeTrue("the top half should be the red side");
-        IsMostly(stored[20, 65], red: false).Should().BeTrue("the bottom half should be the blue side");
+        TestImages.MetadataFields(result.Content).Should().BeEmpty();
+        using var stored = VipsImage.NewFromBuffer(result.Content);
+        IsMostly(stored.Getpoint(20, 15), red: true).Should().BeTrue("the top half should be the red side");
+        IsMostly(stored.Getpoint(20, 65), red: false).Should().BeTrue("the bottom half should be the blue side");
     }
 
     [Fact]
     public async Task ProcessAsync_ShouldStillOrientCorrectly_WhenTheImageIsShrunkFirst()
     {
-        // Resizing happens before AutoOrient, so a full-resolution rotation never allocates a
-        // second full-size buffer. The EXIF tag has to survive the resize for this to work.
-        using var input = new Image<Rgba32>(2000, 1000);
-        input.ProcessPixelRows(rows =>
-        {
-            for (var y = 0; y < rows.Height; y++)
-            {
-                var row = rows.GetRowSpan(y);
-                for (var x = 0; x < row.Length; x++)
-                    row[x] = x < row.Length / 2 ? new Rgba32(255, 0, 0) : new Rgba32(0, 0, 255);
-            }
-        });
-        input.Metadata.ExifProfile = new ExifProfile();
-        input.Metadata.ExifProfile.SetValue(ExifTag.Orientation, (ushort)6);
+        // The image is shrunk before it is oriented, so a full-resolution rotation never
+        // allocates a second full-size buffer. The orientation has to survive the resize for
+        // this to work.
+        using var input = TestImages.RedLeftBlueRight(2000, 1000);
+        var jpeg = TestImages.WithExif(TestImages.Jpeg(input), orientation: 6);
 
-        var result = await CreateProcessor().ProcessAsync(
-            new MemoryStream(EncodeJpeg(input)), ImageProcessingProfile.Avatar);
+        var result = await CreateProcessor().ProcessAsync(new MemoryStream(jpeg), ImageProcessingProfile.Avatar);
 
         Decoded(result).Width.Should().Be(256);
         Decoded(result).Height.Should().Be(512);
 
-        using var stored = Image.Load<Rgba32>(result.Content);
-        IsMostly(stored[128, 64], red: true).Should().BeTrue("the top half should be the red side");
-        IsMostly(stored[128, 448], red: false).Should().BeTrue("the bottom half should be the blue side");
+        using var stored = VipsImage.NewFromBuffer(result.Content);
+        IsMostly(stored.Getpoint(128, 64), red: true).Should().BeTrue("the top half should be the red side");
+        IsMostly(stored.Getpoint(128, 448), red: false).Should().BeTrue("the bottom half should be the blue side");
     }
 
     [Fact]
@@ -199,14 +164,14 @@ public class ImageSharpImageProcessorTests
         var processor = CreateProcessor();
         var bomb = CraftPng(100_000, 100_000);
 
-        // Warm up so JIT and ImageSharp's one-time static setup are not counted against the probe.
+        // Warm up so JIT and libvips' one-time setup are not counted against the probe.
         await processor.Invoking(p => p.ProcessAsync(new MemoryStream(bomb), ImageProcessingProfile.Avatar))
             .Should().ThrowAsync<BadRequestException>();
 
         var before = GC.GetAllocatedBytesForCurrentThread();
         var act = () => processor.ProcessAsync(new MemoryStream(bomb), ImageProcessingProfile.Avatar);
         await act.Should().ThrowAsync<BadRequestException>()
-            .WithMessage(ImageSharpImageProcessor.TooLargeMessage);
+            .WithMessage(NetVipsImageProcessor.TooLargeMessage);
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         allocated.Should().BeLessThan(4 * 1024 * 1024);
@@ -220,40 +185,63 @@ public class ImageSharpImageProcessorTests
             new MemoryStream(CraftPng(7000, 7500)), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
-            .WithMessage(ImageSharpImageProcessor.TooLargeMessage);
+            .WithMessage(NetVipsImageProcessor.TooLargeMessage);
     }
 
     [Fact]
     public async Task ProcessAsync_ShouldRejectAnimatedGif()
     {
-        using var input = new Image<Rgba32>(16, 16, new Rgba32(255, 0, 0));
-        using (var second = new Image<Rgba32>(16, 16, new Rgba32(0, 0, 255)))
-        {
-            input.Frames.AddFrame(second.Frames.RootFrame);
-        }
+        using var first = TestImages.Solid(16, 16, 255, 0, 0);
+        using var second = TestImages.Solid(16, 16, 0, 0, 255);
+        using var animation = TestImages.Animation(first, second);
+        var gif = TestImages.Gif(animation);
 
-        using var gif = new MemoryStream();
-        input.SaveAsGif(gif);
-        gif.Position = 0;
-
-        var act = () => CreateProcessor().ProcessAsync(gif, ImageProcessingProfile.Avatar);
+        var act = () => CreateProcessor().ProcessAsync(new MemoryStream(gif), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
-            .WithMessage(ImageSharpImageProcessor.AnimatedMessage);
+            .WithMessage(NetVipsImageProcessor.AnimatedMessage);
     }
 
     [Fact]
     public async Task ProcessAsync_ShouldConvertStaticGifToWebp()
     {
-        using var input = new Image<Rgba32>(16, 16, new Rgba32(255, 0, 0));
-        using var gif = new MemoryStream();
-        input.SaveAsGif(gif);
-        gif.Position = 0;
+        using var input = TestImages.Solid(16, 16, 255, 0, 0);
 
-        var result = await CreateProcessor().ProcessAsync(gif, ImageProcessingProfile.Avatar);
+        var result = await CreateProcessor().ProcessAsync(
+            new MemoryStream(TestImages.Gif(input)), ImageProcessingProfile.Avatar);
 
         ImageSignatureInspector.TryDetect(result.Content, out var signature).Should().BeTrue();
         signature.Format.Should().Be(ImageFormat.Webp);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldAcceptAGreyscalePng()
+    {
+        // The encoder is handed 8-bit sRGB whatever came in, so a single-band image converts
+        // rather than failing as a server fault.
+        using var black = VipsImage.Black(20, 10);
+        using var grey = (black + 128).Cast(NetVips.Enums.BandFormat.Uchar);
+
+        var result = await CreateProcessor().ProcessAsync(
+            new MemoryStream(grey.PngsaveBuffer()), ImageProcessingProfile.Avatar);
+
+        Decoded(result).Width.Should().Be(20);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldAcceptASixteenBitPng()
+    {
+        using var input = TestImages.Solid(20, 10, 200, 100, 50);
+        using var wide = (input * 257).Cast(NetVips.Enums.BandFormat.Ushort);
+        using var rgb16 = wide.Copy(interpretation: NetVips.Enums.Interpretation.Rgb16);
+
+        var result = await CreateProcessor().ProcessAsync(
+            new MemoryStream(rgb16.PngsaveBuffer(bitdepth: 16)), ImageProcessingProfile.Avatar);
+
+        using var stored = VipsImage.NewFromBuffer(result.Content);
+        stored.Width.Should().Be(20);
+        stored.Format.Should().Be(NetVips.Enums.BandFormat.Uchar);
+        stored.Getpoint(5, 5)[0].Should().BeApproximately(200, 4, "16-bit values scale down to 8 bits, not clip");
     }
 
     [Fact]
@@ -265,21 +253,17 @@ public class ImageSharpImageProcessorTests
         // 400, not 415: [ImageContent] model validation already answers 400 for the same file,
         // and the published contract documents that.
         await act.Should().ThrowAsync<BadRequestException>()
-            .WithMessage(ImageSharpImageProcessor.UnsupportedFormatMessage);
+            .WithMessage(NetVipsImageProcessor.UnsupportedFormatMessage);
     }
 
     [Fact]
     public async Task ProcessAsync_ShouldRejectFormatsOutsideTheAllowlist()
     {
-        using var input = new Image<Rgba32>(8, 8);
-        using var bmp = new MemoryStream();
-        input.SaveAsBmp(bmp);
-        bmp.Position = 0;
-
-        var act = () => CreateProcessor().ProcessAsync(bmp, ImageProcessingProfile.Avatar);
+        var act = () => CreateProcessor().ProcessAsync(
+            new MemoryStream(TestImages.Bmp()), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
-            .WithMessage(ImageSharpImageProcessor.UnsupportedFormatMessage);
+            .WithMessage(NetVipsImageProcessor.UnsupportedFormatMessage);
     }
 
     [Fact]
@@ -291,15 +275,15 @@ public class ImageSharpImageProcessorTests
         var act = () => CreateProcessor().ProcessAsync(new MemoryStream(corrupt), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
-            .WithMessage(ImageSharpImageProcessor.UnreadableMessage);
+            .WithMessage(NetVipsImageProcessor.UnreadableMessage);
     }
 
     [Fact]
     public async Task ProcessAsync_ShouldQueueRequestsBeyondTheConcurrencyLimit()
     {
         var processor = CreateProcessor(new ImageProcessingOptions { MaxConcurrentOperations = 1 });
-        using var input = new Image<Rgba32>(32, 32, new Rgba32(1, 2, 3));
-        var png = EncodePng(input);
+        using var input = TestImages.Solid(32, 32, 1, 2, 3);
+        var png = TestImages.Png(input);
 
         var results = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ =>
             Task.Run(() => processor.ProcessAsync(new MemoryStream(png), ImageProcessingProfile.Avatar))));
@@ -311,8 +295,8 @@ public class ImageSharpImageProcessorTests
     public async Task ProcessAsync_WhenCancelled_ShouldThrowAndLeaveTheSlotFree()
     {
         var processor = CreateProcessor(new ImageProcessingOptions { MaxConcurrentOperations = 1 });
-        using var input = new Image<Rgba32>(32, 32, new Rgba32(1, 2, 3));
-        var png = EncodePng(input);
+        using var input = TestImages.Solid(32, 32, 1, 2, 3);
+        var png = TestImages.Png(input);
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
@@ -326,57 +310,78 @@ public class ImageSharpImageProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_WhenCancelledMidDecode_ShouldStopAndSurfaceCancellation()
+    {
+        // The token reaches libvips' evaluation, not just the gaps between stages: a request that
+        // goes away part-way through a large decode stops holding its slot.
+        var processor = CreateProcessor(new ImageProcessingOptions { MaxConcurrentOperations = 1 });
+        using var input = TestImages.Pattern(
+            7000, 7000,
+            (x, _) => x % 251,
+            (_, y) => y % 241,
+            (x, y) => (x + y) % 239);
+        var png = TestImages.Png(input);
+
+        var uncancelled = System.Diagnostics.Stopwatch.StartNew();
+        await processor.ProcessAsync(new MemoryStream(png), ImageProcessingProfile.Avatar);
+        uncancelled.Stop();
+
+        using var cts = new CancellationTokenSource(uncancelled.Elapsed / 4);
+        var cancelled = System.Diagnostics.Stopwatch.StartNew();
+        var act = () => processor.ProcessAsync(new MemoryStream(png), ImageProcessingProfile.Avatar, cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        cancelled.Stop();
+
+        // Measured at about 0.6 of the uncancelled time with the token wired in, and the full time
+        // without it: cancellation lands between libvips' work units, not instantly.
+        cancelled.Elapsed.Should().BeLessThan(uncancelled.Elapsed * 0.8, "cancellation has to stop the decode, not wait for it to finish");
+    }
+
+    [Fact]
     public async Task ProcessAsync_ShouldStripEveryMetadataProfile_EvenWhenTheInputCarriesThemAll()
     {
-        // The encoder's SkipMetadata is the only mechanism that drops metadata, so this asserts
+        // Keeping no metadata at encode time is the only mechanism that drops it, so this asserts
         // the encoded output directly rather than trusting an in-memory clean-up step.
-        using var input = new Image<Rgba32>(40, 30, new Rgba32(90, 140, 190));
-        input.Metadata.ExifProfile = new ExifProfile();
-        input.Metadata.ExifProfile.SetValue(ExifTag.Software, "definitely-not-wanted");
-        input.Metadata.IptcProfile = new IptcProfile();
-        input.Metadata.IptcProfile.SetValue(IptcTag.Byline, "someone");
+        using var input = TestImages.Solid(40, 30, 90, 140, 190);
+        var jpeg = TestImages.WithIptcByline(
+            TestImages.WithExif(TestImages.Jpeg(input), software: "definitely-not-wanted"),
+            "someone");
+        TestImages.MetadataFields(jpeg).Should().Contain(["exif-data", "iptc-data"], "the fixture has to carry both to prove anything");
 
-        var result = await CreateProcessor().ProcessAsync(
-            new MemoryStream(EncodeJpeg(input)), ImageProcessingProfile.Avatar);
+        var result = await CreateProcessor().ProcessAsync(new MemoryStream(jpeg), ImageProcessingProfile.Avatar);
 
-        var stored = Image.Identify(result.Content);
-        stored.Metadata.ExifProfile.Should().BeNull();
-        stored.Metadata.XmpProfile.Should().BeNull();
-        stored.Metadata.IptcProfile.Should().BeNull();
-        stored.Metadata.IccProfile.Should().BeNull();
+        TestImages.MetadataFields(result.Content).Should().BeEmpty();
+        TestImages.WebpChunks(result.Content).Should().NotContain(["EXIF", "XMP ", "ICCP"]);
         result.Content.AsSpan().IndexOf("definitely-not-wanted"u8).Should().Be(-1, "the EXIF string must not survive anywhere in the encoded bytes");
+        result.Content.AsSpan().IndexOf("someone"u8).Should().Be(-1, "the IPTC by-line must not survive anywhere in the encoded bytes");
     }
 
     [Fact]
     public async Task ProcessAsync_ShouldRejectAnimatedWebp()
     {
-        using var input = new Image<Rgba32>(32, 32, new Rgba32(255, 0, 0));
-        using (var second = new Image<Rgba32>(32, 32, new Rgba32(0, 0, 255)))
-        {
-            input.Frames.AddFrame(second.Frames.RootFrame);
-        }
+        using var first = TestImages.Solid(32, 32, 255, 0, 0);
+        using var second = TestImages.Solid(32, 32, 0, 0, 255);
+        using var animation = TestImages.Animation(first, second);
+        var webp = TestImages.Webp(animation);
 
-        using var webp = new MemoryStream();
-        input.Save(webp, new WebpEncoder());
-        webp.Position = 0;
-
-        var act = () => CreateProcessor().ProcessAsync(webp, ImageProcessingProfile.Avatar);
+        var act = () => CreateProcessor().ProcessAsync(new MemoryStream(webp), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
-            .WithMessage(ImageSharpImageProcessor.AnimatedMessage);
+            .WithMessage(NetVipsImageProcessor.AnimatedMessage);
     }
 
     [Fact]
-    public async Task ProcessAsync_ShouldRejectApngAsAnimated_NotAsUnreadable()
+    public async Task ProcessAsync_ShouldRejectApngAsAnimated_NotFlattenIt()
     {
-        // ImageSharp 3.x cannot decode an APNG at all: left to the decoder it fails as invalid
-        // PNG data, which would tell the user their file is broken rather than animated. The
-        // acTL chunk is checked before decoding so the message matches GIF and WebP.
+        // libvips reads only an APNG's default image, so left to the decoder the animation would
+        // be silently flattened to its first frame. The acTL chunk is checked before decoding so
+        // it is refused with the same message as GIF and WebP.
         var act = () => CreateProcessor().ProcessAsync(
             new MemoryStream(CraftApng()), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
-            .WithMessage(ImageSharpImageProcessor.AnimatedMessage);
+            .WithMessage(NetVipsImageProcessor.AnimatedMessage);
     }
 
     [Fact]
@@ -384,19 +389,14 @@ public class ImageSharpImageProcessorTests
     {
         // Guards the acTL scan against matching bytes inside pixel data: the scan walks chunk
         // headers and stops at IDAT rather than searching the whole file.
-        using var input = new Image<Rgba32>(64, 64);
-        input.ProcessPixelRows(rows =>
-        {
-            for (var y = 0; y < rows.Height; y++)
-            {
-                var row = rows.GetRowSpan(y);
-                for (var x = 0; x < row.Length; x++)
-                    row[x] = new Rgba32((byte)(x * 7), (byte)(y * 5), (byte)(x ^ y));
-            }
-        });
+        using var input = TestImages.Pattern(
+            64, 64,
+            (x, _) => (x * 7) % 256,
+            (_, y) => (y * 5) % 256,
+            (x, y) => x ^ y);
 
         var result = await CreateProcessor().ProcessAsync(
-            new MemoryStream(EncodePng(input)), ImageProcessingProfile.Avatar);
+            new MemoryStream(TestImages.Png(input)), ImageProcessingProfile.Avatar);
 
         Decoded(result).Width.Should().Be(64);
     }
@@ -419,7 +419,7 @@ public class ImageSharpImageProcessorTests
             new MemoryStream(stream.ToArray()), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
-            .WithMessage(ImageSharpImageProcessor.UnreadableMessage);
+            .WithMessage(NetVipsImageProcessor.UnreadableMessage);
     }
 
     [Theory]
@@ -427,21 +427,21 @@ public class ImageSharpImageProcessorTests
     [InlineData((byte)3, (byte)6)]   // bit depth 3 is not valid for RGBA
     public async Task ProcessAsync_ShouldReturnBadRequest_ForUnsupportedPngVariants(byte bitDepth, byte colorType)
     {
-        // ImageSharp raises NotSupportedException rather than an ImageFormatException for these,
-        // which would otherwise escape the filter and surface as a 500.
+        // An invalid header is the uploader's file, so it has to come back as a 400 rather than
+        // escape the filter as a 500.
         var act = () => CreateProcessor().ProcessAsync(
             new MemoryStream(CraftPng(8, 8, bitDepth, colorType)), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
-            .WithMessage(ImageSharpImageProcessor.UnreadableMessage);
+            .WithMessage(NetVipsImageProcessor.UnreadableMessage);
     }
 
     [Fact]
     public async Task ProcessAsync_ShouldAcceptAStreamThatCannotSeek()
     {
         // The upload is buffered once up front, so a forward-only stream is fine.
-        using var input = new Image<Rgba32>(24, 24, new Rgba32(7, 8, 9));
-        var png = EncodePng(input);
+        using var input = TestImages.Solid(24, 24, 7, 8, 9);
+        var png = TestImages.Png(input);
 
         var result = await CreateProcessor().ProcessAsync(
             new ForwardOnlyStream(png), ImageProcessingProfile.Avatar);
@@ -460,8 +460,8 @@ public class ImageSharpImageProcessorTests
             SlotWaitTimeoutSeconds = 1
         });
 
-        using var input = new Image<Rgba32>(3000, 3000, new Rgba32(4, 5, 6));
-        var png = EncodePng(input);
+        using var input = TestImages.Solid(3000, 3000, 4, 5, 6);
+        var png = TestImages.Png(input);
         using var blocker = new SlowStream(png, TimeSpan.FromSeconds(5));
 
         var occupying = processor.ProcessAsync(blocker, ImageProcessingProfile.Avatar);
@@ -473,26 +473,28 @@ public class ImageSharpImageProcessorTests
         };
 
         await shed.Should().ThrowAsync<NotAvailableException>()
-            .WithMessage(ImageSharpImageProcessor.BusyMessage);
+            .WithMessage(NetVipsImageProcessor.BusyMessage);
 
         await occupying;
     }
 
     [Fact]
-    public async Task ProcessAsync_ShouldReturnBadRequest_ForDecoderFailuresOfAnyExceptionType()
+    public async Task ProcessAsync_ShouldReturnBadRequest_ForATruncatedGif()
     {
-        // ImageSharp throws whatever the parser that choked happened to raise — IndexOutOfRange and
-        // EndOfStream among them — so the filter cannot be a list of types. A truncated GIF is one
-        // such file: whatever comes back, it must be the uploader's 400.
-        using var input = new Image<Rgba32>(64, 64, new Rgba32(1, 2, 3));
-        using var gif = new MemoryStream();
-        input.SaveAsGif(gif);
-        var truncated = gif.ToArray()[..(int)(gif.Length * 0.6)];
+        // The header survives and the frame data runs out: whatever the decoder makes of it, it
+        // is the uploader's 400.
+        using var input = TestImages.Pattern(
+            64, 64,
+            (x, _) => x * 4,
+            (_, y) => y * 4,
+            (x, y) => (x + y) * 2);
+        var gif = TestImages.Gif(input);
+        var truncated = gif[..(int)(gif.Length * 0.6)];
 
         var act = () => CreateProcessor().ProcessAsync(new MemoryStream(truncated), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
-            .WithMessage(ImageSharpImageProcessor.UnreadableMessage);
+            .WithMessage(NetVipsImageProcessor.UnreadableMessage);
     }
 
     [Theory]
@@ -501,25 +503,39 @@ public class ImageSharpImageProcessorTests
     public async Task ProcessAsync_ShouldReturnBadRequest_ForAPngTruncatedMidDecode(double keep)
     {
         // Failing inside the decoder rather than before it: the header is intact and the pixel
-        // data runs out part-way. Whatever the decoder raises, the uploader gets a 400.
-        using var input = new Image<Rgba32>(320, 240);
-        input.ProcessPixelRows(rows =>
-        {
-            for (var y = 0; y < rows.Height; y++)
-            {
-                var row = rows.GetRowSpan(y);
-                for (var x = 0; x < row.Length; x++)
-                    row[x] = new Rgba32((byte)(x % 251), (byte)(y % 241), (byte)((x * y) % 239));
-            }
-        });
+        // data runs out part-way. libvips decodes lazily, so this only fails once pixels are
+        // demanded, and that still has to be the uploader's 400 rather than a fault in encoding.
+        using var input = TestImages.Pattern(
+            320, 240,
+            (x, _) => x % 251,
+            (_, y) => y % 241,
+            (x, y) => (x * y) % 239);
 
-        var png = EncodePng(input);
+        var png = TestImages.Png(input);
         var truncated = png[..(int)(png.Length * keep)];
 
         var act = () => CreateProcessor().ProcessAsync(new MemoryStream(truncated), ImageProcessingProfile.Avatar);
 
         await act.Should().ThrowAsync<BadRequestException>()
-            .WithMessage(ImageSharpImageProcessor.UnreadableMessage);
+            .WithMessage(NetVipsImageProcessor.UnreadableMessage);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldReturnBadRequest_ForAJpegTruncatedMidDecode()
+    {
+        using var input = TestImages.Pattern(
+            320, 240,
+            (x, _) => x % 251,
+            (_, y) => y % 241,
+            (x, y) => (x * y) % 239);
+
+        var jpeg = TestImages.Jpeg(input);
+        var truncated = jpeg[..(int)(jpeg.Length * 0.5)];
+
+        var act = () => CreateProcessor().ProcessAsync(new MemoryStream(truncated), ImageProcessingProfile.Avatar);
+
+        await act.Should().ThrowAsync<BadRequestException>()
+            .WithMessage(NetVipsImageProcessor.UnreadableMessage);
     }
 
     [Fact]
@@ -528,8 +544,8 @@ public class ImageSharpImageProcessorTests
         // A broken stream is our problem, not the uploader's. Reporting it as "could not be read"
         // would tell the user their good photo is broken and keep a real fault out of the 500-level
         // alerting.
-        using var input = new Image<Rgba32>(64, 64, new Rgba32(1, 2, 3));
-        using var failing = new FailingStream(EncodePng(input));
+        using var input = TestImages.Solid(64, 64, 1, 2, 3);
+        using var failing = new FailingStream(TestImages.Png(input));
 
         var act = () => CreateProcessor().ProcessAsync(failing, ImageProcessingProfile.Avatar);
 
@@ -539,11 +555,11 @@ public class ImageSharpImageProcessorTests
     [Fact]
     public async Task ProcessAsync_ShouldSurfaceCancellation_RatherThanCallingItAnUnreadableImage()
     {
-        using var input = new Image<Rgba32>(64, 64, new Rgba32(1, 2, 3));
+        using var input = TestImages.Solid(64, 64, 1, 2, 3);
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
-        var act = () => CreateProcessor().ProcessAsync(new MemoryStream(EncodePng(input)), ImageProcessingProfile.Avatar, cts.Token);
+        var act = () => CreateProcessor().ProcessAsync(new MemoryStream(TestImages.Png(input)), ImageProcessingProfile.Avatar, cts.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
@@ -571,30 +587,20 @@ public class ImageSharpImageProcessorTests
             .Should().BeTrue();
     }
 
-    /// <summary>The stored image, as a reader of the blob would see it.</summary>
-    private static ImageInfo Decoded(ProcessedImage result) => Image.Identify(result.Content);
+    /// <summary>The stored image's size, as a reader of the blob would see it.</summary>
+    private static (int Width, int Height) Decoded(ProcessedImage result)
+    {
+        using var image = VipsImage.NewFromBuffer(result.Content);
+        return (image.Width, image.Height);
+    }
 
-    private static ImageSharpImageProcessor CreateProcessor(ImageProcessingOptions? options = null) =>
+    private static NetVipsImageProcessor CreateProcessor(ImageProcessingOptions? options = null) =>
         new(Options.Create(options ?? new ImageProcessingOptions()));
 
-    private static byte[] EncodeJpeg(Image image)
-    {
-        using var stream = new MemoryStream();
-        image.SaveAsJpeg(stream);
-        return stream.ToArray();
-    }
-
-    private static byte[] EncodePng(Image image)
-    {
-        using var stream = new MemoryStream();
-        image.SaveAsPng(stream);
-        return stream.ToArray();
-    }
-
-    private static bool IsMostly(Rgba32 pixel, bool red) =>
+    private static bool IsMostly(double[] pixel, bool red) =>
         red
-            ? pixel.R > 180 && pixel.B < 80
-            : pixel.B > 180 && pixel.R < 80;
+            ? pixel[0] > 180 && pixel[2] < 80
+            : pixel[2] > 180 && pixel[0] < 80;
 
     /// <summary>
     /// A structurally valid PNG that declares the given size, 8-bit RGBA, over an empty IDAT.
@@ -621,13 +627,13 @@ public class ImageSharpImageProcessorTests
 
     /// <summary>
     /// A two-frame APNG, assembled from a real single-frame PNG's IDAT payload plus the acTL,
-    /// fcTL and fdAT chunks that make it animated. ImageSharp 3.x cannot write one, so the chunks
-    /// are laid out here rather than checking a binary fixture into the repository.
+    /// fcTL and fdAT chunks that make it animated. libvips cannot write one, so the chunks are
+    /// laid out here rather than checking a binary fixture into the repository.
     /// </summary>
     private static byte[] CraftApng()
     {
-        using var source = new Image<Rgba32>(8, 8, new Rgba32(255, 0, 0));
-        var png = EncodePng(source);
+        using var source = TestImages.Solid(8, 8, 255, 0, 0);
+        var png = TestImages.Png(source);
 
         var idat = new List<byte>();
         var ihdr = Array.Empty<byte>();

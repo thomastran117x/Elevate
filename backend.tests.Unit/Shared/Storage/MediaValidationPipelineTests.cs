@@ -85,7 +85,7 @@ public class MediaValidationPipelineTests
             .ReturnsAsync(new BlobInspection(16, "image/png", FakePngHeader()));
         blobs.Setup(b => b.OpenQuarantineBlobReadAsync(QuarantinePath, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new MemoryStream(new byte[4096]));
-        var processor = new ImageSharpImageProcessor(Options.Create(new ImageProcessingOptions()));
+        var processor = new NetVipsImageProcessor(Options.Create(new ImageProcessingOptions()));
 
         var outcome = await new MediaValidationPipeline(blobs.Object, processor)
             .RunAsync(QuarantinePath, PublicUrl, "image/png", "Event images");
