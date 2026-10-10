@@ -556,7 +556,7 @@ namespace backend.main.features.clubs
     [FeatureGate(FeatureFlagKeys.Clubs)]
     [FeatureGate(FeatureFlagKeys.SearchReindex)]
     [Route("admin/clubs")]
-    [Authorize("AdminOnly")]
+    [Authorize(AuthorizationPolicies.AdminOnly)]
     public class AdminClubsController : ControllerBase
     {
         private readonly IClubReindexService _reindexService;

@@ -1214,7 +1214,7 @@ namespace backend.main.features.events
     [FeatureGate(FeatureFlagKeys.Events)]
     [FeatureGate(FeatureFlagKeys.SearchReindex)]
     [Route("admin/events")]
-    [Authorize("AdminOnly")]
+    [Authorize(AuthorizationPolicies.AdminOnly)]
     public class AdminEventsController : ControllerBase
     {
         private readonly IEventReindexService _reindexService;

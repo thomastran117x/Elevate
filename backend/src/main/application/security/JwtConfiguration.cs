@@ -113,10 +113,10 @@ namespace backend.main.application.security
 
             services.AddAuthorization(options =>
             {
-                options.AddPolicy("AdminOnly", p =>
+                options.AddPolicy(AuthorizationPolicies.AdminOnly, p =>
                     p.RequireRole(AuthRoles.Admin));
 
-                options.AddPolicy("OrganizerOnly", p =>
+                options.AddPolicy(AuthorizationPolicies.OrganizerOnly, p =>
                     p.RequireRole(AuthRoles.Organizer));
             });
             return services;

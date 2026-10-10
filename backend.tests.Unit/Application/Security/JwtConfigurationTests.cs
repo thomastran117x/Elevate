@@ -41,8 +41,8 @@ public class JwtConfigurationTests
         options.TokenValidationParameters.ValidAudience.Should().Be("EventXperienceConsumers");
         options.TokenValidationParameters.ClockSkew.Should().Be(TimeSpan.FromSeconds(30));
 
-        var adminPolicy = authorization.GetPolicy("AdminOnly");
-        var organizerPolicy = authorization.GetPolicy("OrganizerOnly");
+        var adminPolicy = authorization.GetPolicy(AuthorizationPolicies.AdminOnly);
+        var organizerPolicy = authorization.GetPolicy(AuthorizationPolicies.OrganizerOnly);
 
         adminPolicy.Should().NotBeNull();
         organizerPolicy.Should().NotBeNull();

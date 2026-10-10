@@ -149,7 +149,7 @@ namespace backend.main.features.clubs.reviews
             _reviewService = reviewService;
         }
 
-        [Authorize("AdminOnly")]
+        [Authorize(AuthorizationPolicies.AdminOnly)]
         [HttpGet("{userId}/reviews")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<ClubReviewResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetReviewsByUser(
