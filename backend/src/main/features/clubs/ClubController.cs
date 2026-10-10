@@ -159,6 +159,7 @@ namespace backend.main.features.clubs
         }
 
         [HttpGet("{id}")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<ClubResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClub(int id)
         {
@@ -176,6 +177,7 @@ namespace backend.main.features.clubs
         }
 
         [HttpGet("")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubs(
             [FromQuery] string? search,
@@ -207,6 +209,7 @@ namespace backend.main.features.clubs
         }
 
         [HttpPost("search")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> SearchClubs([FromBody] ClubSearchRequest request)
         {

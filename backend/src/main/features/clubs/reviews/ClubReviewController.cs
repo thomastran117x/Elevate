@@ -52,6 +52,7 @@ namespace backend.main.features.clubs.reviews
         }
 
         [HttpGet("{clubId}/reviews")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubReviewResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetReviewsByClub(
             int clubId,

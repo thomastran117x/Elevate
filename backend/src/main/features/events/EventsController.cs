@@ -240,6 +240,7 @@ namespace backend.main.features.events
         }
 
         [HttpGet("clubs/{clubId}")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<EventResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEventsByClub(int clubId, EventStatus? status = null, int page = 1, int pageSize = 20, [FromQuery] string? search = null)
         {
@@ -602,6 +603,7 @@ namespace backend.main.features.events
         }
 
         [HttpGet("{eventId}")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<EventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEvent(int eventId)
         {
@@ -629,6 +631,7 @@ namespace backend.main.features.events
         }
 
         [HttpGet("")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<EventResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEvents(
             string? search = null,
@@ -688,6 +691,7 @@ namespace backend.main.features.events
         }
 
         [HttpPost("search")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<EventResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> SearchEvents([FromBody] EventSearchRequest request)
         {
@@ -723,6 +727,7 @@ namespace backend.main.features.events
         }
 
         [HttpGet("batch")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEventsBatch([FromQuery] string ids)
         {

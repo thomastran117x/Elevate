@@ -104,7 +104,7 @@ namespace backend.main.application.openapi
                     );
                     return Results.Text(json, "application/json");
                 }
-            ).ExcludeFromDescription();
+            ).ExcludeFromDescription().AllowAnonymous();
             endpoints.MapGet(
                 OpenApiDocumentMode.JsonRoutePattern,
                 async Task<IResult> (
@@ -120,7 +120,7 @@ namespace backend.main.application.openapi
                     var json = await GenerateOpenApiJsonAsync(services, documentName);
                     return Results.Text(json, "application/json");
                 }
-            ).ExcludeFromDescription();
+            ).ExcludeFromDescription().AllowAnonymous();
             endpoints.MapGet(
                 OpenApiDocumentMode.DefaultYamlRoute,
                 async Task<IResult> (IServiceProvider services) =>
@@ -131,7 +131,7 @@ namespace backend.main.application.openapi
                     );
                     return Results.Text(yaml, "application/yaml");
                 }
-            ).ExcludeFromDescription();
+            ).ExcludeFromDescription().AllowAnonymous();
             endpoints.MapGet(
                 OpenApiDocumentMode.YamlRoutePattern,
                 async Task<IResult> (
@@ -147,7 +147,7 @@ namespace backend.main.application.openapi
                     var yaml = await GenerateOpenApiYamlAsync(services, documentName);
                     return Results.Text(yaml, "application/yaml");
                 }
-            ).ExcludeFromDescription();
+            ).ExcludeFromDescription().AllowAnonymous();
 
             return endpoints;
         }

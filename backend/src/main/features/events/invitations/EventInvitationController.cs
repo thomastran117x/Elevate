@@ -176,6 +176,7 @@ public sealed class EventInvitationController : ControllerBase
     }
 
     [HttpPost("invitations/resolve")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<EventInvitationResolveResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ResolveInvitation([FromBody] ResolveEventInvitationRequest request)
     {

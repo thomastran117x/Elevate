@@ -25,6 +25,7 @@ namespace backend.main.features.clubs.follow
         }
 
         [HttpGet("{clubId}/members")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubMemberResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubMembers(
             int clubId,

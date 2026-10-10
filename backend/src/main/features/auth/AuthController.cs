@@ -76,6 +76,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("login")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<LoginAuthenticationResponse>), StatusCodes.Status200OK)]
@@ -133,6 +134,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("signup")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<VerificationChallengeResponse>), StatusCodes.Status200OK)]
@@ -511,6 +513,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("verify/otp")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
@@ -550,6 +553,7 @@ namespace backend.main.features.auth
         }
 
         [HttpGet("verify")]
+        [AllowAnonymous]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status302Found)]
@@ -567,6 +571,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("verify")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
@@ -605,6 +610,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("google")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<OAuthAuthenticationResponse>), StatusCodes.Status200OK)]
@@ -637,6 +643,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("google/code")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<OAuthAuthenticationResponse>), StatusCodes.Status200OK)]
@@ -671,6 +678,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("microsoft")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<OAuthAuthenticationResponse>), StatusCodes.Status200OK)]
@@ -731,6 +739,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("refresh")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest? request)
@@ -768,6 +777,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("oauth/complete")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
@@ -808,6 +818,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("api/refresh")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ApiRefresh([FromBody] RefreshTokenRequest? request)
         {
@@ -845,6 +856,7 @@ namespace backend.main.features.auth
         }
 
         [HttpGet("csrf")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         public IActionResult Csrf()
         {
@@ -866,6 +878,7 @@ namespace backend.main.features.auth
         // bound to the anonymous session — an unsatisfiable contradiction that made authenticated
         // logout always fail. The middleware alone is the correct (and sufficient) guard here.
         [HttpPost("logout")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> Logout([FromBody] RefreshTokenRequest? request)
         {
@@ -901,6 +914,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("api/logout")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> ApiLogout([FromBody] RefreshTokenRequest? request)
         {
@@ -935,6 +949,7 @@ namespace backend.main.features.auth
         }
 
         [HttpGet("device/verify")]
+        [AllowAnonymous]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status302Found)]
@@ -952,6 +967,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("device/verify")]
+        [AllowAnonymous]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> VerifyDevice([FromBody] VerificationTokenRequest request)
@@ -989,6 +1005,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("mfa/start")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<StartLoginStepUpResponse>), StatusCodes.Status200OK)]
@@ -1017,6 +1034,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("mfa/verify")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
@@ -1050,6 +1068,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("mfa/verify/totp")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
@@ -1083,6 +1102,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("recovery/password")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<VerificationChallengeResponse>), StatusCodes.Status200OK)]
@@ -1090,6 +1110,7 @@ namespace backend.main.features.auth
             RecoverPasswordInternalAsync(request);
 
         [HttpPost("forgot-password")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<VerificationChallengeResponse>), StatusCodes.Status200OK)]
@@ -1139,6 +1160,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("recovery/username")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
@@ -1174,6 +1196,7 @@ namespace backend.main.features.auth
         }
 
         [HttpPost("reset-password")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
@@ -1183,6 +1206,7 @@ namespace backend.main.features.auth
         ) => ResetPasswordInternalAsync(request, token);
 
         [HttpPost("change-password")]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
