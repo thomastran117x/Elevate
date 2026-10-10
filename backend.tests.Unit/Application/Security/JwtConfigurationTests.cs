@@ -53,6 +53,30 @@ public class JwtConfigurationTests
     }
 
     [Fact]
+    public void AddJwtAuth_ShouldRequireAnAuthenticatedBearerUser_ByDefaultAndAsFallback()
+    {
+        using var provider = BuildJwtProvider(new Mock<IAuthUserRepository>());
+        var authorization = provider.GetRequiredService<IOptions<AuthorizationOptions>>().Value;
+
+        foreach (var policy in new[] { authorization.DefaultPolicy, authorization.FallbackPolicy })
+        {
+            policy.Should().NotBeNull();
+            policy!.AuthenticationSchemes.Should().Equal(JwtBearerDefaults.AuthenticationScheme);
+            policy.Requirements.Should().ContainSingle()
+                .Which.Should().BeOfType<DenyAnonymousAuthorizationRequirement>();
+        }
+    }
+
+    [Fact]
+    public void AddJwtAuth_ShouldRegisterTheUnmatchedRouteResultHandler()
+    {
+        using var provider = BuildJwtProvider(new Mock<IAuthUserRepository>());
+
+        provider.GetRequiredService<IAuthorizationMiddlewareResultHandler>()
+            .Should().BeOfType<UnmatchedRouteAuthorizationResultHandler>();
+    }
+
+    [Fact]
     public async Task OnChallenge_ShouldReturnUnauthorizedPayload_ForMissingToken()
     {
         using var provider = BuildJwtProvider(new Mock<IAuthUserRepository>());

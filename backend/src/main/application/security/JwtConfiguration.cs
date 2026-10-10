@@ -10,6 +10,7 @@ using backend.main.shared.other;
 using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 
 namespace backend.main.application.security
@@ -20,8 +21,8 @@ namespace backend.main.application.security
         private const string AUDIENCE = "EventXperienceConsumers";
         public static IServiceCollection AddJwtAuth(this IServiceCollection services, IConfiguration config)
         {
-            services.AddAuthentication("Bearer")
-                .AddJwtBearer("Bearer", options =>
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
                 {
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
@@ -113,12 +114,21 @@ namespace backend.main.application.security
 
             services.AddAuthorization(options =>
             {
+                // Authenticated by default: an endpoint is public only when it opts out with
+                // [AllowAnonymous], so a forgotten attribute fails closed instead of open.
+                var authenticated = new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme)
+                    .RequireAuthenticatedUser()
+                    .Build();
+                options.DefaultPolicy = authenticated;
+                options.FallbackPolicy = authenticated;
+
                 options.AddPolicy(AuthorizationPolicies.AdminOnly, p =>
                     p.RequireRole(AuthRoles.Admin));
 
                 options.AddPolicy(AuthorizationPolicies.OrganizerOnly, p =>
                     p.RequireRole(AuthRoles.Organizer));
             });
+            services.AddSingleton<IAuthorizationMiddlewareResultHandler, UnmatchedRouteAuthorizationResultHandler>();
             return services;
         }
     }
