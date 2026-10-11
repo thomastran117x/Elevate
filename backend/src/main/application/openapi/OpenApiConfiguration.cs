@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 
 using backend.main.application.security;
@@ -17,6 +18,9 @@ namespace backend.main.application.openapi
     public static class OpenApiConfiguration
     {
         private const string BearerSchemeName = "bearerAuth";
+        private const string AuthorizationExtensionName = "x-authorization";
+        private const string AnonymousAuthorization = "anonymous";
+        private const string AuthenticatedAuthorization = "authenticated";
         private static readonly Dictionary<string, string> AcronymDisplayNames =
             new(StringComparer.OrdinalIgnoreCase)
             {
@@ -104,7 +108,7 @@ namespace backend.main.application.openapi
                     );
                     return Results.Text(json, "application/json");
                 }
-            ).ExcludeFromDescription();
+            ).ExcludeFromDescription().AllowAnonymous();
             endpoints.MapGet(
                 OpenApiDocumentMode.JsonRoutePattern,
                 async Task<IResult> (
@@ -120,7 +124,7 @@ namespace backend.main.application.openapi
                     var json = await GenerateOpenApiJsonAsync(services, documentName);
                     return Results.Text(json, "application/json");
                 }
-            ).ExcludeFromDescription();
+            ).ExcludeFromDescription().AllowAnonymous();
             endpoints.MapGet(
                 OpenApiDocumentMode.DefaultYamlRoute,
                 async Task<IResult> (IServiceProvider services) =>
@@ -131,7 +135,7 @@ namespace backend.main.application.openapi
                     );
                     return Results.Text(yaml, "application/yaml");
                 }
-            ).ExcludeFromDescription();
+            ).ExcludeFromDescription().AllowAnonymous();
             endpoints.MapGet(
                 OpenApiDocumentMode.YamlRoutePattern,
                 async Task<IResult> (
@@ -147,7 +151,7 @@ namespace backend.main.application.openapi
                     var yaml = await GenerateOpenApiYamlAsync(services, documentName);
                     return Results.Text(yaml, "application/yaml");
                 }
-            ).ExcludeFromDescription();
+            ).ExcludeFromDescription().AllowAnonymous();
 
             return endpoints;
         }
@@ -163,7 +167,9 @@ namespace backend.main.application.openapi
                 Title = "EventXperience Backend API",
                 Version = OpenApiDocumentMode.DocumentName,
                 Description =
-                    "Generated API reference for the EventXperience backend. Responses use the shared ApiResponse envelope unless noted otherwise."
+                    "Generated API reference for the EventXperience backend. Responses use the shared ApiResponse envelope unless noted otherwise. "
+                    + "Every operation requires a bearer token unless its `x-authorization` extension is `anonymous`; "
+                    + "otherwise the extension is `authenticated` or the name of the required authorization policy."
             };
             var serverUrl = Environment.GetEnvironmentVariable("OPENAPI_SERVER_URL");
             document.Servers = string.IsNullOrWhiteSpace(serverUrl)
@@ -286,7 +292,7 @@ namespace backend.main.application.openapi
 
             ApplyOperationId(operation, context);
             ApplyTags(operation, context, relativePath);
-            ApplyAuthorization(operation, metadata);
+            ApplyAuthorization(operation, metadata, context.Document);
             ApplyStandardErrors(operation, metadata);
             ApplyCsrfDocumentation(operation, relativePath);
             ApplySpecialHeaders(operation, relativePath);
@@ -350,27 +356,58 @@ namespace backend.main.application.openapi
 
         private static void ApplyAuthorization(
             OpenApiOperation operation,
-            IList<object> metadata
+            IList<object> metadata,
+            OpenApiDocument? document
         )
         {
-            if (metadata.OfType<IAllowAnonymous>().Any())
+            var authorization = DescribeAuthorization(metadata);
+
+            operation.Extensions ??= new Dictionary<string, IOpenApiExtension>();
+            operation.Extensions[AuthorizationExtensionName] =
+                new JsonNodeExtension(JsonValue.Create(authorization));
+
+            if (authorization == AnonymousAuthorization)
             {
                 return;
             }
 
-            if (!metadata.OfType<IAuthorizeData>().Any())
-            {
-                return;
-            }
-
+            // The reference must carry its host document, or it serializes as an empty
+            // requirement (`security: [{}]`) that reads as "no authentication required".
             operation.Security ??= [];
             operation.Security.Add(
                 new OpenApiSecurityRequirement
                 {
-                    [new OpenApiSecuritySchemeReference(BearerSchemeName)] = []
+                    [new OpenApiSecuritySchemeReference(BearerSchemeName, document)] = []
                 }
             );
         }
+
+        /// <summary>
+        /// Mirrors how the authorization middleware resolves an endpoint: <c>[AllowAnonymous]</c>
+        /// wins, and anything else requires an authenticated user through the fallback policy
+        /// even without an attribute.
+        /// </summary>
+        private static string DescribeAuthorization(IList<object> metadata)
+        {
+            if (IsAnonymous(metadata))
+            {
+                return AnonymousAuthorization;
+            }
+
+            var policies = metadata
+                .OfType<IAuthorizeData>()
+                .Select(data => data.Policy)
+                .Where(policy => !string.IsNullOrWhiteSpace(policy))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
+            return policies.Length == 0
+                ? AuthenticatedAuthorization
+                : string.Join(",", policies);
+        }
+
+        private static bool IsAnonymous(IList<object> metadata) =>
+            metadata.OfType<IAllowAnonymous>().Any();
 
         private static void ApplyStandardErrors(
             OpenApiOperation operation,
@@ -392,7 +429,7 @@ namespace backend.main.application.openapi
                 typeof(ApiResponse<object?>)
             );
 
-            if (metadata.OfType<IAuthorizeData>().Any() && !metadata.OfType<IAllowAnonymous>().Any())
+            if (!IsAnonymous(metadata))
             {
                 AddResponseIfMissing(
                     operation,

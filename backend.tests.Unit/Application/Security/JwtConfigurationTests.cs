@@ -41,8 +41,8 @@ public class JwtConfigurationTests
         options.TokenValidationParameters.ValidAudience.Should().Be("EventXperienceConsumers");
         options.TokenValidationParameters.ClockSkew.Should().Be(TimeSpan.FromSeconds(30));
 
-        var adminPolicy = authorization.GetPolicy("AdminOnly");
-        var organizerPolicy = authorization.GetPolicy("OrganizerOnly");
+        var adminPolicy = authorization.GetPolicy(AuthorizationPolicies.AdminOnly);
+        var organizerPolicy = authorization.GetPolicy(AuthorizationPolicies.OrganizerOnly);
 
         adminPolicy.Should().NotBeNull();
         organizerPolicy.Should().NotBeNull();
@@ -50,6 +50,30 @@ public class JwtConfigurationTests
             .AllowedRoles.Should().Equal(AuthRoles.Admin);
         organizerPolicy!.Requirements.OfType<RolesAuthorizationRequirement>().Single()
             .AllowedRoles.Should().Equal(AuthRoles.Organizer);
+    }
+
+    [Fact]
+    public void AddJwtAuth_ShouldRequireAnAuthenticatedBearerUser_ByDefaultAndAsFallback()
+    {
+        using var provider = BuildJwtProvider(new Mock<IAuthUserRepository>());
+        var authorization = provider.GetRequiredService<IOptions<AuthorizationOptions>>().Value;
+
+        foreach (var policy in new[] { authorization.DefaultPolicy, authorization.FallbackPolicy })
+        {
+            policy.Should().NotBeNull();
+            policy!.AuthenticationSchemes.Should().Equal(JwtBearerDefaults.AuthenticationScheme);
+            policy.Requirements.Should().ContainSingle()
+                .Which.Should().BeOfType<DenyAnonymousAuthorizationRequirement>();
+        }
+    }
+
+    [Fact]
+    public void AddJwtAuth_ShouldRegisterTheUnmatchedRouteResultHandler()
+    {
+        using var provider = BuildJwtProvider(new Mock<IAuthUserRepository>());
+
+        provider.GetRequiredService<IAuthorizationMiddlewareResultHandler>()
+            .Should().BeOfType<UnmatchedRouteAuthorizationResultHandler>();
     }
 
     [Fact]

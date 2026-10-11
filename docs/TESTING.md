@@ -47,6 +47,19 @@ dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-integ
 
 This static audit compares discovered controller actions with matching API request literals in integration test sources. It reports covered/uncovered actions by controller; CI fails on missing matches. It does not execute tests or replace code coverage and can miss dynamically assembled requests. Add meaningful endpoint assertions rather than source literals solely to satisfy the audit.
 
+### Authorization audit
+
+`backend.tests.Unit/Application/Security/EndpointAuthorizationAuditTests.cs` reflects over the controllers and SignalR hubs that MVC and SignalR discover. It runs with the unit suite, so CI enforces it through `backend-unit-coverage`. It fails when:
+- an action or hub method has neither `[Authorize]` nor `[AllowAnonymous]` on itself or its class;
+- an `[Authorize]` action sits under a class-level `[AllowAnonymous]`;
+- the anonymous surface differs from the reviewed `ExpectedAnonymousEndpoints` list.
+
+`backend.tests.Integration/Application/Security/AuthorizationMatrixEndpointsTests.cs` repeats the metadata check against the running app's routed endpoints, including hubs and minimal endpoints. It also exercises:
+- anonymous access to the public surface;
+- the `401` and `403` envelopes;
+- the `AdminOnly` policy against each global role;
+- club owner, manager, volunteer, unrelated-user, and admin access decided by the services.
+
 PowerShell compatibility wrappers remain in `bin/backend-unit-coverage.ps1` and `bin/backend-integration-endpoint-coverage.ps1`.
 
 ## Frontend unit tests

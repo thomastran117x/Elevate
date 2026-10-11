@@ -114,6 +114,7 @@ namespace backend.main.features.events.registration
         }
 
         [HttpGet("{eventId}/registrations")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventRegistrationResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetRegistrations([Range(1, int.MaxValue)] int eventId, [Range(1, int.MaxValue)] int page = 1, [Range(1, 100)] int pageSize = 20)
         {

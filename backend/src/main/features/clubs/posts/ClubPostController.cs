@@ -165,7 +165,7 @@ namespace backend.main.features.clubs.posts
     [FeatureGate(FeatureFlagKeys.ClubsPosts)]
     [FeatureGate(FeatureFlagKeys.SearchReindex)]
     [Route("admin/clubs")]
-    [Authorize("AdminOnly")]
+    [Authorize(AuthorizationPolicies.AdminOnly)]
     public class AdminClubPostController : ControllerBase
     {
         private readonly IClubPostService _postService;

@@ -92,6 +92,7 @@ namespace backend.main.features.clubs.invitations
         }
 
         [HttpPost("invitations/resolve")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<ClubInvitationResolveResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ResolveInvitation([FromBody] ClubInvitationTokenRequest request)
         {

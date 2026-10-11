@@ -40,7 +40,7 @@ The entry point is `backend/src/main/Program.cs`. `application/` configures star
 
 Controllers bind requests and enforce HTTP/security contracts, services implement business rules, and repositories perform persistence operations. Services are registered through the existing bootstrap container. Repository/cache proxy and resilience behavior should be preserved when adding dependencies. DTOs isolate API contracts from database entities.
 
-Normal startup validates settings, verifies the database connection, applies EF Core migrations, and optionally seeds data. `Testing` and OpenAPI export suppress startup side effects; integration fixtures supply infrastructure and state themselves. Middleware handles forwarded headers, exceptions, request IDs, timeouts, headers/HTTPS, CORS, CSRF, authentication, authorization, and rate limiting. MVC routes receive the `/api` prefix; the club hub is mapped explicitly at `/api/hubs/clubs`.
+Normal startup validates settings, verifies the database connection, applies EF Core migrations, and optionally seeds data. `Testing` and OpenAPI export suppress startup side effects; integration fixtures supply infrastructure and state themselves. Middleware handles forwarded headers, exceptions, request IDs, timeouts, headers/HTTPS, CORS, CSRF, authentication, authorization, and rate limiting. Authorization is authenticated by default: the fallback policy requires a bearer user for every endpoint that does not carry `[AllowAnonymous]`. Requests that match no route pass through to the JSON 404 rather than being challenged. MVC routes receive the `/api` prefix; the club hub is mapped explicitly at `/api/hubs/clubs`.
 
 ## Infrastructure and asynchronous work
 

@@ -163,6 +163,7 @@ namespace backend.main.features.clubs.follow.invitations
         // ---- Recipient-facing (both sources) ----
 
         [HttpPost("members/invitations/resolve")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<ClubMemberInvitationResolveResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ResolveInvitation([FromBody] ClubMemberInvitationTokenRequest request)
         {

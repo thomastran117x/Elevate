@@ -1,4 +1,5 @@
 using backend.main.application.features;
+using backend.main.application.security;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.profile;
@@ -15,7 +16,7 @@ namespace backend.main.features.profile.admin
     [ApiController]
     [FeatureGate(FeatureFlagKeys.ProfileAdmin)]
     [Route("admin/users")]
-    [Authorize("AdminOnly")]
+    [Authorize(AuthorizationPolicies.AdminOnly)]
     public class UserAdminController : ControllerBase
     {
         private readonly IUserService _userService;
