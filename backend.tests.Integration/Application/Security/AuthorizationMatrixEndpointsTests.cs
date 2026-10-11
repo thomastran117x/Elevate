@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.token;
 using backend.main.features.clubs.staff;
 using backend.main.features.events;
 
@@ -271,6 +272,17 @@ public class AuthorizationMatrixEndpointsTests
         string email,
         string role)
     {
+        if (role != "Admin")
+        {
+            return await app.SignUpAndVerifyByTokenAsync(
+                email,
+                role: role,
+                transport: SessionTransportResolver.ApiValue);
+        }
+
+        // Admin cannot self-register, so it is seeded and logged in. Keep this to one login per
+        // test: the shared client keeps the trusted-device cookie from that login, and the cookie
+        // takes precedence over the header on any later login.
         var user = await app.SeedUserAsync(email, role: role);
         var device = $"{user.Username}-device";
         await app.SeedKnownDeviceAsync(user.Id, device);
