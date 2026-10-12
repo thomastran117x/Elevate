@@ -10,6 +10,19 @@ namespace backend.main.features.auth
         Task<User?> UpdateUserAsync(int id, User updated);
         Task<UserStatusRecord?> UpdateUserStatusAsync(int id, bool isDisabled, string? disabledReason);
         Task<bool> IncrementAuthVersionAsync(int id);
+
+        /// <summary>
+        /// Replaces the stored password hash only if it still equals <paramref name="expectedHash"/>,
+        /// in a single conditional update. Used to upgrade an obsolete hash after a successful login:
+        /// the password itself is unchanged, so <c>AuthVersion</c> is left alone and existing
+        /// sessions stay valid. Returns false when the hash changed in the meantime (a concurrent
+        /// login already upgraded it, or the password was reset), in which case nothing is written.
+        /// </summary>
+        Task<bool> TryReplacePasswordHashAsync(
+            int id,
+            string expectedHash,
+            string newHash,
+            CancellationToken cancellationToken = default);
         Task<User?> GetUserAsync(int id);
         Task<UserAuthRecord?> GetAuthByUsernameAsync(string username);
         Task<UserAuthRecord?> GetAuthByEmailAsync(string email);

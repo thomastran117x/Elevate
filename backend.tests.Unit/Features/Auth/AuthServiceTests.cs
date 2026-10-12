@@ -7,6 +7,7 @@ using backend.main.features.auth.device;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
+using backend.main.features.auth.password;
 using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
@@ -300,6 +301,149 @@ public class AuthServiceTests
         deviceService.Verify(service => service.EnsureDeviceKnownAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<ClientRequestInfo>(), It.IsAny<string?>()), Times.Never);
         challengeService.VerifyAll();
     }
+
+    [Fact]
+    public async Task LoginAsync_ShouldUpgradeALegacyBcryptHash_WithoutTouchingAuthVersion()
+    {
+        var legacyHash = BCrypt.Net.BCrypt.HashPassword("Password123!", workFactor: 4);
+        var userRepository = UserRepositoryForLogin(legacyHash);
+        userRepository.Setup(repository => repository.TryReplacePasswordHashAsync(
+                61, legacyHash, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var hasher = TestPasswordHashers.Fast();
+
+        var result = await LoginThroughStepUpAsync(userRepository, "Password123!", hasher);
+
+        result.Type.Should().Be(AuthFlowResponseTypes.RequiresStepUp);
+        userRepository.Verify(repository => repository.TryReplacePasswordHashAsync(
+                61,
+                legacyHash,
+                It.Is<string>(hash =>
+                    hash.StartsWith("$argon2id$")
+                    && hasher.Verify("Password123!", hash) == PasswordVerificationResult.Success),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        userRepository.Verify(repository => repository.IncrementAuthVersionAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task LoginAsync_ShouldLeaveACurrentHashAlone()
+    {
+        var hasher = TestPasswordHashers.Fast();
+        var userRepository = UserRepositoryForLogin(hasher.Hash("Password123!"));
+
+        await LoginThroughStepUpAsync(userRepository, "Password123!", hasher);
+
+        userRepository.Verify(repository => repository.TryReplacePasswordHashAsync(
+                It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task LoginAsync_ShouldStillSucceed_WhenTheHashUpgradeFails()
+    {
+        var legacyHash = BCrypt.Net.BCrypt.HashPassword("Password123!", workFactor: 4);
+        var userRepository = UserRepositoryForLogin(legacyHash);
+        userRepository.Setup(repository => repository.TryReplacePasswordHashAsync(
+                It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TimeoutException("database unavailable"));
+
+        var result = await LoginThroughStepUpAsync(userRepository, "Password123!", TestPasswordHashers.Fast());
+
+        result.Type.Should().Be(AuthFlowResponseTypes.RequiresStepUp);
+    }
+
+    [Fact]
+    public async Task LoginAsync_ShouldNotUpgrade_WhenTheLegacyPasswordIsWrong()
+    {
+        var userRepository = UserRepositoryForLogin(BCrypt.Net.BCrypt.HashPassword("Password123!", workFactor: 4));
+
+        var act = () => LoginThroughStepUpAsync(userRepository, "password123!", TestPasswordHashers.Fast());
+
+        await act.Should().ThrowAsync<UnauthorizedException>();
+        userRepository.Verify(repository => repository.TryReplacePasswordHashAsync(
+                It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task LoginAsync_ShouldNotUpgrade_ForADisabledAccount()
+    {
+        var userRepository = UserRepositoryForLogin(
+            BCrypt.Net.BCrypt.HashPassword("Password123!", workFactor: 4),
+            isDisabled: true);
+
+        var act = () => LoginThroughStepUpAsync(userRepository, "Password123!", TestPasswordHashers.Fast());
+
+        await act.Should().ThrowAsync<ForbiddenException>();
+        userRepository.Verify(repository => repository.TryReplacePasswordHashAsync(
+                It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    private static Mock<IAuthUserRepository> UserRepositoryForLogin(string passwordHash, bool isDisabled = false)
+    {
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetAuthByUsernameAsync("rehash-user"))
+            .ReturnsAsync(new UserAuthRecord
+            {
+                Id = 61,
+                Email = "rehash@example.com",
+                Password = passwordHash,
+                Usertype = "Participant",
+                IsDisabled = isDisabled,
+                AuthVersion = 1
+            });
+        return userRepository;
+    }
+
+    /// <summary>
+    /// Drives a login down the TOTP step-up branch, the shortest path that gets past password
+    /// verification without issuing a session.
+    /// </summary>
+    private static async Task<LoginAuthenticationResult> LoginThroughStepUpAsync(
+        Mock<IAuthUserRepository> userRepository,
+        string password,
+        IPasswordHasher hasher)
+    {
+        using var scope = new TemporaryEnvironmentVariableScope(new Dictionary<string, string?>
+        {
+            ["AUTH_SMS_MFA_ENFORCEMENT_ENABLED"] = "false",
+            ["AUTH_TOTP_MFA_STEP_UP_ENABLED"] = "true"
+        });
+
+        var totpService = new Mock<ITotpMfaEnrollmentService>();
+        totpService.Setup(service => service.GetEnrollmentAsync(61))
+            .ReturnsAsync(new TotpMfaEnrollment
+            {
+                UserId = 61,
+                EncryptedSecret = "v1:encrypted",
+                IsTotpMfaEnabled = true
+            });
+
+        var challengeService = new Mock<ILoginStepUpChallengeService>();
+        challengeService.Setup(service => service.CreateChallengeAsync(
+                It.Is<User>(user => user.Id == 61),
+                SessionTransport.BrowserCookie,
+                false,
+                It.IsAny<string?>()))
+            .ReturnsAsync(new LoginStepUpChallengeResponse
+            {
+                Challenge = "stepup-challenge",
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(15),
+                AvailableMethods = ["totp", "email"],
+                MaskedEmail = "r***@example.com"
+            });
+
+        var service = CreateService(
+            userRepository: userRepository,
+            loginStepUpChallengeService: challengeService,
+            totpMfaEnrollmentService: totpService,
+            passwordHasher: hasher);
+
+        return await service.LoginAsync("rehash-user", password, SessionTransport.BrowserCookie);
+    }
+
     [Fact]
     public async Task GoogleAsync_ShouldAttachProviderIdForExistingEmailUser()
     {
@@ -1701,7 +1845,8 @@ public class AuthServiceTests
         Mock<IAuthSessionService>? authSessionService = null,
         SeedAccountBypassPolicy? seedBypass = null,
         IEmailAvailabilityService? emailAvailability = null,
-        IUsernameAvailabilityService? usernameAvailability = null)
+        IUsernameAvailabilityService? usernameAvailability = null,
+        IPasswordHasher? passwordHasher = null)
     {
         userRepository ??= new Mock<IAuthUserRepository>();
         oauthService ??= new Mock<IOAuthService>();
@@ -1737,7 +1882,8 @@ public class AuthServiceTests
             usernameAvailability,
             emailAvailability,
             seedBypass,
-            TestRequestInfoFactory.Browser());
+            TestRequestInfoFactory.Browser(),
+            passwordHasher ?? TestPasswordHashers.Fast());
     }
 
     private static Mock<ITokenService> CreateTokenServiceForUser(backend.main.features.profile.User user)

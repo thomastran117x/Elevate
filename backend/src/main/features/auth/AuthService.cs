@@ -8,6 +8,7 @@ using backend.main.features.auth.device;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
+using backend.main.features.auth.password;
 using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
@@ -38,7 +39,7 @@ namespace backend.main.features.auth
         private readonly IEmailAvailabilityService _emailAvailability;
         private readonly SeedAccountBypassPolicy _seedBypass;
         private readonly ClientRequestInfo _requestInfo;
-        private const string DummyHash = "$2a$11$9FJqO6j/4jP3E2fOQdWgMuKZXWWvPZ09f8Pj0L9VqB6TfqZ4fE5SO";
+        private readonly IPasswordHasher _passwordHasher;
         private static readonly TimeSpan PendingOAuthSignupTtl = TimeSpan.FromMinutes(15);
 
         public AuthService(
@@ -55,7 +56,8 @@ namespace backend.main.features.auth
             IUsernameAvailabilityService usernameAvailability,
             IEmailAvailabilityService emailAvailability,
             SeedAccountBypassPolicy seedBypass,
-            ClientRequestInfo requestInfo
+            ClientRequestInfo requestInfo,
+            IPasswordHasher passwordHasher
         )
         {
             _userRepository = userRepository;
@@ -72,6 +74,7 @@ namespace backend.main.features.auth
             _emailAvailability = emailAvailability;
             _seedBypass = seedBypass;
             _requestInfo = requestInfo;
+            _passwordHasher = passwordHasher;
         }
 
         public async Task<LoginAuthenticationResult> LoginAsync(
@@ -89,14 +92,17 @@ namespace backend.main.features.auth
                     ? null
                     : await _userRepository.GetAuthByUsernameAsync(normalizedUsername);
 
-                var hashToCheck = user?.Password ?? DummyHash;
-                bool isValidPassword = VerifyPassword(password, hashToCheck);
+                var hashToCheck = user?.Password ?? _passwordHasher.DummyHash;
+                var verification = VerifyPassword(password, hashToCheck);
 
-                if (user == null || user.Password == null || !isValidPassword)
+                if (user == null || user.Password == null || verification == PasswordVerificationResult.Failed)
                     throw new UnauthorizedException("Invalid username or password");
 
                 var resolvedUser = ToUser(user);
                 await EnsureUserEnabledAsync(resolvedUser);
+
+                if (verification == PasswordVerificationResult.SuccessRehashNeeded)
+                    await TryUpgradePasswordHashAsync(user.Id, password, user.Password);
 
                 return await ResolvePostAuthOutcomeAsync(
                     resolvedUser, transport, rememberMe, returnUrl,
@@ -446,8 +452,8 @@ namespace backend.main.features.auth
                         "This account uses social login and has no password set."
                     );
 
-                bool isValid = VerifyPassword(currentPassword, existingUser.Password);
-                if (!isValid)
+                var verification = VerifyPassword(currentPassword, existingUser.Password);
+                if (verification == PasswordVerificationResult.Failed)
                     throw new UnauthorizedException("Current password is incorrect.");
 
                 if (currentPassword == newPassword)
@@ -807,7 +813,7 @@ namespace backend.main.features.auth
         {
             try
             {
-                return BCrypt.Net.BCrypt.HashPassword(password, workFactor: 12);
+                return _passwordHasher.Hash(password);
             }
             catch (Exception e)
             {
@@ -819,11 +825,11 @@ namespace backend.main.features.auth
             }
         }
 
-        private bool VerifyPassword(string password, string hashedPassword)
+        private PasswordVerificationResult VerifyPassword(string password, string hashedPassword)
         {
             try
             {
-                return BCrypt.Net.BCrypt.Verify(password, hashedPassword);
+                return _passwordHasher.Verify(password, hashedPassword);
             }
             catch (Exception e)
             {
@@ -832,6 +838,35 @@ namespace backend.main.features.auth
 
                 Logger.Error($"[AuthService] VerifyPassword failed: {e}");
                 throw new InternalServerErrorException();
+            }
+        }
+
+        /// <summary>
+        /// Replaces an obsolete stored hash with one made from the current parameters, after the
+        /// password has just been proven correct. Best effort: any failure leaves the old hash in
+        /// place, which still verifies, so a failed upgrade can never lock the account out.
+        /// </summary>
+        private async Task TryUpgradePasswordHashAsync(int userId, string password, string currentHash)
+        {
+            try
+            {
+                var upgradedHash = _passwordHasher.Hash(password);
+
+                // A hash that cannot verify the password it was made from must never replace one
+                // that can.
+                if (_passwordHasher.Verify(password, upgradedHash) == PasswordVerificationResult.Failed)
+                {
+                    Logger.Warn($"[AuthService] Upgraded password hash for user {userId} did not verify; kept the existing hash.");
+                    return;
+                }
+
+                // Conditional on the hash we verified against, so a concurrent reset or upgrade wins
+                // and this write becomes a no-op rather than overwriting it.
+                await _userRepository.TryReplacePasswordHashAsync(userId, currentHash, upgradedHash);
+            }
+            catch (Exception e)
+            {
+                Logger.Warn($"[AuthService] Password hash upgrade for user {userId} failed: {e.GetType().Name}");
             }
         }
 

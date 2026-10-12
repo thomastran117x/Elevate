@@ -1,3 +1,4 @@
+using backend.main.features.auth.password;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
 
@@ -11,15 +12,18 @@ public sealed class SeedUsersSeeder : ISeeder
     private readonly AppDatabaseContext _dbContext;
     private readonly IConfiguration _configuration;
     private readonly ILogger<SeedUsersSeeder> _logger;
+    private readonly IPasswordHasher _passwordHasher;
 
     public SeedUsersSeeder(
         AppDatabaseContext dbContext,
         IConfiguration configuration,
-        ILogger<SeedUsersSeeder> logger)
+        ILogger<SeedUsersSeeder> logger,
+        IPasswordHasher passwordHasher)
     {
         _dbContext = dbContext;
         _configuration = configuration;
         _logger = logger;
+        _passwordHasher = passwordHasher;
     }
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
@@ -43,9 +47,7 @@ public sealed class SeedUsersSeeder : ISeeder
             .ToDictionary(user => user.Username!, StringComparer.OrdinalIgnoreCase);
 
         var defaultPassword = ResolveDefaultUserPassword();
-        var passwordHash = BCrypt.Net.BCrypt.HashPassword(
-            defaultPassword,
-            workFactor: 12);
+        var passwordHash = _passwordHasher.Hash(defaultPassword);
 
         var createdCount = 0;
         var updatedCount = 0;
@@ -63,7 +65,7 @@ public sealed class SeedUsersSeeder : ISeeder
 
             if (existingByEmail.TryGetValue(definition.Email, out var existing))
             {
-                if (ApplyDefinition(existing, definition, defaultPassword, passwordHash))
+                if (ApplyDefinition(existing, definition, defaultPassword, passwordHash, _passwordHasher))
                     updatedCount++;
 
                 continue;
@@ -125,7 +127,8 @@ public sealed class SeedUsersSeeder : ISeeder
         User user,
         SeedUserDefinition definition,
         string defaultPassword,
-        string passwordHash)
+        string passwordHash,
+        IPasswordHasher passwordHasher)
     {
         var changed = false;
 
@@ -146,8 +149,9 @@ public sealed class SeedUsersSeeder : ISeeder
             value => user.UsernameDisplay = value);
         changed |= SetIfDifferent(user.Name, definition.Name, value => user.Name = value);
         changed |= SetIfDifferent(user.Usertype, definition.Role, value => user.Usertype = value);
-        if (string.IsNullOrWhiteSpace(user.Password)
-            || !BCrypt.Net.BCrypt.Verify(defaultPassword, user.Password))
+        // Anything short of a current-format match is rewritten, so seed accounts also move off
+        // legacy hashes whenever the seeder runs.
+        if (passwordHasher.Verify(defaultPassword, user.Password) != PasswordVerificationResult.Success)
         {
             user.Password = passwordHash;
             changed = true;

@@ -1,5 +1,8 @@
+using backend.main.features.auth.password;
 using backend.main.features.profile;
 using backend.main.shared.requests;
+
+using Microsoft.Extensions.Options;
 
 namespace backend.tests.Unit.Support;
 
@@ -101,4 +104,25 @@ internal static class TestRequestInfoFactory
         DeviceType = "API Client",
         IsBrowserClient = false
     };
+}
+
+internal static class TestPasswordHashers
+{
+    /// <summary>
+    /// The production hasher with the cheapest parameters the options validator accepts, so the
+    /// suite exercises real Argon2id without paying production cost on every hash.
+    /// </summary>
+    public static PasswordHasher Fast(PasswordHashAlgorithm algorithm = PasswordHashAlgorithm.Argon2id) =>
+        new(Options.Create(FastOptions(algorithm)));
+
+    public static PasswordPolicyOptions FastOptions(
+        PasswordHashAlgorithm algorithm = PasswordHashAlgorithm.Argon2id) => new()
+        {
+            Hashing = new PasswordHashingOptions
+            {
+                Algorithm = algorithm,
+                Argon2 = new Argon2Options { MemoryKiB = Argon2Options.MinMemoryKiB, Iterations = 1, Parallelism = 1 },
+                BcryptWorkFactor = PasswordHashingOptions.MinBcryptWorkFactor,
+            },
+        };
 }

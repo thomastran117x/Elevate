@@ -77,7 +77,13 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
                 ["Auth:AbuseProtection:OAuthCompletionTargetPermitLimit"] = "100000",
                 ["Auth:AbuseProtection:MfaDeliveryTargetPermitLimit"] = "100000",
                 ["Auth:AbuseProtection:EmailAvailabilityIpPermitLimit"] = "100000",
-                ["Auth:AbuseProtection:EmailAvailabilityTargetPermitLimit"] = "100000"
+                ["Auth:AbuseProtection:EmailAvailabilityTargetPermitLimit"] = "100000",
+                // The cheapest Argon2id cost the validator accepts. Must match
+                // TestPasswordHashers.Fast(), or seeded hashes would be upgraded on every login.
+                ["Auth:PasswordPolicy:Hashing:Argon2:MemoryKiB"] = "1024",
+                ["Auth:PasswordPolicy:Hashing:Argon2:Iterations"] = "1",
+                ["Auth:PasswordPolicy:Hashing:Argon2:Parallelism"] = "1",
+                ["Auth:PasswordPolicy:Hashing:BcryptWorkFactor"] = "4"
             };
 
             foreach (var (key, value) in _configurationOverrides)

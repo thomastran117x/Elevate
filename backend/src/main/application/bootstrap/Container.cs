@@ -8,6 +8,7 @@ using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
+using backend.main.features.auth.password;
 using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.bloom;
@@ -201,6 +202,13 @@ namespace backend.main.application.bootstrap
                 .Bind(config.GetSection(StepUpOptions.SectionName))
                 .ValidateOnStart();
             services.AddSingleton<IValidateOptions<StepUpOptions>, StepUpOptionsValidator>();
+            services.AddOptions<PasswordPolicyOptions>()
+                .Bind(config.GetSection(PasswordPolicyOptions.SectionName))
+                .ValidateOnStart();
+            services.AddSingleton<
+                IValidateOptions<PasswordPolicyOptions>,
+                PasswordPolicyOptionsValidator>();
+            services.AddSingleton<IPasswordHasher, PasswordHasher>();
             services.AddOptions<BloomFilterOptions>()
                 .Bind(config.GetSection("BloomFilters"))
                 .ValidateDataAnnotations()

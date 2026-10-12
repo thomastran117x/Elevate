@@ -336,6 +336,21 @@ namespace backend.main.features.auth
             return true;
         }
 
+        public async Task<bool> TryReplacePasswordHashAsync(
+            int id,
+            string expectedHash,
+            string newHash,
+            CancellationToken cancellationToken = default)
+        {
+            var affected = await _context.Users
+                .Where(u => u.Id == id && u.Password == expectedHash)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(u => u.Password, newHash),
+                    cancellationToken);
+
+            return affected == 1;
+        }
+
         public async Task<IReadOnlyList<string>> DeleteUserAsync(int id)
         {
             var user = await _context.Users.FindAsync(id);

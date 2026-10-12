@@ -1,4 +1,5 @@
 using backend.main.features.auth;
+using backend.main.features.auth.password;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts;
@@ -59,7 +60,9 @@ public class ThematicSeedersTests
         var login = await new AuthUserRepository(db).GetAuthByUsernameAsync("HARBOUROWNER");
         login.Should().NotBeNull();
         login!.Email.Should().Be($"harbour.owner{SeedCatalogConstants.SeedEmailDomain}");
-        BCrypt.Net.BCrypt.Verify("Password123!", login.Password).Should().BeTrue();
+        login.Password.Should().StartWith("$argon2id$");
+        TestPasswordHashers.Fast().Verify("Password123!", login.Password)
+            .Should().Be(PasswordVerificationResult.Success);
     }
 
     [Fact]
@@ -471,7 +474,8 @@ public class ThematicSeedersTests
         return new SeedUsersSeeder(
             db,
             BuildConfiguration(),
-            NullLogger<SeedUsersSeeder>.Instance);
+            NullLogger<SeedUsersSeeder>.Instance,
+            TestPasswordHashers.Fast());
     }
 
     private static SeedClubContentSeeder CreateClubSeeder(AppDatabaseContext db)

@@ -14,6 +14,7 @@ using backend.main.features.auth.device;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.oauth;
+using backend.main.features.auth.password;
 using backend.main.features.auth.token;
 using backend.main.features.bloom;
 using backend.main.features.cache;
@@ -179,16 +180,20 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         bool disabled = false,
         string? googleId = null,
         string? microsoftId = null,
-        string? username = null)
+        string? username = null,
+        string? passwordHash = null)
     {
         await using var scope = _factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+        // The app's own hasher, so the stored hash is already current and login does not upgrade
+        // it. Pass passwordHash to seed a legacy format instead.
+        passwordHash ??= scope.ServiceProvider.GetRequiredService<IPasswordHasher>().Hash(password);
 
         var user = new User
         {
             Email = email,
             Username = username ?? email.Split('@')[0],
-            Password = BCrypt.Net.BCrypt.HashPassword(password, workFactor: 4),
+            Password = passwordHash,
             Usertype = role,
             IsDisabled = disabled,
             GoogleID = googleId,

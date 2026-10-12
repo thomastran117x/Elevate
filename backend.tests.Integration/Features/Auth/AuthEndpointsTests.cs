@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.oauth;
+using backend.main.features.auth.password;
 using backend.main.features.auth.token;
 using backend.main.infrastructure.database.core;
 using backend.main.shared.responses;
@@ -15,6 +16,7 @@ using backend.tests.Integration.Infrastructure;
 using FluentAssertions;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace backend.tests.Integration.Features.Auth;
 
@@ -511,6 +513,30 @@ public class AuthEndpointsTests
 
         var profile = await app.Client.GetAsync("/api/profile/Legacy__Name");
         profile.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// Accounts created before Argon2id carry BCrypt hashes. They must keep signing in, and the
+    /// first successful login replaces the hash without invalidating any session.
+    /// </summary>
+    [Fact]
+    public async Task Login_ShouldUpgradeALegacyBcryptHash_InPlace()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        const string password = "Password123!";
+        var legacyHash = BCrypt.Net.BCrypt.HashPassword(password, workFactor: 4);
+        var user = await app.SeedUserAsync("legacy-hash@example.com", passwordHash: legacyHash);
+        await app.SeedKnownDeviceAsync(user.Id, "legacy-hash-device");
+
+        await app.LoginApiAsync("legacy-hash", password, trustedDeviceToken: "legacy-hash-device");
+
+        await using var scope = app.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+        var stored = await db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id);
+        stored.Password.Should().StartWith("$argon2id$");
+        stored.AuthVersion.Should().Be(user.AuthVersion);
+        scope.ServiceProvider.GetRequiredService<IPasswordHasher>().Verify(password, stored.Password)
+            .Should().Be(PasswordVerificationResult.Success);
     }
 
     [Fact]

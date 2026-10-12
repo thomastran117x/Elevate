@@ -1,5 +1,6 @@
 using backend.main.features.auth;
 using backend.main.features.auth.notifications;
+using backend.main.features.auth.password;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.events.invitations;
@@ -19,6 +20,7 @@ namespace backend.main.features.profile.email
         private readonly IEventInvitationService _invitationService;
         private readonly IRefreshAheadCache _refreshCache;
         private readonly TimeProvider _timeProvider;
+        private readonly IPasswordHasher _passwordHasher;
 
         private static string GetUserCacheKey(int userId) => $"user:{userId}";
 
@@ -29,7 +31,8 @@ namespace backend.main.features.profile.email
             IAuthNotificationService notificationService,
             IEventInvitationService invitationService,
             IRefreshAheadCache refreshCache,
-            TimeProvider timeProvider
+            TimeProvider timeProvider,
+            IPasswordHasher passwordHasher
         )
         {
             _userRepository = userRepository;
@@ -39,6 +42,7 @@ namespace backend.main.features.profile.email
             _invitationService = invitationService;
             _refreshCache = refreshCache;
             _timeProvider = timeProvider;
+            _passwordHasher = passwordHasher;
         }
 
         public async Task<VerificationOtpChallenge> RequestChangeAsync(
@@ -242,7 +246,7 @@ namespace backend.main.features.profile.email
         {
             try
             {
-                return BCrypt.Net.BCrypt.Verify(password, hashedPassword);
+                return _passwordHasher.Verify(password, hashedPassword) != PasswordVerificationResult.Failed;
             }
             catch (Exception e)
             {

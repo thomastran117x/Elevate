@@ -10,6 +10,8 @@ using backend.main.features.profile.email;
 using backend.main.seeders;
 using backend.main.shared.exceptions.http;
 
+using backend.tests.Unit.Support;
+
 using FluentAssertions;
 
 using Moq;
@@ -119,6 +121,19 @@ public class EmailChangeServiceTests
         var act = () => harness.Service.RequestChangeAsync(UserId, NewEmail, "guessed");
 
         await act.Should().ThrowAsync<UnauthorizedException>();
+    }
+
+    [Fact]
+    public async Task RequestChangeAsync_ShouldAcceptALegacyBcryptPassword()
+    {
+        var harness = new Harness();
+        harness.WithPasswordAccount(passwordHash: BCrypt.Net.BCrypt.HashPassword(CorrectPassword, 4));
+
+        await harness.Service.RequestChangeAsync(UserId, NewEmail, CorrectPassword);
+
+        harness.Tokens.Verify(
+            t => t.GenerateEmailChangeArtifactsAsync(UserId, AuthVersion, NewEmail),
+            Times.Once);
     }
 
     [Fact]
@@ -396,12 +411,13 @@ public class EmailChangeServiceTests
                 Notifications.Object,
                 Invitations.Object,
                 Cache.Object,
-                new FixedTimeProvider(UtcNow));
+                new FixedTimeProvider(UtcNow),
+                TestPasswordHashers.Fast());
         }
 
-        // Work factor 4 keeps the suite fast; the production hash is 12.
+        // Minimum Argon2id cost keeps the suite fast; production parameters come from configuration.
         public void WithPasswordAccount(bool isDisabled = false, string? passwordHash = null) =>
-            SetAccount(passwordHash ?? BCrypt.Net.BCrypt.HashPassword(CorrectPassword, 4), isDisabled);
+            SetAccount(passwordHash ?? TestPasswordHashers.Fast().Hash(CorrectPassword), isDisabled);
 
         public void WithOAuthOnlyAccount() => SetAccount(password: null, isDisabled: false);
 
