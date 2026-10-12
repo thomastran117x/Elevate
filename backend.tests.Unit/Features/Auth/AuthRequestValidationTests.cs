@@ -9,7 +9,7 @@ namespace backend.tests.Unit.Features.Auth;
 public class AuthRequestValidationTests
 {
     [Fact]
-    public void SignUpRequest_ShouldRequireValidEmailStrongPasswordCaptchaAndKnownRole()
+    public void SignUpRequest_ShouldRequireValidEmailPasswordLengthCaptchaAndKnownRole()
     {
         var request = new SignUpRequest
         {
@@ -25,7 +25,7 @@ public class AuthRequestValidationTests
         results.Select(item => item.ErrorMessage).Should().Contain([
             "The Email field is not a valid e-mail address.",
             "The Username field is required.",
-            "Password must be at least 8 characters long.",
+            "Use between 15 and 128 characters.",
             "The Captcha field is required.",
             "Role must be one of: 'Participant', 'Organizer', 'Volunteer'."
         ]);
@@ -38,7 +38,7 @@ public class AuthRequestValidationTests
         {
             Email = "member@test.local",
             Username = "member",
-            Password = "StrongPass1!",
+            Password = "all lowercase no digits",
             Captcha = "captcha-token",
             Usertype = " organizer "
         };
@@ -77,18 +77,18 @@ public class AuthRequestValidationTests
     }
 
     [Fact]
-    public void ChangePasswordRequest_ShouldEnforceStrongPasswordAndCodeLength()
+    public void ChangePasswordRequest_ShouldEnforcePasswordLengthAndCodeLength()
     {
         var request = new ChangePasswordRequest
         {
-            Password = "NoNumber!",
+            Password = "Sh0rt&Strong!",
             Code = "123"
         };
 
         var results = Validate(request);
 
         results.Select(item => item.ErrorMessage).Should().Contain([
-            "Password must contain at least one number.",
+            "Use between 15 and 128 characters.",
             "Code must be 6 digits."
         ]);
     }

@@ -8,6 +8,7 @@ using backend.main.features.auth.device;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
+using backend.main.features.auth.password;
 using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
@@ -38,7 +39,8 @@ namespace backend.main.features.auth
         private readonly IEmailAvailabilityService _emailAvailability;
         private readonly SeedAccountBypassPolicy _seedBypass;
         private readonly ClientRequestInfo _requestInfo;
-        private const string DummyHash = "$2a$11$9FJqO6j/4jP3E2fOQdWgMuKZXWWvPZ09f8Pj0L9VqB6TfqZ4fE5SO";
+        private readonly IPasswordHasher _passwordHasher;
+        private readonly IPasswordPolicy _passwordPolicy;
         private static readonly TimeSpan PendingOAuthSignupTtl = TimeSpan.FromMinutes(15);
 
         public AuthService(
@@ -55,7 +57,9 @@ namespace backend.main.features.auth
             IUsernameAvailabilityService usernameAvailability,
             IEmailAvailabilityService emailAvailability,
             SeedAccountBypassPolicy seedBypass,
-            ClientRequestInfo requestInfo
+            ClientRequestInfo requestInfo,
+            IPasswordHasher passwordHasher,
+            IPasswordPolicy passwordPolicy
         )
         {
             _userRepository = userRepository;
@@ -72,6 +76,8 @@ namespace backend.main.features.auth
             _emailAvailability = emailAvailability;
             _seedBypass = seedBypass;
             _requestInfo = requestInfo;
+            _passwordHasher = passwordHasher;
+            _passwordPolicy = passwordPolicy;
         }
 
         public async Task<LoginAuthenticationResult> LoginAsync(
@@ -89,14 +95,17 @@ namespace backend.main.features.auth
                     ? null
                     : await _userRepository.GetAuthByUsernameAsync(normalizedUsername);
 
-                var hashToCheck = user?.Password ?? DummyHash;
-                bool isValidPassword = VerifyPassword(password, hashToCheck);
+                var hashToCheck = user?.Password ?? _passwordHasher.DummyHash;
+                var verification = VerifyPassword(password, hashToCheck);
 
-                if (user == null || user.Password == null || !isValidPassword)
+                if (user == null || user.Password == null || verification == PasswordVerificationResult.Failed)
                     throw new UnauthorizedException("Invalid username or password");
 
                 var resolvedUser = ToUser(user);
                 await EnsureUserEnabledAsync(resolvedUser);
+
+                if (verification == PasswordVerificationResult.SuccessRehashNeeded)
+                    await TryUpgradePasswordHashAsync(user.Id, password, user.Password);
 
                 return await ResolvePostAuthOutcomeAsync(
                     resolvedUser, transport, rememberMe, returnUrl,
@@ -130,6 +139,11 @@ namespace backend.main.features.auth
                 // RFC 5321 leaves the local part case-sensitive to the destination host.
                 email = EmailPolicy.Sanitize(email);
                 var probeEmail = EmailPolicy.NormalizeAndValidate(email);
+
+                _passwordPolicy.EnsureAllowed(
+                    password,
+                    new PasswordPolicyContext(username, email),
+                    "Password");
 
                 // Advisory: this method sends a verification mail, it does not create the account.
                 // The verify step below re-checks authoritatively before inserting, so a filter
@@ -395,7 +409,8 @@ namespace backend.main.features.auth
             {
                 var user = await _tokenService.VerifyVerificationToken(
                     token,
-                    VerificationPurpose.ResetPassword
+                    VerificationPurpose.ResetPassword,
+                    pending => EnsureResetPasswordAllowedAsync(pending.Email, password)
                 );
                 await ChangePasswordInternalAsync(user.Email, password);
                 await SendPasswordChangedBestEffortAsync(user.Email);
@@ -417,7 +432,8 @@ namespace backend.main.features.auth
                 var user = await _tokenService.VerifyVerificationOtpAsync(
                     code,
                     challenge,
-                    VerificationPurpose.ResetPassword
+                    VerificationPurpose.ResetPassword,
+                    pending => EnsureResetPasswordAllowedAsync(pending.Email, password)
                 );
                 await ChangePasswordInternalAsync(user.Email, password);
                 await SendPasswordChangedBestEffortAsync(user.Email);
@@ -446,14 +462,19 @@ namespace backend.main.features.auth
                         "This account uses social login and has no password set."
                     );
 
-                bool isValid = VerifyPassword(currentPassword, existingUser.Password);
-                if (!isValid)
+                var verification = VerifyPassword(currentPassword, existingUser.Password);
+                if (verification == PasswordVerificationResult.Failed)
                     throw new UnauthorizedException("Current password is incorrect.");
 
                 if (currentPassword == newPassword)
                     throw new BadRequestException(
                         "New password must be different from your current password."
                     );
+
+                _passwordPolicy.EnsureAllowed(
+                    newPassword,
+                    new PasswordPolicyContext(existingUser.Username, existingUser.Email),
+                    "NewPassword");
 
                 await ChangePasswordInternalAsync(email, newPassword);
             }
@@ -807,7 +828,7 @@ namespace backend.main.features.auth
         {
             try
             {
-                return BCrypt.Net.BCrypt.HashPassword(password, workFactor: 12);
+                return _passwordHasher.Hash(password);
             }
             catch (Exception e)
             {
@@ -819,11 +840,11 @@ namespace backend.main.features.auth
             }
         }
 
-        private bool VerifyPassword(string password, string hashedPassword)
+        private PasswordVerificationResult VerifyPassword(string password, string hashedPassword)
         {
             try
             {
-                return BCrypt.Net.BCrypt.Verify(password, hashedPassword);
+                return _passwordHasher.Verify(password, hashedPassword);
             }
             catch (Exception e)
             {
@@ -835,6 +856,48 @@ namespace backend.main.features.auth
             }
         }
 
+        /// <summary>
+        /// Replaces an obsolete stored hash with one made from the current parameters, after the
+        /// password has just been proven correct. Best effort: any failure leaves the old hash in
+        /// place, which still verifies, so a failed upgrade can never lock the account out.
+        /// </summary>
+        private async Task TryUpgradePasswordHashAsync(int userId, string password, string currentHash)
+        {
+            try
+            {
+                var upgradedHash = _passwordHasher.Hash(password);
+
+                // A hash that cannot verify the password it was made from must never replace one
+                // that can.
+                if (_passwordHasher.Verify(password, upgradedHash) == PasswordVerificationResult.Failed)
+                {
+                    Logger.Warn($"[AuthService] Upgraded password hash for user {userId} did not verify; kept the existing hash.");
+                    return;
+                }
+
+                // Conditional on the hash we verified against, so a concurrent reset or upgrade wins
+                // and this write becomes a no-op rather than overwriting it.
+                await _userRepository.TryReplacePasswordHashAsync(userId, currentHash, upgradedHash);
+            }
+            catch (Exception e)
+            {
+                Logger.Warn($"[AuthService] Password hash upgrade for user {userId} failed: {e.GetType().Name}");
+            }
+        }
+
+        /// <summary>
+        /// Checks a reset's new password against the policy while the reset token is still unused,
+        /// so a rejected choice can be corrected without requesting another email.
+        /// </summary>
+        private async Task EnsureResetPasswordAllowedAsync(string email, string password)
+        {
+            var account = await _userRepository.GetAuthByEmailAsync(email);
+            _passwordPolicy.EnsureAllowed(
+                password,
+                new PasswordPolicyContext(account?.Username, account?.Email ?? email),
+                "Password");
+        }
+
         private async Task ChangePasswordInternalAsync(string email, string password)
         {
             var hashedPassword = HashPassword(password);
@@ -843,13 +906,7 @@ namespace backend.main.features.auth
                 ?? throw new UnauthorizedException("Invalid token");
             await EnsureUserEnabledAsync(ToUser(existingUser));
 
-            await _userRepository.UpdateUserAsync(existingUser.Id, new User
-            {
-                Email = existingUser.Email,
-                Password = hashedPassword,
-                Usertype = existingUser.Usertype,
-            });
-            await _userRepository.IncrementAuthVersionAsync(existingUser.Id);
+            await _userRepository.SetPasswordAndBumpAuthVersionAsync(existingUser.Id, hashedPassword);
             await _tokenService.RevokeAllRefreshSessionsAsync(existingUser.Id);
         }
 

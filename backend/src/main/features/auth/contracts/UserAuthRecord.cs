@@ -7,6 +7,11 @@ namespace backend.main.features.auth.contracts
             get; init;
         }
         public string Email { get; init; } = null!;
+        /// <summary>Carried so a new password can be checked against the account's own name.</summary>
+        public string? Username
+        {
+            get; init;
+        }
         public string? Password
         {
             get; init;

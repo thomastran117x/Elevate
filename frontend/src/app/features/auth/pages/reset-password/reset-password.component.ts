@@ -5,6 +5,11 @@ import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
 import { AuthService } from '../../services/auth.service';
+import {
+  PASSWORD_LENGTH_MESSAGE,
+  PASSWORD_POLICY_HINT,
+  passwordPolicyValidator,
+} from '../../validators/password-policy.validator';
 
 @Component({
   selector: 'app-reset-password',
@@ -19,11 +24,15 @@ export class ResetPasswordComponent implements OnInit {
 
   readonly form = this.fb.nonNullable.group({
     code: this.fb.nonNullable.control('', [Validators.pattern(/^\d{6}$/)]),
-    password: this.fb.nonNullable.control('', [Validators.required, Validators.minLength(8)]),
+    password: this.fb.nonNullable.control('', [Validators.required, passwordPolicyValidator]),
     confirmPassword: this.fb.nonNullable.control('', [Validators.required]),
   });
 
+  readonly passwordHint = PASSWORD_POLICY_HINT;
+  readonly passwordLengthMessage = PASSWORD_LENGTH_MESSAGE;
+
   loading = false;
+  submitted = false;
   error = '';
   success = '';
   token: string | null = null;
@@ -47,20 +56,23 @@ export class ResetPasswordComponent implements OnInit {
     }
   }
 
+  /** Only once both fields hold something, so an empty confirmation reads as required instead. */
+  get passwordsMismatch(): boolean {
+    const { password, confirmPassword } = this.form.getRawValue();
+    return confirmPassword.length > 0 && password !== confirmPassword;
+  }
+
   submit(): void {
     this.error = '';
     this.success = '';
+    this.submitted = true;
     if (!this.token && !this.challenge) {
       this.error = 'This password reset request is missing its recovery proof.';
       return;
     }
-    if (this.form.invalid) return;
+    if (this.form.invalid || this.passwordsMismatch) return;
 
-    const { code, password, confirmPassword } = this.form.getRawValue();
-    if (password !== confirmPassword) {
-      this.error = 'Passwords do not match.';
-      return;
-    }
+    const { code, password } = this.form.getRawValue();
 
     this.loading = true;
     this.auth

@@ -466,7 +466,10 @@ return 1";
             }
         }
 
-        public async Task<User> VerifyVerificationToken(string token, VerificationPurpose expectedPurpose)
+        public async Task<User> VerifyVerificationToken(
+            string token,
+            VerificationPurpose expectedPurpose,
+            Func<User, Task>? beforeConsume = null)
         {
             try
             {
@@ -480,6 +483,9 @@ return 1";
 
                 if (payload.Purpose != expectedPurpose)
                     throw new UnauthorizedException("Verification token purpose mismatch.");
+
+                if (beforeConsume != null)
+                    await beforeConsume(CreateUserFromPayload(payload));
 
                 _ = await _cacheService.DeleteKeyAsync(VerificationTokenKey(token));
                 var state = await GetVerificationStateAsync(payload.Email, payload.Purpose);
@@ -505,7 +511,8 @@ return 1";
         public async Task<User> VerifyVerificationOtpAsync(
             string code,
             string challenge,
-            VerificationPurpose expectedPurpose
+            VerificationPurpose expectedPurpose,
+            Func<User, Task>? beforeConsume = null
         )
         {
             try
@@ -544,11 +551,7 @@ return 1";
                     throw new UnauthorizedException("Invalid or expired verification code.");
                 }
 
-                _ = await _cacheService.DeleteKeyAsync(VerificationTokenKey(state.LinkToken));
-                await DeleteVerificationStateAsync(state);
-                _ = await _cacheService.DeleteKeyAsync(OtpAttemptKey(challenge));
-
-                return CreateUserFromPayload(new VerificationTokenPayload
+                var verifiedUser = CreateUserFromPayload(new VerificationTokenPayload
                 {
                     Email = state.Email,
                     UserId = state.UserId,
@@ -559,6 +562,15 @@ return 1";
                     UsernameDisplay = state.UsernameDisplay,
                     Purpose = state.Purpose,
                 });
+
+                if (beforeConsume != null)
+                    await beforeConsume(verifiedUser);
+
+                _ = await _cacheService.DeleteKeyAsync(VerificationTokenKey(state.LinkToken));
+                await DeleteVerificationStateAsync(state);
+                _ = await _cacheService.DeleteKeyAsync(OtpAttemptKey(challenge));
+
+                return verifiedUser;
             }
             catch (Exception e)
             {

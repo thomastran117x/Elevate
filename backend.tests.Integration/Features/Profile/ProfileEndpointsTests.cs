@@ -95,7 +95,7 @@ public class ProfileEndpointsTests
         var oldLogin = await app.PostJsonWithCsrfAsync("/api/auth/login", new
         {
             username = "profile-user",
-            password = "Password123!",
+            password = AuthApiTestApp.DefaultPassword,
             captcha = "captcha",
             transport = "api"
         });
@@ -309,8 +309,8 @@ public class ProfileEndpointsTests
             "/api/profile/change-password",
             new ChangePasswordAuthenticatedRequest
             {
-                CurrentPassword = "Password123!",
-                NewPassword = "NewPassword456!"
+                CurrentPassword = AuthApiTestApp.DefaultPassword,
+                NewPassword = "brisk willow anchor 456"
             },
             session.AccessToken);
 
@@ -320,7 +320,7 @@ public class ProfileEndpointsTests
         // The new password is now in effect.
         var newSession = await app.LoginApiAsync(
             "pw-user",
-            password: "NewPassword456!",
+            password: "brisk willow anchor 456",
             trustedDeviceToken: "pw-device");
         newSession.AccessToken.Should().NotBeNullOrWhiteSpace();
     }

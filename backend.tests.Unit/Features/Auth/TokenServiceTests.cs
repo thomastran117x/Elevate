@@ -656,6 +656,87 @@ public class TokenServiceTests
         (await service.VerificationTokenExist("verify@example.com", VerificationPurpose.SignUp)).Should().BeNull();
     }
 
+    /// <summary>
+    /// A reset whose new password is rejected must leave the link usable, or every typo in a new
+    /// password would cost the user another round trip through their inbox.
+    /// </summary>
+    [Fact]
+    public async Task VerifyVerificationToken_ShouldKeepTheToken_WhenBeforeConsumeThrows()
+    {
+        var service = new TokenService(new InMemoryCacheService());
+        var artifacts = await service.GenerateVerificationArtifactsAsync(
+            new User { Email = "reset@example.com", Password = "placeholder", Usertype = "placeholder" },
+            VerificationPurpose.ResetPassword);
+
+        var rejected = () => service.VerifyVerificationToken(
+            artifacts.LinkToken,
+            VerificationPurpose.ResetPassword,
+            _ => throw new BadRequestException("rejected"));
+        await rejected.Should().ThrowAsync<BadRequestException>();
+
+        User? seen = null;
+        var verified = await service.VerifyVerificationToken(
+            artifacts.LinkToken,
+            VerificationPurpose.ResetPassword,
+            pending =>
+            {
+                seen = pending;
+                return Task.CompletedTask;
+            });
+
+        seen!.Email.Should().Be("reset@example.com");
+        verified.Email.Should().Be("reset@example.com");
+        var replay = () => service.VerifyVerificationToken(artifacts.LinkToken, VerificationPurpose.ResetPassword);
+        await replay.Should().ThrowAsync<UnauthorizedException>();
+    }
+
+    [Fact]
+    public async Task VerifyVerificationOtpAsync_ShouldKeepTheChallenge_WhenBeforeConsumeThrows()
+    {
+        var service = new TokenService(new InMemoryCacheService());
+        var artifacts = await service.GenerateVerificationArtifactsAsync(
+            new User { Email = "reset-otp@example.com", Password = "placeholder", Usertype = "placeholder" },
+            VerificationPurpose.ResetPassword);
+
+        var rejected = () => service.VerifyVerificationOtpAsync(
+            artifacts.OtpChallenge.Code,
+            artifacts.OtpChallenge.Challenge,
+            VerificationPurpose.ResetPassword,
+            _ => throw new BadRequestException("rejected"));
+        await rejected.Should().ThrowAsync<BadRequestException>();
+
+        var verified = await service.VerifyVerificationOtpAsync(
+            artifacts.OtpChallenge.Code,
+            artifacts.OtpChallenge.Challenge,
+            VerificationPurpose.ResetPassword);
+
+        verified.Email.Should().Be("reset-otp@example.com");
+    }
+
+    [Fact]
+    public async Task VerifyVerificationOtpAsync_ShouldNotRunBeforeConsume_ForAWrongCode()
+    {
+        var service = new TokenService(new InMemoryCacheService());
+        var artifacts = await service.GenerateVerificationArtifactsAsync(
+            new User { Email = "wrong-code@example.com", Password = "placeholder", Usertype = "placeholder" },
+            VerificationPurpose.ResetPassword);
+        var wrongCode = artifacts.OtpChallenge.Code == "000000" ? "111111" : "000000";
+        var ran = false;
+
+        var act = () => service.VerifyVerificationOtpAsync(
+            wrongCode,
+            artifacts.OtpChallenge.Challenge,
+            VerificationPurpose.ResetPassword,
+            _ =>
+            {
+                ran = true;
+                return Task.CompletedTask;
+            });
+
+        await act.Should().ThrowAsync<UnauthorizedException>();
+        ran.Should().BeFalse();
+    }
+
     [Fact]
     public async Task VerifyVerificationToken_ShouldRejectPurposeMismatch()
     {

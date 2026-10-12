@@ -154,6 +154,43 @@ public class AuthUserRepositoryTests
     }
 
     [Fact]
+    public async Task TryReplacePasswordHashAsync_ShouldSwapTheHash_WithoutBumpingAuthVersion()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        var user = await harness.Repository.CreateUserAsync(new User
+        {
+            Email = "rehash@example.com",
+            Password = "legacy-hash",
+            Usertype = "participant",
+        });
+
+        var replaced = await harness.Repository.TryReplacePasswordHashAsync(user.Id, "legacy-hash", "current-hash");
+
+        replaced.Should().BeTrue();
+        var stored = await harness.Db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id);
+        stored.Password.Should().Be("current-hash");
+        stored.AuthVersion.Should().Be(user.AuthVersion);
+    }
+
+    [Fact]
+    public async Task TryReplacePasswordHashAsync_ShouldWriteNothing_WhenTheHashChangedInTheMeantime()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        var user = await harness.Repository.CreateUserAsync(new User
+        {
+            Email = "raced@example.com",
+            Password = "reset-in-between",
+            Usertype = "participant",
+        });
+
+        var replaced = await harness.Repository.TryReplacePasswordHashAsync(user.Id, "legacy-hash", "current-hash");
+
+        replaced.Should().BeFalse();
+        var stored = await harness.Db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id);
+        stored.Password.Should().Be("reset-in-between");
+    }
+
+    [Fact]
     public async Task ExplicitTransactions_ShouldRunInsideConfiguredRetryingExecutionStrategy()
     {
         await using var harness = await AuthUserRepositoryHarness.CreateAsync(

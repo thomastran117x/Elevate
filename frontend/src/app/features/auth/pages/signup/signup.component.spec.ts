@@ -213,7 +213,7 @@ describe('SignupComponent username format', () => {
 
   it('does not submit while the username is malformed', fakeAsync(() => {
     component.form.controls.email.setValue('ada@example.com');
-    component.form.controls.password.setValue('Password123!');
+    component.form.controls.password.setValue('lantern orchard velvet compass');
     enterUsername('.ada');
 
     void component.submit();
@@ -221,6 +221,43 @@ describe('SignupComponent username format', () => {
 
     expect(auth.signup).not.toHaveBeenCalled();
   }));
+
+  it('requires 15 to 128 characters but no particular mix of them', () => {
+    const password = component.form.controls.password;
+
+    password.setValue('Sh0rt&Strong!');
+    expect(password.hasError('passwordLength')).toBeTrue();
+
+    password.setValue('lantern orchard velvet compass');
+    expect(password.valid).toBeTrue();
+
+    password.setValue('🔐'.repeat(15));
+    expect(password.valid).toBeTrue();
+  });
+
+  it('links the password guidance and error to the field for assistive tech', () => {
+    const input: HTMLInputElement = fixture.nativeElement.querySelector('#signup-password');
+    const label: HTMLLabelElement = fixture.nativeElement.querySelector(
+      'label[for="signup-password"]',
+    );
+
+    expect(label).not.toBeNull();
+    expect(input.getAttribute('autocomplete')).toBe('new-password');
+    expect(input.hasAttribute('maxlength')).toBeFalse();
+    expect(input.getAttribute('aria-describedby')).toBe(
+      'signup-password-hint signup-password-error',
+    );
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('15–128 characters');
+
+    component.form.controls.password.setValue('too short');
+    component.submitted = true;
+    fixture.detectChanges();
+
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(fixture.nativeElement.querySelector('#signup-password-error').textContent).toContain(
+      'Use between 15 and 128 characters.',
+    );
+  });
 
   it('fills the username field from a suggestion chip', fakeAsync(() => {
     enterUsername('');

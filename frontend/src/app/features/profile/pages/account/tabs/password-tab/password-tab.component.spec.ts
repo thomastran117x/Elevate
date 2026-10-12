@@ -59,8 +59,8 @@ describe('PasswordTabComponent', () => {
   function fillForm(): void {
     component.passwordForm.setValue({
       currentPassword: 'Password123!',
-      newPassword: 'NewPassword456!',
-      confirmPassword: 'NewPassword456!',
+      newPassword: 'brisk willow anchor 456',
+      confirmPassword: 'brisk willow anchor 456',
     });
   }
 
@@ -80,14 +80,63 @@ describe('PasswordTabComponent', () => {
   it('flags mismatched passwords once a field is touched', () => {
     component.passwordForm.setValue({
       currentPassword: 'Password123!',
-      newPassword: 'NewPassword456!',
-      confirmPassword: 'Different789!',
+      newPassword: 'brisk willow anchor 456',
+      confirmPassword: 'different willow anchor',
     });
     expect(component.passwordsMismatch).toBeFalse();
 
     component.passwordForm.controls.confirmPassword.markAsTouched();
 
     expect(component.passwordsMismatch).toBeTrue();
+  });
+
+  it('rejects a new password outside the 15 to 128 character range', () => {
+    component.passwordForm.setValue({
+      currentPassword: 'Password123!',
+      newPassword: 'Sh0rt&Strong!',
+      confirmPassword: 'Sh0rt&Strong!',
+    });
+
+    component.changePassword();
+
+    expect(component.passwordForm.controls.newPassword.hasError('passwordLength')).toBeTrue();
+    expect(profileService.changePassword).not.toHaveBeenCalled();
+  });
+
+  it('accepts a passphrase with spaces and no symbols or digits', () => {
+    profileService.changePassword.and.returnValue(of(undefined as void));
+    component.passwordForm.setValue({
+      currentPassword: 'Password123!',
+      newPassword: 'quiet lanterns over water',
+      confirmPassword: 'quiet lanterns over water',
+    });
+
+    component.changePassword();
+
+    expect(profileService.changePassword).toHaveBeenCalledOnceWith(
+      'Password123!',
+      'quiet lanterns over water',
+    );
+  });
+
+  it('describes the rule beside the field and announces the length error', () => {
+    component.onMfaVerified();
+    fixture.detectChanges();
+    const input: HTMLInputElement = fixture.nativeElement.querySelector('#new-password');
+
+    expect(input.getAttribute('aria-describedby')).toBe('new-password-hint new-password-error');
+    expect(fixture.nativeElement.querySelector('#new-password-hint').textContent).toContain(
+      '15–128 characters',
+    );
+
+    component.passwordForm.controls.newPassword.setValue('too short');
+    component.passwordForm.controls.newPassword.markAsTouched();
+    fixture.detectChanges();
+
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(fixture.nativeElement.querySelector('#new-password-error').textContent).toContain(
+      'Use between 15 and 128 characters.',
+    );
   });
 
   it('does not submit an invalid form', () => {
@@ -106,7 +155,7 @@ describe('PasswordTabComponent', () => {
 
     expect(profileService.changePassword).toHaveBeenCalledOnceWith(
       'Password123!',
-      'NewPassword456!',
+      'brisk willow anchor 456',
     );
     expect(logoutLocal).toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledWith(['/auth/login']);
@@ -126,7 +175,7 @@ describe('PasswordTabComponent', () => {
     expect(component.stepUpLapsed).toBeTrue();
     expect(component.error).toBe('');
     expect(gate()!.autoOpen).toBeTrue();
-    expect(component.passwordForm.getRawValue().newPassword).toBe('NewPassword456!');
+    expect(component.passwordForm.getRawValue().newPassword).toBe('brisk willow anchor 456');
     expect(logoutLocal).not.toHaveBeenCalled();
 
     gate()!.verified.emit();

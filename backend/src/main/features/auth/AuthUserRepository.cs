@@ -336,6 +336,38 @@ namespace backend.main.features.auth
             return true;
         }
 
+        public async Task<bool> SetPasswordAndBumpAuthVersionAsync(
+            int id,
+            string passwordHash,
+            CancellationToken cancellationToken = default)
+        {
+            var affected = await _context.Users
+                .Where(u => u.Id == id)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(u => u.Password, passwordHash)
+                        .SetProperty(u => u.AuthVersion, u => u.AuthVersion + 1)
+                        .SetProperty(u => u.UpdatedAt, DateTime.UtcNow),
+                    cancellationToken);
+
+            return affected == 1;
+        }
+
+        public async Task<bool> TryReplacePasswordHashAsync(
+            int id,
+            string expectedHash,
+            string newHash,
+            CancellationToken cancellationToken = default)
+        {
+            var affected = await _context.Users
+                .Where(u => u.Id == id && u.Password == expectedHash)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(u => u.Password, newHash),
+                    cancellationToken);
+
+            return affected == 1;
+        }
+
         public async Task<IReadOnlyList<string>> DeleteUserAsync(int id)
         {
             var user = await _context.Users.FindAsync(id);
@@ -494,6 +526,7 @@ namespace backend.main.features.auth
                 {
                     Id = u.Id,
                     Email = u.Email,
+                    Username = u.Username,
                     Password = u.Password,
                     Usertype = AuthRoles.NormalizeStored(u.Usertype),
                     Name = u.Name,
@@ -511,6 +544,7 @@ namespace backend.main.features.auth
                 {
                     Id = u.Id,
                     Email = u.Email,
+                    Username = u.Username,
                     Password = u.Password,
                     Usertype = AuthRoles.NormalizeStored(u.Usertype),
                     Name = u.Name,
@@ -528,6 +562,7 @@ namespace backend.main.features.auth
                 {
                     Id = u.Id,
                     Email = u.Email,
+                    Username = u.Username,
                     Password = u.Password,
                     Usertype = AuthRoles.NormalizeStored(u.Usertype),
                     Name = u.Name,

@@ -58,13 +58,13 @@ describe('api-client-error.model', () => {
         message: 'Validation failed.',
         error: {
           code: 'VALIDATION_ERROR',
-          details: { NewPassword: ['Password must be at least 8 characters.'] },
+          details: { NewPassword: ['Use between 15 and 128 characters.'] },
         },
       },
     });
 
     expect(getApiClientMessage(error, 'Fallback message.')).toBe(
-      'Password must be at least 8 characters.',
+      'Use between 15 and 128 characters.',
     );
   });
 

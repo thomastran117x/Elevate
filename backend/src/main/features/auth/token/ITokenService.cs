@@ -14,15 +14,27 @@ namespace backend.main.features.auth.token
             bool? rememberMe = null
         );
         public Task<string> GenerateVerificationToken(User user, VerificationPurpose purpose);
-        public Task<User> VerifyVerificationToken(string verifyToken, VerificationPurpose expectedPurpose);
+        /// <param name="beforeConsume">
+        /// Runs once the token is proven valid but before it is used up. An exception thrown here
+        /// leaves the token in place, so a request rejected for another reason can be retried.
+        /// </param>
+        public Task<User> VerifyVerificationToken(
+            string verifyToken,
+            VerificationPurpose expectedPurpose,
+            Func<User, Task>? beforeConsume = null);
         public Task<VerificationOtpChallenge> GenerateVerificationOtpAsync(
             User user,
             VerificationPurpose purpose
         );
+        /// <param name="beforeConsume">
+        /// Runs once the code is proven correct but before the challenge is used up, as for
+        /// <see cref="VerifyVerificationToken"/>.
+        /// </param>
         public Task<User> VerifyVerificationOtpAsync(
             string code,
             string challenge,
-            VerificationPurpose expectedPurpose
+            VerificationPurpose expectedPurpose,
+            Func<User, Task>? beforeConsume = null
         );
         public Task<VerificationArtifacts> GenerateVerificationArtifactsAsync(
             User user,

@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.oauth;
+using backend.main.features.auth.password;
 using backend.main.features.auth.token;
 using backend.main.infrastructure.database.core;
 using backend.main.shared.responses;
@@ -15,6 +16,7 @@ using backend.tests.Integration.Infrastructure;
 using FluentAssertions;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace backend.tests.Integration.Features.Auth;
 
@@ -44,7 +46,7 @@ public class AuthEndpointsTests
         {
             Email = "verify-otp@example.com",
             Username = "verify-otp",
-            Password = "Password123!",
+            Password = AuthApiTestApp.DefaultPassword,
             Usertype = "Organizer",
             Captcha = "captcha"
         });
@@ -87,7 +89,7 @@ public class AuthEndpointsTests
             Content = JsonContent.Create(new LoginRequest
             {
                 Username = "login",
-                Password = "Password123!",
+                Password = AuthApiTestApp.DefaultPassword,
                 Captcha = "captcha"
             })
         };
@@ -136,7 +138,7 @@ public class AuthEndpointsTests
     public async Task ChangePassword_ShouldSupportTokenAndOtpFlows()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
-        var user = await app.SeedUserAsync("reset@example.com", "Password123!");
+        var user = await app.SeedUserAsync("reset@example.com", AuthApiTestApp.DefaultPassword);
         await app.SeedKnownDeviceAsync(user.Id, "trusted-reset-device");
         var originalHash = user.Password;
 
@@ -154,7 +156,7 @@ public class AuthEndpointsTests
             $"/api/auth/reset-password?token={Uri.EscapeDataString(tokenEmail.Token)}",
             new ResetPasswordRequest
             {
-                Password = "NewPassword123!"
+                Password = "fresh lagoon kite 2026"
             });
         resetByToken.StatusCode.Should().Be(HttpStatusCode.OK);
         app.Publisher.EmailMessages.Should().Contain(message =>
@@ -170,7 +172,7 @@ public class AuthEndpointsTests
             Content = JsonContent.Create(new LoginRequest
             {
                 Username = "reset",
-                Password = "NewPassword123!",
+                Password = "fresh lagoon kite 2026",
                 Captcha = "captcha"
             })
         };
@@ -193,7 +195,7 @@ public class AuthEndpointsTests
 
         var resetByOtp = await app.PostJsonWithCsrfAsync("/api/auth/change-password", new ChangePasswordRequest
         {
-            Password = "OtpReset123!",
+            Password = "otp chosen passphrase 77",
             Challenge = forgotBody.Data!.Challenge,
             Code = otpEmail.Code!
         });
@@ -209,7 +211,7 @@ public class AuthEndpointsTests
             Content = JsonContent.Create(new LoginRequest
             {
                 Username = "reset",
-                Password = "OtpReset123!",
+                Password = "otp chosen passphrase 77",
                 Captcha = "captcha"
             })
         };
@@ -513,6 +515,30 @@ public class AuthEndpointsTests
         profile.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
+    /// <summary>
+    /// Accounts created before Argon2id carry BCrypt hashes. They must keep signing in, and the
+    /// first successful login replaces the hash without invalidating any session.
+    /// </summary>
+    [Fact]
+    public async Task Login_ShouldUpgradeALegacyBcryptHash_InPlace()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        const string password = "Password123!";
+        var legacyHash = BCrypt.Net.BCrypt.HashPassword(password, workFactor: 4);
+        var user = await app.SeedUserAsync("legacy-hash@example.com", passwordHash: legacyHash);
+        await app.SeedKnownDeviceAsync(user.Id, "legacy-hash-device");
+
+        await app.LoginApiAsync("legacy-hash", password, trustedDeviceToken: "legacy-hash-device");
+
+        await using var scope = app.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+        var stored = await db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id);
+        stored.Password.Should().StartWith("$argon2id$");
+        stored.AuthVersion.Should().Be(user.AuthVersion);
+        scope.ServiceProvider.GetRequiredService<IPasswordHasher>().Verify(password, stored.Password)
+            .Should().Be(PasswordVerificationResult.Success);
+    }
+
     [Fact]
     public async Task Me_ShouldReturnCurrentUserForAuthenticatedAccessToken()
     {
@@ -542,7 +568,7 @@ public class AuthEndpointsTests
         {
             Email = "browser-logout@example.com",
             Username = "browser-logout",
-            Password = "Password123!",
+            Password = AuthApiTestApp.DefaultPassword,
             Usertype = "Participant",
             Captcha = "captcha"
         });
@@ -587,7 +613,7 @@ public class AuthEndpointsTests
         var login = await app.PostJsonWithCsrfAsync("/api/auth/login", new LoginRequest
         {
             Username = "new-device",
-            Password = "Password123!",
+            Password = AuthApiTestApp.DefaultPassword,
             Captcha = "captcha",
             Transport = SessionTransportResolver.ApiValue
         });
@@ -1009,7 +1035,7 @@ public class AuthEndpointsTests
             var login = await app.PostJsonWithCsrfAsync("/api/auth/login", new LoginRequest
             {
                 Username = "stepup",
-                Password = "Password123!",
+                Password = AuthApiTestApp.DefaultPassword,
                 Captcha = "captcha",
                 Transport = SessionTransportResolver.ApiValue,
                 ReturnUrl = "/bookings/123"

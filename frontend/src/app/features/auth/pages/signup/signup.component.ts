@@ -29,6 +29,11 @@ import {
   toUsernameDisplay,
   usernameFormatValidator,
 } from '../../validators/username-format.validator';
+import {
+  PASSWORD_LENGTH_MESSAGE,
+  PASSWORD_POLICY_HINT,
+  passwordPolicyValidator,
+} from '../../validators/password-policy.validator';
 import { UsernameSuggestionsComponent } from '../../components/username-suggestions/username-suggestions.component';
 
 @Component({
@@ -81,7 +86,7 @@ export class SignupComponent {
         ),
       ],
     }),
-    password: this.fb.nonNullable.control('', [Validators.required, Validators.minLength(8)]),
+    password: this.fb.nonNullable.control('', [Validators.required, passwordPolicyValidator]),
     usertype: this.fb.nonNullable.control<SignupRole>('participant', [Validators.required]),
   });
 
@@ -90,6 +95,9 @@ export class SignupComponent {
 
   readonly suggestions = signal<UsernameSuggestion[]>([]);
   readonly suggestionsLoading = signal(false);
+
+  readonly passwordHint = PASSWORD_POLICY_HINT;
+  readonly passwordLengthMessage = PASSWORD_LENGTH_MESSAGE;
 
   loading = false;
   submitted = false;
