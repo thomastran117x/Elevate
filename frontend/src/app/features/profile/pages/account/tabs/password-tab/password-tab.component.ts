@@ -12,6 +12,11 @@ import { Router } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 
 import {
+  PASSWORD_LENGTH_MESSAGE,
+  PASSWORD_POLICY_HINT,
+  passwordPolicyValidator,
+} from '@/features/auth/validators/password-policy.validator';
+import {
   getApiClientMessage,
   isApiClientErrorCode,
 } from '../../../../../../core/api/models/api-client-error.model';
@@ -50,11 +55,14 @@ export class PasswordTabComponent {
   readonly passwordForm = this.fb.nonNullable.group(
     {
       currentPassword: this.fb.nonNullable.control('', [Validators.required]),
-      newPassword: this.fb.nonNullable.control('', [Validators.required, Validators.minLength(8)]),
+      newPassword: this.fb.nonNullable.control('', [Validators.required, passwordPolicyValidator]),
       confirmPassword: this.fb.nonNullable.control('', [Validators.required]),
     },
     { validators: passwordsMatchValidator },
   );
+
+  readonly passwordHint = PASSWORD_POLICY_HINT;
+  readonly passwordLengthMessage = PASSWORD_LENGTH_MESSAGE;
 
   saving = false;
   error = '';

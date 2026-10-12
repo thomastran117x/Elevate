@@ -223,7 +223,9 @@
             </div>
 
             <div>
-              <label class="mb-2 block text-sm font-semibold text-content">Password</label>
+              <label for="signup-password" class="mb-2 block text-sm font-semibold text-content"
+                >Password</label
+              >
               <div class="relative">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -240,15 +242,24 @@
                   />
                 </svg>
                 <input
+                  id="signup-password"
                   type="password"
+                  autocomplete="new-password"
                   formControlName="password"
                   class="form-field w-full py-3 pl-12 pr-4 text-sm"
-                  placeholder="Create a secure password"
+                  placeholder="Create a passphrase"
+                  aria-describedby="signup-password-hint signup-password-error"
+                  [attr.aria-invalid]="submitted && form.controls['password'].invalid"
                 />
               </div>
-              @if (submitted && form.controls['password'].invalid) {
-                <div class="mt-2 text-sm text-danger">Password must be at least 8 characters.</div>
-              }
+              <p id="signup-password-hint" class="mt-2 text-xs text-muted">{{ passwordHint }}</p>
+              <div id="signup-password-error" aria-live="polite">
+                @if (submitted && form.controls['password'].hasError('required')) {
+                  <div class="mt-2 text-sm text-danger">Password is required.</div>
+                } @else if (submitted && form.controls['password'].hasError('passwordLength')) {
+                  <div class="mt-2 text-sm text-danger">{{ passwordLengthMessage }}</div>
+                }
+              </div>
             </div>
 
             <div>
