@@ -46,7 +46,7 @@ public class AuthEndpointsTests
         {
             Email = "verify-otp@example.com",
             Username = "verify-otp",
-            Password = "Password123!",
+            Password = AuthApiTestApp.DefaultPassword,
             Usertype = "Organizer",
             Captcha = "captcha"
         });
@@ -89,7 +89,7 @@ public class AuthEndpointsTests
             Content = JsonContent.Create(new LoginRequest
             {
                 Username = "login",
-                Password = "Password123!",
+                Password = AuthApiTestApp.DefaultPassword,
                 Captcha = "captcha"
             })
         };
@@ -138,7 +138,7 @@ public class AuthEndpointsTests
     public async Task ChangePassword_ShouldSupportTokenAndOtpFlows()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
-        var user = await app.SeedUserAsync("reset@example.com", "Password123!");
+        var user = await app.SeedUserAsync("reset@example.com", AuthApiTestApp.DefaultPassword);
         await app.SeedKnownDeviceAsync(user.Id, "trusted-reset-device");
         var originalHash = user.Password;
 
@@ -156,7 +156,7 @@ public class AuthEndpointsTests
             $"/api/auth/reset-password?token={Uri.EscapeDataString(tokenEmail.Token)}",
             new ResetPasswordRequest
             {
-                Password = "NewPassword123!"
+                Password = "fresh lagoon kite 2026"
             });
         resetByToken.StatusCode.Should().Be(HttpStatusCode.OK);
         app.Publisher.EmailMessages.Should().Contain(message =>
@@ -172,7 +172,7 @@ public class AuthEndpointsTests
             Content = JsonContent.Create(new LoginRequest
             {
                 Username = "reset",
-                Password = "NewPassword123!",
+                Password = "fresh lagoon kite 2026",
                 Captcha = "captcha"
             })
         };
@@ -195,7 +195,7 @@ public class AuthEndpointsTests
 
         var resetByOtp = await app.PostJsonWithCsrfAsync("/api/auth/change-password", new ChangePasswordRequest
         {
-            Password = "OtpReset123!",
+            Password = "otp chosen passphrase 77",
             Challenge = forgotBody.Data!.Challenge,
             Code = otpEmail.Code!
         });
@@ -211,7 +211,7 @@ public class AuthEndpointsTests
             Content = JsonContent.Create(new LoginRequest
             {
                 Username = "reset",
-                Password = "OtpReset123!",
+                Password = "otp chosen passphrase 77",
                 Captcha = "captcha"
             })
         };
@@ -568,7 +568,7 @@ public class AuthEndpointsTests
         {
             Email = "browser-logout@example.com",
             Username = "browser-logout",
-            Password = "Password123!",
+            Password = AuthApiTestApp.DefaultPassword,
             Usertype = "Participant",
             Captcha = "captcha"
         });
@@ -613,7 +613,7 @@ public class AuthEndpointsTests
         var login = await app.PostJsonWithCsrfAsync("/api/auth/login", new LoginRequest
         {
             Username = "new-device",
-            Password = "Password123!",
+            Password = AuthApiTestApp.DefaultPassword,
             Captcha = "captcha",
             Transport = SessionTransportResolver.ApiValue
         });
@@ -1035,7 +1035,7 @@ public class AuthEndpointsTests
             var login = await app.PostJsonWithCsrfAsync("/api/auth/login", new LoginRequest
             {
                 Username = "stepup",
-                Password = "Password123!",
+                Password = AuthApiTestApp.DefaultPassword,
                 Captcha = "captcha",
                 Transport = SessionTransportResolver.ApiValue,
                 ReturnUrl = "/bookings/123"

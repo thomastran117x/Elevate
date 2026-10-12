@@ -1,13 +1,13 @@
 using System.ComponentModel.DataAnnotations;
 
-using backend.main.shared.attributes.validation;
+using backend.main.features.auth.password;
 
 namespace backend.main.features.auth.contracts.requests
 {
     public class ResetPasswordRequest
     {
         [Required]
-        [StrongPassword]
+        [PasswordPolicy]
         public required string Password
         {
             get; set;

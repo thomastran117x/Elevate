@@ -40,6 +40,7 @@ namespace backend.main.features.auth
         private readonly SeedAccountBypassPolicy _seedBypass;
         private readonly ClientRequestInfo _requestInfo;
         private readonly IPasswordHasher _passwordHasher;
+        private readonly IPasswordPolicy _passwordPolicy;
         private static readonly TimeSpan PendingOAuthSignupTtl = TimeSpan.FromMinutes(15);
 
         public AuthService(
@@ -57,7 +58,8 @@ namespace backend.main.features.auth
             IEmailAvailabilityService emailAvailability,
             SeedAccountBypassPolicy seedBypass,
             ClientRequestInfo requestInfo,
-            IPasswordHasher passwordHasher
+            IPasswordHasher passwordHasher,
+            IPasswordPolicy passwordPolicy
         )
         {
             _userRepository = userRepository;
@@ -75,6 +77,7 @@ namespace backend.main.features.auth
             _seedBypass = seedBypass;
             _requestInfo = requestInfo;
             _passwordHasher = passwordHasher;
+            _passwordPolicy = passwordPolicy;
         }
 
         public async Task<LoginAuthenticationResult> LoginAsync(
@@ -136,6 +139,11 @@ namespace backend.main.features.auth
                 // RFC 5321 leaves the local part case-sensitive to the destination host.
                 email = EmailPolicy.Sanitize(email);
                 var probeEmail = EmailPolicy.NormalizeAndValidate(email);
+
+                _passwordPolicy.EnsureAllowed(
+                    password,
+                    new PasswordPolicyContext(username, email),
+                    "Password");
 
                 // Advisory: this method sends a verification mail, it does not create the account.
                 // The verify step below re-checks authoritatively before inserting, so a filter
@@ -401,7 +409,8 @@ namespace backend.main.features.auth
             {
                 var user = await _tokenService.VerifyVerificationToken(
                     token,
-                    VerificationPurpose.ResetPassword
+                    VerificationPurpose.ResetPassword,
+                    pending => EnsureResetPasswordAllowedAsync(pending.Email, password)
                 );
                 await ChangePasswordInternalAsync(user.Email, password);
                 await SendPasswordChangedBestEffortAsync(user.Email);
@@ -423,7 +432,8 @@ namespace backend.main.features.auth
                 var user = await _tokenService.VerifyVerificationOtpAsync(
                     code,
                     challenge,
-                    VerificationPurpose.ResetPassword
+                    VerificationPurpose.ResetPassword,
+                    pending => EnsureResetPasswordAllowedAsync(pending.Email, password)
                 );
                 await ChangePasswordInternalAsync(user.Email, password);
                 await SendPasswordChangedBestEffortAsync(user.Email);
@@ -460,6 +470,11 @@ namespace backend.main.features.auth
                     throw new BadRequestException(
                         "New password must be different from your current password."
                     );
+
+                _passwordPolicy.EnsureAllowed(
+                    newPassword,
+                    new PasswordPolicyContext(existingUser.Username, existingUser.Email),
+                    "NewPassword");
 
                 await ChangePasswordInternalAsync(email, newPassword);
             }
@@ -870,6 +885,19 @@ namespace backend.main.features.auth
             }
         }
 
+        /// <summary>
+        /// Checks a reset's new password against the policy while the reset token is still unused,
+        /// so a rejected choice can be corrected without requesting another email.
+        /// </summary>
+        private async Task EnsureResetPasswordAllowedAsync(string email, string password)
+        {
+            var account = await _userRepository.GetAuthByEmailAsync(email);
+            _passwordPolicy.EnsureAllowed(
+                password,
+                new PasswordPolicyContext(account?.Username, account?.Email ?? email),
+                "Password");
+        }
+
         private async Task ChangePasswordInternalAsync(string email, string password)
         {
             var hashedPassword = HashPassword(password);
@@ -878,13 +906,7 @@ namespace backend.main.features.auth
                 ?? throw new UnauthorizedException("Invalid token");
             await EnsureUserEnabledAsync(ToUser(existingUser));
 
-            await _userRepository.UpdateUserAsync(existingUser.Id, new User
-            {
-                Email = existingUser.Email,
-                Password = hashedPassword,
-                Usertype = existingUser.Usertype,
-            });
-            await _userRepository.IncrementAuthVersionAsync(existingUser.Id);
+            await _userRepository.SetPasswordAndBumpAuthVersionAsync(existingUser.Id, hashedPassword);
             await _tokenService.RevokeAllRefreshSessionsAsync(existingUser.Id);
         }
 

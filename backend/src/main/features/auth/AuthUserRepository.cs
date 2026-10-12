@@ -336,6 +336,23 @@ namespace backend.main.features.auth
             return true;
         }
 
+        public async Task<bool> SetPasswordAndBumpAuthVersionAsync(
+            int id,
+            string passwordHash,
+            CancellationToken cancellationToken = default)
+        {
+            var affected = await _context.Users
+                .Where(u => u.Id == id)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(u => u.Password, passwordHash)
+                        .SetProperty(u => u.AuthVersion, u => u.AuthVersion + 1)
+                        .SetProperty(u => u.UpdatedAt, DateTime.UtcNow),
+                    cancellationToken);
+
+            return affected == 1;
+        }
+
         public async Task<bool> TryReplacePasswordHashAsync(
             int id,
             string expectedHash,
@@ -509,6 +526,7 @@ namespace backend.main.features.auth
                 {
                     Id = u.Id,
                     Email = u.Email,
+                    Username = u.Username,
                     Password = u.Password,
                     Usertype = AuthRoles.NormalizeStored(u.Usertype),
                     Name = u.Name,
@@ -526,6 +544,7 @@ namespace backend.main.features.auth
                 {
                     Id = u.Id,
                     Email = u.Email,
+                    Username = u.Username,
                     Password = u.Password,
                     Usertype = AuthRoles.NormalizeStored(u.Usertype),
                     Name = u.Name,
@@ -543,6 +562,7 @@ namespace backend.main.features.auth
                 {
                     Id = u.Id,
                     Email = u.Email,
+                    Username = u.Username,
                     Password = u.Password,
                     Usertype = AuthRoles.NormalizeStored(u.Usertype),
                     Name = u.Name,

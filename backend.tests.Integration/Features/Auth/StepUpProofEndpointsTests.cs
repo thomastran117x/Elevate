@@ -225,14 +225,14 @@ public class StepUpProofEndpointsTests
             "/api/profile/change-password",
             new ChangePasswordAuthenticatedRequest
             {
-                CurrentPassword = "Password123!",
-                NewPassword = "NewPassword456!"
+                CurrentPassword = AuthApiTestApp.DefaultPassword,
+                NewPassword = "brisk willow anchor 456"
             },
             session.AccessToken);
         change.StatusCode.Should().Be(HttpStatusCode.OK);
 
         (await app.ReadStepUpProofAsync(session.AccessToken)).Should().BeNull();
-        var fresh = await app.LoginApiAsync("proof-password", "NewPassword456!");
+        var fresh = await app.LoginApiAsync("proof-password", "brisk willow anchor 456");
         await AssertMfaRequiredAsync(await app.GetWithBearerAsync("/api/auth/mfa/step-up/status", fresh.AccessToken));
     }
 
@@ -398,13 +398,13 @@ public class StepUpProofEndpointsTests
         "/api/profile/username" => new ChangeUsernameRequest { Username = "renamed-user" },
         "/api/profile/change-password" => new ChangePasswordAuthenticatedRequest
         {
-            CurrentPassword = "Password123!",
-            NewPassword = "NewPassword456!"
+            CurrentPassword = AuthApiTestApp.DefaultPassword,
+            NewPassword = "brisk willow anchor 456"
         },
         "/api/profile/email" => new ChangeEmailRequest
         {
             NewEmail = "moved@example.com",
-            CurrentPassword = "Password123!"
+            CurrentPassword = AuthApiTestApp.DefaultPassword
         },
         "/api/profile" => null,
         _ when path.EndsWith("/enroll/start", StringComparison.Ordinal) && !path.Contains("/totp/") =>

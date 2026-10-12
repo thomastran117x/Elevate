@@ -37,5 +37,22 @@ namespace backend.main.features.auth.password
 
             return count;
         }
+
+        /// <summary>
+        /// The normalized, lowercased letters and digits only, so <c>"P a s s-w o r d 1"</c> and
+        /// <c>"password1"</c> compare equal. Blocklist entries and context terms are reduced the
+        /// same way before matching.
+        /// </summary>
+        public static string Skeleton(string value)
+        {
+            var builder = new StringBuilder(value.Length);
+            foreach (var rune in Normalize(value).ToLowerInvariant().EnumerateRunes())
+            {
+                if (Rune.IsLetterOrDigit(rune))
+                    builder.Append(rune.ToString());
+            }
+
+            return builder.ToString();
+        }
     }
 }

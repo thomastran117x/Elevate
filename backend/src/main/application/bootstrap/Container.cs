@@ -209,6 +209,8 @@ namespace backend.main.application.bootstrap
                 IValidateOptions<PasswordPolicyOptions>,
                 PasswordPolicyOptionsValidator>();
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
+            services.AddSingleton<IPasswordBlocklist, PasswordBlocklist>();
+            services.AddSingleton<IPasswordPolicy, PasswordPolicy>();
             services.AddOptions<BloomFilterOptions>()
                 .Bind(config.GetSection("BloomFilters"))
                 .ValidateDataAnnotations()

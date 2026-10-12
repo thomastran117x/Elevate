@@ -12,6 +12,15 @@ namespace backend.main.features.auth
         Task<bool> IncrementAuthVersionAsync(int id);
 
         /// <summary>
+        /// Sets a new password and bumps <c>AuthVersion</c> in one statement, so access tokens
+        /// issued under the old password stop validating in the same commit that changes it.
+        /// </summary>
+        Task<bool> SetPasswordAndBumpAuthVersionAsync(
+            int id,
+            string passwordHash,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Replaces the stored password hash only if it still equals <paramref name="expectedHash"/>,
         /// in a single conditional update. Used to upgrade an obsolete hash after a successful login:
         /// the password itself is unchanged, so <c>AuthVersion</c> is left alone and existing

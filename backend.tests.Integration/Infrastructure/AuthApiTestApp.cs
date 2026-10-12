@@ -44,6 +44,13 @@ namespace backend.tests.Integration.Infrastructure;
 
 public sealed class AuthApiTestApp : IAsyncDisposable
 {
+    /// <summary>
+    /// The password every helper defaults to. It has to satisfy the signup policy (15+ characters,
+    /// not common, not containing any test account's username or email), because accounts created
+    /// through <see cref="SignUpAndVerifyByTokenAsync"/> log in with it later.
+    /// </summary>
+    public const string DefaultPassword = "vivid quartz meadow 8253";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -175,7 +182,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
 
     public async Task<User> SeedUserAsync(
         string email,
-        string password = "Password123!",
+        string password = DefaultPassword,
         string role = "Participant",
         bool disabled = false,
         string? googleId = null,
@@ -630,7 +637,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
 
     public async Task<AuthenticatedSessionResponse> SignUpAndVerifyByTokenAsync(
         string email,
-        string password = "Password123!",
+        string password = DefaultPassword,
         string role = "Participant",
         string? transport = null,
         string? username = null)
@@ -663,7 +670,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
 
     public async Task<AuthenticatedSessionResponse> LoginApiAsync(
         string username,
-        string password = "Password123!",
+        string password = DefaultPassword,
         string trustedDeviceToken = "known-device")
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")

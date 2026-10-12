@@ -28,6 +28,8 @@ namespace backend.tests.Unit.Features.Auth;
 
 public class AuthServiceTests
 {
+    private const string ValidNewPassword = "lantern orchard velvet compass";
+
     [Fact]
     public async Task LoginAsync_ShouldRejectUnknownUser()
     {
@@ -120,7 +122,7 @@ public class AuthServiceTests
             authNotificationService: notifications);
 
         var result = await service.SignUpAsync(
-            "new@example.com", "new-user", "Password123!", "organizer");
+            "new@example.com", "new-user", ValidNewPassword, "organizer");
 
         result.Code.Should().Be("123456");
         capturedUser.Should().NotBeNull();
@@ -597,7 +599,7 @@ public class AuthServiceTests
             .ReturnsAsync(user);
 
         var tokenService = CreateTokenServiceForUser(user);
-        tokenService.Setup(service => service.VerifyVerificationToken("verify-token", VerificationPurpose.SignUp))
+        tokenService.Setup(service => service.VerifyVerificationToken("verify-token", VerificationPurpose.SignUp, It.IsAny<Func<backend.main.features.profile.User, Task>?>()))
             .ReturnsAsync(user);
 
         var authSessionService = CreateAuthSessionServiceForUser(user);
@@ -628,7 +630,7 @@ public class AuthServiceTests
             .ReturnsAsync(user);
 
         var tokenService = CreateTokenServiceForUser(user);
-        tokenService.Setup(service => service.VerifyVerificationOtpAsync("123456", "challenge", VerificationPurpose.SignUp))
+        tokenService.Setup(service => service.VerifyVerificationOtpAsync("123456", "challenge", VerificationPurpose.SignUp, It.IsAny<Func<backend.main.features.profile.User, Task>?>()))
             .ReturnsAsync(user);
 
         var authSessionService = CreateAuthSessionServiceForUser(user);
@@ -708,7 +710,7 @@ public class AuthServiceTests
             .ReturnsAsync(true);
 
         var tokenService = new Mock<ITokenService>();
-        tokenService.Setup(service => service.VerifyVerificationToken("reset-token", VerificationPurpose.ResetPassword))
+        tokenService.Setup(service => service.VerifyVerificationToken("reset-token", VerificationPurpose.ResetPassword, It.IsAny<Func<backend.main.features.profile.User, Task>?>()))
             .ReturnsAsync(new backend.main.features.profile.User
             {
                 Email = "reset@example.com",
@@ -724,11 +726,10 @@ public class AuthServiceTests
             authNotificationService: notifications
         );
 
-        await service.ResetPasswordAsync("reset-token", "Password123!");
+        await service.ResetPasswordAsync("reset-token", ValidNewPassword);
 
-        userRepository.Verify(repository => repository.UpdateUserAsync(21, It.Is<backend.main.features.profile.User>(u =>
-            u.Email == "reset@example.com" && !string.IsNullOrWhiteSpace(u.Password))), Times.Once);
-        userRepository.Verify(repository => repository.IncrementAuthVersionAsync(21), Times.Once);
+        userRepository.Verify(repository => repository.SetPasswordAndBumpAuthVersionAsync(
+            21, It.Is<string>(hash => hash.StartsWith("$argon2id$")), It.IsAny<CancellationToken>()), Times.Once);
         tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(21), Times.Once);
         notifications.Verify(service => service.SendPasswordChangedAsync(
             "reset@example.com",
@@ -761,7 +762,7 @@ public class AuthServiceTests
             .ReturnsAsync(true);
 
         var tokenService = new Mock<ITokenService>();
-        tokenService.Setup(service => service.VerifyVerificationOtpAsync("123456", "otp-challenge", VerificationPurpose.ResetPassword))
+        tokenService.Setup(service => service.VerifyVerificationOtpAsync("123456", "otp-challenge", VerificationPurpose.ResetPassword, It.IsAny<Func<backend.main.features.profile.User, Task>?>()))
             .ReturnsAsync(new backend.main.features.profile.User
             {
                 Email = "reset-otp@example.com",
@@ -777,11 +778,10 @@ public class AuthServiceTests
             authNotificationService: notifications
         );
 
-        await service.ResetPasswordWithOtpAsync("123456", "otp-challenge", "Password123!");
+        await service.ResetPasswordWithOtpAsync("123456", "otp-challenge", ValidNewPassword);
 
-        userRepository.Verify(repository => repository.UpdateUserAsync(22, It.Is<backend.main.features.profile.User>(u =>
-            u.Email == "reset-otp@example.com" && !string.IsNullOrWhiteSpace(u.Password))), Times.Once);
-        userRepository.Verify(repository => repository.IncrementAuthVersionAsync(22), Times.Once);
+        userRepository.Verify(repository => repository.SetPasswordAndBumpAuthVersionAsync(
+            22, It.Is<string>(hash => hash.StartsWith("$argon2id$")), It.IsAny<CancellationToken>()), Times.Once);
         tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(22), Times.Once);
         notifications.Verify(service => service.SendPasswordChangedAsync(
             "reset-otp@example.com",
@@ -1283,7 +1283,7 @@ public class AuthServiceTests
                 (user, _, _) => captured = user)
             .ReturnsAsync(SignupArtifacts());
 
-        await service.SignUpAsync("  Ada.Lovelace@Example.COM  ", "new-user", "Password123!", "organizer");
+        await service.SignUpAsync("  Ada.Lovelace@Example.COM  ", "new-user", ValidNewPassword, "organizer");
 
         // Trimmed, but not lowercased.
         captured.Should().NotBeNull();
@@ -1315,7 +1315,7 @@ public class AuthServiceTests
         };
         var emailAvailability = new Mock<IEmailAvailabilityService>();
         var service = CreateSignupCompletionService(user, emailAvailability, out var tokenService);
-        tokenService.Setup(t => t.VerifyVerificationToken("verify-token", VerificationPurpose.SignUp))
+        tokenService.Setup(t => t.VerifyVerificationToken("verify-token", VerificationPurpose.SignUp, It.IsAny<Func<backend.main.features.profile.User, Task>?>()))
             .ReturnsAsync(user);
 
         await service.VerifyAsync("verify-token", SessionTransport.BrowserCookie);
@@ -1345,7 +1345,7 @@ public class AuthServiceTests
         };
         var service = CreateSignupCompletionService(
             user, new Mock<IEmailAvailabilityService>(), out var tokenService);
-        tokenService.Setup(t => t.VerifyVerificationToken("verify-token", VerificationPurpose.SignUp))
+        tokenService.Setup(t => t.VerifyVerificationToken("verify-token", VerificationPurpose.SignUp, It.IsAny<Func<backend.main.features.profile.User, Task>?>()))
             .ReturnsAsync(user);
 
         await service.VerifyAsync("verify-token", SessionTransport.BrowserCookie);
@@ -1373,7 +1373,7 @@ public class AuthServiceTests
         };
         var service = CreateSignupCompletionService(
             user, new Mock<IEmailAvailabilityService>(), out var tokenService);
-        tokenService.Setup(t => t.VerifyVerificationToken("verify-token", VerificationPurpose.SignUp))
+        tokenService.Setup(t => t.VerifyVerificationToken("verify-token", VerificationPurpose.SignUp, It.IsAny<Func<backend.main.features.profile.User, Task>?>()))
             .ReturnsAsync(user);
 
         await service.VerifyAsync("verify-token", SessionTransport.BrowserCookie);
@@ -1399,7 +1399,7 @@ public class AuthServiceTests
         };
         var service = CreateSignupCompletionService(
             user, new Mock<IEmailAvailabilityService>(), out var tokenService);
-        tokenService.Setup(t => t.VerifyVerificationToken("verify-token", VerificationPurpose.SignUp))
+        tokenService.Setup(t => t.VerifyVerificationToken("verify-token", VerificationPurpose.SignUp, It.IsAny<Func<backend.main.features.profile.User, Task>?>()))
             .ReturnsAsync(user);
 
         await service.VerifyAsync("verify-token", SessionTransport.BrowserCookie);
@@ -1420,7 +1420,7 @@ public class AuthServiceTests
         userRepository.Setup(repository => repository.GetAuthByUsernameAsync("new-user"))
             .ReturnsAsync((UserAuthRecord?)null);
 
-        await service.SignUpAsync("New@Example.COM", "new-user", "Password123!", "organizer");
+        await service.SignUpAsync("New@Example.COM", "new-user", ValidNewPassword, "organizer");
 
         emailAvailability.Verify(availability => availability.IsRegisteredAsync(
                 "new@example.com",
@@ -1440,7 +1440,7 @@ public class AuthServiceTests
             .ReturnsAsync(true);
         var service = CreateServiceWithEmailFilter(emailAvailability, out _);
 
-        var act = () => service.SignUpAsync("taken@example.com", "new-user", "Password123!", "organizer");
+        var act = () => service.SignUpAsync("taken@example.com", "new-user", ValidNewPassword, "organizer");
 
         await act.Should().ThrowAsync<ConflictException>();
     }
@@ -1462,7 +1462,7 @@ public class AuthServiceTests
         };
         var emailAvailability = new Mock<IEmailAvailabilityService>();
         var service = CreateSignupCompletionService(user, emailAvailability, out var tokenService);
-        tokenService.Setup(t => t.VerifyVerificationToken("verify-token", VerificationPurpose.SignUp))
+        tokenService.Setup(t => t.VerifyVerificationToken("verify-token", VerificationPurpose.SignUp, It.IsAny<Func<backend.main.features.profile.User, Task>?>()))
             .ReturnsAsync(user);
 
         await service.VerifyAsync("verify-token", SessionTransport.BrowserCookie);
@@ -1490,7 +1490,7 @@ public class AuthServiceTests
         };
         var emailAvailability = new Mock<IEmailAvailabilityService>();
         var service = CreateSignupCompletionService(user, emailAvailability, out var tokenService);
-        tokenService.Setup(t => t.VerifyVerificationOtpAsync("123456", "challenge", VerificationPurpose.SignUp))
+        tokenService.Setup(t => t.VerifyVerificationOtpAsync("123456", "challenge", VerificationPurpose.SignUp, It.IsAny<Func<backend.main.features.profile.User, Task>?>()))
             .ReturnsAsync(user);
 
         await service.VerifyOtpAsync("123456", "challenge", SessionTransport.BrowserCookie);
@@ -1832,6 +1832,189 @@ public class AuthServiceTests
             usernameAvailability: usernameAvailability?.Object);
     }
 
+    [Theory]
+    [InlineData("Password123!", "Use between 15 and 128 characters.")]
+    [InlineData("p a s s w o r d 1 2 3", PasswordPolicyMessages.TooCommon)]
+    [InlineData("new-user forever and ever", PasswordPolicyMessages.TooCommon)]
+    [InlineData("new@example.com is my login", PasswordPolicyMessages.TooCommon)]
+    public async Task SignUpAsync_ShouldRejectAPasswordThePolicyDisallows_BeforeSendingAnything(
+        string password, string expectedMessage)
+    {
+        var tokenService = new Mock<ITokenService>();
+        var notifications = new Mock<IAuthNotificationService>();
+        var service = CreateService(
+            tokenService: tokenService,
+            authNotificationService: notifications,
+            passwordPolicy: TestPasswordPolicies.Default("password123"));
+
+        var act = () => service.SignUpAsync("new@example.com", "new-user", password, "organizer");
+
+        var error = (await act.Should().ThrowAsync<PasswordPolicyException>()).Which;
+        error.Details.Should().BeEquivalentTo(new Dictionary<string, string[]> { ["Password"] = [expectedMessage] });
+        tokenService.Verify(t => t.GenerateVerificationArtifactsAsync(
+            It.IsAny<backend.main.features.profile.User>(), It.IsAny<VerificationPurpose>(), It.IsAny<bool>()), Times.Never);
+        notifications.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_ShouldCheckThePolicyBeforeTheTokenIsConsumed_AndChangeNothing()
+    {
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetAuthByEmailAsync("reset@example.com"))
+            .ReturnsAsync(new UserAuthRecord
+            {
+                Id = 21,
+                Email = "reset@example.com",
+                Username = "harbourowner",
+                Usertype = "Participant"
+            });
+
+        var tokenService = new Mock<ITokenService>();
+        tokenService.Setup(service => service.VerifyVerificationToken(
+                "reset-token",
+                VerificationPurpose.ResetPassword,
+                It.IsAny<Func<backend.main.features.profile.User, Task>?>()))
+            .Returns(async (string _, VerificationPurpose _, Func<backend.main.features.profile.User, Task>? beforeConsume) =>
+            {
+                var pending = new backend.main.features.profile.User { Email = "reset@example.com", Usertype = "Participant" };
+                await beforeConsume!(pending);
+                return pending;
+            });
+
+        var service = CreateService(userRepository: userRepository, tokenService: tokenService);
+
+        var act = () => service.ResetPasswordAsync("reset-token", "harbourowner is back again");
+
+        await act.Should().ThrowAsync<PasswordPolicyException>();
+        userRepository.Verify(repository => repository.SetPasswordAndBumpAuthVersionAsync(
+            It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ResetPasswordWithOtpAsync_ShouldPassThePolicyCheckIntoTheVerification()
+    {
+        var tokenService = new Mock<ITokenService>();
+        tokenService.Setup(service => service.VerifyVerificationOtpAsync(
+                "123456",
+                "otp-challenge",
+                VerificationPurpose.ResetPassword,
+                It.IsAny<Func<backend.main.features.profile.User, Task>?>()))
+            .Returns(async (string _, string _, VerificationPurpose _, Func<backend.main.features.profile.User, Task>? beforeConsume) =>
+            {
+                var pending = new backend.main.features.profile.User { Email = "reset-otp@example.com", Usertype = "Participant" };
+                await beforeConsume!(pending);
+                return pending;
+            });
+
+        var service = CreateService(tokenService: tokenService);
+
+        var act = () => service.ResetPasswordWithOtpAsync("123456", "otp-challenge", "too short");
+
+        await act.Should().ThrowAsync<PasswordPolicyException>();
+    }
+
+    [Fact]
+    public async Task ChangePasswordForAuthenticatedUserAsync_ShouldStoreANewHash_AndEndEverySession()
+    {
+        var hasher = TestPasswordHashers.Fast();
+        var userRepository = UserRepositoryForPasswordChange(hasher.Hash("old passphrase that works"));
+
+        var tokenService = new Mock<ITokenService>();
+        var service = CreateService(userRepository: userRepository, tokenService: tokenService, passwordHasher: hasher);
+
+        await service.ChangePasswordForAuthenticatedUserAsync("member@example.com", "old passphrase that works", ValidNewPassword);
+
+        userRepository.Verify(repository => repository.SetPasswordAndBumpAuthVersionAsync(
+                31,
+                It.Is<string>(hash => hasher.Verify(ValidNewPassword, hash) == PasswordVerificationResult.Success),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(31), Times.Once);
+    }
+
+    [Fact]
+    public async Task ChangePasswordForAuthenticatedUserAsync_ShouldAcceptALegacyCurrentPassword()
+    {
+        var userRepository = UserRepositoryForPasswordChange(BCrypt.Net.BCrypt.HashPassword("Password123!", workFactor: 4));
+        var service = CreateService(userRepository: userRepository);
+
+        await service.ChangePasswordForAuthenticatedUserAsync("member@example.com", "Password123!", ValidNewPassword);
+
+        userRepository.Verify(repository => repository.SetPasswordAndBumpAuthVersionAsync(
+            31, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ChangePasswordForAuthenticatedUserAsync_ShouldRejectAWrongCurrentPassword()
+    {
+        var hasher = TestPasswordHashers.Fast();
+        var userRepository = UserRepositoryForPasswordChange(hasher.Hash("old passphrase that works"));
+        var service = CreateService(userRepository: userRepository, passwordHasher: hasher);
+
+        var act = () => service.ChangePasswordForAuthenticatedUserAsync("member@example.com", "not the old one", ValidNewPassword);
+
+        await act.Should().ThrowAsync<UnauthorizedException>().WithMessage("Current password is incorrect.");
+        userRepository.Verify(repository => repository.SetPasswordAndBumpAuthVersionAsync(
+            It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangePasswordForAuthenticatedUserAsync_ShouldRejectANewPasswordThePolicyDisallows()
+    {
+        var hasher = TestPasswordHashers.Fast();
+        var userRepository = UserRepositoryForPasswordChange(hasher.Hash("old passphrase that works"));
+        var service = CreateService(userRepository: userRepository, passwordHasher: hasher);
+
+        var act = () => service.ChangePasswordForAuthenticatedUserAsync(
+            "member@example.com", "old passphrase that works", "member-one all day long");
+
+        var error = (await act.Should().ThrowAsync<PasswordPolicyException>()).Which;
+        error.Details.Should().BeEquivalentTo(
+            new Dictionary<string, string[]> { ["NewPassword"] = [PasswordPolicyMessages.TooCommon] });
+        userRepository.Verify(repository => repository.SetPasswordAndBumpAuthVersionAsync(
+            It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangePasswordForAuthenticatedUserAsync_ShouldRejectReusingTheCurrentPassword()
+    {
+        var hasher = TestPasswordHashers.Fast();
+        var userRepository = UserRepositoryForPasswordChange(hasher.Hash(ValidNewPassword));
+        var service = CreateService(userRepository: userRepository, passwordHasher: hasher);
+
+        var act = () => service.ChangePasswordForAuthenticatedUserAsync("member@example.com", ValidNewPassword, ValidNewPassword);
+
+        await act.Should().ThrowAsync<BadRequestException>().WithMessage("New password must be different*");
+    }
+
+    [Fact]
+    public async Task ChangePasswordForAuthenticatedUserAsync_ShouldRejectSocialOnlyAccounts()
+    {
+        var userRepository = UserRepositoryForPasswordChange(passwordHash: null);
+        var service = CreateService(userRepository: userRepository);
+
+        var act = () => service.ChangePasswordForAuthenticatedUserAsync("member@example.com", "anything", ValidNewPassword);
+
+        await act.Should().ThrowAsync<BadRequestException>().WithMessage("*social login*");
+    }
+
+    private static Mock<IAuthUserRepository> UserRepositoryForPasswordChange(string? passwordHash)
+    {
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetAuthByEmailAsync("member@example.com"))
+            .ReturnsAsync(new UserAuthRecord
+            {
+                Id = 31,
+                Email = "member@example.com",
+                Username = "member-one",
+                Password = passwordHash,
+                Usertype = "Participant",
+                AuthVersion = 4
+            });
+        return userRepository;
+    }
+
     private static AuthService CreateService(
         Mock<IAuthUserRepository>? userRepository = null,
         Mock<IOAuthService>? oauthService = null,
@@ -1846,7 +2029,8 @@ public class AuthServiceTests
         SeedAccountBypassPolicy? seedBypass = null,
         IEmailAvailabilityService? emailAvailability = null,
         IUsernameAvailabilityService? usernameAvailability = null,
-        IPasswordHasher? passwordHasher = null)
+        IPasswordHasher? passwordHasher = null,
+        IPasswordPolicy? passwordPolicy = null)
     {
         userRepository ??= new Mock<IAuthUserRepository>();
         oauthService ??= new Mock<IOAuthService>();
@@ -1883,7 +2067,8 @@ public class AuthServiceTests
             emailAvailability,
             seedBypass,
             TestRequestInfoFactory.Browser(),
-            passwordHasher ?? TestPasswordHashers.Fast());
+            passwordHasher ?? TestPasswordHashers.Fast(),
+            passwordPolicy ?? TestPasswordPolicies.Default());
     }
 
     private static Mock<ITokenService> CreateTokenServiceForUser(backend.main.features.profile.User user)

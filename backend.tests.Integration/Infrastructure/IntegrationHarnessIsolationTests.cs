@@ -40,7 +40,7 @@ public sealed class IntegrationHarnessIsolationTests
                 {
                     Email = "old-notification@example.com",
                     Username = "old-notification",
-                    Password = "Password123!",
+                    Password = AuthApiTestApp.DefaultPassword,
                     Usertype = "Participant",
                     Captcha = "captcha"
                 });

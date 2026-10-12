@@ -221,6 +221,7 @@ public class AuthTotpStepUpServiceTests
             new EmailAvailabilityService(userRepository.Object, new DisabledBloomFilterRegistry()),
             new SeedAccountBypassPolicy(new ConfigurationBuilder().Build()),
             TestRequestInfoFactory.Browser(),
-            TestPasswordHashers.Fast());
+            TestPasswordHashers.Fast(),
+            TestPasswordPolicies.Default());
     }
 }

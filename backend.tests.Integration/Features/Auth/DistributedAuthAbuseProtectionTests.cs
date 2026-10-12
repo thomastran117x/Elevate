@@ -111,7 +111,7 @@ public sealed class DistributedAuthAbuseProtectionTests
             app,
             peer,
             "reset-login",
-            "Password123!",
+            AuthApiTestApp.DefaultPassword,
             "203.0.113.33");
         successful.StatusCode.Should().Be(
             HttpStatusCode.OK,

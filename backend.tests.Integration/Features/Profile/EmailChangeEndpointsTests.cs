@@ -117,7 +117,7 @@ public class EmailChangeEndpointsTests
             new ChangeEmailRequest
             {
                 NewEmail = "occupied@example.com",
-                CurrentPassword = "Password123!"
+                CurrentPassword = AuthApiTestApp.DefaultPassword
             },
             session.AccessToken);
 
@@ -160,7 +160,7 @@ public class EmailChangeEndpointsTests
             new ChangeEmailRequest
             {
                 NewEmail = "no-stepup-new@example.com",
-                CurrentPassword = "Password123!"
+                CurrentPassword = AuthApiTestApp.DefaultPassword
             },
             session.AccessToken);
 
@@ -231,7 +231,7 @@ public class EmailChangeEndpointsTests
             "/api/profile/change-password",
             new ChangePasswordAuthenticatedRequest
             {
-                CurrentPassword = "Password123!",
+                CurrentPassword = AuthApiTestApp.DefaultPassword,
                 NewPassword = "RecoveredPassword456!"
             },
             session.AccessToken);
@@ -337,7 +337,7 @@ public class EmailChangeEndpointsTests
     {
         var response = await app.PostJsonWithBearerAndCsrfAsync(
             "/api/profile/email",
-            new ChangeEmailRequest { NewEmail = newEmail, CurrentPassword = "Password123!" },
+            new ChangeEmailRequest { NewEmail = newEmail, CurrentPassword = AuthApiTestApp.DefaultPassword },
             accessToken);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(response));

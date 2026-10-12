@@ -73,6 +73,8 @@
     <EmbeddedResource Include="src\main\features\profile\suggestions\wordlists\adjectives.txt" LogicalName="UsernameWordLists.adjectives.txt" />
     <EmbeddedResource Include="src\main\features\profile\suggestions\wordlists\nouns.txt" LogicalName="UsernameWordLists.nouns.txt" />
     <EmbeddedResource Include="src\main\features\profile\suggestions\wordlists\denied-substrings.txt" LogicalName="UsernameWordLists.denied-substrings.txt" />
+    <None Remove="src\main\features\auth\password\blocklist\*.txt" />
+    <EmbeddedResource Include="src\main\features\auth\password\blocklist\common-passwords.txt" LogicalName="PasswordBlocklist.common.txt" />
   </ItemGroup>
 
   <ItemGroup>

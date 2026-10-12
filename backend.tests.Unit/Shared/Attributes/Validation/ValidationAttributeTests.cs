@@ -18,19 +18,6 @@ namespace backend.tests.Unit.Shared.Attributes.Validation;
 public class ValidationAttributeTests
 {
     [Fact]
-    public void StrongPassword_ShouldRejectWeakPasswords_AndAcceptStrongOnes()
-    {
-        var attribute = new StrongPasswordAttribute();
-
-        Validate(attribute, "short")!.ErrorMessage.Should().Be("Password must be at least 8 characters long.");
-        Validate(attribute, "lowercase1!")!.ErrorMessage.Should().Be("Password must contain at least one uppercase letter.");
-        Validate(attribute, "UPPERCASE1!")!.ErrorMessage.Should().Be("Password must contain at least one lowercase letter.");
-        Validate(attribute, "NoNumber!")!.ErrorMessage.Should().Be("Password must contain at least one number.");
-        Validate(attribute, "NoSpecial1")!.ErrorMessage.Should().Be("Password must contain at least one special character.");
-        Validate(attribute, "StrongPass1!").Should().Be(ValidationResult.Success);
-    }
-
-    [Fact]
     public void ValidRole_ShouldNormalizeKnownRoles_AndRejectUnknownOnes()
     {
         var attribute = new ValidRoleAttribute();

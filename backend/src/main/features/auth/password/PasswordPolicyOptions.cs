@@ -9,6 +9,40 @@ namespace backend.main.features.auth.password
     {
         public const string SectionName = "Auth:PasswordPolicy";
 
+        /// <summary>NIST SP 800-63B's floor for a password used as a single factor is 8.</summary>
+        public const int LowestAllowedMinLength = 8;
+
+        /// <summary>The longest password accepted. Larger values only invite hashing-cost abuse.</summary>
+        public const int HighestAllowedMaxLength = 128;
+
+        /// <summary>
+        /// Counted in Unicode scalar values after NFKC normalization. The Angular forms carry the
+        /// same bounds as constants and must change together with these.
+        /// </summary>
+        public int MinLength { get; set; } = 15;
+
+        public int MaxLength { get; set; } = HighestAllowedMaxLength;
+
+        /// <summary>
+        /// Whether the bundled list of common and breached passwords is loaded.
+        /// </summary>
+        public bool UseEmbeddedBlocklist { get; set; } = true;
+
+        /// <summary>
+        /// An optional local file of further blocked passwords, one per line, merged with the
+        /// bundled list. Lines starting with <c>"# "</c> are comments. The file is read once, in
+        /// process; passwords are never sent to an outside service.
+        /// </summary>
+        public string? BlocklistPath
+        {
+            get; set;
+        }
+
+        /// <summary>
+        /// Words specific to this service that no password may contain, such as the product name.
+        /// </summary>
+        public List<string> ContextTerms { get; set; } = ["eventxperience", "event xperience"];
+
         public PasswordHashingOptions Hashing { get; set; } = new();
     }
 
@@ -61,6 +95,24 @@ namespace backend.main.features.auth.password
         public ValidateOptionsResult Validate(string? name, PasswordPolicyOptions options)
         {
             var failures = new List<string>();
+            var root = PasswordPolicyOptions.SectionName;
+
+            if (options.MinLength is < PasswordPolicyOptions.LowestAllowedMinLength
+                or > PasswordPolicyOptions.HighestAllowedMaxLength)
+            {
+                failures.Add(
+                    $"{root}:MinLength must be between {PasswordPolicyOptions.LowestAllowedMinLength} and {PasswordPolicyOptions.HighestAllowedMaxLength}.");
+            }
+
+            if (options.MaxLength < options.MinLength || options.MaxLength > PasswordPolicyOptions.HighestAllowedMaxLength)
+            {
+                failures.Add(
+                    $"{root}:MaxLength must be at least MinLength and at most {PasswordPolicyOptions.HighestAllowedMaxLength}.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(options.BlocklistPath) && !File.Exists(options.BlocklistPath))
+                failures.Add($"{root}:BlocklistPath points to a file that does not exist.");
+
             var hashing = options.Hashing;
             var section = $"{PasswordPolicyOptions.SectionName}:Hashing";
 

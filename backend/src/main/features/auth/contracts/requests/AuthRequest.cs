@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-using backend.main.shared.attributes.validation;
+using backend.main.features.auth.password;
 
 namespace backend.main.features.auth.contracts.requests
 {
@@ -14,7 +14,7 @@ namespace backend.main.features.auth.contracts.requests
         }
 
         [Required]
-        [StrongPassword]
+        [PasswordPolicy]
         public required string Password
         {
             get; set;

@@ -126,3 +126,21 @@ internal static class TestPasswordHashers
             },
         };
 }
+
+internal static class TestPasswordPolicies
+{
+    /// <summary>
+    /// The production policy with default options over a handful of blocklist entries, so tests
+    /// do not load the full bundled list for every service they construct.
+    /// </summary>
+    public static PasswordPolicy Default(params string[] blocked) =>
+        new(Options.Create(new PasswordPolicyOptions()), new InMemoryPasswordBlocklist(
+            blocked.Length > 0 ? blocked : ["password", "letmein", "iloveyou"]));
+
+    internal sealed class InMemoryPasswordBlocklist(IEnumerable<string> entries) : IPasswordBlocklist
+    {
+        private readonly HashSet<string> _entries = entries.Select(PasswordText.Skeleton).ToHashSet();
+
+        public bool Contains(string skeleton) => _entries.Contains(skeleton);
+    }
+}
