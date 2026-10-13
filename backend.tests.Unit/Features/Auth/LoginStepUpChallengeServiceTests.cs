@@ -63,8 +63,8 @@ public class LoginStepUpChallengeServiceTests
         var userRepository = new Mock<IAuthUserRepository>();
         userRepository.Setup(r => r.GetUserAsync(5)).ReturnsAsync(user);
         var deviceTrustService = new Mock<IDeviceTrustService>();
-        deviceTrustService.Setup(d => d.TrustAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Returns(Task.CompletedTask);
+        deviceTrustService.Setup(d => d.TrustAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(true);
         var authSessionService = new Mock<IAuthSessionService>();
         authSessionService.Setup(s => s.IssueAsync(It.IsAny<User>(), It.IsAny<SessionTransport>(), It.IsAny<string?>(), It.IsAny<bool?>()))
             .ReturnsAsync(CreateUserToken(user));
@@ -114,9 +114,9 @@ public class LoginStepUpChallengeServiceTests
         var deviceTrustService = new Mock<IDeviceTrustService>();
         deviceTrustService
             .Setup(d => d.TrustAsync(
-                It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<string>(), It.IsAny<string>()))
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(true);
 
         var authSessionService = new Mock<IAuthSessionService>();
         authSessionService
@@ -155,6 +155,77 @@ public class LoginStepUpChallengeServiceTests
                 It.IsAny<User>(), It.IsAny<SessionTransport>(),
                 It.IsAny<string?>(), It.IsAny<bool?>()),
             Times.Never);
+    }
+
+    /// <summary>
+    /// A rotation that commits after the version check but before the device is trusted must
+    /// cost the sign-in its session and its trust alike.
+    /// </summary>
+    /// <remarks>
+    /// The trust service refuses under the account's row lock, so being told "no" here means the
+    /// version moved after the session was issued. The session is undone, and the challenge goes
+    /// with it so it cannot simply be completed again.
+    /// </remarks>
+    [Fact]
+    public async Task TryVerifyEmailAsync_ShouldRefuse_WhenTrustIsRefusedForAMovedAuthVersion()
+    {
+        var mfaRepo = new Mock<IMfaEnrollmentRepository>();
+        mfaRepo.Setup(r => r.GetByUserIdAsync(5)).ReturnsAsync((SmsMfaEnrollment?)null);
+
+        var user = new TestUserBuilder().WithId(5).WithEmail("user@example.com").Build();
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(r => r.GetUserAsync(5)).ReturnsAsync(user);
+
+        var deviceTrustService = new Mock<IDeviceTrustService>();
+        deviceTrustService
+            .Setup(d => d.TrustAsync(
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(false);
+
+        var authSessionService = new Mock<IAuthSessionService>();
+        authSessionService
+            .Setup(s => s.IssueAsync(
+                It.IsAny<User>(), It.IsAny<SessionTransport>(),
+                It.IsAny<string?>(), It.IsAny<bool?>()))
+            .ReturnsAsync(CreateUserToken(user));
+
+        var tokenService = new Mock<ITokenService>();
+        var cache = new InMemoryCacheService();
+        var notifications = new Mock<IAuthNotificationService>();
+        string? capturedToken = null;
+        notifications
+            .Setup(n => n.SendDeviceVerificationAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .Callback<string, string, string?>((_, token, _) => capturedToken = token)
+            .Returns(Task.CompletedTask);
+
+        var service = CreateService(
+            cache,
+            notifications,
+            mfaRepo,
+            deviceTrustService: deviceTrustService,
+            userRepository: userRepository,
+            authSessionService: authSessionService,
+            tokenService: tokenService);
+
+        var challenge = await service.CreateChallengeAsync(
+            user, SessionTransport.ApiToken, false, "/dashboard");
+        await service.StartAsync(challenge.Challenge, "email");
+
+        var act = () => service.TryVerifyEmailAsync(capturedToken!);
+
+        await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("*no longer valid*");
+        deviceTrustService.Verify(
+            d => d.TrustAsync(
+                5, user.AuthVersion, It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<string>()),
+            Times.Once);
+        tokenService.Verify(t => t.RevokeAllRefreshSessionsAsync(5), Times.Once);
+
+        var retry = await service.TryVerifyEmailAsync(capturedToken!);
+        retry.Should().BeNull();
     }
 
     [Fact]
@@ -269,8 +340,8 @@ public class LoginStepUpChallengeServiceTests
         userRepository.Setup(r => r.GetUserAsync(7)).ReturnsAsync(user);
 
         var deviceTrustService = new Mock<IDeviceTrustService>();
-        deviceTrustService.Setup(d => d.TrustAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Returns(Task.CompletedTask);
+        deviceTrustService.Setup(d => d.TrustAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(true);
 
         var authSessionService = new Mock<IAuthSessionService>();
         var expectedToken = CreateUserToken(user);
@@ -286,7 +357,7 @@ public class LoginStepUpChallengeServiceTests
 
         result.UserToken.Should().Be(expectedToken);
         result.ReturnPath.Should().Be("/bookings");
-        deviceTrustService.Verify(d => d.TrustAsync(7, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        deviceTrustService.Verify(d => d.TrustAsync(7, user.AuthVersion, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
 
     [Fact]
@@ -371,8 +442,8 @@ public class LoginStepUpChallengeServiceTests
         userRepository.Setup(r => r.GetUserAsync(8)).ReturnsAsync(user);
 
         var deviceTrustService = new Mock<IDeviceTrustService>();
-        deviceTrustService.Setup(d => d.TrustAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Returns(Task.CompletedTask);
+        deviceTrustService.Setup(d => d.TrustAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(true);
 
         var authSessionService = new Mock<IAuthSessionService>();
         var expectedToken = CreateUserToken(user);
@@ -389,7 +460,7 @@ public class LoginStepUpChallengeServiceTests
         result.Should().NotBeNull();
         result!.UserToken.Should().Be(expectedToken);
         result.ReturnPath.Should().Be("/events");
-        deviceTrustService.Verify(d => d.TrustAsync(8, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        deviceTrustService.Verify(d => d.TrustAsync(8, user.AuthVersion, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
 
     [Fact]
@@ -465,7 +536,8 @@ public class LoginStepUpChallengeServiceTests
         Mock<ITotpMfaEnrollmentService>? totpService = null,
         Mock<IDeviceTrustService>? deviceTrustService = null,
         Mock<IAuthUserRepository>? userRepository = null,
-        Mock<IAuthSessionService>? authSessionService = null)
+        Mock<IAuthSessionService>? authSessionService = null,
+        Mock<ITokenService>? tokenService = null)
     {
         cache ??= new InMemoryCacheService();
         notifications ??= new Mock<IAuthNotificationService>();
@@ -474,6 +546,7 @@ public class LoginStepUpChallengeServiceTests
         deviceTrustService ??= new Mock<IDeviceTrustService>();
         userRepository ??= new Mock<IAuthUserRepository>();
         authSessionService ??= new Mock<IAuthSessionService>();
+        tokenService ??= new Mock<ITokenService>();
 
         return new LoginStepUpChallengeService(
             cache,
@@ -483,7 +556,7 @@ public class LoginStepUpChallengeServiceTests
             deviceTrustService.Object,
             userRepository.Object,
             authSessionService.Object,
-            new Mock<ITokenService>().Object,
+            tokenService.Object,
             TestRequestInfoFactory.Browser());
     }
 

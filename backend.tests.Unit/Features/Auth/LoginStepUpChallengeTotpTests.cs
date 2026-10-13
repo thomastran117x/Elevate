@@ -96,8 +96,8 @@ public class LoginStepUpChallengeTotpTests
         userRepository.Setup(repository => repository.GetUserAsync(7)).ReturnsAsync(user);
 
         var deviceTrustService = new Mock<IDeviceTrustService>();
-        deviceTrustService.Setup(service => service.TrustAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Returns(Task.CompletedTask);
+        deviceTrustService.Setup(service => service.TrustAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(true);
 
         var expectedToken = CreateUserToken(user);
         var authSessionService = new Mock<IAuthSessionService>();
