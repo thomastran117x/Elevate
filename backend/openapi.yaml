@@ -10282,6 +10282,18 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfOAuthAuthenticationResponse'
+        '409':
+          description: Conflict
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
         '400':
           description: 'Bad request, validation failure, or CSRF failure.'
           content:
@@ -10334,6 +10346,18 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfOAuthAuthenticationResponse'
+        '409':
+          description: Conflict
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
         '400':
           description: 'Bad request, validation failure, or CSRF failure.'
           content:
@@ -10386,6 +10410,18 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfOAuthAuthenticationResponse'
+        '409':
+          description: Conflict
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
         '400':
           description: 'Bad request, validation failure, or CSRF failure.'
           content:
@@ -10541,6 +10577,18 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfAuthenticatedSessionResponse'
+        '409':
+          description: Conflict
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
         '400':
           description: 'Bad request, validation failure, or CSRF failure.'
           content:

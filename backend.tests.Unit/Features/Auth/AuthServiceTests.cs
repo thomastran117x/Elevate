@@ -580,6 +580,156 @@ public class AuthServiceTests
             Times.Never);
     }
 
+    /// <summary>
+    /// An email match never signs in to an account already linked to a different provider id.
+    /// </summary>
+    /// <remarks>
+    /// This is the case a reassigned Workspace address produces: the new holder's Google id matches
+    /// no account, but the address still matches the old holder's. Falling through to that account
+    /// would hand it over on the strength of the address alone. The rightful owner is unaffected,
+    /// because their own provider id resolves first.
+    /// </remarks>
+    [Fact]
+    public async Task GoogleAsync_ShouldRejectSignIn_WhenEmailAccountIsLinkedToADifferentGoogleId()
+    {
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetOAuthByGoogleIdAsync("google-newcomer"))
+            .ReturnsAsync((UserOAuthRecord?)null);
+        userRepository.Setup(repository => repository.GetOAuthByEmailAsync("existing@example.com"))
+            .ReturnsAsync(new UserOAuthRecord
+            {
+                Id = 9,
+                Email = "existing@example.com",
+                Usertype = "Participant",
+                GoogleID = "google-owner",
+                AuthVersion = 1
+            });
+
+        var oauthService = new Mock<IOAuthService>();
+        oauthService.Setup(service => service.VerifyGoogleTokenAsync("google-token", null))
+            .ReturnsAsync(new OAuthUser("google-newcomer", "existing@example.com", "New Holder", "google"));
+
+        var authSessionService = new Mock<IAuthSessionService>();
+        var service = CreateService(
+            userRepository: userRepository,
+            oauthService: oauthService,
+            authSessionService: authSessionService);
+
+        var act = () => service.GoogleAsync("google-token", SessionTransport.BrowserCookie);
+
+        await act.Should().ThrowAsync<ConflictException>()
+            .WithMessage("This email address belongs to an account that signs in with a different Google or Microsoft account.");
+        userRepository.Verify(
+            repository => repository.UpdateProviderIdsAsync(It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<string?>()),
+            Times.Never);
+        authSessionService.Verify(
+            s => s.IssueAsync(
+                It.IsAny<backend.main.features.profile.User>(),
+                It.IsAny<SessionTransport>(),
+                It.IsAny<string?>(),
+                It.IsAny<bool?>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task MicrosoftAsync_ShouldRejectSignIn_WhenEmailAccountIsLinkedToADifferentMicrosoftId()
+    {
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetOAuthByMicrosoftIdAsync("ms-newcomer"))
+            .ReturnsAsync((UserOAuthRecord?)null);
+        userRepository.Setup(repository => repository.GetOAuthByEmailAsync("existing@example.com"))
+            .ReturnsAsync(new UserOAuthRecord
+            {
+                Id = 9,
+                Email = "existing@example.com",
+                Usertype = "Participant",
+                MicrosoftID = "ms-owner",
+                AuthVersion = 1
+            });
+
+        var oauthService = new Mock<IOAuthService>();
+        oauthService.Setup(service => service.VerifyMicrosoftTokenAsync("ms-token", null))
+            .ReturnsAsync(new OAuthUser("ms-newcomer", "existing@example.com", "New Holder", "microsoft"));
+
+        var authSessionService = new Mock<IAuthSessionService>();
+        var service = CreateService(
+            userRepository: userRepository,
+            oauthService: oauthService,
+            authSessionService: authSessionService);
+
+        var act = () => service.MicrosoftAsync("ms-token", SessionTransport.BrowserCookie);
+
+        await act.Should().ThrowAsync<ConflictException>()
+            .WithMessage("This email address belongs to an account that signs in with a different Google or Microsoft account.");
+        userRepository.Verify(
+            repository => repository.UpdateProviderIdsAsync(It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<string?>()),
+            Times.Never);
+        authSessionService.Verify(
+            s => s.IssueAsync(
+                It.IsAny<backend.main.features.profile.User>(),
+                It.IsAny<SessionTransport>(),
+                It.IsAny<string?>(),
+                It.IsAny<bool?>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// A link to the other provider blocks the email fallback just the same.
+    /// </summary>
+    /// <remarks>
+    /// The new holder of a reassigned address can authenticate through either provider, so
+    /// checking only the provider being signed in with would leave the takeover one provider away.
+    /// </remarks>
+    [Theory]
+    [InlineData("google")]
+    [InlineData("microsoft")]
+    public async Task OAuthSignIn_ShouldRejectEmailFallback_WhenAccountIsLinkedToTheOtherProvider(string provider)
+    {
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetOAuthByGoogleIdAsync("newcomer-id"))
+            .ReturnsAsync((UserOAuthRecord?)null);
+        userRepository.Setup(repository => repository.GetOAuthByMicrosoftIdAsync("newcomer-id"))
+            .ReturnsAsync((UserOAuthRecord?)null);
+        userRepository.Setup(repository => repository.GetOAuthByEmailAsync("existing@example.com"))
+            .ReturnsAsync(new UserOAuthRecord
+            {
+                Id = 9,
+                Email = "existing@example.com",
+                Usertype = "Participant",
+                GoogleID = provider == "microsoft" ? "google-owner" : null,
+                MicrosoftID = provider == "google" ? "ms-owner" : null,
+                AuthVersion = 1
+            });
+
+        var oauthService = new Mock<IOAuthService>();
+        oauthService.Setup(service => service.VerifyGoogleTokenAsync("provider-token", null))
+            .ReturnsAsync(new OAuthUser("newcomer-id", "existing@example.com", "New Holder", "google"));
+        oauthService.Setup(service => service.VerifyMicrosoftTokenAsync("provider-token", null))
+            .ReturnsAsync(new OAuthUser("newcomer-id", "existing@example.com", "New Holder", "microsoft"));
+
+        var authSessionService = new Mock<IAuthSessionService>();
+        var service = CreateService(
+            userRepository: userRepository,
+            oauthService: oauthService,
+            authSessionService: authSessionService);
+
+        Func<Task> act = provider == "google"
+            ? () => service.GoogleAsync("provider-token", SessionTransport.BrowserCookie)
+            : () => service.MicrosoftAsync("provider-token", SessionTransport.BrowserCookie);
+
+        await act.Should().ThrowAsync<ConflictException>();
+        userRepository.Verify(
+            repository => repository.UpdateProviderIdsAsync(It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<string?>()),
+            Times.Never);
+        authSessionService.Verify(
+            s => s.IssueAsync(
+                It.IsAny<backend.main.features.profile.User>(),
+                It.IsAny<SessionTransport>(),
+                It.IsAny<string?>(),
+                It.IsAny<bool?>()),
+            Times.Never);
+    }
+
     [Fact]
     public async Task VerifyAsync_ShouldCreateUser_AndReturnTokenPair()
     {
@@ -1111,6 +1261,67 @@ public class AuthServiceTests
         result.user.Usertype.Should().Be(AuthRoles.DefaultOAuthRole);
         userRepository.Verify(repository => repository.UpdateUserAsync(84, It.Is<backend.main.features.profile.User>(u =>
             u.Usertype == AuthRoles.DefaultOAuthRole)), Times.Once);
+    }
+
+    /// <summary>
+    /// Completing a pending signup re-resolves the provider identity, so it applies the same
+    /// mismatched-link check as a direct sign-in rather than issuing a session for that account.
+    /// </summary>
+    [Fact]
+    public async Task CompleteOAuthSignupAsync_ShouldReject_WhenEmailAccountIsLinkedToADifferentProviderId()
+    {
+        var pendingJson = JsonConvert.SerializeObject(new
+        {
+            ProviderUserId = "google-newcomer",
+            Email = "existing@example.com",
+            Name = "New Holder",
+            Provider = "google",
+            Transport = SessionTransport.BrowserCookie
+        });
+
+        var cache = new Mock<ICacheService>();
+        cache.Setup(service => service.GetValueAsync("oauth:pending:signup-token"))
+            .ReturnsAsync(pendingJson);
+
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetOAuthByGoogleIdAsync("google-newcomer"))
+            .ReturnsAsync((UserOAuthRecord?)null);
+        userRepository.Setup(repository => repository.GetOAuthByEmailAsync("existing@example.com"))
+            .ReturnsAsync(new UserOAuthRecord
+            {
+                Id = 84,
+                Email = "existing@example.com",
+                Usertype = "Participant",
+                GoogleID = "google-owner",
+                AuthVersion = 1
+            });
+
+        var authSessionService = new Mock<IAuthSessionService>();
+        var service = CreateService(
+            userRepository: userRepository,
+            cacheService: cache,
+            authSessionService: authSessionService);
+
+        var act = () => service.CompleteOAuthSignupAsync(
+            "signup-token",
+            "participant",
+            "pending-user",
+            SessionTransport.BrowserCookie);
+
+        await act.Should().ThrowAsync<ConflictException>();
+        userRepository.Verify(
+            repository => repository.CreateUserAsync(It.IsAny<backend.main.features.profile.User>()),
+            Times.Never);
+        userRepository.Verify(
+            repository => repository.UpdateProviderIdsAsync(It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<string?>()),
+            Times.Never);
+        authSessionService.Verify(
+            s => s.IssueAsync(
+                It.IsAny<backend.main.features.profile.User>(),
+                It.IsAny<SessionTransport>(),
+                It.IsAny<string?>(),
+                It.IsAny<bool?>()),
+            Times.Never);
     }
 
     [Fact]
