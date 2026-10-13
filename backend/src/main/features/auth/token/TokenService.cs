@@ -100,6 +100,7 @@ return 1";
 
         public async Task<RefreshTokenIssue> GenerateRefreshToken(
             int userId,
+            int authVersion,
             ClientRequestInfo requestInfo,
             SessionTransport transport,
             string? sessionId = null,
@@ -134,6 +135,7 @@ return 1";
                     {
                         SessionId = Guid.NewGuid().ToString("N"),
                         UserId = userId,
+                        AuthVersion = authVersion,
                         Transport = transport,
                         LastSeenDeviceType = requestInfo.DeviceType,
                         LastSeenClientName = requestInfo.ClientName,
@@ -157,6 +159,11 @@ return 1";
                     if (session.Transport != transport)
                         throw new UnauthorizedException("Refresh session transport mismatch.");
 
+                    if (session.AuthVersion is int issuedVersion && issuedVersion != authVersion)
+                        throw new UnauthorizedException("Refresh session is no longer valid.");
+
+                    // Also stamps a session minted before the version was recorded.
+                    session.AuthVersion = authVersion;
                     session.LastSeenDeviceType = requestInfo.DeviceType;
                     session.LastSeenClientName = requestInfo.ClientName;
                     session.LastSeenIpAddress = requestInfo.IpAddress;
@@ -287,6 +294,7 @@ return 1";
                 {
                     SessionId = session.SessionId,
                     UserId = tokenRecord.UserId,
+                    AuthVersion = session.AuthVersion,
                     Transport = session.Transport,
                 };
             }
@@ -966,6 +974,9 @@ return 1";
         {
             try
             {
+                // Best effort: an unreachable cache reads as an empty set and revokes nothing.
+                // Callers bump AuthVersion first, and the version stamped on each session is what
+                // stops a surviving one from being refreshed.
                 var sessionIds = await _cacheService.SetMembersAsync(UserSessionsKey(userId));
                 foreach (var sessionId in sessionIds)
                     await RevokeRefreshSessionAsync(sessionId);
@@ -1175,6 +1186,14 @@ return 1";
                 get; set;
             }
             public int UserId
+            {
+                get; set;
+            }
+            /// <summary>
+            /// The account's AuthVersion when the session was issued or last rotated. Null for a
+            /// session stored before this was recorded; it is stamped on its next refresh.
+            /// </summary>
+            public int? AuthVersion
             {
                 get; set;
             }

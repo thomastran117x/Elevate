@@ -715,6 +715,18 @@ namespace backend.main.features.auth
                     throw new ResourceNotFoundException($"User with ID {validation.UserId} is not found");
                 await EnsureUserEnabledAsync(user, revokeSessions: true);
 
+                // A password change, disable or email change bumps AuthVersion and then sweeps
+                // the account's sessions, but the sweep revokes nothing when the cache is
+                // unreachable. Comparing here, where the user is already loaded, keeps a session
+                // that survived it from minting access tokens for the new version.
+                if (validation.AuthVersion is int issuedVersion && issuedVersion != user.AuthVersion)
+                {
+                    await _tokenService.RevokeRefreshSessionAsync(validation.SessionId);
+                    throw new UnauthorizedException(
+                        "Refresh session is no longer valid. Please sign in again."
+                    );
+                }
+
                 return await _authSessionService.IssueAsync(
                     user,
                     validation.Transport,

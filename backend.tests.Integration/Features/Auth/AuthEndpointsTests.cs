@@ -539,6 +539,36 @@ public class AuthEndpointsTests
             .Should().Be(PasswordVerificationResult.Success);
     }
 
+    /// <summary>
+    /// A rotation bumps AuthVersion and then sweeps the account's sessions from Redis, but the
+    /// sweep revokes nothing when Redis is unreachable. Bumping the version without the sweep
+    /// stands in for that outage: the surviving session must still be refused.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_ShouldRejectSession_WhenAuthVersionChangedWithoutRevocation()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        await app.SignUpAndVerifyByTokenAsync("refresh-version@example.com");
+        var user = await app.FindUserByEmailAsync("refresh-version@example.com");
+
+        var refresh = await app.PostJsonWithCsrfAsync("/api/auth/refresh", new RefreshTokenRequest());
+        refresh.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        await using (var scope = app.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+            await db.Users
+                .Where(u => u.Id == user!.Id)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.AuthVersion, u => u.AuthVersion + 1));
+        }
+
+        var staleRefresh = await app.PostJsonWithCsrfAsync("/api/auth/refresh", new RefreshTokenRequest());
+        staleRefresh.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var retry = await app.PostJsonWithCsrfAsync("/api/auth/refresh", new RefreshTokenRequest());
+        retry.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
     [Fact]
     public async Task Me_ShouldReturnCurrentUserForAuthenticatedAccessToken()
     {
