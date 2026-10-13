@@ -949,6 +949,16 @@ namespace backend.main.features.auth
                     null
                 ) ?? emailUser;
             }
+            else if (emailUser.GoogleID != oauthUser.Id)
+            {
+                // The address matches but the account is already linked to another Google
+                // identity, typically a Workspace address reassigned after the link was made. An
+                // email match must never override an existing link, or the new holder of the
+                // address would sign in as the old one.
+                throw new ConflictException(
+                    "This email address belongs to an account linked to a different Google account."
+                );
+            }
 
             return ToUser(emailUser);
         }
@@ -975,6 +985,16 @@ namespace backend.main.features.auth
                     null,
                     oauthUser.Id
                 ) ?? emailUser;
+            }
+            else if (emailUser.MicrosoftID != oauthUser.Id)
+            {
+                // The address matches but the account is already linked to another Microsoft
+                // identity, typically an Entra address reassigned after the link was made. An
+                // email match must never override an existing link, or the new holder of the
+                // address would sign in as the old one.
+                throw new ConflictException(
+                    "This email address belongs to an account linked to a different Microsoft account."
+                );
             }
 
             return ToUser(emailUser);
