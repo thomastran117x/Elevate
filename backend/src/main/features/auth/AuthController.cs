@@ -614,6 +614,7 @@ namespace backend.main.features.auth
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<OAuthAuthenticationResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status409Conflict)]
         public async Task<IActionResult> GoogleAuthenticate([FromBody] GoogleRequest request)
         {
             try
@@ -647,6 +648,7 @@ namespace backend.main.features.auth
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<OAuthAuthenticationResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status409Conflict)]
         public async Task<IActionResult> GoogleCodeAuthenticate([FromBody] GoogleCodeRequest request)
         {
             try
@@ -682,6 +684,7 @@ namespace backend.main.features.auth
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<OAuthAuthenticationResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status409Conflict)]
         public async Task<IActionResult> MicrosoftAuthenticate([FromBody] MicrosoftRequest request)
         {
             try
@@ -781,6 +784,7 @@ namespace backend.main.features.auth
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status409Conflict)]
         public async Task<IActionResult> CompleteOAuthSignup([FromBody] CompleteOAuthSignupRequest request)
         {
             try
