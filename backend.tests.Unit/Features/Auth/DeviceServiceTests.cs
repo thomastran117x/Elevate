@@ -35,7 +35,7 @@ public class DeviceServiceTests
             cacheService: cache,
             authNotificationService: notifications);
 
-        await service.EnsureDeviceKnownAsync(4, "known@example.com", TestRequestInfoFactory.Browser());
+        await service.EnsureDeviceKnownAsync(4, "known@example.com", 2, TestRequestInfoFactory.Browser());
 
         notifications.Verify(s => s.SendDeviceVerificationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()), Times.Never);
         cache.Verify(c => c.SetValueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan?>()), Times.Never);
@@ -48,11 +48,13 @@ public class DeviceServiceTests
         deviceTrustService.Setup(s => s.IsTrustedAsync(7, It.IsAny<ClientRequestInfo>()))
             .ReturnsAsync(false);
 
+        string? storedPending = null;
         var cache = new Mock<backend.main.features.cache.ICacheService>();
         cache.Setup(service => service.SetValueAsync(
                 It.Is<string>(key => key.StartsWith("device:pending:")),
                 It.IsAny<string>(),
                 It.IsAny<TimeSpan?>()))
+            .Callback<string, string, TimeSpan?>((_, value, _) => storedPending = value)
             .ReturnsAsync(true);
 
         var notifications = new Mock<IAuthNotificationService>();
@@ -61,13 +63,15 @@ public class DeviceServiceTests
             cacheService: cache,
             authNotificationService: notifications);
 
-        var act = () => service.EnsureDeviceKnownAsync(7, "unknown@example.com", TestRequestInfoFactory.Browser());
+        var act = () => service.EnsureDeviceKnownAsync(7, "unknown@example.com", 5, TestRequestInfoFactory.Browser());
 
         await act.Should().ThrowAsync<DeviceVerificationRequiredException>();
         notifications.Verify(s => s.SendDeviceVerificationAsync(
             "unknown@example.com",
             It.Is<string>(token => !string.IsNullOrWhiteSpace(token)),
             It.IsAny<string?>()), Times.Once);
+        JsonDocument.Parse(storedPending!).RootElement.GetProperty("AuthVersion").GetInt32()
+            .Should().Be(5);
     }
 
     [Fact]
@@ -76,6 +80,7 @@ public class DeviceServiceTests
         var pendingState = JsonSerializer.Serialize(new
         {
             UserId = 11,
+            AuthVersion = 1,
             Email = "member@example.com",
             DeviceType = "Desktop",
             ClientName = "Chrome",
@@ -166,9 +171,47 @@ public class DeviceServiceTests
             Times.Never);
     }
 
-    private static string PendingState() => JsonSerializer.Serialize(new
+    /// <summary>
+    /// A link that outlives a password reset or email change must not still sign its holder in,
+    /// nor trust their device.
+    /// </summary>
+    [Fact]
+    public async Task VerifyDeviceAsync_ShouldRefuse_WhenTheAccountRotatedSinceTheLinkWasSent()
+    {
+        var harness = VerifyHarness.Create(PendingState());
+        harness.User.AuthVersion = 2;
+
+        var act = () => harness.Service.VerifyDeviceAsync("verify-token", SessionTransport.BrowserCookie);
+
+        await act.Should().ThrowAsync<UnauthorizedException>().WithMessage("*no longer valid*");
+        harness.Sessions.Verify(
+            s => s.IssueAsync(It.IsAny<backend.main.features.profile.User>(), It.IsAny<SessionTransport>(), It.IsAny<string?>(), It.IsAny<bool?>()),
+            Times.Never);
+        harness.DeviceTrust.Verify(
+            s => s.TrustAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// Entries cached before the version was recorded cannot show they predate no rotation.
+    /// </summary>
+    [Fact]
+    public async Task VerifyDeviceAsync_ShouldRefuse_ALinkStoredWithoutAnAuthVersion()
+    {
+        var harness = VerifyHarness.Create(PendingState(authVersion: null));
+
+        var act = () => harness.Service.VerifyDeviceAsync("verify-token", SessionTransport.BrowserCookie);
+
+        await act.Should().ThrowAsync<UnauthorizedException>().WithMessage("*no longer valid*");
+        harness.Sessions.Verify(
+            s => s.IssueAsync(It.IsAny<backend.main.features.profile.User>(), It.IsAny<SessionTransport>(), It.IsAny<string?>(), It.IsAny<bool?>()),
+            Times.Never);
+    }
+
+    private static string PendingState(int? authVersion = 1) => JsonSerializer.Serialize(new
     {
         UserId = 11,
+        AuthVersion = authVersion,
         Email = "member@example.com",
         DeviceType = "Desktop",
         ClientName = "Chrome",
