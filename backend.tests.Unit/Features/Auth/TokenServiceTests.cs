@@ -212,7 +212,7 @@ public class TokenServiceTests
     {
         var cache = new InMemoryCacheService();
         var service = new TokenService(cache);
-        var issue = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.BrowserCookie);
+        var issue = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.BrowserCookie);
         await cache.SetValueAsync(StepUpProofKeys.ForSession(issue.SessionId), "{}", TimeSpan.FromMinutes(10));
 
         await service.RevokeRefreshSessionAsync(issue.SessionId);
@@ -237,7 +237,7 @@ public class TokenServiceTests
     {
         var cache = new InMemoryCacheService();
         var service = new TokenService(cache);
-        var issue = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.BrowserCookie);
+        var issue = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.BrowserCookie);
 
         var result = await service.StoreStepUpProofAsync(issue.SessionId, 8, 0, "{\"proof\":1}", TimeSpan.FromMinutes(10));
 
@@ -252,7 +252,7 @@ public class TokenServiceTests
     {
         var cache = new InMemoryCacheService();
         var service = new TokenService(cache);
-        var issue = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.BrowserCookie);
+        var issue = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.BrowserCookie);
         await service.RevokeRefreshSessionAsync(issue.SessionId);
 
         // A step-up verify that finishes after logout must not resurrect a proof.
@@ -322,7 +322,7 @@ public class TokenServiceTests
     {
         var cache = new InMemoryCacheService();
         var service = new TokenService(cache);
-        var issue = await service.GenerateRefreshToken(8, CreateRequestInfo(), SessionTransport.BrowserCookie);
+        var issue = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.BrowserCookie);
         await cache.IncrementAsync(StepUpProofKeys.GenerationForUser(8));
 
         // Verification began at generation 0; a factor change has since advanced it to 1.
@@ -339,7 +339,7 @@ public class TokenServiceTests
         var service = new TokenService(cache);
         var requestInfo = CreateRequestInfo();
 
-        var issue = await service.GenerateRefreshToken(8, requestInfo, SessionTransport.BrowserCookie);
+        var issue = await service.GenerateRefreshToken(8, 1, requestInfo, SessionTransport.BrowserCookie);
 
         var act = () => service.ValidateRefreshToken(
             issue.Value,
@@ -358,7 +358,7 @@ public class TokenServiceTests
         var service = new TokenService(cache);
         var requestInfo = CreateRequestInfo();
 
-        var issue = await service.GenerateRefreshToken(8, requestInfo, SessionTransport.BrowserCookie);
+        var issue = await service.GenerateRefreshToken(8, 1, requestInfo, SessionTransport.BrowserCookie);
 
         var act = () => service.ValidateRefreshToken(
             issue.Value,
@@ -377,7 +377,7 @@ public class TokenServiceTests
         var service = new TokenService(cache);
         var requestInfo = CreateRequestInfo();
 
-        var issue = await service.GenerateRefreshToken(8, requestInfo, SessionTransport.BrowserCookie);
+        var issue = await service.GenerateRefreshToken(8, 1, requestInfo, SessionTransport.BrowserCookie);
 
         var act = () => service.ValidateRefreshToken(
             issue.Value,
@@ -396,7 +396,7 @@ public class TokenServiceTests
         var service = new TokenService(cache);
         var requestInfo = CreateRequestInfo();
 
-        var issue = await service.GenerateRefreshToken(8, requestInfo, SessionTransport.BrowserCookie);
+        var issue = await service.GenerateRefreshToken(8, 1, requestInfo, SessionTransport.BrowserCookie);
 
         var result = await service.ValidateRefreshToken(
             issue.Value,
@@ -457,7 +457,7 @@ public class TokenServiceTests
         var service = new TokenService(cache);
         var requestInfo = CreateRequestInfo();
 
-        var issue = await service.GenerateRefreshToken(14, requestInfo, SessionTransport.ApiToken);
+        var issue = await service.GenerateRefreshToken(14, 1, requestInfo, SessionTransport.ApiToken);
         var result = await service.ValidateRefreshToken(
             issue.Value,
             issue.SessionBindingToken,
@@ -476,7 +476,7 @@ public class TokenServiceTests
         var service = new TokenService(cache);
         var requestInfo = CreateRequestInfo();
 
-        var issue = await service.GenerateRefreshToken(8, requestInfo, SessionTransport.BrowserCookie);
+        var issue = await service.GenerateRefreshToken(8, 1, requestInfo, SessionTransport.BrowserCookie);
         var validation = await service.ValidateRefreshToken(
             issue.Value,
             issue.SessionBindingToken,
@@ -485,6 +485,7 @@ public class TokenServiceTests
 
         var act = () => service.GenerateRefreshToken(
             9,
+            1,
             requestInfo,
             SessionTransport.BrowserCookie,
             validation.SessionId);
@@ -500,7 +501,7 @@ public class TokenServiceTests
         var service = new TokenService(cache);
         var requestInfo = CreateRequestInfo();
 
-        var issue = await service.GenerateRefreshToken(8, requestInfo, SessionTransport.BrowserCookie);
+        var issue = await service.GenerateRefreshToken(8, 1, requestInfo, SessionTransport.BrowserCookie);
         var validation = await service.ValidateRefreshToken(
             issue.Value,
             issue.SessionBindingToken,
@@ -509,12 +510,113 @@ public class TokenServiceTests
 
         var act = () => service.GenerateRefreshToken(
             8,
+            1,
             requestInfo,
             SessionTransport.ApiToken,
             validation.SessionId);
 
         await act.Should().ThrowAsync<UnauthorizedException>()
             .WithMessage("Refresh session transport mismatch.");
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldReturnIssuingAuthVersion()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var requestInfo = CreateRequestInfo();
+
+        var issue = await service.GenerateRefreshToken(8, 4, requestInfo, SessionTransport.BrowserCookie);
+        var result = await service.ValidateRefreshToken(
+            issue.Value,
+            issue.SessionBindingToken,
+            SessionTransport.BrowserCookie,
+            requestInfo);
+
+        result.AuthVersion.Should().Be(4);
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldReturnNullAuthVersion_ForLegacySession()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var requestInfo = CreateRequestInfo();
+
+        var issue = await service.GenerateRefreshToken(8, 4, requestInfo, SessionTransport.BrowserCookie);
+        await RemoveSessionAuthVersionAsync(cache, issue.SessionId);
+
+        var result = await service.ValidateRefreshToken(
+            issue.Value,
+            issue.SessionBindingToken,
+            SessionTransport.BrowserCookie,
+            requestInfo);
+
+        result.AuthVersion.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GenerateRefreshToken_ShouldRejectAuthVersionMismatch_WhenReusingExistingSession()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var requestInfo = CreateRequestInfo();
+
+        var issue = await service.GenerateRefreshToken(8, 4, requestInfo, SessionTransport.BrowserCookie);
+        var validation = await service.ValidateRefreshToken(
+            issue.Value,
+            issue.SessionBindingToken,
+            SessionTransport.BrowserCookie,
+            requestInfo);
+
+        var act = () => service.GenerateRefreshToken(
+            8,
+            5,
+            requestInfo,
+            SessionTransport.BrowserCookie,
+            validation.SessionId);
+
+        await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh session is no longer valid.");
+    }
+
+    [Fact]
+    public async Task GenerateRefreshToken_ShouldStampLegacySession_WhenRotating()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var requestInfo = CreateRequestInfo();
+
+        var issue = await service.GenerateRefreshToken(8, 4, requestInfo, SessionTransport.BrowserCookie);
+        await RemoveSessionAuthVersionAsync(cache, issue.SessionId);
+        var validation = await service.ValidateRefreshToken(
+            issue.Value,
+            issue.SessionBindingToken,
+            SessionTransport.BrowserCookie,
+            requestInfo);
+
+        var rotated = await service.GenerateRefreshToken(
+            8,
+            6,
+            requestInfo,
+            SessionTransport.BrowserCookie,
+            validation.SessionId);
+        var result = await service.ValidateRefreshToken(
+            rotated.Value,
+            rotated.SessionBindingToken,
+            SessionTransport.BrowserCookie,
+            requestInfo);
+
+        result.SessionId.Should().Be(issue.SessionId);
+        result.AuthVersion.Should().Be(6);
+    }
+
+    private static async Task RemoveSessionAuthVersionAsync(InMemoryCacheService cache, string sessionId)
+    {
+        var key = $"refresh:v2:session:{sessionId}";
+        var session = Newtonsoft.Json.Linq.JObject.Parse((await cache.GetValueAsync(key))!);
+        session.Remove("AuthVersion");
+        await cache.SetValueAsync(key, session.ToString(), TimeSpan.FromDays(1));
     }
 
     [Fact]
@@ -773,8 +875,8 @@ public class TokenServiceTests
             IsBrowserClient = false
         };
 
-        var browserIssue = await service.GenerateRefreshToken(44, browserRequest, SessionTransport.BrowserCookie);
-        var apiIssue = await service.GenerateRefreshToken(44, apiRequest, SessionTransport.ApiToken);
+        var browserIssue = await service.GenerateRefreshToken(44, 1, browserRequest, SessionTransport.BrowserCookie);
+        var apiIssue = await service.GenerateRefreshToken(44, 1, apiRequest, SessionTransport.ApiToken);
 
         await service.RevokeAllRefreshSessionsAsync(44);
 

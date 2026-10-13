@@ -8,6 +8,7 @@ namespace backend.main.features.auth.token
         public AccessTokenIssue GenerateAccessToken(User user, string sessionId);
         public Task<RefreshTokenIssue> GenerateRefreshToken(
             int userId,
+            int authVersion,
             ClientRequestInfo requestInfo,
             SessionTransport transport,
             string? sessionId = null,

@@ -482,6 +482,7 @@ public class AuthServiceTests
             .Returns(new AccessTokenIssue("access-token", DateTime.UtcNow.AddMinutes(15)));
         tokenService.Setup(service => service.GenerateRefreshToken(
                 9,
+                It.IsAny<int>(),
                 It.IsAny<backend.main.shared.requests.ClientRequestInfo>(),
                 SessionTransport.BrowserCookie,
                 null,
@@ -1416,6 +1417,78 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task HandleTokensAsync_ShouldRotate_WhenSessionAuthVersionMatches()
+    {
+        var user = new TestUserBuilder().WithId(63).Build();
+        user.AuthVersion = 3;
+
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetUserAsync(63))
+            .ReturnsAsync(user);
+
+        var tokenService = CreateTokenServiceForUser(user);
+        SetupRefreshValidation(tokenService, userId: 63, authVersion: 3);
+
+        var authSessionService = CreateAuthSessionServiceForUser(user);
+        var service = CreateService(userRepository: userRepository, tokenService: tokenService, authSessionService: authSessionService);
+
+        var result = await service.HandleTokensAsync(
+            "old-refresh-token",
+            "binding-token",
+            SessionTransport.BrowserCookie);
+
+        result.token.RefreshToken.Should().Be("refresh-token");
+        tokenService.Verify(s => s.RevokeRefreshSessionAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleTokensAsync_ShouldRevokeSession_WhenAccountAuthVersionMovedOn()
+    {
+        var user = new TestUserBuilder().WithId(63).Build();
+        user.AuthVersion = 4;
+
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetUserAsync(63))
+            .ReturnsAsync(user);
+
+        var tokenService = CreateTokenServiceForUser(user);
+        SetupRefreshValidation(tokenService, userId: 63, authVersion: 3);
+
+        var authSessionService = CreateAuthSessionServiceForUser(user);
+        var service = CreateService(userRepository: userRepository, tokenService: tokenService, authSessionService: authSessionService);
+
+        var act = () => service.HandleTokensAsync(
+            "old-refresh-token",
+            "binding-token",
+            SessionTransport.BrowserCookie);
+
+        await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh session is no longer valid. Please sign in again.");
+        tokenService.Verify(s => s.RevokeRefreshSessionAsync("existing-session"), Times.Once);
+        authSessionService.Verify(s => s.IssueAsync(
+            It.IsAny<backend.main.features.profile.User>(),
+            It.IsAny<SessionTransport>(),
+            It.IsAny<string?>(),
+            It.IsAny<bool?>()), Times.Never);
+    }
+
+    private static void SetupRefreshValidation(Mock<ITokenService> tokenService, int userId, int? authVersion)
+    {
+        tokenService.Setup(service => service.ValidateRefreshToken(
+                "old-refresh-token",
+                "binding-token",
+                SessionTransport.BrowserCookie,
+                It.IsAny<ClientRequestInfo>()))
+            .ReturnsAsync(new RefreshTokenValidationResult
+            {
+                SessionId = "existing-session",
+                UserId = userId,
+                AuthVersion = authVersion,
+                Transport = SessionTransport.BrowserCookie
+            });
+    }
+
+    [Fact]
     public async Task VerifyDeviceLoginAsync_ShouldReturnDeviceIssuedToken()
     {
         var expectedToken = new UserToken(
@@ -2289,6 +2362,7 @@ public class AuthServiceTests
             .Returns(new AccessTokenIssue("access-token", DateTime.UtcNow.AddMinutes(15)));
         tokenService.Setup(service => service.GenerateRefreshToken(
                 user.Id,
+                It.IsAny<int>(),
                 It.IsAny<ClientRequestInfo>(),
                 SessionTransport.BrowserCookie,
                 It.IsAny<string?>(),

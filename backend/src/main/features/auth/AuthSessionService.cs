@@ -34,6 +34,7 @@ namespace backend.main.features.auth
                 // sid stays stable across access-token rotations within one session.
                 var refreshToken = await _tokenService.GenerateRefreshToken(
                     user.Id,
+                    user.AuthVersion,
                     _requestInfo,
                     transport,
                     sessionId,
