@@ -4,6 +4,8 @@ ASP.NET Core application targeting .NET 10, with EF Core/PostgreSQL, Redis, Elas
 
 Feature controllers, services, repositories, and contracts live under `src/main/features/`. `application/` configures DI, middleware, security, routes, flags, and OpenAPI; `infrastructure/` integrates external stores; `shared/` holds cross-feature contracts/utilities. EF migrations are in `Migrations/`.
 
+Static data bundled into the backend assembly lives under `resources/`, organized by domain. These files are embedded at build time and do not need to be deployed separately.
+
 See [architecture](../docs/ARCHITECTURE.md), [setup](../docs/SETUP.md), [configuration](../docs/CONFIGURATION.md), and [CONTRIBUTING](../CONTRIBUTING.md). All commands below run from the repository root.
 
 ## Run and build

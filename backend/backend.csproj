@@ -69,12 +69,12 @@
     <!-- Explicit LogicalNames: the default manifest name is derived from the folder path, so a
          rename would break UsernameWordLists' lookup silently at runtime. The None Remove is
          required first, or the SDK's default None glob and this EmbeddedResource collide. -->
-    <None Remove="src\main\features\profile\suggestions\wordlists\*.txt" />
-    <EmbeddedResource Include="src\main\features\profile\suggestions\wordlists\adjectives.txt" LogicalName="UsernameWordLists.adjectives.txt" />
-    <EmbeddedResource Include="src\main\features\profile\suggestions\wordlists\nouns.txt" LogicalName="UsernameWordLists.nouns.txt" />
-    <EmbeddedResource Include="src\main\features\profile\suggestions\wordlists\denied-substrings.txt" LogicalName="UsernameWordLists.denied-substrings.txt" />
-    <None Remove="src\main\features\auth\password\blocklist\*.txt" />
-    <EmbeddedResource Include="src\main\features\auth\password\blocklist\common-passwords.txt" LogicalName="PasswordBlocklist.common.txt" />
+    <None Remove="resources\usernames\*.txt" />
+    <EmbeddedResource Include="resources\usernames\adjectives.txt" LogicalName="UsernameWordLists.adjectives.txt" />
+    <EmbeddedResource Include="resources\usernames\nouns.txt" LogicalName="UsernameWordLists.nouns.txt" />
+    <EmbeddedResource Include="resources\usernames\denied-substrings.txt" LogicalName="UsernameWordLists.denied-substrings.txt" />
+    <None Remove="resources\passwords\*.txt" />
+    <EmbeddedResource Include="resources\passwords\common-passwords.txt" LogicalName="PasswordBlocklist.common.txt" />
   </ItemGroup>
 
   <ItemGroup>
@@ -89,4 +89,3 @@
   </ItemGroup>
 
 </Project>
-
