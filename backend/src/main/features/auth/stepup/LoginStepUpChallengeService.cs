@@ -376,13 +376,23 @@ namespace backend.main.features.auth.stepup
                     rememberMe: state.RememberMe
                 );
 
-                // The check above is not enough on its own. A rotation committing between it and
-                // the line above would run its revocation before this session existed, so nothing
-                // would have removed it - and although the access token just minted carries the
-                // stale version and is rejected, the refresh session would still mint valid ones.
-                // Re-read once the session exists and undo it if the account moved on.
-                var current = await _userRepository.GetUserAsync(state.UserId);
-                if (current == null || current.AuthVersion != state.AuthVersion)
+                // The check above is not enough on its own: a rotation can commit between it and
+                // the line above, running its revocation before this session existed. Trust is
+                // also the one thing this path grants that outlives the session - 90 days of
+                // skipping MFA, and an email change leaves the password intact - so it must never
+                // land for a sign-in that is then rejected. Both are settled here, once the session
+                // exists: the trust is written only if the version still matches, compared under
+                // the account's row lock, so no rotation can commit between that comparison and
+                // the write.
+                var trusted = await _deviceTrustService.TrustAsync(
+                    state.UserId,
+                    state.AuthVersion,
+                    state.TrustedDeviceId,
+                    state.DeviceType,
+                    state.ClientName,
+                    state.IpAddress
+                );
+                if (!trusted)
                 {
                     // Revoking the account's sessions rather than just this one: a rotation has
                     // happened, so everything is meant to be gone, and this is idempotent with the
@@ -393,18 +403,6 @@ namespace backend.main.features.auth.stepup
                         "This sign-in verification challenge is no longer valid. Please sign in again."
                     );
                 }
-
-                // Deliberately after the re-check rather than before the session is issued.
-                // Trusting a device persists for 90 days and lets it skip MFA, and an email change
-                // leaves the password intact - so granting trust on a path that then rejects the
-                // sign-in would hand a lasting bypass to whoever completed the stale challenge.
-                await _deviceTrustService.TrustAsync(
-                    state.UserId,
-                    state.TrustedDeviceId,
-                    state.DeviceType,
-                    state.ClientName,
-                    state.IpAddress
-                );
 
                 await DeleteStateAsync(state);
 

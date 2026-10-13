@@ -1,5 +1,7 @@
 using backend.main.features.auth.device;
 using backend.main.shared.requests;
+using backend.main.shared.utilities;
+using backend.main.utilities;
 
 using backend.tests.Unit.Support;
 
@@ -48,57 +50,81 @@ public class DeviceTrustServiceTests
     }
 
     [Fact]
-    public async Task TrustAsync_ShouldCreateDevice_WhenNoPriorDeviceExists()
+    public async Task TrustAsync_ShouldTrustTheDevice_AtTheExpectedAuthVersion()
     {
         var httpContextAccessor = new Mock<IHttpContextAccessor>();
         httpContextAccessor.Setup(a => a.HttpContext).Returns((HttpContext?)null);
 
         var deviceRepository = new Mock<IDeviceRepository>();
-        deviceRepository.Setup(r => r.GetDeviceAsync(It.IsAny<int>(), It.IsAny<string>()))
-            .ReturnsAsync((Device?)null);
+        deviceRepository
+            .Setup(r => r.TrustIfAuthVersionAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<Device>()))
+            .ReturnsAsync(true);
 
         var service = new DeviceTrustService(
             deviceRepository.Object,
             httpContextAccessor.Object,
             TestRequestInfoFactory.Browser());
 
-        await service.TrustAsync(3, "device-id-abc", "Desktop", "Chrome", "127.0.0.1");
+        var trusted = await service.TrustAsync(3, 4, "device-id-abc", "Desktop", "Chrome", "127.0.0.1");
 
-        deviceRepository.Verify(r => r.CreateDeviceAsync(It.Is<Device>(d =>
+        trusted.Should().BeTrue();
+        deviceRepository.Verify(r => r.TrustIfAuthVersionAsync(3, 4, It.Is<Device>(d =>
             d.UserId == 3
+            && d.DeviceTokenHash == CryptoHelper.HashToken("device-id-abc")
             && d.DeviceType == "Desktop"
             && d.ClientName == "Chrome"
             && d.IpAddress == "127.0.0.1")), Times.Once);
     }
 
     [Fact]
-    public async Task TrustAsync_ShouldUpdateExistingDevice_WhenDeviceAlreadyTrusted()
+    public async Task TrustAsync_ShouldHandTheDeviceTokenBack_WhenTrusted()
     {
+        var httpContext = new DefaultHttpContext();
         var httpContextAccessor = new Mock<IHttpContextAccessor>();
-        httpContextAccessor.Setup(a => a.HttpContext).Returns((HttpContext?)null);
-
-        var existingDevice = new Device
-        {
-            UserId = 3,
-            DeviceTokenHash = "existing-hash",
-            DeviceType = "Mobile",
-            ClientName = "Safari",
-            IpAddress = "10.0.0.1"
-        };
+        httpContextAccessor.Setup(a => a.HttpContext).Returns(httpContext);
 
         var deviceRepository = new Mock<IDeviceRepository>();
-        deviceRepository.Setup(r => r.GetDeviceAsync(It.IsAny<int>(), It.IsAny<string>()))
-            .ReturnsAsync(existingDevice);
+        deviceRepository
+            .Setup(r => r.TrustIfAuthVersionAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<Device>()))
+            .ReturnsAsync(true);
 
         var service = new DeviceTrustService(
             deviceRepository.Object,
             httpContextAccessor.Object,
             TestRequestInfoFactory.Browser());
 
-        await service.TrustAsync(3, "device-id-abc", "Desktop", "Chrome", "127.0.0.1");
+        await service.TrustAsync(3, 4, "device-id-abc", "Desktop", "Chrome", "127.0.0.1");
 
-        deviceRepository.Verify(r => r.UpdateLastSeenAsync(
-            It.Is<Device>(d => d.DeviceType == "Desktop" && d.ClientName == "Chrome")), Times.Once);
-        deviceRepository.Verify(r => r.CreateDeviceAsync(It.IsAny<Device>()), Times.Never);
+        httpContext.Response.Headers[HttpUtility.TrustedDeviceHeaderName].ToString()
+            .Should().Be("device-id-abc");
+        httpContext.Response.Headers.SetCookie.ToString()
+            .Should().Contain(HttpUtility.TrustedDeviceCookieName);
+    }
+
+    /// <summary>
+    /// A refused trust must leave the client with nothing to present on its next sign-in.
+    /// </summary>
+    [Fact]
+    public async Task TrustAsync_ShouldNotHandTheDeviceTokenBack_WhenTheAuthVersionMovedOn()
+    {
+        var httpContext = new DefaultHttpContext();
+        var httpContextAccessor = new Mock<IHttpContextAccessor>();
+        httpContextAccessor.Setup(a => a.HttpContext).Returns(httpContext);
+
+        var deviceRepository = new Mock<IDeviceRepository>();
+        deviceRepository
+            .Setup(r => r.TrustIfAuthVersionAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<Device>()))
+            .ReturnsAsync(false);
+
+        var service = new DeviceTrustService(
+            deviceRepository.Object,
+            httpContextAccessor.Object,
+            TestRequestInfoFactory.Browser());
+
+        var trusted = await service.TrustAsync(3, 4, "device-id-abc", "Desktop", "Chrome", "127.0.0.1");
+
+        trusted.Should().BeFalse();
+        httpContext.Response.Headers.ContainsKey(HttpUtility.TrustedDeviceHeaderName).Should().BeFalse();
+        httpContext.Response.Headers.ContainsKey("Set-Cookie").Should().BeFalse();
     }
 }

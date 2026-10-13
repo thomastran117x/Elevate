@@ -59,18 +59,19 @@ namespace backend.main.features.auth.device
             return true;
         }
 
-        public async Task TrustAsync(
+        public async Task<bool> TrustAsync(
             int userId,
+            int expectedAuthVersion,
             string trustedDeviceId,
             string deviceType,
             string clientName,
             string ipAddress
         )
         {
-            var existing = await _deviceRepository.GetDeviceAsync(userId, ComputeDeviceTokenHash(trustedDeviceId));
-            if (existing == null)
-            {
-                await _deviceRepository.CreateDeviceAsync(new Device
+            var trusted = await _deviceRepository.TrustIfAuthVersionAsync(
+                userId,
+                expectedAuthVersion,
+                new Device
                 {
                     UserId = userId,
                     DeviceTokenHash = ComputeDeviceTokenHash(trustedDeviceId),
@@ -78,14 +79,8 @@ namespace backend.main.features.auth.device
                     ClientName = clientName,
                     IpAddress = ipAddress
                 });
-            }
-            else
-            {
-                existing.DeviceType = deviceType;
-                existing.ClientName = clientName;
-                existing.IpAddress = ipAddress;
-                await _deviceRepository.UpdateLastSeenAsync(existing);
-            }
+            if (!trusted)
+                return false;
 
             var httpContext = _httpContextAccessor.HttpContext;
             if (httpContext != null)
@@ -97,6 +92,8 @@ namespace backend.main.features.auth.device
                     TrustedDeviceLifetime
                 );
             }
+
+            return true;
         }
 
         private static string ComputeDeviceTokenHash(string deviceToken) => CryptoHelper.HashToken(deviceToken);

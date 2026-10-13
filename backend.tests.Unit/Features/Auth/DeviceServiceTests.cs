@@ -7,6 +7,7 @@ using backend.main.features.auth.notifications;
 using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.shared.exceptions.app;
+using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
 
 using backend.tests.Unit.Support;
@@ -98,8 +99,8 @@ public class DeviceServiceTests
             .ReturnsAsync((AuthenticatedSessionResult?)null);
 
         var deviceTrustService = new Mock<IDeviceTrustService>();
-        deviceTrustService.Setup(s => s.TrustAsync(11, "trusted-device-id", "Desktop", "Chrome", "127.0.0.1"))
-            .Returns(Task.CompletedTask);
+        deviceTrustService.Setup(s => s.TrustAsync(11, user.AuthVersion, "trusted-device-id", "Desktop", "Chrome", "127.0.0.1"))
+            .ReturnsAsync(true);
 
         var expectedToken = new Token(
             "access-token",
@@ -127,7 +128,111 @@ public class DeviceServiceTests
 
         result.UserToken.user.Email.Should().Be("member@example.com");
         result.UserToken.token.RefreshToken.Should().Be("refresh-token");
-        deviceTrustService.Verify(t => t.TrustAsync(11, "trusted-device-id", "Desktop", "Chrome", "127.0.0.1"), Times.Once);
+        deviceTrustService.Verify(t => t.TrustAsync(11, user.AuthVersion, "trusted-device-id", "Desktop", "Chrome", "127.0.0.1"), Times.Once);
+    }
+
+    /// <summary>
+    /// A refused trust means the account rotated after the session was issued, so the session's
+    /// revocation was missed and has to be repeated here.
+    /// </summary>
+    [Fact]
+    public async Task VerifyDeviceAsync_ShouldRevokeAndRefuse_WhenTrustIsRefused()
+    {
+        var harness = VerifyHarness.Create(PendingState());
+        harness.DeviceTrust
+            .Setup(s => s.TrustAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(false);
+
+        var act = () => harness.Service.VerifyDeviceAsync("verify-token", SessionTransport.BrowserCookie);
+
+        await act.Should().ThrowAsync<UnauthorizedException>().WithMessage("*no longer valid*");
+        harness.Tokens.Verify(t => t.RevokeAllRefreshSessionsAsync(11), Times.Once);
+    }
+
+    [Fact]
+    public async Task VerifyDeviceAsync_ShouldNotTrustTheDevice_ForADisabledAccount()
+    {
+        var harness = VerifyHarness.Create(PendingState());
+        harness.User.IsDisabled = true;
+
+        var act = () => harness.Service.VerifyDeviceAsync("verify-token", SessionTransport.BrowserCookie);
+
+        await act.Should().ThrowAsync<ForbiddenException>();
+        harness.DeviceTrust.Verify(
+            s => s.TrustAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+        harness.Sessions.Verify(
+            s => s.IssueAsync(It.IsAny<backend.main.features.profile.User>(), It.IsAny<SessionTransport>(), It.IsAny<string?>(), It.IsAny<bool?>()),
+            Times.Never);
+    }
+
+    private static string PendingState() => JsonSerializer.Serialize(new
+    {
+        UserId = 11,
+        Email = "member@example.com",
+        DeviceType = "Desktop",
+        ClientName = "Chrome",
+        TrustedDeviceId = "trusted-device-id",
+        IpAddress = "127.0.0.1"
+    });
+
+    /// <summary>
+    /// A pending device verification for account 11 under "verify-token", with every collaborator
+    /// set up to succeed. Tests override the piece they are about.
+    /// </summary>
+    private sealed class VerifyHarness
+    {
+        public required DeviceService Service { get; init; }
+        public required backend.main.features.profile.User User { get; init; }
+        public required Mock<IDeviceTrustService> DeviceTrust { get; init; }
+        public required Mock<IAuthSessionService> Sessions { get; init; }
+        public required Mock<ITokenService> Tokens { get; init; }
+
+        public static VerifyHarness Create(string pendingState)
+        {
+            var cache = new Mock<backend.main.features.cache.ICacheService>();
+            cache.Setup(s => s.GetValueAsync("device:pending:verify-token"))
+                .ReturnsAsync(pendingState);
+            cache.Setup(s => s.DeleteKeyAsync("device:pending:verify-token"))
+                .ReturnsAsync(true);
+
+            var user = new TestUserBuilder().WithId(11).WithEmail("member@example.com").Build();
+            var userRepository = new Mock<IAuthUserRepository>();
+            userRepository.Setup(repo => repo.GetUserAsync(11)).ReturnsAsync(user);
+
+            var loginStepUpChallengeService = new Mock<ILoginStepUpChallengeService>();
+            loginStepUpChallengeService.Setup(s => s.TryVerifyEmailAsync("verify-token"))
+                .ReturnsAsync((AuthenticatedSessionResult?)null);
+
+            var deviceTrust = new Mock<IDeviceTrustService>();
+            deviceTrust
+                .Setup(s => s.TrustAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+                .ReturnsAsync(true);
+
+            var sessions = new Mock<IAuthSessionService>();
+            sessions
+                .Setup(s => s.IssueAsync(It.IsAny<backend.main.features.profile.User>(), It.IsAny<SessionTransport>(), It.IsAny<string?>(), It.IsAny<bool?>()))
+                .ReturnsAsync(new UserToken(
+                    new Token("access-token", DateTime.UtcNow.AddMinutes(15), "refresh-token", "binding-token", TimeSpan.FromDays(1), SessionTransport.BrowserCookie),
+                    user));
+
+            var tokens = new Mock<ITokenService>();
+
+            return new VerifyHarness
+            {
+                Service = CreateService(
+                    userRepository: userRepository,
+                    cacheService: cache,
+                    loginStepUpChallengeService: loginStepUpChallengeService,
+                    deviceTrustService: deviceTrust,
+                    authSessionService: sessions,
+                    tokenService: tokens),
+                User = user,
+                DeviceTrust = deviceTrust,
+                Sessions = sessions,
+                Tokens = tokens
+            };
+        }
     }
 
     private static DeviceService CreateService(
@@ -137,7 +242,8 @@ public class DeviceServiceTests
         Mock<IAuthNotificationService>? authNotificationService = null,
         Mock<IDeviceTrustService>? deviceTrustService = null,
         Mock<IAuthSessionService>? authSessionService = null,
-        Mock<ILoginStepUpChallengeService>? loginStepUpChallengeService = null)
+        Mock<ILoginStepUpChallengeService>? loginStepUpChallengeService = null,
+        Mock<ITokenService>? tokenService = null)
     {
         deviceRepository ??= new Mock<IDeviceRepository>();
         userRepository ??= new Mock<IAuthUserRepository>();
@@ -146,6 +252,7 @@ public class DeviceServiceTests
         deviceTrustService ??= new Mock<IDeviceTrustService>();
         authSessionService ??= new Mock<IAuthSessionService>();
         loginStepUpChallengeService ??= new Mock<ILoginStepUpChallengeService>();
+        tokenService ??= new Mock<ITokenService>();
 
         return new DeviceService(
             deviceRepository.Object,
@@ -155,7 +262,8 @@ public class DeviceServiceTests
             TestRequestInfoFactory.Browser(),
             deviceTrustService.Object,
             authSessionService.Object,
-            loginStepUpChallengeService.Object);
+            loginStepUpChallengeService.Object,
+            tokenService.Object);
     }
 
     private static string ComputeHash(string token)
