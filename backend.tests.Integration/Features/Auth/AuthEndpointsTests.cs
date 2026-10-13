@@ -712,6 +712,53 @@ public class AuthEndpointsTests
         microsoftBody.Data.Auth.RefreshToken.Should().NotBeNullOrWhiteSpace();
     }
 
+    [Fact]
+    public async Task OAuthSignIn_ShouldReturnConflict_WhenEmailMatchesAnAccountLinkedToAnotherIdentity()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        await app.SeedUserAsync("linked.owner@example.com", googleId: "google-owner");
+        await app.SeedUserAsync("ms.owner@example.com", microsoftId: "ms-owner");
+
+        // A different identity of the same provider reporting the address.
+        app.OAuth.RegisterGoogleToken(
+            "google-newcomer",
+            new OAuthUser("google-newcomer", "linked.owner@example.com", "New Holder", "google"));
+        // The other provider reporting an address whose account is linked elsewhere.
+        app.OAuth.RegisterGoogleToken(
+            "google-cross-provider",
+            new OAuthUser("google-cross", "ms.owner@example.com", "New Holder", "google"));
+        app.OAuth.RegisterMicrosoftToken(
+            "ms-cross-provider",
+            new OAuthUser("ms-cross", "linked.owner@example.com", "New Holder", "microsoft"));
+
+        var sameProvider = await app.PostJsonWithCsrfAsync("/api/auth/google", new GoogleRequest
+        {
+            Token = "google-newcomer"
+        });
+        var googleOntoMicrosoft = await app.PostJsonWithCsrfAsync("/api/auth/google", new GoogleRequest
+        {
+            Token = "google-cross-provider"
+        });
+        var microsoftOntoGoogle = await app.PostJsonWithCsrfAsync("/api/auth/microsoft", new MicrosoftRequest
+        {
+            Token = "ms-cross-provider"
+        });
+
+        foreach (var response in new[] { sameProvider, googleOntoMicrosoft, microsoftOntoGoogle })
+        {
+            response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+            response.Headers.TryGetValues("Set-Cookie", out var cookies);
+            (cookies ?? []).Should().NotContain(cookie => cookie.Contains("refresh", StringComparison.OrdinalIgnoreCase));
+        }
+
+        var googleOwner = await app.FindUserByEmailAsync("linked.owner@example.com");
+        googleOwner!.GoogleID.Should().Be("google-owner");
+        googleOwner.MicrosoftID.Should().BeNull();
+        var microsoftOwner = await app.FindUserByEmailAsync("ms.owner@example.com");
+        microsoftOwner!.MicrosoftID.Should().Be("ms-owner");
+        microsoftOwner.GoogleID.Should().BeNull();
+    }
+
 
     [Fact]
     public async Task MfaStatus_ShouldReturnEmptyState_ForAuthenticatedUser()

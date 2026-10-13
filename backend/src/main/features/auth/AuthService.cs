@@ -941,24 +941,12 @@ namespace backend.main.features.auth
             if (emailUser == null)
                 return null;
 
-            if (string.IsNullOrWhiteSpace(emailUser.GoogleID))
-            {
-                emailUser = await _userRepository.UpdateProviderIdsAsync(
-                    emailUser.Id,
-                    oauthUser.Id,
-                    null
-                ) ?? emailUser;
-            }
-            else if (emailUser.GoogleID != oauthUser.Id)
-            {
-                // The address matches but the account is already linked to another Google
-                // identity, typically a Workspace address reassigned after the link was made. An
-                // email match must never override an existing link, or the new holder of the
-                // address would sign in as the old one.
-                throw new ConflictException(
-                    "This email address belongs to an account linked to a different Google account."
-                );
-            }
+            EnsureEmailFallbackAllowed(emailUser);
+            emailUser = await _userRepository.UpdateProviderIdsAsync(
+                emailUser.Id,
+                oauthUser.Id,
+                null
+            ) ?? emailUser;
 
             return ToUser(emailUser);
         }
@@ -978,26 +966,37 @@ namespace backend.main.features.auth
             if (emailUser == null)
                 return null;
 
-            if (string.IsNullOrWhiteSpace(emailUser.MicrosoftID))
-            {
-                emailUser = await _userRepository.UpdateProviderIdsAsync(
-                    emailUser.Id,
-                    null,
-                    oauthUser.Id
-                ) ?? emailUser;
-            }
-            else if (emailUser.MicrosoftID != oauthUser.Id)
-            {
-                // The address matches but the account is already linked to another Microsoft
-                // identity, typically an Entra address reassigned after the link was made. An
-                // email match must never override an existing link, or the new holder of the
-                // address would sign in as the old one.
-                throw new ConflictException(
-                    "This email address belongs to an account linked to a different Microsoft account."
-                );
-            }
+            EnsureEmailFallbackAllowed(emailUser);
+            emailUser = await _userRepository.UpdateProviderIdsAsync(
+                emailUser.Id,
+                null,
+                oauthUser.Id
+            ) ?? emailUser;
 
             return ToUser(emailUser);
+        }
+
+        /// <summary>
+        /// Refuses to sign in to an account by email match once it has any provider link.
+        /// </summary>
+        /// <remarks>
+        /// Called only after the caller's provider id matched no account, so any link present
+        /// belongs to a different identity — typically a Workspace or Entra address reassigned
+        /// after the link was made. Both providers are checked because the new holder of the
+        /// address can authenticate through either one. Password recovery never emails a reset to
+        /// an account without a local password, so a provider link may be the account's only
+        /// credential and an address match must not stand in for it. An account with no link
+        /// still links on an address match; control of that inbox could already reset its password.
+        /// </remarks>
+        private static void EnsureEmailFallbackAllowed(UserOAuthRecord emailUser)
+        {
+            if (string.IsNullOrWhiteSpace(emailUser.GoogleID)
+                && string.IsNullOrWhiteSpace(emailUser.MicrosoftID))
+                return;
+
+            throw new ConflictException(
+                "This email address belongs to an account that signs in with a different Google or Microsoft account."
+            );
         }
 
         private async Task<User> EnsureOAuthRoleAsync(User user)
