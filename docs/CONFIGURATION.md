@@ -31,6 +31,8 @@ Generated public values are `NODE_ENV` (production flag), `BACKEND_URL`, `FRONTE
 
 Compose maps `MSAL_CLIENT_ID` to backend `MS_CLIENT_ID`. A locally run backend must supply `MS_CLIENT_ID` explicitly for Microsoft OAuth.
 
+Work and school Microsoft accounts link to an existing account by email only when the ID token includes the `xms_edov` optional claim set to true. To allow that, add `xms_edov` to the ID token's optional claims in the Entra app registration. Without the claim, those users can still sign up with a new account or sign in with a subject that is already linked. Personal Microsoft accounts need no extra configuration. See [OAuth provider sign-in](API.md#oauth-provider-sign-in).
+
 ## Infrastructure and integrations
 
 | Area                    | Principal settings                                                                                          |

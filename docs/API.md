@@ -44,6 +44,26 @@ Some operations require MFA step-up as well as a signed-in session. Username, pa
 
 Signup (`POST /api/auth/signup`), reset (`POST /api/auth/reset-password` and `/api/auth/change-password`), and authenticated change (`POST /api/profile/change-password`) accept 15–128 characters with no composition rules. A length violation fails model validation. A common, breached, or account-derived value is rejected by the service. Both return `400` with code `VALIDATION_ERROR` and `details` keyed by the request field (`Password` or `NewPassword`), holding a single message. A rejected reset password leaves the emailed link or code usable for another attempt. A successful reset or change bumps `AuthVersion` and revokes every refresh session. Login (`POST /api/auth/login`) never applies the policy. See [password policy and hashing](CONFIGURATION.md#password-policy-and-hashing).
 
+### OAuth provider sign-in
+
+Google (`POST /api/auth/google`, `/api/auth/google/code`) and Microsoft (`POST /api/auth/microsoft`) sign-in first look up the account linked to the provider subject. A linked subject signs in whatever address the provider now reports.
+
+Otherwise the provider's email is matched against existing accounts:
+
+- **No match.** The response asks for role selection, and `POST /api/auth/oauth/complete` creates the account.
+- **The account is linked to a different Google or Microsoft identity.** The request answers `409`, and nothing is linked.
+- **The account has no provider link.** The subject is linked to it, and the caller is signed in. This happens only when the provider proves the caller controls the address.
+
+Google requires `email_verified`. For Microsoft:
+
+- The email comes only from the ID token's `email` claim, never from `preferred_username`, which a tenant administrator sets.
+- The email counts as verified when the token is from the personal-account (consumer) tenant `9188040d-6c67-4c5b-b112-36a304b66dad`, or when the `xms_edov` claim is true. See [configuration](CONFIGURATION.md#addresses-and-public-values).
+- An unverified address that matches an existing account answers `409` with error code `OAUTH_EMAIL_UNVERIFIED`. The account is neither linked nor signed in.
+- An unverified address with no matching account can still create a new account.
+- A token with no `email` claim signs in only with a subject that is already linked. Otherwise it answers `401`.
+
+Completing a pending signup re-runs these checks.
+
 ## Authorization
 
 Every endpoint requires an authenticated bearer user unless it explicitly opts out. `AddJwtAuth` sets both the default and the fallback authorization policy to "authenticated Bearer user", so an action, hub, or minimal endpoint without an authorization attribute fails closed rather than open.
