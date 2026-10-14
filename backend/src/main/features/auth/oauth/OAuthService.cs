@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text.Json;
 
 using backend.main.application.environment;
@@ -16,6 +17,9 @@ namespace backend.main.features.auth.oauth
 {
     public class OAuthService : BaseService, IOAuthService
     {
+        /// <summary>The tenant id Microsoft issues personal (consumer) account tokens from.</summary>
+        private const string MicrosoftConsumerTenantId = "9188040d-6c67-4c5b-b112-36a304b66dad";
+
         private readonly string? _googleClientId;
         private readonly string? _googleClientSecret;
         private readonly string? _microsoftClientId;
@@ -150,7 +154,8 @@ namespace backend.main.features.auth.oauth
                 payload.Subject,
                 payload.Email,
                 payload.Name ?? payload.Email,
-                "google"
+                "google",
+                emailVerified: true
             );
         }
 
@@ -196,19 +201,39 @@ namespace backend.main.features.auth.oauth
                 throw new UnauthorizedException("Microsoft nonce validation failed");
             }
 
-            var email =
-                principal.Claims.FirstOrDefault(c => c.Type == "preferred_username")?.Value ??
-                principal.Claims.FirstOrDefault(c => c.Type == "email")?.Value ??
-                throw new UnauthorizedException("Missing Microsoft email claim");
+            // preferred_username is a work or school UPN that the tenant administrator sets, and
+            // email is mutable, so neither proves the caller controls the mailbox. Only email is
+            // read, and it counts as verified only when Microsoft vouches for it.
+            var email = principal.Claims.FirstOrDefault(c => c.Type == "email")?.Value;
+            if (string.IsNullOrWhiteSpace(email))
+                email = null;
 
             var name =
-                principal.Claims.FirstOrDefault(c => c.Type == "name")?.Value ?? email;
+                principal.Claims.FirstOrDefault(c => c.Type == "name")?.Value ?? email ?? string.Empty;
 
             var sub =
                 principal.Claims.FirstOrDefault(c => c.Type == "sub")?.Value ??
                 throw new UnauthorizedException("Missing Microsoft sub claim");
 
-            return new OAuthUser(sub, email, name, "microsoft");
+            var emailVerified = email != null && IsMicrosoftEmailVerified(principal);
+
+            return new OAuthUser(sub, email, name, "microsoft", emailVerified);
+        }
+
+        /// <summary>
+        /// Personal Microsoft accounts verify their address at sign-up. A work or school address
+        /// is verified only when the token carries the xms_edov optional claim set to true,
+        /// meaning the tenant has proven it owns the email's domain.
+        /// </summary>
+        private static bool IsMicrosoftEmailVerified(ClaimsPrincipal principal)
+        {
+            var tenantId = principal.Claims.FirstOrDefault(c => c.Type == "tid")?.Value;
+            if (string.Equals(tenantId, MicrosoftConsumerTenantId, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            var domainOwnerVerified = principal.Claims.FirstOrDefault(c => c.Type == "xms_edov")?.Value;
+            return string.Equals(domainOwnerVerified, "true", StringComparison.OrdinalIgnoreCase)
+                || domainOwnerVerified == "1";
         }
     }
 }
