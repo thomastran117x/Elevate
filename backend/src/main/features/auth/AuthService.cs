@@ -598,7 +598,7 @@ namespace backend.main.features.auth
                     AuthSecurityMethod.Google,
                     () => _oauthService.VerifyGoogleTokenAsync(token, expectedNonce));
                 if (oauthUser == null)
-                    throw new UnauthorizedException("Invalid Google Token");
+                    throw ProviderRejected(AuthSecurityMethod.Google, "Invalid Google Token");
 
                 var user = await ResolveGoogleUserAsync(oauthUser);
                 if (user == null)
@@ -666,7 +666,7 @@ namespace backend.main.features.auth
                     AuthSecurityMethod.Microsoft,
                     () => _oauthService.VerifyMicrosoftTokenAsync(token, expectedNonce));
                 if (oauthUser == null)
-                    throw new UnauthorizedException("Invalid Microsoft Token");
+                    throw ProviderRejected(AuthSecurityMethod.Microsoft, "Invalid Microsoft Token");
 
                 var user = await ResolveMicrosoftUserAsync(oauthUser);
                 if (user == null)
@@ -1060,7 +1060,7 @@ namespace backend.main.features.auth
             // Google refuses to vouch for an unverified address upstream, so any address
             // reported here may drive the fallback.
             var email = oauthUser.Email
-                ?? throw new UnauthorizedException("Missing Google email claim");
+                ?? throw ProviderRejected(AuthSecurityMethod.Google, "Missing Google email claim");
             var emailUser = await _userRepository.GetOAuthByEmailAsync(email);
             if (emailUser == null)
                 return null;
@@ -1090,7 +1090,7 @@ namespace backend.main.features.auth
             // Without a linked subject the address is all there is to go on, so a token that
             // reports none cannot sign in or sign up.
             if (string.IsNullOrWhiteSpace(oauthUser.Email))
-                throw new UnauthorizedException("Missing Microsoft email claim");
+                throw ProviderRejected(AuthSecurityMethod.Microsoft, "Missing Microsoft email claim");
 
             // An unverified address can still start a new account. That signs no one into an
             // existing account, though the new account holds an address nobody has proven.
@@ -1332,17 +1332,30 @@ namespace backend.main.features.auth
             }
             catch (Exception e) when (e is UnauthorizedException or SecurityTokenException or InvalidJwtException)
             {
-                _securityEvents.Emit(new AuthSecurityEvent
-                {
-                    Definition = AuthSecurityEvents.SignInFailed,
-                    Outcome = AuthSecurityOutcome.Denied,
-                    Reason = AuthSecurityReason.ProviderRejected,
-                    Method = provider,
-                    Flow = AuthSecurityFlow.Login,
-                });
+                EmitProviderRejected(provider);
                 throw;
             }
         }
+
+        /// <summary>
+        /// Records a provider token whose claims cannot sign anyone in, such as one without the email
+        /// an unlinked account needs, and returns the 401 to throw.
+        /// </summary>
+        private UnauthorizedException ProviderRejected(AuthSecurityMethod provider, string message)
+        {
+            EmitProviderRejected(provider);
+            return new UnauthorizedException(message);
+        }
+
+        private void EmitProviderRejected(AuthSecurityMethod provider) =>
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.SignInFailed,
+                Outcome = AuthSecurityOutcome.Denied,
+                Reason = AuthSecurityReason.ProviderRejected,
+                Method = provider,
+                Flow = AuthSecurityFlow.Login,
+            });
 
         private static AuthSecurityMethod ProviderMethod(string provider) =>
             provider == "google" ? AuthSecurityMethod.Google : AuthSecurityMethod.Microsoft;

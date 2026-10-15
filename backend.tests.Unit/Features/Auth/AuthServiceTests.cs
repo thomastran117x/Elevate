@@ -1245,7 +1245,8 @@ public class AuthServiceTests
             .ReturnsAsync(new OAuthUser("ms-unknown", null, string.Empty, "microsoft"));
 
         var cache = new Mock<ICacheService>();
-        var service = CreateService(userRepository: userRepository, oauthService: oauthService, cacheService: cache);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(securityEvents: securityEvents, userRepository: userRepository, oauthService: oauthService, cacheService: cache);
 
         var act = () => service.MicrosoftAsync("ms-token", SessionTransport.BrowserCookie);
 
@@ -1255,6 +1256,9 @@ public class AuthServiceTests
         cache.Verify(
             c => c.SetValueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan?>()),
             Times.Never);
+        var failed = securityEvents.Of(AuthSecurityEvents.SignInFailed).Should().ContainSingle().Subject;
+        failed.Reason.Should().Be(AuthSecurityReason.ProviderRejected);
+        failed.Method.Should().Be(AuthSecurityMethod.Microsoft);
     }
 
     [Fact]
