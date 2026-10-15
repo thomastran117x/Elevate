@@ -134,7 +134,6 @@ public enum AuthSecurityReason
     AttemptsExhausted,
     Replayed,
     AuthVersionMismatch,
-    DeviceTrustLost,
     InvalidState,
     InvalidRequest,
     Rejected,
@@ -148,6 +147,7 @@ public enum AuthSecurityReason
     PasswordReset,
     EmailChanged,
     AccountDeleted,
+    AccountEnabled,
     EmailBoundToOtherProvider,
     Policy,
     MfaRequired,
@@ -171,6 +171,7 @@ public enum AuthSecurityFlow
     General,
     Login,
     Signup,
+    Recovery,
     PasswordRecovery,
     UsernameRecovery,
     PasswordReset,
@@ -207,7 +208,6 @@ public enum AuthSecurityFactor
 
 public enum AuthFactorChange
 {
-    Enrolled,
     Enabled,
     Disabled,
     Removed,

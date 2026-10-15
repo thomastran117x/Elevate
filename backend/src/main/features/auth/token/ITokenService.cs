@@ -1,3 +1,4 @@
+using backend.main.features.auth.events;
 using backend.main.features.profile;
 using backend.main.shared.requests;
 
@@ -60,8 +61,8 @@ namespace backend.main.features.auth.token
             string proofJson,
             TimeSpan lifetime
         );
-        public Task RevokeRefreshSessionAsync(string sessionId);
-        public Task RevokeAllRefreshSessionsAsync(int userId);
+        public Task RevokeRefreshSessionAsync(string sessionId, AuthSecurityReason reason);
+        public Task RevokeAllRefreshSessionsAsync(int userId, AuthSecurityReason reason);
         public Task<string?> VerificationTokenExist(string email, VerificationPurpose purpose);
         public Task<VerificationArtifacts> GenerateEmailChangeArtifactsAsync(
             int userId,

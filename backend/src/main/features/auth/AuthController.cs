@@ -6,6 +6,7 @@ using backend.main.features.auth.abuse;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.events;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
 using backend.main.features.profile;
@@ -45,6 +46,7 @@ namespace backend.main.features.auth
         private readonly ITokenService _tokenService;
         private readonly IEmailChangeService _emailChangeService;
         private readonly IAuthAbuseProtectionService _abuseProtection;
+        private readonly IAuthSecurityEventEmitter _securityEvents;
 
         public AuthController(
             IAuthService authService,
@@ -58,7 +60,8 @@ namespace backend.main.features.auth
             IConfiguration configuration,
             ITokenService tokenService,
             IEmailChangeService emailChangeService,
-            IAuthAbuseProtectionService abuseProtection
+            IAuthAbuseProtectionService abuseProtection,
+            IAuthSecurityEventEmitter securityEvents
         )
         {
             _authService = authService;
@@ -73,6 +76,7 @@ namespace backend.main.features.auth
             _tokenService = tokenService;
             _emailChangeService = emailChangeService;
             _abuseProtection = abuseProtection;
+            _securityEvents = securityEvents;
         }
 
         [HttpPost("login")]
@@ -100,7 +104,7 @@ namespace backend.main.features.auth
                         request.Captcha ?? string.Empty,
                         HttpContext.RequestAborted))
                 {
-                    return await CreateFailedLoginResponseAsync(request.Username);
+                    return await CreateFailedLoginResponseAsync(request.Username, AuthSecurityReason.CaptchaFailed);
                 }
 
                 var result = await _authService.LoginAsync(
@@ -123,7 +127,7 @@ namespace backend.main.features.auth
             catch (Exception e)
             {
                 if (e is UnauthorizedException)
-                    return await CreateFailedLoginResponseAsync(request.Username);
+                    return await CreateFailedLoginResponseAsync(request.Username, AuthSecurityReason.InvalidCredentials);
 
                 if (e is AppException)
                     return HandleError.Resolve(e);
@@ -405,8 +409,19 @@ namespace backend.main.features.auth
             }
         }
 
-        private async Task<IActionResult> CreateFailedLoginResponseAsync(string username)
+        private async Task<IActionResult> CreateFailedLoginResponseAsync(string username, AuthSecurityReason reason)
         {
+            _securityEvents.Emit(
+                new AuthSecurityEvent
+                {
+                    Definition = AuthSecurityEvents.SignInFailed,
+                    Outcome = AuthSecurityOutcome.Denied,
+                    Reason = reason,
+                    Method = AuthSecurityMethod.Password,
+                    Flow = AuthSecurityFlow.Login,
+                },
+                AuthSecurityTarget.Username(username));
+
             var state = await _abuseProtection.RecordLoginFailureAsync(
                 username,
                 HttpContext.RequestAborted);

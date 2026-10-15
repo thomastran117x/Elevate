@@ -1,5 +1,6 @@
 using backend.main.features.auth;
 using backend.main.features.auth.contracts;
+using backend.main.features.auth.events;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
@@ -10,6 +11,7 @@ using backend.main.features.profile.email;
 using backend.main.seeders;
 using backend.main.shared.exceptions.http;
 
+using backend.tests.Unit.Features.Auth.Events;
 using backend.tests.Unit.Support;
 
 using FluentAssertions;
@@ -201,7 +203,7 @@ public class EmailChangeServiceTests
 
         // The address is an access token claim, so leaving refresh sessions alive would let a
         // stale identity keep minting new tokens.
-        harness.Tokens.Verify(t => t.RevokeAllRefreshSessionsAsync(UserId), Times.Once);
+        harness.Tokens.Verify(t => t.RevokeAllRefreshSessionsAsync(UserId, AuthSecurityReason.EmailChanged), Times.Once);
         harness.Cache.Verify(c => c.RemoveAsync($"user:{UserId}"), Times.Once);
     }
 
@@ -382,6 +384,7 @@ public class EmailChangeServiceTests
         public readonly Mock<IEmailAvailabilityService> Availability = new();
         public readonly Mock<IAuthNotificationService> Notifications = new();
         public readonly Mock<IEventInvitationService> Invitations = new();
+        public readonly RecordingAuthSecurityEventEmitter SecurityEvents = new();
         public readonly Mock<IRefreshAheadCache> Cache = new();
         public readonly DateTime UtcNow = new(2026, 9, 7, 12, 0, 0, DateTimeKind.Utc);
 
@@ -412,7 +415,8 @@ public class EmailChangeServiceTests
                 Invitations.Object,
                 Cache.Object,
                 new FixedTimeProvider(UtcNow),
-                TestPasswordHashers.Fast());
+                TestPasswordHashers.Fast(),
+                SecurityEvents);
         }
 
         // Minimum Argon2id cost keeps the suite fast; production parameters come from configuration.

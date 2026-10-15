@@ -3,6 +3,7 @@ using backend.main.application.security;
 using backend.main.features.auth;
 using backend.main.features.auth.abuse;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.events;
 using backend.main.features.auth.token;
 using backend.main.features.profile.contracts.requests;
 using backend.main.features.profile.contracts.responses;
@@ -365,7 +366,7 @@ namespace backend.main.features.profile
             {
                 var userPayload = User.GetUserPayload();
 
-                await _tokenService.RevokeAllRefreshSessionsAsync(userPayload.Id);
+                await _tokenService.RevokeAllRefreshSessionsAsync(userPayload.Id, AuthSecurityReason.AccountDeleted);
                 await _userService.DeleteUserAsync(userPayload.Id);
 
                 HttpUtility.ClearBrowserRefreshSession(Response);

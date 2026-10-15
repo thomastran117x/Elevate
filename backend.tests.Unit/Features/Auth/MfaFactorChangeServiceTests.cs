@@ -1,3 +1,5 @@
+using backend.tests.Unit.Features.Auth.Events;
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.notifications;
@@ -10,6 +12,8 @@ namespace backend.tests.Unit.Features.Auth;
 
 public class MfaFactorChangeServiceTests
 {
+    private readonly RecordingAuthSecurityEventEmitter _securityEvents = new();
+
     [Theory]
     [InlineData(MfaFactorKind.Sms, MfaFactorChange.Enabled)]
     [InlineData(MfaFactorKind.Sms, MfaFactorChange.Disabled)]
@@ -17,11 +21,21 @@ public class MfaFactorChangeServiceTests
     public async Task RecordAsync_ShouldClearStepUpProofsOnEverySession(MfaFactorKind factor, MfaFactorChange change)
     {
         var sessionMfa = new Mock<ISessionMfaVerificationService>();
-        var service = new MfaFactorChangeService(sessionMfa.Object, new Mock<IAuthNotificationService>().Object);
+        var service = new MfaFactorChangeService(sessionMfa.Object, new Mock<IAuthNotificationService>().Object, _securityEvents);
 
         await service.RecordAsync(42, "member@example.com", factor, change);
 
         sessionMfa.Verify(s => s.ClearUserProofsAsync(42), Times.Once);
+        var recorded = _securityEvents.Of(AuthSecurityEvents.FactorChanged).Should().ContainSingle().Subject;
+        recorded.UserId.Should().Be(42);
+        recorded.Outcome.Should().Be(AuthSecurityOutcome.Succeeded);
+        recorded.Factor.Should().Be(factor == MfaFactorKind.Sms ? AuthSecurityFactor.Sms : AuthSecurityFactor.Totp);
+        recorded.Change.Should().Be(change switch
+        {
+            MfaFactorChange.Enabled => AuthFactorChange.Enabled,
+            MfaFactorChange.Disabled => AuthFactorChange.Disabled,
+            _ => AuthFactorChange.Removed,
+        });
     }
 
     [Theory]
@@ -35,7 +49,7 @@ public class MfaFactorChangeServiceTests
         string expectedChange)
     {
         var notifications = new Mock<IAuthNotificationService>();
-        var service = new MfaFactorChangeService(new Mock<ISessionMfaVerificationService>().Object, notifications.Object);
+        var service = new MfaFactorChangeService(new Mock<ISessionMfaVerificationService>().Object, notifications.Object, _securityEvents);
 
         await service.RecordAsync(42, "member@example.com", factor, change);
 
@@ -53,7 +67,7 @@ public class MfaFactorChangeServiceTests
         notifications
             .Setup(n => n.SendMfaFactorChangedAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
             .ThrowsAsync(new InvalidOperationException("broker unavailable"));
-        var service = new MfaFactorChangeService(sessionMfa.Object, notifications.Object);
+        var service = new MfaFactorChangeService(sessionMfa.Object, notifications.Object, _securityEvents);
 
         var act = () => service.RecordAsync(42, "member@example.com", MfaFactorKind.Sms, MfaFactorChange.Removed);
 

@@ -1,6 +1,8 @@
+using backend.tests.Unit.Features.Auth.Events;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.token;
 using backend.main.features.profile;
@@ -216,7 +218,7 @@ public class TokenServiceTests
         var issue = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.BrowserCookie);
         await cache.SetValueAsync(StepUpProofKeys.ForSession(issue.SessionId), "{}", TimeSpan.FromMinutes(10));
 
-        await service.RevokeRefreshSessionAsync(issue.SessionId);
+        await service.RevokeRefreshSessionAsync(issue.SessionId, AuthSecurityReason.Logout);
 
         (await cache.KeyExistsAsync(StepUpProofKeys.ForSession(issue.SessionId))).Should().BeFalse();
     }
@@ -228,7 +230,7 @@ public class TokenServiceTests
         var service = new TokenService(cache);
         await cache.SetValueAsync(StepUpProofKeys.ForSession("gone"), "{}", TimeSpan.FromMinutes(10));
 
-        await service.RevokeRefreshSessionAsync("gone");
+        await service.RevokeRefreshSessionAsync("gone", AuthSecurityReason.Logout);
 
         (await cache.KeyExistsAsync(StepUpProofKeys.ForSession("gone"))).Should().BeFalse();
     }
@@ -254,7 +256,7 @@ public class TokenServiceTests
         var cache = new InMemoryCacheService();
         var service = new TokenService(cache);
         var issue = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.BrowserCookie);
-        await service.RevokeRefreshSessionAsync(issue.SessionId);
+        await service.RevokeRefreshSessionAsync(issue.SessionId, AuthSecurityReason.Logout);
 
         // A step-up verify that finishes after logout must not resurrect a proof.
         var result = await service.StoreStepUpProofAsync(issue.SessionId, 8, 0, "{}", TimeSpan.FromMinutes(10));
@@ -294,7 +296,7 @@ public class TokenServiceTests
             .ReturnsAsync(new backend.main.features.cache.CacheScriptResult(true, 1L));
         var service = new TokenService(cache.Object);
 
-        await service.RevokeRefreshSessionAsync("s1");
+        await service.RevokeRefreshSessionAsync("s1", AuthSecurityReason.Logout);
 
         deletedTogether!.Select(key => key.ToString())
             .Should().Equal("refresh:v2:session:s1", StepUpProofKeys.ForSession("s1"));
@@ -313,7 +315,7 @@ public class TokenServiceTests
             .ReturnsAsync(backend.main.features.cache.CacheScriptResult.Unavailable);
         var service = new TokenService(cache.Object);
 
-        var act = () => service.RevokeRefreshSessionAsync("s1");
+        var act = () => service.RevokeRefreshSessionAsync("s1", AuthSecurityReason.Logout);
 
         await act.Should().ThrowAsync<NotAvailableException>();
     }
@@ -422,7 +424,8 @@ public class TokenServiceTests
     {
         var cache = new InMemoryCacheService();
         var clock = new MutableTimeProvider(new DateTimeOffset(2026, 10, 14, 12, 0, 0, TimeSpan.Zero));
-        var service = new TokenService(cache, clock);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = new TokenService(cache, clock, securityEvents);
         var (first, newest) = await RotateAsync(service);
         await cache.SetValueAsync(StepUpProofKeys.ForSession(newest.SessionId), "{}", TimeSpan.FromMinutes(10));
         clock.Advance(TimeSpan.FromSeconds(11));
@@ -431,6 +434,13 @@ public class TokenServiceTests
 
         await replay.Should().ThrowAsync<UnauthorizedException>()
             .WithMessage("Refresh token reuse detected.");
+        var reused = securityEvents.Of(AuthSecurityEvents.RefreshTokenReused).Should().ContainSingle().Subject;
+        reused.Reason.Should().Be(AuthSecurityReason.Replayed);
+        reused.SessionId.Should().Be(newest.SessionId);
+        reused.UserId.Should().Be(8);
+        var revoked = securityEvents.Of(AuthSecurityEvents.SessionRevoked).Should().ContainSingle().Subject;
+        revoked.Reason.Should().Be(AuthSecurityReason.TokenReuse);
+        revoked.SessionId.Should().Be(newest.SessionId);
         (await cache.KeyExistsAsync($"refresh:v2:session:{newest.SessionId}")).Should().BeFalse();
         (await cache.KeyExistsAsync(StepUpProofKeys.ForSession(newest.SessionId))).Should().BeFalse();
 
@@ -546,7 +556,7 @@ public class TokenServiceTests
         var clock = new MutableTimeProvider(new DateTimeOffset(2026, 10, 14, 12, 0, 0, TimeSpan.Zero));
         var service = new TokenService(cache, clock);
         var (first, newest) = await RotateAsync(service);
-        await service.RevokeRefreshSessionAsync(newest.SessionId);
+        await service.RevokeRefreshSessionAsync(newest.SessionId, AuthSecurityReason.Logout);
         clock.Advance(TimeSpan.FromMinutes(5));
 
         var replay = () => ValidateAsync(service, first);
@@ -578,7 +588,7 @@ public class TokenServiceTests
         var cache = new InMemoryCacheService();
         var service = new TokenService(cache);
         var issue = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.ApiToken);
-        cache.BeforeNextScript = () => service.RevokeRefreshSessionAsync(issue.SessionId);
+        cache.BeforeNextScript = () => service.RevokeRefreshSessionAsync(issue.SessionId, AuthSecurityReason.Logout);
 
         var act = () => ValidateAsync(service, issue);
 
@@ -595,7 +605,7 @@ public class TokenServiceTests
         var service = new TokenService(cache);
         var issue = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.ApiToken);
         var validation = await ValidateAsync(service, issue);
-        cache.BeforeNextScript = () => service.RevokeRefreshSessionAsync(issue.SessionId);
+        cache.BeforeNextScript = () => service.RevokeRefreshSessionAsync(issue.SessionId, AuthSecurityReason.Logout);
 
         var act = () => service.GenerateRefreshToken(
             8, 1, CreateRequestInfo(), SessionTransport.ApiToken, validation.SessionId);
@@ -727,7 +737,8 @@ public class TokenServiceTests
     public async Task VerifyVerificationOtpAsync_ShouldInvalidateChallengeAfterMaximumAttempts()
     {
         var cache = new InMemoryCacheService();
-        var service = new TokenService(cache);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = new TokenService(cache, securityEvents: securityEvents);
         var user = new User
         {
             Email = "signup@example.com",
@@ -746,6 +757,16 @@ public class TokenServiceTests
 
             await wrongAttempt.Should().ThrowAsync<UnauthorizedException>();
         }
+
+        securityEvents.Of(AuthSecurityEvents.VerificationFailed).Select(e => e.Reason).Should().Equal(
+            AuthSecurityReason.InvalidCode,
+            AuthSecurityReason.InvalidCode,
+            AuthSecurityReason.InvalidCode,
+            AuthSecurityReason.InvalidCode,
+            AuthSecurityReason.AttemptsExhausted);
+        securityEvents.Emitted.Should().OnlyContain(entry =>
+            entry.Event.Flow == AuthSecurityFlow.Signup
+            && entry.Target == AuthSecurityTarget.Email(user.Email));
 
         var validAttempt = () => service.VerifyVerificationOtpAsync(
             artifacts.OtpChallenge.Code,
@@ -1172,7 +1193,8 @@ public class TokenServiceTests
     public async Task RevokeAllRefreshSessionsAsync_ShouldInvalidateEverySessionForUser()
     {
         var cache = new InMemoryCacheService();
-        var service = new TokenService(cache);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = new TokenService(cache, securityEvents: securityEvents);
         var browserRequest = CreateRequestInfo();
         var apiRequest = new ClientRequestInfo
         {
@@ -1185,7 +1207,13 @@ public class TokenServiceTests
         var browserIssue = await service.GenerateRefreshToken(44, 1, browserRequest, SessionTransport.BrowserCookie);
         var apiIssue = await service.GenerateRefreshToken(44, 1, apiRequest, SessionTransport.ApiToken);
 
-        await service.RevokeAllRefreshSessionsAsync(44);
+        await service.RevokeAllRefreshSessionsAsync(44, AuthSecurityReason.PasswordChanged);
+
+        // One event for the sweep rather than one per session.
+        var revoked = securityEvents.Of(AuthSecurityEvents.SessionRevoked).Should().ContainSingle().Subject;
+        revoked.UserId.Should().Be(44);
+        revoked.SessionId.Should().BeNull();
+        revoked.Reason.Should().Be(AuthSecurityReason.PasswordChanged);
 
         var browserAct = () => service.ValidateRefreshToken(
             browserIssue.Value,

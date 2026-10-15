@@ -3,6 +3,7 @@ using System.Text;
 
 using backend.main.application.environment;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.token;
@@ -48,6 +49,7 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
         private readonly TimeProvider _timeProvider;
         private readonly TimeSpan _proofLifetime;
         private readonly string _proofSecret;
+        private readonly IAuthSecurityEventEmitter _securityEvents;
 
         public SessionMfaVerificationService(
             ICacheService cacheService,
@@ -56,7 +58,8 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
             ITotpMfaEnrollmentService totpMfaEnrollmentService,
             ITokenService tokenService,
             TimeProvider timeProvider,
-            IOptions<StepUpOptions> stepUpOptions
+            IOptions<StepUpOptions> stepUpOptions,
+            IAuthSecurityEventEmitter securityEvents
         )
         {
             _cacheService = cacheService;
@@ -67,6 +70,7 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
             _timeProvider = timeProvider;
             _proofLifetime = stepUpOptions.Value.ProofLifetime;
             _proofSecret = EnvironmentSetting.JwtSecretKeyVerification;
+            _securityEvents = securityEvents;
         }
 
         public async Task<SessionMfaOptionsResponse> GetOptionsAsync(int userId, string email)
@@ -226,25 +230,32 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
                         if (totpAttempts == 1)
                             await _cacheService.SetExpiryAsync(TotpAttemptKey(userId), ChallengeTtl);
                         if (totpAttempts >= MaxOtpAttempts)
+                        {
+                            EmitThrottled(userId, AuthSecurityFlow.SessionStepUp, AuthThrottleDimension.Attempts);
                             throw new TooManyRequestException("Too many verification attempts. Please try again later.");
+                        }
 
-                        LogAudit(userId, normalizedMethod, false);
+                        EmitStepUp(userId, sessionId, normalizedMethod, AuthSecurityReason.InvalidCode);
                         throw;
                     }
 
                     await _cacheService.DeleteKeyAsync(TotpAttemptKey(userId));
                     await RecordProofAsync(userId, sessionId, authVersion, normalizedMethod, generation, factorState);
-                    LogAudit(userId, normalizedMethod, true);
+                    EmitStepUp(userId, sessionId, normalizedMethod, null);
                     return;
                 }
 
                 var state = await GetStateAsync(userId);
                 if (state == null || state.Method != normalizedMethod)
+                {
+                    EmitStepUp(userId, sessionId, normalizedMethod, AuthSecurityReason.Expired);
                     throw new UnauthorizedException("Invalid or expired verification challenge.");
+                }
 
                 if (state.ExpiresAtUtc <= DateTime.UtcNow)
                 {
                     await DeleteStateAsync(userId);
+                    EmitStepUp(userId, sessionId, normalizedMethod, AuthSecurityReason.Expired);
                     throw new UnauthorizedException("Invalid or expired verification challenge.");
                 }
 
@@ -257,13 +268,19 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
                     else
                         await PersistStateAsync(state);
 
-                    LogAudit(userId, normalizedMethod, false);
+                    EmitStepUp(
+                        userId,
+                        sessionId,
+                        normalizedMethod,
+                        state.FailedAttempts >= MaxOtpAttempts
+                            ? AuthSecurityReason.AttemptsExhausted
+                            : AuthSecurityReason.InvalidCode);
                     throw new UnauthorizedException("Invalid or expired verification code.");
                 }
 
                 await DeleteStateAsync(userId);
                 await RecordProofAsync(userId, sessionId, authVersion, normalizedMethod, generation, factorState);
-                LogAudit(userId, normalizedMethod, true);
+                EmitStepUp(userId, sessionId, normalizedMethod, null);
             }
             catch (Exception ex)
             {
@@ -470,7 +487,10 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
                 await _cacheService.SetExpiryAsync(key, StartRateLimitTtl);
 
             if (count > MaxStartRequests)
+            {
+                EmitThrottled(userId, AuthSecurityFlow.MfaDelivery, AuthThrottleDimension.Account);
                 throw new TooManyRequestException("Too many verification codes have been requested. Please try again later.");
+            }
         }
 
         private async Task<bool> PersistStateAsync(PendingState state)
@@ -524,10 +544,34 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
             };
         }
 
-        private static void LogAudit(int userId, string method, bool success)
-        {
-            Logger.Info($"[SessionMfaAudit] userId={userId} method={method} success={success}");
-        }
+        /// <param name="failure">Null for a verified proof; otherwise why verification failed.</param>
+        private void EmitStepUp(int userId, string sessionId, string method, AuthSecurityReason? failure) =>
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = failure is null ? AuthSecurityEvents.StepUpSucceeded : AuthSecurityEvents.StepUpFailed,
+                Outcome = failure is null ? AuthSecurityOutcome.Succeeded : AuthSecurityOutcome.Denied,
+                Reason = failure ?? AuthSecurityReason.None,
+                Method = method switch
+                {
+                    TotpMethod => AuthSecurityMethod.Totp,
+                    SmsMethod => AuthSecurityMethod.Sms,
+                    _ => AuthSecurityMethod.Email,
+                },
+                Flow = AuthSecurityFlow.SessionStepUp,
+                UserId = userId,
+                SessionId = sessionId,
+            });
+
+        private void EmitThrottled(int userId, AuthSecurityFlow flow, AuthThrottleDimension dimension) =>
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.Throttled,
+                Outcome = AuthSecurityOutcome.Throttled,
+                Reason = AuthSecurityReason.LimitExceeded,
+                Flow = flow,
+                Dimension = dimension,
+                UserId = userId,
+            });
 
         private static string UserKey(int userId) => $"mfa:stepup:user:{userId}";
         private static string StartKey(int userId) => $"mfa:stepup:start:user:{userId}";

@@ -1,4 +1,5 @@
 using backend.main.features.auth;
+using backend.main.features.auth.events;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.password;
 using backend.main.features.auth.token;
@@ -21,6 +22,7 @@ namespace backend.main.features.profile.email
         private readonly IRefreshAheadCache _refreshCache;
         private readonly TimeProvider _timeProvider;
         private readonly IPasswordHasher _passwordHasher;
+        private readonly IAuthSecurityEventEmitter _securityEvents;
 
         private static string GetUserCacheKey(int userId) => $"user:{userId}";
 
@@ -32,7 +34,8 @@ namespace backend.main.features.profile.email
             IEventInvitationService invitationService,
             IRefreshAheadCache refreshCache,
             TimeProvider timeProvider,
-            IPasswordHasher passwordHasher
+            IPasswordHasher passwordHasher,
+            IAuthSecurityEventEmitter securityEvents
         )
         {
             _userRepository = userRepository;
@@ -43,6 +46,7 @@ namespace backend.main.features.profile.email
             _refreshCache = refreshCache;
             _timeProvider = timeProvider;
             _passwordHasher = passwordHasher;
+            _securityEvents = securityEvents;
         }
 
         public async Task<VerificationOtpChallenge> RequestChangeAsync(
@@ -195,8 +199,16 @@ namespace backend.main.features.profile.email
             // The address is an access token claim, so every outstanding session has to go. The
             // AuthVersion bump inside ChangeEmailAsync already invalidates the access tokens;
             // this drops the refresh sessions that would otherwise mint new ones.
-            await _tokenService.RevokeAllRefreshSessionsAsync(pending.UserId);
+            await _tokenService.RevokeAllRefreshSessionsAsync(pending.UserId, AuthSecurityReason.EmailChanged);
             await _refreshCache.RemoveAsync(GetUserCacheKey(pending.UserId));
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.FactorChanged,
+                Outcome = AuthSecurityOutcome.Succeeded,
+                Factor = AuthSecurityFactor.Email,
+                Change = AuthFactorChange.Changed,
+                UserId = pending.UserId,
+            });
 
             // Best effort, like the notifications below: the address has already changed and the
             // proof has already been consumed, so reporting failure here would tell the caller the

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 
+using backend.main.features.auth.events;
 using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Http;
@@ -75,6 +76,35 @@ namespace backend.main.application.security
         private const int ImageUploadPermitLimit = 30;
         private static readonly TimeSpan ImageUploadWindow = TimeSpan.FromMinutes(10);
 
+        /// <summary>
+        /// Records a rejection by one of the authentication policies as an <c>auth.throttled</c>
+        /// event. The global and upload limits are not authentication controls and are left out.
+        /// </summary>
+        internal static void RecordAuthThrottle(HttpContext httpContext)
+        {
+            var policy = httpContext.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName;
+            AuthSecurityFlow? flow = policy switch
+            {
+                AuthPolicyName => AuthSecurityFlow.General,
+                UsernameAvailabilityPolicyName => AuthSecurityFlow.UsernameAvailability,
+                UsernameSuggestionsPolicyName => AuthSecurityFlow.UsernameSuggestions,
+                EmailAvailabilityPolicyName => AuthSecurityFlow.EmailAvailability,
+                EmailChangePolicyName => AuthSecurityFlow.EmailChange,
+                _ => null,
+            };
+            if (flow is null)
+                return;
+
+            httpContext.RequestServices.GetService<IAuthSecurityEventEmitter>()?.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.Throttled,
+                Outcome = AuthSecurityOutcome.Throttled,
+                Reason = AuthSecurityReason.LimitExceeded,
+                Flow = flow,
+                Dimension = AuthThrottleDimension.RateLimiter,
+            });
+        }
+
         public static IServiceCollection AddInMemoryRateLimiter(
             this IServiceCollection services,
             IConfiguration? configuration = null)
@@ -105,6 +135,7 @@ namespace backend.main.application.security
 
                 options.OnRejected = async (context, cancellationToken) =>
                 {
+                    RecordAuthThrottle(context.HttpContext);
                     context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
                     context.HttpContext.Response.ContentType = "application/json";
                     if (context.Lease.TryGetMetadata(

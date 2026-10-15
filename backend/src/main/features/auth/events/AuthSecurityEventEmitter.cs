@@ -32,6 +32,20 @@ public interface IAuthSecurityEventEmitter
     void Emit(AuthSecurityEvent securityEvent, AuthSecurityTarget? target = null);
 }
 
+/// <summary>Discards events, for code constructed outside dependency injection.</summary>
+public sealed class NullAuthSecurityEventEmitter : IAuthSecurityEventEmitter
+{
+    public static readonly NullAuthSecurityEventEmitter Instance = new();
+
+    private NullAuthSecurityEventEmitter()
+    {
+    }
+
+    public void Emit(AuthSecurityEvent securityEvent, AuthSecurityTarget? target = null)
+    {
+    }
+}
+
 public sealed class AuthSecurityEventEmitter : IAuthSecurityEventEmitter
 {
     private static readonly EventId SinkFailedEvent = new(33901, "AuthSecurityEventSinkFailed");
@@ -106,9 +120,14 @@ public sealed class AuthSecurityEventEmitter : IAuthSecurityEventEmitter
                 ? NormalizeSessionId(principal?.FindFirst(TokenService.SessionIdClaimType)?.Value)
                 : null);
 
+        // A signed-in caller acting on another account, such as an administrator, is the actor.
+        var actorUserId = securityEvent.ActorUserId
+            ?? (principalUserId is not null && principalUserId != userId ? principalUserId : null);
+
         return securityEvent with
         {
             UserId = userId,
+            ActorUserId = actorUserId,
             SessionId = sessionId,
             TargetHash = _options.IncludeTargetHash && target is { } aimedAt
                 ? _hasher.HashTarget(aimedAt)

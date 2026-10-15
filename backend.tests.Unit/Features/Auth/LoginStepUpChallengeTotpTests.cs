@@ -1,5 +1,6 @@
 using backend.main.features.auth;
 using backend.main.features.auth.device;
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
@@ -181,7 +182,8 @@ public class LoginStepUpChallengeTotpTests
             userRepository.Object,
             authSessionService.Object,
             new Mock<ITokenService>().Object,
-            TestRequestInfoFactory.Browser());
+            TestRequestInfoFactory.Browser(),
+            NullAuthSecurityEventEmitter.Instance);
     }
 
     private static UserToken CreateUserToken(User user) =>

@@ -1,5 +1,6 @@
 using backend.main.features.auth;
 using backend.main.features.auth.device;
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
@@ -9,6 +10,7 @@ using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
 
+using backend.tests.Unit.Features.Auth.Events;
 using backend.tests.Unit.Support;
 
 using FluentAssertions;
@@ -222,7 +224,7 @@ public class LoginStepUpChallengeServiceTests
                 5, user.AuthVersion, It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<string>(), It.IsAny<string>()),
             Times.Once);
-        tokenService.Verify(t => t.RevokeAllRefreshSessionsAsync(5), Times.Once);
+        tokenService.Verify(t => t.RevokeAllRefreshSessionsAsync(5, AuthSecurityReason.AuthVersionMismatch), Times.Once);
 
         var retry = await service.TryVerifyEmailAsync(capturedToken!);
         retry.Should().BeNull();
@@ -348,7 +350,8 @@ public class LoginStepUpChallengeServiceTests
         authSessionService.Setup(s => s.IssueAsync(It.IsAny<User>(), It.IsAny<SessionTransport>(), It.IsAny<string?>(), It.IsAny<bool?>()))
             .ReturnsAsync(expectedToken);
 
-        var service = CreateService(cache, notifications, mfaRepo, deviceTrustService: deviceTrustService, userRepository: userRepository, authSessionService: authSessionService);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(cache, notifications, mfaRepo, deviceTrustService: deviceTrustService, userRepository: userRepository, authSessionService: authSessionService, securityEvents: securityEvents);
 
         var challenge = await service.CreateChallengeAsync(user, SessionTransport.ApiToken, false, "/bookings");
         var startResponse = await service.StartAsync(challenge.Challenge, "sms");
@@ -358,6 +361,12 @@ public class LoginStepUpChallengeServiceTests
         result.UserToken.Should().Be(expectedToken);
         result.ReturnPath.Should().Be("/bookings");
         deviceTrustService.Verify(d => d.TrustAsync(7, user.AuthVersion, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        securityEvents.Of(AuthSecurityEvents.StepUpSucceeded).Should().ContainSingle()
+            .Which.Method.Should().Be(AuthSecurityMethod.Sms);
+        var signedIn = securityEvents.Of(AuthSecurityEvents.SignInSucceeded).Should().ContainSingle().Subject;
+        signedIn.Method.Should().Be(AuthSecurityMethod.Sms);
+        signedIn.Flow.Should().Be(AuthSecurityFlow.LoginStepUp);
+        signedIn.UserId.Should().Be(7);
     }
 
     [Fact]
@@ -537,7 +546,8 @@ public class LoginStepUpChallengeServiceTests
         Mock<IDeviceTrustService>? deviceTrustService = null,
         Mock<IAuthUserRepository>? userRepository = null,
         Mock<IAuthSessionService>? authSessionService = null,
-        Mock<ITokenService>? tokenService = null)
+        Mock<ITokenService>? tokenService = null,
+        IAuthSecurityEventEmitter? securityEvents = null)
     {
         cache ??= new InMemoryCacheService();
         notifications ??= new Mock<IAuthNotificationService>();
@@ -557,7 +567,8 @@ public class LoginStepUpChallengeServiceTests
             userRepository.Object,
             authSessionService.Object,
             tokenService.Object,
-            TestRequestInfoFactory.Browser());
+            TestRequestInfoFactory.Browser(),
+            securityEvents ?? NullAuthSecurityEventEmitter.Instance);
     }
 
     private static UserToken CreateUserToken(User user) =>

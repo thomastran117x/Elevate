@@ -69,6 +69,30 @@ public sealed class AuthSecurityEventEmitterTests
     }
 
     [Fact]
+    public void Emit_ShouldRecordASignedInCallerActingOnAnotherAccountAsTheActor()
+    {
+        var context = CreateContext(userId: 1, sessionId: SessionId);
+        var sink = new RecordingAuthSecurityEventSink();
+        var emitter = AuthSecurityEventTestSupport.CreateEmitter(context, [sink]);
+
+        emitter.Emit(new AuthSecurityEvent
+        {
+            Definition = AuthSecurityEvents.SessionRevoked,
+            Outcome = AuthSecurityOutcome.Succeeded,
+            UserId = 7,
+        });
+        emitter.Emit(new AuthSecurityEvent
+        {
+            Definition = AuthSecurityEvents.StepUpSucceeded,
+            Outcome = AuthSecurityOutcome.Succeeded,
+            UserId = 1,
+        });
+
+        sink.Events[0].ActorUserId.Should().Be(1);
+        sink.Events[1].ActorUserId.Should().BeNull();
+    }
+
+    [Fact]
     public void Emit_ShouldOverwriteEnrichmentAndDropMalformedValues()
     {
         var context = CreateContext();

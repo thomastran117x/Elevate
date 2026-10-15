@@ -4,6 +4,7 @@ using System.Text;
 using backend.main.application.environment;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.device;
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
@@ -44,6 +45,7 @@ namespace backend.main.features.auth.stepup
         private readonly IAuthSessionService _authSessionService;
         private readonly ITokenService _tokenService;
         private readonly ClientRequestInfo _requestInfo;
+        private readonly IAuthSecurityEventEmitter _securityEvents;
 
         public LoginStepUpChallengeService(
             ICacheService cacheService,
@@ -54,7 +56,8 @@ namespace backend.main.features.auth.stepup
             IAuthUserRepository userRepository,
             IAuthSessionService authSessionService,
             ITokenService tokenService,
-            ClientRequestInfo requestInfo
+            ClientRequestInfo requestInfo,
+            IAuthSecurityEventEmitter securityEvents
         )
         {
             _cacheService = cacheService;
@@ -66,6 +69,7 @@ namespace backend.main.features.auth.stepup
             _authSessionService = authSessionService;
             _tokenService = tokenService;
             _requestInfo = requestInfo;
+            _securityEvents = securityEvents;
         }
 
         public async Task<LoginStepUpChallengeResponse> CreateChallengeAsync(
@@ -144,7 +148,16 @@ namespace backend.main.features.auth.stepup
                     };
                 }
 
-                EnforceCooldown(state, normalizedMethod, now);
+                try
+                {
+                    EnforceCooldown(state, normalizedMethod, now);
+                }
+                catch (TooManyRequestException)
+                {
+                    EmitThrottled(state.UserId, AuthThrottleDimension.Attempts);
+                    throw;
+                }
+
                 await EnforceSendCapsAsync(state);
 
                 var previousChallengeHash = state.ChallengeHash;
@@ -242,10 +255,17 @@ namespace backend.main.features.auth.stepup
             {
                 var challengeHash = CryptoHelper.HashToken(challenge);
                 var state = await GetStateByHashAsync(challengeHash)
-                    ?? throw new UnauthorizedException("Invalid or expired sign-in verification challenge.");
+                    ?? throw StepUpRejected(
+                        AuthSecurityMethod.Sms,
+                        AuthSecurityReason.Expired,
+                        "Invalid or expired sign-in verification challenge.");
 
                 if (string.IsNullOrWhiteSpace(state.SmsCodeHash))
-                    throw new UnauthorizedException("Invalid or expired sign-in verification code.");
+                    throw StepUpRejected(
+                        AuthSecurityMethod.Sms,
+                        AuthSecurityReason.InvalidState,
+                        "Invalid or expired sign-in verification code.",
+                        state.UserId);
 
                 var expectedHash = HashCode(state.PendingId, state.ChallengeHash, code);
                 if (!CryptoHelper.FixedTimeEquals(state.SmsCodeHash, expectedHash))
@@ -260,10 +280,16 @@ namespace backend.main.features.auth.stepup
                         throw new NotAvailableException();
                     }
 
-                    throw new UnauthorizedException("Invalid or expired sign-in verification code.");
+                    throw StepUpRejected(
+                        AuthSecurityMethod.Sms,
+                        state.SmsFailedAttempts >= MaxSmsAttempts
+                            ? AuthSecurityReason.AttemptsExhausted
+                            : AuthSecurityReason.InvalidCode,
+                        "Invalid or expired sign-in verification code.",
+                        state.UserId);
                 }
 
-                return await CompletePendingChallengeAsync(state);
+                return await CompletePendingChallengeAsync(state, AuthSecurityMethod.Sms);
             }
             catch (Exception ex)
             {
@@ -281,10 +307,17 @@ namespace backend.main.features.auth.stepup
             {
                 var challengeHash = CryptoHelper.HashToken(challenge);
                 var state = await GetStateByHashAsync(challengeHash)
-                    ?? throw new UnauthorizedException("Invalid or expired sign-in verification challenge.");
+                    ?? throw StepUpRejected(
+                        AuthSecurityMethod.Totp,
+                        AuthSecurityReason.Expired,
+                        "Invalid or expired sign-in verification challenge.");
 
                 if (!state.HasTotp)
-                    throw new UnauthorizedException("TOTP MFA is not available for this sign-in challenge.");
+                    throw StepUpRejected(
+                        AuthSecurityMethod.Totp,
+                        AuthSecurityReason.InvalidState,
+                        "TOTP MFA is not available for this sign-in challenge.",
+                        state.UserId);
 
                 try
                 {
@@ -302,10 +335,16 @@ namespace backend.main.features.auth.stepup
                         throw new NotAvailableException();
                     }
 
+                    EmitStepUpFailed(
+                        AuthSecurityMethod.Totp,
+                        state.TotpFailedAttempts >= MaxTotpAttempts
+                            ? AuthSecurityReason.AttemptsExhausted
+                            : AuthSecurityReason.InvalidCode,
+                        state.UserId);
                     throw;
                 }
 
-                return await CompletePendingChallengeAsync(state);
+                return await CompletePendingChallengeAsync(state, AuthSecurityMethod.Totp);
             }
             catch (Exception ex)
             {
@@ -327,12 +366,19 @@ namespace backend.main.features.auth.stepup
                     return null;
 
                 var state = JsonConvert.DeserializeObject<PendingStepUpState>(json)
-                    ?? throw new UnauthorizedException("Invalid or expired device verification token.");
+                    ?? throw StepUpRejected(
+                        AuthSecurityMethod.Email,
+                        AuthSecurityReason.InvalidState,
+                        "Invalid or expired device verification token.");
 
                 if (!string.Equals(state.EmailTokenHash, tokenHash, StringComparison.Ordinal))
-                    throw new UnauthorizedException("Invalid or expired device verification token.");
+                    throw StepUpRejected(
+                        AuthSecurityMethod.Email,
+                        AuthSecurityReason.Expired,
+                        "Invalid or expired device verification token.",
+                        state.UserId);
 
-                return await CompletePendingChallengeAsync(state);
+                return await CompletePendingChallengeAsync(state, AuthSecurityMethod.Email);
             }
             catch (Exception ex)
             {
@@ -344,19 +390,36 @@ namespace backend.main.features.auth.stepup
             }
         }
 
-        private async Task<AuthenticatedSessionResult> CompletePendingChallengeAsync(PendingStepUpState state)
+        private async Task<AuthenticatedSessionResult> CompletePendingChallengeAsync(
+            PendingStepUpState state,
+            AuthSecurityMethod method)
         {
             var lockValue = CreateRandomToken();
             var lockKey = CompletionLockKey(state.PendingId);
             if (!await _cacheService.AcquireLockAsync(lockKey, lockValue, CompletionLockTtl))
-                throw new UnauthorizedException("This sign-in verification challenge has already been used.");
+                throw StepUpRejected(
+                    method,
+                    AuthSecurityReason.Replayed,
+                    "This sign-in verification challenge has already been used.",
+                    state.UserId);
 
             try
             {
                 var user = await _userRepository.GetUserAsync(state.UserId)
                     ?? throw new ResourceNotFoundException($"User with ID {state.UserId} not found.");
                 if (user.IsDisabled)
+                {
+                    _securityEvents.Emit(new AuthSecurityEvent
+                    {
+                        Definition = AuthSecurityEvents.SignInFailed,
+                        Outcome = AuthSecurityOutcome.Denied,
+                        Reason = AuthSecurityReason.AccountDisabled,
+                        Method = method,
+                        Flow = AuthSecurityFlow.LoginStepUp,
+                        UserId = user.Id,
+                    });
                     throw new ForbiddenException("This account is disabled.");
+                }
 
                 // Revoking sessions cannot reach a challenge that is mid-flight: it holds no
                 // session yet. Without this check, a password or email change that signed every
@@ -365,9 +428,11 @@ namespace backend.main.features.auth.stepup
                 if (user.AuthVersion != state.AuthVersion)
                 {
                     await DeleteStateAsync(state);
-                    throw new UnauthorizedException(
-                        "This sign-in verification challenge is no longer valid. Please sign in again."
-                    );
+                    throw StepUpRejected(
+                        method,
+                        AuthSecurityReason.AuthVersionMismatch,
+                        "This sign-in verification challenge is no longer valid. Please sign in again.",
+                        state.UserId);
                 }
 
                 var userToken = await _authSessionService.IssueAsync(
@@ -397,18 +462,30 @@ namespace backend.main.features.auth.stepup
                     // Revoking the account's sessions rather than just this one: a rotation has
                     // happened, so everything is meant to be gone, and this is idempotent with the
                     // revocation the rotation already ran.
-                    await _tokenService.RevokeAllRefreshSessionsAsync(state.UserId);
+                    await _tokenService.RevokeAllRefreshSessionsAsync(state.UserId, AuthSecurityReason.AuthVersionMismatch);
                     await DeleteStateAsync(state);
-                    throw new UnauthorizedException(
-                        "This sign-in verification challenge is no longer valid. Please sign in again."
-                    );
+                    throw StepUpRejected(
+                        method,
+                        AuthSecurityReason.AuthVersionMismatch,
+                        "This sign-in verification challenge is no longer valid. Please sign in again.",
+                        state.UserId);
                 }
 
                 await DeleteStateAsync(state);
 
+                _securityEvents.Emit(new AuthSecurityEvent
+                {
+                    Definition = AuthSecurityEvents.StepUpSucceeded,
+                    Outcome = AuthSecurityOutcome.Succeeded,
+                    Method = method,
+                    Flow = AuthSecurityFlow.LoginStepUp,
+                    UserId = state.UserId,
+                    SessionId = userToken.token.SessionId,
+                });
+
                 return new AuthenticatedSessionResult
                 {
-                    UserToken = userToken,
+                    UserToken = _securityEvents.SignedIn(userToken, method, AuthSecurityFlow.LoginStepUp),
                     ReturnPath = state.ReturnPath
                 };
             }
@@ -423,24 +500,68 @@ namespace backend.main.features.auth.stepup
             await IncrementWithLimitAsync(
                 UserSendKey(state.UserId),
                 MaxUserSends,
+                state.UserId,
+                AuthThrottleDimension.Account,
                 "Too many sign-in verification deliveries have been requested for this account. Please try again later."
             );
             await IncrementWithLimitAsync(
                 IpSendKey(_requestInfo.IpAddress),
                 MaxIpSends,
+                state.UserId,
+                AuthThrottleDimension.SourceIp,
                 "Too many sign-in verification deliveries have been requested from this IP. Please try again later."
             );
         }
 
-        private async Task IncrementWithLimitAsync(string key, int limit, string message)
+        private async Task IncrementWithLimitAsync(
+            string key,
+            int limit,
+            int userId,
+            AuthThrottleDimension dimension,
+            string message)
         {
             var count = await _cacheService.IncrementAsync(key);
             if (count == 1)
                 await _cacheService.SetExpiryAsync(key, ChallengeTtl);
 
             if (count > limit)
+            {
+                EmitThrottled(userId, dimension);
                 throw new TooManyRequestException(message);
+            }
         }
+
+        private UnauthorizedException StepUpRejected(
+            AuthSecurityMethod method,
+            AuthSecurityReason reason,
+            string message,
+            int? userId = null)
+        {
+            EmitStepUpFailed(method, reason, userId);
+            return new UnauthorizedException(message);
+        }
+
+        private void EmitStepUpFailed(AuthSecurityMethod method, AuthSecurityReason reason, int? userId) =>
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.StepUpFailed,
+                Outcome = AuthSecurityOutcome.Denied,
+                Reason = reason,
+                Method = method,
+                Flow = AuthSecurityFlow.LoginStepUp,
+                UserId = userId,
+            });
+
+        private void EmitThrottled(int userId, AuthThrottleDimension dimension) =>
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.Throttled,
+                Outcome = AuthSecurityOutcome.Throttled,
+                Reason = AuthSecurityReason.LimitExceeded,
+                Flow = AuthSecurityFlow.MfaDelivery,
+                Dimension = dimension,
+                UserId = userId,
+            });
 
         private static void EnforceCooldown(PendingStepUpState state, string method, DateTime now)
         {

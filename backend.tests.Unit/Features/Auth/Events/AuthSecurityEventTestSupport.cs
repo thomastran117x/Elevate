@@ -17,6 +17,20 @@ internal sealed class RecordingAuthSecurityEventSink : IAuthSecurityEventSink
     public void Write(AuthSecurityEvent securityEvent) => Events.Add(securityEvent);
 }
 
+/// <summary>Captures events as the emitting code classified them, before enrichment.</summary>
+internal sealed class RecordingAuthSecurityEventEmitter : IAuthSecurityEventEmitter
+{
+    public List<(AuthSecurityEvent Event, AuthSecurityTarget? Target)> Emitted { get; } = [];
+
+    public IEnumerable<AuthSecurityEvent> Events => Emitted.Select(entry => entry.Event);
+
+    public void Emit(AuthSecurityEvent securityEvent, AuthSecurityTarget? target = null) =>
+        Emitted.Add((securityEvent, target));
+
+    public IEnumerable<AuthSecurityEvent> Of(AuthSecurityEventDefinition definition) =>
+        Events.Where(securityEvent => securityEvent.Definition == definition);
+}
+
 internal sealed class ThrowingAuthSecurityEventSink : IAuthSecurityEventSink
 {
     public void Write(AuthSecurityEvent securityEvent) =>

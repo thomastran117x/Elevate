@@ -3,6 +3,7 @@ using System.Text;
 
 using backend.main.application.environment;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.events;
 using backend.main.features.auth.notifications;
 using backend.main.features.cache;
 using backend.main.shared.exceptions.http;
@@ -26,17 +27,20 @@ namespace backend.main.features.auth.mfa
         private readonly ICacheService _cacheService;
         private readonly IAuthNotificationService _notificationService;
         private readonly string _proofSecret;
+        private readonly IAuthSecurityEventEmitter _securityEvents;
 
         public MfaEnrollmentService(
             IMfaEnrollmentRepository repository,
             ICacheService cacheService,
-            IAuthNotificationService notificationService
+            IAuthNotificationService notificationService,
+            IAuthSecurityEventEmitter securityEvents
         )
         {
             _repository = repository;
             _cacheService = cacheService;
             _notificationService = notificationService;
             _proofSecret = EnvironmentSetting.JwtSecretKeyVerification;
+            _securityEvents = securityEvents;
         }
 
         public async Task<MfaChallengeResponse> StartEnrollmentAsync(int userId, string phoneNumber)
@@ -123,16 +127,13 @@ namespace backend.main.features.auth.mfa
                 );
 
                 await DeleteStateAsync(state);
-                var action = isReEnable ? "re-enable" : "enroll";
-                LogAudit(userId, action, true, "sms configuration verified");
                 return enrollment;
             }
             catch (Exception ex)
             {
                 if (ex is AppException)
                 {
-                    var action = IsReEnable(existingEnrollment, state?.PhoneNumber) ? "re-enable" : "enroll";
-                    LogAudit(userId, action, false, ex.Message);
+                    _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Sms, AuthFactorChange.Enabled, ex);
                     throw;
                 }
 
@@ -155,14 +156,13 @@ namespace backend.main.features.auth.mfa
                 var updated = await _repository.SetEnabledAsync(userId, false)
                     ?? throw new ConflictException("SMS MFA is not configured for this account.");
 
-                LogAudit(userId, "disable", true, "sms configuration disabled");
                 return updated;
             }
             catch (Exception ex)
             {
                 if (ex is AppException)
                 {
-                    LogAudit(userId, "disable", false, ex.Message);
+                    _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Sms, AuthFactorChange.Disabled, ex);
                     throw;
                 }
 
@@ -182,13 +182,12 @@ namespace backend.main.features.auth.mfa
                 if (!await _repository.RemoveAsync(userId))
                     throw new ConflictException("SMS MFA is not configured for this account.");
 
-                LogAudit(userId, "remove", true, "sms configuration removed");
             }
             catch (Exception ex)
             {
                 if (ex is AppException)
                 {
-                    LogAudit(userId, "remove", false, ex.Message);
+                    _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Sms, AuthFactorChange.Removed, ex);
                     throw;
                 }
 
@@ -332,11 +331,6 @@ namespace backend.main.features.auth.mfa
                 && !string.IsNullOrWhiteSpace(enrollment.PhoneNumber)
                 && string.Equals(enrollment.PhoneNumber, pendingPhoneNumber, StringComparison.Ordinal)
                 && !enrollment.IsSmsMfaEnabled;
-        }
-
-        private static void LogAudit(int userId, string action, bool success, string reason)
-        {
-            Logger.Info($"[AuthMfaAudit] userId={userId} method=sms action={action} success={success} reason={reason}");
         }
 
         private static string UserKey(int userId) => $"mfa:enrollment:user:{userId}";

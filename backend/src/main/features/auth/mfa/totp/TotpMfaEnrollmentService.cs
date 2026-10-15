@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 
 using backend.main.application.environment;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.events;
 using backend.main.features.cache;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.utilities.logger;
@@ -46,14 +47,17 @@ namespace backend.main.features.auth.mfa.totp
 
         private readonly ITotpMfaEnrollmentRepository _repository;
         private readonly ICacheService _cacheService;
+        private readonly IAuthSecurityEventEmitter _securityEvents;
 
         public TotpMfaEnrollmentService(
             ITotpMfaEnrollmentRepository repository,
-            ICacheService cacheService
+            ICacheService cacheService,
+            IAuthSecurityEventEmitter securityEvents
         )
         {
             _repository = repository;
             _cacheService = cacheService;
+            _securityEvents = securityEvents;
         }
 
         public async Task<TotpMfaEnrollment?> GetEnrollmentAsync(int userId)
@@ -163,7 +167,6 @@ namespace backend.main.features.auth.mfa.totp
                     var enrollment = await _repository.UpsertAsync(userId, encryptedSecret, EncryptionKeyVersion, enrolledAtUtc);
 
                     await _cacheService.DeleteKeyAsync(PendingKey(userId));
-                    LogAudit(userId, "enroll", true, "totp configuration verified");
                     return enrollment;
                 }
                 finally
@@ -175,7 +178,7 @@ namespace backend.main.features.auth.mfa.totp
             {
                 if (ex is AppException)
                 {
-                    LogAudit(userId, "enroll", false, ex.Message);
+                    _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Totp, AuthFactorChange.Enabled, ex);
                     throw;
                 }
 
@@ -209,14 +212,13 @@ namespace backend.main.features.auth.mfa.totp
                 }
 
                 await _cacheService.DeleteKeyAsync(ActionAttemptKey(userId, "enable"));
-                LogAudit(userId, "re-enable", true, "totp configuration re-enabled");
                 return updated;
             }
             catch (Exception ex)
             {
                 if (ex is AppException)
                 {
-                    LogAudit(userId, "re-enable", false, ex.Message);
+                    _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Totp, AuthFactorChange.Enabled, ex);
                     throw;
                 }
 
@@ -250,14 +252,13 @@ namespace backend.main.features.auth.mfa.totp
                 }
 
                 await _cacheService.DeleteKeyAsync(ActionAttemptKey(userId, "disable"));
-                LogAudit(userId, "disable", true, "totp configuration disabled");
                 return updated;
             }
             catch (Exception ex)
             {
                 if (ex is AppException)
                 {
-                    LogAudit(userId, "disable", false, ex.Message);
+                    _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Totp, AuthFactorChange.Disabled, ex);
                     throw;
                 }
 
@@ -287,13 +288,12 @@ namespace backend.main.features.auth.mfa.totp
                 }
 
                 await ClearManagementStateAsync(userId);
-                LogAudit(userId, "remove", true, "totp configuration removed");
             }
             catch (Exception ex)
             {
                 if (ex is AppException)
                 {
-                    LogAudit(userId, "remove", false, ex.Message);
+                    _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Totp, AuthFactorChange.Removed, ex);
                     throw;
                 }
 
@@ -491,11 +491,6 @@ namespace backend.main.features.auth.mfa.totp
         {
             if (!EnvironmentSetting.AuthTotpMfaEnrollmentEnabled)
                 throw new NotAvailableException("TOTP MFA enrollment is currently unavailable.");
-        }
-
-        private static void LogAudit(int userId, string action, bool success, string reason)
-        {
-            Logger.Info($"[AuthMfaAudit] userId={userId} method=totp action={action} success={success} reason={reason}");
         }
 
         private static string PendingKey(int userId) => $"totp:enrollment:pending:user:{userId}";

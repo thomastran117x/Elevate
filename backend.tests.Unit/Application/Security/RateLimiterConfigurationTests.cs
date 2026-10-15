@@ -4,7 +4,10 @@ using System.Security.Claims;
 using System.Text.Json;
 
 using backend.main.application.security;
+using backend.main.features.auth.events;
 using backend.main.features.cache;
+
+using backend.tests.Unit.Features.Auth.Events;
 
 using FluentAssertions;
 
@@ -22,6 +25,51 @@ namespace backend.tests.Unit.Application.Security;
 
 public class RateLimiterConfigurationTests
 {
+    [Theory]
+    [InlineData(RateLimiterConfiguration.AuthPolicyName, AuthSecurityFlow.General)]
+    [InlineData(RateLimiterConfiguration.EmailAvailabilityPolicyName, AuthSecurityFlow.EmailAvailability)]
+    [InlineData(RateLimiterConfiguration.EmailChangePolicyName, AuthSecurityFlow.EmailChange)]
+    public void RecordAuthThrottle_ShouldRecordAuthenticationPolicyRejections(string policy, AuthSecurityFlow flow)
+    {
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var context = CreateContextForPolicy(policy, securityEvents);
+
+        RateLimiterConfiguration.RecordAuthThrottle(context);
+
+        var throttled = securityEvents.Of(AuthSecurityEvents.Throttled).Should().ContainSingle().Subject;
+        throttled.Flow.Should().Be(flow);
+        throttled.Dimension.Should().Be(AuthThrottleDimension.RateLimiter);
+        throttled.Outcome.Should().Be(AuthSecurityOutcome.Throttled);
+    }
+
+    [Theory]
+    [InlineData(RateLimiterConfiguration.ImageUploadPolicyName)]
+    [InlineData(null)]
+    public void RecordAuthThrottle_ShouldIgnoreLimitsThatAreNotAuthenticationControls(string? policy)
+    {
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var context = CreateContextForPolicy(policy, securityEvents);
+
+        RateLimiterConfiguration.RecordAuthThrottle(context);
+
+        securityEvents.Emitted.Should().BeEmpty();
+    }
+
+    private static DefaultHttpContext CreateContextForPolicy(string? policy, IAuthSecurityEventEmitter securityEvents)
+    {
+        var metadata = policy is null
+            ? new EndpointMetadataCollection()
+            : new EndpointMetadataCollection(new EnableRateLimitingAttribute(policy));
+        var context = new DefaultHttpContext
+        {
+            RequestServices = new ServiceCollection()
+                .AddSingleton(securityEvents)
+                .BuildServiceProvider(),
+        };
+        context.SetEndpoint(new Endpoint(_ => Task.CompletedTask, metadata, "test"));
+        return context;
+    }
+
     [Fact]
     public async Task AddInMemoryRateLimiter_ShouldRejectRequestsBeyondPermitLimit()
     {

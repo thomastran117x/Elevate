@@ -1,5 +1,6 @@
 using backend.main.features.auth;
 using backend.main.features.auth.contracts;
+using backend.main.features.auth.events;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.clubs.follow;
@@ -168,7 +169,9 @@ namespace backend.main.features.profile
             if (user == null)
                 throw new ResourceNotFoundException($"User with the id {id} is not found");
 
-            await _tokenService.RevokeAllRefreshSessionsAsync(id);
+            await _tokenService.RevokeAllRefreshSessionsAsync(
+                id,
+                isDisabled ? AuthSecurityReason.AccountDisabled : AuthSecurityReason.AccountEnabled);
             await _refreshCache.RemoveAsync(GetUserCacheKey(id));
             return user;
         }

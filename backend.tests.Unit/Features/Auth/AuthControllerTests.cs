@@ -5,6 +5,7 @@ using backend.main.features.bloom;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.events;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
 using backend.main.features.profile;
@@ -12,6 +13,7 @@ using backend.main.features.profile.email;
 using backend.main.shared.requests;
 using backend.main.shared.responses;
 
+using backend.tests.Unit.Features.Auth.Events;
 using backend.tests.Unit.Support;
 
 using FluentAssertions;
@@ -169,9 +171,11 @@ public class AuthControllerTests
                 "user",
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new LoginAbuseState(4, true, false, true, null));
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
         var controller = CreateController(
             captchaService: captchaService,
-            abuseProtection: abuseProtection);
+            abuseProtection: abuseProtection,
+            securityEvents: securityEvents);
         captchaService.Setup(service => service.VerifyCaptchaAsync("bad-captcha", It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
@@ -188,6 +192,10 @@ public class AuthControllerTests
         response.Message.Should().Be("Authentication failed. Please try again.");
         response.Error!.Code.Should().Be("AUTHENTICATION_FAILED");
         response.Meta.Should().BeEquivalentTo(new { captchaRequired = true });
+        var failed = securityEvents.Emitted.Should().ContainSingle().Subject;
+        failed.Event.Definition.Should().Be(AuthSecurityEvents.SignInFailed);
+        failed.Event.Reason.Should().Be(AuthSecurityReason.CaptchaFailed);
+        failed.Target.Should().Be(AuthSecurityTarget.Username("user"));
     }
 
     [Fact]
@@ -849,7 +857,8 @@ public class AuthControllerTests
         Mock<ICaptchaService>? captchaService = null,
         Mock<IAntiforgery>? antiforgery = null,
         Mock<IEmailAvailabilityService>? emailAvailability = null,
-        Mock<IAuthAbuseProtectionService>? abuseProtection = null)
+        Mock<IAuthAbuseProtectionService>? abuseProtection = null,
+        IAuthSecurityEventEmitter? securityEvents = null)
     {
         authService ??= new Mock<IAuthService>();
         if (captchaService is null)
@@ -887,7 +896,8 @@ public class AuthControllerTests
             configuration,
             new Mock<ITokenService>().Object,
             new Mock<IEmailChangeService>().Object,
-            (abuseProtection ?? CreateAbuseProtection()).Object);
+            (abuseProtection ?? CreateAbuseProtection()).Object,
+            securityEvents ?? NullAuthSecurityEventEmitter.Instance);
 
         controller.ControllerContext = new ControllerContext
         {

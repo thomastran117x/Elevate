@@ -1,3 +1,4 @@
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa.totp;
 using backend.main.shared.exceptions.http;
 
@@ -41,7 +42,7 @@ public class TotpMfaEnrollmentServiceTests
             IsTotpMfaEnabled = true,
             EnrolledAtUtc = new DateTime(2026, 6, 20, 12, 0, 0, DateTimeKind.Utc),
         });
-        var service = new TotpMfaEnrollmentService(repository.Object, new InMemoryCacheService());
+        var service = new TotpMfaEnrollmentService(repository.Object, new InMemoryCacheService(), NullAuthSecurityEventEmitter.Instance);
 
         var act = () => service.StartEnrollmentAsync(99, "user@example.com");
 
@@ -56,7 +57,7 @@ public class TotpMfaEnrollmentServiceTests
         TotpMfaEnrollment? storedEnrollment = null;
         var repository = CreateStatefulRepository(storedEnrollment, value => storedEnrollment = value);
         var cache = new InMemoryCacheService();
-        var service = new TotpMfaEnrollmentService(repository.Object, cache);
+        var service = new TotpMfaEnrollmentService(repository.Object, cache, NullAuthSecurityEventEmitter.Instance);
 
         var start = await service.StartEnrollmentAsync(99, "user@example.com");
         var code = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
@@ -75,7 +76,7 @@ public class TotpMfaEnrollmentServiceTests
     {
         using var scope = new EnvironmentVariableScope();
         var cache = new InMemoryCacheService();
-        var service = new TotpMfaEnrollmentService(CreateStatefulRepository().Object, cache);
+        var service = new TotpMfaEnrollmentService(CreateStatefulRepository().Object, cache, NullAuthSecurityEventEmitter.Instance);
 
         var start = await service.StartEnrollmentAsync(99, "user@example.com");
 
@@ -91,7 +92,7 @@ public class TotpMfaEnrollmentServiceTests
     {
         using var scope = new EnvironmentVariableScope();
         var cache = new InMemoryCacheService();
-        var service = new TotpMfaEnrollmentService(CreateStatefulRepository().Object, cache);
+        var service = new TotpMfaEnrollmentService(CreateStatefulRepository().Object, cache, NullAuthSecurityEventEmitter.Instance);
 
         var start = await service.StartEnrollmentAsync(99, "user@example.com");
         var validCode = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
@@ -117,7 +118,7 @@ public class TotpMfaEnrollmentServiceTests
         TotpMfaEnrollment? storedEnrollment = null;
         var repository = CreateStatefulRepository(storedEnrollment, value => storedEnrollment = value);
         var cache = new InMemoryCacheService();
-        var service = new TotpMfaEnrollmentService(repository.Object, cache);
+        var service = new TotpMfaEnrollmentService(repository.Object, cache, NullAuthSecurityEventEmitter.Instance);
 
         var start = await service.StartEnrollmentAsync(99, "user@example.com");
         var enrollCode = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
@@ -177,7 +178,7 @@ public class TotpMfaEnrollmentServiceTests
         TotpMfaEnrollment? storedEnrollment = null;
         var repository = CreateStatefulRepository(storedEnrollment, value => storedEnrollment = value);
         var cache = new InMemoryCacheService();
-        var service = new TotpMfaEnrollmentService(repository.Object, cache);
+        var service = new TotpMfaEnrollmentService(repository.Object, cache, NullAuthSecurityEventEmitter.Instance);
 
         var initialStart = await service.StartEnrollmentAsync(99, "user@example.com");
         var initialCode = new Totp(Base32Encoding.ToBytes(initialStart.SecretKey)).ComputeTotp();
@@ -207,7 +208,7 @@ public class TotpMfaEnrollmentServiceTests
         TotpMfaEnrollment? storedEnrollment = null;
         var repository = CreateStatefulRepository(storedEnrollment, value => storedEnrollment = value);
         var cache = new InMemoryCacheService();
-        var service = new TotpMfaEnrollmentService(repository.Object, cache);
+        var service = new TotpMfaEnrollmentService(repository.Object, cache, NullAuthSecurityEventEmitter.Instance);
 
         var start = await service.StartEnrollmentAsync(99, "user@example.com");
         var enrollCode = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
@@ -229,7 +230,7 @@ public class TotpMfaEnrollmentServiceTests
         TotpMfaEnrollment? storedEnrollment = null;
         var repository = CreateStatefulRepository(storedEnrollment, value => storedEnrollment = value);
         var cache = new InMemoryCacheService();
-        var service = new TotpMfaEnrollmentService(repository.Object, cache);
+        var service = new TotpMfaEnrollmentService(repository.Object, cache, NullAuthSecurityEventEmitter.Instance);
 
         var start = await service.StartEnrollmentAsync(99, "user@example.com");
         var enrollCode = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
@@ -252,7 +253,7 @@ public class TotpMfaEnrollmentServiceTests
         TotpMfaEnrollment? storedEnrollment = null;
         var repository = CreateStatefulRepository(storedEnrollment, value => storedEnrollment = value);
         var cache = new InMemoryCacheService();
-        var service = new TotpMfaEnrollmentService(repository.Object, cache);
+        var service = new TotpMfaEnrollmentService(repository.Object, cache, NullAuthSecurityEventEmitter.Instance);
 
         var start = await service.StartEnrollmentAsync(99, "user@example.com");
         var enrollCode = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
@@ -283,7 +284,7 @@ public class TotpMfaEnrollmentServiceTests
     {
         repository ??= CreateStatefulRepository();
         cache ??= new InMemoryCacheService();
-        return new TotpMfaEnrollmentService(repository.Object, cache);
+        return new TotpMfaEnrollmentService(repository.Object, cache, NullAuthSecurityEventEmitter.Instance);
     }
 
     private static Mock<ITotpMfaEnrollmentRepository> CreateStatefulRepository(
