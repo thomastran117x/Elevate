@@ -139,7 +139,9 @@ public sealed class AuthSecurityEventEmitter : IAuthSecurityEventEmitter
         return securityEvent with
         {
             SessionId = sessionId,
-            TargetHash = _options.IncludeTargetHash && target is { } aimedAt
+            // A target stands in for an unknown account; once the account is known, its hash is
+            // unnecessary personal data.
+            TargetHash = _options.IncludeTargetHash && securityEvent.UserId is null && target is { } aimedAt
                 ? _hasher.HashTarget(aimedAt)
                 : null,
             SourceIpHash = _options.IncludeSourceIpHash && context is not null

@@ -117,6 +117,27 @@ public sealed class AuthSecurityEventEmitterTests
     }
 
     [Fact]
+    public void Emit_ShouldDropTheTargetHash_OnceTheAccountIsKnown()
+    {
+        var sink = new RecordingAuthSecurityEventSink();
+        var emitter = AuthSecurityEventTestSupport.CreateEmitter(CreateContext(), [sink]);
+
+        emitter.Emit(
+            new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.RecoveryRequested,
+                Outcome = AuthSecurityOutcome.Succeeded,
+                Reason = AuthSecurityReason.Issued,
+                UserId = 8,
+            },
+            AuthSecurityTarget.Username("active-user"));
+
+        var recorded = sink.Events.Should().ContainSingle().Subject;
+        recorded.UserId.Should().Be(8);
+        recorded.TargetHash.Should().BeNull();
+    }
+
+    [Fact]
     public void Emit_ShouldKeepAnAccountWideRevocationSessionless()
     {
         var context = CreateContext(userId: 1, sessionId: SessionId);
