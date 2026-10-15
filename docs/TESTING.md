@@ -11,6 +11,8 @@ dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- backend-unit-
 
 The unit project covers feature services/controllers/repositories with doubles, shared utilities, validation, security helpers, infrastructure policies, bootstrap behavior, and workers. Use xUnit, Moq, FluentAssertions, and existing builders/collections. Tests that change process environment or the global logger use the existing isolation collections.
 
+Auth code that records security events takes `IAuthSecurityEventEmitter`; pass `NullAuthSecurityEventEmitter.Instance` when a test does not care, or `RecordingAuthSecurityEventEmitter` from `Features/Auth/Events` to assert on what was emitted. `docs/SECURITY_EVENTS.md` is copied into the unit test output and checked against the event contract, so changing the catalog, reasons, operations, or metrics means updating that document in the same change.
+
 ### Backend coverage
 
 The enforced default is **90% filtered unit line coverage**. The development task runs Release tests using `backend.coverage.runsettings` and the first-party Microsoft Code Coverage collector, reads Cobertura under `.tmp/backend-unit-coverage/`, and fails below the floor. Branch coverage is reported separately, without a separate branch floor.
