@@ -99,6 +99,24 @@ public class RateLimiterConfigurationTests
         securityEvents.Of(AuthSecurityEvents.Throttled).Should().HaveCount(expectThrottleEvent ? 1 : 0);
     }
 
+    [Fact]
+    public void RecordAuthThrottle_ShouldAttributeTheAccountBudgetToTheCaller_AndLeaveAnonymousPoliciesUnattributed()
+    {
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var caller = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "42")], "Test"));
+        var emailChange = CreateContextForPolicy(RateLimiterConfiguration.EmailChangePolicyName, securityEvents);
+        emailChange.User = caller;
+        var login = CreateContextForPolicy(RateLimiterConfiguration.AuthPolicyName, securityEvents);
+        login.User = caller;
+
+        RateLimiterConfiguration.RecordAuthThrottle(emailChange);
+        RateLimiterConfiguration.RecordAuthThrottle(login);
+
+        securityEvents.Events.Select(e => (e.Flow, e.UserId)).Should().Equal(
+            (AuthSecurityFlow.EmailChange, 42),
+            (AuthSecurityFlow.General, (int?)null));
+    }
+
     private static DefaultHttpContext CreateContextForPolicy(string? policy, IAuthSecurityEventEmitter securityEvents)
     {
         var metadata = policy is null

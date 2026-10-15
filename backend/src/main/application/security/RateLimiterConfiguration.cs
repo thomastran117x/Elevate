@@ -98,6 +98,13 @@ namespace backend.main.application.security
             if (flow is null)
                 return;
 
+            // The email-change budget is per account and runs after authentication, so the
+            // throttled account is the caller. The other policies are anonymous and per address.
+            int? userId = policy == EmailChangePolicyName
+                && int.TryParse(httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var callerId)
+                ? callerId
+                : null;
+
             httpContext.RequestServices.GetService<IAuthSecurityEventEmitter>()?.Emit(new AuthSecurityEvent
             {
                 Definition = AuthSecurityEvents.Throttled,
@@ -105,6 +112,7 @@ namespace backend.main.application.security
                 Reason = AuthSecurityReason.LimitExceeded,
                 Flow = flow,
                 Dimension = AuthThrottleDimension.RateLimiter,
+                UserId = userId,
             });
         }
 
