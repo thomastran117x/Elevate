@@ -463,8 +463,11 @@ namespace backend.main.features.auth
                     VerificationPurpose.ResetPassword,
                     pending => EnsureResetPasswordAllowedAsync(pending.Email, password)
                 );
-                var userId = await ChangePasswordInternalAsync(user.Email, password, AuthSecurityReason.PasswordReset);
-                EmitRecoveryCompleted(userId);
+                await ChangePasswordInternalAsync(
+                    user.Email,
+                    password,
+                    AuthSecurityReason.PasswordReset,
+                    EmitRecoveryCompleted);
                 await SendPasswordChangedBestEffortAsync(user.Email);
             }
             catch (Exception e)
@@ -487,8 +490,11 @@ namespace backend.main.features.auth
                     VerificationPurpose.ResetPassword,
                     pending => EnsureResetPasswordAllowedAsync(pending.Email, password)
                 );
-                var userId = await ChangePasswordInternalAsync(user.Email, password, AuthSecurityReason.PasswordReset);
-                EmitRecoveryCompleted(userId);
+                await ChangePasswordInternalAsync(
+                    user.Email,
+                    password,
+                    AuthSecurityReason.PasswordReset,
+                    EmitRecoveryCompleted);
                 await SendPasswordChangedBestEffortAsync(user.Email);
             }
             catch (Exception e)
@@ -504,6 +510,7 @@ namespace backend.main.features.auth
         public async Task ChangePasswordForAuthenticatedUserAsync(string email, string currentPassword, string newPassword)
         {
             int? userId = null;
+            var committed = false;
             try
             {
                 var existingUser = await _userRepository.GetAuthByEmailAsync(email)
@@ -531,33 +538,44 @@ namespace backend.main.features.auth
                     new PasswordPolicyContext(existingUser.Username, existingUser.Email),
                     "NewPassword");
 
-                await ChangePasswordInternalAsync(email, newPassword, AuthSecurityReason.PasswordChanged);
-                _securityEvents.Emit(new AuthSecurityEvent
-                {
-                    Definition = AuthSecurityEvents.FactorChanged,
-                    Outcome = AuthSecurityOutcome.Succeeded,
-                    Factor = AuthSecurityFactor.Password,
-                    Change = AuthFactorChange.Changed,
-                    UserId = existingUser.Id,
-                });
+                await ChangePasswordInternalAsync(
+                    email,
+                    newPassword,
+                    AuthSecurityReason.PasswordChanged,
+                    changedUserId =>
+                    {
+                        committed = true;
+                        _securityEvents.Emit(new AuthSecurityEvent
+                        {
+                            Definition = AuthSecurityEvents.FactorChanged,
+                            Outcome = AuthSecurityOutcome.Succeeded,
+                            Factor = AuthSecurityFactor.Password,
+                            Change = AuthFactorChange.Changed,
+                            UserId = changedUserId,
+                        });
+                    });
             }
             catch (Exception e)
             {
                 // Every refusal is recorded: a wrong current password, a disabled account, a provider-only
-                // account, a reused or disallowed password, and faults.
-                _securityEvents.FactorChangeFailed(
-                    userId,
-                    AuthSecurityFactor.Password,
-                    AuthFactorChange.Changed,
-                    e,
-                    e switch
-                    {
-                        UnauthorizedException => userId is null
-                            ? AuthSecurityReason.InvalidState
-                            : AuthSecurityReason.InvalidCredentials,
-                        ForbiddenException => AuthSecurityReason.AccountDisabled,
-                        _ => null,
-                    });
+                // account, a reused or disallowed password, and faults. A failure after the password was
+                // committed, such as in the session sweep, is not a failed change: the success is recorded.
+                if (!committed)
+                {
+                    _securityEvents.FactorChangeFailed(
+                        userId,
+                        AuthSecurityFactor.Password,
+                        AuthFactorChange.Changed,
+                        e,
+                        e switch
+                        {
+                            UnauthorizedException => userId is null
+                                ? AuthSecurityReason.InvalidState
+                                : AuthSecurityReason.InvalidCredentials,
+                            ForbiddenException => AuthSecurityReason.AccountDisabled,
+                            _ => null,
+                        });
+                }
 
                 if (e is AppException)
                     throw;
@@ -993,11 +1011,13 @@ namespace backend.main.features.auth
                 "Password");
         }
 
-        /// <returns>The account whose password changed.</returns>
-        private async Task<int> ChangePasswordInternalAsync(
+        /// <param name="onCommitted">Records the change. It runs once the new password is committed and
+        /// before the session sweep, which can fail after the change has already taken effect.</param>
+        private async Task ChangePasswordInternalAsync(
             string email,
             string password,
-            AuthSecurityReason revocationReason)
+            AuthSecurityReason revocationReason,
+            Action<int> onCommitted)
         {
             var hashedPassword = HashPassword(password);
 
@@ -1006,8 +1026,8 @@ namespace backend.main.features.auth
             await EnsureUserEnabledAsync(ToUser(existingUser));
 
             await _userRepository.SetPasswordAndBumpAuthVersionAsync(existingUser.Id, hashedPassword);
+            onCommitted(existingUser.Id);
             await _tokenService.RevokeAllRefreshSessionsAsync(existingUser.Id, revocationReason);
-            return existingUser.Id;
         }
 
         private async Task SendPasswordChangedBestEffortAsync(string email)

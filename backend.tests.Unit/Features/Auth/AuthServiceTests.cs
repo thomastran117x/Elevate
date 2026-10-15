@@ -2503,6 +2503,26 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task ChangePasswordForAuthenticatedUserAsync_ShouldRecordTheCommittedChange_EvenWhenTheSessionSweepFails()
+    {
+        var hasher = TestPasswordHashers.Fast();
+        var userRepository = UserRepositoryForPasswordChange(hasher.Hash("old passphrase that works"));
+        var tokenService = new Mock<ITokenService>();
+        tokenService.Setup(service => service.RevokeAllRefreshSessionsAsync(31, AuthSecurityReason.PasswordChanged, null))
+            .ThrowsAsync(new NotAvailableException());
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(securityEvents: securityEvents, userRepository: userRepository, tokenService: tokenService, passwordHasher: hasher);
+
+        var act = () => service.ChangePasswordForAuthenticatedUserAsync("member@example.com", "old passphrase that works", ValidNewPassword);
+
+        await act.Should().ThrowAsync<NotAvailableException>();
+        securityEvents.Of(AuthSecurityEvents.FactorChanged).Should().ContainSingle()
+            .Which.UserId.Should().Be(31);
+        securityEvents.Of(AuthSecurityEvents.FactorChangeFailed).Should().BeEmpty(
+            "the password did change; the failure came after the commit");
+    }
+
+    [Fact]
     public async Task ChangePasswordForAuthenticatedUserAsync_ShouldStoreANewHash_AndEndEverySession()
     {
         var hasher = TestPasswordHashers.Fast();

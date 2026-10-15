@@ -208,6 +208,24 @@ public class EmailChangeServiceTests
     }
 
     [Fact]
+    public async Task ConfirmAsync_ShouldRecordTheCommittedChange_EvenWhenTheSessionSweepFails()
+    {
+        var harness = new Harness();
+        harness.WithPasswordAccount();
+        harness.WithSuccessfulChange();
+        harness.Tokens
+            .Setup(t => t.RevokeAllRefreshSessionsAsync(UserId, AuthSecurityReason.EmailChanged, null))
+            .ThrowsAsync(new NotAvailableException());
+
+        var act = () => harness.Service.ConfirmAsync(new PendingEmailChange(UserId, AuthVersion, NewEmail, DateTime.UtcNow));
+
+        await act.Should().ThrowAsync<NotAvailableException>();
+        var changed = harness.SecurityEvents.Of(AuthSecurityEvents.FactorChanged).Should().ContainSingle().Subject;
+        changed.Factor.Should().Be(AuthSecurityFactor.Email);
+        changed.UserId.Should().Be(UserId);
+    }
+
+    [Fact]
     public async Task ConfirmAsync_ShouldRecordTheNewAddressInTheFilter()
     {
         var harness = new Harness();

@@ -196,11 +196,7 @@ namespace backend.main.features.profile.email
             // positive only costs the authoritative database lookup that every write already makes.
             await _emailAvailability.MarkRegisteredAsync(normalizedEmail, cancellationToken);
 
-            // The address is an access token claim, so every outstanding session has to go. The
-            // AuthVersion bump inside ChangeEmailAsync already invalidates the access tokens;
-            // this drops the refresh sessions that would otherwise mint new ones.
-            await _tokenService.RevokeAllRefreshSessionsAsync(pending.UserId, AuthSecurityReason.EmailChanged);
-            await _refreshCache.RemoveAsync(GetUserCacheKey(pending.UserId));
+            // The change is committed, so it is recorded before the cleanup below, which can fail.
             _securityEvents.Emit(new AuthSecurityEvent
             {
                 Definition = AuthSecurityEvents.FactorChanged,
@@ -209,6 +205,12 @@ namespace backend.main.features.profile.email
                 Change = AuthFactorChange.Changed,
                 UserId = pending.UserId,
             });
+
+            // The address is an access token claim, so every outstanding session has to go. The
+            // AuthVersion bump inside ChangeEmailAsync already invalidates the access tokens;
+            // this drops the refresh sessions that would otherwise mint new ones.
+            await _tokenService.RevokeAllRefreshSessionsAsync(pending.UserId, AuthSecurityReason.EmailChanged);
+            await _refreshCache.RemoveAsync(GetUserCacheKey(pending.UserId));
 
             // Best effort, like the notifications below: the address has already changed and the
             // proof has already been consumed, so reporting failure here would tell the caller the
