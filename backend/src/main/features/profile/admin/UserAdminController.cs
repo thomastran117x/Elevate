@@ -27,6 +27,7 @@ namespace backend.main.features.profile.admin
         }
 
         [HttpPatch("{id}/status")]
+        [RequireMfa]
         [ProducesResponseType(typeof(ApiResponse<UserStatusResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateUserStatus(int id, [FromBody] UpdateUserStatusRequest request)
         {
@@ -51,8 +52,3 @@ namespace backend.main.features.profile.admin
         }
     }
 }
-
-
-
-
-

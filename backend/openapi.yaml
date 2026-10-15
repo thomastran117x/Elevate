@@ -589,7 +589,7 @@ paths:
       tags:
         - admin
       summary: Update a user's account status
-      description: Enables or disables a user account. Disabling immediately revokes all active sessions.
+      description: Enables or disables a user account. Disabling immediately revokes all active sessions. Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.
       operationId: UserAdmin_UpdateUserStatus_patch
       parameters:
         - name: id

@@ -5,6 +5,7 @@ using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.profile;
+using backend.main.features.profile.admin;
 
 using FluentAssertions;
 
@@ -12,7 +13,8 @@ namespace backend.tests.Unit.Application.Security;
 
 /// <summary>
 /// The registry of account mutations that must carry <see cref="RequireMfaAttribute"/>. Any new
-/// credential, factor, provider, session, device, or recovery-code mutation belongs here too.
+/// credential, factor, provider, session, device, or recovery-code mutation belongs here too, as
+/// does any administrative action that changes another user's account access.
 /// </summary>
 public class SensitiveEndpointStepUpTests
 {
@@ -32,6 +34,7 @@ public class SensitiveEndpointStepUpTests
         { typeof(AuthTotpMfaController), nameof(AuthTotpMfaController.Enable) },
         { typeof(AuthTotpMfaController), nameof(AuthTotpMfaController.Disable) },
         { typeof(AuthTotpMfaController), nameof(AuthTotpMfaController.Remove) },
+        { typeof(UserAdminController), nameof(UserAdminController.UpdateUserStatus) },
     };
 
     // Step-up itself must stay reachable without a proof, or users could never obtain one.

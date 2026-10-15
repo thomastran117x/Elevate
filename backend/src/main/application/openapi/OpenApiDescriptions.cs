@@ -20,7 +20,7 @@ namespace backend.main.application.openapi
                 ["POST /api/admin/events/reindex"] = new("Rebuild the events search index"),
                 ["PATCH /api/admin/users/{id}/status"] = new(
                     "Update a user's account status",
-                    "Enables or disables a user account. Disabling immediately revokes all active sessions."
+                    "Enables or disables a user account. Disabling immediately revokes all active sessions. " + StepUpRequired
                 ),
 
                 // ── Auth ─────────────────────────────────────────────────────────────────
