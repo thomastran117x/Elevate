@@ -1,6 +1,8 @@
+using System.Text.RegularExpressions;
+
 namespace backend.main.application.handlers
 {
-    public static class RequestIdHandler
+    public static partial class RequestIdHandler
     {
         private const string RequestIdHeader = "X-Request-Id";
 
@@ -8,6 +10,18 @@ namespace backend.main.application.handlers
         {
             return app.UseMiddleware<RequestIdMiddleware>();
         }
+
+        /// <summary>
+        /// Whether a request id is safe to log and echo. The id becomes the trace identifier that
+        /// security events and logs carry, so a client-supplied value is accepted only in this
+        /// narrow form: anything longer, or containing line breaks or markup, could forge or split
+        /// log entries.
+        /// </summary>
+        internal static bool IsValidRequestId(string? value) =>
+            !string.IsNullOrEmpty(value) && RequestIdPattern().IsMatch(value);
+
+        [GeneratedRegex("^[A-Za-z0-9._:-]{1,128}$")]
+        private static partial Regex RequestIdPattern();
 
         private class RequestIdMiddleware
         {
@@ -22,7 +36,7 @@ namespace backend.main.application.handlers
             {
                 if (
                     !context.Request.Headers.TryGetValue(RequestIdHeader, out var existing)
-                    || string.IsNullOrWhiteSpace(existing)
+                    || !IsValidRequestId(existing.ToString())
                 )
                 {
                     existing = Guid.NewGuid().ToString("D");

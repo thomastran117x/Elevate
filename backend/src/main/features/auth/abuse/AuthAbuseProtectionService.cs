@@ -336,7 +336,7 @@ public sealed class AuthAbuseProtectionService : IAuthAbuseProtectionService
         _ => (target ?? string.Empty).Trim(),
     };
 
-    private static string NormalizeIp(string sourceIp)
+    internal static string NormalizeIp(string sourceIp)
     {
         var value = (sourceIp ?? string.Empty).Trim();
         return IPAddress.TryParse(value, out var address)
