@@ -146,6 +146,22 @@ public class SessionMfaVerificationServiceTests
     }
 
     [Fact]
+    public async Task VerifyAsync_WithMalformedTotp_ShouldRecordAFailedStepUp()
+    {
+        var totp = new Mock<ITotpMfaEnrollmentService>();
+        totp.Setup(t => t.VerifyPersistedCodeAsync(UserId, "abc"))
+            .ThrowsAsync(new BadRequestException("TOTP code must be 6 digits."));
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var (service, _, _) = CreateService(totp: totp, securityEvents: securityEvents);
+
+        var act = () => service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "totp", "abc");
+
+        await act.Should().ThrowAsync<BadRequestException>();
+        securityEvents.Of(AuthSecurityEvents.StepUpFailed).Should().ContainSingle()
+            .Which.Reason.Should().Be(AuthSecurityReason.InvalidRequest);
+    }
+
+    [Fact]
     public async Task VerifyAsync_WithRepeatedInvalidTotp_ShouldThrottleAfterMaxAttempts()
     {
         var totp = new Mock<ITotpMfaEnrollmentService>();

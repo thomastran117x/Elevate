@@ -343,6 +343,12 @@ namespace backend.main.features.auth.stepup
                         state.UserId);
                     throw;
                 }
+                catch (BadRequestException)
+                {
+                    // A malformed code is refused before it is checked, so it costs no attempt.
+                    EmitStepUpFailed(AuthSecurityMethod.Totp, AuthSecurityReason.InvalidRequest, state.UserId);
+                    throw;
+                }
 
                 return await CompletePendingChallengeAsync(state, AuthSecurityMethod.Totp);
             }

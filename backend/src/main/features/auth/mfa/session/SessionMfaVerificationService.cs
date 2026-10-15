@@ -238,6 +238,12 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
                         EmitStepUp(userId, sessionId, normalizedMethod, AuthSecurityReason.InvalidCode);
                         throw;
                     }
+                    catch (BadRequestException)
+                    {
+                        // A malformed code is refused before it is checked, so it costs no attempt.
+                        EmitStepUp(userId, sessionId, normalizedMethod, AuthSecurityReason.InvalidRequest);
+                        throw;
+                    }
 
                     await _cacheService.DeleteKeyAsync(TotpAttemptKey(userId));
                     await RecordProofAsync(userId, sessionId, authVersion, normalizedMethod, generation, factorState);
