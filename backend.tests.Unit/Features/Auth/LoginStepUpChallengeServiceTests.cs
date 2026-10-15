@@ -226,8 +226,10 @@ public class LoginStepUpChallengeServiceTests
             Times.Once);
         tokenService.Verify(t => t.RevokeAllRefreshSessionsAsync(5, AuthSecurityReason.AuthVersionMismatch, null), Times.Once);
 
-        var retry = await service.TryVerifyEmailAsync(capturedToken!);
-        retry.Should().BeNull();
+        // The used link is refused as a step-up, with the response the device-link path gave before.
+        var retry = () => service.TryVerifyEmailAsync(capturedToken!);
+        await retry.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Invalid or expired device verification token.");
     }
 
     [Fact]
@@ -278,6 +280,7 @@ public class LoginStepUpChallengeServiceTests
         startResponse.Challenge.Should().NotBe(challenge.Challenge);
         startResponse.MaskedEmail.Should().NotBeNullOrWhiteSpace();
         capturedToken.Should().NotBeNullOrWhiteSpace();
+        capturedToken.Should().StartWith(LoginStepUpChallengeService.EmailTokenPrefix);
     }
 
     [Fact]
@@ -431,6 +434,24 @@ public class LoginStepUpChallengeServiceTests
         var result = await service.TryVerifyEmailAsync("nonexistent-email-token");
 
         result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task TryVerifyEmailAsync_ShouldRefuseAnUnknownStepUpLink_AsAStepUp()
+    {
+        // A step-up link that expired or was already used must not fall through to the device-link
+        // path, which would record it as a failed device verification.
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(securityEvents: securityEvents);
+
+        var act = () => service.TryVerifyEmailAsync(LoginStepUpChallengeService.EmailTokenPrefix + "expired-token");
+
+        await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Invalid or expired device verification token.");
+        var failed = securityEvents.Of(AuthSecurityEvents.StepUpFailed).Should().ContainSingle().Subject;
+        failed.Reason.Should().Be(AuthSecurityReason.Expired);
+        failed.Method.Should().Be(AuthSecurityMethod.Email);
+        failed.Flow.Should().Be(AuthSecurityFlow.LoginStepUp);
     }
 
     [Fact]

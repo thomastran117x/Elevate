@@ -36,6 +36,13 @@ namespace backend.main.features.auth.stepup
         private const string SmsMethod = "sms";
         private const string TotpMethod = "totp";
 
+        /// <summary>
+        /// Prefix of step-up email tokens. Step-up and new-device links share one endpoint, so the
+        /// prefix is what tells an unknown or used step-up link from a device link. The dot never
+        /// occurs in the Base64Url device tokens.
+        /// </summary>
+        internal const string EmailTokenPrefix = "su.";
+
         private readonly ICacheService _cacheService;
         private readonly IAuthNotificationService _notificationService;
         private readonly IMfaEnrollmentRepository _mfaEnrollmentRepository;
@@ -184,7 +191,7 @@ namespace backend.main.features.auth.stepup
                 }
                 else
                 {
-                    emailToken = CreateRandomToken();
+                    emailToken = EmailTokenPrefix + CreateRandomToken();
                     state.EmailTokenHash = CryptoHelper.HashToken(emailToken);
                     maskedDestination = PhoneNumberFormatter.MaskEmail(state.Email);
                 }
@@ -369,7 +376,17 @@ namespace backend.main.features.auth.stepup
                 var tokenHash = CryptoHelper.HashToken(token);
                 var json = await _cacheService.GetValueAsync(EmailTokenKey(tokenHash));
                 if (string.IsNullOrWhiteSpace(json))
-                    return null;
+                {
+                    // Only a step-up link carries the prefix, so an expired or used one is refused here,
+                    // as a step-up, with the same response the device-link path would give.
+                    if (!token.StartsWith(EmailTokenPrefix, StringComparison.Ordinal))
+                        return null;
+
+                    throw StepUpRejected(
+                        AuthSecurityMethod.Email,
+                        AuthSecurityReason.Expired,
+                        "Invalid or expired device verification token.");
+                }
 
                 var state = JsonConvert.DeserializeObject<PendingStepUpState>(json)
                     ?? throw StepUpRejected(

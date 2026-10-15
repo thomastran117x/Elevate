@@ -43,6 +43,8 @@ Ids and names are append-only: never renumber, rename, or reuse one. Persist and
 
 `auth.recovery.requested` reasons tell operators whether anything was sent. The API response deliberately hides that, so the reason must never be shown to the requester or in the user-facing history. A `throttled` factor change is recorded as `auth.throttled` with flow `mfa_enrollment`.
 
+Login step-up email links and new-device links share `POST /api/auth/device/verify`. Step-up tokens start with `su.`, and the dot never occurs in device tokens, so an expired or already-used step-up link is recorded as `auth.step_up.failed` with flow `login_step_up`, not as a failed device verification. The response is the same for both.
+
 ## Fields
 
 | Field | Meaning |
