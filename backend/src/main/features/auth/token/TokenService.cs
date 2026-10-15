@@ -1239,7 +1239,10 @@ return 1";
             }
         }
 
-        public async Task RevokeAllRefreshSessionsAsync(int userId, AuthSecurityReason reason)
+        public async Task RevokeAllRefreshSessionsAsync(
+            int userId,
+            AuthSecurityReason reason,
+            int? actorUserId = null)
         {
             try
             {
@@ -1259,6 +1262,7 @@ return 1";
                     Outcome = AuthSecurityOutcome.Succeeded,
                     Reason = reason,
                     UserId = userId,
+                    ActorUserId = actorUserId,
                 });
             }
             catch (Exception e)

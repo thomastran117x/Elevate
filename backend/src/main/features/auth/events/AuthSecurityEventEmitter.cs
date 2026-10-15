@@ -123,28 +123,21 @@ public sealed class AuthSecurityEventEmitter : IAuthSecurityEventEmitter
             out var parsedUserId)
             ? parsedUserId
             : (int?)null;
-        // An event aimed at a named target, such as a sign-in attempt for some username, is about
-        // that target. A bearer token that happens to accompany the request says nothing about it,
-        // so the caller is neither the subject nor the actor.
-        var callerUserId = target is null ? principalUserId : null;
-        var userId = securityEvent.UserId ?? callerUserId;
-
-        // The caller's session is only borrowed for an event about the caller's own account, and
-        // never for an account-wide revocation, whose missing session id means "every session".
+        // Accounts are never inferred from the signed-in caller: many auth endpoints are anonymous
+        // and act on a link, code, or name, so a bearer token that happens to accompany the request
+        // says nothing about whom the event concerns. Callers state UserId and ActorUserId.
+        //
+        // The caller's session is only borrowed for an event the caller stated is about their own
+        // account, and never for an account-wide revocation, whose missing session id means
+        // "every session".
         var borrowsSession = securityEvent.Definition != AuthSecurityEvents.SessionRevoked;
         var sessionId = NormalizeSessionId(securityEvent.SessionId)
-            ?? (borrowsSession && userId is not null && userId == callerUserId
+            ?? (borrowsSession && securityEvent.UserId is not null && securityEvent.UserId == principalUserId
                 ? NormalizeSessionId(principal?.FindFirst(TokenService.SessionIdClaimType)?.Value)
                 : null);
 
-        // A signed-in caller acting on another account, such as an administrator, is the actor.
-        var actorUserId = securityEvent.ActorUserId
-            ?? (callerUserId is not null && callerUserId != userId ? callerUserId : null);
-
         return securityEvent with
         {
-            UserId = userId,
-            ActorUserId = actorUserId,
             SessionId = sessionId,
             TargetHash = _options.IncludeTargetHash && target is { } aimedAt
                 ? _hasher.HashTarget(aimedAt)

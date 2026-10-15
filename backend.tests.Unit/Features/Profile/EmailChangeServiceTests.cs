@@ -203,7 +203,7 @@ public class EmailChangeServiceTests
 
         // The address is an access token claim, so leaving refresh sessions alive would let a
         // stale identity keep minting new tokens.
-        harness.Tokens.Verify(t => t.RevokeAllRefreshSessionsAsync(UserId, AuthSecurityReason.EmailChanged), Times.Once);
+        harness.Tokens.Verify(t => t.RevokeAllRefreshSessionsAsync(UserId, AuthSecurityReason.EmailChanged, null), Times.Once);
         harness.Cache.Verify(c => c.RemoveAsync($"user:{UserId}"), Times.Once);
     }
 

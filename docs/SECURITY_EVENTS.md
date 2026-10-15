@@ -54,8 +54,8 @@ Ids and names are append-only: never renumber, rename, or reuse one. Persist and
 | `Flow` | The flow, verification purpose, or throttled budget, such as `login`, `signup`, `password_reset`, `email_change`, `device_verification`, `login_step_up`, `session_step_up`, `mfa_delivery`, or `mfa_enrollment`. |
 | `Dimension` | For throttles: `source_ip`, `target`, `account`, `attempts`, or `rate_limiter`. |
 | `Factor`, `Change` | For factor events: `sms`, `totp`, `password`, or `email`; `enabled`, `disabled`, `removed`, or `changed`. |
-| `UserId` | The account the event is about, when known. |
-| `ActorUserId` | The signed-in account that caused the event when it is not `UserId`, such as an administrator disabling an account. |
+| `UserId` | The account the event is about, when known. It is stated by the code that emits the event and never inferred from a bearer token, since many auth endpoints are anonymous and act on a link, code, or name. The exception is `authz.denied`, which is about the caller. |
+| `ActorUserId` | The account that caused the event when it is not `UserId`, such as an administrator disabling an account. Set only where that account authorized the action. |
 | `SessionId` | The server-generated refresh session id. Absent on `auth.session.revoked` when every session of the account was revoked. |
 | `TargetHash` | Keyed hash of the normalized username or email an event is aimed at when no account id is known, such as a failed sign-in. |
 | `SourceIpHash` | Keyed hash of the client address, after forwarded-header processing. |

@@ -28,6 +28,23 @@ public class AuthorizationDenialObserverTests
         denied.Outcome.Should().Be(AuthSecurityOutcome.Denied);
         denied.Reason.Should().Be(AuthSecurityReason.ResourceAccess);
         denied.Route.Should().Be("DELETE api/clubs/{clubId}");
+        denied.UserId.Should().BeNull();
+    }
+
+    [Fact]
+    public void Observe_ShouldAttributeTheDenialToTheSignedInCaller()
+    {
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var observer = CreateObserver(securityEvents);
+        var context = CreateContext(StatusCodes.Status403Forbidden, "api/clubs/{clubId}");
+        context.User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
+            [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, "42")],
+            "Test"));
+
+        observer.Observe(context);
+
+        securityEvents.Of(AuthSecurityEvents.AuthorizationDenied).Should().ContainSingle()
+            .Which.UserId.Should().Be(42);
     }
 
     [Theory]

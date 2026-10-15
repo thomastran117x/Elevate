@@ -224,7 +224,7 @@ public class LoginStepUpChallengeServiceTests
                 5, user.AuthVersion, It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<string>(), It.IsAny<string>()),
             Times.Once);
-        tokenService.Verify(t => t.RevokeAllRefreshSessionsAsync(5, AuthSecurityReason.AuthVersionMismatch), Times.Once);
+        tokenService.Verify(t => t.RevokeAllRefreshSessionsAsync(5, AuthSecurityReason.AuthVersionMismatch, null), Times.Once);
 
         var retry = await service.TryVerifyEmailAsync(capturedToken!);
         retry.Should().BeNull();

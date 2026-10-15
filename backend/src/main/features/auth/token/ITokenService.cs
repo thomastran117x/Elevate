@@ -62,7 +62,9 @@ namespace backend.main.features.auth.token
             TimeSpan lifetime
         );
         public Task RevokeRefreshSessionAsync(string sessionId, AuthSecurityReason reason);
-        public Task RevokeAllRefreshSessionsAsync(int userId, AuthSecurityReason reason);
+        /// <param name="actorUserId">The account that caused the revocation when it is not
+        /// <paramref name="userId"/>, such as an administrator.</param>
+        public Task RevokeAllRefreshSessionsAsync(int userId, AuthSecurityReason reason, int? actorUserId = null);
         public Task<string?> VerificationTokenExist(string email, VerificationPurpose purpose);
         public Task<VerificationArtifacts> GenerateEmailChangeArtifactsAsync(
             int userId,

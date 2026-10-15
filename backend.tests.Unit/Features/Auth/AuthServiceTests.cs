@@ -85,7 +85,7 @@ public class AuthServiceTests
         await act.Should().ThrowAsync<ForbiddenException>()
             .WithMessage("This account is disabled.");
 
-        tokenService.Verify(s => s.RevokeAllRefreshSessionsAsync(44, AuthSecurityReason.AccountDisabled), Times.Once);
+        tokenService.Verify(s => s.RevokeAllRefreshSessionsAsync(44, AuthSecurityReason.AccountDisabled, null), Times.Once);
     }
 
     [Fact]
@@ -899,7 +899,7 @@ public class AuthServiceTests
                 Email = "reset@example.com",
                 Usertype = "Participant"
             });
-        tokenService.Setup(service => service.RevokeAllRefreshSessionsAsync(21, AuthSecurityReason.PasswordReset))
+        tokenService.Setup(service => service.RevokeAllRefreshSessionsAsync(21, AuthSecurityReason.PasswordReset, null))
             .Returns(Task.CompletedTask);
 
         var notifications = new Mock<IAuthNotificationService>();
@@ -913,7 +913,7 @@ public class AuthServiceTests
 
         userRepository.Verify(repository => repository.SetPasswordAndBumpAuthVersionAsync(
             21, It.Is<string>(hash => hash.StartsWith("$argon2id$")), It.IsAny<CancellationToken>()), Times.Once);
-        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(21, AuthSecurityReason.PasswordReset), Times.Once);
+        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(21, AuthSecurityReason.PasswordReset, null), Times.Once);
         notifications.Verify(service => service.SendPasswordChangedAsync(
             "reset@example.com",
             null
@@ -951,7 +951,7 @@ public class AuthServiceTests
                 Email = "reset-otp@example.com",
                 Usertype = "Participant"
             });
-        tokenService.Setup(service => service.RevokeAllRefreshSessionsAsync(22, AuthSecurityReason.PasswordReset))
+        tokenService.Setup(service => service.RevokeAllRefreshSessionsAsync(22, AuthSecurityReason.PasswordReset, null))
             .Returns(Task.CompletedTask);
 
         var notifications = new Mock<IAuthNotificationService>();
@@ -965,7 +965,7 @@ public class AuthServiceTests
 
         userRepository.Verify(repository => repository.SetPasswordAndBumpAuthVersionAsync(
             22, It.Is<string>(hash => hash.StartsWith("$argon2id$")), It.IsAny<CancellationToken>()), Times.Once);
-        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(22, AuthSecurityReason.PasswordReset), Times.Once);
+        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(22, AuthSecurityReason.PasswordReset, null), Times.Once);
         notifications.Verify(service => service.SendPasswordChangedAsync(
             "reset-otp@example.com",
             null
@@ -2476,7 +2476,7 @@ public class AuthServiceTests
         await act.Should().ThrowAsync<PasswordPolicyException>();
         userRepository.Verify(repository => repository.SetPasswordAndBumpAuthVersionAsync(
             It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
-        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(It.IsAny<int>(), It.IsAny<AuthSecurityReason>()), Times.Never);
+        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(It.IsAny<int>(), It.IsAny<AuthSecurityReason>(), It.IsAny<int?>()), Times.Never);
     }
 
     [Fact]
@@ -2519,7 +2519,7 @@ public class AuthServiceTests
                 It.Is<string>(hash => hasher.Verify(ValidNewPassword, hash) == PasswordVerificationResult.Success),
                 It.IsAny<CancellationToken>()),
             Times.Once);
-        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(31, AuthSecurityReason.PasswordChanged), Times.Once);
+        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(31, AuthSecurityReason.PasswordChanged, null), Times.Once);
         var changed = securityEvents.Of(AuthSecurityEvents.FactorChanged).Should().ContainSingle().Subject;
         changed.Factor.Should().Be(AuthSecurityFactor.Password);
         changed.Change.Should().Be(AuthFactorChange.Changed);

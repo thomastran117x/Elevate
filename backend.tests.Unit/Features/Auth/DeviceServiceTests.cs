@@ -152,7 +152,7 @@ public class DeviceServiceTests
         var act = () => harness.Service.VerifyDeviceAsync("verify-token", SessionTransport.BrowserCookie);
 
         await act.Should().ThrowAsync<UnauthorizedException>().WithMessage("*no longer valid*");
-        harness.Tokens.Verify(t => t.RevokeAllRefreshSessionsAsync(11, AuthSecurityReason.AuthVersionMismatch), Times.Once);
+        harness.Tokens.Verify(t => t.RevokeAllRefreshSessionsAsync(11, AuthSecurityReason.AuthVersionMismatch, null), Times.Once);
     }
 
     [Fact]

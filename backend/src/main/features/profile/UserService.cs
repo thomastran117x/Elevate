@@ -163,7 +163,11 @@ namespace backend.main.features.profile
             return true;
         }
 
-        public async Task<UserStatusRecord> UpdateUserStatusAsync(int id, bool isDisabled, string? reason)
+        public async Task<UserStatusRecord> UpdateUserStatusAsync(
+            int id,
+            bool isDisabled,
+            string? reason,
+            int actorUserId)
         {
             var user = await _authUserRepository.UpdateUserStatusAsync(id, isDisabled, reason);
             if (user == null)
@@ -171,7 +175,8 @@ namespace backend.main.features.profile
 
             await _tokenService.RevokeAllRefreshSessionsAsync(
                 id,
-                isDisabled ? AuthSecurityReason.AccountDisabled : AuthSecurityReason.AccountEnabled);
+                isDisabled ? AuthSecurityReason.AccountDisabled : AuthSecurityReason.AccountEnabled,
+                actorUserId);
             await _refreshCache.RemoveAsync(GetUserCacheKey(id));
             return user;
         }

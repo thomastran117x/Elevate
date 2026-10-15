@@ -1,3 +1,5 @@
+using System.Security.Claims;
+
 using backend.main.features.auth.events;
 
 namespace backend.main.application.security
@@ -63,6 +65,12 @@ namespace backend.main.application.security
                 Definition = AuthSecurityEvents.AuthorizationDenied,
                 Outcome = AuthSecurityOutcome.Denied,
                 Reason = feature?.DenialReason ?? AuthSecurityReason.ResourceAccess,
+                // A denial is about the caller, so here, unlike elsewhere, the account comes from the token.
+                UserId = int.TryParse(
+                    context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value,
+                    out var userId)
+                    ? userId
+                    : null,
                 Route = DescribeRoute(context),
             });
         }

@@ -21,7 +21,8 @@ namespace backend.main.features.profile
         /// </summary>
         Task<User> UpdateAvatarAsync(int id, IFormFile image, CancellationToken cancellationToken = default);
         Task<bool> DeleteUserAsync(int id);
-        Task<UserStatusRecord> UpdateUserStatusAsync(int id, bool isDisabled, string? reason);
+        /// <param name="actorUserId">The administrator making the change, recorded on the revocation.</param>
+        Task<UserStatusRecord> UpdateUserStatusAsync(int id, bool isDisabled, string? reason, int actorUserId);
         Task<IEnumerable<FollowClub>> GetUserFollowingsAsync(int id, int page = 1, int pageSize = 20);
     }
 }

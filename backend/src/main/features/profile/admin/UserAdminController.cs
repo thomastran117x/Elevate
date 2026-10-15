@@ -31,7 +31,11 @@ namespace backend.main.features.profile.admin
         [ProducesResponseType(typeof(ApiResponse<UserStatusResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateUserStatus(int id, [FromBody] UpdateUserStatusRequest request)
         {
-            var user = await _userService.UpdateUserStatusAsync(id, request.IsDisabled, request.Reason);
+            var user = await _userService.UpdateUserStatusAsync(
+                id,
+                request.IsDisabled,
+                request.Reason,
+                User.GetUserPayload().Id);
 
             return StatusCode(
                 200,

@@ -34,6 +34,7 @@ public sealed class AuthSecurityEventEmitterTests
                 Definition = AuthSecurityEvents.StepUpSucceeded,
                 Outcome = AuthSecurityOutcome.Succeeded,
                 Method = AuthSecurityMethod.Totp,
+                UserId = 42,
             });
 
         var recorded = sink.Events.Should().ContainSingle().Subject;
@@ -69,27 +70,34 @@ public sealed class AuthSecurityEventEmitterTests
     }
 
     [Fact]
-    public void Emit_ShouldRecordASignedInCallerActingOnAnotherAccountAsTheActor()
+    public void Emit_ShouldNeverInferAccountsFromTheSignedInCaller()
     {
+        // Anonymous artifact flows (device links, signup and email-change confirmation, login
+        // step-up) can arrive with an unrelated bearer token; that caller is neither the subject
+        // nor the actor.
         var context = CreateContext(userId: 1, sessionId: SessionId);
         var sink = new RecordingAuthSecurityEventSink();
         var emitter = AuthSecurityEventTestSupport.CreateEmitter(context, [sink]);
 
         emitter.Emit(new AuthSecurityEvent
         {
-            Definition = AuthSecurityEvents.SessionRevoked,
-            Outcome = AuthSecurityOutcome.Succeeded,
-            UserId = 7,
+            Definition = AuthSecurityEvents.VerificationFailed,
+            Outcome = AuthSecurityOutcome.Denied,
+            Reason = AuthSecurityReason.Expired,
         });
         emitter.Emit(new AuthSecurityEvent
         {
-            Definition = AuthSecurityEvents.StepUpSucceeded,
+            Definition = AuthSecurityEvents.SignInSucceeded,
             Outcome = AuthSecurityOutcome.Succeeded,
-            UserId = 1,
+            UserId = 7,
         });
 
-        sink.Events[0].ActorUserId.Should().Be(1);
+        sink.Events[0].UserId.Should().BeNull();
+        sink.Events[0].ActorUserId.Should().BeNull();
+        sink.Events[0].SessionId.Should().BeNull();
+        sink.Events[1].UserId.Should().Be(7);
         sink.Events[1].ActorUserId.Should().BeNull();
+        sink.Events[1].SessionId.Should().BeNull();
     }
 
     [Fact]
