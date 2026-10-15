@@ -4,6 +4,7 @@ namespace backend.main.features.events.invitations.contracts.requests;
 
 public sealed class ResolveEventInvitationRequest
 {
+    [RequestText(RequestTextKind.Sensitive)]
     [Required]
     public string Token { get; set; } = string.Empty;
 }

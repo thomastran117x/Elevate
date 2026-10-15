@@ -9,6 +9,7 @@ public sealed class CreateEventInvitationsRequest : IValidatableObject
         get; set;
     }
 
+    [RequestText(RequestTextKind.Structured)]
     public List<string>? Emails
     {
         get; set;

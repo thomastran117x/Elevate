@@ -6,6 +6,7 @@ namespace backend.main.features.clubs.contracts.requests
 {
     public sealed record ClubSearchRequest : IValidatableObject
     {
+        [RequestText(RequestTextKind.Structured)]
         public string? Query
         {
             get; init;

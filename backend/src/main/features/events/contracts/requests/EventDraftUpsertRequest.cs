@@ -9,24 +9,28 @@ namespace backend.main.features.events.contracts.requests
     /// </summary>
     public sealed class EventDraftUpsertRequest : IValidatableObject
     {
+        [RequestText(RequestTextKind.HumanSingleLine)]
         [StringLength(30, MinimumLength = 3)]
         public string? Name
         {
             get; set;
         }
 
+        [RequestText(RequestTextKind.HumanMultiline)]
         [StringLength(200, MinimumLength = 10)]
         public string? Description
         {
             get; set;
         }
 
+        [RequestText(RequestTextKind.HumanSingleLine)]
         [StringLength(50)]
         public string? Location
         {
             get; set;
         }
 
+        [RequestText(RequestTextKind.Structured)]
         public List<string>? ImageUrls
         {
             get; set;
@@ -71,12 +75,14 @@ namespace backend.main.features.events.contracts.requests
             get; set;
         }
 
+        [RequestText(RequestTextKind.HumanSingleLine)]
         [StringLength(100)]
         public string? VenueName
         {
             get; set;
         }
 
+        [RequestText(RequestTextKind.HumanSingleLine)]
         [StringLength(100)]
         public string? City
         {
@@ -95,6 +101,7 @@ namespace backend.main.features.events.contracts.requests
             get; set;
         }
 
+        [RequestText(RequestTextKind.HumanSingleLine)]
         public List<string>? Tags
         {
             get; set;

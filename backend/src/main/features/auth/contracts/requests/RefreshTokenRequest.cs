@@ -8,6 +8,7 @@ namespace backend.main.features.auth.contracts.requests
         /// <summary>
         /// Refresh token, usually supplied by API clients when cookie transport is not used.
         /// </summary>
+        [RequestText(RequestTextKind.Sensitive)]
         public string? RefreshToken
         {
             get; set;
@@ -15,6 +16,7 @@ namespace backend.main.features.auth.contracts.requests
         /// <summary>
         /// Session binding token paired with the refresh token for API-token transport.
         /// </summary>
+        [RequestText(RequestTextKind.Sensitive)]
         public string? SessionBindingToken
         {
             get; set;

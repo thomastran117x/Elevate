@@ -69,6 +69,37 @@ public class AuthEndpointsTests
     }
 
     [Fact]
+    public async Task SignupModeration_ShouldNotChangeHistoricalLoginOrOpaqueCredentials()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+
+        var signup = await app.PostJsonWithCsrfAsync("/api/auth/signup", new SignUpRequest
+        {
+            Email = "prohibited-signup@example.com",
+            Username = "porn",
+            Password = AuthApiTestApp.DefaultPassword,
+            Usertype = "Participant",
+            Captcha = "captcha"
+        });
+        var signupBody = await signup.Content.ReadAsStringAsync();
+        signup.StatusCode.Should().Be(HttpStatusCode.BadRequest, signupBody);
+        signupBody.Should().Contain("Username").And.Contain("prohibited language");
+
+        const string exactPassword = "  <porn> login passphrase  ";
+        var historical = await app.SeedUserAsync(
+            "historical-login@example.com",
+            password: exactPassword,
+            username: "porn");
+        await app.SeedKnownDeviceAsync(historical.Id, "historical-login-device");
+
+        var session = await app.LoginApiAsync(
+            "porn",
+            password: exactPassword,
+            trustedDeviceToken: "historical-login-device");
+        session.AccessToken.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
     public async Task Login_ShouldSucceedForKnownDevice_AndRejectInvalidCredentials()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
@@ -432,7 +463,18 @@ public class AuthEndpointsTests
         });
         malformed.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
-        // Neither rejection consumed the pending signup, so the same token still completes.
+        var prohibited = await app.PostJsonWithCsrfAsync("/api/auth/oauth/complete", new CompleteOAuthSignupRequest
+        {
+            SignupToken = signupToken,
+            Usertype = "Participant",
+            Username = "porn",
+            Transport = SessionTransportResolver.ApiValue
+        });
+        prohibited.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await prohibited.Content.ReadAsStringAsync())
+            .Should().Contain("Username").And.Contain("prohibited language");
+
+        // None of the rejections consumed the pending signup, so the same token still completes.
         var success = await app.PostJsonWithCsrfAsync("/api/auth/oauth/complete", new CompleteOAuthSignupRequest
         {
             SignupToken = signupToken,

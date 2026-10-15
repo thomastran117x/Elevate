@@ -8,6 +8,7 @@ namespace backend.main.features.events.contracts.requests
 {
     public sealed record EventSearchRequest : IValidatableObject
     {
+        [RequestText(RequestTextKind.Structured)]
         public string? Query
         {
             get; init;
@@ -48,10 +49,12 @@ namespace backend.main.features.events.contracts.requests
         {
             get; init;
         }
+        [RequestText(RequestTextKind.Structured)]
         public List<string>? Tags
         {
             get; init;
         }
+        [RequestText(RequestTextKind.Structured)]
         public string? City
         {
             get; init;

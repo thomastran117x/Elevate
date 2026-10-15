@@ -10,6 +10,7 @@ public sealed class DiscussionReplyCreateRequest
         get; set;
     }
 
+    [RequestText(RequestTextKind.HumanMultiline)]
     [Required]
     [StringLength(1000)]
     public string Content { get; set; } = string.Empty;
@@ -17,6 +18,7 @@ public sealed class DiscussionReplyCreateRequest
 
 public sealed class DiscussionReplyUpdateRequest
 {
+    [RequestText(RequestTextKind.HumanMultiline)]
     [Required]
     [StringLength(1000)]
     public string Content { get; set; } = string.Empty;
