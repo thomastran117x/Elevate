@@ -89,6 +89,17 @@ public sealed class AuthSecurityEventEmitter : IAuthSecurityEventEmitter
             return;
         }
 
+        try
+        {
+            var context = _httpContextAccessor.HttpContext;
+            if (context is not null && enriched.Definition != AuthSecurityEvents.AuthorizationDenied)
+                AuthSecurityRequestFeature.For(context).EventRecorded = true;
+        }
+        catch (ObjectDisposedException)
+        {
+            // The request already ended; there is no denial left to explain.
+        }
+
         foreach (var sink in _sinks)
         {
             try

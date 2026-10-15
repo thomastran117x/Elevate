@@ -107,6 +107,8 @@ app.UseMiddleware<GlobalExceptionHandler>();
 
 app.UseRequestId();
 
+app.UseAuthorizationDenialObserver();
+
 app.UseRouting();
 
 app.UseRequestTimeouts();

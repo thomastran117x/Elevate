@@ -3,6 +3,7 @@ using backend.main.application.security;
 using backend.main.features.auth.abuse;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.events;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
 using backend.main.shared.responses;
@@ -122,6 +123,7 @@ namespace backend.main.features.auth.mfa
         [HttpPost("sms/enroll/verify")]
         [RequireMfa]
         [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.FactorChange)]
         public async Task<IActionResult> VerifyEnrollment([FromBody] MfaEnrollmentVerifyRequest request)
         {
             try
@@ -157,6 +159,7 @@ namespace backend.main.features.auth.mfa
         [HttpPost("sms/disable")]
         [RequireMfa]
         [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.FactorChange)]
         public async Task<IActionResult> Disable([FromBody] MfaDisableRequest _)
         {
             try
@@ -187,6 +190,7 @@ namespace backend.main.features.auth.mfa
         [HttpPost("sms/remove")]
         [RequireMfa]
         [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.FactorChange)]
         public async Task<IActionResult> Remove([FromBody] MfaDisableRequest _)
         {
             try
