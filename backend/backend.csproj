@@ -73,6 +73,8 @@
     <EmbeddedResource Include="resources\usernames\adjectives.txt" LogicalName="UsernameWordLists.adjectives.txt" />
     <EmbeddedResource Include="resources\usernames\nouns.txt" LogicalName="UsernameWordLists.nouns.txt" />
     <EmbeddedResource Include="resources\usernames\denied-substrings.txt" LogicalName="UsernameWordLists.denied-substrings.txt" />
+    <None Remove="resources\content\*.txt" />
+    <EmbeddedResource Include="resources\content\prohibited-terms.txt" LogicalName="ContentTextPolicy.prohibited-terms.txt" />
     <None Remove="resources\passwords\*.txt" />
     <EmbeddedResource Include="resources\passwords\common-passwords.txt" LogicalName="PasswordBlocklist.common.txt" />
   </ItemGroup>

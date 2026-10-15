@@ -33,6 +33,45 @@ namespace backend.tests.Integration.Features.Events;
 public class EventEndpointsTests
 {
     [Fact]
+    public async Task BatchCreate_ShouldReportTheNestedPathForUnsafeHumanText()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var organizer = await app.SeedUserAsync(
+            "nested-content@example.com",
+            role: "Organizer");
+        await app.SeedKnownDeviceAsync(organizer.Id, "nested-content-device");
+        var session = await app.LoginApiAsync(
+            "nested-content",
+            trustedDeviceToken: "nested-content-device");
+
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Post,
+            "/api/events/batch/1",
+            session.AccessToken,
+            JsonContent.Create(new
+            {
+                events = new[]
+                {
+                    new
+                    {
+                        name = "<bad>",
+                        description = "A valid description for nested model validation.",
+                        location = "Main Hall",
+                        imageUrls = new[] { "https://example.com/event.webp" },
+                        startTime = DateTime.UtcNow.AddDays(7),
+                        category = EventCategory.Gaming
+                    }
+                }
+            })));
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest, body);
+        body.Should().Contain("VALIDATION_ERROR")
+            .And.Contain("Events[0].Name")
+            .And.NotContain("<bad>");
+    }
+
+    [Fact]
     public async Task EventLifecycle_ShouldPresignCreateFetchSearchUpdateAndDelete()
     {
         await using var app = await AuthApiTestApp.CreateAsync();

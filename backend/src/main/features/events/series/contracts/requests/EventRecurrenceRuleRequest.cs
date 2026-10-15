@@ -40,6 +40,7 @@ public class EventRecurrenceRuleRequest : IValidatableObject
     public EventMonthlyDayPolicy MonthlyDayPolicy { get; set; } = EventMonthlyDayPolicy.ClampToMonthEnd;
 
     /// <summary>Local wall-clock start, as <c>yyyy-MM-ddTHH:mm[:ss]</c> with no offset.</summary>
+    [RequestText(RequestTextKind.Structured)]
     [Required]
     [StringLength(19, MinimumLength = 16)]
     public string StartLocalDateTime { get; set; } = string.Empty;
@@ -51,6 +52,7 @@ public class EventRecurrenceRuleRequest : IValidatableObject
         get; set;
     }
 
+    [RequestText(RequestTextKind.Structured)]
     [Required]
     [StringLength(EventSeriesTimeZones.MaxTimeZoneIdLength)]
     public string TimeZoneId { get; set; } = string.Empty;
@@ -63,6 +65,7 @@ public class EventRecurrenceRuleRequest : IValidatableObject
     }
 
     /// <summary>Inclusive local cutoff, as <c>yyyy-MM-dd</c>. Required when EndMode is UntilDate.</summary>
+    [RequestText(RequestTextKind.Structured)]
     public string? EndLocalDate
     {
         get; set;

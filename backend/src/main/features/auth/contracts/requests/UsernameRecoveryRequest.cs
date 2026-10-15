@@ -4,6 +4,7 @@ namespace backend.main.features.auth.contracts.requests
 {
     public class UsernameRecoveryRequest
     {
+        [RequestText(RequestTextKind.Structured)]
         [Required]
         [EmailAddress]
         public required string Email
@@ -11,6 +12,7 @@ namespace backend.main.features.auth.contracts.requests
             get; set;
         }
 
+        [RequestText(RequestTextKind.Sensitive)]
         [Required]
         public required string Captcha
         {

@@ -7,16 +7,19 @@ namespace backend.main.features.clubs.contracts.requests
     /// </summary>
     public class ClubUpdateRequest
     {
+        [RequestText(RequestTextKind.HumanSingleLine)]
         [StringLength(30, ErrorMessage = "Name cannot exceed 30 characters.")]
         public required string Name
         {
             get; set;
         }
+        [RequestText(RequestTextKind.HumanMultiline)]
         [StringLength(30, ErrorMessage = "Description cannot exceed 30 characters.")]
         public required string Description
         {
             get; set;
         }
+        [RequestText(RequestTextKind.Structured)]
         [RegularExpression("^(sport|sports|academic|social|cultural|game|gaming|music|other)$",
         ErrorMessage = "Clubtype must be one of: sport, sports, academic, social, cultural, game, gaming, music, other.")]
         public required string Clubtype
@@ -24,11 +27,13 @@ namespace backend.main.features.clubs.contracts.requests
             get; set;
         }
 
+        [RequestText(RequestTextKind.Structured)]
         [Required(ErrorMessage = "Club image URL is required.")]
         [Url(ErrorMessage = "Club image URL must be a valid URL.")]
         public string ClubImageUrl { get; set; } = string.Empty;
 
         /// <summary>Optional hero/banner image URL. Send null/empty to clear the banner.</summary>
+        [RequestText(RequestTextKind.Structured)]
         [Url(ErrorMessage = "Banner image URL must be a valid URL.")]
         public string? BannerImageUrl
         {
@@ -36,27 +41,32 @@ namespace backend.main.features.clubs.contracts.requests
         }
 
         /// <summary>Up to 5 display photos (enforced server-side). Send the full desired list; omitted images are removed.</summary>
+        [RequestText(RequestTextKind.Structured)]
         public List<string>? GalleryImageUrls
         {
             get; set;
         }
+        [RequestText(RequestTextKind.Structured)]
         [Phone]
         public string? Phone
         {
             get; set;
         }
+        [RequestText(RequestTextKind.Structured)]
         [EmailAddress]
         public string? Email
         {
             get; set;
         }
 
+        [RequestText(RequestTextKind.Structured)]
         [Url(ErrorMessage = "Website URL must be a valid URL.")]
         public string? WebsiteUrl
         {
             get; set;
         }
 
+        [RequestText(RequestTextKind.HumanSingleLine)]
         [StringLength(100, ErrorMessage = "Location cannot exceed 100 characters.")]
         public string? Location
         {

@@ -11,6 +11,7 @@ namespace backend.main.features.clubs.contracts.requests
         /// Optional username or email of the new owner. When provided, the server resolves it to a
         /// user id (takes precedence over <see cref="NewOwnerUserId"/>).
         /// </summary>
+        [RequestText(RequestTextKind.Structured)]
         public string? NewOwnerIdentifier
         {
             get; set;

@@ -24,6 +24,13 @@ Authentication abuse counters are fixed-window Redis keys shared by API replicas
 
 New passwords follow the passphrase policy under `Auth:PasswordPolicy`: 15–128 characters plus an in-process blocklist. They are hashed with Argon2id, and legacy BCrypt hashes are upgraded on login; see the [configuration guide](../docs/CONFIGURATION.md#password-policy-and-hashing).
 
+Persisted human-authored JSON fields are normalized and validated at the API boundary. Outer
+whitespace and line endings are canonicalized before ordinary model validation; markup, unsafe
+control/direction characters, and conservative whole-word English prohibited language are rejected
+with the shared field-specific validation envelope. Credentials, tokens, URLs, contact values, and
+other structured protocol fields are explicitly excluded and are never rewritten. See the
+[API guide](../docs/API.md#human-authored-request-text) for the complete contract.
+
 Local `.env` loading walks executable ancestors; nearer files can override root settings, while existing nonempty process values are preserved. Containers rely on injected environment values. See configuration before retaining older `backend/.env` files.
 
 ## Migrations and API reference

@@ -54,10 +54,12 @@ namespace backend.main.features.events.contracts.requests
 
     public class AddEventImageRequest : IValidatableObject
     {
+        [RequestText(RequestTextKind.Structured)]
         [Required]
         [StringLength(2048)]
         public string ImageUrl { get; set; } = null!;
 
+        [RequestText(RequestTextKind.HumanSingleLine)]
         [StringLength(EventImageAltTextRule.MaxAltTextLength)]
         public string? AltText
         {
@@ -94,6 +96,7 @@ namespace backend.main.features.events.contracts.requests
     /// <summary>Edits the accessibility metadata of an image already attached to the event.</summary>
     public class UpdateEventImageRequest : IValidatableObject
     {
+        [RequestText(RequestTextKind.HumanSingleLine)]
         [StringLength(EventImageAltTextRule.MaxAltTextLength)]
         public string? AltText
         {
@@ -117,6 +120,7 @@ namespace backend.main.features.events.contracts.requests
     /// <summary>Swaps the file behind an image slot, keeping its order, cover flag and alt text.</summary>
     public class ReplaceEventImageRequest : IValidatableObject
     {
+        [RequestText(RequestTextKind.Structured)]
         [Required]
         [StringLength(2048)]
         public string ImageUrl { get; set; } = null!;

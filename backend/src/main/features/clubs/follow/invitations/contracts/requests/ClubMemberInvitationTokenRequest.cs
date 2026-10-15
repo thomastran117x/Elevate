@@ -4,6 +4,7 @@ namespace backend.main.features.clubs.follow.invitations.contracts.requests
 {
     public sealed class ClubMemberInvitationTokenRequest
     {
+        [RequestText(RequestTextKind.Sensitive)]
         [Required]
         public string Token { get; set; } = string.Empty;
     }

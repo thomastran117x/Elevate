@@ -9,6 +9,7 @@ namespace backend.main.features.clubs.posts.comments.contracts.requests
             get; set;
         }
 
+        [RequestText(RequestTextKind.HumanMultiline)]
         [Required]
         [StringLength(1000)]
         public string Content { get; set; } = string.Empty;

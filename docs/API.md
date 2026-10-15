@@ -32,6 +32,28 @@ On failure, `success` is false, `data` is null, and `error` contains a machine-r
 
 Paginated responses can carry `items`, `totalCount`, `page`, `pageSize`, and `totalPages` inside `data`; pages are 1-based. Consult the endpoint schema for its query parameters and limits. Frontend normalizers intentionally accept camelCase and legacy PascalCase payload shapes; preserve that compatibility when touching them.
 
+## Human-authored request text
+
+JSON body fields that persist human-authored text are plain text. Before the normal required and
+length rules run, the API trims outer whitespace and changes CRLF or CR line endings to LF. It keeps
+interior whitespace, ordinary Unicode, accents, and valid emoji. Fields such as names, titles,
+locations, cities, tags, addresses, and image alt text are single-line; descriptions, posts,
+comments, replies, reviews, registration notes, and dietary needs may contain LF line breaks.
+
+The API rejects HTML angle brackets, unsupported control or text-direction characters, and a
+conservative server-side list of English prohibited words and phrases. Matching is case-insensitive
+and uses complete words or phrases rather than substrings, so a harmless longer word is not refused.
+Failures return `400` with code `VALIDATION_ERROR` and the affected field in `error.details`; the
+response does not repeat the submitted text or reveal the prohibited-term list.
+
+Passwords, email addresses, phone numbers, URLs, upload metadata, OAuth data, tokens, codes,
+CAPTCHA values, enum/date/time values, invitation identifiers, and search filters keep their
+specialized validation and are not transformed by this policy. In particular, passwords and tokens
+remain byte-for-byte identical. Username moderation runs only when a username is created or
+changed; login and lookup still accept historical usernames. Existing stored rows and version
+snapshots are not rewritten. Output remains plain text and must continue to be rendered with the
+frontend's normal escaping rather than as HTML.
+
 ## Authentication, CSRF, and MFA
 
 Protected HTTP endpoints use JWT bearer access tokens: `Authorization: Bearer <access-token>`. Refresh sessions use cookies; browser clients must retain cookies and send credentials on the relevant requests. Use the existing frontend interceptors and session flow rather than inventing an alternative token-storage contract.

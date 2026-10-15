@@ -4,6 +4,7 @@ namespace backend.main.features.clubs.reviews.contracts.requests
 {
     public class ClubReviewUpdateRequest
     {
+        [RequestText(RequestTextKind.HumanSingleLine)]
         [Required]
         [StringLength(100)]
         public string Title { get; set; } = string.Empty;
@@ -15,6 +16,7 @@ namespace backend.main.features.clubs.reviews.contracts.requests
             get; set;
         }
 
+        [RequestText(RequestTextKind.HumanMultiline)]
         [StringLength(500)]
         public string? Comment
         {

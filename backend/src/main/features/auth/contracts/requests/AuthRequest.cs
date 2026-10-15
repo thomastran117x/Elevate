@@ -6,6 +6,7 @@ namespace backend.main.features.auth.contracts.requests
 {
     public abstract class AuthRequest
     {
+        [RequestText(RequestTextKind.Structured)]
         [Required]
         [EmailAddress]
         public required string Email
@@ -13,6 +14,7 @@ namespace backend.main.features.auth.contracts.requests
             get; set;
         }
 
+        [RequestText(RequestTextKind.Sensitive)]
         [Required]
         [PasswordPolicy]
         public required string Password
@@ -21,6 +23,7 @@ namespace backend.main.features.auth.contracts.requests
         }
         public bool RememberMe { get; set; } = false;
 
+        [RequestText(RequestTextKind.Sensitive)]
         [Required]
         public required string Captcha
         {

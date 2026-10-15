@@ -11,18 +11,22 @@ namespace backend.main.features.events.contracts.requests
     /// </summary>
     public class EventCreateRequest : IValidatableObject
     {
+        [RequestText(RequestTextKind.HumanSingleLine)]
         [Required]
         [StringLength(30, MinimumLength = 3)]
         public string Name { get; set; } = null!;
 
+        [RequestText(RequestTextKind.HumanMultiline)]
         [Required]
         [StringLength(200, MinimumLength = 10)]
         public string Description { get; set; } = null!;
 
+        [RequestText(RequestTextKind.HumanSingleLine)]
         [Required]
         [StringLength(50)]
         public string Location { get; set; } = null!;
 
+        [RequestText(RequestTextKind.Structured)]
         public List<string> ImageUrls { get; set; } = new();
 
         public bool IsPrivate
@@ -55,12 +59,14 @@ namespace backend.main.features.events.contracts.requests
             get; set;
         }
 
+        [RequestText(RequestTextKind.HumanSingleLine)]
         [StringLength(100)]
         public string? VenueName
         {
             get; set;
         }
 
+        [RequestText(RequestTextKind.HumanSingleLine)]
         [StringLength(100)]
         public string? City
         {
@@ -79,6 +85,7 @@ namespace backend.main.features.events.contracts.requests
             get; set;
         }
 
+        [RequestText(RequestTextKind.HumanSingleLine)]
         public List<string>? Tags
         {
             get; set;

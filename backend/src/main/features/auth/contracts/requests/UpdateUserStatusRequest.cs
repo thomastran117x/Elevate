@@ -6,6 +6,7 @@ namespace backend.main.features.auth.contracts.requests
         {
             get; set;
         }
+        [RequestText(RequestTextKind.HumanMultiline)]
         public string? Reason
         {
             get; set;
