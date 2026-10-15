@@ -1035,6 +1035,169 @@ public class AuthServiceTests
         deviceService.Verify(service => service.EnsureDeviceKnownAsync(15, "member@example.com", 1, It.IsAny<ClientRequestInfo>(), It.IsAny<string?>()), Times.Once);
     }
 
+    /// <summary>
+    /// An address Microsoft did not verify never links to, or signs in to, the account holding it.
+    /// </summary>
+    /// <remarks>
+    /// Any Entra tenant can issue a token whose email claim names someone else's address. The
+    /// account here has no provider link, the case the fallback used to take over on the strength
+    /// of that claim alone.
+    /// </remarks>
+    [Fact]
+    public async Task MicrosoftAsync_ShouldRejectEmailFallback_WhenEmailIsUnverified()
+    {
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetOAuthByMicrosoftIdAsync("ms-attacker"))
+            .ReturnsAsync((UserOAuthRecord?)null);
+        userRepository.Setup(repository => repository.GetOAuthByEmailAsync("victim@example.com"))
+            .ReturnsAsync(new UserOAuthRecord
+            {
+                Id = 9,
+                Email = "victim@example.com",
+                Usertype = "Participant",
+                AuthVersion = 1
+            });
+
+        var oauthService = new Mock<IOAuthService>();
+        oauthService.Setup(service => service.VerifyMicrosoftTokenAsync("ms-token", null))
+            .ReturnsAsync(new OAuthUser("ms-attacker", "victim@example.com", "Attacker", "microsoft"));
+
+        var authSessionService = new Mock<IAuthSessionService>();
+        var service = CreateService(
+            userRepository: userRepository,
+            oauthService: oauthService,
+            authSessionService: authSessionService);
+
+        var act = () => service.MicrosoftAsync("ms-token", SessionTransport.BrowserCookie);
+
+        var error = await act.Should().ThrowAsync<MicrosoftEmailUnverifiedException>();
+        error.Which.StatusCode.Should().Be(409);
+        error.Which.ErrorCode.Should().Be(MicrosoftEmailUnverifiedException.Code);
+        userRepository.Verify(
+            repository => repository.UpdateProviderIdsAsync(It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<string?>()),
+            Times.Never);
+        authSessionService.Verify(
+            s => s.IssueAsync(
+                It.IsAny<backend.main.features.profile.User>(),
+                It.IsAny<SessionTransport>(),
+                It.IsAny<string?>(),
+                It.IsAny<bool?>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task MicrosoftAsync_ShouldLinkByEmail_WhenEmailIsVerified()
+    {
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetOAuthByMicrosoftIdAsync("ms-owner"))
+            .ReturnsAsync((UserOAuthRecord?)null);
+        userRepository.Setup(repository => repository.GetOAuthByEmailAsync("owner@example.com"))
+            .ReturnsAsync(new UserOAuthRecord
+            {
+                Id = 9,
+                Email = "owner@example.com",
+                Usertype = "Participant",
+                AuthVersion = 1
+            });
+        userRepository.Setup(repository => repository.UpdateProviderIdsAsync(9, null, "ms-owner"))
+            .ReturnsAsync(new UserOAuthRecord
+            {
+                Id = 9,
+                Email = "owner@example.com",
+                Usertype = "Participant",
+                MicrosoftID = "ms-owner",
+                AuthVersion = 1
+            });
+
+        var oauthService = new Mock<IOAuthService>();
+        oauthService.Setup(service => service.VerifyMicrosoftTokenAsync("ms-token", null))
+            .ReturnsAsync(new OAuthUser("ms-owner", "owner@example.com", "Owner", "microsoft", emailVerified: true));
+
+        var authSessionService = CreateAuthSessionServiceForUser(new backend.main.features.profile.User
+        {
+            Id = 9,
+            Email = "owner@example.com",
+            Usertype = "Participant",
+            MicrosoftID = "ms-owner"
+        });
+        var service = CreateService(
+            userRepository: userRepository,
+            oauthService: oauthService,
+            authSessionService: authSessionService);
+
+        var result = await service.MicrosoftAsync("ms-token", SessionTransport.BrowserCookie);
+
+        result.RequiresRoleSelection.Should().BeFalse();
+        result.UserToken.Should().NotBeNull();
+        result.UserToken!.user.MicrosoftID.Should().Be("ms-owner");
+        userRepository.Verify(repository => repository.UpdateProviderIdsAsync(9, null, "ms-owner"), Times.Once);
+    }
+
+    /// <summary>
+    /// A subject that is already linked signs in whatever the token says about the address, so
+    /// users linked before the verification rule keep signing in unchanged.
+    /// </summary>
+    [Fact]
+    public async Task MicrosoftAsync_ShouldAuthenticateLinkedSubject_WithoutAnEmail()
+    {
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetOAuthByMicrosoftIdAsync("ms-linked"))
+            .ReturnsAsync(new UserOAuthRecord
+            {
+                Id = 21,
+                Email = "linked@example.com",
+                Usertype = "Participant",
+                MicrosoftID = "ms-linked",
+                AuthVersion = 1
+            });
+
+        var oauthService = new Mock<IOAuthService>();
+        oauthService.Setup(service => service.VerifyMicrosoftTokenAsync("ms-token", null))
+            .ReturnsAsync(new OAuthUser("ms-linked", null, string.Empty, "microsoft"));
+
+        var authSessionService = CreateAuthSessionServiceForUser(new backend.main.features.profile.User
+        {
+            Id = 21,
+            Email = "linked@example.com",
+            Usertype = "Participant",
+            MicrosoftID = "ms-linked"
+        });
+        var service = CreateService(
+            userRepository: userRepository,
+            oauthService: oauthService,
+            authSessionService: authSessionService);
+
+        var result = await service.MicrosoftAsync("ms-token", SessionTransport.BrowserCookie);
+
+        result.UserToken.Should().NotBeNull();
+        result.UserToken!.user.Id.Should().Be(21);
+        userRepository.Verify(repository => repository.GetOAuthByEmailAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task MicrosoftAsync_ShouldRejectUnlinkedSubject_WithoutAnEmail()
+    {
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetOAuthByMicrosoftIdAsync("ms-unknown"))
+            .ReturnsAsync((UserOAuthRecord?)null);
+
+        var oauthService = new Mock<IOAuthService>();
+        oauthService.Setup(service => service.VerifyMicrosoftTokenAsync("ms-token", null))
+            .ReturnsAsync(new OAuthUser("ms-unknown", null, string.Empty, "microsoft"));
+
+        var cache = new Mock<ICacheService>();
+        var service = CreateService(userRepository: userRepository, oauthService: oauthService, cacheService: cache);
+
+        var act = () => service.MicrosoftAsync("ms-token", SessionTransport.BrowserCookie);
+
+        await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Missing Microsoft email claim");
+        userRepository.Verify(repository => repository.GetOAuthByEmailAsync(It.IsAny<string>()), Times.Never);
+        cache.Verify(
+            c => c.SetValueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan?>()),
+            Times.Never);
+    }
+
     [Fact]
     public async Task GoogleCodeAsync_ShouldExchangeCode_AndAuthenticateUser()
     {
@@ -1322,6 +1485,88 @@ public class AuthServiceTests
                 It.IsAny<SessionTransport>(),
                 It.IsAny<string?>(),
                 It.IsAny<bool?>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// The address can be registered between starting a Microsoft signup and completing it. The
+    /// pending state keeps whether Microsoft verified the address, so completing applies the same
+    /// rule as a direct sign-in instead of linking on an unproven address.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CompleteOAuthSignupAsync_ShouldLinkMicrosoftByEmail_OnlyWhenThePendingEmailIsVerified(bool emailVerified)
+    {
+        var pendingJson = JsonConvert.SerializeObject(new
+        {
+            ProviderUserId = "ms-pending",
+            Email = "taken@example.com",
+            EmailVerified = emailVerified,
+            Name = "Pending Holder",
+            Provider = "microsoft",
+            Transport = SessionTransport.BrowserCookie
+        });
+
+        var cache = new Mock<ICacheService>();
+        cache.Setup(service => service.GetValueAsync("oauth:pending:signup-token"))
+            .ReturnsAsync(pendingJson);
+        cache.Setup(service => service.DeleteKeyAsync("oauth:pending:signup-token"))
+            .ReturnsAsync(true);
+
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetOAuthByMicrosoftIdAsync("ms-pending"))
+            .ReturnsAsync((UserOAuthRecord?)null);
+        userRepository.Setup(repository => repository.GetOAuthByEmailAsync("taken@example.com"))
+            .ReturnsAsync(new UserOAuthRecord
+            {
+                Id = 84,
+                Email = "taken@example.com",
+                Usertype = "Participant",
+                AuthVersion = 1
+            });
+        userRepository.Setup(repository => repository.UpdateProviderIdsAsync(84, null, "ms-pending"))
+            .ReturnsAsync(new UserOAuthRecord
+            {
+                Id = 84,
+                Email = "taken@example.com",
+                Usertype = "Participant",
+                MicrosoftID = "ms-pending",
+                AuthVersion = 1
+            });
+
+        var authSessionService = CreateAuthSessionServiceForUser(new backend.main.features.profile.User
+        {
+            Id = 84,
+            Email = "taken@example.com",
+            Usertype = "Participant",
+            MicrosoftID = "ms-pending"
+        });
+        var service = CreateService(
+            userRepository: userRepository,
+            cacheService: cache,
+            authSessionService: authSessionService);
+
+        var act = () => service.CompleteOAuthSignupAsync(
+            "signup-token",
+            "participant",
+            "pending-user",
+            SessionTransport.BrowserCookie);
+
+        if (emailVerified)
+        {
+            var result = await act();
+            result.user.Id.Should().Be(84);
+            userRepository.Verify(repository => repository.UpdateProviderIdsAsync(84, null, "ms-pending"), Times.Once);
+            return;
+        }
+
+        await act.Should().ThrowAsync<MicrosoftEmailUnverifiedException>();
+        userRepository.Verify(
+            repository => repository.UpdateProviderIdsAsync(It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<string?>()),
+            Times.Never);
+        userRepository.Verify(
+            repository => repository.CreateUserAsync(It.IsAny<backend.main.features.profile.User>()),
             Times.Never);
     }
 

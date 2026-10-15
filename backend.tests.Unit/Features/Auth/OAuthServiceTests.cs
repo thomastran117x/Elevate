@@ -145,22 +145,14 @@ public class OAuthServiceTests
     [Fact]
     public async Task VerifyMicrosoftTokenAsync_ShouldReturnOAuthUser_ForValidToken()
     {
-        var key = new SymmetricSecurityKey(new byte[32]);
-        var service = CreateService();
-        SetPrivateField(service, "_microsoftClientId", "ms-client");
-        SetPrivateField(service, "_microsoftConfigManager", CreateConfigManager(key, "https://login.microsoftonline.com/test-tenant/v2.0"));
+        var (service, key) = CreateMicrosoftService();
 
-        var token = CreateJwt(
-            issuer: "https://login.microsoftonline.com/test-tenant/v2.0",
-            audience: "ms-client",
-            key: key,
-            claims:
-            [
-                new Claim("sub", "microsoft-user-1"),
-                new Claim("preferred_username", "microsoft@example.com"),
-                new Claim("name", "Microsoft User"),
-                new Claim("nonce", "expected-nonce")
-            ]);
+        var token = CreateMicrosoftJwt(
+            key,
+            new Claim("sub", "microsoft-user-1"),
+            new Claim("email", "microsoft@example.com"),
+            new Claim("name", "Microsoft User"),
+            new Claim("nonce", "expected-nonce"));
 
         var result = await service.VerifyMicrosoftTokenAsync(token, "expected-nonce");
 
@@ -173,21 +165,13 @@ public class OAuthServiceTests
     [Fact]
     public async Task VerifyMicrosoftTokenAsync_ShouldThrowUnauthorized_WhenNonceDoesNotMatch()
     {
-        var key = new SymmetricSecurityKey(new byte[32]);
-        var service = CreateService();
-        SetPrivateField(service, "_microsoftClientId", "ms-client");
-        SetPrivateField(service, "_microsoftConfigManager", CreateConfigManager(key, "https://login.microsoftonline.com/test-tenant/v2.0"));
+        var (service, key) = CreateMicrosoftService();
 
-        var token = CreateJwt(
-            issuer: "https://login.microsoftonline.com/test-tenant/v2.0",
-            audience: "ms-client",
-            key: key,
-            claims:
-            [
-                new Claim("sub", "microsoft-user-1"),
-                new Claim("preferred_username", "microsoft@example.com"),
-                new Claim("nonce", "actual-nonce")
-            ]);
+        var token = CreateMicrosoftJwt(
+            key,
+            new Claim("sub", "microsoft-user-1"),
+            new Claim("email", "microsoft@example.com"),
+            new Claim("nonce", "actual-nonce"));
 
         var action = () => service.VerifyMicrosoftTokenAsync(token, "expected-nonce");
 
@@ -196,29 +180,153 @@ public class OAuthServiceTests
             .WithMessage("Microsoft nonce validation failed");
     }
 
+    /// <summary>
+    /// <c>preferred_username</c> is a UPN a tenant administrator sets, so it is never read as an
+    /// email address, even when it is the only address-like claim.
+    /// </summary>
     [Fact]
-    public async Task VerifyMicrosoftTokenAsync_ShouldThrowUnauthorized_WhenEmailClaimIsMissing()
+    public async Task VerifyMicrosoftTokenAsync_ShouldReturnNoEmail_WhenOnlyPreferredUsernameIsPresent()
     {
-        var key = new SymmetricSecurityKey(new byte[32]);
-        var service = CreateService();
-        SetPrivateField(service, "_microsoftClientId", "ms-client");
-        SetPrivateField(service, "_microsoftConfigManager", CreateConfigManager(key, "https://login.microsoftonline.com/test-tenant/v2.0"));
+        var (service, key) = CreateMicrosoftService();
 
-        var token = CreateJwt(
-            issuer: "https://login.microsoftonline.com/test-tenant/v2.0",
-            audience: "ms-client",
-            key: key,
-            claims:
-            [
-                new Claim("sub", "microsoft-user-1")
-            ]);
+        var token = CreateMicrosoftJwt(
+            key,
+            new Claim("sub", "microsoft-user-1"),
+            new Claim("preferred_username", "victim@example.com"),
+            new Claim("tid", MicrosoftConsumerTenantId));
+
+        var result = await service.VerifyMicrosoftTokenAsync(token);
+
+        result.Email.Should().BeNull();
+        result.EmailVerified.Should().BeFalse();
+        result.Name.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task VerifyMicrosoftTokenAsync_ShouldReadEmailClaim_RatherThanPreferredUsername()
+    {
+        var (service, key) = CreateMicrosoftService();
+
+        var token = CreateMicrosoftJwt(
+            key,
+            new Claim("sub", "microsoft-user-1"),
+            new Claim("preferred_username", "victim@example.com"),
+            new Claim("email", "holder@example.com"));
+
+        var result = await service.VerifyMicrosoftTokenAsync(token);
+
+        result.Email.Should().Be("holder@example.com");
+        result.Name.Should().Be("holder@example.com");
+    }
+
+    [Fact]
+    public async Task VerifyMicrosoftTokenAsync_ShouldReportEmailUnverified_ForWorkTenantWithoutDomainOwnerClaim()
+    {
+        var (service, key) = CreateMicrosoftService();
+
+        var token = CreateMicrosoftJwt(
+            key,
+            new Claim("sub", "microsoft-user-1"),
+            new Claim("email", "worker@example.com"),
+            new Claim("tid", WorkTenantId));
+
+        var result = await service.VerifyMicrosoftTokenAsync(token);
+
+        result.Email.Should().Be("worker@example.com");
+        result.EmailVerified.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("true", ClaimValueTypes.Boolean, true)]
+    [InlineData("1", ClaimValueTypes.String, true)]
+    [InlineData("false", ClaimValueTypes.Boolean, false)]
+    public async Task VerifyMicrosoftTokenAsync_ShouldTrustDomainOwnerClaim_ForWorkTenant(
+        string value,
+        string valueType,
+        bool expectedVerified)
+    {
+        var (service, key) = CreateMicrosoftService();
+
+        var token = CreateMicrosoftJwt(
+            key,
+            new Claim("sub", "microsoft-user-1"),
+            new Claim("email", "worker@example.com"),
+            new Claim("tid", WorkTenantId),
+            new Claim("xms_edov", value, valueType));
+
+        var result = await service.VerifyMicrosoftTokenAsync(token);
+
+        result.EmailVerified.Should().Be(expectedVerified);
+    }
+
+    [Fact]
+    public async Task VerifyMicrosoftTokenAsync_ShouldReportEmailVerified_ForConsumerTenant()
+    {
+        var (service, key) = CreateMicrosoftService();
+
+        var token = CreateMicrosoftJwt(
+            key,
+            new Claim("sub", "microsoft-user-1"),
+            new Claim("email", "personal@example.com"),
+            new Claim("tid", MicrosoftConsumerTenantId));
+
+        var result = await service.VerifyMicrosoftTokenAsync(token);
+
+        result.Email.Should().Be("personal@example.com");
+        result.EmailVerified.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A token without an address is not refused here. A subject that is already linked still
+    /// signs in; resolution refuses it only when it would need the address.
+    /// </summary>
+    [Fact]
+    public async Task VerifyMicrosoftTokenAsync_ShouldReturnNoEmail_WhenEmailClaimIsMissing()
+    {
+        var (service, key) = CreateMicrosoftService();
+
+        var token = CreateMicrosoftJwt(
+            key,
+            new Claim("sub", "microsoft-user-1"));
+
+        var result = await service.VerifyMicrosoftTokenAsync(token);
+
+        result.Id.Should().Be("microsoft-user-1");
+        result.Email.Should().BeNull();
+        result.EmailVerified.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task VerifyMicrosoftTokenAsync_ShouldThrowUnauthorized_WhenSubClaimIsMissing()
+    {
+        var (service, key) = CreateMicrosoftService();
+
+        var token = CreateMicrosoftJwt(
+            key,
+            new Claim("email", "microsoft@example.com"));
 
         var action = () => service.VerifyMicrosoftTokenAsync(token);
 
         await action.Should()
             .ThrowAsync<UnauthorizedException>()
-            .WithMessage("Missing Microsoft email claim");
+            .WithMessage("Missing Microsoft sub claim");
     }
+
+    private const string MicrosoftConsumerTenantId = "9188040d-6c67-4c5b-b112-36a304b66dad";
+    private const string WorkTenantId = "11111111-2222-3333-4444-555555555555";
+    private const string MicrosoftIssuer = "https://login.microsoftonline.com/test-tenant/v2.0";
+
+    private static (OAuthService Service, SecurityKey Key) CreateMicrosoftService()
+    {
+        var key = new SymmetricSecurityKey(new byte[32]);
+        var service = CreateService();
+        SetPrivateField(service, "_microsoftClientId", "ms-client");
+        SetPrivateField(service, "_microsoftConfigManager", CreateConfigManager(key, MicrosoftIssuer));
+        return (service, key);
+    }
+
+    private static string CreateMicrosoftJwt(SecurityKey key, params Claim[] claims)
+        => CreateJwt(MicrosoftIssuer, "ms-client", key, claims);
 
     private static OAuthService CreateService(Func<HttpRequestMessage, HttpResponseMessage>? responseFactory = null)
     {

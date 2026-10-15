@@ -620,7 +620,8 @@ namespace backend.main.features.auth
                     pending.ProviderUserId,
                     pending.Email,
                     pending.Name,
-                    pending.Provider
+                    pending.Provider,
+                    pending.EmailVerified
                 );
                 var user = pending.Provider switch
                 {
@@ -949,7 +950,11 @@ namespace backend.main.features.auth
             if (providerUser != null)
                 return ToUser(providerUser);
 
-            var emailUser = await _userRepository.GetOAuthByEmailAsync(oauthUser.Email);
+            // Google refuses to vouch for an unverified address upstream, so any address
+            // reported here may drive the fallback.
+            var email = oauthUser.Email
+                ?? throw new UnauthorizedException("Missing Google email claim");
+            var emailUser = await _userRepository.GetOAuthByEmailAsync(email);
             if (emailUser == null)
                 return null;
 
@@ -974,11 +979,24 @@ namespace backend.main.features.auth
             if (providerUser != null)
                 return ToUser(providerUser);
 
+            // Without a linked subject the address is all there is to go on, so a token that
+            // reports none cannot sign in or sign up.
+            if (string.IsNullOrWhiteSpace(oauthUser.Email))
+                throw new UnauthorizedException("Missing Microsoft email claim");
+
+            // An unverified address can still start a new account. That signs no one into an
+            // existing account, though the new account holds an address nobody has proven.
             var emailUser = await _userRepository.GetOAuthByEmailAsync(oauthUser.Email);
             if (emailUser == null)
                 return null;
 
             EnsureEmailFallbackAllowed(emailUser);
+
+            // Any Entra tenant can issue a token whose email claim names someone else's address,
+            // so linking on it would hand that account to whoever runs the tenant.
+            if (!oauthUser.EmailVerified)
+                throw new MicrosoftEmailUnverifiedException();
+
             emailUser = await _userRepository.UpdateProviderIdsAsync(
                 emailUser.Id,
                 null,
@@ -999,6 +1017,9 @@ namespace backend.main.features.auth
         /// an account without a local password, so a provider link may be the account's only
         /// credential and an address match must not stand in for it. An account with no link
         /// still links on an address match; control of that inbox could already reset its password.
+        /// That holds only when the provider proves the caller controls the inbox: Google requires
+        /// <c>email_verified</c>, and Microsoft resolution refuses an unverified address after this
+        /// check with <see cref="MicrosoftEmailUnverifiedException"/>.
         /// </remarks>
         private static void EnsureEmailFallbackAllowed(UserOAuthRecord emailUser)
         {
@@ -1037,10 +1058,13 @@ namespace backend.main.features.auth
         )
         {
             var signupToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+            var email = oauthUser.Email
+                ?? throw new UnauthorizedException("OAuth provider did not report an email address.");
             var pendingState = new PendingOAuthSignupState
             {
                 ProviderUserId = oauthUser.Id,
-                Email = oauthUser.Email,
+                Email = email,
+                EmailVerified = oauthUser.EmailVerified,
                 Name = oauthUser.Name,
                 Provider = oauthUser.Provider,
                 Transport = transport,
@@ -1058,7 +1082,7 @@ namespace backend.main.features.auth
             return new PendingOAuthSignupChallenge
             {
                 SignupToken = signupToken,
-                Email = oauthUser.Email,
+                Email = email,
                 Name = oauthUser.Name,
                 Provider = oauthUser.Provider,
             };
@@ -1176,6 +1200,14 @@ namespace backend.main.features.auth
                 get; set;
             }
             public required string Email
+            {
+                get; set;
+            }
+            /// <summary>
+            /// Carried so completing the signup re-resolves under the same rule. An entry written
+            /// before this field existed reads as false, which refuses the email fallback.
+            /// </summary>
+            public bool EmailVerified
             {
                 get; set;
             }
