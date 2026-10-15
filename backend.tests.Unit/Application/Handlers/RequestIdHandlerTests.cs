@@ -57,6 +57,7 @@ public class RequestIdHandlerTests
     [InlineData("forged\r\nline")]
     [InlineData("<script>")]
     [InlineData("with space")]
+    [InlineData("trailing-newline\n")]
     public async Task UseRequestId_ShouldReplaceAnUnsafeHeader(string supplied)
     {
         var services = new ServiceCollection().BuildServiceProvider();
@@ -80,5 +81,6 @@ public class RequestIdHandlerTests
         RequestIdHandler.IsValidRequestId(new string('a', 128)).Should().BeTrue();
         RequestIdHandler.IsValidRequestId(new string('a', 129)).Should().BeFalse();
         RequestIdHandler.IsValidRequestId(null).Should().BeFalse();
+        RequestIdHandler.IsValidRequestId("abc\n").Should().BeFalse();
     }
 }

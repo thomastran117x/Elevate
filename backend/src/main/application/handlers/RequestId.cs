@@ -20,7 +20,8 @@ namespace backend.main.application.handlers
         internal static bool IsValidRequestId(string? value) =>
             !string.IsNullOrEmpty(value) && RequestIdPattern().IsMatch(value);
 
-        [GeneratedRegex("^[A-Za-z0-9._:-]{1,128}$")]
+        // \z, not $: $ also matches before a trailing newline, which would let "id\n" through.
+        [GeneratedRegex(@"\A[A-Za-z0-9._:-]{1,128}\z")]
         private static partial Regex RequestIdPattern();
 
         private class RequestIdMiddleware
