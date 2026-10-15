@@ -45,10 +45,8 @@ namespace backend.main.features.auth.mfa
 
         public async Task RecordAsync(int userId, string email, MfaFactorKind factor, MfaFactorChange change)
         {
-            // The proof that authorized this change is spent: the next sensitive change, on this
-            // or any other session, needs a new verification against the new factor set.
-            await _sessionMfaVerificationService.ClearUserProofsAsync(userId);
-
+            // The change is already committed, so it is recorded first: a failure clearing proofs
+            // below must not drop it from the security events.
             _securityEvents.Emit(new AuthSecurityEvent
             {
                 Definition = AuthSecurityEvents.FactorChanged,
@@ -62,6 +60,10 @@ namespace backend.main.features.auth.mfa
                 },
                 UserId = userId,
             });
+
+            // The proof that authorized this change is spent: the next sensitive change, on this
+            // or any other session, needs a new verification against the new factor set.
+            await _sessionMfaVerificationService.ClearUserProofsAsync(userId);
 
             // The change is already committed; a lost notice must not turn it into an error.
             try

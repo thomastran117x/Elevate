@@ -60,6 +60,21 @@ public class MfaFactorChangeServiceTests
     }
 
     [Fact]
+    public async Task RecordAsync_ShouldRecordTheCommittedChange_EvenWhenProofCleanupFails()
+    {
+        var sessionMfa = new Mock<ISessionMfaVerificationService>();
+        sessionMfa.Setup(s => s.ClearUserProofsAsync(42))
+            .ThrowsAsync(new InvalidOperationException("redis unavailable"));
+        var service = new MfaFactorChangeService(sessionMfa.Object, new Mock<IAuthNotificationService>().Object, _securityEvents);
+
+        var act = () => service.RecordAsync(42, "member@example.com", MfaFactorKind.Totp, MfaFactorChange.Disabled);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        _securityEvents.Of(AuthSecurityEvents.FactorChanged).Should().ContainSingle()
+            .Which.Change.Should().Be(AuthFactorChange.Disabled);
+    }
+
+    [Fact]
     public async Task RecordAsync_ShouldNotFail_WhenTheNoticeCannotBeSent()
     {
         var sessionMfa = new Mock<ISessionMfaVerificationService>();
