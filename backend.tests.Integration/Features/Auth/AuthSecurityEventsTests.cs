@@ -15,6 +15,8 @@ using backend.tests.Integration.Infrastructure;
 
 using FluentAssertions;
 
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -200,6 +202,7 @@ public sealed class AuthSecurityEventsTests
             serviceOverrides: services =>
             {
                 services.AddSingleton<IAuthSecurityEventSink>(sink);
+                services.AddSingleton<IStartupFilter>(new ClientAddressStartupFilter(IPAddress.Parse(ClientAddress)));
                 serviceOverrides?.Invoke(services);
             },
             configurationOverrides: configurationOverrides);
@@ -216,7 +219,6 @@ public sealed class AuthSecurityEventsTests
                 Transport = SessionTransportResolver.ApiValue,
             })
         };
-        request.Headers.Add("X-Forwarded-For", ClientAddress);
         request.Headers.Add(HttpUtility.TrustedDeviceHeaderName, "known-device");
         request.Headers.Add(CsrfConfiguration.CsrfHeaderName, await app.GetCsrfTokenAsync());
         return await app.Client.SendAsync(request);
@@ -315,6 +317,23 @@ public sealed class AuthSecurityEventsTests
                 copy[tag.Key] = tag.Value;
             Measurements.Enqueue((instrument.Name, copy));
         }
+    }
+
+    /// <summary>
+    /// Gives every request a client address, as Kestrel would. The test server leaves it unset, and
+    /// forwarded headers cannot supply one because the API only trusts configured proxies.
+    /// </summary>
+    private sealed class ClientAddressStartupFilter(IPAddress address) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use((context, nextMiddleware) =>
+            {
+                context.Connection.RemoteIpAddress = address;
+                return nextMiddleware(context);
+            });
+            next(app);
+        };
     }
 
     /// <summary>Wall-clock time plus an offset the test can move forward.</summary>
