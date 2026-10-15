@@ -16,7 +16,7 @@ The emitter runs each sink in its own `try`/`catch`. A failing sink increments `
 Two pieces of middleware cover what individual services cannot see:
 
 - The authorization denial observer records every 403 as `authz.denied` when the response starts. That covers policy failures, `[RequireMfa]`, and `ForbiddenException` from any feature. A 403 another event already describes, such as a disabled account's failed sign-in, is not counted twice. 401 responses are not recorded, because expired access tokens produce them constantly.
-- `[AuthOperation]` on auth endpoints records `auth.operation.duration`, classified from the final status code.
+- `[AuthOperation]` marks auth endpoints for `auth.operation.duration`. Middleware mounted after routing and ahead of the rate limiter, authentication, and authorization times them, so their short-circuited 429, 401, and 403 responses are counted, classified from the final status code.
 
 ## Event catalog
 

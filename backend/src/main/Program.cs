@@ -111,6 +111,10 @@ app.UseAuthorizationDenialObserver();
 
 app.UseRouting();
 
+// After routing, so the endpoint is known, and before the rate limiter and authentication, so their
+// short-circuited responses are timed with everything else.
+app.UseAuthOperationMetrics();
+
 app.UseRequestTimeouts();
 
 app.UseSecurityHeaders();
