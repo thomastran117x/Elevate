@@ -435,12 +435,16 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
             {
                 case StepUpProofWriteResult.Stored:
                     return;
+                // The code was correct, but the proof could not be stored, so the step-up is refused.
                 case StepUpProofWriteResult.SessionEnded:
+                    EmitStepUp(userId, sessionId, method, AuthSecurityReason.SessionEnded);
                     throw new UnauthorizedException("This session has ended. Please sign in again.");
                 case StepUpProofWriteResult.Superseded:
+                    EmitStepUp(userId, sessionId, method, AuthSecurityReason.AuthVersionMismatch);
                     throw new ConflictException("Your security settings changed during verification. Please verify again.");
                 default:
                     // Reporting success without a stored proof would loop the user through verification.
+                    EmitStepUp(userId, sessionId, method, AuthSecurityReason.None, AuthSecurityOutcome.Faulted);
                     throw new NotAvailableException();
             }
         }
@@ -545,11 +549,16 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
         }
 
         /// <param name="failure">Null for a verified proof; otherwise why verification failed.</param>
-        private void EmitStepUp(int userId, string sessionId, string method, AuthSecurityReason? failure) =>
+        private void EmitStepUp(
+            int userId,
+            string sessionId,
+            string method,
+            AuthSecurityReason? failure,
+            AuthSecurityOutcome failureOutcome = AuthSecurityOutcome.Denied) =>
             _securityEvents.Emit(new AuthSecurityEvent
             {
                 Definition = failure is null ? AuthSecurityEvents.StepUpSucceeded : AuthSecurityEvents.StepUpFailed,
-                Outcome = failure is null ? AuthSecurityOutcome.Succeeded : AuthSecurityOutcome.Denied,
+                Outcome = failure is null ? AuthSecurityOutcome.Succeeded : failureOutcome,
                 Reason = failure ?? AuthSecurityReason.None,
                 Method = method switch
                 {

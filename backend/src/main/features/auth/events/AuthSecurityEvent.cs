@@ -148,6 +148,7 @@ public enum AuthSecurityReason
     EmailChanged,
     AccountDeleted,
     AccountEnabled,
+    SessionEnded,
     EmailBoundToOtherProvider,
     Policy,
     MfaRequired,

@@ -32,7 +32,7 @@ Ids and names are append-only: never renumber, rename, or reuse one. Persist and
 | 33021 | `auth.recovery.completed` | Information | A password reset completes. | `succeeded` | `none` |
 | 33030 | `auth.verification.failed` | Warning | An emailed link or code for signup, password reset, email change, or a new device is refused. | `denied` | `expired`, `invalid_state`, `invalid_code`, `attempts_exhausted`, `auth_version_mismatch` |
 | 33040 | `auth.step_up.succeeded` | Information | A login or in-session step-up code is verified. | `succeeded` | `none` |
-| 33041 | `auth.step_up.failed` | Warning | A login or in-session step-up is refused. | `denied` | `expired`, `invalid_state`, `invalid_code`, `attempts_exhausted`, `replayed`, `auth_version_mismatch` |
+| 33041 | `auth.step_up.failed` | Warning | A login or in-session step-up is refused, including a correct code whose proof could not be stored. | `denied`, `faulted` | `expired`, `invalid_state`, `invalid_code`, `attempts_exhausted`, `replayed`, `auth_version_mismatch`, `session_ended`, `none` |
 | 33050 | `auth.factor.changed` | Information | SMS or TOTP MFA is enabled, disabled, or removed, or the password or email changes. | `succeeded` | `none` |
 | 33051 | `auth.factor.change_failed` | Warning | A second-factor change or authenticated password change is refused or fails with a service fault. | `denied`, `faulted` | `invalid_credentials`, `account_disabled`, `invalid_code`, `invalid_state`, `invalid_request`, `rejected`, `none` |
 | 33060 | `auth.refresh_token.reused` | Warning | A rotated refresh token is presented after the 10-second grace window, a theft signal. | `denied` | `replayed` |
@@ -97,6 +97,7 @@ Ids and names are append-only: never renumber, rename, or reuse one. Persist and
 | `password_reset` | The password was reset through recovery. |
 | `email_changed` | The account email changed. |
 | `account_enabled` | An administrator re-enabled the account. |
+| `session_ended` | The refresh session ended (sign-out or revocation) before a verified step-up proof could be stored. |
 | `account_deleted` | The user deleted the account. |
 | `email_bound_to_other_provider` | The email belongs to an account linked to a different Google or Microsoft identity. |
 | `policy` | An authorization policy or role check failed. |

@@ -198,12 +198,19 @@ public class SessionMfaVerificationServiceTests
     {
         var totp = new Mock<ITotpMfaEnrollmentService>();
         totp.Setup(t => t.VerifyPersistedCodeAsync(UserId, "123456")).Returns(Task.CompletedTask);
-        var (service, _, _) = CreateService(totp: totp, storeResult: StepUpProofWriteResult.SessionEnded);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var (service, _, _) = CreateService(
+            totp: totp,
+            storeResult: StepUpProofWriteResult.SessionEnded,
+            securityEvents: securityEvents);
 
         var act = () => service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "totp", "123456");
 
         await act.Should().ThrowAsync<UnauthorizedException>();
         (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
+        securityEvents.Of(AuthSecurityEvents.StepUpFailed).Should().ContainSingle()
+            .Which.Reason.Should().Be(AuthSecurityReason.SessionEnded);
+        securityEvents.Of(AuthSecurityEvents.StepUpSucceeded).Should().BeEmpty();
     }
 
     [Fact]
