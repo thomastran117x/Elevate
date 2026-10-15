@@ -19,6 +19,7 @@ public class ProfileAdminEndpointsTests
         var admin = await app.SeedUserAsync("profile-admin@example.com", role: "Admin");
         await app.SeedKnownDeviceAsync(admin.Id, "profile-admin-device");
         var adminSession = await app.LoginApiAsync("profile-admin", trustedDeviceToken: "profile-admin-device");
+        await app.GrantStepUpProofAsync(adminSession.AccessToken);
 
         var target = await app.SeedUserAsync("profile-target@example.com", role: "Participant");
 
@@ -54,6 +55,53 @@ public class ProfileAdminEndpointsTests
         var enabledUser = await app.FindUserByEmailAsync("profile-target@example.com");
         enabledUser.Should().NotBeNull();
         enabledUser!.IsDisabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AdminStatusEndpoint_ShouldRequireFreshStepUp()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+
+        var admin = await app.SeedUserAsync("profile-stepup-admin@example.com", role: "Admin");
+        await app.SeedKnownDeviceAsync(admin.Id, "profile-stepup-admin-device");
+        var adminSession = await app.LoginApiAsync("profile-stepup-admin", trustedDeviceToken: "profile-stepup-admin-device");
+
+        var target = await app.SeedUserAsync("profile-stepup-target@example.com", role: "Participant");
+
+        var withoutProof = await SendDisableAsync(app, target.Id, adminSession.AccessToken);
+        await AssertMfaRequiredAsync(withoutProof);
+
+        // A proof verified 10 minutes and a second ago is past its window.
+        await app.GrantStepUpProofAsync(adminSession.AccessToken, DateTime.UtcNow.AddMinutes(-10).AddSeconds(-1));
+        var staleProof = await SendDisableAsync(app, target.Id, adminSession.AccessToken);
+        await AssertMfaRequiredAsync(staleProof);
+
+        var unchanged = await app.FindUserByEmailAsync("profile-stepup-target@example.com");
+        unchanged!.IsDisabled.Should().BeFalse();
+
+        await app.GrantStepUpProofAsync(adminSession.AccessToken);
+        var withFreshProof = await SendDisableAsync(app, target.Id, adminSession.AccessToken);
+        withFreshProof.StatusCode.Should().Be(HttpStatusCode.OK, await withFreshProof.Content.ReadAsStringAsync());
+
+        var disabled = await app.FindUserByEmailAsync("profile-stepup-target@example.com");
+        disabled!.IsDisabled.Should().BeTrue();
+    }
+
+    private static Task<HttpResponseMessage> SendDisableAsync(AuthApiTestApp app, int userId, string accessToken) =>
+        app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Patch,
+            $"/api/admin/users/{userId}/status",
+            accessToken,
+            JsonContent.Create(new
+            {
+                isDisabled = true,
+                reason = "policy"
+            })));
+
+    private static async Task AssertMfaRequiredAsync(HttpResponseMessage response)
+    {
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
+        (await response.Content.ReadAsStringAsync()).Should().Contain("MFA_REQUIRED");
     }
 
     private static HttpRequestMessage CreateAuthorizedRequest(
