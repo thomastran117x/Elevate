@@ -131,11 +131,10 @@ namespace backend.main.features.auth.mfa
             }
             catch (Exception ex)
             {
+                // Recorded before the fault is translated, so an outage shows as faulted, not missing.
+                _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Sms, AuthFactorChange.Enabled, ex);
                 if (ex is AppException)
-                {
-                    _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Sms, AuthFactorChange.Enabled, ex);
                     throw;
-                }
 
                 Logger.Error($"[MfaEnrollmentService] VerifyEnrollmentAsync failed: {ex}");
                 throw new InternalServerErrorException();
@@ -160,11 +159,10 @@ namespace backend.main.features.auth.mfa
             }
             catch (Exception ex)
             {
+                // Recorded before the fault is translated, so an outage shows as faulted, not missing.
+                _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Sms, AuthFactorChange.Disabled, ex);
                 if (ex is AppException)
-                {
-                    _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Sms, AuthFactorChange.Disabled, ex);
                     throw;
-                }
 
                 Logger.Error($"[MfaEnrollmentService] DisableAsync failed: {ex}");
                 throw new InternalServerErrorException();
@@ -185,11 +183,10 @@ namespace backend.main.features.auth.mfa
             }
             catch (Exception ex)
             {
+                // Recorded before the fault is translated, so an outage shows as faulted, not missing.
+                _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Sms, AuthFactorChange.Removed, ex);
                 if (ex is AppException)
-                {
-                    _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Sms, AuthFactorChange.Removed, ex);
                     throw;
-                }
 
                 Logger.Error($"[MfaEnrollmentService] RemoveAsync failed: {ex}");
                 throw new InternalServerErrorException();

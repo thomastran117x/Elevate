@@ -503,10 +503,12 @@ namespace backend.main.features.auth
 
         public async Task ChangePasswordForAuthenticatedUserAsync(string email, string currentPassword, string newPassword)
         {
+            int? userId = null;
             try
             {
                 var existingUser = await _userRepository.GetAuthByEmailAsync(email)
                     ?? throw new UnauthorizedException("User not found.");
+                userId = existingUser.Id;
 
                 await EnsureUserEnabledAsync(ToUser(existingUser));
 
@@ -517,18 +519,7 @@ namespace backend.main.features.auth
 
                 var verification = VerifyPassword(currentPassword, existingUser.Password);
                 if (verification == PasswordVerificationResult.Failed)
-                {
-                    _securityEvents.Emit(new AuthSecurityEvent
-                    {
-                        Definition = AuthSecurityEvents.FactorChangeFailed,
-                        Outcome = AuthSecurityOutcome.Denied,
-                        Reason = AuthSecurityReason.InvalidCredentials,
-                        Factor = AuthSecurityFactor.Password,
-                        Change = AuthFactorChange.Changed,
-                        UserId = existingUser.Id,
-                    });
                     throw new UnauthorizedException("Current password is incorrect.");
-                }
 
                 if (currentPassword == newPassword)
                     throw new BadRequestException(
@@ -552,6 +543,22 @@ namespace backend.main.features.auth
             }
             catch (Exception e)
             {
+                // Every refusal is recorded: a wrong current password, a disabled account, a provider-only
+                // account, a reused or disallowed password, and faults.
+                _securityEvents.FactorChangeFailed(
+                    userId,
+                    AuthSecurityFactor.Password,
+                    AuthFactorChange.Changed,
+                    e,
+                    e switch
+                    {
+                        UnauthorizedException => userId is null
+                            ? AuthSecurityReason.InvalidState
+                            : AuthSecurityReason.InvalidCredentials,
+                        ForbiddenException => AuthSecurityReason.AccountDisabled,
+                        _ => null,
+                    });
+
                 if (e is AppException)
                     throw;
 

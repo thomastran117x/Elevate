@@ -26,24 +26,32 @@ public static class AuthSecurityEventEmitterExtensions
     }
 
     /// <summary>
-    /// Records a second-factor change that was refused. A refusal by an attempt limit is recorded
-    /// as a throttle so throttling dashboards see every limit in one place.
+    /// Records a factor change that was refused or faulted. A refusal by an attempt limit is
+    /// recorded as a throttle so throttling dashboards see every limit in one place. A request the
+    /// client abandoned is not a failure of the change and is not recorded.
     /// </summary>
+    /// <param name="reason">Overrides the reason classified from the exception type.</param>
     public static void FactorChangeFailed(
         this IAuthSecurityEventEmitter emitter,
-        int userId,
+        int? userId,
         AuthSecurityFactor factor,
         AuthFactorChange change,
-        Exception exception)
+        Exception exception,
+        AuthSecurityReason? reason = null)
     {
-        var (outcome, reason) = Classify(exception);
+        if (exception is OperationCanceledException)
+            return;
+
+        var (outcome, classified) = Classify(exception);
         var throttled = outcome == AuthSecurityOutcome.Throttled;
         emitter.Emit(new AuthSecurityEvent
         {
             Definition = throttled ? AuthSecurityEvents.Throttled : AuthSecurityEvents.FactorChangeFailed,
             Outcome = outcome,
-            Reason = reason,
-            Flow = AuthSecurityFlow.MfaEnrollment,
+            Reason = reason ?? classified,
+            Flow = factor is AuthSecurityFactor.Sms or AuthSecurityFactor.Totp
+                ? AuthSecurityFlow.MfaEnrollment
+                : null,
             Dimension = throttled ? AuthThrottleDimension.Attempts : null,
             Factor = factor,
             Change = change,

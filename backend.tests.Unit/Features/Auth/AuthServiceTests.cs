@@ -2579,11 +2579,17 @@ public class AuthServiceTests
     {
         var hasher = TestPasswordHashers.Fast();
         var userRepository = UserRepositoryForPasswordChange(hasher.Hash(ValidNewPassword));
-        var service = CreateService(userRepository: userRepository, passwordHasher: hasher);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(securityEvents: securityEvents, userRepository: userRepository, passwordHasher: hasher);
 
         var act = () => service.ChangePasswordForAuthenticatedUserAsync("member@example.com", ValidNewPassword, ValidNewPassword);
 
         await act.Should().ThrowAsync<BadRequestException>().WithMessage("New password must be different*");
+        var failed = securityEvents.Of(AuthSecurityEvents.FactorChangeFailed).Should().ContainSingle().Subject;
+        failed.Reason.Should().Be(AuthSecurityReason.InvalidRequest);
+        failed.Outcome.Should().Be(AuthSecurityOutcome.Denied);
+        failed.Factor.Should().Be(AuthSecurityFactor.Password);
+        failed.UserId.Should().Be(31);
     }
 
     [Fact]

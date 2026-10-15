@@ -176,11 +176,10 @@ namespace backend.main.features.auth.mfa.totp
             }
             catch (Exception ex)
             {
+                // Recorded before the fault is translated, so an outage shows as faulted, not missing.
+                _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Totp, AuthFactorChange.Enabled, ex);
                 if (ex is AppException)
-                {
-                    _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Totp, AuthFactorChange.Enabled, ex);
                     throw;
-                }
 
                 Logger.Error($"[TotpMfaEnrollmentService] VerifyEnrollmentAsync failed: {ex}");
                 throw new InternalServerErrorException();
@@ -216,11 +215,10 @@ namespace backend.main.features.auth.mfa.totp
             }
             catch (Exception ex)
             {
+                // Recorded before the fault is translated, so an outage shows as faulted, not missing.
+                _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Totp, AuthFactorChange.Enabled, ex);
                 if (ex is AppException)
-                {
-                    _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Totp, AuthFactorChange.Enabled, ex);
                     throw;
-                }
 
                 Logger.Error($"[TotpMfaEnrollmentService] EnableAsync failed: {ex}");
                 throw new InternalServerErrorException();
@@ -256,11 +254,10 @@ namespace backend.main.features.auth.mfa.totp
             }
             catch (Exception ex)
             {
+                // Recorded before the fault is translated, so an outage shows as faulted, not missing.
+                _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Totp, AuthFactorChange.Disabled, ex);
                 if (ex is AppException)
-                {
-                    _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Totp, AuthFactorChange.Disabled, ex);
                     throw;
-                }
 
                 Logger.Error($"[TotpMfaEnrollmentService] DisableAsync failed: {ex}");
                 throw new InternalServerErrorException();
@@ -291,11 +288,10 @@ namespace backend.main.features.auth.mfa.totp
             }
             catch (Exception ex)
             {
+                // Recorded before the fault is translated, so an outage shows as faulted, not missing.
+                _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Totp, AuthFactorChange.Removed, ex);
                 if (ex is AppException)
-                {
-                    _securityEvents.FactorChangeFailed(userId, AuthSecurityFactor.Totp, AuthFactorChange.Removed, ex);
                     throw;
-                }
 
                 Logger.Error($"[TotpMfaEnrollmentService] RemoveAsync failed: {ex}");
                 throw new InternalServerErrorException();

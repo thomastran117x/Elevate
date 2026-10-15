@@ -2,6 +2,7 @@ using backend.main.features.auth.events;
 using backend.main.features.auth.mfa.totp;
 using backend.main.shared.exceptions.http;
 
+using backend.tests.Unit.Features.Auth.Events;
 using backend.tests.Unit.Support;
 
 using FluentAssertions;
@@ -272,6 +273,24 @@ public class TotpMfaEnrollmentServiceTests
         (await cache.KeyExistsAsync("totp:action:attempt:enable:99")).Should().BeFalse();
         (await cache.KeyExistsAsync("totp:action:attempt:disable:99")).Should().BeFalse();
         (await cache.KeyExistsAsync("totp:action:attempt:remove:99")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task DisableAsync_ShouldRecordAFaultedChange_WhenTheStoreFails()
+    {
+        var repository = new Mock<ITotpMfaEnrollmentRepository>();
+        repository.Setup(r => r.GetByUserIdAsync(99)).ThrowsAsync(new InvalidOperationException("store down"));
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = new TotpMfaEnrollmentService(repository.Object, new InMemoryCacheService(), securityEvents);
+
+        var act = () => service.DisableAsync(99, "123456");
+
+        await act.Should().ThrowAsync<InternalServerErrorException>();
+        var failed = securityEvents.Of(AuthSecurityEvents.FactorChangeFailed).Should().ContainSingle().Subject;
+        failed.Outcome.Should().Be(AuthSecurityOutcome.Faulted);
+        failed.Factor.Should().Be(AuthSecurityFactor.Totp);
+        failed.Change.Should().Be(AuthFactorChange.Disabled);
+        failed.UserId.Should().Be(99);
     }
 
     private static string InvalidCodeExcept(string validCode)
