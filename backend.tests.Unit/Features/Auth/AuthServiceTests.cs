@@ -1212,6 +1212,27 @@ public class AuthServiceTests
         userRepository.Verify(repository => repository.GetOAuthByEmailAsync(It.IsAny<string>()), Times.Never);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task OAuthSignIn_ShouldRecordARejectedProviderToken(bool unauthorized)
+    {
+        var oauthService = new Mock<IOAuthService>();
+        oauthService.Setup(service => service.VerifyGoogleTokenAsync("forged-token", null))
+            .ThrowsAsync(unauthorized
+                ? new UnauthorizedException("Google nonce validation failed")
+                : new Microsoft.IdentityModel.Tokens.SecurityTokenException("bad signature"));
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(securityEvents: securityEvents, oauthService: oauthService);
+
+        var act = () => service.GoogleAsync("forged-token", SessionTransport.BrowserCookie);
+
+        await act.Should().ThrowAsync<Exception>();
+        var failed = securityEvents.Of(AuthSecurityEvents.SignInFailed).Should().ContainSingle().Subject;
+        failed.Reason.Should().Be(AuthSecurityReason.ProviderRejected);
+        failed.Method.Should().Be(AuthSecurityMethod.Google);
+    }
+
     [Fact]
     public async Task MicrosoftAsync_ShouldRejectUnlinkedSubject_WithoutAnEmail()
     {

@@ -19,7 +19,10 @@ using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
 using backend.main.shared.utilities.logger;
 
+using Google.Apis.Auth;
+
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.IdentityModel.Tokens;
 
 using Newtonsoft.Json;
 
@@ -566,10 +569,9 @@ namespace backend.main.features.auth
         {
             try
             {
-                OAuthUser oauthUser = await _oauthService.VerifyGoogleTokenAsync(
-                    token,
-                    expectedNonce
-                );
+                OAuthUser oauthUser = await VerifyProviderTokenAsync(
+                    AuthSecurityMethod.Google,
+                    () => _oauthService.VerifyGoogleTokenAsync(token, expectedNonce));
                 if (oauthUser == null)
                     throw new UnauthorizedException("Invalid Google Token");
 
@@ -611,7 +613,9 @@ namespace backend.main.features.auth
         {
             try
             {
-                var idToken = await _oauthService.ExchangeGoogleCodeAsync(code, codeVerifier, redirectUri);
+                var idToken = await VerifyProviderTokenAsync(
+                    AuthSecurityMethod.Google,
+                    () => _oauthService.ExchangeGoogleCodeAsync(code, codeVerifier, redirectUri));
                 return await GoogleAsync(idToken, transport, nonce, returnUrl);
             }
             catch (Exception e)
@@ -633,10 +637,9 @@ namespace backend.main.features.auth
         {
             try
             {
-                OAuthUser oauthUser = await _oauthService.VerifyMicrosoftTokenAsync(
-                    token,
-                    expectedNonce
-                );
+                OAuthUser oauthUser = await VerifyProviderTokenAsync(
+                    AuthSecurityMethod.Microsoft,
+                    () => _oauthService.VerifyMicrosoftTokenAsync(token, expectedNonce));
                 if (oauthUser == null)
                     throw new UnauthorizedException("Invalid Microsoft Token");
 
@@ -1288,6 +1291,30 @@ namespace backend.main.features.auth
                 await _tokenService.RevokeAllRefreshSessionsAsync(user.Id, AuthSecurityReason.AccountDisabled);
 
             throw new ForbiddenException("This account is disabled.");
+        }
+
+        /// <summary>
+        /// Runs a provider token check, recording a refused token as a failed sign-in. Signature and
+        /// claim failures are recorded whether they surface as 401 or as an unhandled token error.
+        /// </summary>
+        private async Task<T> VerifyProviderTokenAsync<T>(AuthSecurityMethod provider, Func<Task<T>> verify)
+        {
+            try
+            {
+                return await verify();
+            }
+            catch (Exception e) when (e is UnauthorizedException or SecurityTokenException or InvalidJwtException)
+            {
+                _securityEvents.Emit(new AuthSecurityEvent
+                {
+                    Definition = AuthSecurityEvents.SignInFailed,
+                    Outcome = AuthSecurityOutcome.Denied,
+                    Reason = AuthSecurityReason.ProviderRejected,
+                    Method = provider,
+                    Flow = AuthSecurityFlow.Login,
+                });
+                throw;
+            }
         }
 
         private static AuthSecurityMethod ProviderMethod(string provider) =>
