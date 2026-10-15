@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.password;
 using backend.main.features.auth.token;
@@ -17,6 +18,7 @@ using FluentAssertions;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace backend.tests.Integration.Features.Auth;
 
@@ -357,6 +359,52 @@ public class AuthEndpointsTests
         });
 
         replay.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Refresh_ShouldRevokeTheSession_WhenARotatedTokenIsReplayedAfterTheGraceWindow()
+    {
+        var clock = new AdvanceableTimeProvider();
+        await using var app = await AuthApiTestApp.CreateAsync(serviceOverrides: services =>
+        {
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(clock);
+        });
+
+        var first = await app.SignUpAndVerifyByTokenAsync(
+            "refresh-reuse@example.com",
+            transport: SessionTransportResolver.ApiValue);
+        var newest = await RefreshApiAsync(app, first);
+        var sessionId = ReadSessionId(newest.AccessToken);
+        await app.GrantStepUpProofAsync(newest.AccessToken);
+
+        clock.Advance(TimeSpan.FromSeconds(11));
+        var replay = await PostApiRefreshAsync(app, first);
+
+        replay.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await app.Cache.KeyExistsAsync($"refresh:v2:session:{sessionId}")).Should().BeFalse();
+        (await app.Cache.KeyExistsAsync(StepUpProofKeys.ForSession(sessionId))).Should().BeFalse();
+
+        // The newest token dies with the session, whichever party was holding it.
+        var next = await PostApiRefreshAsync(app, newest);
+        next.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Refresh_ShouldKeepTheSession_WhenADuplicateArrivesWithinTheGraceWindow()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+
+        var first = await app.SignUpAndVerifyByTokenAsync(
+            "refresh-duplicate@example.com",
+            transport: SessionTransportResolver.ApiValue);
+        var newest = await RefreshApiAsync(app, first);
+
+        var duplicate = await PostApiRefreshAsync(app, first);
+        duplicate.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var next = await PostApiRefreshAsync(app, newest);
+        next.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -1333,10 +1381,41 @@ public class AuthEndpointsTests
         verify.StatusCode.Should().Be(HttpStatusCode.OK);
         return await app.ReadApiResponseAsync<MfaSettingsResponse>(verify);
     }
+
+    private static Task<HttpResponseMessage> PostApiRefreshAsync(
+        AuthApiTestApp app,
+        AuthenticatedSessionResponse session) =>
+        app.Client.PostAsJsonAsync("/api/auth/api/refresh", new RefreshTokenRequest
+        {
+            RefreshToken = session.RefreshToken,
+            SessionBindingToken = session.SessionBindingToken
+        });
+
+    private static async Task<AuthenticatedSessionResponse> RefreshApiAsync(
+        AuthApiTestApp app,
+        AuthenticatedSessionResponse session)
+    {
+        var response = await PostApiRefreshAsync(app, session);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await app.ReadApiResponseAsync<AuthenticatedSessionResponse>(response);
+        body.Data.Should().NotBeNull();
+        return body.Data!;
+    }
+
+    private static string ReadSessionId(string accessToken) =>
+        new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler()
+            .ReadJwtToken(accessToken)
+            .Claims
+            .First(claim => claim.Type == TokenService.SessionIdClaimType)
+            .Value;
+
+    /// <summary>Wall-clock time plus an offset the test can move forward.</summary>
+    private sealed class AdvanceableTimeProvider : TimeProvider
+    {
+        private TimeSpan _offset;
+
+        public void Advance(TimeSpan by) => _offset += by;
+
+        public override DateTimeOffset GetUtcNow() => System.GetUtcNow() + _offset;
+    }
 }
-
-
-
-
-
-

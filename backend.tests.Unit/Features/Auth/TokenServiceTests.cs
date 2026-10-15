@@ -6,6 +6,7 @@ using backend.main.features.auth.token;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
+using backend.main.shared.utilities;
 
 using FluentAssertions;
 
@@ -413,7 +414,313 @@ public class TokenServiceTests
             requestInfo);
 
         await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh token was already rotated.");
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldRevokeTheSession_WhenARotatedTokenIsReplayedAfterTheGraceWindow()
+    {
+        var cache = new InMemoryCacheService();
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026, 10, 14, 12, 0, 0, TimeSpan.Zero));
+        var service = new TokenService(cache, clock);
+        var (first, newest) = await RotateAsync(service);
+        await cache.SetValueAsync(StepUpProofKeys.ForSession(newest.SessionId), "{}", TimeSpan.FromMinutes(10));
+        clock.Advance(TimeSpan.FromSeconds(11));
+
+        var replay = () => ValidateAsync(service, first);
+
+        await replay.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh token reuse detected.");
+        (await cache.KeyExistsAsync($"refresh:v2:session:{newest.SessionId}")).Should().BeFalse();
+        (await cache.KeyExistsAsync(StepUpProofKeys.ForSession(newest.SessionId))).Should().BeFalse();
+
+        // Whoever holds the newest token, attacker or user, has to sign in again.
+        var next = () => ValidateAsync(service, newest);
+        await next.Should().ThrowAsync<UnauthorizedException>()
             .WithMessage("Invalid or expired refresh token.");
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldRevokeOnReplay_EvenWithoutTheBindingToken()
+    {
+        var cache = new InMemoryCacheService();
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026, 10, 14, 12, 0, 0, TimeSpan.Zero));
+        var service = new TokenService(cache, clock);
+        var (first, newest) = await RotateAsync(service);
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        var replay = () => service.ValidateRefreshToken(
+            first.Value,
+            null,
+            SessionTransport.ApiToken,
+            CreateRequestInfo());
+
+        await replay.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh token reuse detected.");
+        (await cache.KeyExistsAsync($"refresh:v2:session:{newest.SessionId}")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldKeepTheSession_WhenADuplicateArrivesWithinTheGraceWindow()
+    {
+        var cache = new InMemoryCacheService();
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026, 10, 14, 12, 0, 0, TimeSpan.Zero));
+        var service = new TokenService(cache, clock);
+        var (first, newest) = await RotateAsync(service);
+        clock.Advance(TimeSpan.FromSeconds(9));
+
+        var duplicate = () => ValidateAsync(service, first);
+
+        await duplicate.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh token was already rotated.");
+        var result = await ValidateAsync(service, newest);
+        result.SessionId.Should().Be(newest.SessionId);
+    }
+
+    [Fact]
+    public async Task GenerateRefreshToken_ShouldDeriveTheTokenFromTheSessionAndGeneration()
+    {
+        var service = new TokenService(new InMemoryCacheService());
+
+        var (first, newest) = await RotateAsync(service);
+
+        first.Value.Should().StartWith($"v1.{first.SessionId}.1.");
+        newest.Value.Should().StartWith($"v1.{first.SessionId}.2.");
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldStoreNothingPerToken_AcrossRotations()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var issue = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.ApiToken);
+
+        for (var rotation = 0; rotation < 5; rotation++)
+        {
+            var validation = await ValidateAsync(service, issue);
+            issue = await service.GenerateRefreshToken(
+                8, 1, CreateRequestInfo(), SessionTransport.ApiToken, validation.SessionId);
+        }
+
+        cache.Keys.Should().NotContain(key => key.StartsWith("refresh:v2:token:"));
+        cache.Keys.Should().Contain($"refresh:v2:session:{issue.SessionId}");
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldRevokeTheSession_WhenAnOlderGenerationIsReplayedInsideTheGraceWindow()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var (first, second) = await RotateAsync(service);
+        var validation = await ValidateAsync(service, second);
+        await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.ApiToken, validation.SessionId);
+
+        // Only the generation just rotated away can be a harmless duplicate.
+        var replay = () => ValidateAsync(service, first);
+
+        await replay.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh token reuse detected.");
+        (await cache.KeyExistsAsync($"refresh:v2:session:{first.SessionId}")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldRejectAForgedTokenWithoutRevoking()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var issue = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.ApiToken);
+        var forged = issue.Value[..issue.Value.LastIndexOf('.')] + ".AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+        var act = () => service.ValidateRefreshToken(
+            forged, issue.SessionBindingToken, SessionTransport.ApiToken, CreateRequestInfo());
+
+        await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Invalid or expired refresh token.");
+        (await ValidateAsync(service, issue)).SessionId.Should().Be(issue.SessionId);
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldRejectAReplay_AfterTheSessionWasRevoked()
+    {
+        var cache = new InMemoryCacheService();
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026, 10, 14, 12, 0, 0, TimeSpan.Zero));
+        var service = new TokenService(cache, clock);
+        var (first, newest) = await RotateAsync(service);
+        await service.RevokeRefreshSessionAsync(newest.SessionId);
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        var replay = () => ValidateAsync(service, first);
+
+        await replay.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Invalid or expired refresh token.");
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldRotateOnce_WhenTwoRefreshesRaceOnOneToken()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var issue = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.ApiToken);
+        RefreshTokenValidationResult? winner = null;
+        cache.BeforeNextScript = async () => winner = await ValidateAsync(service, issue);
+
+        var loser = () => ValidateAsync(service, issue);
+
+        await loser.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh token was already rotated.");
+        winner.Should().NotBeNull();
+        (await cache.KeyExistsAsync($"refresh:v2:session:{issue.SessionId}")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldNotRecreateASessionRevokedDuringRotation()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var issue = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.ApiToken);
+        cache.BeforeNextScript = () => service.RevokeRefreshSessionAsync(issue.SessionId);
+
+        var act = () => ValidateAsync(service, issue);
+
+        await act.Should().ThrowAsync<UnauthorizedException>();
+        (await cache.KeyExistsAsync($"refresh:v2:session:{issue.SessionId}")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GenerateRefreshToken_ShouldNotRecreateASessionRevokedBeforeTheNextTokenIsWritten()
+    {
+        // A reuse revocation landing between a refresh's validation and its write of the next
+        // token must stay revoked: the refresh must not bring the session back.
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var issue = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.ApiToken);
+        var validation = await ValidateAsync(service, issue);
+        cache.BeforeNextScript = () => service.RevokeRefreshSessionAsync(issue.SessionId);
+
+        var act = () => service.GenerateRefreshToken(
+            8, 1, CreateRequestInfo(), SessionTransport.ApiToken, validation.SessionId);
+
+        await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh session is invalid or expired.");
+        (await cache.KeyExistsAsync($"refresh:v2:session:{issue.SessionId}")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldFailClosed_WhenTheGenerationCannotBeAdvanced()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var issue = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.ApiToken);
+        cache.ScriptsUnavailable = true;
+
+        var act = () => ValidateAsync(service, issue);
+
+        await act.Should().ThrowAsync<NotAvailableException>();
+        cache.ScriptsUnavailable = false;
+        (await ValidateAsync(service, issue)).SessionId.Should().Be(issue.SessionId);
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldMoveALegacySessionOntoDerivedTokens()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var legacy = await SeedLegacySessionAsync(cache);
+
+        var validation = await ValidateAsync(service, legacy);
+        var next = await service.GenerateRefreshToken(
+            8, 1, CreateRequestInfo(), SessionTransport.ApiToken, validation.SessionId);
+
+        next.Value.Should().StartWith($"v1.{legacy.SessionId}.1.");
+        (await ValidateAsync(service, next)).SessionId.Should().Be(legacy.SessionId);
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldRevokeTheSession_WhenARotatedLegacyTokenIsReplayed()
+    {
+        var cache = new InMemoryCacheService();
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026, 10, 14, 12, 0, 0, TimeSpan.Zero));
+        var service = new TokenService(cache, clock);
+        var legacy = await SeedLegacySessionAsync(cache);
+        var validation = await ValidateAsync(service, legacy);
+        var next = await service.GenerateRefreshToken(
+            8, 1, CreateRequestInfo(), SessionTransport.ApiToken, validation.SessionId);
+
+        var duplicate = () => ValidateAsync(service, legacy);
+        await duplicate.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh token was already rotated.");
+
+        clock.Advance(TimeSpan.FromSeconds(11));
+        var replay = () => ValidateAsync(service, legacy);
+        await replay.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh token reuse detected.");
+
+        var newest = () => ValidateAsync(service, next);
+        await newest.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Invalid or expired refresh token.");
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldFailClosed_WhenALegacyTokenCannotBeRetired()
+    {
+        var cache = CreateCacheWithLiveToken();
+        cache.Setup(c => c.TryEvalAsync(
+                It.IsAny<string>(),
+                It.IsAny<StackExchange.Redis.RedisKey[]>(),
+                It.IsAny<StackExchange.Redis.RedisValue[]>()))
+            .ReturnsAsync(backend.main.features.cache.CacheScriptResult.Unavailable);
+        var service = new TokenService(cache.Object);
+
+        var act = () => service.ValidateRefreshToken(
+            LiveToken, "binding", SessionTransport.ApiToken, CreateRequestInfo());
+
+        await act.Should().ThrowAsync<NotAvailableException>();
+        cache.Verify(c => c.SetValueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan?>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldRejectWithoutRevoking_WhenAConcurrentRefreshRetiredALegacyTokenFirst()
+    {
+        var cache = CreateCacheWithLiveToken();
+        cache.Setup(c => c.TryEvalAsync(
+                It.IsAny<string>(),
+                It.IsAny<StackExchange.Redis.RedisKey[]>(),
+                It.IsAny<StackExchange.Redis.RedisValue[]>()))
+            .ReturnsAsync(new backend.main.features.cache.CacheScriptResult(true, 0L));
+        var service = new TokenService(cache.Object);
+
+        var act = () => service.ValidateRefreshToken(
+            LiveToken, "binding", SessionTransport.ApiToken, CreateRequestInfo());
+
+        await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh token was already rotated.");
+        cache.Verify(c => c.TryEvalAsync(
+            It.Is<string>(script => script.Contains("redis.call('DEL'")),
+            It.IsAny<StackExchange.Redis.RedisKey[]>(),
+            It.IsAny<StackExchange.Redis.RedisValue[]>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldFailClosed_WhenLegacyReuseCannotRevokeTheSession()
+    {
+        var cache = new Mock<backend.main.features.cache.ICacheService>();
+        var tokenKey = RefreshTokenKey("replayed");
+        cache.Setup(c => c.GetValueAsync(tokenKey))
+            .ReturnsAsync("{\"SessionId\":\"s1\",\"UserId\":8,\"RetiredAt\":\"2026-10-14T12:00:00Z\"}");
+        cache.Setup(c => c.GetValueAsync("refresh:v2:session:s1"))
+            .ReturnsAsync("{\"SessionId\":\"s1\",\"UserId\":8,\"CurrentRefreshTokenHash\":\"\",\"CurrentBindingTokenHash\":\"\"}");
+        cache.Setup(c => c.TryEvalAsync(
+                It.IsAny<string>(),
+                It.IsAny<StackExchange.Redis.RedisKey[]>(),
+                It.IsAny<StackExchange.Redis.RedisValue[]>()))
+            .ReturnsAsync(backend.main.features.cache.CacheScriptResult.Unavailable);
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026, 10, 14, 12, 5, 0, TimeSpan.Zero));
+        var service = new TokenService(cache.Object, clock);
+
+        var act = () => service.ValidateRefreshToken(
+            "replayed", "binding", SessionTransport.ApiToken, CreateRequestInfo());
+
+        await act.Should().ThrowAsync<NotAvailableException>();
     }
 
     [Fact]
@@ -904,6 +1211,83 @@ public class TokenServiceTests
         DeviceType = "Desktop",
         IsBrowserClient = true
     };
+
+    private static string RefreshTokenKey(string refreshToken) =>
+        $"refresh:v2:token:{CryptoHelper.HashToken(refreshToken)}";
+
+    private static Task<RefreshTokenValidationResult> ValidateAsync(TokenService service, RefreshTokenIssue issue) =>
+        service.ValidateRefreshToken(issue.Value, issue.SessionBindingToken, issue.Transport, CreateRequestInfo());
+
+    /// <summary>Issues a token and rotates it once, as a refresh does.</summary>
+    private static async Task<(RefreshTokenIssue First, RefreshTokenIssue Newest)> RotateAsync(TokenService service)
+    {
+        var first = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.ApiToken);
+        var validation = await ValidateAsync(service, first);
+        var newest = await service.GenerateRefreshToken(
+            8, 1, CreateRequestInfo(), SessionTransport.ApiToken, validation.SessionId);
+        return (first, newest);
+    }
+
+    private const string LiveToken = "live-token";
+
+    /// <summary>
+    /// A cache mock holding <see cref="LiveToken"/> as a live stored (pre-derived) API-transport
+    /// token and its session.
+    /// </summary>
+    private static Mock<backend.main.features.cache.ICacheService> CreateCacheWithLiveToken()
+    {
+        var cache = new Mock<backend.main.features.cache.ICacheService>();
+        cache.Setup(c => c.GetValueAsync(RefreshTokenKey(LiveToken)))
+            .ReturnsAsync("{\"SessionId\":\"s1\",\"UserId\":8}");
+        cache.Setup(c => c.GetValueAsync("refresh:v2:session:s1"))
+            .ReturnsAsync(Newtonsoft.Json.JsonConvert.SerializeObject(new
+            {
+                SessionId = "s1",
+                UserId = 8,
+                Transport = SessionTransport.ApiToken,
+                CurrentRefreshTokenHash = CryptoHelper.HashToken(LiveToken),
+                CurrentBindingTokenHash = CryptoHelper.HashToken("binding"),
+            }));
+        return cache;
+    }
+
+    /// <summary>
+    /// Stores a session as it was before derived tokens: a random token under its hash, and a
+    /// session with no token secret.
+    /// </summary>
+    private static async Task<RefreshTokenIssue> SeedLegacySessionAsync(InMemoryCacheService cache)
+    {
+        var sessionId = Guid.NewGuid().ToString("N");
+        const string token = "bGVnYWN5LXJlZnJlc2gtdG9rZW4tdmFsdWUtMDAwMDA=";
+        const string binding = "legacy-binding";
+        await cache.SetValueAsync(
+            RefreshTokenKey(token),
+            Newtonsoft.Json.JsonConvert.SerializeObject(new { SessionId = sessionId, UserId = 8, CreatedAt = DateTime.UtcNow }),
+            TimeSpan.FromDays(1));
+        await cache.SetValueAsync(
+            $"refresh:v2:session:{sessionId}",
+            Newtonsoft.Json.JsonConvert.SerializeObject(new
+            {
+                SessionId = sessionId,
+                UserId = 8,
+                AuthVersion = 1,
+                Transport = SessionTransport.ApiToken,
+                CurrentRefreshTokenHash = CryptoHelper.HashToken(token),
+                CurrentBindingTokenHash = CryptoHelper.HashToken(binding),
+            }),
+            TimeSpan.FromDays(1));
+        await cache.SetAddAsync("refresh:v2:user:8:sessions", sessionId);
+        return new RefreshTokenIssue(token, binding, TimeSpan.FromDays(1), SessionTransport.ApiToken, sessionId);
+    }
+
+    private sealed class MutableTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private DateTimeOffset _utcNow = utcNow;
+
+        public void Advance(TimeSpan by) => _utcNow += by;
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+    }
 }
 
 internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheService
@@ -919,6 +1303,26 @@ internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheS
 
     private readonly object _gate = new();
     private readonly Dictionary<string, CacheEntry> _entries = [];
+
+    /// <summary>
+    /// Runs once, just before the next script, to interleave a concurrent request with the
+    /// read-then-swap a script completes.
+    /// </summary>
+    public Func<Task>? BeforeNextScript { get; set; }
+
+    /// <summary>Makes scripts fail as they do when Redis is unreachable.</summary>
+    public bool ScriptsUnavailable { get; set; }
+
+    public IReadOnlyCollection<string> Keys
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _entries.Keys.Where(key => TryGetEntry(key, out _)).ToList();
+            }
+        }
+    }
 
     public Task<bool> SetValueAsync(string key, string value, TimeSpan? expiry = null)
     {
@@ -1153,7 +1557,22 @@ internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheS
         }
     }
 
-    public Task<object> EvalAsync(string script, StackExchange.Redis.RedisKey[] keys, StackExchange.Redis.RedisValue[] values)
+    public async Task<object> EvalAsync(string script, StackExchange.Redis.RedisKey[] keys, StackExchange.Redis.RedisValue[] values)
+    {
+        if (BeforeNextScript is { } concurrent)
+        {
+            BeforeNextScript = null;
+            await concurrent();
+        }
+
+        if (ScriptsUnavailable)
+            throw new StackExchange.Redis.RedisConnectionException(
+                StackExchange.Redis.ConnectionFailureType.UnableToConnect, "Redis is unavailable.");
+
+        return EvaluateScript(script, keys, values);
+    }
+
+    private object EvaluateScript(string script, StackExchange.Redis.RedisKey[] keys, StackExchange.Redis.RedisValue[] values)
     {
         lock (_gate)
         {
@@ -1161,7 +1580,7 @@ internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheS
             {
                 _entries.Remove(keys[0].ToString());
                 _entries.Remove(keys[1].ToString());
-                return Task.FromResult<object>(1L);
+                return 1L;
             }
 
             if (keys.Length == 2 && values.Length == 0 && script.Contains("or false", StringComparison.Ordinal))
@@ -1169,25 +1588,42 @@ internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheS
                 // Atomic proof + generation read used by the step-up gate.
                 var proofValue = TryGetEntry(keys[0].ToString(), out var proofEntry) ? proofEntry.StringValue : null;
                 var generationValue = TryGetEntry(keys[1].ToString(), out var genEntry) ? genEntry.StringValue : null;
-                return Task.FromResult<object>(new object?[] { proofValue, generationValue });
+                return new object?[] { proofValue, generationValue };
             }
 
             if (keys.Length == 3 && script.Contains("redis.call('EXISTS'", StringComparison.Ordinal))
             {
                 if (!TryGetEntry(keys[0].ToString(), out _))
-                    return Task.FromResult<object>(0L);
+                    return 0L;
 
                 var currentGeneration = TryGetEntry(keys[2].ToString(), out var generationEntry)
                     && long.TryParse(generationEntry.StringValue, out var parsed)
                         ? parsed
                         : 0;
                 if (currentGeneration != long.Parse(values[2].ToString()))
-                    return Task.FromResult<object>(2L);
+                    return 2L;
 
                 var proof = GetOrCreateEntry(keys[1].ToString());
                 proof.StringValue = values[0].ToString();
                 proof.ExpiresAt = DateTimeOffset.UtcNow.AddMilliseconds(long.Parse(values[1].ToString()));
-                return Task.FromResult<object>(1L);
+                return 1L;
+            }
+
+            if (keys.Length == 1
+                && values.Length == 3
+                && script.Contains("redis.call('GET'", StringComparison.Ordinal)
+                && script.Contains("redis.call('SET'", StringComparison.Ordinal))
+            {
+                // Compare-and-set used to retire a rotated refresh token.
+                var key = keys[0].ToString();
+                var current = TryGetEntry(key, out var existing) ? existing.StringValue : null;
+                if (current != values[0].ToString())
+                    return 0L;
+
+                var entry = GetOrCreateEntry(key);
+                entry.StringValue = values[1].ToString();
+                entry.ExpiresAt = DateTimeOffset.UtcNow.AddMilliseconds(long.Parse(values[2].ToString()));
+                return 1L;
             }
 
             if (keys.Length == 1
@@ -1203,16 +1639,16 @@ internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheS
                     && long.TryParse(existing.StringValue, out var lastWindow)
                     && matchedWindow <= lastWindow)
                 {
-                    return Task.FromResult<object>(0L);
+                    return 0L;
                 }
 
                 var entry = GetOrCreateEntry(key);
                 entry.StringValue = matchedWindow.ToString();
                 entry.ExpiresAt = DateTimeOffset.UtcNow.AddMilliseconds(ttlMs);
-                return Task.FromResult<object>(1L);
+                return 1L;
             }
 
-            return Task.FromResult<object>(1L);
+            return 1L;
         }
     }
 
