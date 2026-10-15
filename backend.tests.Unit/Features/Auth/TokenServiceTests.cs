@@ -6,6 +6,7 @@ using backend.main.features.auth.token;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
+using backend.main.shared.utilities;
 
 using FluentAssertions;
 
@@ -413,7 +414,180 @@ public class TokenServiceTests
             requestInfo);
 
         await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh token was already rotated.");
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldRevokeTheSession_WhenARotatedTokenIsReplayedAfterTheGraceWindow()
+    {
+        var cache = new InMemoryCacheService();
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026, 10, 14, 12, 0, 0, TimeSpan.Zero));
+        var service = new TokenService(cache, clock);
+        var (first, newest) = await RotateAsync(service);
+        await cache.SetValueAsync(StepUpProofKeys.ForSession(newest.SessionId), "{}", TimeSpan.FromMinutes(10));
+        clock.Advance(TimeSpan.FromSeconds(11));
+
+        var replay = () => ValidateAsync(service, first);
+
+        await replay.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh token reuse detected.");
+        (await cache.KeyExistsAsync($"refresh:v2:session:{newest.SessionId}")).Should().BeFalse();
+        (await cache.KeyExistsAsync(StepUpProofKeys.ForSession(newest.SessionId))).Should().BeFalse();
+
+        // Whoever holds the newest token, attacker or user, has to sign in again.
+        var next = () => ValidateAsync(service, newest);
+        await next.Should().ThrowAsync<UnauthorizedException>()
             .WithMessage("Invalid or expired refresh token.");
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldRevokeOnReplay_EvenWithoutTheBindingToken()
+    {
+        var cache = new InMemoryCacheService();
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026, 10, 14, 12, 0, 0, TimeSpan.Zero));
+        var service = new TokenService(cache, clock);
+        var (first, newest) = await RotateAsync(service);
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        var replay = () => service.ValidateRefreshToken(
+            first.Value,
+            null,
+            SessionTransport.ApiToken,
+            CreateRequestInfo());
+
+        await replay.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh token reuse detected.");
+        (await cache.KeyExistsAsync($"refresh:v2:session:{newest.SessionId}")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldKeepTheSession_WhenADuplicateArrivesWithinTheGraceWindow()
+    {
+        var cache = new InMemoryCacheService();
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026, 10, 14, 12, 0, 0, TimeSpan.Zero));
+        var service = new TokenService(cache, clock);
+        var (first, newest) = await RotateAsync(service);
+        clock.Advance(TimeSpan.FromSeconds(9));
+
+        var duplicate = () => ValidateAsync(service, first);
+
+        await duplicate.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh token was already rotated.");
+        var result = await ValidateAsync(service, newest);
+        result.SessionId.Should().Be(newest.SessionId);
+    }
+
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 30)]
+    public async Task ValidateRefreshToken_ShouldKeepTheRetiredTokenForTheRefreshLifetime(bool rememberMe, int days)
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var issue = await service.GenerateRefreshToken(
+            8, 1, CreateRequestInfo(), SessionTransport.ApiToken, rememberMe: rememberMe);
+
+        await ValidateAsync(service, issue);
+
+        var ttl = await cache.GetTTLAsync(RefreshTokenKey(issue.Value));
+        ttl.Should().NotBeNull();
+        ttl!.Value.Should().BeGreaterThan(TimeSpan.FromDays(days) - TimeSpan.FromMinutes(1))
+            .And.BeLessThanOrEqualTo(TimeSpan.FromDays(days));
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldRejectAReplay_AfterTheSessionWasRevoked()
+    {
+        var cache = new InMemoryCacheService();
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026, 10, 14, 12, 0, 0, TimeSpan.Zero));
+        var service = new TokenService(cache, clock);
+        var (first, newest) = await RotateAsync(service);
+        await service.RevokeRefreshSessionAsync(newest.SessionId);
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        var replay = () => ValidateAsync(service, first);
+
+        await replay.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Invalid or expired refresh token.");
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldStillRotateARecordStoredBeforeRetiredTokensWereKept()
+    {
+        var cache = new InMemoryCacheService();
+        var service = new TokenService(cache);
+        var issue = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.ApiToken);
+        var key = RefreshTokenKey(issue.Value);
+        var legacy = Newtonsoft.Json.Linq.JObject.Parse((await cache.GetValueAsync(key))!);
+        legacy.Remove("RetiredAt");
+        await cache.SetValueAsync(key, legacy.ToString(Newtonsoft.Json.Formatting.None), TimeSpan.FromDays(1));
+
+        var result = await ValidateAsync(service, issue);
+
+        result.SessionId.Should().Be(issue.SessionId);
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldFailClosed_WhenTheTokenCannotBeRetired()
+    {
+        var cache = CreateCacheWithLiveToken();
+        cache.Setup(c => c.TryEvalAsync(
+                It.IsAny<string>(),
+                It.IsAny<StackExchange.Redis.RedisKey[]>(),
+                It.IsAny<StackExchange.Redis.RedisValue[]>()))
+            .ReturnsAsync(backend.main.features.cache.CacheScriptResult.Unavailable);
+        var service = new TokenService(cache.Object);
+
+        var act = () => service.ValidateRefreshToken(
+            LiveToken, "binding", SessionTransport.ApiToken, CreateRequestInfo());
+
+        await act.Should().ThrowAsync<NotAvailableException>();
+        cache.Verify(c => c.SetValueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan?>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldRejectWithoutRevoking_WhenAConcurrentRefreshRetiredTheTokenFirst()
+    {
+        var cache = CreateCacheWithLiveToken();
+        cache.Setup(c => c.TryEvalAsync(
+                It.IsAny<string>(),
+                It.IsAny<StackExchange.Redis.RedisKey[]>(),
+                It.IsAny<StackExchange.Redis.RedisValue[]>()))
+            .ReturnsAsync(new backend.main.features.cache.CacheScriptResult(true, 0L));
+        var service = new TokenService(cache.Object);
+
+        var act = () => service.ValidateRefreshToken(
+            LiveToken, "binding", SessionTransport.ApiToken, CreateRequestInfo());
+
+        await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Refresh token was already rotated.");
+        cache.Verify(c => c.TryEvalAsync(
+            It.Is<string>(script => script.Contains("redis.call('DEL'")),
+            It.IsAny<StackExchange.Redis.RedisKey[]>(),
+            It.IsAny<StackExchange.Redis.RedisValue[]>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ValidateRefreshToken_ShouldFailClosed_WhenReuseCannotRevokeTheSession()
+    {
+        var cache = new Mock<backend.main.features.cache.ICacheService>();
+        var tokenKey = RefreshTokenKey("replayed");
+        cache.Setup(c => c.GetValueAsync(tokenKey))
+            .ReturnsAsync("{\"SessionId\":\"s1\",\"UserId\":8,\"RetiredAt\":\"2026-10-14T12:00:00Z\"}");
+        cache.Setup(c => c.GetValueAsync("refresh:v2:session:s1"))
+            .ReturnsAsync("{\"SessionId\":\"s1\",\"UserId\":8,\"CurrentRefreshTokenHash\":\"\",\"CurrentBindingTokenHash\":\"\"}");
+        cache.Setup(c => c.TryEvalAsync(
+                It.IsAny<string>(),
+                It.IsAny<StackExchange.Redis.RedisKey[]>(),
+                It.IsAny<StackExchange.Redis.RedisValue[]>()))
+            .ReturnsAsync(backend.main.features.cache.CacheScriptResult.Unavailable);
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026, 10, 14, 12, 5, 0, TimeSpan.Zero));
+        var service = new TokenService(cache.Object, clock);
+
+        var act = () => service.ValidateRefreshToken(
+            "replayed", "binding", SessionTransport.ApiToken, CreateRequestInfo());
+
+        await act.Should().ThrowAsync<NotAvailableException>();
     }
 
     [Fact]
@@ -904,6 +1078,51 @@ public class TokenServiceTests
         DeviceType = "Desktop",
         IsBrowserClient = true
     };
+
+    private static string RefreshTokenKey(string refreshToken) =>
+        $"refresh:v2:token:{CryptoHelper.HashToken(refreshToken)}";
+
+    private static Task<RefreshTokenValidationResult> ValidateAsync(TokenService service, RefreshTokenIssue issue) =>
+        service.ValidateRefreshToken(issue.Value, issue.SessionBindingToken, issue.Transport, CreateRequestInfo());
+
+    /// <summary>Issues a token and rotates it once, as a refresh does.</summary>
+    private static async Task<(RefreshTokenIssue First, RefreshTokenIssue Newest)> RotateAsync(TokenService service)
+    {
+        var first = await service.GenerateRefreshToken(8, 1, CreateRequestInfo(), SessionTransport.ApiToken);
+        var validation = await ValidateAsync(service, first);
+        var newest = await service.GenerateRefreshToken(
+            8, 1, CreateRequestInfo(), SessionTransport.ApiToken, validation.SessionId);
+        return (first, newest);
+    }
+
+    private const string LiveToken = "live-token";
+
+    /// <summary>A cache mock holding <see cref="LiveToken"/> as a live API-transport token and its session.</summary>
+    private static Mock<backend.main.features.cache.ICacheService> CreateCacheWithLiveToken()
+    {
+        var cache = new Mock<backend.main.features.cache.ICacheService>();
+        cache.Setup(c => c.GetValueAsync(RefreshTokenKey(LiveToken)))
+            .ReturnsAsync("{\"SessionId\":\"s1\",\"UserId\":8}");
+        cache.Setup(c => c.GetValueAsync("refresh:v2:session:s1"))
+            .ReturnsAsync(Newtonsoft.Json.JsonConvert.SerializeObject(new
+            {
+                SessionId = "s1",
+                UserId = 8,
+                Transport = SessionTransport.ApiToken,
+                CurrentRefreshTokenHash = CryptoHelper.HashToken(LiveToken),
+                CurrentBindingTokenHash = CryptoHelper.HashToken("binding"),
+            }));
+        return cache;
+    }
+
+    private sealed class MutableTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private DateTimeOffset _utcNow = utcNow;
+
+        public void Advance(TimeSpan by) => _utcNow += by;
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+    }
 }
 
 internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheService
@@ -1187,6 +1406,23 @@ internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheS
                 var proof = GetOrCreateEntry(keys[1].ToString());
                 proof.StringValue = values[0].ToString();
                 proof.ExpiresAt = DateTimeOffset.UtcNow.AddMilliseconds(long.Parse(values[1].ToString()));
+                return Task.FromResult<object>(1L);
+            }
+
+            if (keys.Length == 1
+                && values.Length == 3
+                && script.Contains("redis.call('GET'", StringComparison.Ordinal)
+                && script.Contains("redis.call('SET'", StringComparison.Ordinal))
+            {
+                // Compare-and-set used to retire a rotated refresh token.
+                var key = keys[0].ToString();
+                var current = TryGetEntry(key, out var existing) ? existing.StringValue : null;
+                if (current != values[0].ToString())
+                    return Task.FromResult<object>(0L);
+
+                var entry = GetOrCreateEntry(key);
+                entry.StringValue = values[1].ToString();
+                entry.ExpiresAt = DateTimeOffset.UtcNow.AddMilliseconds(long.Parse(values[2].ToString()));
                 return Task.FromResult<object>(1L);
             }
 

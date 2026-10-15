@@ -34,6 +34,9 @@ namespace backend.main.features.auth.token
         private const string RefreshKeyPrefix = "refresh:v2";
         private readonly TimeSpan DEFAULT_REFRESH_TTL = TimeSpan.FromDays(1);
         private readonly TimeSpan REMEMBERED_REFRESH_TTL = TimeSpan.FromDays(30);
+        // How long after rotation a replay of the retired token is treated as a harmless
+        // duplicate (two tabs restoring at once, a network retry) rather than as theft.
+        private static readonly TimeSpan RefreshReuseGrace = TimeSpan.FromSeconds(10);
         private readonly TimeSpan VERIFY_TTL = TimeSpan.FromMinutes(30);
         private const int MAX_OTP_ATTEMPTS = 5;
         private const string PlaceholderUsertype = "placeholder";
@@ -53,11 +56,24 @@ end
 redis.call('SET', KEYS[2], ARGV[1], 'PX', ARGV[2])
 return 1";
 
-        public TokenService(ICacheService cacheService)
+        // Swaps the live token record for its retired form only if it is still the record that
+        // was validated, so of two refreshes racing on one token exactly one rotates. The retired
+        // record stays behind so a later replay can be recognised as reuse.
+        private const string RetireRefreshTokenScript = @"
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then
+    return 0
+end
+redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+return 1";
+
+        private readonly TimeProvider _timeProvider;
+
+        public TokenService(ICacheService cacheService, TimeProvider? timeProvider = null)
         {
             JWT_ACCESS_SECRET = EnvironmentSetting.JwtSecretKeyAccess;
             JWT_VERIFICATION_SECRET = EnvironmentSetting.JwtSecretKeyVerification;
             _cacheService = cacheService;
+            _timeProvider = timeProvider ?? TimeProvider.System;
         }
 
         public AccessTokenIssue GenerateAccessToken(User user, string sessionId)
@@ -239,6 +255,11 @@ return 1";
                 var tokenRecord = JsonConvert.DeserializeObject<RefreshTokenRecord>(storedValue)
                     ?? throw new UnauthorizedException("Invalid refresh token payload.");
 
+                // Checked before the binding token: a replayed token is a theft signal whether
+                // or not the binding cookie came with it.
+                if (tokenRecord.RetiredAt is DateTime retiredAt)
+                    throw await RejectRetiredRefreshTokenAsync(tokenRecord, retiredAt);
+
                 var session = await GetRefreshSessionAsync(tokenRecord.SessionId)
                     ?? throw new UnauthorizedException("Refresh session is invalid or expired.");
 
@@ -272,9 +293,27 @@ return 1";
                     throw new UnauthorizedException("Invalid session binding token.");
                 }
 
-                var result = await _cacheService.DeleteKeyAsync(TokenKey(tokenHash));
-                if (!result)
+                var refreshTtl = ResolveRefreshTtl(session.RememberMe);
+                tokenRecord.RetiredAt = _timeProvider.GetUtcNow().UtcDateTime;
+
+                // The retired record lives for the refresh lifetime from now, never less than
+                // what the token itself had left, so any replay it could have made is caught.
+                var retired = await _cacheService.TryEvalAsync(
+                    RetireRefreshTokenScript,
+                    [(StackExchange.Redis.RedisKey)TokenKey(tokenHash)],
+                    [
+                        storedValue,
+                        JsonConvert.SerializeObject(tokenRecord),
+                        checked((long)refreshTtl.TotalMilliseconds),
+                    ]
+                );
+
+                if (!retired.Succeeded || retired.Value is null)
                     throw new NotAvailableException();
+
+                // A concurrent refresh with the same token rotated it first.
+                if (ToLong(retired.Value) != 1)
+                    throw new UnauthorizedException("Refresh token was already rotated.");
 
                 session.LastSeenAt = DateTime.UtcNow;
                 session.LastSeenIpAddress = requestInfo.IpAddress;
@@ -284,7 +323,7 @@ return 1";
                 var sessionUpdated = await _cacheService.SetValueAsync(
                     SessionKey(session.SessionId),
                     JsonConvert.SerializeObject(session),
-                    ResolveRefreshTtl(session.RememberMe)
+                    refreshTtl
                 );
 
                 if (!sessionUpdated)
@@ -307,6 +346,40 @@ return 1";
                 throw new InternalServerErrorException();
             }
         }
+
+        /// <summary>
+        /// Handles a refresh token that was already rotated away. Past the grace window this is
+        /// reuse: whoever holds the newest token may be an attacker who refreshed first, so the
+        /// whole session is revoked and both parties have to sign in again.
+        /// </summary>
+        /// <returns>The rejection to throw. Throws itself if the revocation cannot be confirmed.</returns>
+        private async Task<UnauthorizedException> RejectRetiredRefreshTokenAsync(
+            RefreshTokenRecord tokenRecord,
+            DateTime retiredAt
+        )
+        {
+            var session = await GetRefreshSessionAsync(tokenRecord.SessionId);
+
+            // Already revoked or expired: the retired record outlived its session.
+            if (session == null || session.UserId != tokenRecord.UserId)
+                return new UnauthorizedException("Invalid or expired refresh token.");
+
+            if (_timeProvider.GetUtcNow().UtcDateTime - retiredAt < RefreshReuseGrace)
+                return new UnauthorizedException("Refresh token was already rotated.");
+
+            // Interim security event until structured auth events land (#323).
+            Logger.Warn(
+                $"[TokenService] auth.refresh_token_reuse session={session.SessionId} user={session.UserId}"
+            );
+
+            await RevokeRefreshSessionAsync(session.SessionId);
+            return new UnauthorizedException("Refresh token reuse detected.");
+        }
+
+        private static long ToLong(object value) =>
+            value is StackExchange.Redis.RedisResult redisResult
+                ? (long)redisResult
+                : Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture);
 
         public async Task<string> GenerateVerificationToken(User user, VerificationPurpose purpose)
         {
@@ -921,10 +994,7 @@ return 1";
             if (!result.Succeeded || result.Value is null)
                 return StepUpProofWriteResult.Unavailable;
 
-            var stored = result.Value is StackExchange.Redis.RedisResult redisResult
-                ? (long)redisResult
-                : Convert.ToInt64(result.Value, System.Globalization.CultureInfo.InvariantCulture);
-            return stored switch
+            return ToLong(result.Value) switch
             {
                 1 => StepUpProofWriteResult.Stored,
                 2 => StepUpProofWriteResult.Superseded,
@@ -1174,6 +1244,14 @@ return 1";
                 get; set;
             }
             public DateTime CreatedAt
+            {
+                get; set;
+            }
+            /// <summary>
+            /// When the token was rotated away. Null while it is the session's live token,
+            /// including every record stored before retired tokens were kept.
+            /// </summary>
+            public DateTime? RetiredAt
             {
                 get; set;
             }
