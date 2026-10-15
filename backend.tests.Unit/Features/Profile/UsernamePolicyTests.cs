@@ -71,6 +71,16 @@ public class UsernamePolicyTests
     }
 
     [Fact]
+    public void NormalizeAndValidate_ShouldRejectProhibitedLanguageWithoutAffectingLookup()
+    {
+        var act = () => UsernamePolicy.NormalizeAndValidate("porn");
+
+        act.Should().Throw<BadRequestException>()
+            .WithMessage("That username is not available.");
+        UsernamePolicy.Normalize("porn").Should().Be("porn");
+    }
+
+    [Fact]
     public void ReservedNames_ShouldBePinnedSoChangesAreDeliberate()
     {
         UsernamePolicy.ReservedNames.Should().BeEquivalentTo([

@@ -6,14 +6,17 @@ namespace backend.main.features.auth.contracts.requests
     /// </summary>
     public sealed class EmailChangeConfirmationRequest
     {
+        [RequestText(RequestTextKind.Sensitive)]
         public string? Token
         {
             get; set;
         }
+        [RequestText(RequestTextKind.Sensitive)]
         public string? Code
         {
             get; set;
         }
+        [RequestText(RequestTextKind.Sensitive)]
         public string? Challenge
         {
             get; set;

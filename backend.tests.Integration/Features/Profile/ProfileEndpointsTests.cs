@@ -46,9 +46,9 @@ public class ProfileEndpointsTests
         {
             Content = JsonContent.Create(new
             {
-                name = "Profile User",
+                name = "  Profile User  ",
                 phone = "+1 416 555 0100",
-                address = "1 Test Street",
+                address = "  1 Test Street  ",
                 username = "bypass-attempt"
             })
         };
@@ -119,6 +119,49 @@ public class ProfileEndpointsTests
         oldPublicResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var oldPublicProfile = await app.ReadApiResponseAsync<PublicProfileResponse>(oldPublicResponse);
         oldPublicProfile.Data!.Username.Should().Be("profileuser");
+    }
+
+    [Fact]
+    public async Task ProfileText_ShouldRejectUnsafeContentAndProhibitedUsernames()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var user = await app.SeedUserAsync("content-policy@example.com");
+        await app.SeedKnownDeviceAsync(user.Id, "content-policy-device");
+        var session = await app.LoginApiAsync(
+            "content-policy",
+            trustedDeviceToken: "content-policy-device");
+
+        foreach (var (value, expectedMessage) in new[]
+        {
+            ("<script>", "markup or unsupported characters"),
+            ("porn", "prohibited language"),
+            ("bad\u202Ename", "markup or unsupported characters"),
+        })
+        {
+            var response = await app.SendWithBearerAndCsrfAsync(
+                HttpMethod.Patch,
+                "/api/profile",
+                new { name = value },
+                session.AccessToken);
+            var body = await response.Content.ReadAsStringAsync();
+
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest, body);
+            body.Should().Contain("VALIDATION_ERROR").And.Contain("Name");
+            body.Should().Contain(expectedMessage).And.NotContain(value);
+        }
+
+        await app.CompleteSessionMfaByEmailAsync(
+            "content-policy@example.com",
+            session.AccessToken);
+        var username = await app.SendWithBearerAndCsrfAsync(
+            HttpMethod.Patch,
+            "/api/profile/username",
+            new ChangeUsernameRequest { Username = "porn" },
+            session.AccessToken);
+        var usernameBody = await username.Content.ReadAsStringAsync();
+
+        username.StatusCode.Should().Be(HttpStatusCode.BadRequest, usernameBody);
+        usernameBody.Should().Contain("Username").And.Contain("prohibited language");
     }
 
     [Fact]

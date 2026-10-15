@@ -8,18 +8,21 @@ namespace backend.main.features.events.waitlist.contracts.requests
     /// </summary>
     public class JoinWaitlistRequest
     {
+        [RequestText(RequestTextKind.HumanMultiline)]
         [StringLength(500)]
         public string? Notes
         {
             get; set;
         }
 
+        [RequestText(RequestTextKind.Structured)]
         [StringLength(32)]
         public string? PhoneNumber
         {
             get; set;
         }
 
+        [RequestText(RequestTextKind.HumanMultiline)]
         [StringLength(500)]
         public string? DietaryNeeds
         {

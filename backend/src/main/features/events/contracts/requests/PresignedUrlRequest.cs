@@ -20,10 +20,12 @@ namespace backend.main.features.events.contracts.requests
             get; set;
         }
 
+        [RequestText(RequestTextKind.Structured)]
         [Required]
         [StringLength(255, MinimumLength = 3)]
         public string FileName { get; set; } = null!;
 
+        [RequestText(RequestTextKind.Structured)]
         [Required]
         [StringLength(100)]
         public string ContentType { get; set; } = null!;

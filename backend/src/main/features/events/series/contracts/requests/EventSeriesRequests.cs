@@ -28,6 +28,7 @@ public class ExtendEventSeriesRequest : IValidatableObject
     }
 
     /// <summary>New inclusive local cutoff, as <c>yyyy-MM-dd</c>.</summary>
+    [RequestText(RequestTextKind.Structured)]
     public string? UntilLocalDate
     {
         get; set;
@@ -82,30 +83,35 @@ public class UpdateFutureOccurrencesRequest : IValidatableObject
     /// </summary>
     public bool IncludeOverridden { get; set; } = false;
 
+    [RequestText(RequestTextKind.HumanSingleLine)]
     [StringLength(30, MinimumLength = 3)]
     public string? Name
     {
         get; set;
     }
 
+    [RequestText(RequestTextKind.HumanMultiline)]
     [StringLength(200, MinimumLength = 10)]
     public string? Description
     {
         get; set;
     }
 
+    [RequestText(RequestTextKind.HumanSingleLine)]
     [StringLength(50)]
     public string? Location
     {
         get; set;
     }
 
+    [RequestText(RequestTextKind.HumanSingleLine)]
     [StringLength(100)]
     public string? VenueName
     {
         get; set;
     }
 
+    [RequestText(RequestTextKind.HumanSingleLine)]
     [StringLength(100)]
     public string? City
     {
@@ -153,17 +159,20 @@ public class UpdateFutureOccurrencesRequest : IValidatableObject
         get; set;
     }
 
+    [RequestText(RequestTextKind.HumanSingleLine)]
     public List<string>? Tags
     {
         get; set;
     }
 
+    [RequestText(RequestTextKind.Structured)]
     public List<string>? ImageUrls
     {
         get; set;
     }
 
     /// <summary>New local start time-of-day, as <c>HH:mm</c>, interpreted in the series' zone.</summary>
+    [RequestText(RequestTextKind.Structured)]
     public string? LocalStartTime
     {
         get; set;

@@ -46,10 +46,12 @@ if (!isOpenApiDocumentMode)
 
 builder.Host.UseMinimalSerilog();
 
-builder.Services.AddControllersWithViews(options =>
-{
-    options.Conventions.Insert(0, new RoutePrefixConvention(RoutePaths.ApiPrefix));
-});
+builder.Services
+    .AddControllersWithViews(options =>
+    {
+        options.Conventions.Insert(0, new RoutePrefixConvention(RoutePaths.ApiPrefix));
+    })
+    .AddJsonOptions(options => RequestTextJsonMetadata.Configure(options.JsonSerializerOptions));
 builder.Services.AddApiResponseConventions();
 builder.Services.AddAppOpenApi();
 builder.Services.AddSignalR(options =>

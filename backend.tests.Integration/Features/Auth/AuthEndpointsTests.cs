@@ -71,6 +71,37 @@ public class AuthEndpointsTests
     }
 
     [Fact]
+    public async Task SignupModeration_ShouldNotChangeHistoricalLoginOrOpaqueCredentials()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+
+        var signup = await app.PostJsonWithCsrfAsync("/api/auth/signup", new SignUpRequest
+        {
+            Email = "prohibited-signup@example.com",
+            Username = "porn",
+            Password = AuthApiTestApp.DefaultPassword,
+            Usertype = "Participant",
+            Captcha = "captcha"
+        });
+        var signupBody = await signup.Content.ReadAsStringAsync();
+        signup.StatusCode.Should().Be(HttpStatusCode.BadRequest, signupBody);
+        signupBody.Should().Contain("Username").And.Contain("prohibited language");
+
+        const string exactPassword = "  <porn> login passphrase  ";
+        var historical = await app.SeedUserAsync(
+            "historical-login@example.com",
+            password: exactPassword,
+            username: "porn");
+        await app.SeedKnownDeviceAsync(historical.Id, "historical-login-device");
+
+        var session = await app.LoginApiAsync(
+            "porn",
+            password: exactPassword,
+            trustedDeviceToken: "historical-login-device");
+        session.AccessToken.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
     public async Task Login_ShouldSucceedForKnownDevice_AndRejectInvalidCredentials()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
@@ -480,7 +511,18 @@ public class AuthEndpointsTests
         });
         malformed.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
-        // Neither rejection consumed the pending signup, so the same token still completes.
+        var prohibited = await app.PostJsonWithCsrfAsync("/api/auth/oauth/complete", new CompleteOAuthSignupRequest
+        {
+            SignupToken = signupToken,
+            Usertype = "Participant",
+            Username = "porn",
+            Transport = SessionTransportResolver.ApiValue
+        });
+        prohibited.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await prohibited.Content.ReadAsStringAsync())
+            .Should().Contain("Username").And.Contain("prohibited language");
+
+        // None of the rejections consumed the pending signup, so the same token still completes.
         var success = await app.PostJsonWithCsrfAsync("/api/auth/oauth/complete", new CompleteOAuthSignupRequest
         {
             SignupToken = signupToken,
@@ -835,6 +877,86 @@ public class AuthEndpointsTests
         var microsoftOwner = await app.FindUserByEmailAsync("ms.owner@example.com");
         microsoftOwner!.MicrosoftID.Should().Be("ms-owner");
         microsoftOwner.GoogleID.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task MicrosoftSignIn_ShouldLinkByEmail_OnlyWhenMicrosoftVerifiedTheEmail()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var account = await app.SeedUserAsync("ms.target@example.com");
+        await app.SeedKnownDeviceAsync(account.Id, "ms-target-device");
+
+        // Any Entra tenant can issue a token whose email claim names this account's address.
+        app.OAuth.RegisterMicrosoftToken(
+            "ms-unverified",
+            new OAuthUser("ms-tenant-impostor", "ms.target@example.com", "Impostor", "microsoft"));
+        app.OAuth.RegisterMicrosoftToken(
+            "ms-verified",
+            new OAuthUser("ms-mailbox-owner", "ms.target@example.com", "Owner", "microsoft", emailVerified: true));
+
+        var unverified = await app.Client.SendAsync(await CreateCsrfRequestAsync(
+            app,
+            "/api/auth/microsoft",
+            new MicrosoftRequest
+            {
+                Token = "ms-unverified",
+                Transport = SessionTransportResolver.ApiValue
+            },
+            trustedDeviceToken: "ms-target-device"));
+
+        unverified.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await unverified.Content.ReadAsStringAsync()).Should().Contain(MicrosoftEmailUnverifiedException.Code);
+        unverified.Headers.TryGetValues("Set-Cookie", out var cookies);
+        (cookies ?? []).Should().NotContain(cookie => cookie.Contains("refresh", StringComparison.OrdinalIgnoreCase));
+        (await app.FindUserByEmailAsync("ms.target@example.com"))!.MicrosoftID.Should().BeNull();
+
+        var verified = await app.Client.SendAsync(await CreateCsrfRequestAsync(
+            app,
+            "/api/auth/microsoft",
+            new MicrosoftRequest
+            {
+                Token = "ms-verified",
+                Transport = SessionTransportResolver.ApiValue
+            },
+            trustedDeviceToken: "ms-target-device"));
+
+        verified.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await app.ReadApiResponseAsync<OAuthAuthenticationResponse>(verified);
+        body.Data!.RequiresRoleSelection.Should().BeFalse();
+        body.Data.Auth.Should().NotBeNull();
+        body.Data.Auth!.AccessToken.Should().NotBeNullOrWhiteSpace();
+        (await app.FindUserByEmailAsync("ms.target@example.com"))!.MicrosoftID.Should().Be("ms-mailbox-owner");
+    }
+
+    /// <summary>
+    /// Accounts linked before the verification rule keep signing in by subject, including when the
+    /// token now reports no address at all.
+    /// </summary>
+    [Fact]
+    public async Task MicrosoftSignIn_ShouldAuthenticateLinkedSubject_WithoutAnEmail()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var account = await app.SeedUserAsync("ms.linked@example.com", microsoftId: "ms-linked-subject");
+        await app.SeedKnownDeviceAsync(account.Id, "ms-linked-device");
+
+        app.OAuth.RegisterMicrosoftToken(
+            "ms-no-email",
+            new OAuthUser("ms-linked-subject", null, string.Empty, "microsoft"));
+
+        var response = await app.Client.SendAsync(await CreateCsrfRequestAsync(
+            app,
+            "/api/auth/microsoft",
+            new MicrosoftRequest
+            {
+                Token = "ms-no-email",
+                Transport = SessionTransportResolver.ApiValue
+            },
+            trustedDeviceToken: "ms-linked-device"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await app.ReadApiResponseAsync<OAuthAuthenticationResponse>(response);
+        body.Data!.Auth.Should().NotBeNull();
+        body.Data.Auth!.AccessToken.Should().NotBeNullOrWhiteSpace();
     }
 
 

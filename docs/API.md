@@ -32,6 +32,28 @@ On failure, `success` is false, `data` is null, and `error` contains a machine-r
 
 Paginated responses can carry `items`, `totalCount`, `page`, `pageSize`, and `totalPages` inside `data`; pages are 1-based. Consult the endpoint schema for its query parameters and limits. Frontend normalizers intentionally accept camelCase and legacy PascalCase payload shapes; preserve that compatibility when touching them.
 
+## Human-authored request text
+
+JSON body fields that persist human-authored text are plain text. Before the normal required and
+length rules run, the API trims outer whitespace and changes CRLF or CR line endings to LF. It keeps
+interior whitespace, ordinary Unicode, accents, and valid emoji. Fields such as names, titles,
+locations, cities, tags, addresses, and image alt text are single-line; descriptions, posts,
+comments, replies, reviews, registration notes, and dietary needs may contain LF line breaks.
+
+The API rejects HTML angle brackets, unsupported control or text-direction characters, and a
+conservative server-side list of English prohibited words and phrases. Matching is case-insensitive
+and uses complete words or phrases rather than substrings, so a harmless longer word is not refused.
+Failures return `400` with code `VALIDATION_ERROR` and the affected field in `error.details`; the
+response does not repeat the submitted text or reveal the prohibited-term list.
+
+Passwords, email addresses, phone numbers, URLs, upload metadata, OAuth data, tokens, codes,
+CAPTCHA values, enum/date/time values, invitation identifiers, and search filters keep their
+specialized validation and are not transformed by this policy. In particular, passwords and tokens
+remain byte-for-byte identical. Username moderation runs only when a username is created or
+changed; login and lookup still accept historical usernames. Existing stored rows and version
+snapshots are not rewritten. Output remains plain text and must continue to be rendered with the
+frontend's normal escaping rather than as HTML.
+
 ## Authentication, CSRF, and MFA
 
 Protected HTTP endpoints use JWT bearer access tokens: `Authorization: Bearer <access-token>`. Refresh sessions use cookies; browser clients must retain cookies and send credentials on the relevant requests. Use the existing frontend interceptors and session flow rather than inventing an alternative token-storage contract.
@@ -43,6 +65,26 @@ Some operations require MFA step-up as well as a signed-in session. Username, pa
 ### Passwords
 
 Signup (`POST /api/auth/signup`), reset (`POST /api/auth/reset-password` and `/api/auth/change-password`), and authenticated change (`POST /api/profile/change-password`) accept 15–128 characters with no composition rules. A length violation fails model validation. A common, breached, or account-derived value is rejected by the service. Both return `400` with code `VALIDATION_ERROR` and `details` keyed by the request field (`Password` or `NewPassword`), holding a single message. A rejected reset password leaves the emailed link or code usable for another attempt. A successful reset or change bumps `AuthVersion` and revokes every refresh session. Login (`POST /api/auth/login`) never applies the policy. See [password policy and hashing](CONFIGURATION.md#password-policy-and-hashing).
+
+### OAuth provider sign-in
+
+Google (`POST /api/auth/google`, `/api/auth/google/code`) and Microsoft (`POST /api/auth/microsoft`) sign-in first look up the account linked to the provider subject. A linked subject signs in whatever address the provider now reports.
+
+Otherwise the provider's email is matched against existing accounts:
+
+- **No match.** The response asks for role selection, and `POST /api/auth/oauth/complete` creates the account.
+- **The account is linked to a different Google or Microsoft identity.** The request answers `409`, and nothing is linked.
+- **The account has no provider link.** The subject is linked to it, and the caller is signed in. This happens only when the provider proves the caller controls the address.
+
+Google requires `email_verified`. For Microsoft:
+
+- The email comes only from the ID token's `email` claim, never from `preferred_username`, which a tenant administrator sets.
+- The email counts as verified when the token is from the personal-account (consumer) tenant `9188040d-6c67-4c5b-b112-36a304b66dad`, or when the `xms_edov` claim is true. See [configuration](CONFIGURATION.md#addresses-and-public-values).
+- An unverified address that matches an existing account answers `409` with error code `OAUTH_EMAIL_UNVERIFIED`. The account is neither linked nor signed in.
+- An unverified address with no matching account can still create a new account.
+- A token with no `email` claim signs in only with a subject that is already linked. Otherwise it answers `401`.
+
+Completing a pending signup re-runs these checks.
 
 ## Authorization
 

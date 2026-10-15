@@ -181,6 +181,11 @@ public static class UsernamePolicy
         if (ReservedNames.Contains(normalized))
             throw new BadRequestException("That username is not available.");
 
+        // New username writes share the public-content language policy. Lookup and login paths use
+        // Normalize only, so historical usernames remain usable even when they predate this rule.
+        if (ContentTextPolicy.ContainsProhibitedLanguage(display))
+            throw new BadRequestException("That username is not available.");
+
         return new UsernameForms(normalized, display);
     }
 
