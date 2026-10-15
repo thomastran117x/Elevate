@@ -93,6 +93,43 @@ public sealed class AuthSecurityEventEmitterTests
     }
 
     [Fact]
+    public void Emit_ShouldNotAttributeATargetedEventToTheSignedInCaller()
+    {
+        var context = CreateContext(userId: 1, sessionId: SessionId);
+        var sink = new RecordingAuthSecurityEventSink();
+        var emitter = AuthSecurityEventTestSupport.CreateEmitter(context, [sink]);
+
+        emitter.Emit(SignInFailed(), AuthSecurityTarget.Username("someone-else"));
+
+        var recorded = sink.Events.Should().ContainSingle().Subject;
+        recorded.UserId.Should().BeNull();
+        recorded.ActorUserId.Should().BeNull();
+        recorded.SessionId.Should().BeNull();
+        recorded.TargetHash.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Emit_ShouldKeepAnAccountWideRevocationSessionless()
+    {
+        var context = CreateContext(userId: 1, sessionId: SessionId);
+        var sink = new RecordingAuthSecurityEventSink();
+        var emitter = AuthSecurityEventTestSupport.CreateEmitter(context, [sink]);
+
+        emitter.Emit(new AuthSecurityEvent
+        {
+            Definition = AuthSecurityEvents.SessionRevoked,
+            Outcome = AuthSecurityOutcome.Succeeded,
+            Reason = AuthSecurityReason.PasswordChanged,
+            UserId = 1,
+        });
+
+        var recorded = sink.Events.Should().ContainSingle().Subject;
+        recorded.UserId.Should().Be(1);
+        recorded.SessionId.Should().BeNull();
+        recorded.ActorUserId.Should().BeNull();
+    }
+
+    [Fact]
     public void Emit_ShouldOverwriteEnrichmentAndDropMalformedValues()
     {
         var context = CreateContext();

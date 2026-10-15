@@ -123,17 +123,23 @@ public sealed class AuthSecurityEventEmitter : IAuthSecurityEventEmitter
             out var parsedUserId)
             ? parsedUserId
             : (int?)null;
-        var userId = securityEvent.UserId ?? principalUserId;
+        // An event aimed at a named target, such as a sign-in attempt for some username, is about
+        // that target. A bearer token that happens to accompany the request says nothing about it,
+        // so the caller is neither the subject nor the actor.
+        var callerUserId = target is null ? principalUserId : null;
+        var userId = securityEvent.UserId ?? callerUserId;
 
-        // The caller's session is only borrowed for an event about the caller's own account.
+        // The caller's session is only borrowed for an event about the caller's own account, and
+        // never for an account-wide revocation, whose missing session id means "every session".
+        var borrowsSession = securityEvent.Definition != AuthSecurityEvents.SessionRevoked;
         var sessionId = NormalizeSessionId(securityEvent.SessionId)
-            ?? (userId is not null && userId == principalUserId
+            ?? (borrowsSession && userId is not null && userId == callerUserId
                 ? NormalizeSessionId(principal?.FindFirst(TokenService.SessionIdClaimType)?.Value)
                 : null);
 
         // A signed-in caller acting on another account, such as an administrator, is the actor.
         var actorUserId = securityEvent.ActorUserId
-            ?? (principalUserId is not null && principalUserId != userId ? principalUserId : null);
+            ?? (callerUserId is not null && callerUserId != userId ? callerUserId : null);
 
         return securityEvent with
         {
