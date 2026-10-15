@@ -27,7 +27,7 @@ Ids and names are append-only: never renumber, rename, or reuse one. Persist and
 | 33001 | `auth.sign_in.succeeded` | Information | A session is issued by password, OAuth, signup verification, device link, or login step-up sign-in. Refreshes are not sign-ins. | `succeeded` | `none` |
 | 33002 | `auth.sign_in.failed` | Warning | A password, CAPTCHA, or provider token is refused, or a disabled account tries to sign in or refresh. | `denied` | `invalid_credentials`, `captcha_failed`, `account_disabled`, `provider_rejected` |
 | 33003 | `auth.sign_in.challenged` | Information | Credentials were accepted but new-device verification or MFA step-up is required first. | `succeeded` | `device_verification_required`, `step_up_required` |
-| 33010 | `auth.throttled` | Warning | An abuse budget, rate-limiter policy, or MFA delivery or attempt limit refuses a request. | `throttled` | `limit_exceeded` |
+| 33010 | `auth.throttled` | Warning | An abuse budget, an authentication rate-limiter policy, or an MFA delivery or attempt limit refuses a request. The global per-client limit is not an authentication control and is not recorded. | `throttled` | `limit_exceeded` |
 | 33020 | `auth.recovery.requested` | Information | Password or username recovery is requested. | `succeeded` | `issued`, `suppressed`, `provider_reminder` |
 | 33021 | `auth.recovery.completed` | Information | A password reset completes. | `succeeded` | `none` |
 | 33030 | `auth.verification.failed` | Warning | An emailed link or code for signup, password reset, email change, or a new device is refused. | `denied` | `expired`, `invalid_state`, `invalid_code`, `attempts_exhausted`, `auth_version_mismatch` |

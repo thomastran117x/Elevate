@@ -82,6 +82,9 @@ namespace backend.main.application.security
         /// </summary>
         internal static void RecordAuthThrottle(HttpContext httpContext)
         {
+            if (GlobalLimiterRejectionMarker.WasRejected(httpContext))
+                return;
+
             var policy = httpContext.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName;
             AuthSecurityFlow? flow = policy switch
             {
@@ -156,7 +159,7 @@ namespace backend.main.application.security
                     );
                 };
 
-                options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+                options.GlobalLimiter = new GlobalLimiterRejectionMarker(PartitionedRateLimiter.Create<HttpContext, string>(context =>
                 {
                     try
                     {
@@ -178,7 +181,7 @@ namespace backend.main.application.security
                             QueueLimit = 0
                         });
                     }
-                });
+                }));
 
                 options.AddPolicy(AuthPolicyName, context =>
                 {

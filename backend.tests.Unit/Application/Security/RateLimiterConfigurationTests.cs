@@ -14,6 +14,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -53,6 +54,49 @@ public class RateLimiterConfigurationTests
         RateLimiterConfiguration.RecordAuthThrottle(context);
 
         securityEvents.Emitted.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(1, 100, false)]
+    [InlineData(100, 1, true)]
+    public async Task OnRejected_ShouldOnlyRecordAuthPolicyRefusals_NotTheGlobalLimit(
+        int globalLimit,
+        int authLimit,
+        bool expectThrottleEvent)
+    {
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["RateLimiter:PermitLimit"] = globalLimit.ToString(),
+                ["RateLimiter:AuthPermitLimit"] = authLimit.ToString(),
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IAuthSecurityEventEmitter>(securityEvents);
+        services.AddInMemoryRateLimiter(configuration);
+
+        using var provider = services.BuildServiceProvider();
+        var app = new ApplicationBuilder(provider);
+        app.Use((context, next) =>
+        {
+            context.SetEndpoint(new Endpoint(
+                _ => Task.CompletedTask,
+                new EndpointMetadataCollection(new EnableRateLimitingAttribute(RateLimiterConfiguration.AuthPolicyName)),
+                "login"));
+            return next(context);
+        });
+        app.UseRateLimiter();
+        app.Run(async context => await context.Response.WriteAsync("ok"));
+        var pipeline = app.Build();
+
+        await pipeline(CreateRateLimitContext(provider, IPAddress.Parse("127.0.0.1")));
+        var rejected = CreateRateLimitContext(provider, IPAddress.Parse("127.0.0.1"));
+        await pipeline(rejected);
+
+        rejected.Response.StatusCode.Should().Be(StatusCodes.Status429TooManyRequests);
+        securityEvents.Of(AuthSecurityEvents.Throttled).Should().HaveCount(expectThrottleEvent ? 1 : 0);
     }
 
     private static DefaultHttpContext CreateContextForPolicy(string? policy, IAuthSecurityEventEmitter securityEvents)
