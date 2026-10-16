@@ -1227,7 +1227,7 @@ public class AuthServiceTests
 
         var act = () => service.GoogleAsync("forged-token", SessionTransport.BrowserCookie);
 
-        await act.Should().ThrowAsync<Exception>();
+        await act.Should().ThrowAsync<UnauthorizedException>();
         var failed = securityEvents.Of(AuthSecurityEvents.SignInFailed).Should().ContainSingle().Subject;
         failed.Reason.Should().Be(AuthSecurityReason.ProviderRejected);
         failed.Method.Should().Be(AuthSecurityMethod.Google);

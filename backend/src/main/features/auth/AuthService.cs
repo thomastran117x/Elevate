@@ -1321,8 +1321,9 @@ namespace backend.main.features.auth
         }
 
         /// <summary>
-        /// Runs a provider token check, recording a refused token as a failed sign-in. Signature and
-        /// claim failures are recorded whether they surface as 401 or as an unhandled token error.
+        /// Runs a provider token check, recording a refused token as a failed sign-in. A validation
+        /// error that escapes the provider service is refused with the same generic 401, so the event,
+        /// the operation metric, and the response agree that the credential was bad.
         /// </summary>
         private async Task<T> VerifyProviderTokenAsync<T>(AuthSecurityMethod provider, Func<Task<T>> verify)
         {
@@ -1330,10 +1331,15 @@ namespace backend.main.features.auth
             {
                 return await verify();
             }
-            catch (Exception e) when (e is UnauthorizedException or SecurityTokenException or InvalidJwtException)
+            catch (UnauthorizedException)
             {
                 EmitProviderRejected(provider);
                 throw;
+            }
+            catch (Exception e) when (e is SecurityTokenException or InvalidJwtException)
+            {
+                EmitProviderRejected(provider);
+                throw new UnauthorizedException("Invalid provider token.");
             }
         }
 

@@ -35,16 +35,17 @@ public class OAuthServiceTests
     {
         var service = CreateService(_ => new HttpResponseMessage(HttpStatusCode.BadRequest)
         {
-            Content = new StringContent("bad_code")
+            Content = new StringContent("{\"error\":\"invalid_grant\",\"error_description\":\"provider detail\"}")
         });
         SetPrivateField(service, "_googleClientId", "google-client");
         SetPrivateField(service, "_googleClientSecret", "google-secret");
 
         var action = () => service.ExchangeGoogleCodeAsync("bad-code", "verifier", "https://app.example.com/callback");
 
-        await action.Should()
-            .ThrowAsync<UnauthorizedException>()
-            .WithMessage("*bad_code*");
+        // Google's error body is provider content and is not echoed back to the client.
+        var thrown = await action.Should().ThrowAsync<UnauthorizedException>();
+        thrown.Which.Message.Should().Be("Google code exchange failed.");
+        thrown.Which.Message.Should().NotContain("invalid_grant").And.NotContain("provider detail");
     }
 
     [Fact]
@@ -53,6 +54,23 @@ public class OAuthServiceTests
         var service = CreateService(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = JsonContent.Create(new { id_token = "" })
+        });
+        SetPrivateField(service, "_googleClientId", "google-client");
+        SetPrivateField(service, "_googleClientSecret", "google-secret");
+
+        var action = () => service.ExchangeGoogleCodeAsync("code", "verifier", "https://app.example.com/callback");
+
+        await action.Should()
+            .ThrowAsync<UnauthorizedException>()
+            .WithMessage("No id_token returned from Google.");
+    }
+
+    [Fact]
+    public async Task ExchangeGoogleCodeAsync_ShouldThrowUnauthorized_WhenTheResponseHasNoIdTokenProperty()
+    {
+        var service = CreateService(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new { access_token = "only-an-access-token" })
         });
         SetPrivateField(service, "_googleClientId", "google-client");
         SetPrivateField(service, "_googleClientSecret", "google-secret");
@@ -310,6 +328,58 @@ public class OAuthServiceTests
         await action.Should()
             .ThrowAsync<UnauthorizedException>()
             .WithMessage("Missing Microsoft sub claim");
+    }
+
+    [Fact]
+    public async Task VerifyGoogleTokenAsync_ShouldRejectAMalformedToken_PromptlyAndAsUnauthorized()
+    {
+        var service = CreateService();
+        SetPrivateField(service, "_googleClientId", "google-client");
+        var started = System.Diagnostics.Stopwatch.StartNew();
+
+        var action = () => service.VerifyGoogleTokenAsync("not-a-jwt");
+
+        // Validation fails the same way every time, so it is not retried with backoff.
+        var thrown = await action.Should().ThrowAsync<UnauthorizedException>();
+        thrown.Which.Message.Should().Be("Invalid Google token.");
+        started.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task VerifyMicrosoftTokenAsync_ShouldRejectAWronglySignedToken_AsUnauthorized()
+    {
+        var (service, _) = CreateMicrosoftService();
+        var forged = CreateMicrosoftJwt(
+            new SymmetricSecurityKey(Enumerable.Repeat((byte)7, 32).ToArray()),
+            new Claim("sub", "microsoft-user-1"));
+
+        var action = () => service.VerifyMicrosoftTokenAsync(forged);
+
+        var thrown = await action.Should().ThrowAsync<UnauthorizedException>();
+        thrown.Which.Message.Should().Be("Invalid Microsoft token.");
+    }
+
+    [Fact]
+    public async Task VerifyMicrosoftTokenAsync_ShouldRejectAnUntrustedIssuer_AsUnauthorized()
+    {
+        var (service, key) = CreateMicrosoftService();
+        var token = CreateJwt("https://evil.example.com/v2.0", "ms-client", key, [new Claim("sub", "microsoft-user-1")]);
+
+        var action = () => service.VerifyMicrosoftTokenAsync(token);
+
+        await action.Should().ThrowAsync<UnauthorizedException>().WithMessage("Invalid Microsoft token.");
+    }
+
+    [Theory]
+    [InlineData("not-a-jwt")]
+    [InlineData("")]
+    public async Task VerifyMicrosoftTokenAsync_ShouldRejectAMalformedToken_AsUnauthorized(string token)
+    {
+        var (service, _) = CreateMicrosoftService();
+
+        var action = () => service.VerifyMicrosoftTokenAsync(token);
+
+        await action.Should().ThrowAsync<UnauthorizedException>().WithMessage("Invalid Microsoft token.");
     }
 
     private const string MicrosoftConsumerTenantId = "9188040d-6c67-4c5b-b112-36a304b66dad";
