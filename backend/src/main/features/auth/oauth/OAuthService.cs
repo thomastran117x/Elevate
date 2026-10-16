@@ -20,6 +20,8 @@ namespace backend.main.features.auth.oauth
         /// <summary>The tenant id Microsoft issues personal (consumer) account tokens from.</summary>
         private const string MicrosoftConsumerTenantId = "9188040d-6c67-4c5b-b112-36a304b66dad";
 
+        private const string GoogleUnavailableMessage = "Google sign-in is temporarily unavailable. Please try again.";
+
         private readonly string? _googleClientId;
         private readonly string? _googleClientSecret;
         private readonly string? _microsoftClientId;
@@ -63,22 +65,39 @@ namespace backend.main.features.auth.oauth
             if (_googleClientId == null || _googleClientSecret == null)
                 throw new NotAvailableException("Google OAuth is not available");
 
-            var response = await Http.PostAsync(
-                "https://oauth2.googleapis.com/token",
-                new FormUrlEncodedContent(
-                [
-                    new("client_id", _googleClientId),
-                    new("client_secret", _googleClientSecret),
-                    new("code", code),
-                    new("code_verifier", codeVerifier),
-                    new("redirect_uri", redirectUri),
-                    new("grant_type", "authorization_code"),
-                ])
-            );
+            HttpResponseMessage response;
+            try
+            {
+                response = await Http.PostAsync(
+                    "https://oauth2.googleapis.com/token",
+                    new FormUrlEncodedContent(
+                    [
+                        new("client_id", _googleClientId),
+                        new("client_secret", _googleClientSecret),
+                        new("code", code),
+                        new("code_verifier", codeVerifier),
+                        new("redirect_uri", redirectUri),
+                        new("grant_type", "authorization_code"),
+                    ])
+                );
+            }
+            catch (Exception ex) when (IsTransient(ex))
+            {
+                throw new NotAvailableException(GoogleUnavailableMessage);
+            }
 
             // Google's error body is not echoed: it is provider content the client has no use for.
             if (!response.IsSuccessStatusCode)
+            {
+                // Only a client error means the grant itself was refused (invalid_grant and the
+                // like). Rate limiting and server errors are Google being unavailable, which must
+                // not be counted as a rejected credential.
+                var status = (int)response.StatusCode;
+                if (status == StatusCodes.Status429TooManyRequests || status >= 500)
+                    throw new NotAvailableException(GoogleUnavailableMessage);
+
                 throw new UnauthorizedException("Google code exchange failed.");
+            }
 
             var data = await response.Content.ReadFromJsonAsync<JsonElement>();
             var idToken = data.TryGetProperty("id_token", out var idTokenElement)

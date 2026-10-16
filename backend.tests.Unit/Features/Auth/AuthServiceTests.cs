@@ -1212,16 +1212,12 @@ public class AuthServiceTests
         userRepository.Verify(repository => repository.GetOAuthByEmailAsync(It.IsAny<string>()), Times.Never);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task OAuthSignIn_ShouldRecordARejectedProviderToken(bool unauthorized)
+    [Fact]
+    public async Task OAuthSignIn_ShouldRecordARejectedProviderToken()
     {
         var oauthService = new Mock<IOAuthService>();
         oauthService.Setup(service => service.VerifyGoogleTokenAsync("forged-token", null))
-            .ThrowsAsync(unauthorized
-                ? new UnauthorizedException("Google nonce validation failed")
-                : new Microsoft.IdentityModel.Tokens.SecurityTokenException("bad signature"));
+            .ThrowsAsync(new UnauthorizedException("Invalid Google token."));
         var securityEvents = new RecordingAuthSecurityEventEmitter();
         var service = CreateService(securityEvents: securityEvents, oauthService: oauthService);
 

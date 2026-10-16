@@ -65,6 +65,34 @@ public class OAuthServiceTests
             .WithMessage("No id_token returned from Google.");
     }
 
+    [Theory]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.TooManyRequests)]
+    public async Task ExchangeGoogleCodeAsync_ShouldReportGoogleUnavailable_NotARejectedGrant(HttpStatusCode status)
+    {
+        var service = CreateService(_ => new HttpResponseMessage(status));
+        SetPrivateField(service, "_googleClientId", "google-client");
+        SetPrivateField(service, "_googleClientSecret", "google-secret");
+
+        var action = () => service.ExchangeGoogleCodeAsync("code", "verifier", "https://app.example.com/callback");
+
+        // An outage must not be recorded as a rejected provider credential.
+        await action.Should().ThrowAsync<NotAvailableException>();
+    }
+
+    [Fact]
+    public async Task ExchangeGoogleCodeAsync_ShouldReportGoogleUnavailable_WhenTheRequestFails()
+    {
+        var service = CreateService(_ => throw new HttpRequestException("connection refused"));
+        SetPrivateField(service, "_googleClientId", "google-client");
+        SetPrivateField(service, "_googleClientSecret", "google-secret");
+
+        var action = () => service.ExchangeGoogleCodeAsync("code", "verifier", "https://app.example.com/callback");
+
+        await action.Should().ThrowAsync<NotAvailableException>();
+    }
+
     [Fact]
     public async Task ExchangeGoogleCodeAsync_ShouldThrowUnauthorized_WhenTheResponseHasNoIdTokenProperty()
     {

@@ -19,10 +19,7 @@ using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
 using backend.main.shared.utilities.logger;
 
-using Google.Apis.Auth;
-
 using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.IdentityModel.Tokens;
 
 using Newtonsoft.Json;
 
@@ -1321,9 +1318,8 @@ namespace backend.main.features.auth
         }
 
         /// <summary>
-        /// Runs a provider token check, recording a refused token as a failed sign-in. A validation
-        /// error that escapes the provider service is refused with the same generic 401, so the event,
-        /// the operation metric, and the response agree that the credential was bad.
+        /// Runs a provider token check, recording a refused token as a failed sign-in. The provider
+        /// service reports every refused token, including one that fails validation, as a 401.
         /// </summary>
         private async Task<T> VerifyProviderTokenAsync<T>(AuthSecurityMethod provider, Func<Task<T>> verify)
         {
@@ -1335,11 +1331,6 @@ namespace backend.main.features.auth
             {
                 EmitProviderRejected(provider);
                 throw;
-            }
-            catch (Exception e) when (e is SecurityTokenException or InvalidJwtException)
-            {
-                EmitProviderRejected(provider);
-                throw new UnauthorizedException("Invalid provider token.");
             }
         }
 
