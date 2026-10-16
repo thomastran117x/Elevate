@@ -1190,6 +1190,35 @@ public class TokenServiceTests
     }
 
     [Fact]
+    public async Task RevokeAllRefreshSessionsAsync_ShouldRecordNothing_WhenThereWereNoSessions()
+    {
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = new TokenService(new InMemoryCacheService(), securityEvents: securityEvents);
+
+        await service.RevokeAllRefreshSessionsAsync(44, AuthSecurityReason.AccountDisabled);
+
+        // A disabled account refreshing again must not add an "all sessions revoked" entry each time.
+        securityEvents.Emitted.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RevokeAllRefreshSessionsAsync_ShouldRecordAFault_WhenTheSessionListCannotBeRead()
+    {
+        var cache = new InMemoryCacheService();
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = new TokenService(cache, securityEvents: securityEvents);
+        await service.GenerateRefreshToken(44, 1, CreateRequestInfo(), SessionTransport.ApiToken);
+        cache.ScriptsUnavailable = true;
+
+        await service.RevokeAllRefreshSessionsAsync(44, AuthSecurityReason.AccountDisabled, actorUserId: 1);
+
+        var recorded = securityEvents.Of(AuthSecurityEvents.SessionRevoked).Should().ContainSingle().Subject;
+        recorded.Outcome.Should().Be(AuthSecurityOutcome.Faulted);
+        recorded.Reason.Should().Be(AuthSecurityReason.AccountDisabled);
+        recorded.ActorUserId.Should().Be(1);
+    }
+
+    [Fact]
     public async Task RevokeAllRefreshSessionsAsync_ShouldInvalidateEverySessionForUser()
     {
         var cache = new InMemoryCacheService();
@@ -1604,6 +1633,14 @@ internal sealed class InMemoryCacheService : backend.main.features.cache.ICacheS
     {
         lock (_gate)
         {
+            if (keys.Length == 1 && script.Contains("redis.call('SMEMBERS'", StringComparison.Ordinal))
+            {
+                // The account's session list, read so that an outage is distinguishable from empty.
+                return TryGetEntry(keys[0].ToString(), out var setEntry)
+                    ? setEntry.SetValues.Cast<object?>().ToArray()
+                    : Array.Empty<object?>();
+            }
+
             if (keys.Length == 2 && script.Contains("redis.call('DEL'", StringComparison.Ordinal))
             {
                 _entries.Remove(keys[0].ToString());

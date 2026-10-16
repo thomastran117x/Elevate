@@ -61,6 +61,10 @@ return 1";
         // Replaces a value only if it is still exactly the one that was read. Refresh rotation
         // uses it so concurrent refreshes cannot both rotate, and so a session deleted by a
         // revocation in the meantime is never written back.
+        // Lists the account's refresh sessions. A script, unlike the plain set read, reports when
+        // the cache could not answer.
+        private const string ReadSessionIdsScript = "return redis.call('SMEMBERS', KEYS[1])";
+
         private const string CompareAndSetScript = @"
 if redis.call('GET', KEYS[1]) ~= ARGV[1] then
     return 0
@@ -1246,24 +1250,33 @@ return 1";
         {
             try
             {
-                // Best effort: an unreachable cache reads as an empty set and revokes nothing.
-                // Callers bump AuthVersion first, and the version stamped on each session is what
-                // stops a surviving one from being refreshed.
-                var sessionIds = await _cacheService.SetMembersAsync(UserSessionsKey(userId));
-                foreach (var sessionId in sessionIds)
-                    await RevokeRefreshSessionCoreAsync(sessionId);
+                // Best effort: callers bump AuthVersion first, and the version stamped on each
+                // session is what stops a surviving one from being refreshed. The session list is
+                // read through a script so that an unreachable cache is told apart from an account
+                // with no sessions; the plain set read reports both as empty.
+                var read = await _cacheService.TryEvalAsync(
+                    ReadSessionIdsScript,
+                    [(StackExchange.Redis.RedisKey)UserSessionsKey(userId)],
+                    []);
+                if (!read.Succeeded)
+                {
+                    EmitSessionsRevoked(userId, reason, actorUserId, AuthSecurityOutcome.Faulted);
+                    return;
+                }
+
+                var revoked = 0;
+                foreach (var sessionId in ReadMembers(read.Value))
+                {
+                    if (await RevokeRefreshSessionCoreAsync(sessionId) is not null)
+                        revoked++;
+                }
 
                 await _cacheService.DeleteKeyAsync(UserSessionsKey(userId));
 
-                // One event for the sweep, with no session id: it covers every session.
-                _securityEvents.Emit(new AuthSecurityEvent
-                {
-                    Definition = AuthSecurityEvents.SessionRevoked,
-                    Outcome = AuthSecurityOutcome.Succeeded,
-                    Reason = reason,
-                    UserId = userId,
-                    ActorUserId = actorUserId,
-                });
+                // One event for the sweep, with no session id: it covers every session. Nothing is
+                // recorded when there was nothing to end, such as a disabled account refreshing again.
+                if (revoked > 0)
+                    EmitSessionsRevoked(userId, reason, actorUserId, AuthSecurityOutcome.Succeeded);
             }
             catch (Exception e)
             {
@@ -1274,6 +1287,28 @@ return 1";
                 throw new InternalServerErrorException();
             }
         }
+
+        private void EmitSessionsRevoked(
+            int userId,
+            AuthSecurityReason reason,
+            int? actorUserId,
+            AuthSecurityOutcome outcome) =>
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.SessionRevoked,
+                Outcome = outcome,
+                Reason = reason,
+                UserId = userId,
+                ActorUserId = actorUserId,
+            });
+
+        private static string[] ReadMembers(object? value) => value switch
+        {
+            StackExchange.Redis.RedisResult result when !result.IsNull =>
+                ((StackExchange.Redis.RedisResult[]?)result ?? []).Select(member => member.ToString()).ToArray(),
+            object?[] items => items.Where(item => item is not null).Select(item => item!.ToString()!).ToArray(),
+            _ => [],
+        };
 
         private async Task<RefreshSessionState?> GetRefreshSessionAsync(string sessionId) =>
             (await ReadRefreshSessionAsync(sessionId)).Session;
