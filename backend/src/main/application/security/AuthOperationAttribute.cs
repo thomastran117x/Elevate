@@ -1,5 +1,4 @@
 using backend.main.features.auth.events;
-using backend.main.shared.exceptions.http;
 
 namespace backend.main.application.security
 {
@@ -68,44 +67,32 @@ namespace backend.main.application.security
             _timeProvider = timeProvider;
         }
 
-        public async Task InvokeAsync(HttpContext context)
+        public Task InvokeAsync(HttpContext context)
         {
             var operation = context.GetEndpoint()?.Metadata.GetMetadata<AuthOperationAttribute>();
             if (operation is null)
-            {
-                await _next(context);
-                return;
-            }
+                return _next(context);
 
             var started = _timeProvider.GetTimestamp();
-            int? escapedStatus = null;
-            try
-            {
-                await _next(context);
-            }
-            catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                // The global exception handler, outside this middleware, answers an AppException with
-                // its own status code; anything else becomes a 500.
-                escapedStatus = ex is AppException appException
-                    ? appException.StatusCode
-                    : StatusCodes.Status500InternalServerError;
-                throw;
-            }
-            finally
+
+            // Recorded once the response has completed, from the status the client actually
+            // received. An exception that escapes this middleware is answered further out (the
+            // global handler turns a CSRF failure into 400 and an AppException into its own code),
+            // so guessing the status here would misclassify those responses.
+            context.Response.OnCompleted(() =>
             {
                 if (!context.RequestAborted.IsCancellationRequested)
                 {
                     _metrics.RecordOperation(
                         operation.Operation,
-                        AuthOperationAttribute.Classify(escapedStatus ?? context.Response.StatusCode),
+                        AuthOperationAttribute.Classify(context.Response.StatusCode),
                         _timeProvider.GetElapsedTime(started));
                 }
-            }
+
+                return Task.CompletedTask;
+            });
+
+            return _next(context);
         }
     }
 }
