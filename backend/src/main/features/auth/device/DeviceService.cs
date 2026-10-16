@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
+using backend.main.features.auth.events;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
@@ -29,6 +30,7 @@ namespace backend.main.features.auth.device
         private readonly IAuthSessionService _authSessionService;
         private readonly ILoginStepUpChallengeService _loginStepUpChallengeService;
         private readonly ITokenService _tokenService;
+        private readonly IAuthSecurityEventEmitter _securityEvents;
         private readonly TimeSpan _pendingTtl = TimeSpan.FromMinutes(15);
 
         private const string StaleLinkMessage =
@@ -43,7 +45,8 @@ namespace backend.main.features.auth.device
             IDeviceTrustService deviceTrustService,
             IAuthSessionService authSessionService,
             ILoginStepUpChallengeService loginStepUpChallengeService,
-            ITokenService tokenService)
+            ITokenService tokenService,
+            IAuthSecurityEventEmitter securityEvents)
         {
             _deviceRepository = deviceRepository;
             _userRepository = userRepository;
@@ -54,6 +57,7 @@ namespace backend.main.features.auth.device
             _authSessionService = authSessionService;
             _loginStepUpChallengeService = loginStepUpChallengeService;
             _tokenService = tokenService;
+            _securityEvents = securityEvents;
         }
 
         public async Task EnsureDeviceKnownAsync(int userId, string userEmail, int authVersion, ClientRequestInfo requestInfo, string? returnUrl = null)
@@ -116,28 +120,39 @@ namespace backend.main.features.auth.device
 
                 var json = await _cacheService.GetValueAsync($"device:pending:{token}");
                 if (string.IsNullOrEmpty(json))
-                    throw new UnauthorizedException("Invalid or expired device verification token.");
+                    throw LinkRejected(AuthSecurityReason.Expired, "Invalid or expired device verification token.");
 
                 var pending = JsonConvert.DeserializeObject<PendingDevice>(json)
-                    ?? throw new UnauthorizedException("Invalid device verification token payload.");
+                    ?? throw LinkRejected(AuthSecurityReason.InvalidState, "Invalid device verification token payload.");
 
                 await _cacheService.DeleteKeyAsync($"device:pending:{token}");
 
                 // An entry stored before the version was recorded cannot show it predates no
                 // rotation. It lives 15 minutes, so refusing costs at most a fresh sign-in.
                 if (pending.AuthVersion is not int issuedVersion)
-                    throw new UnauthorizedException(StaleLinkMessage);
+                    throw LinkRejected(AuthSecurityReason.InvalidState, StaleLinkMessage, pending.UserId);
 
                 var user = await _userRepository.GetUserAsync(pending.UserId)
                     ?? throw new ResourceNotFoundException($"User with ID {pending.UserId} not found.");
                 if (user.IsDisabled)
+                {
+                    _securityEvents.Emit(new AuthSecurityEvent
+                    {
+                        Definition = AuthSecurityEvents.SignInFailed,
+                        Outcome = AuthSecurityOutcome.Denied,
+                        Reason = AuthSecurityReason.AccountDisabled,
+                        Method = AuthSecurityMethod.Email,
+                        Flow = AuthSecurityFlow.DeviceVerification,
+                        UserId = user.Id,
+                    });
                     throw new ForbiddenException("This account is disabled.");
+                }
 
                 // The link outlives a password reset or email change that signs every device out,
                 // because it holds no session for that sweep to reach. Without this, whoever
                 // passed the password check before the change would still be signed in here.
                 if (user.AuthVersion != issuedVersion)
-                    throw new UnauthorizedException(StaleLinkMessage);
+                    throw LinkRejected(AuthSecurityReason.AuthVersionMismatch, StaleLinkMessage, user.Id);
 
                 var userToken = await _authSessionService.IssueAsync(user, transport, rememberMe: false);
 
@@ -155,13 +170,16 @@ namespace backend.main.features.auth.device
                 );
                 if (!trusted)
                 {
-                    await _tokenService.RevokeAllRefreshSessionsAsync(pending.UserId);
-                    throw new UnauthorizedException(StaleLinkMessage);
+                    await _tokenService.RevokeAllRefreshSessionsAsync(pending.UserId, AuthSecurityReason.AuthVersionMismatch);
+                    throw LinkRejected(AuthSecurityReason.AuthVersionMismatch, StaleLinkMessage, pending.UserId);
                 }
 
                 return new AuthenticatedSessionResult
                 {
-                    UserToken = userToken,
+                    UserToken = _securityEvents.SignedIn(
+                        userToken,
+                        AuthSecurityMethod.Email,
+                        AuthSecurityFlow.DeviceVerification),
                     ReturnPath = pending.ReturnPath
                 };
             }
@@ -173,6 +191,21 @@ namespace backend.main.features.auth.device
                 Logger.Error($"[DeviceService] VerifyDeviceAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
+        }
+
+        private UnauthorizedException LinkRejected(AuthSecurityReason reason, string message, int? userId = null)
+        {
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.VerificationFailed,
+                Outcome = AuthSecurityOutcome.Denied,
+                Reason = reason,
+                Method = AuthSecurityMethod.Email,
+                Flow = AuthSecurityFlow.DeviceVerification,
+                UserId = userId,
+            });
+
+            return new UnauthorizedException(message);
         }
 
         private sealed class PendingDevice

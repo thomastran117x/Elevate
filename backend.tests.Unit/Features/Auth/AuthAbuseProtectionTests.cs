@@ -1,6 +1,9 @@
 using backend.main.features.auth.abuse;
+using backend.main.features.auth.events;
 using backend.main.features.cache;
 using backend.main.shared.exceptions.http;
+
+using backend.tests.Unit.Features.Auth.Events;
 
 using FluentAssertions;
 
@@ -147,7 +150,8 @@ public sealed class AuthAbuseProtectionTests
         };
         var context = new DefaultHttpContext();
         var accessor = new HttpContextAccessor { HttpContext = context };
-        var service = CreateService(store, httpContextAccessor: accessor);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(store, httpContextAccessor: accessor, securityEvents: securityEvents);
 
         var action = () => service.EnsureSourceAllowedAsync(
             AuthAbuseFlow.General,
@@ -156,18 +160,24 @@ public sealed class AuthAbuseProtectionTests
         await action.Should().ThrowAsync<TooManyRequestException>()
             .WithMessage("Too many requests. Please try again later.");
         context.Response.Headers.RetryAfter.ToString().Should().Be("12");
+        var throttled = securityEvents.Of(AuthSecurityEvents.Throttled).Should().ContainSingle().Subject;
+        throttled.Outcome.Should().Be(AuthSecurityOutcome.Throttled);
+        throttled.Flow.Should().Be(AuthSecurityFlow.General);
+        throttled.Dimension.Should().Be(AuthThrottleDimension.SourceIp);
     }
 
     private static AuthAbuseProtectionService CreateService(
         IAuthAbuseProtectionStore store,
         ILogger<AuthAbuseProtectionService>? logger = null,
-        IHttpContextAccessor? httpContextAccessor = null) =>
+        IHttpContextAccessor? httpContextAccessor = null,
+        IAuthSecurityEventEmitter? securityEvents = null) =>
         new(
             store,
             Options.Create(new AuthAbuseProtectionOptions()),
             TimeProvider.System,
             httpContextAccessor ?? new HttpContextAccessor(),
-            logger ?? Mock.Of<ILogger<AuthAbuseProtectionService>>());
+            logger ?? Mock.Of<ILogger<AuthAbuseProtectionService>>(),
+            securityEvents ?? NullAuthSecurityEventEmitter.Instance);
 
     private sealed class RecordingStore : IAuthAbuseProtectionStore
     {

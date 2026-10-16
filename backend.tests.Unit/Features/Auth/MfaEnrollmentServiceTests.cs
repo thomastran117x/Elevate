@@ -1,3 +1,4 @@
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.notifications;
 using backend.main.shared.exceptions.http;
@@ -20,7 +21,7 @@ public class MfaEnrollmentServiceTests
         var repository = new Mock<IMfaEnrollmentRepository>();
         var notifications = new Mock<IAuthNotificationService>();
         var cache = new InMemoryCacheService();
-        var service = new MfaEnrollmentService(repository.Object, cache, notifications.Object);
+        var service = new MfaEnrollmentService(repository.Object, cache, notifications.Object, NullAuthSecurityEventEmitter.Instance);
 
         var response = await service.StartEnrollmentAsync(12, "(416) 555-0123");
 
@@ -41,7 +42,7 @@ public class MfaEnrollmentServiceTests
         using var scope = new EnvironmentVariableScope();
         var repository = new Mock<IMfaEnrollmentRepository>();
         repository.Setup(repo => repo.GetByUserIdAsync(12)).ReturnsAsync((SmsMfaEnrollment?)null);
-        var service = new MfaEnrollmentService(repository.Object, new InMemoryCacheService(), Mock.Of<IAuthNotificationService>());
+        var service = new MfaEnrollmentService(repository.Object, new InMemoryCacheService(), Mock.Of<IAuthNotificationService>(), NullAuthSecurityEventEmitter.Instance);
 
         var act = () => service.StartEnableAsync(12);
 
@@ -63,7 +64,7 @@ public class MfaEnrollmentServiceTests
             PhoneVerifiedAtUtc = new DateTime(2026, 6, 22, 15, 0, 0, DateTimeKind.Utc),
         });
 
-        var service = new MfaEnrollmentService(repository.Object, new InMemoryCacheService(), notifications.Object);
+        var service = new MfaEnrollmentService(repository.Object, new InMemoryCacheService(), notifications.Object, NullAuthSecurityEventEmitter.Instance);
 
         var response = await service.StartEnableAsync(12);
 
@@ -100,7 +101,7 @@ public class MfaEnrollmentServiceTests
                 return savedEnrollment;
             });
 
-        var service = new MfaEnrollmentService(repository.Object, cache, notifications.Object);
+        var service = new MfaEnrollmentService(repository.Object, cache, notifications.Object, NullAuthSecurityEventEmitter.Instance);
         var challenge = await service.StartEnrollmentAsync(12, "+14165550123");
         var sendInvocation = notifications.Invocations.Single();
         var smsCode = sendInvocation.Arguments[1].Should().BeOfType<string>().Subject;
@@ -139,7 +140,7 @@ public class MfaEnrollmentServiceTests
                 PhoneVerifiedAtUtc = verifiedAtUtc,
             });
 
-        var service = new MfaEnrollmentService(repository.Object, cache, notifications.Object);
+        var service = new MfaEnrollmentService(repository.Object, cache, notifications.Object, NullAuthSecurityEventEmitter.Instance);
         var challenge = await service.StartEnableAsync(12);
         var sendInvocation = notifications.Invocations.Single();
         var smsCode = sendInvocation.Arguments[1].Should().BeOfType<string>().Subject;
@@ -157,7 +158,7 @@ public class MfaEnrollmentServiceTests
         var repository = new Mock<IMfaEnrollmentRepository>();
         var notifications = new Mock<IAuthNotificationService>();
         var cache = new InMemoryCacheService();
-        var service = new MfaEnrollmentService(repository.Object, cache, notifications.Object);
+        var service = new MfaEnrollmentService(repository.Object, cache, notifications.Object, NullAuthSecurityEventEmitter.Instance);
 
         var challenge = await service.StartEnrollmentAsync(12, "+14165550123");
         var sendInvocation = notifications.Invocations.Single();
@@ -187,7 +188,7 @@ public class MfaEnrollmentServiceTests
             PhoneVerifiedAtUtc = new DateTime(2026, 6, 22, 15, 0, 0, DateTimeKind.Utc),
         });
 
-        var service = new MfaEnrollmentService(repository.Object, new InMemoryCacheService(), Mock.Of<IAuthNotificationService>());
+        var service = new MfaEnrollmentService(repository.Object, new InMemoryCacheService(), Mock.Of<IAuthNotificationService>(), NullAuthSecurityEventEmitter.Instance);
 
         var act = () => service.DisableAsync(12);
 
@@ -209,7 +210,7 @@ public class MfaEnrollmentServiceTests
         });
         repository.Setup(repo => repo.RemoveAsync(12)).ReturnsAsync(true);
 
-        var service = new MfaEnrollmentService(repository.Object, new InMemoryCacheService(), Mock.Of<IAuthNotificationService>());
+        var service = new MfaEnrollmentService(repository.Object, new InMemoryCacheService(), Mock.Of<IAuthNotificationService>(), NullAuthSecurityEventEmitter.Instance);
 
         await service.RemoveAsync(12);
 

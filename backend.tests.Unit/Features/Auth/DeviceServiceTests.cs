@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using backend.main.features.auth;
 using backend.main.features.auth.device;
+using backend.main.features.auth.events;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
@@ -151,7 +152,7 @@ public class DeviceServiceTests
         var act = () => harness.Service.VerifyDeviceAsync("verify-token", SessionTransport.BrowserCookie);
 
         await act.Should().ThrowAsync<UnauthorizedException>().WithMessage("*no longer valid*");
-        harness.Tokens.Verify(t => t.RevokeAllRefreshSessionsAsync(11), Times.Once);
+        harness.Tokens.Verify(t => t.RevokeAllRefreshSessionsAsync(11, AuthSecurityReason.AuthVersionMismatch, null), Times.Once);
     }
 
     [Fact]
@@ -286,7 +287,8 @@ public class DeviceServiceTests
         Mock<IDeviceTrustService>? deviceTrustService = null,
         Mock<IAuthSessionService>? authSessionService = null,
         Mock<ILoginStepUpChallengeService>? loginStepUpChallengeService = null,
-        Mock<ITokenService>? tokenService = null)
+        Mock<ITokenService>? tokenService = null,
+        IAuthSecurityEventEmitter? securityEvents = null)
     {
         deviceRepository ??= new Mock<IDeviceRepository>();
         userRepository ??= new Mock<IAuthUserRepository>();
@@ -306,7 +308,8 @@ public class DeviceServiceTests
             deviceTrustService.Object,
             authSessionService.Object,
             loginStepUpChallengeService.Object,
-            tokenService.Object);
+            tokenService.Object,
+            securityEvents ?? NullAuthSecurityEventEmitter.Instance);
     }
 
     private static string ComputeHash(string token)

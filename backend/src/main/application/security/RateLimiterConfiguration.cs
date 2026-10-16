@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 
+using backend.main.features.auth.events;
 using backend.main.shared.responses;
 
 using Microsoft.AspNetCore.Http;
@@ -75,6 +76,46 @@ namespace backend.main.application.security
         private const int ImageUploadPermitLimit = 30;
         private static readonly TimeSpan ImageUploadWindow = TimeSpan.FromMinutes(10);
 
+        /// <summary>
+        /// Records a rejection by one of the authentication policies as an <c>auth.throttled</c>
+        /// event. The global and upload limits are not authentication controls and are left out.
+        /// </summary>
+        internal static void RecordAuthThrottle(HttpContext httpContext)
+        {
+            if (GlobalLimiterRejectionMarker.WasRejected(httpContext))
+                return;
+
+            var policy = httpContext.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName;
+            AuthSecurityFlow? flow = policy switch
+            {
+                AuthPolicyName => AuthSecurityFlow.General,
+                UsernameAvailabilityPolicyName => AuthSecurityFlow.UsernameAvailability,
+                UsernameSuggestionsPolicyName => AuthSecurityFlow.UsernameSuggestions,
+                EmailAvailabilityPolicyName => AuthSecurityFlow.EmailAvailability,
+                EmailChangePolicyName => AuthSecurityFlow.EmailChange,
+                _ => null,
+            };
+            if (flow is null)
+                return;
+
+            // The email-change budget is per account and runs after authentication, so the
+            // throttled account is the caller. The other policies are anonymous and per address.
+            int? userId = policy == EmailChangePolicyName
+                && int.TryParse(httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var callerId)
+                ? callerId
+                : null;
+
+            httpContext.RequestServices.GetService<IAuthSecurityEventEmitter>()?.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.Throttled,
+                Outcome = AuthSecurityOutcome.Throttled,
+                Reason = AuthSecurityReason.LimitExceeded,
+                Flow = flow,
+                Dimension = AuthThrottleDimension.RateLimiter,
+                UserId = userId,
+            });
+        }
+
         public static IServiceCollection AddInMemoryRateLimiter(
             this IServiceCollection services,
             IConfiguration? configuration = null)
@@ -105,6 +146,7 @@ namespace backend.main.application.security
 
                 options.OnRejected = async (context, cancellationToken) =>
                 {
+                    RecordAuthThrottle(context.HttpContext);
                     context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
                     context.HttpContext.Response.ContentType = "application/json";
                     if (context.Lease.TryGetMetadata(
@@ -125,7 +167,7 @@ namespace backend.main.application.security
                     );
                 };
 
-                options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+                options.GlobalLimiter = new GlobalLimiterRejectionMarker(PartitionedRateLimiter.Create<HttpContext, string>(context =>
                 {
                     try
                     {
@@ -147,7 +189,7 @@ namespace backend.main.application.security
                             QueueLimit = 0
                         });
                     }
-                });
+                }));
 
                 options.AddPolicy(AuthPolicyName, context =>
                 {

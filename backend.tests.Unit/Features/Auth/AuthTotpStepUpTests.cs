@@ -7,6 +7,7 @@ using backend.main.features.auth.captcha;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.device;
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
@@ -89,7 +90,8 @@ public class AuthTotpStepUpControllerTests
             configuration,
             new Mock<ITokenService>().Object,
             new Mock<IEmailChangeService>().Object,
-            CreateAbuseProtection().Object)
+            CreateAbuseProtection().Object,
+            NullAuthSecurityEventEmitter.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -222,6 +224,7 @@ public class AuthTotpStepUpServiceTests
             new SeedAccountBypassPolicy(new ConfigurationBuilder().Build()),
             TestRequestInfoFactory.Browser(),
             TestPasswordHashers.Fast(),
-            TestPasswordPolicies.Default());
+            TestPasswordPolicies.Default(),
+            NullAuthSecurityEventEmitter.Instance);
     }
 }

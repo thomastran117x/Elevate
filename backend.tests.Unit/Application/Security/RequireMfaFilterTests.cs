@@ -2,6 +2,7 @@ using System.Security.Claims;
 
 using backend.main.application.security;
 using backend.main.features.auth;
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.token;
 using backend.main.shared.responses;
@@ -144,6 +145,8 @@ public class RequireMfaFilterTests
         var body = result.Value.Should().BeOfType<ApiResponse<object?>>().Subject;
         body.Success.Should().BeFalse();
         body.Error!.Code.Should().Be("MFA_REQUIRED");
+        context.HttpContext.Features.Get<AuthSecurityRequestFeature>()!.DenialReason
+            .Should().Be(AuthSecurityReason.MfaRequired);
     }
 
     private static RequireMfaAttribute.RequireMfaFilter CreateFilter(

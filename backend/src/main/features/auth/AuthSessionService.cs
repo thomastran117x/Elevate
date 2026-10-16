@@ -48,7 +48,10 @@ namespace backend.main.features.auth
                     refreshToken.SessionBindingToken,
                     refreshToken.Lifetime,
                     refreshToken.Transport
-                );
+                )
+                {
+                    SessionId = refreshToken.SessionId,
+                };
 
                 return new UserToken(authToken, user);
             }

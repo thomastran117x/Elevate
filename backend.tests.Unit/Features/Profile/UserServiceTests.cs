@@ -1,6 +1,7 @@
 using backend.main.features.auth;
 using backend.main.features.bloom;
 using backend.main.features.auth.contracts;
+using backend.main.features.auth.events;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.clubs.follow;
@@ -87,10 +88,10 @@ public class UserServiceTests
         var refreshCache = new Mock<IRefreshAheadCache>();
         var service = CreateService(authRepository: authRepository, tokenService: tokenService, refreshCache: refreshCache);
 
-        var result = await service.UpdateUserStatusAsync(9, true, "policy");
+        var result = await service.UpdateUserStatusAsync(9, true, "policy", actorUserId: 1);
 
         result.IsDisabled.Should().BeTrue();
-        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(9), Times.Once);
+        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(9, AuthSecurityReason.AccountDisabled, 1), Times.Once);
         refreshCache.Verify(c => c.RemoveAsync("user:9"), Times.Once);
     }
 

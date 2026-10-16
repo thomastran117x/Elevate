@@ -3,6 +3,7 @@ using backend.main.application.security;
 using backend.main.features.auth.abuse;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
@@ -74,6 +75,7 @@ namespace backend.main.features.auth.mfa.totp
 
         [HttpPost("enroll/verify")]
         [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.FactorChange)]
         public async Task<IActionResult> VerifyEnrollment([FromBody] TotpEnrollmentVerifyRequest request)
         {
             try
@@ -98,6 +100,7 @@ namespace backend.main.features.auth.mfa.totp
 
         [HttpPost("enable")]
         [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.FactorChange)]
         public async Task<IActionResult> Enable([FromBody] TotpDisableRequest request)
         {
             try
@@ -122,6 +125,7 @@ namespace backend.main.features.auth.mfa.totp
 
         [HttpPost("disable")]
         [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.FactorChange)]
         public async Task<IActionResult> Disable([FromBody] TotpDisableRequest request)
         {
             try
@@ -146,6 +150,7 @@ namespace backend.main.features.auth.mfa.totp
 
         [HttpPost("remove")]
         [ProducesResponseType(typeof(ApiResponse<MfaSettingsResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.FactorChange)]
         public async Task<IActionResult> Remove([FromBody] TotpDisableRequest request)
         {
             try

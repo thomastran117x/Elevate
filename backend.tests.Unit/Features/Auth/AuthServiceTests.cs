@@ -4,6 +4,7 @@ using backend.main.features.bloom;
 using backend.main.features.auth.contracts;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.device;
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
@@ -15,6 +16,7 @@ using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
 
+using backend.tests.Unit.Features.Auth.Events;
 using backend.tests.Unit.Support;
 
 using FluentAssertions;
@@ -83,7 +85,7 @@ public class AuthServiceTests
         await act.Should().ThrowAsync<ForbiddenException>()
             .WithMessage("This account is disabled.");
 
-        tokenService.Verify(s => s.RevokeAllRefreshSessionsAsync(44), Times.Once);
+        tokenService.Verify(s => s.RevokeAllRefreshSessionsAsync(44, AuthSecurityReason.AccountDisabled, null), Times.Once);
     }
 
     [Fact]
@@ -143,7 +145,8 @@ public class AuthServiceTests
             .ReturnsAsync((UserRecoveryRecord?)null);
 
         var notifications = new Mock<IAuthNotificationService>();
-        var service = CreateService(userRepository: userRepository, authNotificationService: notifications);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(securityEvents: securityEvents, userRepository: userRepository, authNotificationService: notifications);
 
         var challenge = await service.RecoverPasswordAsync("unknown-user");
 
@@ -154,6 +157,11 @@ public class AuthServiceTests
         notifications.Verify(
             service => service.SendPasswordResetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()),
             Times.Never);
+        var recovery = securityEvents.Emitted.Should().ContainSingle().Subject;
+        recovery.Event.Definition.Should().Be(AuthSecurityEvents.RecoveryRequested);
+        recovery.Event.Reason.Should().Be(AuthSecurityReason.Suppressed);
+        recovery.Event.UserId.Should().BeNull();
+        recovery.Target.Should().Be(AuthSecurityTarget.Username("unknown-user"));
     }
 
     [Fact]
@@ -285,7 +293,9 @@ public class AuthServiceTests
                 MaskedEmail = "t***@example.com"
             });
 
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
         var service = CreateService(
+            securityEvents: securityEvents,
             userRepository: userRepository,
             deviceService: deviceService,
             loginStepUpChallengeService: challengeService,
@@ -302,6 +312,11 @@ public class AuthServiceTests
         result.StepUp!.Challenge.Should().Be("stepup-challenge");
         deviceService.Verify(service => service.EnsureDeviceKnownAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<ClientRequestInfo>(), It.IsAny<string?>()), Times.Never);
         challengeService.VerifyAll();
+        var challenged = securityEvents.Of(AuthSecurityEvents.SignInChallenged).Should().ContainSingle().Subject;
+        challenged.Reason.Should().Be(AuthSecurityReason.StepUpRequired);
+        challenged.Method.Should().Be(AuthSecurityMethod.Password);
+        challenged.UserId.Should().Be(27);
+        securityEvents.Of(AuthSecurityEvents.SignInSucceeded).Should().BeEmpty();
     }
 
     [Fact]
@@ -502,7 +517,9 @@ public class AuthServiceTests
             Usertype = "Participant",
             GoogleID = "google-1"
         });
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
         var service = CreateService(
+            securityEvents: securityEvents,
             userRepository: userRepository,
             oauthService: oauthService,
             tokenService: tokenService,
@@ -516,6 +533,9 @@ public class AuthServiceTests
         result.UserToken!.user.GoogleID.Should().Be("google-1");
         userRepository.Verify(repository => repository.UpdateProviderIdsAsync(9, "google-1", null), Times.Once);
         deviceService.Verify(s => s.EnsureDeviceKnownAsync(9, "existing@example.com", 1, It.IsAny<backend.main.shared.requests.ClientRequestInfo>(), It.IsAny<string?>()), Times.Once);
+        var linked = securityEvents.Of(AuthSecurityEvents.ProviderLinked).Should().ContainSingle().Subject;
+        linked.UserId.Should().Be(9);
+        linked.Method.Should().Be(AuthSecurityMethod.Google);
     }
 
     /// <summary>
@@ -611,7 +631,9 @@ public class AuthServiceTests
             .ReturnsAsync(new OAuthUser("google-newcomer", "existing@example.com", "New Holder", "google"));
 
         var authSessionService = new Mock<IAuthSessionService>();
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
         var service = CreateService(
+            securityEvents: securityEvents,
             userRepository: userRepository,
             oauthService: oauthService,
             authSessionService: authSessionService);
@@ -630,6 +652,11 @@ public class AuthServiceTests
                 It.IsAny<string?>(),
                 It.IsAny<bool?>()),
             Times.Never);
+        var conflict = securityEvents.Of(AuthSecurityEvents.ProviderLinkConflict).Should().ContainSingle().Subject;
+        conflict.Reason.Should().Be(AuthSecurityReason.EmailBoundToOtherProvider);
+        conflict.UserId.Should().Be(9);
+        conflict.Method.Should().Be(AuthSecurityMethod.Google);
+        securityEvents.Of(AuthSecurityEvents.ProviderLinked).Should().BeEmpty();
     }
 
     [Fact]
@@ -824,7 +851,8 @@ public class AuthServiceTests
             });
 
         var notifications = new Mock<IAuthNotificationService>();
-        var service = CreateService(userRepository: userRepository, tokenService: tokenService, authNotificationService: notifications);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(securityEvents: securityEvents, userRepository: userRepository, tokenService: tokenService, authNotificationService: notifications);
 
         var result = await service.RecoverPasswordAsync("active-user");
 
@@ -834,6 +862,10 @@ public class AuthServiceTests
             "reset-link",
             "654321",
             It.IsAny<string?>()), Times.Once);
+        var requested = securityEvents.Of(AuthSecurityEvents.RecoveryRequested).Should().ContainSingle().Subject;
+        requested.Reason.Should().Be(AuthSecurityReason.Issued);
+        requested.UserId.Should().Be(8);
+        requested.Flow.Should().Be(AuthSecurityFlow.PasswordRecovery);
     }
 
     [Fact]
@@ -867,7 +899,7 @@ public class AuthServiceTests
                 Email = "reset@example.com",
                 Usertype = "Participant"
             });
-        tokenService.Setup(service => service.RevokeAllRefreshSessionsAsync(21))
+        tokenService.Setup(service => service.RevokeAllRefreshSessionsAsync(21, AuthSecurityReason.PasswordReset, null))
             .Returns(Task.CompletedTask);
 
         var notifications = new Mock<IAuthNotificationService>();
@@ -881,7 +913,7 @@ public class AuthServiceTests
 
         userRepository.Verify(repository => repository.SetPasswordAndBumpAuthVersionAsync(
             21, It.Is<string>(hash => hash.StartsWith("$argon2id$")), It.IsAny<CancellationToken>()), Times.Once);
-        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(21), Times.Once);
+        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(21, AuthSecurityReason.PasswordReset, null), Times.Once);
         notifications.Verify(service => service.SendPasswordChangedAsync(
             "reset@example.com",
             null
@@ -919,7 +951,7 @@ public class AuthServiceTests
                 Email = "reset-otp@example.com",
                 Usertype = "Participant"
             });
-        tokenService.Setup(service => service.RevokeAllRefreshSessionsAsync(22))
+        tokenService.Setup(service => service.RevokeAllRefreshSessionsAsync(22, AuthSecurityReason.PasswordReset, null))
             .Returns(Task.CompletedTask);
 
         var notifications = new Mock<IAuthNotificationService>();
@@ -933,7 +965,7 @@ public class AuthServiceTests
 
         userRepository.Verify(repository => repository.SetPasswordAndBumpAuthVersionAsync(
             22, It.Is<string>(hash => hash.StartsWith("$argon2id$")), It.IsAny<CancellationToken>()), Times.Once);
-        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(22), Times.Once);
+        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(22, AuthSecurityReason.PasswordReset, null), Times.Once);
         notifications.Verify(service => service.SendPasswordChangedAsync(
             "reset-otp@example.com",
             null
@@ -1018,7 +1050,9 @@ public class AuthServiceTests
             MicrosoftID = "ms-2",
             AuthVersion = 1
         });
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
         var service = CreateService(
+            securityEvents: securityEvents,
             userRepository: userRepository,
             oauthService: oauthService,
             tokenService: tokenService,
@@ -1033,6 +1067,10 @@ public class AuthServiceTests
         userRepository.Verify(repository => repository.UpdateUserAsync(15, It.Is<backend.main.features.profile.User>(u =>
             u.Usertype == AuthRoles.DefaultOAuthRole)), Times.Once);
         deviceService.Verify(service => service.EnsureDeviceKnownAsync(15, "member@example.com", 1, It.IsAny<ClientRequestInfo>(), It.IsAny<string?>()), Times.Once);
+        var signedIn = securityEvents.Of(AuthSecurityEvents.SignInSucceeded).Should().ContainSingle().Subject;
+        signedIn.Method.Should().Be(AuthSecurityMethod.Microsoft);
+        signedIn.Flow.Should().Be(AuthSecurityFlow.Login);
+        signedIn.UserId.Should().Be(15);
     }
 
     /// <summary>
@@ -1175,6 +1213,23 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task OAuthSignIn_ShouldRecordARejectedProviderToken()
+    {
+        var oauthService = new Mock<IOAuthService>();
+        oauthService.Setup(service => service.VerifyGoogleTokenAsync("forged-token", null))
+            .ThrowsAsync(new UnauthorizedException("Invalid Google token."));
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(securityEvents: securityEvents, oauthService: oauthService);
+
+        var act = () => service.GoogleAsync("forged-token", SessionTransport.BrowserCookie);
+
+        await act.Should().ThrowAsync<UnauthorizedException>();
+        var failed = securityEvents.Of(AuthSecurityEvents.SignInFailed).Should().ContainSingle().Subject;
+        failed.Reason.Should().Be(AuthSecurityReason.ProviderRejected);
+        failed.Method.Should().Be(AuthSecurityMethod.Google);
+    }
+
+    [Fact]
     public async Task MicrosoftAsync_ShouldRejectUnlinkedSubject_WithoutAnEmail()
     {
         var userRepository = new Mock<IAuthUserRepository>();
@@ -1186,7 +1241,8 @@ public class AuthServiceTests
             .ReturnsAsync(new OAuthUser("ms-unknown", null, string.Empty, "microsoft"));
 
         var cache = new Mock<ICacheService>();
-        var service = CreateService(userRepository: userRepository, oauthService: oauthService, cacheService: cache);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(securityEvents: securityEvents, userRepository: userRepository, oauthService: oauthService, cacheService: cache);
 
         var act = () => service.MicrosoftAsync("ms-token", SessionTransport.BrowserCookie);
 
@@ -1196,6 +1252,9 @@ public class AuthServiceTests
         cache.Verify(
             c => c.SetValueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan?>()),
             Times.Never);
+        var failed = securityEvents.Of(AuthSecurityEvents.SignInFailed).Should().ContainSingle().Subject;
+        failed.Reason.Should().Be(AuthSecurityReason.ProviderRejected);
+        failed.Method.Should().Be(AuthSecurityMethod.Microsoft);
     }
 
     [Fact]
@@ -1683,7 +1742,7 @@ public class AuthServiceTests
             SessionTransport.BrowserCookie);
 
         result.token.RefreshToken.Should().Be("refresh-token");
-        tokenService.Verify(s => s.RevokeRefreshSessionAsync(It.IsAny<string>()), Times.Never);
+        tokenService.Verify(s => s.RevokeRefreshSessionAsync(It.IsAny<string>(), It.IsAny<AuthSecurityReason>()), Times.Never);
     }
 
     [Fact]
@@ -1709,7 +1768,7 @@ public class AuthServiceTests
 
         await act.Should().ThrowAsync<UnauthorizedException>()
             .WithMessage("Refresh session is no longer valid. Please sign in again.");
-        tokenService.Verify(s => s.RevokeRefreshSessionAsync("existing-session"), Times.Once);
+        tokenService.Verify(s => s.RevokeRefreshSessionAsync("existing-session", AuthSecurityReason.AuthVersionMismatch), Times.Once);
         authSessionService.Verify(s => s.IssueAsync(
             It.IsAny<backend.main.features.profile.User>(),
             It.IsAny<SessionTransport>(),
@@ -1773,14 +1832,14 @@ public class AuthServiceTests
                 UserId = 9,
                 Transport = SessionTransport.BrowserCookie
             });
-        tokenService.Setup(service => service.RevokeRefreshSessionAsync("session-9"))
+        tokenService.Setup(service => service.RevokeRefreshSessionAsync("session-9", AuthSecurityReason.Logout))
             .Returns(Task.CompletedTask);
 
         var service = CreateService(tokenService: tokenService);
 
         await service.HandleLogoutAsync("refresh-token", "binding-token", SessionTransport.BrowserCookie);
 
-        tokenService.Verify(service => service.RevokeRefreshSessionAsync("session-9"), Times.Once);
+        tokenService.Verify(service => service.RevokeRefreshSessionAsync("session-9", AuthSecurityReason.Logout), Times.Once);
     }
 
     /// <summary>
@@ -2417,7 +2476,7 @@ public class AuthServiceTests
         await act.Should().ThrowAsync<PasswordPolicyException>();
         userRepository.Verify(repository => repository.SetPasswordAndBumpAuthVersionAsync(
             It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
-        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(It.IsAny<int>()), Times.Never);
+        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(It.IsAny<int>(), It.IsAny<AuthSecurityReason>(), It.IsAny<int?>()), Times.Never);
     }
 
     [Fact]
@@ -2444,13 +2503,34 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task ChangePasswordForAuthenticatedUserAsync_ShouldRecordTheCommittedChange_EvenWhenTheSessionSweepFails()
+    {
+        var hasher = TestPasswordHashers.Fast();
+        var userRepository = UserRepositoryForPasswordChange(hasher.Hash("old passphrase that works"));
+        var tokenService = new Mock<ITokenService>();
+        tokenService.Setup(service => service.RevokeAllRefreshSessionsAsync(31, AuthSecurityReason.PasswordChanged, null))
+            .ThrowsAsync(new NotAvailableException());
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(securityEvents: securityEvents, userRepository: userRepository, tokenService: tokenService, passwordHasher: hasher);
+
+        var act = () => service.ChangePasswordForAuthenticatedUserAsync("member@example.com", "old passphrase that works", ValidNewPassword);
+
+        await act.Should().ThrowAsync<NotAvailableException>();
+        securityEvents.Of(AuthSecurityEvents.FactorChanged).Should().ContainSingle()
+            .Which.UserId.Should().Be(31);
+        securityEvents.Of(AuthSecurityEvents.FactorChangeFailed).Should().BeEmpty(
+            "the password did change; the failure came after the commit");
+    }
+
+    [Fact]
     public async Task ChangePasswordForAuthenticatedUserAsync_ShouldStoreANewHash_AndEndEverySession()
     {
         var hasher = TestPasswordHashers.Fast();
         var userRepository = UserRepositoryForPasswordChange(hasher.Hash("old passphrase that works"));
 
         var tokenService = new Mock<ITokenService>();
-        var service = CreateService(userRepository: userRepository, tokenService: tokenService, passwordHasher: hasher);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(securityEvents: securityEvents, userRepository: userRepository, tokenService: tokenService, passwordHasher: hasher);
 
         await service.ChangePasswordForAuthenticatedUserAsync("member@example.com", "old passphrase that works", ValidNewPassword);
 
@@ -2459,7 +2539,11 @@ public class AuthServiceTests
                 It.Is<string>(hash => hasher.Verify(ValidNewPassword, hash) == PasswordVerificationResult.Success),
                 It.IsAny<CancellationToken>()),
             Times.Once);
-        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(31), Times.Once);
+        tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(31, AuthSecurityReason.PasswordChanged, null), Times.Once);
+        var changed = securityEvents.Of(AuthSecurityEvents.FactorChanged).Should().ContainSingle().Subject;
+        changed.Factor.Should().Be(AuthSecurityFactor.Password);
+        changed.Change.Should().Be(AuthFactorChange.Changed);
+        changed.UserId.Should().Be(31);
     }
 
     [Fact]
@@ -2479,13 +2563,18 @@ public class AuthServiceTests
     {
         var hasher = TestPasswordHashers.Fast();
         var userRepository = UserRepositoryForPasswordChange(hasher.Hash("old passphrase that works"));
-        var service = CreateService(userRepository: userRepository, passwordHasher: hasher);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(securityEvents: securityEvents, userRepository: userRepository, passwordHasher: hasher);
 
         var act = () => service.ChangePasswordForAuthenticatedUserAsync("member@example.com", "not the old one", ValidNewPassword);
 
         await act.Should().ThrowAsync<UnauthorizedException>().WithMessage("Current password is incorrect.");
         userRepository.Verify(repository => repository.SetPasswordAndBumpAuthVersionAsync(
             It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        var failed = securityEvents.Of(AuthSecurityEvents.FactorChangeFailed).Should().ContainSingle().Subject;
+        failed.Reason.Should().Be(AuthSecurityReason.InvalidCredentials);
+        failed.Factor.Should().Be(AuthSecurityFactor.Password);
+        failed.UserId.Should().Be(31);
     }
 
     [Fact]
@@ -2510,11 +2599,17 @@ public class AuthServiceTests
     {
         var hasher = TestPasswordHashers.Fast();
         var userRepository = UserRepositoryForPasswordChange(hasher.Hash(ValidNewPassword));
-        var service = CreateService(userRepository: userRepository, passwordHasher: hasher);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(securityEvents: securityEvents, userRepository: userRepository, passwordHasher: hasher);
 
         var act = () => service.ChangePasswordForAuthenticatedUserAsync("member@example.com", ValidNewPassword, ValidNewPassword);
 
         await act.Should().ThrowAsync<BadRequestException>().WithMessage("New password must be different*");
+        var failed = securityEvents.Of(AuthSecurityEvents.FactorChangeFailed).Should().ContainSingle().Subject;
+        failed.Reason.Should().Be(AuthSecurityReason.InvalidRequest);
+        failed.Outcome.Should().Be(AuthSecurityOutcome.Denied);
+        failed.Factor.Should().Be(AuthSecurityFactor.Password);
+        failed.UserId.Should().Be(31);
     }
 
     [Fact]
@@ -2559,7 +2654,8 @@ public class AuthServiceTests
         IEmailAvailabilityService? emailAvailability = null,
         IUsernameAvailabilityService? usernameAvailability = null,
         IPasswordHasher? passwordHasher = null,
-        IPasswordPolicy? passwordPolicy = null)
+        IPasswordPolicy? passwordPolicy = null,
+        IAuthSecurityEventEmitter? securityEvents = null)
     {
         userRepository ??= new Mock<IAuthUserRepository>();
         oauthService ??= new Mock<IOAuthService>();
@@ -2597,7 +2693,8 @@ public class AuthServiceTests
             seedBypass,
             TestRequestInfoFactory.Browser(),
             passwordHasher ?? TestPasswordHashers.Fast(),
-            passwordPolicy ?? TestPasswordPolicies.Default());
+            passwordPolicy ?? TestPasswordPolicies.Default(),
+            securityEvents ?? NullAuthSecurityEventEmitter.Instance);
     }
 
     private static Mock<ITokenService> CreateTokenServiceForUser(backend.main.features.profile.User user)

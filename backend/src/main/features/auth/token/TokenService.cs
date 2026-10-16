@@ -5,6 +5,7 @@ using System.Text;
 
 using backend.main.application.environment;
 using backend.main.application.security;
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.cache;
 using backend.main.features.profile;
@@ -60,6 +61,10 @@ return 1";
         // Replaces a value only if it is still exactly the one that was read. Refresh rotation
         // uses it so concurrent refreshes cannot both rotate, and so a session deleted by a
         // revocation in the meantime is never written back.
+        // Lists the account's refresh sessions. A script, unlike the plain set read, reports when
+        // the cache could not answer.
+        private const string ReadSessionIdsScript = "return redis.call('SMEMBERS', KEYS[1])";
+
         private const string CompareAndSetScript = @"
 if redis.call('GET', KEYS[1]) ~= ARGV[1] then
     return 0
@@ -68,13 +73,18 @@ redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
 return 1";
 
         private readonly TimeProvider _timeProvider;
+        private readonly IAuthSecurityEventEmitter _securityEvents;
 
-        public TokenService(ICacheService cacheService, TimeProvider? timeProvider = null)
+        public TokenService(
+            ICacheService cacheService,
+            TimeProvider? timeProvider = null,
+            IAuthSecurityEventEmitter? securityEvents = null)
         {
             JWT_ACCESS_SECRET = EnvironmentSetting.JwtSecretKeyAccess;
             JWT_VERIFICATION_SECRET = EnvironmentSetting.JwtSecretKeyVerification;
             _cacheService = cacheService;
             _timeProvider = timeProvider ?? TimeProvider.System;
+            _securityEvents = securityEvents ?? NullAuthSecurityEventEmitter.Instance;
         }
 
         public AccessTokenIssue GenerateAccessToken(User user, string sessionId)
@@ -257,7 +267,7 @@ return 1";
 
                 if (session.Transport != expectedTransport)
                 {
-                    await RevokeRefreshSessionAsync(session.SessionId);
+                    await RevokeRefreshSessionAsync(session.SessionId, AuthSecurityReason.TransportMismatch);
                     throw new UnauthorizedException("Refresh token transport mismatch.");
                 }
 
@@ -337,19 +347,20 @@ return 1";
 
             if (session.UserId != tokenRecord.UserId)
             {
-                await RevokeRefreshSessionAsync(tokenRecord.SessionId);
+                await RevokeRefreshSessionAsync(tokenRecord.SessionId, AuthSecurityReason.UserMismatch);
                 throw new UnauthorizedException("Refresh session user mismatch.");
             }
 
             if (session.Transport != expectedTransport)
             {
-                await RevokeRefreshSessionAsync(tokenRecord.SessionId);
+                await RevokeRefreshSessionAsync(tokenRecord.SessionId, AuthSecurityReason.TransportMismatch);
                 throw new UnauthorizedException("Refresh token transport mismatch.");
             }
 
             if (session.CurrentRefreshTokenHash != tokenHash)
             {
-                await RevokeRefreshSessionAsync(tokenRecord.SessionId);
+                EmitRefreshTokenReused(session);
+                await RevokeRefreshSessionAsync(tokenRecord.SessionId, AuthSecurityReason.TokenReuse);
                 throw new UnauthorizedException("Refresh token reuse detected.");
             }
 
@@ -380,13 +391,13 @@ return 1";
         {
             if (string.IsNullOrWhiteSpace(sessionBindingToken))
             {
-                await RevokeRefreshSessionAsync(session.SessionId);
+                await RevokeRefreshSessionAsync(session.SessionId, AuthSecurityReason.BindingMissing);
                 throw new UnauthorizedException("Missing session binding token.");
             }
 
             if (session.CurrentBindingTokenHash != ComputeTokenHash(sessionBindingToken))
             {
-                await RevokeRefreshSessionAsync(session.SessionId);
+                await RevokeRefreshSessionAsync(session.SessionId, AuthSecurityReason.BindingMismatch);
                 throw new UnauthorizedException("Invalid session binding token.");
             }
         }
@@ -411,14 +422,52 @@ return 1";
                 return new UnauthorizedException("Refresh token was already rotated.");
             }
 
-            // Interim security event until structured auth events land (#323).
-            Logger.Warn(
-                $"[TokenService] auth.refresh_token_reuse session={session.SessionId} user={session.UserId}"
-            );
-
-            await RevokeRefreshSessionAsync(session.SessionId);
+            EmitRefreshTokenReused(session);
+            await RevokeRefreshSessionAsync(session.SessionId, AuthSecurityReason.TokenReuse);
             return new UnauthorizedException("Refresh token reuse detected.");
         }
+
+        /// <summary>Records a rejected verification link or code and returns the 401 to throw.</summary>
+        private UnauthorizedException VerificationRejected(
+            VerificationPurpose purpose,
+            AuthSecurityReason reason,
+            string message,
+            int? userId = null,
+            string? email = null)
+        {
+            _securityEvents.Emit(
+                new AuthSecurityEvent
+                {
+                    Definition = AuthSecurityEvents.VerificationFailed,
+                    Outcome = AuthSecurityOutcome.Denied,
+                    Reason = reason,
+                    Method = AuthSecurityMethod.Email,
+                    Flow = FlowFor(purpose),
+                    UserId = userId,
+                },
+                email is null ? null : AuthSecurityTarget.Email(email));
+
+            return new UnauthorizedException(message);
+        }
+
+        internal static AuthSecurityFlow FlowFor(VerificationPurpose purpose) => purpose switch
+        {
+            VerificationPurpose.SignUp => AuthSecurityFlow.Signup,
+            VerificationPurpose.ResetPassword => AuthSecurityFlow.PasswordReset,
+            VerificationPurpose.ChangeEmail => AuthSecurityFlow.EmailChange,
+            _ => AuthSecurityFlow.Verification,
+        };
+
+        private void EmitRefreshTokenReused(RefreshSessionState session) =>
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.RefreshTokenReused,
+                Outcome = AuthSecurityOutcome.Denied,
+                Reason = AuthSecurityReason.Replayed,
+                Method = AuthSecurityMethod.RefreshToken,
+                UserId = session.UserId,
+                SessionId = session.SessionId,
+            });
 
         /// <returns>False when the key no longer holds <paramref name="expected"/>.</returns>
         /// <exception cref="NotAvailableException">The cache could not run the swap.</exception>
@@ -655,13 +704,23 @@ return 1";
                 string? json = await _cacheService.GetValueAsync(VerificationTokenKey(token));
 
                 if (string.IsNullOrEmpty(json))
-                    throw new UnauthorizedException("Invalid or expired verification token.");
+                    throw VerificationRejected(
+                        expectedPurpose,
+                        AuthSecurityReason.Expired,
+                        "Invalid or expired verification token.");
 
                 var payload = JsonConvert.DeserializeObject<VerificationTokenPayload>(json)
-                    ?? throw new UnauthorizedException("Invalid verification token payload.");
+                    ?? throw VerificationRejected(
+                        expectedPurpose,
+                        AuthSecurityReason.InvalidState,
+                        "Invalid verification token payload.");
 
                 if (payload.Purpose != expectedPurpose)
-                    throw new UnauthorizedException("Verification token purpose mismatch.");
+                    throw VerificationRejected(
+                        expectedPurpose,
+                        AuthSecurityReason.InvalidState,
+                        "Verification token purpose mismatch.",
+                        payload.UserId);
 
                 if (beforeConsume != null)
                     await beforeConsume(CreateUserFromPayload(payload));
@@ -698,10 +757,17 @@ return 1";
             {
                 var state = await GetVerificationStateByChallengeAsync(challenge);
                 if (state == null)
-                    throw new UnauthorizedException("Invalid or expired verification challenge.");
+                    throw VerificationRejected(
+                        expectedPurpose,
+                        AuthSecurityReason.Expired,
+                        "Invalid or expired verification challenge.");
 
                 if (state.Purpose != expectedPurpose)
-                    throw new UnauthorizedException("Verification challenge purpose mismatch.");
+                    throw VerificationRejected(
+                        expectedPurpose,
+                        AuthSecurityReason.InvalidState,
+                        "Verification challenge purpose mismatch.",
+                        state.UserId);
 
                 var expectedProof = ComputeOtpProof(
                     state.Purpose,
@@ -716,7 +782,12 @@ return 1";
                 );
 
                 if (state.OtpChallenge != challenge)
-                    throw new UnauthorizedException("Invalid or expired verification challenge.");
+                    throw VerificationRejected(
+                        expectedPurpose,
+                        AuthSecurityReason.Expired,
+                        "Invalid or expired verification challenge.",
+                        state.UserId,
+                        state.Email);
 
                 if (!CryptoHelper.FixedTimeEquals(state.OtpProof, expectedProof))
                 {
@@ -727,7 +798,14 @@ return 1";
                         await DeleteVerificationStateAsync(state);
                     }
 
-                    throw new UnauthorizedException("Invalid or expired verification code.");
+                    throw VerificationRejected(
+                        expectedPurpose,
+                        attempts >= MAX_OTP_ATTEMPTS
+                            ? AuthSecurityReason.AttemptsExhausted
+                            : AuthSecurityReason.InvalidCode,
+                        "Invalid or expired verification code.",
+                        state.UserId,
+                        state.Email);
                 }
 
                 var verifiedUser = CreateUserFromPayload(new VerificationTokenPayload
@@ -831,18 +909,18 @@ return 1";
                 // Read the payload first, only to learn whose lock to take.
                 string? peek = await _cacheService.GetValueAsync(VerificationTokenKey(token));
                 if (string.IsNullOrEmpty(peek))
-                    throw new UnauthorizedException("Invalid or expired email change link.");
+                    throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.Expired, "Invalid or expired email change link.");
 
                 var peeked = JsonConvert.DeserializeObject<VerificationTokenPayload>(peek)
-                    ?? throw new UnauthorizedException("Invalid verification token payload.");
+                    ?? throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.InvalidState, "Invalid verification token payload.");
 
                 // Checked before the account id so a token for another purpose is reported as
                 // such, rather than as one missing a binding it was never meant to carry.
                 if (peeked.Purpose != VerificationPurpose.ChangeEmail)
-                    throw new UnauthorizedException("Verification token purpose mismatch.");
+                    throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.InvalidState, "Verification token purpose mismatch.");
 
                 if (peeked.UserId is not int owner)
-                    throw new UnauthorizedException("Email change token is missing its account.");
+                    throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.InvalidState, "Email change token is missing its account.");
 
                 return await WithEmailChangeLockAsync(owner, () => ConsumeTokenCoreAsync(token));
             }
@@ -863,19 +941,19 @@ return 1";
                 string? json = await _cacheService.GetValueAsync(VerificationTokenKey(token));
 
                 if (string.IsNullOrEmpty(json))
-                    throw new UnauthorizedException("Invalid or expired email change link.");
+                    throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.Expired, "Invalid or expired email change link.");
 
                 var payload = JsonConvert.DeserializeObject<VerificationTokenPayload>(json)
-                    ?? throw new UnauthorizedException("Invalid verification token payload.");
+                    ?? throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.InvalidState, "Invalid verification token payload.");
 
                 if (payload.Purpose != VerificationPurpose.ChangeEmail)
-                    throw new UnauthorizedException("Verification token purpose mismatch.");
+                    throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.InvalidState, "Verification token purpose mismatch.");
 
                 if (payload.UserId is not int userId)
-                    throw new UnauthorizedException("Email change token is missing its account.");
+                    throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.InvalidState, "Email change token is missing its account.");
 
                 if (payload.AuthVersion is not int authVersion)
-                    throw new UnauthorizedException("Email change token is missing its account.");
+                    throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.InvalidState, "Email change token is missing its account.");
 
                 var state = await GetVerificationStateAsync(payload.Email, payload.Purpose);
                 var expiresAtUtc = state?.ExpiresAtUtc ?? DateTime.UtcNow;
@@ -910,13 +988,13 @@ return 1";
             try
             {
                 var peek = await GetVerificationStateByChallengeAsync(challenge)
-                    ?? throw new UnauthorizedException("Invalid or expired verification challenge.");
+                    ?? throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.Expired, "Invalid or expired verification challenge.");
 
                 if (peek.Purpose != VerificationPurpose.ChangeEmail)
-                    throw new UnauthorizedException("Verification challenge purpose mismatch.");
+                    throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.InvalidState, "Verification challenge purpose mismatch.");
 
                 if (peek.UserId is not int owner)
-                    throw new UnauthorizedException("Email change challenge is missing its account.");
+                    throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.InvalidState, "Email change challenge is missing its account.");
 
                 return await WithEmailChangeLockAsync(
                     owner,
@@ -938,19 +1016,19 @@ return 1";
             {
                 var state = await GetVerificationStateByChallengeAsync(challenge);
                 if (state == null)
-                    throw new UnauthorizedException("Invalid or expired verification challenge.");
+                    throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.Expired, "Invalid or expired verification challenge.");
 
                 if (state.Purpose != VerificationPurpose.ChangeEmail)
-                    throw new UnauthorizedException("Verification challenge purpose mismatch.");
+                    throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.InvalidState, "Verification challenge purpose mismatch.");
 
                 if (state.UserId is not int userId)
-                    throw new UnauthorizedException("Email change challenge is missing its account.");
+                    throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.InvalidState, "Email change challenge is missing its account.");
 
                 if (state.AuthVersion is not int authVersion)
-                    throw new UnauthorizedException("Email change challenge is missing its account.");
+                    throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.InvalidState, "Email change challenge is missing its account.");
 
                 if (state.OtpChallenge != challenge)
-                    throw new UnauthorizedException("Invalid or expired verification challenge.");
+                    throw VerificationRejected(VerificationPurpose.ChangeEmail, AuthSecurityReason.Expired, "Invalid or expired verification challenge.");
 
                 var expectedProof = ComputeOtpProof(
                     state.Purpose,
@@ -974,7 +1052,13 @@ return 1";
                         _ = await _cacheService.DeleteKeyAsync(EmailChangeIndexKey(userId));
                     }
 
-                    throw new UnauthorizedException("Invalid or expired verification code.");
+                    throw VerificationRejected(
+                        VerificationPurpose.ChangeEmail,
+                        attempts >= MAX_OTP_ATTEMPTS
+                            ? AuthSecurityReason.AttemptsExhausted
+                            : AuthSecurityReason.InvalidCode,
+                        "Invalid or expired verification code.",
+                        userId);
                 }
 
                 _ = await _cacheService.DeleteKeyAsync(VerificationTokenKey(state.LinkToken));
@@ -1100,7 +1184,24 @@ return 1";
             };
         }
 
-        public async Task RevokeRefreshSessionAsync(string sessionId)
+        public async Task RevokeRefreshSessionAsync(string sessionId, AuthSecurityReason reason)
+        {
+            var userId = await RevokeRefreshSessionCoreAsync(sessionId);
+            if (userId is not null)
+            {
+                _securityEvents.Emit(new AuthSecurityEvent
+                {
+                    Definition = AuthSecurityEvents.SessionRevoked,
+                    Outcome = AuthSecurityOutcome.Succeeded,
+                    Reason = reason,
+                    UserId = userId,
+                    SessionId = sessionId,
+                });
+            }
+        }
+
+        /// <returns>The session's account, or null when no such session was stored.</returns>
+        private async Task<int?> RevokeRefreshSessionCoreAsync(string sessionId)
         {
             try
             {
@@ -1129,6 +1230,8 @@ return 1";
                 );
                 if (!revoked.Succeeded)
                     throw new NotAvailableException();
+
+                return session?.UserId;
             }
             catch (Exception e)
             {
@@ -1140,18 +1243,40 @@ return 1";
             }
         }
 
-        public async Task RevokeAllRefreshSessionsAsync(int userId)
+        public async Task RevokeAllRefreshSessionsAsync(
+            int userId,
+            AuthSecurityReason reason,
+            int? actorUserId = null)
         {
             try
             {
-                // Best effort: an unreachable cache reads as an empty set and revokes nothing.
-                // Callers bump AuthVersion first, and the version stamped on each session is what
-                // stops a surviving one from being refreshed.
-                var sessionIds = await _cacheService.SetMembersAsync(UserSessionsKey(userId));
-                foreach (var sessionId in sessionIds)
-                    await RevokeRefreshSessionAsync(sessionId);
+                // Best effort: callers bump AuthVersion first, and the version stamped on each
+                // session is what stops a surviving one from being refreshed. The session list is
+                // read through a script so that an unreachable cache is told apart from an account
+                // with no sessions; the plain set read reports both as empty.
+                var read = await _cacheService.TryEvalAsync(
+                    ReadSessionIdsScript,
+                    [(StackExchange.Redis.RedisKey)UserSessionsKey(userId)],
+                    []);
+                if (!read.Succeeded)
+                {
+                    EmitSessionsRevoked(userId, reason, actorUserId, AuthSecurityOutcome.Faulted);
+                    return;
+                }
+
+                var revoked = 0;
+                foreach (var sessionId in ReadMembers(read.Value))
+                {
+                    if (await RevokeRefreshSessionCoreAsync(sessionId) is not null)
+                        revoked++;
+                }
 
                 await _cacheService.DeleteKeyAsync(UserSessionsKey(userId));
+
+                // One event for the sweep, with no session id: it covers every session. Nothing is
+                // recorded when there was nothing to end, such as a disabled account refreshing again.
+                if (revoked > 0)
+                    EmitSessionsRevoked(userId, reason, actorUserId, AuthSecurityOutcome.Succeeded);
             }
             catch (Exception e)
             {
@@ -1162,6 +1287,28 @@ return 1";
                 throw new InternalServerErrorException();
             }
         }
+
+        private void EmitSessionsRevoked(
+            int userId,
+            AuthSecurityReason reason,
+            int? actorUserId,
+            AuthSecurityOutcome outcome) =>
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.SessionRevoked,
+                Outcome = outcome,
+                Reason = reason,
+                UserId = userId,
+                ActorUserId = actorUserId,
+            });
+
+        private static string[] ReadMembers(object? value) => value switch
+        {
+            StackExchange.Redis.RedisResult result when !result.IsNull =>
+                ((StackExchange.Redis.RedisResult[]?)result ?? []).Select(member => member.ToString()).ToArray(),
+            object?[] items => items.Where(item => item is not null).Select(item => item!.ToString()!).ToArray(),
+            _ => [],
+        };
 
         private async Task<RefreshSessionState?> GetRefreshSessionAsync(string sessionId) =>
             (await ReadRefreshSessionAsync(sessionId)).Session;

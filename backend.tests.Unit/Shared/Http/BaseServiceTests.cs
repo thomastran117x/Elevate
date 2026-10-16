@@ -1,6 +1,11 @@
+using backend.main.shared.exceptions.http;
 using backend.main.shared.http;
 
 using FluentAssertions;
+
+using Google.Apis.Auth;
+
+using Microsoft.IdentityModel.Tokens;
 
 using Polly.CircuitBreaker;
 
@@ -46,12 +51,41 @@ public class BaseServiceTests
         var action = () => service.ExecuteAsync<string>(() =>
         {
             attempts++;
-            throw new InvalidOperationException("always fails");
+            throw new HttpRequestException("always fails");
         });
 
         var exception = await action.Should().ThrowAsync<Exception>();
-        (exception.Which is InvalidOperationException or BrokenCircuitException).Should().BeTrue();
+        (exception.Which is HttpRequestException or BrokenCircuitException).Should().BeTrue();
         attempts.Should().BeGreaterThanOrEqualTo(3);
+    }
+
+    [Fact]
+    public async Task ExecuteResilientHttpAsync_ShouldNotRetryADeterministicRejection()
+    {
+        // An invalid token fails the same way every time; retrying it only holds the request open.
+        var service = new TestBaseService();
+        var attempts = 0;
+
+        var action = () => service.ExecuteAsync<string>(() =>
+        {
+            attempts++;
+            throw new InvalidJwtException("bad token");
+        });
+
+        await action.Should().ThrowAsync<InvalidJwtException>();
+        attempts.Should().Be(1);
+    }
+
+    [Fact]
+    public void IsTransient_ShouldOnlyAcceptNetworkFaultsAndTimeouts()
+    {
+        BaseService.IsTransient(new HttpRequestException("network")).Should().BeTrue();
+        BaseService.IsTransient(new IOException("connection reset")).Should().BeTrue();
+        BaseService.IsTransient(new TaskCanceledException("timeout", new TimeoutException())).Should().BeTrue();
+        BaseService.IsTransient(new InvalidJwtException("bad token")).Should().BeFalse();
+        BaseService.IsTransient(new SecurityTokenInvalidSignatureException("bad signature")).Should().BeFalse();
+        BaseService.IsTransient(new UnauthorizedException("refused")).Should().BeFalse();
+        BaseService.IsTransient(new TaskCanceledException("caller cancelled")).Should().BeFalse();
     }
 
     [Fact]
