@@ -32,7 +32,7 @@ public class RequestIdHandlerTests
     }
 
     [Fact]
-    public async Task UseRequestId_ShouldPreserveExistingHeader()
+    public async Task UseRequestId_ShouldIgnoreAClientSuppliedId()
     {
         var services = new ServiceCollection().BuildServiceProvider();
         var app = new ApplicationBuilder(services);
@@ -50,7 +50,10 @@ public class RequestIdHandlerTests
 
         await pipeline(context);
 
-        context.TraceIdentifier.Should().Be("request-123");
+        // A caller must not be able to choose the correlation id its requests are logged under.
+        context.TraceIdentifier.Should().NotBe("request-123");
+        Guid.TryParse(context.TraceIdentifier, out _).Should().BeTrue();
+        context.Request.Headers["X-Request-Id"].ToString().Should().Be(context.TraceIdentifier);
     }
 
     [Theory]

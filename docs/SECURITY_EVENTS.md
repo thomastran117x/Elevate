@@ -63,7 +63,7 @@ Login step-up email links and new-device links share `POST /api/auth/device/veri
 | `SourceIpHash` | Keyed hash of the client address, after forwarded-header processing. |
 | `ClientClass`, `DeviceClass` | Coarse User-Agent classes: `browser`, `api_client`, or `unknown`; `desktop`, `mobile`, `tablet`, `api_client`, or `unknown`. The raw User-Agent is never recorded. |
 | `Route` | For `authz.denied`: the HTTP method and route template, such as `DELETE api/profile`. The request path is never recorded. |
-| `CorrelationId` | The request id echoed in `X-Request-Id`. A client-supplied id is kept only if it is 1–128 characters of `A-Z a-z 0-9 . _ : -`; anything else is replaced by a generated GUID. |
+| `CorrelationId` | The request id the API generates for every request and returns in the `X-Request-Id` response header. A client-supplied `X-Request-Id` is ignored, so a caller cannot choose which requests its own are correlated with. |
 
 ### Reason codes
 

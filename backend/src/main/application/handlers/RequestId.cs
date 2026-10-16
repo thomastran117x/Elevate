@@ -12,10 +12,9 @@ namespace backend.main.application.handlers
         }
 
         /// <summary>
-        /// Whether a request id is safe to log and echo. The id becomes the trace identifier that
-        /// security events and logs carry, so a client-supplied value is accepted only in this
-        /// narrow form: anything longer, or containing line breaks or markup, could forge or split
-        /// log entries.
+        /// Whether a trace identifier is safe to copy into security events. The middleware only ever
+        /// sets a generated GUID; this guards events recorded where it did not run, so nothing longer,
+        /// or containing line breaks or markup, can forge or split log entries.
         /// </summary>
         internal static bool IsValidRequestId(string? value) =>
             !string.IsNullOrEmpty(value) && RequestIdPattern().IsMatch(value);
@@ -35,16 +34,12 @@ namespace backend.main.application.handlers
 
             public async Task InvokeAsync(HttpContext context)
             {
-                if (
-                    !context.Request.Headers.TryGetValue(RequestIdHeader, out var existing)
-                    || !IsValidRequestId(existing.ToString())
-                )
-                {
-                    existing = Guid.NewGuid().ToString("D");
-                    context.Request.Headers[RequestIdHeader] = existing;
-                }
-
-                context.TraceIdentifier = existing!;
+                // Always generated here. The id is the correlation id on every log line and security
+                // event, so accepting one from the client would let a caller choose which requests
+                // its own are joined with, including a victim's id copied from a response.
+                var requestId = Guid.NewGuid().ToString("D");
+                context.Request.Headers[RequestIdHeader] = requestId;
+                context.TraceIdentifier = requestId;
 
                 context.Response.OnStarting(() =>
                 {
