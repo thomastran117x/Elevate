@@ -30,6 +30,10 @@ public readonly record struct AuthSecurityTarget(AuthSecurityTargetKind Kind, st
 /// account or source can be correlated without the value being recoverable by hashing a
 /// dictionary of addresses, which an unkeyed hash of an IPv4 address or a common email allows.
 /// </summary>
+/// <remarks>
+/// The key is read once at startup on purpose: changing it mid-run would split hashes of the same
+/// identifier across the change, so a new key takes effect on restart.
+/// </remarks>
 public sealed class AuthIdentifierHasher
 {
     /// <summary>Hex characters kept from the digest: 128 bits.</summary>

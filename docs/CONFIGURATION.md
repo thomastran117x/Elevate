@@ -145,7 +145,7 @@ Authentication outcomes are recorded as structured [security events](SECURITY_EV
 | `IncludeSourceIpHash` | `true` | Add the hashed client address to events. |
 | `IncludeTargetHash` | `true` | Add the hashed username or email to events that have no account id. |
 
-Generate a key with `openssl rand -base64 32` and keep it as secret as the JWT keys. Configure it directly with `Auth__SecurityEvents__IdentifierHashKey` or through the `AUTH_SECURITY_EVENTS_HASH_KEY` variable mapped by Compose. Changing it breaks correlation between hashes made before and after the change.
+Generate a key with `openssl rand -base64 32` and keep it as secret as the JWT keys. Configure it directly with `Auth__SecurityEvents__IdentifierHashKey` or through the `AUTH_SECURITY_EVENTS_HASH_KEY` variable mapped by Compose. Changing it breaks correlation between hashes made before and after the change, and it takes effect on restart. The sink and `Include*` switches take effect without a restart when the configuration source reloads.
 
 ### Refresh sessions
 

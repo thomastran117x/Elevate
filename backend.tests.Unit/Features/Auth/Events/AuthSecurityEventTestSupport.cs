@@ -120,7 +120,7 @@ internal static class AuthSecurityEventTestSupport
         return new AuthSecurityEventEmitter(
             sinks,
             new AuthIdentifierHasher(Microsoft.Extensions.Options.Options.Create(options)),
-            Microsoft.Extensions.Options.Options.Create(options),
+            Monitor(options),
             new HttpContextAccessor { HttpContext = context },
             timeProvider ?? TimeProvider.System,
             metrics ?? new AuthSecurityMetrics(CreateMeterFactory()),

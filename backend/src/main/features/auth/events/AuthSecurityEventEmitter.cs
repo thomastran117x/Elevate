@@ -52,7 +52,7 @@ public sealed class AuthSecurityEventEmitter : IAuthSecurityEventEmitter
 
     private readonly IReadOnlyList<IAuthSecurityEventSink> _sinks;
     private readonly AuthIdentifierHasher _hasher;
-    private readonly AuthSecurityEventsOptions _options;
+    private readonly IOptionsMonitor<AuthSecurityEventsOptions> _options;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly TimeProvider _timeProvider;
     private readonly AuthSecurityMetrics _metrics;
@@ -61,7 +61,7 @@ public sealed class AuthSecurityEventEmitter : IAuthSecurityEventEmitter
     public AuthSecurityEventEmitter(
         IEnumerable<IAuthSecurityEventSink> sinks,
         AuthIdentifierHasher hasher,
-        IOptions<AuthSecurityEventsOptions> options,
+        IOptionsMonitor<AuthSecurityEventsOptions> options,
         IHttpContextAccessor httpContextAccessor,
         TimeProvider timeProvider,
         AuthSecurityMetrics metrics,
@@ -69,7 +69,7 @@ public sealed class AuthSecurityEventEmitter : IAuthSecurityEventEmitter
     {
         _sinks = sinks.ToList();
         _hasher = hasher;
-        _options = options.Value;
+        _options = options;
         _httpContextAccessor = httpContextAccessor;
         _timeProvider = timeProvider;
         _metrics = metrics;
@@ -141,10 +141,10 @@ public sealed class AuthSecurityEventEmitter : IAuthSecurityEventEmitter
             SessionId = sessionId,
             // A target stands in for an unknown account; once the account is known, its hash is
             // unnecessary personal data.
-            TargetHash = _options.IncludeTargetHash && securityEvent.UserId is null && target is { } aimedAt
+            TargetHash = _options.CurrentValue.IncludeTargetHash && securityEvent.UserId is null && target is { } aimedAt
                 ? _hasher.HashTarget(aimedAt)
                 : null,
-            SourceIpHash = _options.IncludeSourceIpHash && context is not null
+            SourceIpHash = _options.CurrentValue.IncludeSourceIpHash && context is not null
                 ? _hasher.HashSourceIp(context.Connection.RemoteIpAddress?.ToString())
                 : null,
             ClientClass = ClassifyClient(userAgent),
