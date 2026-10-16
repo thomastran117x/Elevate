@@ -54,7 +54,7 @@ Login step-up email links and new-device links share `POST /api/auth/device/veri
 | `Reason` | A code from the closed set below; never exception or request text. |
 | `Method` | `password`, `google`, `microsoft`, `sms`, `totp`, `email`, or `refresh_token`. |
 | `Flow` | The flow, verification purpose, or throttled budget, such as `login`, `signup`, `password_reset`, `email_change`, `device_verification`, `login_step_up`, `session_step_up`, `mfa_delivery`, or `mfa_enrollment`. |
-| `Dimension` | For throttles: `source_ip`, `target`, `account`, `attempts`, or `rate_limiter`. |
+| `Dimension` | For throttles: `source_ip`, `target`, `account`, `attempts`, `rate_limiter`, or `concurrency` (a request that lost a race for a verification lock). |
 | `Factor`, `Change` | For factor events: `sms`, `totp`, `password`, or `email`; `enabled`, `disabled`, `removed`, or `changed`. |
 | `UserId` | The account the event is about, when known. It is stated by the code that emits the event and never inferred from a bearer token, since many auth endpoints are anonymous and act on a link, code, or name. The exception is `authz.denied`, which is about the caller. |
 | `ActorUserId` | The account that caused the event when it is not `UserId`, such as an administrator disabling an account. Set only where that account authorized the action. |

@@ -31,13 +31,15 @@ public static class AuthSecurityEventEmitterExtensions
     /// client abandoned is not a failure of the change and is not recorded.
     /// </summary>
     /// <param name="reason">Overrides the reason classified from the exception type.</param>
+    /// <param name="dimension">For a throttled change, which limit refused it; attempts by default.</param>
     public static void FactorChangeFailed(
         this IAuthSecurityEventEmitter emitter,
         int? userId,
         AuthSecurityFactor factor,
         AuthFactorChange change,
         Exception exception,
-        AuthSecurityReason? reason = null)
+        AuthSecurityReason? reason = null,
+        AuthThrottleDimension? dimension = null)
     {
         if (exception is OperationCanceledException)
             return;
@@ -52,7 +54,7 @@ public static class AuthSecurityEventEmitterExtensions
             Flow = factor is AuthSecurityFactor.Sms or AuthSecurityFactor.Totp
                 ? AuthSecurityFlow.MfaEnrollment
                 : null,
-            Dimension = throttled ? AuthThrottleDimension.Attempts : null,
+            Dimension = throttled ? dimension ?? AuthThrottleDimension.Attempts : null,
             Factor = factor,
             Change = change,
             UserId = userId,

@@ -276,6 +276,45 @@ public class TotpMfaEnrollmentServiceTests
     }
 
     [Fact]
+    public async Task DisableAsync_ShouldRecordAWrongCode_AsInvalidCode_NotAMalformedRequest()
+    {
+        using var scope = new EnvironmentVariableScope();
+        TotpMfaEnrollment? storedEnrollment = null;
+        var repository = CreateStatefulRepository(storedEnrollment, value => storedEnrollment = value);
+        var cache = new InMemoryCacheService();
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = new TotpMfaEnrollmentService(repository.Object, cache, securityEvents);
+        var start = await service.StartEnrollmentAsync(99, "user@example.com");
+        await service.VerifyEnrollmentAsync(99, new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp());
+        var validCode = new Totp(Base32Encoding.ToBytes(start.SecretKey)).ComputeTotp();
+
+        var act = () => service.DisableAsync(99, InvalidCodeExcept(validCode));
+
+        // The response is unchanged (400); only the recorded reason is corrected.
+        await act.Should().ThrowAsync<BadRequestException>();
+        var failed = securityEvents.Of(AuthSecurityEvents.FactorChangeFailed).Should().ContainSingle().Subject;
+        failed.Reason.Should().Be(AuthSecurityReason.InvalidCode);
+        failed.Change.Should().Be(AuthFactorChange.Disabled);
+    }
+
+    [Fact]
+    public async Task VerifyEnrollmentAsync_ShouldRecordLockContention_AsAConcurrencyThrottle()
+    {
+        using var scope = new EnvironmentVariableScope();
+        var cache = new InMemoryCacheService();
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = new TotpMfaEnrollmentService(CreateStatefulRepository().Object, cache, securityEvents);
+        await service.StartEnrollmentAsync(99, "user@example.com");
+        await cache.AcquireLockAsync("totp:enrollment:verify-lock:user:99", "other-request", TimeSpan.FromSeconds(5));
+
+        var act = () => service.VerifyEnrollmentAsync(99, "123456");
+
+        await act.Should().ThrowAsync<TooManyRequestException>();
+        var throttled = securityEvents.Of(AuthSecurityEvents.Throttled).Should().ContainSingle().Subject;
+        throttled.Dimension.Should().Be(AuthThrottleDimension.Concurrency);
+    }
+
+    [Fact]
     public async Task DisableAsync_ShouldRecordAFaultedChange_WhenTheStoreFails()
     {
         var repository = new Mock<ITotpMfaEnrollmentRepository>();

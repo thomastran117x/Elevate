@@ -197,6 +197,7 @@ public enum AuthThrottleDimension
     Account,
     Attempts,
     RateLimiter,
+    Concurrency,
 }
 
 public enum AuthSecurityFactor
