@@ -92,8 +92,8 @@ public sealed class AuthSecurityEventEmitter : IAuthSecurityEventEmitter
         try
         {
             var context = _httpContextAccessor.HttpContext;
-            if (context is not null && enriched.Definition != AuthSecurityEvents.AuthorizationDenied)
-                AuthSecurityRequestFeature.For(context).EventRecorded = true;
+            if (context is not null && AuthSecurityRequestFeature.ExplainsForbidden(enriched))
+                AuthSecurityRequestFeature.For(context).DenialExplained = true;
         }
         catch (ObjectDisposedException)
         {

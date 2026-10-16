@@ -57,7 +57,7 @@ namespace backend.main.application.security
                 return;
 
             var feature = context.Features.Get<AuthSecurityRequestFeature>();
-            if (feature?.EventRecorded == true)
+            if (feature?.DenialExplained == true)
                 return;
 
             _securityEvents.Emit(new AuthSecurityEvent

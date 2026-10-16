@@ -13,13 +13,27 @@ public sealed class AuthSecurityRequestFeature
     }
 
     /// <summary>
-    /// Whether a more specific security event already describes this request, such as a disabled
-    /// account's failed sign-in, so its 403 is not counted again as an authorization denial.
+    /// Whether an event already recorded on this request explains a 403 response, so that 403 is
+    /// not counted again as an authorization denial. Unrelated events, such as a session revoked
+    /// earlier in the request, do not count.
     /// </summary>
-    public bool EventRecorded
+    public bool DenialExplained
     {
         get; set;
     }
+
+    /// <summary>
+    /// Whether an event describes a refusal answered with 403: a disabled account turned away, or a
+    /// sign-in held for new-device verification. Every other 403 is an authorization denial.
+    /// </summary>
+    public static bool ExplainsForbidden(AuthSecurityEvent securityEvent) =>
+        securityEvent.Definition != AuthSecurityEvents.AuthorizationDenied
+        && securityEvent.Reason switch
+        {
+            AuthSecurityReason.AccountDisabled => securityEvent.Outcome == AuthSecurityOutcome.Denied,
+            AuthSecurityReason.DeviceVerificationRequired => true,
+            _ => false,
+        };
 
     public static AuthSecurityRequestFeature For(HttpContext context)
     {

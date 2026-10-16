@@ -2,6 +2,7 @@ using backend.main.application.security;
 using backend.main.features.auth.events;
 
 using backend.tests.Unit.Features.Auth.Events;
+using backend.tests.Unit.Support;
 
 using FluentAssertions;
 
@@ -83,7 +84,7 @@ public class AuthorizationDenialObserverTests
         var securityEvents = new RecordingAuthSecurityEventEmitter();
         var observer = CreateObserver(securityEvents);
         var context = CreateContext(StatusCodes.Status403Forbidden, "api/auth/login");
-        AuthSecurityRequestFeature.For(context).EventRecorded = true;
+        AuthSecurityRequestFeature.For(context).DenialExplained = true;
 
         observer.Observe(context);
 
@@ -107,7 +108,7 @@ public class AuthorizationDenialObserverTests
     }
 
     [Fact]
-    public void Emitter_ShouldMarkTheRequestOnceAnotherSecurityEventIsRecorded()
+    public void Emitter_ShouldMarkTheRequest_WhenAnEventExplainsTheForbiddenResponse()
     {
         var context = new DefaultHttpContext();
         var emitter = AuthSecurityEventTestSupport.CreateEmitter(context, []);
@@ -119,7 +120,49 @@ public class AuthorizationDenialObserverTests
             Reason = AuthSecurityReason.AccountDisabled,
         });
 
-        AuthSecurityRequestFeature.For(context).EventRecorded.Should().BeTrue();
+        AuthSecurityRequestFeature.For(context).DenialExplained.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Observe_ShouldStillRecordA403_AfterAnUnrelatedEvent()
+    {
+        // A session revoked earlier in the request (account deletion, a step-up refusal) says
+        // nothing about a later ForbiddenException, so the denial is still recorded.
+        var context = new DefaultHttpContext();
+        var recording = new RecordingAuthSecurityEventSink();
+        var emitter = AuthSecurityEventTestSupport.CreateEmitter(context, [recording]);
+        var observer = new AuthorizationDenialObserverMiddleware(_ => Task.CompletedTask, emitter);
+        emitter.Emit(new AuthSecurityEvent
+        {
+            Definition = AuthSecurityEvents.SessionRevoked,
+            Outcome = AuthSecurityOutcome.Succeeded,
+            Reason = AuthSecurityReason.AccountDeleted,
+            UserId = 4,
+        });
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        context.SetEndpoint(CreateEndpoint("api/clubs/{clubId}"));
+
+        observer.Observe(context);
+
+        recording.Events.Should().Contain(e => e.Definition == AuthSecurityEvents.AuthorizationDenied);
+    }
+
+    [Theory]
+    [InlineData(AuthSecurityReason.AccountDisabled, AuthSecurityOutcome.Denied, true)]
+    [InlineData(AuthSecurityReason.DeviceVerificationRequired, AuthSecurityOutcome.Succeeded, true)]
+    [InlineData(AuthSecurityReason.AccountDisabled, AuthSecurityOutcome.Succeeded, false)]
+    [InlineData(AuthSecurityReason.InvalidCredentials, AuthSecurityOutcome.Denied, false)]
+    public void ExplainsForbidden_ShouldOnlyAcceptEventsThatAccountForA403(
+        AuthSecurityReason reason,
+        AuthSecurityOutcome outcome,
+        bool expected)
+    {
+        AuthSecurityRequestFeature.ExplainsForbidden(new AuthSecurityEvent
+        {
+            Definition = AuthSecurityEvents.SignInFailed,
+            Outcome = outcome,
+            Reason = reason,
+        }).Should().Be(expected);
     }
 
     [Fact]
@@ -137,8 +180,7 @@ public class AuthorizationDenialObserverTests
             return Task.CompletedTask;
         });
         var context = new DefaultHttpContext { RequestServices = services };
-        var responseFeature = new StartableResponseFeature();
-        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpResponseFeature>(responseFeature);
+        var responseFeature = CallbackResponseFeature.AttachTo(context);
 
         await app.Build()(context);
         securityEvents.Emitted.Should().BeEmpty("nothing is observed until the response starts");
@@ -161,29 +203,4 @@ public class AuthorizationDenialObserverTests
 
     private static RouteEndpoint CreateEndpoint(string routeTemplate) =>
         new(_ => Task.CompletedTask, RoutePatternFactory.Parse(routeTemplate), 0, EndpointMetadataCollection.Empty, "test");
-
-    /// <summary>
-    /// The default response feature never runs its OnStarting callbacks; this one runs them when
-    /// the response starts, as a server does.
-    /// </summary>
-    private sealed class StartableResponseFeature : Microsoft.AspNetCore.Http.Features.HttpResponseFeature
-    {
-        private readonly List<(Func<object, Task> Callback, object State)> _onStarting = [];
-        private bool _started;
-
-        public override bool HasStarted => _started;
-
-        public override void OnStarting(Func<object, Task> callback, object state) =>
-            _onStarting.Add((callback, state));
-
-        public async Task StartAsync()
-        {
-            if (_started)
-                return;
-
-            _started = true;
-            for (var i = _onStarting.Count - 1; i >= 0; i--)
-                await _onStarting[i].Callback(_onStarting[i].State);
-        }
-    }
 }
