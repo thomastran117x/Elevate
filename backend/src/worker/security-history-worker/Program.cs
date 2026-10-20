@@ -15,6 +15,10 @@ Logger.Configure(options =>
 
 var builder = Host.CreateApplicationBuilder(args);
 
+// The host's console logger would otherwise print every SQL command EF runs at Information.
+// Logging__LogLevel__Microsoft.EntityFrameworkCore still overrides it.
+builder.Configuration["Logging:LogLevel:Microsoft.EntityFrameworkCore"] ??= "Warning";
+
 builder.Services.AddSingleton(Logger.GetOptions());
 builder.Services.AddSingleton<ICustomLogger, FileLogger>();
 builder.Services.AddSingleton(SecurityHistoryWorkerOptions.FromConfiguration(builder.Configuration));
