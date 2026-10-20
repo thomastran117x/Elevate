@@ -73,6 +73,13 @@ export class ActivityTabComponent {
         switchMap(({ page, moveFocus }) =>
           this.history.getSecurityEvents(page, this.pageSize).pipe(
             tap((result) => {
+              // Retention can expire the last entries of a page between counting and paging. An
+              // empty page past the first then means "go back", not "no activity at all".
+              if (result.items.length === 0 && page > 1 && result.totalCount > 0) {
+                this.requests.next({ page: Math.max(1, result.totalPages), moveFocus });
+                return;
+              }
+
               this.result.set(result);
               this.page.set(page);
               this.state.set('ready');

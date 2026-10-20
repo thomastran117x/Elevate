@@ -179,6 +179,27 @@ describe('ActivityTabComponent', () => {
     expect(history.getSecurityEvents).not.toHaveBeenCalled();
   });
 
+  it('falls back to the last page when retention empties the requested one', () => {
+    // Eleven entries at first; by the time page 2 is asked for, its only entry has expired.
+    history.getSecurityEvents.and.returnValues(
+      of(makePage(1, [makeEntry(11)], 11)),
+      of(makePage(2, [], 10)),
+      of(makePage(1, [makeEntry(11)], 10)),
+    );
+
+    const fixture = createFixture();
+    button(fixture, 'Next').click();
+    fixture.detectChanges();
+
+    expect(history.getSecurityEvents.calls.allArgs()).toEqual([
+      [1, 10],
+      [2, 10],
+      [1, 10],
+    ]);
+    expect(text(fixture)).not.toContain('No recent security activity');
+    expect(text(fixture)).toContain('Page 1 of 1');
+  });
+
   it('ignores page requests while a page is loading', () => {
     const pending = new Subject<SecurityEventsPage>();
     history.getSecurityEvents.and.returnValue(pending);
