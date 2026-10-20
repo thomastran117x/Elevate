@@ -22,7 +22,10 @@ public sealed class SecurityHistoryEventSink : IAuthSecurityEventSink
 {
     private static readonly EventId PublishFailedEvent = new(33902, "SecurityHistoryPublishFailed");
 
-    private readonly IPublisher _publisher;
+    // Resolved on first publish, not when the emitter is built: constructing the Kafka producer
+    // loads its native library, and every host that builds the emitter (OpenAPI export, tests)
+    // would otherwise need it at startup even if it never records an event.
+    private readonly Lazy<IPublisher> _publisher;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IOptionsMonitor<SecurityHistoryOptions> _options;
     private readonly AuthSecurityMetrics _metrics;
@@ -30,17 +33,34 @@ public sealed class SecurityHistoryEventSink : IAuthSecurityEventSink
     private readonly string _topic;
 
     public SecurityHistoryEventSink(
-        IPublisher publisher,
+        IServiceProvider services,
         IHttpContextAccessor httpContextAccessor,
         IOptionsMonitor<SecurityHistoryOptions> options,
         AuthSecurityMetrics metrics,
         ILogger<SecurityHistoryEventSink> logger)
-        : this(publisher, httpContextAccessor, options, metrics, logger, EnvironmentSetting.SecurityHistoryTopic)
+        : this(
+            new Lazy<IPublisher>(services.GetRequiredService<IPublisher>),
+            httpContextAccessor,
+            options,
+            metrics,
+            logger,
+            EnvironmentSetting.SecurityHistoryTopic)
     {
     }
 
     internal SecurityHistoryEventSink(
         IPublisher publisher,
+        IHttpContextAccessor httpContextAccessor,
+        IOptionsMonitor<SecurityHistoryOptions> options,
+        AuthSecurityMetrics metrics,
+        ILogger<SecurityHistoryEventSink> logger,
+        string topic)
+        : this(new Lazy<IPublisher>(publisher), httpContextAccessor, options, metrics, logger, topic)
+    {
+    }
+
+    private SecurityHistoryEventSink(
+        Lazy<IPublisher> publisher,
         IHttpContextAccessor httpContextAccessor,
         IOptionsMonitor<SecurityHistoryOptions> options,
         AuthSecurityMetrics metrics,
@@ -116,7 +136,7 @@ public sealed class SecurityHistoryEventSink : IAuthSecurityEventSink
     {
         try
         {
-            await _publisher.PublishAsync(_topic, message);
+            await _publisher.Value.PublishAsync(_topic, message);
         }
         catch (Exception ex)
         {

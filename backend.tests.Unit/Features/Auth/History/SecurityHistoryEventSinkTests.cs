@@ -10,6 +10,7 @@ using backend.tests.Unit.Features.Auth.Events;
 using FluentAssertions;
 
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -152,6 +153,36 @@ public class SecurityHistoryEventSinkTests
         var entry = logger.Entries.Should().ContainSingle().Subject;
         entry.Level.Should().Be(LogLevel.Warning);
         entry.Message.Should().Contain(nameof(InvalidOperationException)).And.NotContain("broker said");
+    }
+
+    [Fact]
+    public void Constructor_ShouldNotBuildThePublisher_AndAPublisherThatCannotLoadIsCounted()
+    {
+        var resolved = 0;
+        var services = new ServiceCollection()
+            .AddSingleton<IPublisher>(_ =>
+            {
+                resolved++;
+                throw new DllNotFoundException("librdkafka");
+            })
+            .BuildServiceProvider();
+        var meterFactory = AuthSecurityEventTestSupport.CreateMeterFactory();
+        using var recorder = new AuthMetricsRecorder(meterFactory);
+
+        // Hosts that build the emitter without ever recording (OpenAPI export) must not need Kafka.
+        var sink = new SecurityHistoryEventSink(
+            services,
+            new HttpContextAccessor(),
+            new StaticMonitor(new SecurityHistoryOptions()),
+            new AuthSecurityMetrics(meterFactory),
+            new ListLogger<SecurityHistoryEventSink>());
+        resolved.Should().Be(0);
+
+        var write = () => sink.Write(FactorChanged());
+
+        write.Should().NotThrow();
+        resolved.Should().Be(1);
+        recorder.Measurements.Should().ContainSingle(m => m.Instrument == "auth.security_history.publish_failures");
     }
 
     [Fact]
