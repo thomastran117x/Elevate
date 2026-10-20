@@ -16,6 +16,11 @@ export const ACCOUNT_ROUTES: Routes = [
       import('./tabs/security-tab/security-tab.component').then((m) => m.SecurityTabComponent),
   },
   {
+    path: 'activity',
+    loadComponent: () =>
+      import('./tabs/activity-tab/activity-tab.component').then((m) => m.ActivityTabComponent),
+  },
+  {
     path: 'password',
     loadComponent: () =>
       import('./tabs/password-tab/password-tab.component').then((m) => m.PasswordTabComponent),

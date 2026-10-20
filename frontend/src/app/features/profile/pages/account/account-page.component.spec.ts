@@ -52,6 +52,7 @@ describe('AccountPageComponent', () => {
 
     expect(labels).toContain('Profile');
     expect(labels).toContain('Security');
+    expect(labels).toContain('Activity');
     expect(labels).toContain('Password');
     expect(labels).toContain('Danger Zone');
   });
