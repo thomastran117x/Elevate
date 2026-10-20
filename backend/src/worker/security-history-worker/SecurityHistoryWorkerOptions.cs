@@ -117,6 +117,11 @@ public sealed record SecurityHistoryWorkerOptions(
             kinds.Add(kind);
         }
 
+        // Only "none" turns alerts off. A value of nothing but separators is a malformed setting,
+        // and reading it as "no alerts" would silently stop every high-risk notice.
+        if (kinds.Count == 0)
+            throw new InvalidOperationException($"{AlertKindsKey} names no kinds; leave it unset for the defaults or use 'none'.");
+
         return kinds;
     }
 }

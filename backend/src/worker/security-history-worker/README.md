@@ -25,7 +25,7 @@ You need Kafka and the API's PostgreSQL database. Alerts also need the email wor
 | `SECURITY_HISTORY_ALERT_KINDS`            | Comma-separated kinds, or `none`. Unset means `password_changed,provider_linked,refresh_token_reuse_detected,account_disabled`                                                                 |
 | `EMAIL_TOPIC`                             | `eventxperience-email`. Where alerts are handed to the email worker                                                                                                                            |
 
-The worker refuses to start if a value is out of range or names an unknown kind. The default alert kinds are the high-risk changes that send nothing of their own. MFA changes, email changes, and password resets already email the owner when they happen, so adding those kinds sends two emails for one change. Options come from the environment. Non-container runs load ancestor `.env` files, and process values take precedence.
+The worker refuses to start if a value is out of range, names an unknown kind, or lists no kinds at all (only `none` turns alerts off). The default alert kinds are the high-risk changes that send nothing of their own. MFA changes, email changes, and password resets already email the owner when they happen, so adding those kinds sends two emails for one change. Options come from the environment. Non-container runs load ancestor `.env` files, and process values take precedence.
 
 ## Run and Docker
 

@@ -73,6 +73,8 @@ public class SecurityHistoryWorkerOptionsTests
     [InlineData(SecurityHistoryWorkerOptions.PurgeIntervalMinutesKey, "0")]
     [InlineData(SecurityHistoryWorkerOptions.NotificationsEnabledKey, "yes")]
     [InlineData(SecurityHistoryWorkerOptions.AlertKindsKey, "password_changed,login_failed")]
+    [InlineData(SecurityHistoryWorkerOptions.AlertKindsKey, ",")]
+    [InlineData(SecurityHistoryWorkerOptions.AlertKindsKey, " , ,, ")]
     public void FromConfiguration_ShouldRefuseToStart_OnAnInvalidValue(string key, string value)
     {
         var read = () => SecurityHistoryWorkerOptions.FromConfiguration(Configuration(new() { [key] = value }));
