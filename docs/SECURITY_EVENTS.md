@@ -41,6 +41,7 @@ Ids and names are append-only: never renumber, rename, or reuse one. Persist and
 | 33080 | `auth.provider.linked` | Information | A Google or Microsoft identity is linked to an existing account through a verified email match. | `succeeded` | `none` |
 | 33081 | `auth.provider_link.conflict` | Warning | An email match is refused because the account is linked to another identity, or Microsoft did not verify the address. | `denied` | `email_bound_to_other_provider`, `email_unverified` |
 | 33090 | `authz.denied` | Warning | Any 403 response that no other event describes. | `denied` | `policy`, `mfa_required`, `resource_access` |
+| 33100 | `auth.account.status_changed` | Information | An administrator disables or re-enables an account. Recorded whether or not any session was revoked. | `succeeded` | `account_disabled`, `account_enabled` |
 
 `auth.recovery.requested` reasons tell operators whether anything was sent. The API response deliberately hides that, so the reason must never be shown to the requester or in the user-facing history. A `throttled` factor change is recorded as `auth.throttled` with flow `mfa_enrollment`.
 
@@ -136,7 +137,8 @@ The publish is started and left to finish on its own. It never delays, fails, or
 | `auth.factor.changed` | `password_changed`, `email_changed`, `mfa_enabled`, `mfa_disabled`, `mfa_removed` | MFA entries carry the `factor`. |
 | `auth.provider.linked` | `provider_linked` | The provider is the `method`. |
 | `auth.refresh_token.reused` | `refresh_token_reuse_detected` | |
-| `auth.session.revoked` | `signed_out`, `sessions_revoked`, `account_disabled`, `account_enabled`, `session_ended_for_security` | Keeps the revocation `reason`. `token_reuse` is left out because the reuse event already records it, and `account_deleted` because the history goes with the account. |
+| `auth.session.revoked` | `signed_out`, `sessions_revoked`, `session_ended_for_security` | Keeps the revocation `reason`. `token_reuse` is left out because the reuse event already records it. `account_disabled` and `account_enabled` are left out because `auth.account.status_changed` records them, even when no session was revoked. `account_deleted` is left out because the history goes with the account. |
+| `auth.account.status_changed` | `account_disabled`, `account_enabled` | Marked `initiatedByAdmin`. The administrator's id is never stored. |
 
 Everything else is deliberately left out:
 

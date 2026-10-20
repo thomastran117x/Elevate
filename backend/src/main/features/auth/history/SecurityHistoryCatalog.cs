@@ -28,6 +28,7 @@ public static class SecurityHistoryCatalog
             AuthSecurityEvents.RefreshTokenReused,
             AuthSecurityEvents.SessionRevoked,
             AuthSecurityEvents.ProviderLinked,
+            AuthSecurityEvents.AccountStatusChanged,
         };
 
     public static readonly IReadOnlySet<AuthSecurityEventDefinition> NotRecorded =
@@ -83,6 +84,16 @@ public static class SecurityHistoryCatalog
         if (definition == AuthSecurityEvents.SessionRevoked && securityEvent.Outcome == AuthSecurityOutcome.Succeeded)
             return ClassifyRevocation(securityEvent.Reason);
 
+        if (definition == AuthSecurityEvents.AccountStatusChanged)
+        {
+            return securityEvent.Reason switch
+            {
+                AuthSecurityReason.AccountDisabled => AccountSecurityEventKind.AccountDisabled,
+                AuthSecurityReason.AccountEnabled => AccountSecurityEventKind.AccountEnabled,
+                _ => null,
+            };
+        }
+
         return null;
     }
 
@@ -123,15 +134,14 @@ public static class SecurityHistoryCatalog
             AuthSecurityReason.PasswordChanged
                 or AuthSecurityReason.PasswordReset
                 or AuthSecurityReason.EmailChanged => AccountSecurityEventKind.SessionsRevoked,
-            AuthSecurityReason.AccountDisabled => AccountSecurityEventKind.AccountDisabled,
-            AuthSecurityReason.AccountEnabled => AccountSecurityEventKind.AccountEnabled,
             AuthSecurityReason.TransportMismatch
                 or AuthSecurityReason.BindingMissing
                 or AuthSecurityReason.BindingMismatch
                 or AuthSecurityReason.UserMismatch
                 or AuthSecurityReason.AuthVersionMismatch => AccountSecurityEventKind.SessionEndedForSecurity,
-            // TokenReuse is already recorded by the paired auth.refresh_token.reused event, and
-            // AccountDeleted has no owner left to show it to.
+            // TokenReuse is already recorded by the paired auth.refresh_token.reused event, an
+            // admin enable or disable by auth.account.status_changed (which is emitted even when no
+            // session was revoked), and AccountDeleted has no owner left to show it to.
             _ => null,
         };
 }

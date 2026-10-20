@@ -49,8 +49,8 @@ public class SecurityHistoryCatalogTests
         { Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.PasswordChanged), AccountSecurityEventKind.SessionsRevoked },
         { Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.PasswordReset), AccountSecurityEventKind.SessionsRevoked },
         { Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.EmailChanged), AccountSecurityEventKind.SessionsRevoked },
-        { Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.AccountDisabled), AccountSecurityEventKind.AccountDisabled },
-        { Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.AccountEnabled), AccountSecurityEventKind.AccountEnabled },
+        { Event(AuthSecurityEvents.AccountStatusChanged, reason: AuthSecurityReason.AccountDisabled), AccountSecurityEventKind.AccountDisabled },
+        { Event(AuthSecurityEvents.AccountStatusChanged, reason: AuthSecurityReason.AccountEnabled), AccountSecurityEventKind.AccountEnabled },
         { Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.BindingMismatch), AccountSecurityEventKind.SessionEndedForSecurity },
         { Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.BindingMissing), AccountSecurityEventKind.SessionEndedForSecurity },
         { Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.TransportMismatch), AccountSecurityEventKind.SessionEndedForSecurity },
@@ -76,6 +76,10 @@ public class SecurityHistoryCatalogTests
         Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.TokenReuse),
         // The account is gone.
         Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.AccountDeleted),
+        // Already recorded by auth.account.status_changed, which fires even with no sessions.
+        Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.AccountDisabled),
+        Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.AccountEnabled),
+        Event(AuthSecurityEvents.AccountStatusChanged, reason: AuthSecurityReason.None),
         Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.SessionEnded),
         Event(AuthSecurityEvents.SignInChallenged, reason: AuthSecurityReason.LimitExceeded),
         Event(AuthSecurityEvents.FactorChanged, factor: AuthSecurityFactor.Sms, change: AuthFactorChange.Changed),
@@ -95,7 +99,7 @@ public class SecurityHistoryCatalogTests
     [InlineData(99, true)]
     public void IsInitiatedByAdmin_ShouldOnlyFlagAnotherAccountsAction(int? actorUserId, bool expected)
     {
-        var securityEvent = Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.AccountDisabled)
+        var securityEvent = Event(AuthSecurityEvents.AccountStatusChanged, reason: AuthSecurityReason.AccountDisabled)
             with
         { ActorUserId = actorUserId };
 

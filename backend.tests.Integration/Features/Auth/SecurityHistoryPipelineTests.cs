@@ -167,6 +167,36 @@ public sealed class SecurityHistoryPipelineTests
     }
 
     [Fact]
+    public async Task AdminDisable_ShouldBeRecordedAndAlerted_EvenWithoutAnySessionToRevoke()
+    {
+        await using var app = await CreateAppAsync();
+        var admin = await app.SeedUserAsync("pipeline-admin@example.com", role: "Admin");
+        await app.SeedKnownDeviceAsync(admin.Id, "pipeline-admin-device");
+        var adminSession = await app.LoginApiAsync("pipeline-admin", trustedDeviceToken: "pipeline-admin-device");
+        await app.GrantStepUpProofAsync(adminSession.AccessToken);
+        // Never signed in, so disabling it revokes nothing.
+        var dormant = await app.SeedUserAsync("pipeline-dormant@example.com");
+        await app.MarkNotificationBoundaryAsync();
+
+        var response = await app.SendWithBearerAndCsrfAsync(
+            HttpMethod.Patch,
+            $"/api/admin/users/{dormant.Id}/status",
+            new { isDisabled = true, reason = "policy" },
+            adminSession.AccessToken);
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(response));
+
+        var disabled = await app.WaitForSecurityHistoryAsync(m =>
+            m.UserId == dormant.Id && m.Kind == AccountSecurityEventKind.AccountDisabled);
+        disabled.EventName.Should().Be("auth.account.status_changed");
+        disabled.InitiatedByAdmin.Should().BeTrue();
+        (await ProcessAsync(app, disabled)).Should().Be(SecurityHistoryEntryOutcome.Inserted);
+
+        var alert = await app.WaitForEmailAsync(m =>
+            m.Type == EmailMessageType.SecurityAlert && m.Email == "pipeline-dormant@example.com");
+        alert.SecurityAlertKind.Should().Be("account_disabled");
+    }
+
+    [Fact]
     public async Task AnEntryForADeletedAccount_ShouldBeDropped()
     {
         await using var app = await CreateAppAsync();
