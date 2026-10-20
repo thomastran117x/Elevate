@@ -10,20 +10,20 @@ See [security events](../../../../docs/SECURITY_EVENTS.md#account-security-histo
 
 You need Kafka and the API's PostgreSQL database. Alerts also need the email worker.
 
-| Variable                                  | Default / purpose                                                                                                              |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `KAFKA_BOOTSTRAP_SERVERS`                 | Shared broker setting. Standalone fallback `localhost:9092`, template/Compose `kafka:9092`                                     |
-| `DB_CONNECTION_STRING`                    | The API's database                                                                                                             |
-| `SECURITY_HISTORY_TOPIC`                  | `eventxperience-security-history`. Entries published by the API                                                                |
-| `SECURITY_HISTORY_GROUP_ID`               | `security-history-worker`                                                                                                      |
-| `SECURITY_HISTORY_DLQ_TOPIC`              | `eventxperience-security-history-dlq`                                                                                          |
-| `SECURITY_HISTORY_RETENTION_DAYS`         | `90`, 1–365. Fixed into each entry's `ExpiresAtUtc` when it is stored, so a change applies to new entries only                 |
-| `SECURITY_HISTORY_PURGE_INTERVAL_MINUTES` | `60`, 1–1440                                                                                                                   |
-| `SECURITY_HISTORY_PURGE_BATCH_SIZE`       | `500`, 1–5000 rows per delete                                                                                                  |
-| `SECURITY_HISTORY_PURGE_MAX_BATCHES`      | `20`, 1–1000 batches per pass. Whatever is left waits for the next pass                                                        |
-| `SECURITY_HISTORY_NOTIFICATIONS_ENABLED`  | `true`. Email the owner about alert kinds                                                                                      |
-| `SECURITY_HISTORY_ALERT_KINDS`            | Comma-separated kinds, or `none`. Unset means `password_changed,provider_linked,refresh_token_reuse_detected,account_disabled` |
-| `EMAIL_TOPIC`                             | `eventxperience-email`. Where alerts are handed to the email worker                                                            |
+| Variable                                  | Default / purpose                                                                                                                                                                              |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `KAFKA_BOOTSTRAP_SERVERS`                 | Shared broker setting. Standalone fallback `localhost:9092`, template/Compose `kafka:9092`                                                                                                     |
+| `DB_CONNECTION_STRING`                    | The API's database                                                                                                                                                                             |
+| `SECURITY_HISTORY_TOPIC`                  | `eventxperience-security-history`. Entries published by the API                                                                                                                                |
+| `SECURITY_HISTORY_GROUP_ID`               | `security-history-worker`                                                                                                                                                                      |
+| `SECURITY_HISTORY_DLQ_TOPIC`              | `eventxperience-security-history-dlq`                                                                                                                                                          |
+| `SECURITY_HISTORY_RETENTION_DAYS`         | `90`, 1–90. Owners are told entries are kept for up to 90 days, so it can only shorten that. Fixed into each entry's `ExpiresAtUtc` when it is stored, so a change applies to new entries only |
+| `SECURITY_HISTORY_PURGE_INTERVAL_MINUTES` | `60`, 1–1440                                                                                                                                                                                   |
+| `SECURITY_HISTORY_PURGE_BATCH_SIZE`       | `500`, 1–5000 rows per delete                                                                                                                                                                  |
+| `SECURITY_HISTORY_PURGE_MAX_BATCHES`      | `20`, 1–1000 batches per pass. Whatever is left waits for the next pass                                                                                                                        |
+| `SECURITY_HISTORY_NOTIFICATIONS_ENABLED`  | `true`. Email the owner about alert kinds                                                                                                                                                      |
+| `SECURITY_HISTORY_ALERT_KINDS`            | Comma-separated kinds, or `none`. Unset means `password_changed,provider_linked,refresh_token_reuse_detected,account_disabled`                                                                 |
+| `EMAIL_TOPIC`                             | `eventxperience-email`. Where alerts are handed to the email worker                                                                                                                            |
 
 The worker refuses to start if a value is out of range or names an unknown kind. The default alert kinds are the high-risk changes that send nothing of their own. MFA changes, email changes, and password resets already email the owner when they happen, so adding those kinds sends two emails for one change. Options come from the environment. Non-container runs load ancestor `.env` files, and process values take precedence.
 

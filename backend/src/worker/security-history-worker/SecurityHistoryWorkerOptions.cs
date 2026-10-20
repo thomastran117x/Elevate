@@ -31,6 +31,13 @@ public sealed record SecurityHistoryWorkerOptions(
     public const string AlertKindsKey = "SECURITY_HISTORY_ALERT_KINDS";
 
     /// <summary>
+    /// The longest the history may be kept, and the default. The API and the Activity tab promise
+    /// owners that entries are kept for up to 90 days, so the setting can shorten the window but
+    /// never extend it past what they were told.
+    /// </summary>
+    public const int MaxRetentionDays = 90;
+
+    /// <summary>
     /// The changes that send nothing of their own today. MFA, email, and password-reset changes
     /// already notify the owner directly when they happen, so alerting on them too would send two
     /// emails for one change.
@@ -49,7 +56,7 @@ public sealed record SecurityHistoryWorkerOptions(
         Require(EnvironmentSetting.SecurityHistoryTopic, nameof(EnvironmentSetting.SecurityHistoryTopic)),
         Require(EnvironmentSetting.SecurityHistoryGroupId, nameof(EnvironmentSetting.SecurityHistoryGroupId)),
         Require(EnvironmentSetting.SecurityHistoryDlqTopic, nameof(EnvironmentSetting.SecurityHistoryDlqTopic)),
-        ReadInt(configuration, RetentionDaysKey, 90, 1, 365),
+        ReadInt(configuration, RetentionDaysKey, MaxRetentionDays, 1, MaxRetentionDays),
         ReadInt(configuration, PurgeBatchSizeKey, 500, 1, 5000),
         ReadInt(configuration, PurgeMaxBatchesKey, 20, 1, 1000),
         TimeSpan.FromMinutes(ReadInt(configuration, PurgeIntervalMinutesKey, 60, 1, 1440)),

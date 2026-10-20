@@ -88,7 +88,7 @@ Completing a pending signup re-runs these checks.
 
 ### Security history
 
-`GET /api/auth/security-events?page=1&pageSize=20` returns the signed-in caller's own security history from the last 90 days, newest first, as a standard paged envelope. There is no parameter that names an account; the owner is always the token subject. Reading the history needs a signed-in session but no step-up proof. `page` accepts 1–500 and `pageSize` 1–50, and out-of-range values fail model validation with `400`.
+`GET /api/auth/security-events?page=1&pageSize=20` returns the signed-in caller's own security history, newest first, as a standard paged envelope. Entries are kept for up to 90 days (`SECURITY_HISTORY_RETENTION_DAYS` can shorten that, never extend it). There is no parameter that names an account; the owner is always the token subject. Reading the history needs a signed-in session but no step-up proof. `page` accepts 1–500 and `pageSize` 1–50, and out-of-range values fail model validation with `400`.
 
 Each entry has:
 

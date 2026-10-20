@@ -26,8 +26,8 @@ import { toSecurityActivityView } from './security-activity-labels';
 type LoadState = 'loading' | 'ready' | 'error';
 
 /**
- * The signed-in user's security history: sign-ins, recovery, factor, provider, and session changes
- * from the last 90 days, newest first.
+ * The signed-in user's security history: sign-ins, recovery, factor, provider, and session changes,
+ * newest first, kept for up to 90 days.
  *
  * No MFA gate: reading your own history changes nothing, and someone checking whether their account
  * was used should not have to pass a second factor first.

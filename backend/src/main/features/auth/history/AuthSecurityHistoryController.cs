@@ -34,7 +34,7 @@ namespace backend.main.features.auth.history
         }
 
         /// <summary>
-        /// Lists the caller's security history from the last 90 days, newest first.
+        /// Lists the caller's security history, newest first. Entries are kept for up to 90 days.
         /// </summary>
         [HttpGet]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<AccountSecurityEventResponse>>), StatusCodes.Status200OK)]

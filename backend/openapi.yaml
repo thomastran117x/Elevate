@@ -4,7 +4,7 @@ info:
   description: Generated API reference for the EventXperience backend. Responses use the shared ApiResponse envelope unless noted otherwise. Every operation requires a bearer token unless its `x-authorization` extension is `anonymous`; otherwise the extension is `authenticated` or the name of the required authorization policy.
   version: v1
 servers:
-  - url: http://localhost:8091
+  - url: http://localhost:8097
 paths:
   /api/profile:
     get:
@@ -12529,7 +12529,7 @@ paths:
       tags:
         - auth
       summary: List the current user's security history
-      description: 'Returns the caller''s own sign-in, recovery, factor, provider, and session events from the last 90 days, newest first. `page` is 1-500 and `pageSize` is 1-50. Entries carry coarse client and device classes and a masked network prefix, never credentials, codes, contact details, or full addresses.'
+      description: 'Returns the caller''s own sign-in, recovery, factor, provider, and session events newest first. Entries are kept for up to 90 days. `page` is 1-500 and `pageSize` is 1-50. Entries carry coarse client and device classes and a masked network prefix, never credentials, codes, contact details, or full addresses.'
       operationId: AuthSecurityHistory_List_get
       parameters:
         - name: page

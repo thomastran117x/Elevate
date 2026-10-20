@@ -160,7 +160,7 @@ Both switches take effect without a restart when the configuration source reload
 
 Retention and alerts belong to the [security history worker](../backend/src/worker/security-history-worker/README.md#dependencies-and-settings), which owns the table:
 
-- `SECURITY_HISTORY_RETENTION_DAYS` (default 90, 1–365) and the `SECURITY_HISTORY_PURGE_*` settings control the purge.
+- `SECURITY_HISTORY_RETENTION_DAYS` (default 90, 1–90) and the `SECURITY_HISTORY_PURGE_*` settings control the purge. The cap matches what owners are told, that entries are kept for up to 90 days, so the setting can shorten the window but not extend it.
 - `SECURITY_HISTORY_NOTIFICATIONS_ENABLED` turns alerts on or off.
 - `SECURITY_HISTORY_ALERT_KINDS` chooses which changes alert.
 

@@ -72,7 +72,7 @@ namespace backend.main.application.openapi
                 ["GET /api/auth/mfa"] = new("Get MFA security settings"),
                 ["GET /api/auth/security-events"] = new(
                     "List the current user's security history",
-                    "Returns the caller's own sign-in, recovery, factor, provider, and session events from the last 90 days, newest first. `page` is 1-500 and `pageSize` is 1-50. Entries carry coarse client and device classes and a masked network prefix, never credentials, codes, contact details, or full addresses."
+                    "Returns the caller's own sign-in, recovery, factor, provider, and session events newest first. Entries are kept for up to 90 days. `page` is 1-500 and `pageSize` is 1-50. Entries carry coarse client and device classes and a masked network prefix, never credentials, codes, contact details, or full addresses."
                 ),
                 ["POST /api/auth/mfa/enroll/start"] = new("Start SMS MFA enrollment", StepUpRequired),
                 ["POST /api/auth/mfa/enroll/verify"] = new("Verify an SMS MFA enrollment or re-enable code", StepUpRequired),

@@ -65,7 +65,7 @@ public class SecurityHistoryWorkerOptionsTests
 
     [Theory]
     [InlineData(SecurityHistoryWorkerOptions.RetentionDaysKey, "0")]
-    [InlineData(SecurityHistoryWorkerOptions.RetentionDaysKey, "366")]
+    [InlineData(SecurityHistoryWorkerOptions.RetentionDaysKey, "91")]
     [InlineData(SecurityHistoryWorkerOptions.RetentionDaysKey, "ninety")]
     [InlineData(SecurityHistoryWorkerOptions.PurgeBatchSizeKey, "0")]
     [InlineData(SecurityHistoryWorkerOptions.PurgeBatchSizeKey, "5001")]
