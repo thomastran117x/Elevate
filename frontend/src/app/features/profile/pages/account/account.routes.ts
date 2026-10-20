@@ -16,6 +16,14 @@ export const ACCOUNT_ROUTES: Routes = [
       import('./tabs/security-tab/security-tab.component').then((m) => m.SecurityTabComponent),
   },
   {
+    path: 'activity',
+    // The history endpoint lives behind the auth FeatureGate, so with auth off a bookmark would load
+    // a tab whose only request is refused.
+    canMatch: [featureCanMatch(FEATURE_KEYS.auth)],
+    loadComponent: () =>
+      import('./tabs/activity-tab/activity-tab.component').then((m) => m.ActivityTabComponent),
+  },
+  {
     path: 'password',
     loadComponent: () =>
       import('./tabs/password-tab/password-tab.component').then((m) => m.PasswordTabComponent),

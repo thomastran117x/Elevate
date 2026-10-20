@@ -1,0 +1,111 @@
+<section class="surface-card rounded-3xl p-6 sm:p-8" aria-labelledby="security-activity-heading">
+  <header>
+    <h2
+      #heading
+      id="security-activity-heading"
+      tabindex="-1"
+      class="text-lg font-semibold text-content focus:outline-none"
+    >
+      Security activity
+    </h2>
+    <p class="mt-1 text-sm text-subtle">
+      Sign-ins and changes to your account security, newest first. Entries are kept for up to 90
+      days. If something here wasn't you, change your password and review your
+      <a class="font-semibold text-accent hover:underline" routerLink="/account/security"
+        >two-step verification</a
+      >.
+    </p>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p role="status" class="mt-6 text-sm text-subtle">Loading your security activity&hellip;</p>
+    }
+    @case ('error') {
+      <div
+        role="alert"
+        class="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
+      >
+        <span>{{ error() }}</span>
+        <button
+          type="button"
+          class="rounded-full border border-danger/40 px-4 py-1.5 text-xs font-semibold transition hover:bg-danger/10"
+          (click)="retry()"
+        >
+          Try again
+        </button>
+      </div>
+    }
+    @default {
+      @if (entries().length === 0) {
+        <empty-state
+          className="mt-6"
+          icon="🛡️"
+          title="No recent security activity"
+          subtitle="Sign-ins and security changes will appear here."
+        />
+      } @else {
+        <ol class="mt-6 divide-y divide-line border-t border-line" aria-label="Security activity">
+          @for (entry of entries(); track entry.id) {
+            <li class="py-4">
+              <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <p class="text-sm font-semibold text-content">
+                  {{ entry.title }}
+                  @if (entry.important) {
+                    <span
+                      class="ml-2 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-warning"
+                      >Important</span
+                    >
+                  }
+                </p>
+                <time class="text-xs text-subtle" [attr.datetime]="entry.occurredAt">
+                  {{ entry.occurredAt | date: 'medium' }}
+                </time>
+              </div>
+              @if (entry.detail) {
+                <p class="mt-1 text-sm text-subtle">{{ entry.detail }}</p>
+              }
+              @if (entry.initiatedByAdmin) {
+                <p class="mt-1 text-sm text-subtle">Done by an administrator.</p>
+              }
+              @if (entry.context) {
+                <p class="mt-1 text-xs text-faint">{{ entry.context }}</p>
+              }
+              @if (entry.reference) {
+                <p class="mt-1 text-xs text-faint">
+                  Support reference: <span class="font-mono select-all">{{ entry.reference }}</span>
+                </p>
+              }
+            </li>
+          }
+        </ol>
+
+        <nav
+          class="mt-4 flex items-center justify-center gap-2"
+          aria-label="Security activity pages"
+        >
+          <button
+            type="button"
+            class="rounded-2xl border border-line-strong px-3 py-2 text-xs font-semibold text-muted transition hover:bg-glass-strong disabled:opacity-40"
+            [disabled]="!hasPrevious()"
+            (click)="goToPage(page() - 1)"
+          >
+            Previous
+          </button>
+          <p class="text-xs text-faint" aria-live="polite">
+            Page {{ page() }} of {{ totalPages() }} &middot; {{ totalCount() }}
+            {{ totalCount() === 1 ? 'entry' : 'entries' }}
+          </p>
+          <button
+            type="button"
+            class="rounded-2xl border border-line-strong px-3 py-2 text-xs font-semibold text-muted transition hover:bg-glass-strong disabled:opacity-40"
+            [disabled]="!hasNext()"
+            (click)="goToPage(page() + 1)"
+          >
+            Next
+          </button>
+        </nav>
+      }
+    }
+  }
+</section>

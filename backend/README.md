@@ -18,7 +18,7 @@ dotnet run --no-launch-profile --project backend/backend.csproj
 
 Use the SDK selected by `global.json`. Provision PostgreSQL, Redis, Elasticsearch, and reachable Kafka; provider-backed features need their own credentials. Root `.env.example` targets the container network. For host execution, use the host ports in setup and account for Kafka's advertised-listener limitation.
 
-Normal startup validates settings, verifies database connectivity, applies committed migrations, and optionally seeds data. API startup does not start the six separate worker executables. `PORT` defaults to 8090; controllers are under `/api` and the club hub is at `/api/hubs/clubs`.
+Normal startup validates settings, verifies database connectivity, applies committed migrations, and optionally seeds data. API startup does not start the seven separate worker executables. `PORT` defaults to 8090; controllers are under `/api` and the club hub is at `/api/hubs/clubs`.
 
 Authentication abuse counters are fixed-window Redis keys shared by API replicas, with independent hashed source-IP and target dimensions. The existing in-memory IP policies remain active as a degraded fallback. Configure budgets under `Auth:AbuseProtection`; see the [configuration guide](../docs/CONFIGURATION.md#authentication-abuse-protection).
 
@@ -68,5 +68,6 @@ Each worker has its own project and Dockerfile; container builds use `backend/` 
 - [Email worker](src/worker/email-worker/README.md)
 - [SMS worker](src/worker/sms-worker/README.md)
 - [Media worker](src/worker/media-worker/README.md)
+- [Security history worker](src/worker/security-history-worker/README.md)
 
-Indexers consume PostgreSQL outbox CDC via Kafka Connect. Notification workers consume API-published email/SMS messages; the email worker publishes event invitation delivery status for the API consumer. The media worker validates attached image uploads the API hands it when `storage.quarantine.inline` is off, and publishes each verdict for the API to record; like the others, it has no database connection. See [deployment](../docs/DEPLOYMENT.md) for stack initialization and current Kubernetes gaps.
+Indexers consume PostgreSQL outbox CDC via Kafka Connect. Notification workers consume API-published email/SMS messages; the email worker publishes event invitation delivery status for the API consumer. The media worker validates attached image uploads the API hands it when `storage.quarantine.inline` is off, and publishes each verdict for the API to record; like the indexers and notification workers, it has no database connection. The security history worker is the exception: it appends the security events the API publishes to `AccountSecurityEvents` in the API's database, emails high-risk alerts through the email worker, and purges entries after 90 days. The API still owns the schema and migrations. See [deployment](../docs/DEPLOYMENT.md) for stack initialization and current Kubernetes gaps.

@@ -28,6 +28,7 @@ namespace backend.main.features.profile
         private readonly IUsernameAvailabilityService _usernameAvailability;
         private readonly TimeProvider _timeProvider;
         private readonly ProfileOptions _profileOptions;
+        private readonly IAuthSecurityEventEmitter _securityEvents;
 
         private static readonly TimeSpan UserTTL = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan NotFoundTTL = TimeSpan.FromSeconds(15);
@@ -44,7 +45,8 @@ namespace backend.main.features.profile
             IRefreshAheadCache refreshCache,
             IUsernameAvailabilityService usernameAvailability,
             TimeProvider timeProvider,
-            IOptions<ProfileOptions> profileOptions
+            IOptions<ProfileOptions> profileOptions,
+            IAuthSecurityEventEmitter securityEvents
         )
         {
             _userRepository = userRepository;
@@ -57,6 +59,7 @@ namespace backend.main.features.profile
             _usernameAvailability = usernameAvailability;
             _timeProvider = timeProvider;
             _profileOptions = profileOptions.Value;
+            _securityEvents = securityEvents;
         }
 
         public async Task<IReadOnlyList<UserListRecord>> GetAllUsersAsync(
@@ -173,9 +176,22 @@ namespace backend.main.features.profile
             if (user == null)
                 throw new ResourceNotFoundException($"User with the id {id} is not found");
 
+            var statusReason = isDisabled ? AuthSecurityReason.AccountDisabled : AuthSecurityReason.AccountEnabled;
+            // Recorded on its own, after the change is committed: the revocation below is only
+            // recorded when it ended a session, and an account with none (a dormant account, or
+            // any account being re-enabled) would otherwise leave no trace of the change.
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.AccountStatusChanged,
+                Outcome = AuthSecurityOutcome.Succeeded,
+                Reason = statusReason,
+                UserId = id,
+                ActorUserId = actorUserId,
+            });
+
             await _tokenService.RevokeAllRefreshSessionsAsync(
                 id,
-                isDisabled ? AuthSecurityReason.AccountDisabled : AuthSecurityReason.AccountEnabled,
+                statusReason,
                 actorUserId);
             await _refreshCache.RemoveAsync(GetUserCacheKey(id));
             return user;

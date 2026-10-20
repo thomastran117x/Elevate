@@ -1,3 +1,5 @@
+using backend.main.shared.providers.messages;
+
 namespace backend.main.features.auth.notifications
 {
     public interface IAuthNotificationService
@@ -70,6 +72,15 @@ namespace backend.main.features.auth.notifications
         Task SendEmailMfaCodeAsync(
             string email,
             string code,
+            string? recipientName = null);
+
+        /// <summary>
+        /// Tells the account owner about a high-risk change recorded in their security history.
+        /// Only the entry's closed classifications and masked network are sent.
+        /// </summary>
+        Task SendSecurityAlertAsync(
+            string email,
+            SecurityHistoryMessage entry,
             string? recipientName = null);
     }
 }

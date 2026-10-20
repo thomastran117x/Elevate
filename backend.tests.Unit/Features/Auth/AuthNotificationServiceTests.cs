@@ -1,3 +1,5 @@
+using backend.main.features.auth.events;
+using backend.main.features.auth.history;
 using backend.main.features.auth.notifications;
 using backend.main.shared.providers;
 using backend.main.shared.providers.messages;
@@ -111,6 +113,46 @@ public class AuthNotificationServiceTests
                 && message.MfaFactor == "sms"
                 && message.MfaChange == "disabled"
                 && message.RecipientName == "Member"
+                && message.Code == null
+                && message.Token == null)), Times.Once);
+    }
+
+    [Fact]
+    public async Task SendSecurityAlertAsync_ShouldPublishOnlyTheEntrysClassifications()
+    {
+        var publisher = new Mock<IPublisher>();
+        var service = new AuthNotificationService(publisher.Object);
+        var occurredAt = new DateTimeOffset(2026, 10, 20, 12, 0, 0, TimeSpan.Zero);
+
+        await service.SendSecurityAlertAsync(
+            "member@example.com",
+            new SecurityHistoryMessage
+            {
+                MessageId = Guid.NewGuid(),
+                UserId = 7,
+                Kind = AccountSecurityEventKind.ProviderLinked,
+                EventName = "auth.provider.linked",
+                Method = "google",
+                Client = SecurityHistoryClient.Edge,
+                DeviceClass = AuthDeviceClass.Tablet,
+                Network = "2001:db8:abcd::/48",
+                CorrelationId = "request-id",
+                OccurredAt = occurredAt
+            },
+            "Member");
+
+        publisher.Verify(p => p.PublishAsync(
+            NotificationTopics.Email,
+            It.Is<EmailMessage>(message =>
+                message.Type == EmailMessageType.SecurityAlert
+                && message.Email == "member@example.com"
+                && message.RecipientName == "Member"
+                && message.SecurityAlertKind == "provider_linked"
+                && message.SecurityAlertMethod == "google"
+                && message.SecurityAlertClient == "edge"
+                && message.SecurityAlertDeviceClass == "tablet"
+                && message.SecurityAlertNetwork == "2001:db8:abcd::/48"
+                && message.SecurityAlertOccurredAtUtc == occurredAt.UtcDateTime
                 && message.Code == null
                 && message.Token == null)), Times.Once);
     }

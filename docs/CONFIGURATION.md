@@ -147,6 +147,25 @@ Authentication outcomes are recorded as structured [security events](SECURITY_EV
 
 Generate a key with `openssl rand -base64 32` and keep it as secret as the JWT keys. Configure it directly with `Auth__SecurityEvents__IdentifierHashKey` or through the `AUTH_SECURITY_EVENTS_HASH_KEY` variable mapped by Compose. Changing it breaks correlation between hashes made before and after the change, and it takes effect on restart. The sink and `Include*` switches take effect without a restart when the configuration source reloads.
 
+### Account security history
+
+The API publishes the events an account owner should see to the security-history topic; see [account security history](SECURITY_EVENTS.md#account-security-history). `Auth:SecurityHistory` is bound at startup:
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `PublishEnabled` | `true` | Publish history entries. When it is off, nothing new is recorded and existing entries are still served. |
+| `IncludeMaskedNetwork` | `true` | Record the source network truncated to an IPv4 /24 or IPv6 /48. The full address is never recorded. |
+
+Both switches take effect without a restart when the configuration source reloads. Configure them with `Auth__SecurityHistory__...`, or set `AUTH_SECURITY_HISTORY_PUBLISH_ENABLED` under Compose. The topic is `SECURITY_HISTORY_TOPIC` (default `eventxperience-security-history`).
+
+Retention and alerts belong to the [security history worker](../backend/src/worker/security-history-worker/README.md#dependencies-and-settings), which owns the table:
+
+- `SECURITY_HISTORY_RETENTION_DAYS` (default 90, 1–90) and the `SECURITY_HISTORY_PURGE_*` settings control the purge. The cap matches what owners are told, that entries are kept for up to 90 days, so the setting can shorten the window but not extend it.
+- `SECURITY_HISTORY_NOTIFICATIONS_ENABLED` turns alerts on or off.
+- `SECURITY_HISTORY_ALERT_KINDS` chooses which changes alert.
+
+The worker validates them at startup and refuses to start on an out-of-range value or an unknown kind.
+
 ### Refresh sessions
 
 Refresh sessions live in Redis under `refresh:v2:session:{sessionId}` for 1 day, or 30 days with remember-me. Each session records the account's `AuthVersion` when it was issued or last rotated. A password reset, account disable, or email change increments `AuthVersion` and then deletes the account's sessions; that sweep removes nothing if Redis is unreachable, so `POST /api/auth/refresh` also refuses and deletes any session whose recorded version no longer matches the account. Sessions stored before the version was recorded skip that check and are stamped on their next refresh.

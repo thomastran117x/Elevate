@@ -90,6 +90,7 @@ public sealed partial class SecurityEventsDocumentationTests
             Outcome = AuthSecurityOutcome.Denied,
         });
         metrics.RecordSinkFailure("ExampleSink");
+        metrics.RecordSecurityHistoryPublishFailure();
         metrics.RecordOperation(AuthOperation.SignIn, AuthSecurityOutcome.Succeeded, TimeSpan.FromMilliseconds(1));
         var observed = recorder.Measurements.ToDictionary(
             measurement => measurement.Instrument,

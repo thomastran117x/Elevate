@@ -2,7 +2,7 @@
 
 EventXperience is a web application for discovering and organizing events and building club communities. It supports accounts and MFA, public profiles, clubs and discussions, event invitations, recurring events, registration and waitlists, favourites, analytics, and payment integration.
 
-The frontend uses Angular 22, TypeScript, NgRx, Tailwind CSS, and Angular SSR. The API and six background workers use .NET 10. PostgreSQL stores application data; Redis supports caching and shared state; Kafka carries notifications, search updates, and image validation; Elasticsearch powers search.
+The frontend uses Angular 22, TypeScript, NgRx, Tailwind CSS, and Angular SSR. The API and seven background workers use .NET 10. PostgreSQL stores application data; Redis supports caching and shared state; Kafka carries notifications, search updates, image validation, and account security history; Elasticsearch powers search.
 
 ## Quick start with Docker
 
@@ -21,19 +21,20 @@ See [setup](docs/SETUP.md) for prerequisites, local development, infrastructure 
 
 ## Repository map
 
-| Component                                                          | Purpose                                                    |
-| ------------------------------------------------------------------ | ---------------------------------------------------------- |
-| [Frontend](frontend/README.md)                                     | Angular UI, SSR server, and browser tests                  |
-| [Backend API](backend/README.md)                                   | ASP.NET Core application and EF Core migrations            |
-| [Event indexer](backend/src/worker/event-indexer/README.md)        | Event search updates                                       |
-| [Club indexer](backend/src/worker/club-indexer/README.md)          | Club search updates                                        |
-| [Club-post indexer](backend/src/worker/clubpost-indexer/README.md) | Club-post search updates                                   |
-| [Email worker](backend/src/worker/email-worker/README.md)          | SMTP notifications and invitation delivery status          |
-| [SMS worker](backend/src/worker/sms-worker/README.md)              | Twilio MFA messages                                        |
-| [Media worker](backend/src/worker/media-worker/README.md)          | Image upload validation and re-encoding                    |
-| [Backend unit tests](backend.tests.Unit/README.md)                 | Isolated behavior tests                                    |
-| [Backend integration tests](backend.tests.Integration/README.md)   | Real API and container-backed infrastructure tests         |
-| [Development tasks](tools/Event.DevTasks/README.md)                | Formatting, coverage, integration runs, and OpenAPI export |
+| Component                                                                       | Purpose                                                    |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| [Frontend](frontend/README.md)                                                  | Angular UI, SSR server, and browser tests                  |
+| [Backend API](backend/README.md)                                                | ASP.NET Core application and EF Core migrations            |
+| [Event indexer](backend/src/worker/event-indexer/README.md)                     | Event search updates                                       |
+| [Club indexer](backend/src/worker/club-indexer/README.md)                       | Club search updates                                        |
+| [Club-post indexer](backend/src/worker/clubpost-indexer/README.md)              | Club-post search updates                                   |
+| [Email worker](backend/src/worker/email-worker/README.md)                       | SMTP notifications and invitation delivery status          |
+| [SMS worker](backend/src/worker/sms-worker/README.md)                           | Twilio MFA messages                                        |
+| [Media worker](backend/src/worker/media-worker/README.md)                       | Image upload validation and re-encoding                    |
+| [Security history worker](backend/src/worker/security-history-worker/README.md) | Account security history, alerts, and 90-day retention     |
+| [Backend unit tests](backend.tests.Unit/README.md)                              | Isolated behavior tests                                    |
+| [Backend integration tests](backend.tests.Integration/README.md)                | Real API and container-backed infrastructure tests         |
+| [Development tasks](tools/Event.DevTasks/README.md)                             | Formatting, coverage, integration runs, and OpenAPI export |
 
 `docker/` contains Kafka Connect outbox configuration. `backend.sln` groups the .NET projects; `global.json` selects the SDK.
 
