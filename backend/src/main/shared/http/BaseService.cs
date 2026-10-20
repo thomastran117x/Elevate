@@ -19,7 +19,7 @@ namespace backend.main.shared.http
             Http = httpClient ?? new HttpClient();
 
             RetryPolicy = Policy
-                .Handle<Exception>()
+                .Handle<Exception>(IsTransient)
                 .WaitAndRetryAsync(
                     retryCount: 5,
                     sleepDurationProvider: attempt =>
@@ -31,12 +31,24 @@ namespace backend.main.shared.http
                 );
 
             CircuitBreakerPolicy = Policy
-                .Handle<Exception>()
+                .Handle<Exception>(IsTransient)
                 .CircuitBreakerAsync(
                     exceptionsAllowedBeforeBreaking: 3,
                     durationOfBreak: TimeSpan.FromSeconds(10)
                 );
         }
+
+        /// <summary>
+        /// Whether a failure is worth retrying: a network fault or timeout. A deterministic
+        /// rejection, such as an invalid token, fails the same way every time, so retrying it only
+        /// holds the request open and lets one bad caller open the circuit.
+        /// </summary>
+        internal static bool IsTransient(Exception exception) => exception switch
+        {
+            HttpRequestException or TimeoutException or IOException => true,
+            TaskCanceledException { InnerException: TimeoutException } => true,
+            _ => false,
+        };
 
         protected async Task<T> ExecuteResilientHttpAsync<T>(Func<Task<T>> action)
         {

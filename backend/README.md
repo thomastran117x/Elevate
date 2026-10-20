@@ -22,6 +22,8 @@ Normal startup validates settings, verifies database connectivity, applies commi
 
 Authentication abuse counters are fixed-window Redis keys shared by API replicas, with independent hashed source-IP and target dimensions. The existing in-memory IP policies remain active as a degraded fallback. Configure budgets under `Auth:AbuseProtection`; see the [configuration guide](../docs/CONFIGURATION.md#authentication-abuse-protection).
 
+Authentication outcomes (sign-ins, throttles, recovery, verification, step-up, factor changes, token reuse, revocation, provider linking, and 403s) are emitted as structured security events and `EventXperience.Auth` metrics. Production needs `Auth:SecurityEvents:IdentifierHashKey`; see [security events](../docs/SECURITY_EVENTS.md).
+
 New passwords follow the passphrase policy under `Auth:PasswordPolicy`: 15–128 characters plus an in-process blocklist. They are hashed with Argon2id, and legacy BCrypt hashes are upgraded on login; see the [configuration guide](../docs/CONFIGURATION.md#password-policy-and-hashing).
 
 Persisted human-authored JSON fields are normalized and validated at the API boundary. Outer

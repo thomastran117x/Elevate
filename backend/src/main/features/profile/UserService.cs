@@ -1,5 +1,6 @@
 using backend.main.features.auth;
 using backend.main.features.auth.contracts;
+using backend.main.features.auth.events;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.clubs.follow;
@@ -162,13 +163,20 @@ namespace backend.main.features.profile
             return true;
         }
 
-        public async Task<UserStatusRecord> UpdateUserStatusAsync(int id, bool isDisabled, string? reason)
+        public async Task<UserStatusRecord> UpdateUserStatusAsync(
+            int id,
+            bool isDisabled,
+            string? reason,
+            int actorUserId)
         {
             var user = await _authUserRepository.UpdateUserStatusAsync(id, isDisabled, reason);
             if (user == null)
                 throw new ResourceNotFoundException($"User with the id {id} is not found");
 
-            await _tokenService.RevokeAllRefreshSessionsAsync(id);
+            await _tokenService.RevokeAllRefreshSessionsAsync(
+                id,
+                isDisabled ? AuthSecurityReason.AccountDisabled : AuthSecurityReason.AccountEnabled,
+                actorUserId);
             await _refreshCache.RemoveAsync(GetUserCacheKey(id));
             return user;
         }

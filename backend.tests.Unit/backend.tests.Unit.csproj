@@ -40,4 +40,9 @@
     <Compile Include="..\backend\src\worker\event-indexer\EventIndexerMessageParser.cs" Link="Worker\EventIndexerMessageParser.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Read by SecurityEventsDocumentationTests, which keeps the documented contract in step with the code. -->
+    <None Include="..\docs\SECURITY_EVENTS.md" Link="Docs\SECURITY_EVENTS.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

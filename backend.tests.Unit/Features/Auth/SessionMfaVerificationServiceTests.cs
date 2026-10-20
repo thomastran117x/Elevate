@@ -1,9 +1,12 @@
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.token;
 using backend.main.shared.exceptions.http;
+
+using backend.tests.Unit.Features.Auth.Events;
 
 using FluentAssertions;
 
@@ -35,7 +38,8 @@ public class SessionMfaVerificationServiceTests
             .Callback<string, string, string?>((_, code, _) => sentCode = code)
             .Returns(Task.CompletedTask);
 
-        var (service, cache, _) = CreateService(notifications: notifications);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var (service, cache, _) = CreateService(notifications: notifications, securityEvents: securityEvents);
 
         await service.StartAsync(UserId, Email, "email");
         sentCode.Should().NotBeNullOrWhiteSpace();
@@ -51,6 +55,11 @@ public class SessionMfaVerificationServiceTests
         proof.AuthVersion.Should().Be(AuthVersion);
         proof.Method.Should().Be("email");
         proof.VerifiedAtUtc.Should().Be(Start.UtcDateTime);
+        var verified = securityEvents.Of(AuthSecurityEvents.StepUpSucceeded).Should().ContainSingle().Subject;
+        verified.Method.Should().Be(AuthSecurityMethod.Email);
+        verified.Flow.Should().Be(AuthSecurityFlow.SessionStepUp);
+        verified.UserId.Should().Be(UserId);
+        verified.SessionId.Should().Be(SessionId);
     }
 
     [Fact]
@@ -92,7 +101,8 @@ public class SessionMfaVerificationServiceTests
             .Setup(n => n.SendEmailMfaCodeAsync(Email, It.IsAny<string>(), It.IsAny<string?>()))
             .Returns(Task.CompletedTask);
 
-        var (service, _, _) = CreateService(notifications: notifications);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var (service, _, _) = CreateService(notifications: notifications, securityEvents: securityEvents);
 
         await service.StartAsync(UserId, Email, "email");
 
@@ -100,6 +110,9 @@ public class SessionMfaVerificationServiceTests
 
         await act.Should().ThrowAsync<UnauthorizedException>();
         (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
+        securityEvents.Of(AuthSecurityEvents.StepUpFailed).Should().ContainSingle()
+            .Which.Reason.Should().Be(AuthSecurityReason.InvalidCode);
+        securityEvents.Of(AuthSecurityEvents.StepUpSucceeded).Should().BeEmpty();
     }
 
     [Fact]
@@ -130,6 +143,22 @@ public class SessionMfaVerificationServiceTests
 
         await act.Should().ThrowAsync<UnauthorizedException>();
         (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task VerifyAsync_WithMalformedTotp_ShouldRecordAFailedStepUp()
+    {
+        var totp = new Mock<ITotpMfaEnrollmentService>();
+        totp.Setup(t => t.VerifyPersistedCodeAsync(UserId, "abc"))
+            .ThrowsAsync(new BadRequestException("TOTP code must be 6 digits."));
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var (service, _, _) = CreateService(totp: totp, securityEvents: securityEvents);
+
+        var act = () => service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "totp", "abc");
+
+        await act.Should().ThrowAsync<BadRequestException>();
+        securityEvents.Of(AuthSecurityEvents.StepUpFailed).Should().ContainSingle()
+            .Which.Reason.Should().Be(AuthSecurityReason.InvalidRequest);
     }
 
     [Fact]
@@ -185,12 +214,19 @@ public class SessionMfaVerificationServiceTests
     {
         var totp = new Mock<ITotpMfaEnrollmentService>();
         totp.Setup(t => t.VerifyPersistedCodeAsync(UserId, "123456")).Returns(Task.CompletedTask);
-        var (service, _, _) = CreateService(totp: totp, storeResult: StepUpProofWriteResult.SessionEnded);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var (service, _, _) = CreateService(
+            totp: totp,
+            storeResult: StepUpProofWriteResult.SessionEnded,
+            securityEvents: securityEvents);
 
         var act = () => service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "totp", "123456");
 
         await act.Should().ThrowAsync<UnauthorizedException>();
         (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
+        securityEvents.Of(AuthSecurityEvents.StepUpFailed).Should().ContainSingle()
+            .Which.Reason.Should().Be(AuthSecurityReason.SessionEnded);
+        securityEvents.Of(AuthSecurityEvents.StepUpSucceeded).Should().BeEmpty();
     }
 
     [Fact]
@@ -455,11 +491,12 @@ public class SessionMfaVerificationServiceTests
         Mock<IMfaEnrollmentRepository>? smsRepository = null,
         Mock<ITokenService>? tokenService = null,
         int lifetimeMinutes = 10,
-        StepUpProofWriteResult? storeResult = null)
+        StepUpProofWriteResult? storeResult = null,
+        IAuthSecurityEventEmitter? securityEvents = null)
     {
         var cache = new InMemoryCacheService();
         var (service, time) = CreateService(
-            cache, notifications, totp, smsRepository, tokenService, lifetimeMinutes, storeResult);
+            cache, notifications, totp, smsRepository, tokenService, lifetimeMinutes, storeResult, securityEvents);
         return (service, cache, time);
     }
 
@@ -470,7 +507,8 @@ public class SessionMfaVerificationServiceTests
         Mock<IMfaEnrollmentRepository>? smsRepository = null,
         Mock<ITokenService>? tokenService = null,
         int lifetimeMinutes = 10,
-        StepUpProofWriteResult? storeResult = null)
+        StepUpProofWriteResult? storeResult = null,
+        IAuthSecurityEventEmitter? securityEvents = null)
     {
         notifications ??= new Mock<IAuthNotificationService>();
         totp ??= new Mock<ITotpMfaEnrollmentService>();
@@ -503,7 +541,8 @@ public class SessionMfaVerificationServiceTests
             totp.Object,
             tokenService.Object,
             time,
-            Options.Create(new StepUpOptions { ProofLifetimeMinutes = lifetimeMinutes }));
+            Options.Create(new StepUpOptions { ProofLifetimeMinutes = lifetimeMinutes }),
+            securityEvents ?? NullAuthSecurityEventEmitter.Instance);
 
         return (service, time);
     }

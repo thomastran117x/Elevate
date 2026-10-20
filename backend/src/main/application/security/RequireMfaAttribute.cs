@@ -1,6 +1,7 @@
 using System.Security.Claims;
 
 using backend.main.features.auth;
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.token;
 using backend.main.shared.responses;
@@ -58,6 +59,7 @@ namespace backend.main.application.security
                     && await _sessionMfaVerificationService.HasFreshProofAsync(userId, sessionId, authVersion))
                     return;
 
+                AuthSecurityRequestFeature.MarkDenial(context.HttpContext, AuthSecurityReason.MfaRequired);
                 context.Result = new ObjectResult(
                     ApiResponse<object?>.Failure(
                         "Multi-factor verification is required to access this resource.",

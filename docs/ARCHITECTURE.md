@@ -42,6 +42,8 @@ Controllers bind requests and enforce HTTP/security contracts, services implemen
 
 Normal startup validates settings, verifies the database connection, applies EF Core migrations, and optionally seeds data. `Testing` and OpenAPI export suppress startup side effects; integration fixtures supply infrastructure and state themselves. Middleware handles forwarded headers, exceptions, request IDs, timeouts, headers/HTTPS, CORS, CSRF, authentication, authorization, and rate limiting. Authorization is authenticated by default: the fallback policy requires a bearer user for every endpoint that does not carry `[AllowAnonymous]`. Requests that match no route pass through to the JSON 404 rather than being challenged. MVC routes receive the `/api` prefix; the club hub is mapped explicitly at `/api/hubs/clubs`. Identity is first-party: the API issues its own access tokens and refresh sessions rather than delegating to a managed identity provider, as recorded in [ADR 0001](adr/0001-identity-provider-build-vs-buy.md).
 
+Authentication and authorization outcomes are emitted as structured security events through `IAuthSecurityEventEmitter` to pluggable sinks (log and `EventXperience.Auth` metrics today). Services report the outcomes they decide; middleware records every 403 and times auth endpoints. See [security events](SECURITY_EVENTS.md) for the event contract, redaction rules, and alerting guidance.
+
 ## Infrastructure and asynchronous work
 
 - **PostgreSQL / EF Core:** Application records, transactions, versions, registrations, invitations, and search outbox rows. Migrations live in `backend/Migrations/`.

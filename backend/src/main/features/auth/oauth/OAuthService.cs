@@ -20,6 +20,8 @@ namespace backend.main.features.auth.oauth
         /// <summary>The tenant id Microsoft issues personal (consumer) account tokens from.</summary>
         private const string MicrosoftConsumerTenantId = "9188040d-6c67-4c5b-b112-36a304b66dad";
 
+        private const string GoogleUnavailableMessage = "Google sign-in is temporarily unavailable. Please try again.";
+
         private readonly string? _googleClientId;
         private readonly string? _googleClientSecret;
         private readonly string? _microsoftClientId;
@@ -63,27 +65,44 @@ namespace backend.main.features.auth.oauth
             if (_googleClientId == null || _googleClientSecret == null)
                 throw new NotAvailableException("Google OAuth is not available");
 
-            var response = await Http.PostAsync(
-                "https://oauth2.googleapis.com/token",
-                new FormUrlEncodedContent(
-                [
-                    new("client_id", _googleClientId),
-                    new("client_secret", _googleClientSecret),
-                    new("code", code),
-                    new("code_verifier", codeVerifier),
-                    new("redirect_uri", redirectUri),
-                    new("grant_type", "authorization_code"),
-                ])
-            );
+            HttpResponseMessage response;
+            try
+            {
+                response = await Http.PostAsync(
+                    "https://oauth2.googleapis.com/token",
+                    new FormUrlEncodedContent(
+                    [
+                        new("client_id", _googleClientId),
+                        new("client_secret", _googleClientSecret),
+                        new("code", code),
+                        new("code_verifier", codeVerifier),
+                        new("redirect_uri", redirectUri),
+                        new("grant_type", "authorization_code"),
+                    ])
+                );
+            }
+            catch (Exception ex) when (IsTransient(ex))
+            {
+                throw new NotAvailableException(GoogleUnavailableMessage);
+            }
 
+            // Google's error body is not echoed: it is provider content the client has no use for.
             if (!response.IsSuccessStatusCode)
             {
-                var error = await response.Content.ReadAsStringAsync();
-                throw new UnauthorizedException($"Google code exchange failed: {error}");
+                // Only a client error means the grant itself was refused (invalid_grant and the
+                // like). Rate limiting and server errors are Google being unavailable, which must
+                // not be counted as a rejected credential.
+                var status = (int)response.StatusCode;
+                if (status == StatusCodes.Status429TooManyRequests || status >= 500)
+                    throw new NotAvailableException(GoogleUnavailableMessage);
+
+                throw new UnauthorizedException("Google code exchange failed.");
             }
 
             var data = await response.Content.ReadFromJsonAsync<JsonElement>();
-            var idToken = data.GetProperty("id_token").GetString();
+            var idToken = data.TryGetProperty("id_token", out var idTokenElement)
+                ? idTokenElement.GetString()
+                : null;
 
             if (string.IsNullOrWhiteSpace(idToken))
                 throw new UnauthorizedException("No id_token returned from Google.");
@@ -111,7 +130,7 @@ namespace backend.main.features.auth.oauth
                 ClockSkew = TimeSpan.FromMinutes(2)
             };
 
-            var principal = _jwtHandler.ValidateToken(appleToken, validationParams, out _);
+            var principal = ValidateProviderToken(appleToken, validationParams, "Invalid Apple token.");
 
             var sub =
                 principal.Claims.FirstOrDefault(c => c.Type == "sub")?.Value ??
@@ -137,9 +156,19 @@ namespace backend.main.features.auth.oauth
                 Audience = new[] { _googleClientId }
             };
 
-            var payload = await ExecuteResilientHttpAsync(async () =>
-                await GoogleJsonWebSignature.ValidateAsync(googleToken, settings)
-            );
+            GoogleJsonWebSignature.Payload payload;
+            try
+            {
+                // Only fetching Google's signing keys can fail transiently; the resilience policy
+                // retries those faults and lets a rejected token through on the first attempt.
+                payload = await ExecuteResilientHttpAsync(async () =>
+                    await GoogleJsonWebSignature.ValidateAsync(googleToken, settings)
+                );
+            }
+            catch (InvalidJwtException)
+            {
+                throw new UnauthorizedException("Invalid Google token.");
+            }
 
             if (!payload.EmailVerified)
                 throw new UnauthorizedException("Google email is not verified");
@@ -192,7 +221,7 @@ namespace backend.main.features.auth.oauth
                 ClockSkew = TimeSpan.FromMinutes(2)
             };
 
-            var principal = _jwtHandler.ValidateToken(microsoftToken, validationParams, out _);
+            var principal = ValidateProviderToken(microsoftToken, validationParams, "Invalid Microsoft token.");
 
             var nonce = principal.Claims.FirstOrDefault(c => c.Type == "nonce")?.Value;
             if (!string.IsNullOrWhiteSpace(expectedNonce)
@@ -218,6 +247,29 @@ namespace backend.main.features.auth.oauth
             var emailVerified = email != null && IsMicrosoftEmailVerified(principal);
 
             return new OAuthUser(sub, email, name, "microsoft", emailVerified);
+        }
+
+        /// <summary>
+        /// Validates a provider ID token, reporting a token that fails validation as 401.
+        /// </summary>
+        /// <remarks>
+        /// An invalid, expired, wrongly signed, or wrong-audience token is a bad credential, not a
+        /// service fault, so it gets the generic message and never the validation exception's text.
+        /// A failure to fetch the provider's signing keys is not caught here and stays a fault.
+        /// </remarks>
+        private static ClaimsPrincipal ValidateProviderToken(
+            string token,
+            TokenValidationParameters validationParams,
+            string rejectionMessage)
+        {
+            try
+            {
+                return _jwtHandler.ValidateToken(token, validationParams, out _);
+            }
+            catch (Exception ex) when (ex is SecurityTokenException or ArgumentException)
+            {
+                throw new UnauthorizedException(rejectionMessage);
+            }
         }
 
         /// <summary>

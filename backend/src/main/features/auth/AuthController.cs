@@ -6,6 +6,7 @@ using backend.main.features.auth.abuse;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.events;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.token;
 using backend.main.features.profile;
@@ -45,6 +46,7 @@ namespace backend.main.features.auth
         private readonly ITokenService _tokenService;
         private readonly IEmailChangeService _emailChangeService;
         private readonly IAuthAbuseProtectionService _abuseProtection;
+        private readonly IAuthSecurityEventEmitter _securityEvents;
 
         public AuthController(
             IAuthService authService,
@@ -58,7 +60,8 @@ namespace backend.main.features.auth
             IConfiguration configuration,
             ITokenService tokenService,
             IEmailChangeService emailChangeService,
-            IAuthAbuseProtectionService abuseProtection
+            IAuthAbuseProtectionService abuseProtection,
+            IAuthSecurityEventEmitter securityEvents
         )
         {
             _authService = authService;
@@ -73,6 +76,7 @@ namespace backend.main.features.auth
             _tokenService = tokenService;
             _emailChangeService = emailChangeService;
             _abuseProtection = abuseProtection;
+            _securityEvents = securityEvents;
         }
 
         [HttpPost("login")]
@@ -82,6 +86,7 @@ namespace backend.main.features.auth
         [ProducesResponseType(typeof(ApiResponse<LoginAuthenticationResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status429TooManyRequests)]
+        [AuthOperation(AuthOperation.SignIn)]
         public async Task<IActionResult> LocalAuthenticate([FromBody] LoginRequest request)
         {
             try
@@ -100,7 +105,7 @@ namespace backend.main.features.auth
                         request.Captcha ?? string.Empty,
                         HttpContext.RequestAborted))
                 {
-                    return await CreateFailedLoginResponseAsync(request.Username);
+                    return await CreateFailedLoginResponseAsync(request.Username, AuthSecurityReason.CaptchaFailed);
                 }
 
                 var result = await _authService.LoginAsync(
@@ -123,7 +128,7 @@ namespace backend.main.features.auth
             catch (Exception e)
             {
                 if (e is UnauthorizedException)
-                    return await CreateFailedLoginResponseAsync(request.Username);
+                    return await CreateFailedLoginResponseAsync(request.Username, AuthSecurityReason.InvalidCredentials);
 
                 if (e is AppException)
                     return HandleError.Resolve(e);
@@ -405,8 +410,19 @@ namespace backend.main.features.auth
             }
         }
 
-        private async Task<IActionResult> CreateFailedLoginResponseAsync(string username)
+        private async Task<IActionResult> CreateFailedLoginResponseAsync(string username, AuthSecurityReason reason)
         {
+            _securityEvents.Emit(
+                new AuthSecurityEvent
+                {
+                    Definition = AuthSecurityEvents.SignInFailed,
+                    Outcome = AuthSecurityOutcome.Denied,
+                    Reason = reason,
+                    Method = AuthSecurityMethod.Password,
+                    Flow = AuthSecurityFlow.Login,
+                },
+                AuthSecurityTarget.Username(username));
+
             var state = await _abuseProtection.RecordLoginFailureAsync(
                 username,
                 HttpContext.RequestAborted);
@@ -459,6 +475,7 @@ namespace backend.main.features.auth
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status409Conflict)]
+        [AuthOperation(AuthOperation.Verification)]
         public async Task<IActionResult> VerifyEmailChange(
             [FromBody] EmailChangeConfirmationRequest request)
         {
@@ -517,6 +534,7 @@ namespace backend.main.features.auth
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.Verification)]
         public async Task<IActionResult> LocalVerifyOtp([FromBody] OtpVerificationRequest request)
         {
             try
@@ -575,6 +593,7 @@ namespace backend.main.features.auth
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.Verification)]
         public async Task<IActionResult> LocalVerify([FromBody] VerificationTokenRequest request)
         {
             try
@@ -615,6 +634,7 @@ namespace backend.main.features.auth
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<OAuthAuthenticationResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status409Conflict)]
+        [AuthOperation(AuthOperation.OAuthSignIn)]
         public async Task<IActionResult> GoogleAuthenticate([FromBody] GoogleRequest request)
         {
             try
@@ -649,6 +669,7 @@ namespace backend.main.features.auth
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<OAuthAuthenticationResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status409Conflict)]
+        [AuthOperation(AuthOperation.OAuthSignIn)]
         public async Task<IActionResult> GoogleCodeAuthenticate([FromBody] GoogleCodeRequest request)
         {
             try
@@ -685,6 +706,7 @@ namespace backend.main.features.auth
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<OAuthAuthenticationResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status409Conflict)]
+        [AuthOperation(AuthOperation.OAuthSignIn)]
         public async Task<IActionResult> MicrosoftAuthenticate([FromBody] MicrosoftRequest request)
         {
             try
@@ -745,6 +767,7 @@ namespace backend.main.features.auth
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.Refresh)]
         public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest? request)
         {
             try
@@ -785,6 +808,7 @@ namespace backend.main.features.auth
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status409Conflict)]
+        [AuthOperation(AuthOperation.OAuthSignIn)]
         public async Task<IActionResult> CompleteOAuthSignup([FromBody] CompleteOAuthSignupRequest request)
         {
             try
@@ -824,6 +848,7 @@ namespace backend.main.features.auth
         [HttpPost("api/refresh")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.Refresh)]
         public async Task<IActionResult> ApiRefresh([FromBody] RefreshTokenRequest? request)
         {
             try
@@ -974,6 +999,7 @@ namespace backend.main.features.auth
         [AllowAnonymous]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.Verification)]
         public async Task<IActionResult> VerifyDevice([FromBody] VerificationTokenRequest request)
         {
             try
@@ -1042,6 +1068,7 @@ namespace backend.main.features.auth
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.StepUpVerify)]
         public async Task<IActionResult> VerifyStepUp([FromBody] VerifyLoginStepUpRequest request)
         {
             try
@@ -1076,6 +1103,7 @@ namespace backend.main.features.auth
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.StepUpVerify)]
         public async Task<IActionResult> VerifyTotpStepUp([FromBody] VerifyLoginStepUpRequest request)
         {
             try
@@ -1110,6 +1138,7 @@ namespace backend.main.features.auth
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<VerificationChallengeResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.RecoveryRequest)]
         public Task<IActionResult> RecoverPassword([FromBody] PasswordRecoveryRequest request) =>
             RecoverPasswordInternalAsync(request);
 
@@ -1118,6 +1147,7 @@ namespace backend.main.features.auth
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<VerificationChallengeResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.RecoveryRequest)]
         public Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request) =>
             RecoverPasswordInternalAsync(request);
 
@@ -1168,6 +1198,7 @@ namespace backend.main.features.auth
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.RecoveryRequest)]
         public async Task<IActionResult> RecoverUsername([FromBody] UsernameRecoveryRequest request)
         {
             try
@@ -1204,6 +1235,7 @@ namespace backend.main.features.auth
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.PasswordReset)]
         public Task<IActionResult> ResetPassword(
             [FromBody] ResetPasswordRequest request,
             [FromQuery] string? token
@@ -1214,6 +1246,7 @@ namespace backend.main.features.auth
         [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.PasswordReset)]
         public Task<IActionResult> ChangePassword(
             [FromBody] ChangePasswordRequest request,
             [FromQuery] string? token

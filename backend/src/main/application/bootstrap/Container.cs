@@ -3,6 +3,7 @@ using backend.main.features.auth;
 using backend.main.features.auth.abuse;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.device;
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.mfa.totp;
@@ -221,6 +222,17 @@ namespace backend.main.application.bootstrap
             services.AddSingleton(TimeProvider.System);
             services.AddSingleton<IAuthAbuseProtectionStore, RedisAuthAbuseProtectionStore>();
             services.AddSingleton<IAuthAbuseProtectionService, AuthAbuseProtectionService>();
+            services.AddOptions<AuthSecurityEventsOptions>()
+                .Bind(config.GetSection(AuthSecurityEventsOptions.SectionName))
+                .ValidateOnStart();
+            services.AddSingleton<
+                IValidateOptions<AuthSecurityEventsOptions>,
+                AuthSecurityEventsOptionsValidator>();
+            services.AddSingleton<AuthIdentifierHasher>();
+            services.AddSingleton<AuthSecurityMetrics>();
+            services.AddSingleton<IAuthSecurityEventSink, LoggingAuthSecurityEventSink>();
+            services.AddSingleton<IAuthSecurityEventSink, MetricsAuthSecurityEventSink>();
+            services.AddSingleton<IAuthSecurityEventEmitter, AuthSecurityEventEmitter>();
             services.AddSearchInfrastructure(config, featureFlags);
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
             services.AddSingleton<IRepositoryAttributeResolver, RepositoryAttributeResolver>();

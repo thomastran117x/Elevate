@@ -1,3 +1,5 @@
+using System.Security.Claims;
+
 using backend.main.features.auth.contracts;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
@@ -7,6 +9,7 @@ using backend.main.shared.responses;
 
 using FluentAssertions;
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 using Moq;
@@ -15,11 +18,13 @@ namespace backend.tests.Unit.Features.Profile;
 
 public class UserAdminControllerTests
 {
+    private const int AdminId = 1;
+
     [Fact]
     public async Task UpdateUserStatus_ShouldReturnDisablePayload()
     {
         var service = new Mock<IUserService>();
-        service.Setup(s => s.UpdateUserStatusAsync(9, true, "abuse"))
+        service.Setup(s => s.UpdateUserStatusAsync(9, true, "abuse", AdminId))
             .ReturnsAsync(new UserStatusRecord
             {
                 Id = 9,
@@ -29,7 +34,7 @@ public class UserAdminControllerTests
                 AuthVersion = 3
             });
 
-        var controller = new UserAdminController(service.Object);
+        var controller = CreateController(service.Object);
 
         var result = await controller.UpdateUserStatus(9, new UpdateUserStatusRequest
         {
@@ -49,7 +54,7 @@ public class UserAdminControllerTests
     public async Task UpdateUserStatus_ShouldReturnReEnablePayload()
     {
         var service = new Mock<IUserService>();
-        service.Setup(s => s.UpdateUserStatusAsync(9, false, null))
+        service.Setup(s => s.UpdateUserStatusAsync(9, false, null, AdminId))
             .ReturnsAsync(new UserStatusRecord
             {
                 Id = 9,
@@ -57,7 +62,7 @@ public class UserAdminControllerTests
                 AuthVersion = 4
             });
 
-        var controller = new UserAdminController(service.Object);
+        var controller = CreateController(service.Object);
 
         var result = await controller.UpdateUserStatus(9, new UpdateUserStatusRequest
         {
@@ -70,4 +75,22 @@ public class UserAdminControllerTests
         response.Message.Should().Be("User re-enabled successfully.");
         response.Data!.IsDisabled.Should().BeFalse();
     }
+
+    private static UserAdminController CreateController(IUserService service) =>
+        new(service)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [
+                            new Claim(ClaimTypes.NameIdentifier, AdminId.ToString()),
+                            new Claim(ClaimTypes.Name, "admin@example.com"),
+                            new Claim(ClaimTypes.Role, "Admin"),
+                        ],
+                        "Test")),
+                },
+            },
+        };
 }

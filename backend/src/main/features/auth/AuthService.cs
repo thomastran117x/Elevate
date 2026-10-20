@@ -5,6 +5,7 @@ using backend.main.application.security;
 using backend.main.features.auth.contracts;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.device;
+using backend.main.features.auth.events;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
@@ -13,6 +14,7 @@ using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.profile;
+using backend.main.shared.exceptions.app;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
 using backend.main.shared.utilities.logger;
@@ -41,6 +43,7 @@ namespace backend.main.features.auth
         private readonly ClientRequestInfo _requestInfo;
         private readonly IPasswordHasher _passwordHasher;
         private readonly IPasswordPolicy _passwordPolicy;
+        private readonly IAuthSecurityEventEmitter _securityEvents;
         private static readonly TimeSpan PendingOAuthSignupTtl = TimeSpan.FromMinutes(15);
 
         public AuthService(
@@ -59,7 +62,8 @@ namespace backend.main.features.auth
             SeedAccountBypassPolicy seedBypass,
             ClientRequestInfo requestInfo,
             IPasswordHasher passwordHasher,
-            IPasswordPolicy passwordPolicy
+            IPasswordPolicy passwordPolicy,
+            IAuthSecurityEventEmitter securityEvents
         )
         {
             _userRepository = userRepository;
@@ -78,6 +82,7 @@ namespace backend.main.features.auth
             _requestInfo = requestInfo;
             _passwordHasher = passwordHasher;
             _passwordPolicy = passwordPolicy;
+            _securityEvents = securityEvents;
         }
 
         public async Task<LoginAuthenticationResult> LoginAsync(
@@ -102,13 +107,13 @@ namespace backend.main.features.auth
                     throw new UnauthorizedException("Invalid username or password");
 
                 var resolvedUser = ToUser(user);
-                await EnsureUserEnabledAsync(resolvedUser);
+                await EnsureUserEnabledAsync(resolvedUser, signInMethod: AuthSecurityMethod.Password);
 
                 if (verification == PasswordVerificationResult.SuccessRehashNeeded)
                     await TryUpgradePasswordHashAsync(user.Id, password, user.Password);
 
                 return await ResolvePostAuthOutcomeAsync(
-                    resolvedUser, transport, rememberMe, returnUrl,
+                    resolvedUser, AuthSecurityMethod.Password, transport, rememberMe, returnUrl,
                     LoginAuthenticationResult.Authenticated,
                     LoginAuthenticationResult.RequiresStepUp
                 );
@@ -228,7 +233,10 @@ namespace backend.main.features.auth
                 await _usernameAvailability.MarkTakenAsync(user.Username);
                 await _emailAvailability.MarkRegisteredAsync(probeEmail);
 
-                return await _authSessionService.IssueAsync(user, transport);
+                return _securityEvents.SignedIn(
+                    await _authSessionService.IssueAsync(user, transport),
+                    AuthSecurityMethod.Email,
+                    AuthSecurityFlow.Signup);
             }
             catch (Exception e)
             {
@@ -283,7 +291,10 @@ namespace backend.main.features.auth
                 await _usernameAvailability.MarkTakenAsync(user.Username);
                 await _emailAvailability.MarkRegisteredAsync(probeEmail);
 
-                return await _authSessionService.IssueAsync(user, transport);
+                return _securityEvents.SignedIn(
+                    await _authSessionService.IssueAsync(user, transport),
+                    AuthSecurityMethod.Email,
+                    AuthSecurityFlow.Signup);
             }
             catch (Exception e)
             {
@@ -304,11 +315,19 @@ namespace backend.main.features.auth
                     ? null
                     : await _userRepository.GetRecoveryByUsernameAsync(normalizedUsername);
                 if (existingUser == null || existingUser.IsDisabled)
+                {
+                    EmitRecoveryRequested(
+                        AuthSecurityFlow.PasswordRecovery,
+                        AuthSecurityReason.Suppressed,
+                        existingUser?.Id,
+                        AuthSecurityTarget.Username(username));
                     return BuildPlaceholderRecoveryChallenge();
+                }
 
                 if (!existingUser.HasLocalPassword)
                 {
-                    if (existingUser.SignInProviders.Count > 0)
+                    var reminded = existingUser.SignInProviders.Count > 0;
+                    if (reminded)
                     {
                         await _authNotificationService.SendProviderSignInReminderAsync(
                             existingUser.Email,
@@ -317,6 +336,11 @@ namespace backend.main.features.auth
                         );
                     }
 
+                    EmitRecoveryRequested(
+                        AuthSecurityFlow.PasswordRecovery,
+                        reminded ? AuthSecurityReason.ProviderReminder : AuthSecurityReason.Suppressed,
+                        existingUser.Id,
+                        AuthSecurityTarget.Username(username));
                     return BuildPlaceholderRecoveryChallenge();
                 }
 
@@ -339,6 +363,11 @@ namespace backend.main.features.auth
                     existingUser.RecipientName
                 );
 
+                EmitRecoveryRequested(
+                    AuthSecurityFlow.PasswordRecovery,
+                    AuthSecurityReason.Issued,
+                    existingUser.Id,
+                    AuthSecurityTarget.Username(username));
                 return artifacts.OtpChallenge;
             }
             catch (Exception e)
@@ -366,12 +395,23 @@ namespace backend.main.features.auth
                 // filter cannot answer, leaving this path doing two round trips instead of one.
                 // Advisory, and safely so — the method reports nothing to the caller either way,
                 // so a filter lagging a very recent signup costs one unsent reminder.
+                var target = AuthSecurityTarget.Email(email);
                 if (_emailAvailability.IsDefinitelyUnregistered(normalizedEmail))
+                {
+                    EmitRecoveryRequested(AuthSecurityFlow.UsernameRecovery, AuthSecurityReason.Suppressed, null, target);
                     return;
+                }
 
                 var existingUser = await _userRepository.GetRecoveryByEmailAsync(normalizedEmail);
                 if (existingUser == null || existingUser.IsDisabled)
+                {
+                    EmitRecoveryRequested(
+                        AuthSecurityFlow.UsernameRecovery,
+                        AuthSecurityReason.Suppressed,
+                        existingUser?.Id,
+                        target);
                     return;
+                }
 
                 if (existingUser.HasLocalPassword
                     && !string.IsNullOrWhiteSpace(existingUser.Username))
@@ -381,10 +421,12 @@ namespace backend.main.features.auth
                         existingUser.Username,
                         existingUser.RecipientName
                     );
+                    EmitRecoveryRequested(AuthSecurityFlow.UsernameRecovery, AuthSecurityReason.Issued, existingUser.Id, target);
                     return;
                 }
 
-                if (existingUser.SignInProviders.Count > 0)
+                var reminded = existingUser.SignInProviders.Count > 0;
+                if (reminded)
                 {
                     await _authNotificationService.SendProviderSignInReminderAsync(
                         existingUser.Email,
@@ -392,6 +434,12 @@ namespace backend.main.features.auth
                         existingUser.RecipientName
                     );
                 }
+
+                EmitRecoveryRequested(
+                    AuthSecurityFlow.UsernameRecovery,
+                    reminded ? AuthSecurityReason.ProviderReminder : AuthSecurityReason.Suppressed,
+                    existingUser.Id,
+                    target);
             }
             catch (Exception e)
             {
@@ -412,7 +460,11 @@ namespace backend.main.features.auth
                     VerificationPurpose.ResetPassword,
                     pending => EnsureResetPasswordAllowedAsync(pending.Email, password)
                 );
-                await ChangePasswordInternalAsync(user.Email, password);
+                await ChangePasswordInternalAsync(
+                    user.Email,
+                    password,
+                    AuthSecurityReason.PasswordReset,
+                    EmitRecoveryCompleted);
                 await SendPasswordChangedBestEffortAsync(user.Email);
             }
             catch (Exception e)
@@ -435,7 +487,11 @@ namespace backend.main.features.auth
                     VerificationPurpose.ResetPassword,
                     pending => EnsureResetPasswordAllowedAsync(pending.Email, password)
                 );
-                await ChangePasswordInternalAsync(user.Email, password);
+                await ChangePasswordInternalAsync(
+                    user.Email,
+                    password,
+                    AuthSecurityReason.PasswordReset,
+                    EmitRecoveryCompleted);
                 await SendPasswordChangedBestEffortAsync(user.Email);
             }
             catch (Exception e)
@@ -450,10 +506,13 @@ namespace backend.main.features.auth
 
         public async Task ChangePasswordForAuthenticatedUserAsync(string email, string currentPassword, string newPassword)
         {
+            int? userId = null;
+            var committed = false;
             try
             {
                 var existingUser = await _userRepository.GetAuthByEmailAsync(email)
                     ?? throw new UnauthorizedException("User not found.");
+                userId = existingUser.Id;
 
                 await EnsureUserEnabledAsync(ToUser(existingUser));
 
@@ -476,10 +535,45 @@ namespace backend.main.features.auth
                     new PasswordPolicyContext(existingUser.Username, existingUser.Email),
                     "NewPassword");
 
-                await ChangePasswordInternalAsync(email, newPassword);
+                await ChangePasswordInternalAsync(
+                    email,
+                    newPassword,
+                    AuthSecurityReason.PasswordChanged,
+                    changedUserId =>
+                    {
+                        committed = true;
+                        _securityEvents.Emit(new AuthSecurityEvent
+                        {
+                            Definition = AuthSecurityEvents.FactorChanged,
+                            Outcome = AuthSecurityOutcome.Succeeded,
+                            Factor = AuthSecurityFactor.Password,
+                            Change = AuthFactorChange.Changed,
+                            UserId = changedUserId,
+                        });
+                    });
             }
             catch (Exception e)
             {
+                // Every refusal is recorded: a wrong current password, a disabled account, a provider-only
+                // account, a reused or disallowed password, and faults. A failure after the password was
+                // committed, such as in the session sweep, is not a failed change: the success is recorded.
+                if (!committed)
+                {
+                    _securityEvents.FactorChangeFailed(
+                        userId,
+                        AuthSecurityFactor.Password,
+                        AuthFactorChange.Changed,
+                        e,
+                        e switch
+                        {
+                            UnauthorizedException => userId is null
+                                ? AuthSecurityReason.InvalidState
+                                : AuthSecurityReason.InvalidCredentials,
+                            ForbiddenException => AuthSecurityReason.AccountDisabled,
+                            _ => null,
+                        });
+                }
+
                 if (e is AppException)
                     throw;
 
@@ -497,12 +591,11 @@ namespace backend.main.features.auth
         {
             try
             {
-                OAuthUser oauthUser = await _oauthService.VerifyGoogleTokenAsync(
-                    token,
-                    expectedNonce
-                );
+                OAuthUser oauthUser = await VerifyProviderTokenAsync(
+                    AuthSecurityMethod.Google,
+                    () => _oauthService.VerifyGoogleTokenAsync(token, expectedNonce));
                 if (oauthUser == null)
-                    throw new UnauthorizedException("Invalid Google Token");
+                    throw ProviderRejected(AuthSecurityMethod.Google, "Invalid Google Token");
 
                 var user = await ResolveGoogleUserAsync(oauthUser);
                 if (user == null)
@@ -512,11 +605,11 @@ namespace backend.main.features.auth
                     );
                 }
 
-                await EnsureUserEnabledAsync(user);
+                await EnsureUserEnabledAsync(user, signInMethod: AuthSecurityMethod.Google);
                 user = await EnsureOAuthRoleAsync(user);
 
                 return await ResolvePostAuthOutcomeAsync(
-                    user, transport, rememberMe: false, returnUrl,
+                    user, AuthSecurityMethod.Google, transport, rememberMe: false, returnUrl,
                     OAuthAuthenticationResult.Authenticated,
                     OAuthAuthenticationResult.RequiresStepUp
                 );
@@ -542,7 +635,9 @@ namespace backend.main.features.auth
         {
             try
             {
-                var idToken = await _oauthService.ExchangeGoogleCodeAsync(code, codeVerifier, redirectUri);
+                var idToken = await VerifyProviderTokenAsync(
+                    AuthSecurityMethod.Google,
+                    () => _oauthService.ExchangeGoogleCodeAsync(code, codeVerifier, redirectUri));
                 return await GoogleAsync(idToken, transport, nonce, returnUrl);
             }
             catch (Exception e)
@@ -564,12 +659,11 @@ namespace backend.main.features.auth
         {
             try
             {
-                OAuthUser oauthUser = await _oauthService.VerifyMicrosoftTokenAsync(
-                    token,
-                    expectedNonce
-                );
+                OAuthUser oauthUser = await VerifyProviderTokenAsync(
+                    AuthSecurityMethod.Microsoft,
+                    () => _oauthService.VerifyMicrosoftTokenAsync(token, expectedNonce));
                 if (oauthUser == null)
-                    throw new UnauthorizedException("Invalid Microsoft Token");
+                    throw ProviderRejected(AuthSecurityMethod.Microsoft, "Invalid Microsoft Token");
 
                 var user = await ResolveMicrosoftUserAsync(oauthUser);
                 if (user == null)
@@ -579,11 +673,11 @@ namespace backend.main.features.auth
                     );
                 }
 
-                await EnsureUserEnabledAsync(user);
+                await EnsureUserEnabledAsync(user, signInMethod: AuthSecurityMethod.Microsoft);
                 user = await EnsureOAuthRoleAsync(user);
 
                 return await ResolvePostAuthOutcomeAsync(
-                    user, transport, rememberMe: false, returnUrl,
+                    user, AuthSecurityMethod.Microsoft, transport, rememberMe: false, returnUrl,
                     OAuthAuthenticationResult.Authenticated,
                     OAuthAuthenticationResult.RequiresStepUp
                 );
@@ -660,12 +754,15 @@ namespace backend.main.features.auth
                     // Any username supplied is deliberately ignored here. The provider account
                     // resolved to one that already exists, and renaming it from an unauthenticated
                     // signup token would bypass the MFA gate and cooldown on PATCH /profile/username.
-                    await EnsureUserEnabledAsync(user);
+                    await EnsureUserEnabledAsync(user, signInMethod: ProviderMethod(pending.Provider));
                     user = await EnsureOAuthRoleAsync(user);
                 }
 
                 await _cacheService.DeleteKeyAsync(PendingOAuthSignupKey(signupToken));
-                return await _authSessionService.IssueAsync(user, transport);
+                return _securityEvents.SignedIn(
+                    await _authSessionService.IssueAsync(user, transport),
+                    ProviderMethod(pending.Provider),
+                    AuthSecurityFlow.OAuthCompletion);
             }
             catch (Exception e)
             {
@@ -714,7 +811,7 @@ namespace backend.main.features.auth
                 var user = await _userRepository.GetUserAsync(validation.UserId);
                 if (user == null)
                     throw new ResourceNotFoundException($"User with ID {validation.UserId} is not found");
-                await EnsureUserEnabledAsync(user, revokeSessions: true);
+                await EnsureUserEnabledAsync(user, revokeSessions: true, signInMethod: AuthSecurityMethod.RefreshToken);
 
                 // A password change, disable or email change bumps AuthVersion and then sweeps
                 // the account's sessions, but the sweep revokes nothing when the cache is
@@ -722,7 +819,7 @@ namespace backend.main.features.auth
                 // that survived it from minting access tokens for the new version.
                 if (validation.AuthVersion is int issuedVersion && issuedVersion != user.AuthVersion)
                 {
-                    await _tokenService.RevokeRefreshSessionAsync(validation.SessionId);
+                    await _tokenService.RevokeRefreshSessionAsync(validation.SessionId, AuthSecurityReason.AuthVersionMismatch);
                     throw new UnauthorizedException(
                         "Refresh session is no longer valid. Please sign in again."
                     );
@@ -825,7 +922,7 @@ namespace backend.main.features.auth
                     transport,
                     _requestInfo
                 );
-                await _tokenService.RevokeRefreshSessionAsync(validation.SessionId);
+                await _tokenService.RevokeRefreshSessionAsync(validation.SessionId, AuthSecurityReason.Logout);
             }
             catch (Exception e)
             {
@@ -911,7 +1008,13 @@ namespace backend.main.features.auth
                 "Password");
         }
 
-        private async Task ChangePasswordInternalAsync(string email, string password)
+        /// <param name="onCommitted">Records the change. It runs once the new password is committed and
+        /// before the session sweep, which can fail after the change has already taken effect.</param>
+        private async Task ChangePasswordInternalAsync(
+            string email,
+            string password,
+            AuthSecurityReason revocationReason,
+            Action<int> onCommitted)
         {
             var hashedPassword = HashPassword(password);
 
@@ -920,7 +1023,8 @@ namespace backend.main.features.auth
             await EnsureUserEnabledAsync(ToUser(existingUser));
 
             await _userRepository.SetPasswordAndBumpAuthVersionAsync(existingUser.Id, hashedPassword);
-            await _tokenService.RevokeAllRefreshSessionsAsync(existingUser.Id);
+            onCommitted(existingUser.Id);
+            await _tokenService.RevokeAllRefreshSessionsAsync(existingUser.Id, revocationReason);
         }
 
         private async Task SendPasswordChangedBestEffortAsync(string email)
@@ -953,17 +1057,18 @@ namespace backend.main.features.auth
             // Google refuses to vouch for an unverified address upstream, so any address
             // reported here may drive the fallback.
             var email = oauthUser.Email
-                ?? throw new UnauthorizedException("Missing Google email claim");
+                ?? throw ProviderRejected(AuthSecurityMethod.Google, "Missing Google email claim");
             var emailUser = await _userRepository.GetOAuthByEmailAsync(email);
             if (emailUser == null)
                 return null;
 
-            EnsureEmailFallbackAllowed(emailUser);
+            EnsureEmailFallbackAllowed(emailUser, AuthSecurityMethod.Google);
             emailUser = await _userRepository.UpdateProviderIdsAsync(
                 emailUser.Id,
                 oauthUser.Id,
                 null
             ) ?? emailUser;
+            EmitProviderLinked(emailUser.Id, AuthSecurityMethod.Google);
 
             return ToUser(emailUser);
         }
@@ -982,7 +1087,7 @@ namespace backend.main.features.auth
             // Without a linked subject the address is all there is to go on, so a token that
             // reports none cannot sign in or sign up.
             if (string.IsNullOrWhiteSpace(oauthUser.Email))
-                throw new UnauthorizedException("Missing Microsoft email claim");
+                throw ProviderRejected(AuthSecurityMethod.Microsoft, "Missing Microsoft email claim");
 
             // An unverified address can still start a new account. That signs no one into an
             // existing account, though the new account holds an address nobody has proven.
@@ -990,18 +1095,22 @@ namespace backend.main.features.auth
             if (emailUser == null)
                 return null;
 
-            EnsureEmailFallbackAllowed(emailUser);
+            EnsureEmailFallbackAllowed(emailUser, AuthSecurityMethod.Microsoft);
 
             // Any Entra tenant can issue a token whose email claim names someone else's address,
             // so linking on it would hand that account to whoever runs the tenant.
             if (!oauthUser.EmailVerified)
+            {
+                EmitProviderLinkConflict(emailUser.Id, AuthSecurityMethod.Microsoft, AuthSecurityReason.EmailUnverified);
                 throw new MicrosoftEmailUnverifiedException();
+            }
 
             emailUser = await _userRepository.UpdateProviderIdsAsync(
                 emailUser.Id,
                 null,
                 oauthUser.Id
             ) ?? emailUser;
+            EmitProviderLinked(emailUser.Id, AuthSecurityMethod.Microsoft);
 
             return ToUser(emailUser);
         }
@@ -1021,12 +1130,13 @@ namespace backend.main.features.auth
         /// <c>email_verified</c>, and Microsoft resolution refuses an unverified address after this
         /// check with <see cref="MicrosoftEmailUnverifiedException"/>.
         /// </remarks>
-        private static void EnsureEmailFallbackAllowed(UserOAuthRecord emailUser)
+        private void EnsureEmailFallbackAllowed(UserOAuthRecord emailUser, AuthSecurityMethod provider)
         {
             if (string.IsNullOrWhiteSpace(emailUser.GoogleID)
                 && string.IsNullOrWhiteSpace(emailUser.MicrosoftID))
                 return;
 
+            EmitProviderLinkConflict(emailUser.Id, provider, AuthSecurityReason.EmailBoundToOtherProvider);
             throw new ConflictException(
                 "This email address belongs to an account that signs in with a different Google or Microsoft account."
             );
@@ -1102,6 +1212,7 @@ namespace backend.main.features.auth
 
         private async Task<T> ResolvePostAuthOutcomeAsync<T>(
             User user,
+            AuthSecurityMethod method,
             SessionTransport transport,
             bool rememberMe,
             string? returnUrl,
@@ -1114,7 +1225,10 @@ namespace backend.main.features.auth
             {
                 return onAuthenticated(new AuthenticatedSessionResult
                 {
-                    UserToken = await _authSessionService.IssueAsync(user, transport, rememberMe: rememberMe)
+                    UserToken = _securityEvents.SignedIn(
+                        await _authSessionService.IssueAsync(user, transport, rememberMe: rememberMe),
+                        method,
+                        AuthSecurityFlow.Login)
                 });
             }
 
@@ -1122,7 +1236,10 @@ namespace backend.main.features.auth
             {
                 return onAuthenticated(new AuthenticatedSessionResult
                 {
-                    UserToken = await _authSessionService.IssueAsync(user, transport, rememberMe: rememberMe)
+                    UserToken = _securityEvents.SignedIn(
+                        await _authSessionService.IssueAsync(user, transport, rememberMe: rememberMe),
+                        method,
+                        AuthSecurityFlow.Login)
                 });
             }
 
@@ -1134,27 +1251,161 @@ namespace backend.main.features.auth
 
             if (!EnvironmentSetting.AuthSmsMfaEnforcementEnabled && !shouldRequireTotpStepUp)
             {
-                await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, user.AuthVersion, _requestInfo, returnUrl);
+                try
+                {
+                    await _deviceService.EnsureDeviceKnownAsync(user.Id, user.Email, user.AuthVersion, _requestInfo, returnUrl);
+                }
+                catch (DeviceVerificationRequiredException)
+                {
+                    EmitChallenged(user, method, AuthSecurityReason.DeviceVerificationRequired);
+                    throw;
+                }
+
                 return onAuthenticated(new AuthenticatedSessionResult
                 {
-                    UserToken = await _authSessionService.IssueAsync(user, transport, rememberMe: rememberMe)
+                    UserToken = _securityEvents.SignedIn(
+                        await _authSessionService.IssueAsync(user, transport, rememberMe: rememberMe),
+                        method,
+                        AuthSecurityFlow.Login)
                 });
             }
 
             var stepUp = await _loginStepUpChallengeService.CreateChallengeAsync(user, transport, rememberMe, returnUrl);
+            EmitChallenged(user, method, AuthSecurityReason.StepUpRequired);
             return onStepUp(stepUp);
         }
 
-        private async Task EnsureUserEnabledAsync(User user, bool revokeSessions = false)
+        private void EmitChallenged(User user, AuthSecurityMethod method, AuthSecurityReason reason) =>
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.SignInChallenged,
+                Outcome = AuthSecurityOutcome.Succeeded,
+                Reason = reason,
+                Method = method,
+                Flow = AuthSecurityFlow.Login,
+                UserId = user.Id,
+            });
+
+        /// <param name="signInMethod">Set when the check gates a sign-in or refresh, which records
+        /// a disabled account's attempt as a failed sign-in.</param>
+        private async Task EnsureUserEnabledAsync(
+            User user,
+            bool revokeSessions = false,
+            AuthSecurityMethod? signInMethod = null)
         {
             if (!user.IsDisabled)
                 return;
 
+            if (signInMethod is not null)
+            {
+                _securityEvents.Emit(new AuthSecurityEvent
+                {
+                    Definition = AuthSecurityEvents.SignInFailed,
+                    Outcome = AuthSecurityOutcome.Denied,
+                    Reason = AuthSecurityReason.AccountDisabled,
+                    Method = signInMethod,
+                    Flow = signInMethod == AuthSecurityMethod.RefreshToken
+                        ? AuthSecurityFlow.Refresh
+                        : AuthSecurityFlow.Login,
+                    UserId = user.Id,
+                });
+            }
+
             if (revokeSessions)
-                await _tokenService.RevokeAllRefreshSessionsAsync(user.Id);
+                await _tokenService.RevokeAllRefreshSessionsAsync(user.Id, AuthSecurityReason.AccountDisabled);
 
             throw new ForbiddenException("This account is disabled.");
         }
+
+        /// <summary>
+        /// Runs a provider token check, recording a refused token as a failed sign-in. The provider
+        /// service reports every refused token, including one that fails validation, as a 401.
+        /// </summary>
+        private async Task<T> VerifyProviderTokenAsync<T>(AuthSecurityMethod provider, Func<Task<T>> verify)
+        {
+            try
+            {
+                return await verify();
+            }
+            catch (UnauthorizedException)
+            {
+                EmitProviderRejected(provider);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Records a provider token whose claims cannot sign anyone in, such as one without the email
+        /// an unlinked account needs, and returns the 401 to throw.
+        /// </summary>
+        private UnauthorizedException ProviderRejected(AuthSecurityMethod provider, string message)
+        {
+            EmitProviderRejected(provider);
+            return new UnauthorizedException(message);
+        }
+
+        private void EmitProviderRejected(AuthSecurityMethod provider) =>
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.SignInFailed,
+                Outcome = AuthSecurityOutcome.Denied,
+                Reason = AuthSecurityReason.ProviderRejected,
+                Method = provider,
+                Flow = AuthSecurityFlow.Login,
+            });
+
+        private static AuthSecurityMethod ProviderMethod(string provider) =>
+            provider == "google" ? AuthSecurityMethod.Google : AuthSecurityMethod.Microsoft;
+
+        /// <remarks>
+        /// The reason says whether anything was sent, which the response deliberately hides. It is
+        /// for operators only and must never be surfaced to the requester.
+        /// </remarks>
+        private void EmitRecoveryRequested(
+            AuthSecurityFlow flow,
+            AuthSecurityReason reason,
+            int? userId,
+            AuthSecurityTarget target) =>
+            _securityEvents.Emit(
+                new AuthSecurityEvent
+                {
+                    Definition = AuthSecurityEvents.RecoveryRequested,
+                    Outcome = AuthSecurityOutcome.Succeeded,
+                    Reason = reason,
+                    Method = AuthSecurityMethod.Email,
+                    Flow = flow,
+                    UserId = userId,
+                },
+                target);
+
+        private void EmitRecoveryCompleted(int userId) =>
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.RecoveryCompleted,
+                Outcome = AuthSecurityOutcome.Succeeded,
+                Method = AuthSecurityMethod.Email,
+                Flow = AuthSecurityFlow.PasswordReset,
+                UserId = userId,
+            });
+
+        private void EmitProviderLinked(int userId, AuthSecurityMethod provider) =>
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.ProviderLinked,
+                Outcome = AuthSecurityOutcome.Succeeded,
+                Method = provider,
+                UserId = userId,
+            });
+
+        private void EmitProviderLinkConflict(int userId, AuthSecurityMethod provider, AuthSecurityReason reason) =>
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.ProviderLinkConflict,
+                Outcome = AuthSecurityOutcome.Denied,
+                Reason = reason,
+                Method = provider,
+                UserId = userId,
+            });
 
         private static User ToUser(UserAuthRecord record)
         {

@@ -4,6 +4,7 @@ using System.Text;
 using backend.main.application.bootstrap;
 using backend.main.application.environment;
 using backend.main.features.auth;
+using backend.main.features.auth.events;
 using backend.main.features.auth.token;
 using backend.main.shared.exceptions.app;
 using backend.main.shared.other;
@@ -77,6 +78,7 @@ namespace backend.main.application.security
 
                         OnForbidden = async context =>
                         {
+                            AuthSecurityRequestFeature.MarkDenial(context.HttpContext, AuthSecurityReason.Policy);
                             context.Response.StatusCode = StatusCodes.Status403Forbidden;
                             context.Response.ContentType = "application/json";
 

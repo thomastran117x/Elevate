@@ -4,13 +4,17 @@ using System.Security.Claims;
 using System.Text.Json;
 
 using backend.main.application.security;
+using backend.main.features.auth.events;
 using backend.main.features.cache;
+
+using backend.tests.Unit.Features.Auth.Events;
 
 using FluentAssertions;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -22,6 +26,112 @@ namespace backend.tests.Unit.Application.Security;
 
 public class RateLimiterConfigurationTests
 {
+    [Theory]
+    [InlineData(RateLimiterConfiguration.AuthPolicyName, AuthSecurityFlow.General)]
+    [InlineData(RateLimiterConfiguration.EmailAvailabilityPolicyName, AuthSecurityFlow.EmailAvailability)]
+    [InlineData(RateLimiterConfiguration.EmailChangePolicyName, AuthSecurityFlow.EmailChange)]
+    public void RecordAuthThrottle_ShouldRecordAuthenticationPolicyRejections(string policy, AuthSecurityFlow flow)
+    {
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var context = CreateContextForPolicy(policy, securityEvents);
+
+        RateLimiterConfiguration.RecordAuthThrottle(context);
+
+        var throttled = securityEvents.Of(AuthSecurityEvents.Throttled).Should().ContainSingle().Subject;
+        throttled.Flow.Should().Be(flow);
+        throttled.Dimension.Should().Be(AuthThrottleDimension.RateLimiter);
+        throttled.Outcome.Should().Be(AuthSecurityOutcome.Throttled);
+    }
+
+    [Theory]
+    [InlineData(RateLimiterConfiguration.ImageUploadPolicyName)]
+    [InlineData(null)]
+    public void RecordAuthThrottle_ShouldIgnoreLimitsThatAreNotAuthenticationControls(string? policy)
+    {
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var context = CreateContextForPolicy(policy, securityEvents);
+
+        RateLimiterConfiguration.RecordAuthThrottle(context);
+
+        securityEvents.Emitted.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(1, 100, false)]
+    [InlineData(100, 1, true)]
+    public async Task OnRejected_ShouldOnlyRecordAuthPolicyRefusals_NotTheGlobalLimit(
+        int globalLimit,
+        int authLimit,
+        bool expectThrottleEvent)
+    {
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["RateLimiter:PermitLimit"] = globalLimit.ToString(),
+                ["RateLimiter:AuthPermitLimit"] = authLimit.ToString(),
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IAuthSecurityEventEmitter>(securityEvents);
+        services.AddInMemoryRateLimiter(configuration);
+
+        using var provider = services.BuildServiceProvider();
+        var app = new ApplicationBuilder(provider);
+        app.Use((context, next) =>
+        {
+            context.SetEndpoint(new Endpoint(
+                _ => Task.CompletedTask,
+                new EndpointMetadataCollection(new EnableRateLimitingAttribute(RateLimiterConfiguration.AuthPolicyName)),
+                "login"));
+            return next(context);
+        });
+        app.UseRateLimiter();
+        app.Run(async context => await context.Response.WriteAsync("ok"));
+        var pipeline = app.Build();
+
+        await pipeline(CreateRateLimitContext(provider, IPAddress.Parse("127.0.0.1")));
+        var rejected = CreateRateLimitContext(provider, IPAddress.Parse("127.0.0.1"));
+        await pipeline(rejected);
+
+        rejected.Response.StatusCode.Should().Be(StatusCodes.Status429TooManyRequests);
+        securityEvents.Of(AuthSecurityEvents.Throttled).Should().HaveCount(expectThrottleEvent ? 1 : 0);
+    }
+
+    [Fact]
+    public void RecordAuthThrottle_ShouldAttributeTheAccountBudgetToTheCaller_AndLeaveAnonymousPoliciesUnattributed()
+    {
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var caller = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "42")], "Test"));
+        var emailChange = CreateContextForPolicy(RateLimiterConfiguration.EmailChangePolicyName, securityEvents);
+        emailChange.User = caller;
+        var login = CreateContextForPolicy(RateLimiterConfiguration.AuthPolicyName, securityEvents);
+        login.User = caller;
+
+        RateLimiterConfiguration.RecordAuthThrottle(emailChange);
+        RateLimiterConfiguration.RecordAuthThrottle(login);
+
+        securityEvents.Events.Select(e => (e.Flow, e.UserId)).Should().Equal(
+            (AuthSecurityFlow.EmailChange, 42),
+            (AuthSecurityFlow.General, (int?)null));
+    }
+
+    private static DefaultHttpContext CreateContextForPolicy(string? policy, IAuthSecurityEventEmitter securityEvents)
+    {
+        var metadata = policy is null
+            ? new EndpointMetadataCollection()
+            : new EndpointMetadataCollection(new EnableRateLimitingAttribute(policy));
+        var context = new DefaultHttpContext
+        {
+            RequestServices = new ServiceCollection()
+                .AddSingleton(securityEvents)
+                .BuildServiceProvider(),
+        };
+        context.SetEndpoint(new Endpoint(_ => Task.CompletedTask, metadata, "test"));
+        return context;
+    }
+
     [Fact]
     public async Task AddInMemoryRateLimiter_ShouldRejectRequestsBeyondPermitLimit()
     {

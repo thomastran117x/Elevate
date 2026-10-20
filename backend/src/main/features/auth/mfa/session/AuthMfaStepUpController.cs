@@ -5,6 +5,7 @@ using backend.main.application.security;
 using backend.main.features.auth.abuse;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.events;
 using backend.main.features.auth.token;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
@@ -97,6 +98,7 @@ namespace backend.main.features.auth.mfa.session
 
         [HttpPost("verify")]
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.StepUpVerify)]
         public async Task<IActionResult> Verify([FromBody] SessionMfaVerifyRequest request)
         {
             try

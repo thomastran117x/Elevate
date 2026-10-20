@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 
 using backend.main.application.environment;
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.events;
 using backend.main.features.cache;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.utilities.logger;
@@ -46,14 +47,17 @@ namespace backend.main.features.auth.mfa.totp
 
         private readonly ITotpMfaEnrollmentRepository _repository;
         private readonly ICacheService _cacheService;
+        private readonly IAuthSecurityEventEmitter _securityEvents;
 
         public TotpMfaEnrollmentService(
             ITotpMfaEnrollmentRepository repository,
-            ICacheService cacheService
+            ICacheService cacheService,
+            IAuthSecurityEventEmitter securityEvents
         )
         {
             _repository = repository;
             _cacheService = cacheService;
+            _securityEvents = securityEvents;
         }
 
         public async Task<TotpMfaEnrollment?> GetEnrollmentAsync(int userId)
@@ -128,7 +132,7 @@ namespace backend.main.features.auth.mfa.totp
                 var lockValue = Guid.NewGuid().ToString("N");
                 var lockKey = VerifyLockKey(userId);
                 if (!await _cacheService.AcquireLockAsync(lockKey, lockValue, VerifyLockTtl))
-                    throw new TooManyRequestException("Enrollment verification is already in progress. Please try again shortly.");
+                    throw new VerificationInProgressException();
 
                 try
                 {
@@ -163,7 +167,6 @@ namespace backend.main.features.auth.mfa.totp
                     var enrollment = await _repository.UpsertAsync(userId, encryptedSecret, EncryptionKeyVersion, enrolledAtUtc);
 
                     await _cacheService.DeleteKeyAsync(PendingKey(userId));
-                    LogAudit(userId, "enroll", true, "totp configuration verified");
                     return enrollment;
                 }
                 finally
@@ -173,11 +176,10 @@ namespace backend.main.features.auth.mfa.totp
             }
             catch (Exception ex)
             {
+                // Recorded before the fault is translated, so an outage shows as faulted, not missing.
+                RecordChangeFailed(userId, AuthFactorChange.Enabled, ex);
                 if (ex is AppException)
-                {
-                    LogAudit(userId, "enroll", false, ex.Message);
                     throw;
-                }
 
                 Logger.Error($"[TotpMfaEnrollmentService] VerifyEnrollmentAsync failed: {ex}");
                 throw new InternalServerErrorException();
@@ -209,16 +211,14 @@ namespace backend.main.features.auth.mfa.totp
                 }
 
                 await _cacheService.DeleteKeyAsync(ActionAttemptKey(userId, "enable"));
-                LogAudit(userId, "re-enable", true, "totp configuration re-enabled");
                 return updated;
             }
             catch (Exception ex)
             {
+                // Recorded before the fault is translated, so an outage shows as faulted, not missing.
+                RecordChangeFailed(userId, AuthFactorChange.Enabled, ex);
                 if (ex is AppException)
-                {
-                    LogAudit(userId, "re-enable", false, ex.Message);
                     throw;
-                }
 
                 Logger.Error($"[TotpMfaEnrollmentService] EnableAsync failed: {ex}");
                 throw new InternalServerErrorException();
@@ -250,16 +250,14 @@ namespace backend.main.features.auth.mfa.totp
                 }
 
                 await _cacheService.DeleteKeyAsync(ActionAttemptKey(userId, "disable"));
-                LogAudit(userId, "disable", true, "totp configuration disabled");
                 return updated;
             }
             catch (Exception ex)
             {
+                // Recorded before the fault is translated, so an outage shows as faulted, not missing.
+                RecordChangeFailed(userId, AuthFactorChange.Disabled, ex);
                 if (ex is AppException)
-                {
-                    LogAudit(userId, "disable", false, ex.Message);
                     throw;
-                }
 
                 Logger.Error($"[TotpMfaEnrollmentService] DisableAsync failed: {ex}");
                 throw new InternalServerErrorException();
@@ -287,15 +285,13 @@ namespace backend.main.features.auth.mfa.totp
                 }
 
                 await ClearManagementStateAsync(userId);
-                LogAudit(userId, "remove", true, "totp configuration removed");
             }
             catch (Exception ex)
             {
+                // Recorded before the fault is translated, so an outage shows as faulted, not missing.
+                RecordChangeFailed(userId, AuthFactorChange.Removed, ex);
                 if (ex is AppException)
-                {
-                    LogAudit(userId, "remove", false, ex.Message);
                     throw;
-                }
 
                 Logger.Error($"[TotpMfaEnrollmentService] RemoveAsync failed: {ex}");
                 throw new InternalServerErrorException();
@@ -341,7 +337,7 @@ namespace backend.main.features.auth.mfa.totp
                 if (attempts >= MaxActionAttempts)
                     throw new TooManyRequestException($"Too many failed TOTP {action} attempts. Please try again later.");
 
-                throw new BadRequestException("Invalid TOTP code.");
+                throw new ClassifiedBadRequestException("Invalid TOTP code.", AuthSecurityReason.InvalidCode);
             }
 
             return matchedWindow;
@@ -395,9 +391,13 @@ namespace backend.main.features.auth.mfa.totp
             if (!await TryClaimReplayWindowAsync(guardKey, matchedWindow))
             {
                 if (invalidAsBadRequest)
-                    throw new BadRequestException("TOTP code has already been used. Please wait for a new code.");
+                    throw new ClassifiedBadRequestException(
+                        "TOTP code has already been used. Please wait for a new code.",
+                        AuthSecurityReason.Replayed);
 
-                throw new UnauthorizedException("TOTP code has already been used. Please wait for a new code.");
+                throw new ClassifiedUnauthorizedException(
+                    "TOTP code has already been used. Please wait for a new code.",
+                    AuthSecurityReason.Replayed);
             }
         }
 
@@ -493,10 +493,46 @@ namespace backend.main.features.auth.mfa.totp
                 throw new NotAvailableException("TOTP MFA enrollment is currently unavailable.");
         }
 
-        private static void LogAudit(int userId, string action, bool success, string reason)
+        /// <summary>
+        /// Records a refused or faulted TOTP change. The HTTP status of each failure is unchanged, but
+        /// several share an exception type, so a failure that knows its reason carries it: a wrong or
+        /// reused code is not a malformed request, and losing the verification lock is not an
+        /// exhausted attempt budget.
+        /// </summary>
+        private void RecordChangeFailed(int userId, AuthFactorChange change, Exception ex) =>
+            _securityEvents.FactorChangeFailed(
+                userId,
+                AuthSecurityFactor.Totp,
+                change,
+                ex,
+                (ex as IClassifiedTotpFailure)?.Reason,
+                ex is VerificationInProgressException ? AuthThrottleDimension.Concurrency : null);
+
+        private interface IClassifiedTotpFailure
         {
-            Logger.Info($"[AuthMfaAudit] userId={userId} method=totp action={action} success={success} reason={reason}");
+            AuthSecurityReason Reason
+            {
+                get;
+            }
         }
+
+        /// <summary>A refused TOTP code (400) whose reason is known.</summary>
+        private sealed class ClassifiedBadRequestException(string message, AuthSecurityReason reason)
+            : BadRequestException(message), IClassifiedTotpFailure
+        {
+            public AuthSecurityReason Reason { get; } = reason;
+        }
+
+        /// <summary>A refused TOTP code (401) whose reason is known.</summary>
+        private sealed class ClassifiedUnauthorizedException(string message, AuthSecurityReason reason)
+            : UnauthorizedException(message), IClassifiedTotpFailure
+        {
+            public AuthSecurityReason Reason { get; } = reason;
+        }
+
+        /// <summary>A second verification racing the first for the enrollment lock (429).</summary>
+        private sealed class VerificationInProgressException()
+            : TooManyRequestException("Enrollment verification is already in progress. Please try again shortly.");
 
         private static string PendingKey(int userId) => $"totp:enrollment:pending:user:{userId}";
         private static string VerifyLockKey(int userId) => $"totp:enrollment:verify-lock:user:{userId}";

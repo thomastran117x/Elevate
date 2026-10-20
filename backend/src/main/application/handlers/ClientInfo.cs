@@ -29,36 +29,38 @@ namespace backend.main.application.handlers
 
         public async Task InvokeAsync(HttpContext context, ClientRequestInfo requestInfo)
         {
-            requestInfo.IpAddress = ResolveIpAddress(context);
-            requestInfo.ClientName = ResolveClientName(context);
-            requestInfo.DeviceType = ResolveDeviceType(context);
-            requestInfo.IsBrowserClient = ResolveIsBrowser(context);
+            var userAgent = context.Request.Headers.UserAgent.ToString();
+            requestInfo.IpAddress = ClientRequestClassifier.ResolveIpAddress(context);
+            requestInfo.ClientName = ClientRequestClassifier.ResolveClientName(userAgent);
+            requestInfo.DeviceType = ClientRequestClassifier.ResolveDeviceType(userAgent);
+            requestInfo.IsBrowserClient = ClientRequestClassifier.ResolveIsBrowser(userAgent);
 
             await _next(context);
         }
+    }
 
-        private static bool ResolveIsBrowser(HttpContext context)
+    /// <summary>
+    /// Coarse client classification from the connection and User-Agent. Shared by the inspection
+    /// middleware and by code that runs before it, such as authentication, authorization, and rate
+    /// limiting, where the scoped <see cref="ClientRequestInfo"/> is not yet populated.
+    /// </summary>
+    public static class ClientRequestClassifier
+    {
+        public static bool ResolveIsBrowser(string userAgent)
         {
-            var userAgent = context.Request.Headers.UserAgent.ToString();
             if (string.IsNullOrWhiteSpace(userAgent))
                 return true;
 
-            return !(
-                userAgent.Contains("PostmanRuntime", StringComparison.OrdinalIgnoreCase)
-                || userAgent.Contains("curl/", StringComparison.OrdinalIgnoreCase)
-                || userAgent.Contains("axios/", StringComparison.OrdinalIgnoreCase)
-                || userAgent.Contains("HttpClient", StringComparison.OrdinalIgnoreCase)
-            );
+            return !IsApiClient(userAgent);
         }
 
-        private static string ResolveIpAddress(HttpContext context)
+        public static string ResolveIpAddress(HttpContext context)
         {
             return context.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
         }
 
-        private static string ResolveClientName(HttpContext context)
+        public static string ResolveClientName(string userAgent)
         {
-            var userAgent = context.Request.Headers.UserAgent.ToString();
             if (string.IsNullOrWhiteSpace(userAgent))
                 return "Unknown";
 
@@ -91,9 +93,8 @@ namespace backend.main.application.handlers
             return userAgent.Split('/')[0].Trim();
         }
 
-        private static string ResolveDeviceType(HttpContext context)
+        public static string ResolveDeviceType(string userAgent)
         {
-            var userAgent = context.Request.Headers.UserAgent.ToString();
             if (string.IsNullOrWhiteSpace(userAgent))
                 return "Unknown";
 
@@ -118,16 +119,16 @@ namespace backend.main.application.handlers
             )
                 return "Desktop";
 
-            if (
-                userAgent.Contains("PostmanRuntime", StringComparison.OrdinalIgnoreCase)
-                || userAgent.Contains("curl/", StringComparison.OrdinalIgnoreCase)
-                || userAgent.Contains("HttpClient", StringComparison.OrdinalIgnoreCase)
-                || userAgent.Contains("axios/", StringComparison.OrdinalIgnoreCase)
-            )
+            if (IsApiClient(userAgent))
                 return "API Client";
 
             return "Unknown";
         }
+
+        private static bool IsApiClient(string userAgent) =>
+            userAgent.Contains("PostmanRuntime", StringComparison.OrdinalIgnoreCase)
+            || userAgent.Contains("curl/", StringComparison.OrdinalIgnoreCase)
+            || userAgent.Contains("axios/", StringComparison.OrdinalIgnoreCase)
+            || userAgent.Contains("HttpClient", StringComparison.OrdinalIgnoreCase);
     }
 }
-

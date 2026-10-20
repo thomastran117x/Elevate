@@ -28,6 +28,11 @@ namespace backend.main.features.auth.token
         {
             get; set;
         }
+        /// <summary>The refresh session the tokens belong to. Server-side only; never serialized.</summary>
+        public string? SessionId
+        {
+            get; init;
+        }
 
         public Token(
             string accessToken,

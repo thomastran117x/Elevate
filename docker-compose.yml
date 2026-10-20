@@ -142,6 +142,7 @@ services:
       Auth__AbuseProtection__DelayBase: "${AUTH_ABUSE_DELAY_BASE:-00:00:00.500}"
       Auth__AbuseProtection__DelayMaximum: "${AUTH_ABUSE_DELAY_MAXIMUM:-00:00:08}"
       Auth__StepUp__ProofLifetimeMinutes: "${AUTH_STEP_UP_PROOF_LIFETIME_MINUTES:-10}"
+      Auth__SecurityEvents__IdentifierHashKey: "${AUTH_SECURITY_EVENTS_HASH_KEY:-}"
       Auth__PasswordPolicy__BlocklistPath: "${AUTH_PASSWORD_BLOCKLIST_PATH:-}"
       Auth__PasswordPolicy__Hashing__Algorithm: "${AUTH_PASSWORD_HASH_ALGORITHM:-Argon2id}"
       Auth__PasswordPolicy__Hashing__Argon2__MemoryKiB: "${AUTH_PASSWORD_HASH_ARGON2_MEMORY_KIB:-19456}"

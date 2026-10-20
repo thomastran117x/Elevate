@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 
+using backend.main.features.auth.events;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
 
@@ -73,7 +74,6 @@ public sealed class AuthAbuseProtectionService : IAuthAbuseProtectionService
 {
     private static readonly EventId RedisUnavailableEvent = new(32001, "AuthAbuseRedisUnavailable");
     private static readonly EventId RedisRecoveredEvent = new(32002, "AuthAbuseRedisRecovered");
-    private static readonly EventId ThrottledEvent = new(32003, "AuthAbuseThrottled");
     private static readonly EventId LoginSuccessEvent = new(32004, "AuthLoginFailureStateReset");
 
     private readonly IAuthAbuseProtectionStore _store;
@@ -81,6 +81,7 @@ public sealed class AuthAbuseProtectionService : IAuthAbuseProtectionService
     private readonly TimeProvider _timeProvider;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<AuthAbuseProtectionService> _logger;
+    private readonly IAuthSecurityEventEmitter _securityEvents;
     private int _redisDegraded;
 
     public AuthAbuseProtectionService(
@@ -88,13 +89,15 @@ public sealed class AuthAbuseProtectionService : IAuthAbuseProtectionService
         IOptions<AuthAbuseProtectionOptions> options,
         TimeProvider timeProvider,
         IHttpContextAccessor httpContextAccessor,
-        ILogger<AuthAbuseProtectionService> logger)
+        ILogger<AuthAbuseProtectionService> logger,
+        IAuthSecurityEventEmitter securityEvents)
     {
         _store = store;
         _options = options.Value;
         _timeProvider = timeProvider;
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
+        _securityEvents = securityEvents;
     }
 
     public async Task EnsureSourceAllowedAsync(
@@ -115,7 +118,7 @@ public sealed class AuthAbuseProtectionService : IAuthAbuseProtectionService
             AuthAbuseTargetKind.SourceIp,
             NormalizeIp(sourceIp));
         var result = await _store.ReserveAsync(key, limit, window, cancellationToken);
-        HandleDecision(result, flow, "source-ip");
+        HandleDecision(result, flow, AuthThrottleDimension.SourceIp);
     }
 
     public async Task EnsureTargetAllowedAsync(
@@ -127,7 +130,7 @@ public sealed class AuthAbuseProtectionService : IAuthAbuseProtectionService
         var (limit, window) = TargetBudget(flow);
         var key = BuildKey(FlowName(flow), "target", kind, NormalizeTarget(kind, target));
         var result = await _store.ReserveAsync(key, limit, window, cancellationToken);
-        HandleDecision(result, flow, "target");
+        HandleDecision(result, flow, AuthThrottleDimension.Target, kind, target);
     }
 
     public async Task<LoginAbuseState> GetLoginStateAsync(
@@ -151,11 +154,11 @@ public sealed class AuthAbuseProtectionService : IAuthAbuseProtectionService
         if (!state.Throttled)
             return state;
 
-        _logger.LogWarning(
-            ThrottledEvent,
-            "Authentication abuse protection throttled flow {Flow} on {Dimension}.",
-            "login",
-            "target");
+        EmitThrottled(
+            AuthSecurityFlow.Login,
+            AuthThrottleDimension.Account,
+            AuthAbuseTargetKind.Username,
+            username);
         SetRetryAfter(state.RetryAfter);
         throw new TooManyRequestException(
             "Too many requests. Please try again later."
@@ -237,17 +240,15 @@ public sealed class AuthAbuseProtectionService : IAuthAbuseProtectionService
     private void HandleDecision(
         AuthCounterResult result,
         AuthAbuseFlow flow,
-        string dimension)
+        AuthThrottleDimension dimension,
+        AuthAbuseTargetKind? kind = null,
+        string? target = null)
     {
         ObserveStore(result.StoreAvailable);
         if (!result.StoreAvailable || result.Allowed)
             return;
 
-        _logger.LogWarning(
-            ThrottledEvent,
-            "Authentication abuse protection throttled flow {Flow} on {Dimension}.",
-            FlowName(flow),
-            dimension);
+        EmitThrottled(SecurityFlow(flow), dimension, kind, target);
         SetRetryAfter(result.RetryAfter);
         throw new TooManyRequestException(
             "Too many requests. Please try again later."
@@ -319,6 +320,44 @@ public sealed class AuthAbuseProtectionService : IAuthAbuseProtectionService
         string normalizedValue) =>
         $"{_options.KeyPrefix}:{flow}:{dimension}:{HashIdentifier(kind, normalizedValue)}";
 
+    private void EmitThrottled(
+        AuthSecurityFlow flow,
+        AuthThrottleDimension dimension,
+        AuthAbuseTargetKind? kind,
+        string? target)
+    {
+        AuthSecurityTarget? aimedAt = kind switch
+        {
+            AuthAbuseTargetKind.Username => AuthSecurityTarget.Username(target),
+            AuthAbuseTargetKind.Email => AuthSecurityTarget.Email(target),
+            _ => null,
+        };
+
+        _securityEvents.Emit(
+            new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.Throttled,
+                Outcome = AuthSecurityOutcome.Throttled,
+                Reason = AuthSecurityReason.LimitExceeded,
+                Flow = flow,
+                Dimension = dimension,
+                UserId = kind == AuthAbuseTargetKind.AccountId && int.TryParse(target, out var userId)
+                    ? userId
+                    : null,
+            },
+            aimedAt);
+    }
+
+    private static AuthSecurityFlow SecurityFlow(AuthAbuseFlow flow) => flow switch
+    {
+        AuthAbuseFlow.Recovery => AuthSecurityFlow.Recovery,
+        AuthAbuseFlow.Verification => AuthSecurityFlow.Verification,
+        AuthAbuseFlow.OAuthCompletion => AuthSecurityFlow.OAuthCompletion,
+        AuthAbuseFlow.MfaDelivery => AuthSecurityFlow.MfaDelivery,
+        AuthAbuseFlow.EmailAvailability => AuthSecurityFlow.EmailAvailability,
+        _ => AuthSecurityFlow.General,
+    };
+
     private static string FlowName(AuthAbuseFlow flow) => flow switch
     {
         AuthAbuseFlow.Recovery => "recovery",
@@ -336,7 +375,7 @@ public sealed class AuthAbuseProtectionService : IAuthAbuseProtectionService
         _ => (target ?? string.Empty).Trim(),
     };
 
-    private static string NormalizeIp(string sourceIp)
+    internal static string NormalizeIp(string sourceIp)
     {
         var value = (sourceIp ?? string.Empty).Trim();
         return IPAddress.TryParse(value, out var address)
