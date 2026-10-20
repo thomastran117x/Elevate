@@ -6,12 +6,16 @@ import { provideFeatureFlags } from '@testing';
 import { AccountPageComponent } from './account-page.component';
 
 describe('AccountPageComponent', () => {
-  function createFixture(recentlyViewedEnabled: boolean): ComponentFixture<AccountPageComponent> {
+  function createFixture(
+    recentlyViewedEnabled: boolean,
+    authEnabled = true,
+  ): ComponentFixture<AccountPageComponent> {
     TestBed.configureTestingModule({
       imports: [AccountPageComponent],
       providers: [
         provideRouter([]),
         provideFeatureFlags({
+          auth: authEnabled,
           events: true,
           'events.recentlyviewed': recentlyViewedEnabled,
           profile: true,
@@ -47,12 +51,26 @@ describe('AccountPageComponent', () => {
     expect(tabLabels(fixture)).not.toContain('Privacy');
   });
 
+  it('shows the activity tab while the auth feature is on', () => {
+    const fixture = createFixture(false);
+
+    expect(fixture.componentInstance.activityTabEnabled).toBeTrue();
+    expect(tabLabels(fixture)).toContain('Activity');
+  });
+
+  it('hides the activity tab when the auth feature is off', () => {
+    const fixture = createFixture(false, false);
+
+    // Its only endpoint is behind the auth feature gate, so the tab could never load.
+    expect(fixture.componentInstance.activityTabEnabled).toBeFalse();
+    expect(tabLabels(fixture)).not.toContain('Activity');
+  });
+
   it('keeps the other tabs regardless', () => {
-    const labels = tabLabels(createFixture(false));
+    const labels = tabLabels(createFixture(false, false));
 
     expect(labels).toContain('Profile');
     expect(labels).toContain('Security');
-    expect(labels).toContain('Activity');
     expect(labels).toContain('Password');
     expect(labels).toContain('Danger Zone');
   });

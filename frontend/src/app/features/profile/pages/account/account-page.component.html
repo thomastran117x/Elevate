@@ -40,14 +40,16 @@
       >
         Security
       </a>
-      <a
-        routerLink="activity"
-        routerLinkActive="border-b-2 border-accent text-content font-semibold"
-        [routerLinkActiveOptions]="{ exact: false }"
-        class="px-4 pb-3 pt-2 text-sm font-medium text-subtle transition hover:text-content"
-      >
-        Activity
-      </a>
+      @if (activityTabEnabled) {
+        <a
+          routerLink="activity"
+          routerLinkActive="border-b-2 border-accent text-content font-semibold"
+          [routerLinkActiveOptions]="{ exact: false }"
+          class="px-4 pb-3 pt-2 text-sm font-medium text-subtle transition hover:text-content"
+        >
+          Activity
+        </a>
+      }
       <a
         routerLink="password"
         routerLinkActive="border-b-2 border-accent text-content font-semibold"
