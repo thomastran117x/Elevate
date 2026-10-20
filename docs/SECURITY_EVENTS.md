@@ -10,8 +10,9 @@ Auth code builds an `AuthSecurityEvent` and passes it to `IAuthSecurityEventEmit
 
 - **Logging sink:** one log entry per event at the catalog level, with the catalog `EventId` and every field rendered in the message and kept as structured properties.
 - **Metrics sink:** increments `auth.security_events` on the `EventXperience.Auth` meter.
+- **Security history sink:** publishes the events the account owner should see to the security-history topic, without waiting for Kafka; see [account security history](#account-security-history).
 
-The emitter runs each sink in its own `try`/`catch`. A failing sink increments `auth.security_events.sink_failures` and logs the exception type (never its message); the other sinks and the request carry on. Sinks run inline, so a new sink must not block. The persisted security history (#326) should implement `IAuthSecurityEventSink` and hand events to a queue or outbox.
+The emitter runs each sink in its own `try`/`catch`. A failing sink increments `auth.security_events.sink_failures` and logs the exception type (never its message); the other sinks and the request carry on. Sinks run inline, so a new sink must not block.
 
 Two pieces of middleware cover what individual services cannot see:
 
@@ -121,6 +122,51 @@ Usernames, emails, and addresses that an event needs for correlation are recorde
 
 Account ids, session ids, and hashes are still pseudonymous personal data. Restrict access to the event log as you would to other account records.
 
+## Account security history
+
+The owner-facing history (#326) is a separate, persisted record built from this same contract. `SecurityHistoryEventSink` classifies each event with `SecurityHistoryCatalog` and publishes the ones the owner should see to `eventxperience-security-history`. The security-history worker stores them in `AccountSecurityEvents` and sends any alert. `GET /api/auth/security-events` reads them back; see [the API guide](API.md#security-history).
+
+The publish is started and left to finish on its own. It never delays, fails, or rolls back the security action. If Kafka cannot take the message, the entry is lost and `auth.security_history.publish_failures` is incremented.
+
+| Event | Recorded as | Notes |
+| --- | --- | --- |
+| `auth.sign_in.succeeded` | `signed_in` | Includes the sign-in `method`. |
+| `auth.sign_in.challenged` | `new_device_challenge` or `sign_in_challenge` | For `device_verification_required` and `step_up_required`. |
+| `auth.recovery.completed` | `password_reset` | |
+| `auth.factor.changed` | `password_changed`, `email_changed`, `mfa_enabled`, `mfa_disabled`, `mfa_removed` | MFA entries carry the `factor`. |
+| `auth.provider.linked` | `provider_linked` | The provider is the `method`. |
+| `auth.refresh_token.reused` | `refresh_token_reuse_detected` | |
+| `auth.session.revoked` | `signed_out`, `sessions_revoked`, `account_disabled`, `account_enabled`, `session_ended_for_security` | Keeps the revocation `reason`. `token_reuse` is left out because the reuse event already records it, and `account_deleted` because the history goes with the account. |
+
+Everything else is deliberately left out:
+
+- Failed sign-ins and verifications would let anyone who knows a username write into someone else's history.
+- Recovery requests carry reasons (`issued`, `suppressed`, `provider_reminder`) that must never reach the requester.
+- Throttling, step-up results, failed factor changes, provider link conflicts, and authorization denials are also excluded.
+
+Faulted events and events with no account id are never recorded. A unit test requires every catalog event to be listed as recorded or not recorded, so a new event needs a decision here.
+
+Each entry stores:
+
+- the kind, catalog name, and optional method, factor, and revocation reason;
+- a client family from a closed list (`chrome`, `edge`, `firefox`, `safari`, `opera`, `api_client`, `other`, `unknown`), never the User-Agent;
+- the device class;
+- the source network truncated to an IPv4 /24 or IPv6 /48;
+- the correlation id;
+- `initiatedByAdmin`, when another account caused the change.
+
+Nothing else is stored: no hashes, session ids, contact details, full addresses, or the acting administrator's id.
+
+### Support and investigation
+
+Each history entry shows its correlation id to the owner as a support reference, the same value as the `X-Request-Id` of the request that produced it. To investigate an entry:
+
+1. Ask the user for the reference.
+2. Find the row with `SELECT * FROM "AccountSecurityEvents" WHERE "CorrelationId" = '<reference>'`.
+3. Search the security event log for the same `CorrelationId`. The log holds the pseudonymous detail the history leaves out, such as the session id and source hash.
+
+The reference reveals nothing by itself, so the internal detail stays with operators.
+
 ## Metrics
 
 All instruments are on the `EventXperience.Auth` meter. Every tag value comes from a closed set. Account ids, session ids, hashes, addresses, routes, and correlation ids are never tags.
@@ -129,6 +175,7 @@ All instruments are on the `EventXperience.Auth` meter. Every tag value comes fr
 | --- | --- | --- | --- |
 | `auth.security_events` | Counter | `{event}` | `event`, `outcome`, `reason`, `method`, `flow`, `dimension`, `factor` |
 | `auth.security_events.sink_failures` | Counter | `{failure}` | `sink` |
+| `auth.security_history.publish_failures` | Counter | `{failure}` | none |
 | `auth.operation.duration` | Histogram | `ms` | `operation`, `outcome` |
 
 `operation` is one of `sign_in`, `oauth_sign_in`, `refresh`, `step_up_verify`, `recovery_request`, `password_reset`, `verification`, or `factor_change`. Its `outcome` is `succeeded` for 2xx and 3xx, `throttled` for 429, `denied` for any other 4xx, and `faulted` for 5xx or an unhandled exception. Requests the client abandons are not recorded. Unset event tags are reported as `none`.
@@ -146,7 +193,7 @@ dotnet-counters monitor --process-id <api-pid> --counters EventXperience.Auth
 | --- | --- |
 | Security event log entries | Keep 30 days searchable for investigations; archive up to 90 days if incident response needs it. They hold pseudonymous identifiers, so do not keep them longer than that need. |
 | Metrics | Aggregates without identifiers; keep 13 months for seasonal baselines. |
-| Account security history | Persisted separately for 90 days by #326 from this same contract. |
+| Account security history | 90 days in `AccountSecurityEvents`. Each row's `ExpiresAtUtc` is set when it is written, reads hide expired rows, and the security-history worker deletes them in batches. Deleting the account deletes its history. |
 
 ## Dashboards and alerts
 
@@ -162,7 +209,7 @@ Recommended panels:
 | Provider linking | `auth.provider.linked` and `auth.provider_link.conflict` by `method` and `reason` |
 | Authorization denials | `authz.denied` by `reason`; top `Route` values from the log |
 | Auth latency and faults | `auth.operation.duration` p50 and p95 by `operation`; share of `outcome="faulted"` |
-| Pipeline health | `auth.security_events.sink_failures` by `sink` |
+| Pipeline health | `auth.security_events.sink_failures` by `sink`; `auth.security_history.publish_failures` |
 
 Example alert conditions follow. The names are as the OpenTelemetry Prometheus exporter renders the instruments (dots become underscores and counters gain `_total`); adapt them to the backend chosen in #330. Enable alerts gradually: run each in notify-only mode for two weeks, set thresholds from the measured baseline (for example, three times the baseline p99), then page.
 
@@ -176,5 +223,6 @@ Example alert conditions follow. The names are as the OpenTelemetry Prometheus e
 | Authorization probing | `sum(rate(auth_security_events_total{event="authz.denied",reason="resource_access"}[5m]))` above baseline | One caller walking resource ids. Group the log by `UserId` and `Route`. |
 | Auth faults | Faulted share of `auth_operation_duration_milliseconds_count` above 2% for 10 minutes | Service errors, as distinct from refusals. |
 | Event pipeline broken | `increase(auth_security_events_sink_failures_total[5m]) > 0` | Events are being lost. |
+| Security history not recording | `increase(auth_security_history_publish_failures_total[5m]) > 0` | Owner-facing history entries are being lost. |
 
-To investigate a user report, ask for the `X-Request-Id` from the failing response and search the log for that `CorrelationId`.
+To investigate a user report, ask for the `X-Request-Id` from the failing response, or the support reference shown on a security history entry, and search the log for that `CorrelationId`.

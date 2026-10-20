@@ -17,6 +17,7 @@ public sealed class AuthSecurityMetrics
 
     private readonly Counter<long> _events;
     private readonly Counter<long> _sinkFailures;
+    private readonly Counter<long> _securityHistoryPublishFailures;
     private readonly Histogram<double> _operationDuration;
 
     public AuthSecurityMetrics(IMeterFactory meterFactory)
@@ -30,6 +31,10 @@ public sealed class AuthSecurityMetrics
             "auth.security_events.sink_failures",
             unit: "{failure}",
             description: "Security events a sink failed to write.");
+        _securityHistoryPublishFailures = meter.CreateCounter<long>(
+            "auth.security_history.publish_failures",
+            unit: "{failure}",
+            description: "Account security history entries lost because the publish to Kafka failed.");
         _operationDuration = meter.CreateHistogram<double>(
             "auth.operation.duration",
             unit: "ms",
@@ -54,6 +59,9 @@ public sealed class AuthSecurityMetrics
 
     public void RecordSinkFailure(string sink) =>
         _sinkFailures.Add(1, new KeyValuePair<string, object?>("sink", sink));
+
+    public void RecordSecurityHistoryPublishFailure() =>
+        _securityHistoryPublishFailures.Add(1);
 
     public void RecordOperation(AuthOperation operation, AuthSecurityOutcome outcome, TimeSpan elapsed) =>
         _operationDuration.Record(

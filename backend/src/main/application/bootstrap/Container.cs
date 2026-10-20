@@ -233,6 +233,10 @@ namespace backend.main.application.bootstrap
             services.AddSingleton<AuthSecurityMetrics>();
             services.AddSingleton<IAuthSecurityEventSink, LoggingAuthSecurityEventSink>();
             services.AddSingleton<IAuthSecurityEventSink, MetricsAuthSecurityEventSink>();
+            services.AddOptions<SecurityHistoryOptions>()
+                .Bind(config.GetSection(SecurityHistoryOptions.SectionName))
+                .ValidateOnStart();
+            services.AddSingleton<IAuthSecurityEventSink, SecurityHistoryEventSink>();
             services.AddSingleton<IAuthSecurityEventEmitter, AuthSecurityEventEmitter>();
             services.AddSearchInfrastructure(config, featureFlags);
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();

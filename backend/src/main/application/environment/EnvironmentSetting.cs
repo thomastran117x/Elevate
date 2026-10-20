@@ -53,6 +53,9 @@ namespace backend.main.application.environment
         private static readonly string _mediaValidationDlqTopic;
         private static readonly string _mediaValidationStatusTopic;
         private static readonly string _mediaValidationStatusGroupId;
+        private static readonly string _securityHistoryTopic;
+        private static readonly string _securityHistoryGroupId;
+        private static readonly string _securityHistoryDlqTopic;
         private static readonly string? _twilioAccountSid;
         private static readonly string? _twilioAuthToken;
         private static readonly string? _twilioMessagingServiceSid;
@@ -191,6 +194,15 @@ namespace backend.main.application.environment
                 ["MEDIA_VALIDATION_STATUS_GROUP_ID"],
                 "media-validation-status-updater"
             );
+            _securityHistoryTopic = GetOrDefault(
+                ["SECURITY_HISTORY_TOPIC"],
+                "eventxperience-security-history"
+            );
+            _securityHistoryGroupId = GetOrDefault(["SECURITY_HISTORY_GROUP_ID"], "security-history-worker");
+            _securityHistoryDlqTopic = GetOrDefault(
+                ["SECURITY_HISTORY_DLQ_TOPIC"],
+                "eventxperience-security-history-dlq"
+            );
             _twilioAccountSid = GetOptional(["TWILIO_ACCOUNT_SID"]);
             _twilioAuthToken = GetOptional(["TWILIO_AUTH_TOKEN"]);
             _twilioMessagingServiceSid = GetOptional(["TWILIO_MESSAGING_SERVICE_SID"]);
@@ -309,6 +321,9 @@ namespace backend.main.application.environment
         public static string MediaValidationDlqTopic => _mediaValidationDlqTopic;
         public static string MediaValidationStatusTopic => _mediaValidationStatusTopic;
         public static string MediaValidationStatusGroupId => _mediaValidationStatusGroupId;
+        public static string SecurityHistoryTopic => _securityHistoryTopic;
+        public static string SecurityHistoryGroupId => _securityHistoryGroupId;
+        public static string SecurityHistoryDlqTopic => _securityHistoryDlqTopic;
         public static string? TwilioAccountSid => _twilioAccountSid;
         public static string? TwilioAuthToken => _twilioAuthToken;
         public static string? TwilioMessagingServiceSid => _twilioMessagingServiceSid;

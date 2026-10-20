@@ -147,6 +147,17 @@ Authentication outcomes are recorded as structured [security events](SECURITY_EV
 
 Generate a key with `openssl rand -base64 32` and keep it as secret as the JWT keys. Configure it directly with `Auth__SecurityEvents__IdentifierHashKey` or through the `AUTH_SECURITY_EVENTS_HASH_KEY` variable mapped by Compose. Changing it breaks correlation between hashes made before and after the change, and it takes effect on restart. The sink and `Include*` switches take effect without a restart when the configuration source reloads.
 
+### Account security history
+
+The API publishes the events an account owner should see to the security-history topic; see [account security history](SECURITY_EVENTS.md#account-security-history). `Auth:SecurityHistory` is bound at startup:
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `PublishEnabled` | `true` | Publish history entries. When it is off, nothing new is recorded and existing entries are still served. |
+| `IncludeMaskedNetwork` | `true` | Record the source network truncated to an IPv4 /24 or IPv6 /48. The full address is never recorded. |
+
+Both switches take effect without a restart when the configuration source reloads. Configure them with `Auth__SecurityHistory__...`. The topic is `SECURITY_HISTORY_TOPIC` (default `eventxperience-security-history`).
+
 ### Refresh sessions
 
 Refresh sessions live in Redis under `refresh:v2:session:{sessionId}` for 1 day, or 30 days with remember-me. Each session records the account's `AuthVersion` when it was issued or last rotated. A password reset, account disable, or email change increments `AuthVersion` and then deletes the account's sessions; that sweep removes nothing if Redis is unreachable, so `POST /api/auth/refresh` also refuses and deletes any session whose recorded version no longer matches the account. Sessions stored before the version was recorded skip that check and are stamped on their next refresh.

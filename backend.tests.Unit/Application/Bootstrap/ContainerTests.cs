@@ -4,6 +4,8 @@ using backend.main.application.bootstrap;
 using backend.main.application.features;
 using backend.main.features.auth;
 using backend.main.features.auth.captcha;
+using backend.main.features.auth.events;
+using backend.main.features.auth.history;
 using backend.main.features.bloom;
 using backend.main.features.profile.email;
 using backend.main.features.cache;
@@ -38,6 +40,29 @@ namespace backend.tests.Unit.Application.Bootstrap;
 
 public class ContainerTests
 {
+    [Fact]
+    public void AddApplicationServices_ShouldRegisterTheSecurityHistorySinkAndItsReadPath()
+    {
+        var config = new ConfigurationBuilder().Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);
+
+        services.AddApplicationServices(config, includeHostedServices: false);
+
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(IAuthSecurityEventSink)
+            && descriptor.ImplementationType == typeof(SecurityHistoryEventSink)
+            && descriptor.Lifetime == ServiceLifetime.Singleton);
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(ISecurityHistoryService)
+            && descriptor.ImplementationType == typeof(SecurityHistoryService)
+            && descriptor.Lifetime == ServiceLifetime.Scoped);
+        services.Should().Contain(descriptor =>
+            descriptor.ServiceType == typeof(ISecurityHistoryRepository)
+            && descriptor.Lifetime == ServiceLifetime.Scoped);
+    }
+
     [Fact]
     public void AddApplicationServices_ShouldRegisterBloomFilters_WhenTheFeatureIsOn()
     {
