@@ -20848,10 +20848,193 @@
         ],
         "x-authorization": "authenticated"
       }
+    },
+    "/api/auth/security-events": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "List the current user's security history",
+        "description": "Returns the caller's own sign-in, recovery, factor, provider, and session events from the last 90 days, newest first. `page` is 1-500 and `pageSize` is 1-50. Entries carry coarse client and device classes and a masked network prefix, never credentials, codes, contact details, or full addresses.",
+        "operationId": "AuthSecurityHistory_List_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPagedResponseOfAccountSecurityEventResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPagedResponseOfAccountSecurityEventResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPagedResponseOfAccountSecurityEventResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      }
     }
   },
   "components": {
     "schemas": {
+      "AccountSecurityEventResponse": {
+        "required": [
+          "kind",
+          "client",
+          "deviceClass"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Int64"
+          },
+          "kind": {
+            "description": "What happened, e.g. `signed_in` or `password_changed`.",
+            "$ref": "#/components/schemas/String"
+          },
+          "occurredAt": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "method": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The sign-in method, e.g. `password` or `google`, when relevant.",
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          },
+          "factor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The factor a change was about, e.g. `sms` or `totp`, when relevant.",
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          },
+          "reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Why it happened, e.g. `password_changed` for a revocation, when relevant.",
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          },
+          "client": {
+            "description": "The client family, e.g. `chrome`, or `unknown`.",
+            "$ref": "#/components/schemas/String"
+          },
+          "deviceClass": {
+            "description": "The device class, e.g. `desktop`, or `unknown`.",
+            "$ref": "#/components/schemas/String"
+          },
+          "network": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The source network prefix, e.g. `203.0.113.0/24`, never the full address.",
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          },
+          "initiatedByAdmin": {
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "reference": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The id of the request that produced the entry. Quoting it lets support find the related\r\nrecords without the user ever seeing them.",
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          }
+        },
+        "description": "One entry of the caller's account security history. Classification fields are snake_case\r\nnames from closed sets, never ordinals; contact details and raw addresses are never included."
+      },
       "AddEventImageRequest": {
         "required": [
           "imageUrl"
@@ -23598,6 +23781,48 @@
           "data": {
             "description": "Endpoint-specific response payload. `null` on error responses.",
             "$ref": "#/components/schemas/Object"
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
+      "ApiResponseOfPagedResponseOfAccountSecurityEventResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/PagedResponseOfAccountSecurityEventResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
           },
           "error": {
             "oneOf": [
@@ -29621,6 +29846,12 @@
         "type": "string",
         "format": "uuid"
       },
+      "IEnumerableOfAccountSecurityEventResponse": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AccountSecurityEventResponse"
+        }
+      },
       "IEnumerableOfClubDiscussionResponse": {
         "type": "array",
         "items": {
@@ -30747,6 +30978,38 @@
             ]
           }
         }
+      },
+      "PagedResponseOfAccountSecurityEventResponse": {
+        "required": [
+          "items",
+          "totalCount",
+          "page",
+          "pageSize"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Items for the current page.",
+            "$ref": "#/components/schemas/IEnumerableOfAccountSecurityEventResponse"
+          },
+          "totalCount": {
+            "description": "Total number of matching records.",
+            "$ref": "#/components/schemas/Int32"
+          },
+          "page": {
+            "description": "Current 1-based page number.",
+            "$ref": "#/components/schemas/Int32"
+          },
+          "pageSize": {
+            "description": "Requested page size.",
+            "$ref": "#/components/schemas/Int32"
+          },
+          "totalPages": {
+            "description": "Total number of available pages.",
+            "$ref": "#/components/schemas/Int32"
+          }
+        },
+        "description": "Standard pagination payload used inside API response envelopes."
       },
       "PagedResponseOfClubDiscussionResponse": {
         "required": [

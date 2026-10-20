@@ -70,6 +70,10 @@ namespace backend.main.application.openapi
                 ["POST /api/auth/mfa/verify"] = new("Verify an SMS sign-in code", "Validates an SMS code for an active sign-in verification challenge and completes login on success."),
                 ["POST /api/auth/mfa/verify/totp"] = new("Verify an authenticator sign-in code", "Validates a TOTP code for an active sign-in verification challenge and completes login on success."),
                 ["GET /api/auth/mfa"] = new("Get MFA security settings"),
+                ["GET /api/auth/security-events"] = new(
+                    "List the current user's security history",
+                    "Returns the caller's own sign-in, recovery, factor, provider, and session events from the last 90 days, newest first. `page` is 1-500 and `pageSize` is 1-50. Entries carry coarse client and device classes and a masked network prefix, never credentials, codes, contact details, or full addresses."
+                ),
                 ["POST /api/auth/mfa/enroll/start"] = new("Start SMS MFA enrollment", StepUpRequired),
                 ["POST /api/auth/mfa/enroll/verify"] = new("Verify an SMS MFA enrollment or re-enable code", StepUpRequired),
                 ["POST /api/auth/mfa/enable/start"] = new("Start SMS MFA re-enable", StepUpRequired),
