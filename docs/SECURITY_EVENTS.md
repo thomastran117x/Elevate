@@ -155,7 +155,7 @@ Each entry stores:
 - the device class;
 - the source network truncated to an IPv4 /24 or IPv6 /48;
 - the correlation id;
-- `initiatedByAdmin`, when another account caused the change.
+- `initiatedByAdmin`, when another account caused the change. Such an entry has no client, device, or network, because the request was the administrator's.
 
 Nothing else is stored: no hashes, session ids, contact details, full addresses, or the acting administrator's id.
 

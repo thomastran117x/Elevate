@@ -93,7 +93,10 @@ public sealed class SecurityHistoryEventSink : IAuthSecurityEventSink
         if (SecurityHistoryCatalog.Classify(securityEvent) is not { } kind)
             return null;
 
-        var (userAgent, network) = ReadRequest(includeNetwork);
+        // An administrator's action runs on the administrator's request, so its browser, device and
+        // network describe them, not the owner. The owner sees only that an administrator acted.
+        var initiatedByAdmin = SecurityHistoryCatalog.IsInitiatedByAdmin(securityEvent);
+        var (userAgent, network) = initiatedByAdmin ? (null, null) : ReadRequest(includeNetwork);
 
         return new SecurityHistoryMessage
         {
@@ -105,10 +108,10 @@ public sealed class SecurityHistoryEventSink : IAuthSecurityEventSink
             Factor = AuthSecurityWireNames.Of(securityEvent.Factor),
             Reason = SecurityHistoryCatalog.ReasonFor(securityEvent),
             Client = SecurityHistoryClients.FromUserAgent(userAgent),
-            DeviceClass = securityEvent.DeviceClass,
+            DeviceClass = initiatedByAdmin ? AuthDeviceClass.Unknown : securityEvent.DeviceClass,
             Network = network,
             CorrelationId = securityEvent.CorrelationId,
-            InitiatedByAdmin = SecurityHistoryCatalog.IsInitiatedByAdmin(securityEvent),
+            InitiatedByAdmin = initiatedByAdmin,
             OccurredAt = securityEvent.OccurredAt,
         };
     }

@@ -189,6 +189,9 @@ public sealed class SecurityHistoryPipelineTests
             m.UserId == dormant.Id && m.Kind == AccountSecurityEventKind.AccountDisabled);
         disabled.EventName.Should().Be("auth.account.status_changed");
         disabled.InitiatedByAdmin.Should().BeTrue();
+        // The request was the administrator's, so none of its context is attributed to the owner.
+        disabled.Network.Should().BeNull();
+        disabled.Client.Should().Be(SecurityHistoryClient.Unknown);
         (await ProcessAsync(app, disabled)).Should().Be(SecurityHistoryEntryOutcome.Inserted);
 
         var alert = await app.WaitForEmailAsync(m =>

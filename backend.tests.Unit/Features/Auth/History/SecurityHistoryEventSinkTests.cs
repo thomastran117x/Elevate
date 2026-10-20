@@ -32,7 +32,7 @@ public class SecurityHistoryEventSinkTests
         var publisher = new CapturingPublisher();
         var sink = CreateSink(publisher, Context("203.0.113.50", ChromeUserAgent));
 
-        sink.Write(FactorChanged() with { ActorUserId = 99 });
+        sink.Write(FactorChanged());
 
         var (topic, message) = publisher.Published.Should().ContainSingle().Subject;
         topic.Should().Be(Topic);
@@ -47,8 +47,36 @@ public class SecurityHistoryEventSinkTests
         message.DeviceClass.Should().Be(AuthDeviceClass.Desktop);
         message.Network.Should().Be("203.0.113.0/24");
         message.CorrelationId.Should().Be("req-123");
-        message.InitiatedByAdmin.Should().BeTrue();
+        message.InitiatedByAdmin.Should().BeFalse();
         message.OccurredAt.Should().Be(OccurredAt);
+    }
+
+    [Fact]
+    public void Write_ShouldKeepTheAdministratorsRequestContextOutOfTheOwnersHistory()
+    {
+        var publisher = new CapturingPublisher();
+        var sink = CreateSink(publisher, Context("198.51.100.7", ChromeUserAgent));
+
+        sink.Write(new AuthSecurityEvent
+        {
+            Definition = AuthSecurityEvents.AccountStatusChanged,
+            Outcome = AuthSecurityOutcome.Succeeded,
+            Reason = AuthSecurityReason.AccountDisabled,
+            UserId = 7,
+            ActorUserId = 99,
+            DeviceClass = AuthDeviceClass.Desktop,
+            CorrelationId = "req-admin",
+            OccurredAt = OccurredAt,
+        });
+
+        // The request is the administrator's; the owner learns only that an administrator acted.
+        var message = publisher.Published.Single().Message;
+        message.Kind.Should().Be(AccountSecurityEventKind.AccountDisabled);
+        message.InitiatedByAdmin.Should().BeTrue();
+        message.Client.Should().Be(SecurityHistoryClient.Unknown);
+        message.DeviceClass.Should().Be(AuthDeviceClass.Unknown);
+        message.Network.Should().BeNull();
+        message.CorrelationId.Should().Be("req-admin");
     }
 
     [Fact]
