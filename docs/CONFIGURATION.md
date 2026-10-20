@@ -156,7 +156,15 @@ The API publishes the events an account owner should see to the security-history
 | `PublishEnabled` | `true` | Publish history entries. When it is off, nothing new is recorded and existing entries are still served. |
 | `IncludeMaskedNetwork` | `true` | Record the source network truncated to an IPv4 /24 or IPv6 /48. The full address is never recorded. |
 
-Both switches take effect without a restart when the configuration source reloads. Configure them with `Auth__SecurityHistory__...`. The topic is `SECURITY_HISTORY_TOPIC` (default `eventxperience-security-history`).
+Both switches take effect without a restart when the configuration source reloads. Configure them with `Auth__SecurityHistory__...`, or set `AUTH_SECURITY_HISTORY_PUBLISH_ENABLED` under Compose. The topic is `SECURITY_HISTORY_TOPIC` (default `eventxperience-security-history`).
+
+Retention and alerts belong to the [security history worker](../backend/src/worker/security-history-worker/README.md#dependencies-and-settings), which owns the table:
+
+- `SECURITY_HISTORY_RETENTION_DAYS` (default 90, 1–365) and the `SECURITY_HISTORY_PURGE_*` settings control the purge.
+- `SECURITY_HISTORY_NOTIFICATIONS_ENABLED` turns alerts on or off.
+- `SECURITY_HISTORY_ALERT_KINDS` chooses which changes alert.
+
+The worker validates them at startup and refuses to start on an out-of-range value or an unknown kind.
 
 ### Refresh sessions
 

@@ -12,11 +12,12 @@ namespace backend.main.application.handlers
         }
 
         /// <summary>
-        /// Whether a trace identifier is safe to copy into security events. The middleware only ever
-        /// sets a generated GUID; this guards events recorded where it did not run, so nothing longer,
-        /// or containing line breaks or markup, can forge or split log entries.
+        /// Whether a trace identifier is safe to copy into security events and the security history.
+        /// The middleware only ever sets a generated GUID; this guards events recorded where it did
+        /// not run, so nothing longer, or containing line breaks or markup, can forge or split log
+        /// entries.
         /// </summary>
-        internal static bool IsValidRequestId(string? value) =>
+        public static bool IsValidRequestId(string? value) =>
             !string.IsNullOrEmpty(value) && RequestIdPattern().IsMatch(value);
 
         // \z, not $: $ also matches before a trailing newline, which would let "id\n" through.

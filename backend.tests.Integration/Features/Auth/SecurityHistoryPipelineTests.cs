@@ -1,14 +1,23 @@
+extern alias securityhistoryworker;
+
+using System.Diagnostics.Metrics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
 using backend.main.application.security;
 using backend.main.features.auth.contracts.requests;
+using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.history;
+using backend.main.features.auth.notifications;
 using backend.main.features.auth.token;
+using backend.main.features.profile.contracts.requests;
+using backend.main.infrastructure.database.core;
 using backend.main.shared.providers;
 using backend.main.shared.providers.messages;
+using backend.main.shared.providers.messaging;
 using backend.main.utilities;
+using securityhistoryworker::backend.worker.security_history_worker;
 
 using backend.tests.Integration.Infrastructure;
 
@@ -16,13 +25,15 @@ using FluentAssertions;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace backend.tests.Integration.Features.Auth;
 
 /// <summary>
-/// The producer half of the account security history: real auth journeys through the API, read
-/// back from the security-history topic exactly as the worker would receive them.
+/// The account security history end to end: real auth journeys through the API, read back from the
+/// security-history topic exactly as the worker receives them, run through the worker's processor
+/// against the same database, and read again through the endpoint.
 /// </summary>
 public sealed class SecurityHistoryPipelineTests
 {
@@ -93,6 +104,181 @@ public sealed class SecurityHistoryPipelineTests
         message.Reason.Should().Be("logout");
         message.EventName.Should().Be("auth.session.revoked");
     }
+
+    [Fact]
+    public async Task SignIn_ShouldAppearInTheOwnersHistory_OnceTheWorkerHasStoredIt()
+    {
+        await using var app = await CreateAppAsync();
+        var user = await app.SeedUserAsync("pipeline-history@example.com");
+        await app.SeedKnownDeviceAsync(user.Id, "pipeline-history-device");
+        await app.MarkNotificationBoundaryAsync();
+        var session = await app.LoginApiAsync("pipeline-history", trustedDeviceToken: "pipeline-history-device");
+        var published = await app.WaitForSecurityHistoryAsync(m =>
+            m.UserId == user.Id && m.Kind == AccountSecurityEventKind.SignedIn);
+
+        var outcome = await ProcessAsync(app, published);
+
+        outcome.Should().Be(SecurityHistoryEntryOutcome.Inserted);
+        var response = await app.GetWithBearerAsync("/api/auth/security-events?pageSize=10", session.AccessToken);
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(response));
+        var page = (await app.ReadApiResponseAsync<HistoryPage>(response)).Data!;
+        var entry = page.Items.Should().ContainSingle().Subject;
+        entry.Kind.Should().Be("signed_in");
+        entry.Method.Should().Be("password");
+        entry.Network.Should().Be("203.0.113.0/24");
+        entry.Reference.Should().Be(published.CorrelationId);
+
+        // A redelivery changes nothing.
+        (await ProcessAsync(app, published)).Should().Be(SecurityHistoryEntryOutcome.Duplicate);
+    }
+
+    [Fact]
+    public async Task PasswordChange_ShouldStoreTheEntryAndEmailASecurityAlert()
+    {
+        await using var app = await CreateAppAsync();
+        var user = await app.SeedUserAsync("pipeline-alert@example.com");
+        await app.SeedKnownDeviceAsync(user.Id, "pipeline-alert-device");
+        var session = await app.LoginApiAsync("pipeline-alert", trustedDeviceToken: "pipeline-alert-device");
+        await app.CompleteSessionMfaByEmailAsync("pipeline-alert@example.com", session.AccessToken);
+        await app.MarkNotificationBoundaryAsync();
+
+        var response = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/profile/change-password",
+            new ChangePasswordAuthenticatedRequest
+            {
+                CurrentPassword = AuthApiTestApp.DefaultPassword,
+                NewPassword = "brisk willow anchor 456"
+            },
+            session.AccessToken);
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(response));
+
+        var changed = await app.WaitForSecurityHistoryAsync(m =>
+            m.UserId == user.Id && m.Kind == AccountSecurityEventKind.PasswordChanged);
+        (await ProcessAsync(app, changed)).Should().Be(SecurityHistoryEntryOutcome.Inserted);
+
+        var alert = await app.WaitForEmailAsync(m =>
+            m.Type == EmailMessageType.SecurityAlert && m.Email == "pipeline-alert@example.com");
+        alert.SecurityAlertKind.Should().Be("password_changed");
+        alert.SecurityAlertNetwork.Should().Be("203.0.113.0/24");
+        alert.Token.Should().BeNull();
+        alert.Code.Should().BeNull();
+        (await app.QueryDbAsync(db => db.AccountSecurityEvents.CountAsync(e =>
+            e.UserId == user.Id && e.Kind == AccountSecurityEventKind.PasswordChanged))).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AnEntryForADeletedAccount_ShouldBeDropped()
+    {
+        await using var app = await CreateAppAsync();
+        var user = await app.SeedUserAsync("pipeline-deleted@example.com");
+        await app.QueryDbAsync(db => db.Users.Where(u => u.Id == user.Id).ExecuteDeleteAsync());
+
+        var outcome = await ProcessAsync(app, new SecurityHistoryMessage
+        {
+            MessageId = Guid.NewGuid(),
+            UserId = user.Id,
+            Kind = AccountSecurityEventKind.SignedOut,
+            EventName = "auth.session.revoked",
+            Reason = "logout",
+            OccurredAt = DateTimeOffset.UtcNow,
+        });
+
+        outcome.Should().Be(SecurityHistoryEntryOutcome.AccountDeleted);
+        (await app.QueryDbAsync(db => db.AccountSecurityEvents.CountAsync(e => e.UserId == user.Id))).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task RetentionRunner_ShouldDeleteOnlyExpiredEntries()
+    {
+        await using var app = await CreateAppAsync();
+        var user = await app.SeedUserAsync("pipeline-retention@example.com");
+        var now = DateTime.UtcNow;
+        var expired = Guid.NewGuid();
+        var current = Guid.NewGuid();
+        await app.QueryDbAsync(db =>
+        {
+            db.AccountSecurityEvents.AddRange(
+                Stored(user.Id, expired, now.AddDays(-91), now.AddDays(-1)),
+                Stored(user.Id, current, now.AddDays(-1), now.AddDays(89)));
+            return db.SaveChangesAsync();
+        });
+
+        await using (var scope = app.Services.CreateAsyncScope())
+        {
+            var runner = new SecurityHistoryRetentionRunner(
+                scope.ServiceProvider.GetRequiredService<AppDatabaseContext>(),
+                WorkerOptions(),
+                TimeProvider.System,
+                new SecurityHistoryWorkerMetrics(app.Services.GetRequiredService<IMeterFactory>()));
+            await runner.RunOnceAsync();
+        }
+
+        var remaining = await app.QueryDbAsync(db => db.AccountSecurityEvents
+            .Where(e => e.UserId == user.Id)
+            .Select(e => e.MessageId)
+            .ToListAsync());
+        remaining.Should().Equal(current);
+    }
+
+    private static async Task<SecurityHistoryEntryOutcome> ProcessAsync(AuthApiTestApp app, SecurityHistoryMessage message)
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+        var db = services.GetRequiredService<AppDatabaseContext>();
+        var options = WorkerOptions();
+        var metrics = new SecurityHistoryWorkerMetrics(services.GetRequiredService<IMeterFactory>());
+        var processor = new SecurityHistoryMessageProcessor(
+            new SecurityHistoryWriter(db, options, TimeProvider.System),
+            new SecurityHistoryAlertSender(db, services.GetRequiredService<IAuthNotificationService>(), options, metrics),
+            new FailingDlqPublisher(),
+            metrics);
+
+        var envelope = new KafkaMessageEnvelope(
+            options.Topic,
+            0,
+            0,
+            null,
+            JsonSerializer.Serialize(message, JsonOptions.Default),
+            new Dictionary<string, string?>());
+        return await processor.ProcessAsync(envelope);
+    }
+
+    private static SecurityHistoryWorkerOptions WorkerOptions() => new(
+        BootstrapServers: "unused",
+        Topic: "eventxperience-security-history",
+        GroupId: "security-history-worker",
+        DlqTopic: "eventxperience-security-history-dlq",
+        RetentionDays: 90,
+        PurgeBatchSize: 500,
+        PurgeMaxBatches: 20,
+        PurgeInterval: TimeSpan.FromHours(1),
+        NotificationsEnabled: true,
+        AlertKinds: SecurityHistoryWorkerOptions.DefaultAlertKinds);
+
+    private static AccountSecurityEvent Stored(int userId, Guid messageId, DateTime occurredAt, DateTime expiresAt) => new()
+    {
+        MessageId = messageId,
+        UserId = userId,
+        Kind = AccountSecurityEventKind.SignedIn,
+        EventName = "auth.sign_in.succeeded",
+        OccurredAtUtc = occurredAt,
+        RecordedAtUtc = occurredAt,
+        ExpiresAtUtc = expiresAt,
+    };
+
+    /// <summary>Nothing in these journeys should be dead-lettered; one that is fails the test.</summary>
+    private sealed class FailingDlqPublisher : ISecurityHistoryWorkerDlqPublisher
+    {
+        public Task PublishAsync(KafkaMessageEnvelope envelope, string error, CancellationToken cancellationToken = default) =>
+            throw new Xunit.Sdk.XunitException($"Unexpected dead letter: {error}");
+    }
+
+    private sealed record HistoryPage(
+        List<AccountSecurityEventResponse> Items,
+        int TotalCount,
+        int Page,
+        int PageSize,
+        int TotalPages);
 
     private static Task<AuthApiTestApp> CreateAppAsync(Action<IServiceCollection>? serviceOverrides = null) =>
         AuthApiTestApp.CreateAsync(serviceOverrides: services =>

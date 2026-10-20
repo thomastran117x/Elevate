@@ -32,6 +32,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\backend\backend.csproj" />
+    <!-- Aliased because the worker's top-level Program would otherwise clash with the API's,
+         which WebApplicationFactory<Program> names. -->
+    <ProjectReference Include="..\backend\src\worker\security-history-worker\security-history-worker.csproj">
+      <Aliases>securityhistoryworker</Aliases>
+    </ProjectReference>
   </ItemGroup>
 
 </Project>

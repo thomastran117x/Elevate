@@ -9,10 +9,10 @@ From the repository root, prepare `.env` from `.env.example` without overwriting
 ```powershell
 docker compose up --build -d
 docker compose ps
-docker compose logs -f backend event-indexer club-indexer clubpost-indexer media-worker
+docker compose logs -f backend event-indexer club-indexer clubpost-indexer media-worker security-history-worker
 ```
 
-Compose provisions PostgreSQL with logical replication, Redis, Elasticsearch, Kafka, topic initialization, Kafka Connect, outbox connector registration, the API, frontend, and six workers. Application containers use service DNS names. Browser-facing URLs must be reachable from the user's browser, rather than container-only hostnames.
+Compose provisions PostgreSQL with logical replication, Redis, Elasticsearch, Kafka, topic initialization, Kafka Connect, outbox connector registration, the API, frontend, and seven workers. Application containers use service DNS names. Browser-facing URLs must be reachable from the user's browser, rather than container-only hostnames.
 
 The API listens on 8090 and applies migrations before serving normal traffic. A database connection or migration failure terminates startup. Review migrations and back up persistent data before upgrades; startup migration execution is part of the current implementation and must be accounted for when scaling API replicas. Keep seeding and auth seed-account bypass disabled outside controlled demos.
 
@@ -88,6 +88,17 @@ A save waits up to ten seconds, once, for the worker's verdict on all of its ima
 **To roll back to inline validation**, set `FEATURE_STORAGE_QUARANTINE_INLINE=true`. Assets the worker left Processing are released once their claim is five minutes old, by the next attach of the same upload or by the hourly quarantine reaper, and are then validated inline.
 
 **To roll back quarantine**, set `FEATURE_STORAGE_QUARANTINE=false`. Uploads then go straight to the public container and are checked in place, exactly as before. Uploads issued while quarantine was on but not yet attached need to be uploaded again. The reaper keeps running and deletes what quarantine held.
+
+### Account security history
+
+The API publishes each owner-visible security event to `eventxperience-security-history`, and the [security history worker](../backend/src/worker/security-history-worker/README.md) stores it and sends any alert. To roll it out:
+
+1. Run the `accountsecurityevents` migration through the API. The worker never migrates; it waits until the table exists before consuming.
+2. Create the security-history topic and its DLQ. Compose's `kafka-init` creates them.
+3. Deploy the email worker before or with the API, because the API appends `SecurityAlert` to the email message types. An older email worker would dead-letter alerts.
+4. Deploy the security history worker with Kafka, `DB_CONNECTION_STRING`, and `EMAIL_TOPIC`.
+
+The API publishes without waiting for Kafka. A broker outage therefore loses entries rather than failing sign-ins or account changes. Watch `auth.security_history.publish_failures` on the API and the worker's DLQ. To stop recording without removing anything, set `Auth__SecurityHistory__PublishEnabled=false`; existing entries stay readable until they expire. Deleting an account deletes its history through the foreign key.
 
 ## Kubernetes assets and gaps
 
