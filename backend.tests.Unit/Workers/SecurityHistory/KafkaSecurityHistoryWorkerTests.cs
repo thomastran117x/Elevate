@@ -1,7 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
 
-using backend.main.features.auth.notifications;
 using backend.main.infrastructure.database.core;
 using backend.main.shared.providers;
 using backend.main.shared.providers.messaging;
@@ -149,10 +148,8 @@ public class KafkaSecurityHistoryWorkerTests
             var metrics = Metrics().Metrics;
             return new SecurityHistoryMessageProcessor(
                 new SecurityHistoryWriter(db, options, new HistoryClock(Now)),
-                new SecurityHistoryAlertSender(db, Mock.Of<IAuthNotificationService>(), options, metrics),
                 dlq,
-                metrics,
-                Polly.ResiliencePipeline.Empty);
+                metrics);
         });
         var provider = services.BuildServiceProvider();
 

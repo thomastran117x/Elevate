@@ -31,10 +31,11 @@ builder.Services.AddSingleton<IPublisher, Publisher>();
 builder.Services.AddScoped<IAuthNotificationService, AuthNotificationService>();
 builder.Services.AddSingleton<ISecurityHistoryWorkerDlqPublisher, KafkaSecurityHistoryWorkerDlqPublisher>();
 builder.Services.AddScoped<SecurityHistoryWriter>();
-builder.Services.AddScoped<SecurityHistoryAlertSender>();
+builder.Services.AddScoped<SecurityHistoryAlertRunner>();
 builder.Services.AddScoped<SecurityHistoryMessageProcessor>();
 builder.Services.AddScoped<SecurityHistoryRetentionRunner>();
 builder.Services.AddHostedService<KafkaSecurityHistoryWorker>();
+builder.Services.AddHostedService<SecurityHistoryAlertService>();
 builder.Services.AddHostedService<SecurityHistoryRetentionService>();
 
 using var host = builder.Build();

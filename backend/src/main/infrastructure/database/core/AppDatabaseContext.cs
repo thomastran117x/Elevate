@@ -57,6 +57,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<SmsMfaEnrollment> SmsMfaEnrollments { get; set; } = null!;
         public DbSet<TotpMfaEnrollment> TotpMfaEnrollments { get; set; } = null!;
         public DbSet<AccountSecurityEvent> AccountSecurityEvents { get; set; } = null!;
+        public DbSet<SecurityHistoryOutbox> SecurityHistoryOutbox { get; set; } = null!;
         public DbSet<ClubPost> ClubPosts { get; set; } = null!;
         public DbSet<PostComment> PostComments { get; set; } = null!;
         public DbSet<PostCommentReaction> PostCommentReactions { get; set; } = null!;
@@ -872,6 +873,18 @@ namespace backend.main.infrastructure.database.core
                 .Property(e => e.CorrelationId)
                 .HasMaxLength(128);
 
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .Property(e => e.AlertState)
+                .HasConversion<string>()
+                .HasMaxLength(16)
+                .HasDefaultValue(SecurityAlertState.None);
+
+            // The dispatcher's only query: pending alerts that are due. Filtered, so the index stays
+            // the size of the backlog rather than the whole history.
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .HasIndex(e => e.AlertNextAttemptAtUtc)
+                .HasFilter("\"AlertState\" = 'Pending'");
+
             modelBuilder.Entity<ClubPost>()
                 .HasOne<User>()
                 .WithMany()
@@ -1123,6 +1136,41 @@ namespace backend.main.infrastructure.database.core
                 .HasColumnName("created_at");
 
             modelBuilder.Entity<EventSearchOutbox>()
+                .HasIndex(e => e.CreatedAt);
+
+            // Same column names as the search outboxes, which the Debezium EventRouter expects.
+            modelBuilder.Entity<SecurityHistoryOutbox>()
+                .ToTable("security_history_outbox");
+
+            modelBuilder.Entity<SecurityHistoryOutbox>()
+                .Property(e => e.Id)
+                .HasColumnName("id");
+
+            modelBuilder.Entity<SecurityHistoryOutbox>()
+                .Property(e => e.AggregateType)
+                .HasColumnName("aggregatetype")
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<SecurityHistoryOutbox>()
+                .Property(e => e.AggregateId)
+                .HasColumnName("aggregateid")
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<SecurityHistoryOutbox>()
+                .Property(e => e.Type)
+                .HasColumnName("type")
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<SecurityHistoryOutbox>()
+                .Property(e => e.Payload)
+                .HasColumnName("payload")
+                .HasColumnType("json");
+
+            modelBuilder.Entity<SecurityHistoryOutbox>()
+                .Property(e => e.CreatedAt)
+                .HasColumnName("created_at");
+
+            modelBuilder.Entity<SecurityHistoryOutbox>()
                 .HasIndex(e => e.CreatedAt);
 
             modelBuilder.Entity<ClubSearchOutbox>()

@@ -31,7 +31,9 @@ public sealed class SecurityHistoryRetentionRunner
         _metrics = metrics;
     }
 
-    /// <returns>How many entries were deleted.</returns>
+    public static readonly TimeSpan OutboxRetention = TimeSpan.FromDays(1);
+
+    /// <returns>How many history entries were deleted.</returns>
     public async Task<int> RunOnceAsync(CancellationToken cancellationToken = default)
     {
         var now = _timeProvider.GetUtcNow().UtcDateTime;
@@ -68,6 +70,25 @@ public sealed class SecurityHistoryRetentionRunner
         if (purged > 0)
             Logger.Info($"[SecurityHistoryRetentionRunner] Purged {purged} security history entries past retention.");
 
+        await PurgeRelayedOutboxAsync(now, cancellationToken);
         return purged;
+    }
+
+    /// <summary>
+    /// Outbox rows only carry entries to Debezium, which reads each insert from the WAL its
+    /// replication slot retains and ignores deletes. Deleting a row therefore never loses it, even
+    /// while the connector is behind; rows are kept a day only so operators can inspect them.
+    /// </summary>
+    private async Task PurgeRelayedOutboxAsync(DateTime now, CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+            return;
+
+        var cutoff = now - OutboxRetention;
+        var removed = await _db.SecurityHistoryOutbox
+            .Where(o => o.CreatedAt < cutoff)
+            .ExecuteDeleteAsync(cancellationToken);
+        if (removed > 0)
+            Logger.Info($"[SecurityHistoryRetentionRunner] Removed {removed} relayed security history outbox rows.");
     }
 }

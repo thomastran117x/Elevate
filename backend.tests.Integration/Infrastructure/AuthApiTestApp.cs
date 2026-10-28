@@ -531,8 +531,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         _kafkaProbe.MarkBoundaryAsync(
             _resources.EmailTopic,
             _resources.SmsTopic,
-            _resources.EmailStatusTopic,
-            _resources.SecurityHistoryTopic);
+            _resources.EmailStatusTopic);
 
     public Task<EmailMessage> WaitForEmailAsync(
         Func<EmailMessage, bool> predicate,
@@ -543,15 +542,6 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         Func<SmsMfaMessage, bool> predicate,
         TimeSpan? timeout = null) =>
         _kafkaProbe.WaitForAsync(_resources.SmsTopic, predicate, timeout);
-
-    public Task<SecurityHistoryMessage> WaitForSecurityHistoryAsync(
-        Func<SecurityHistoryMessage, bool> predicate,
-        TimeSpan? timeout = null) =>
-        _kafkaProbe.WaitForAsync(_resources.SecurityHistoryTopic, predicate, timeout);
-
-    /// <summary>The raw JSON of every security history message published since the last boundary.</summary>
-    public Task<IReadOnlyList<JsonElement>> ReadNewSecurityHistoryJsonAsync(TimeSpan? timeout = null) =>
-        _kafkaProbe.ReadNewAsync<JsonElement>(_resources.SecurityHistoryTopic, timeout);
 
     public Task<IReadOnlyList<EmailMessage>> ReadNewEmailMessagesAsync(TimeSpan? timeout = null) =>
         _kafkaProbe.ReadNewAsync<EmailMessage>(_resources.EmailTopic, timeout);

@@ -10,7 +10,6 @@ using backend.tests.Unit.Features.Auth.Events;
 using FluentAssertions;
 
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -20,22 +19,20 @@ namespace backend.tests.Unit.Features.Auth.History;
 
 public class SecurityHistoryEventSinkTests
 {
-    private const string Topic = "security-history-test";
     private const string ChromeUserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
 
     private static readonly DateTimeOffset OccurredAt = new(2026, 10, 20, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void Write_ShouldPublishARecordedEvent_WithOnlyCoarseContext()
+    public void Write_ShouldQueueARecordedEvent_WithOnlyCoarseContext()
     {
-        var publisher = new CapturingPublisher();
-        var sink = CreateSink(publisher, Context("203.0.113.50", ChromeUserAgent));
+        var queue = new SecurityHistoryQueue();
+        var sink = CreateSink(queue, Context("203.0.113.50", ChromeUserAgent));
 
         sink.Write(FactorChanged());
 
-        var (topic, message) = publisher.Published.Should().ContainSingle().Subject;
-        topic.Should().Be(Topic);
+        var message = Queued(queue).Should().ContainSingle().Subject;
         message.MessageId.Should().NotBeEmpty();
         message.UserId.Should().Be(7);
         message.Kind.Should().Be(AccountSecurityEventKind.MfaEnabled);
@@ -54,8 +51,8 @@ public class SecurityHistoryEventSinkTests
     [Fact]
     public void Write_ShouldKeepTheAdministratorsRequestContextOutOfTheOwnersHistory()
     {
-        var publisher = new CapturingPublisher();
-        var sink = CreateSink(publisher, Context("198.51.100.7", ChromeUserAgent));
+        var queue = new SecurityHistoryQueue();
+        var sink = CreateSink(queue, Context("198.51.100.7", ChromeUserAgent));
 
         sink.Write(new AuthSecurityEvent
         {
@@ -70,7 +67,7 @@ public class SecurityHistoryEventSinkTests
         });
 
         // The request is the administrator's; the owner learns only that an administrator acted.
-        var message = publisher.Published.Single().Message;
+        var message = Queued(queue).Single();
         message.Kind.Should().Be(AccountSecurityEventKind.AccountDisabled);
         message.InitiatedByAdmin.Should().BeTrue();
         message.Client.Should().Be(SecurityHistoryClient.Unknown);
@@ -82,65 +79,66 @@ public class SecurityHistoryEventSinkTests
     [Fact]
     public void Write_ShouldGiveEveryEventItsOwnMessageId()
     {
-        var publisher = new CapturingPublisher();
-        var sink = CreateSink(publisher, Context("203.0.113.50", ChromeUserAgent));
+        var queue = new SecurityHistoryQueue();
+        var sink = CreateSink(queue, Context("203.0.113.50", ChromeUserAgent));
 
         sink.Write(FactorChanged());
         sink.Write(FactorChanged());
 
-        publisher.Published.Select(p => p.Message.MessageId).Should().OnlyHaveUniqueItems();
+        Queued(queue).Select(m => m.MessageId).Should().OnlyHaveUniqueItems();
     }
 
     [Fact]
     public void Write_ShouldIgnoreEventsTheOwnerShouldNotSee()
     {
-        var publisher = new CapturingPublisher();
-        var sink = CreateSink(publisher, Context("203.0.113.50", ChromeUserAgent));
+        var queue = new SecurityHistoryQueue();
+        var sink = CreateSink(queue, Context("203.0.113.50", ChromeUserAgent));
 
         sink.Write(FactorChanged() with { Definition = AuthSecurityEvents.SignInFailed });
         sink.Write(FactorChanged() with { UserId = null });
 
-        publisher.Published.Should().BeEmpty();
+        Queued(queue).Should().BeEmpty();
     }
 
     [Fact]
-    public void Write_ShouldPublishNothing_WhenPublishingIsOff()
+    public void Write_ShouldQueueNothing_WhenPublishingIsOff()
     {
-        var publisher = new CapturingPublisher();
+        var queue = new SecurityHistoryQueue();
         var sink = CreateSink(
-            publisher,
+            queue,
             Context("203.0.113.50", ChromeUserAgent),
             new SecurityHistoryOptions { PublishEnabled = false });
 
         sink.Write(FactorChanged());
 
-        publisher.Published.Should().BeEmpty();
+        Queued(queue).Should().BeEmpty();
     }
 
     [Fact]
     public void Write_ShouldLeaveTheNetworkOut_WhenMaskedNetworksAreOff()
     {
-        var publisher = new CapturingPublisher();
+        var queue = new SecurityHistoryQueue();
         var sink = CreateSink(
-            publisher,
+            queue,
             Context("203.0.113.50", ChromeUserAgent),
             new SecurityHistoryOptions { IncludeMaskedNetwork = false });
 
         sink.Write(FactorChanged());
 
-        publisher.Published.Single().Message.Network.Should().BeNull();
-        publisher.Published.Single().Message.Client.Should().Be(SecurityHistoryClient.Chrome);
+        var message = Queued(queue).Single();
+        message.Network.Should().BeNull();
+        message.Client.Should().Be(SecurityHistoryClient.Chrome);
     }
 
     [Fact]
     public void Write_ShouldStillRecord_WithoutARequest()
     {
-        var publisher = new CapturingPublisher();
-        var sink = CreateSink(publisher, context: null);
+        var queue = new SecurityHistoryQueue();
+        var sink = CreateSink(queue, context: null);
 
         sink.Write(FactorChanged());
 
-        var message = publisher.Published.Single().Message;
+        var message = Queued(queue).Single();
         message.Client.Should().Be(SecurityHistoryClient.Unknown);
         message.Network.Should().BeNull();
     }
@@ -150,67 +148,44 @@ public class SecurityHistoryEventSinkTests
     {
         var context = new Mock<HttpContext>();
         context.SetupGet(c => c.Request).Throws(new ObjectDisposedException("HttpContext"));
-        var publisher = new CapturingPublisher();
-        var sink = CreateSink(publisher, context.Object);
+        var queue = new SecurityHistoryQueue();
+        var sink = CreateSink(queue, context.Object);
 
         sink.Write(FactorChanged());
 
-        publisher.Published.Single().Message.Client.Should().Be(SecurityHistoryClient.Unknown);
+        Queued(queue).Single().Client.Should().Be(SecurityHistoryClient.Unknown);
     }
 
     [Fact]
-    public void Write_ShouldCountAndSwallowAFailedPublish_LoggingOnlyTheExceptionType()
+    public void Write_ShouldCountAndLogAnEntryTheFullQueueRefuses()
     {
-        var publisher = new Mock<IPublisher>();
-        publisher
-            .Setup(p => p.PublishAsync(Topic, It.IsAny<SecurityHistoryMessage>()))
-            .ThrowsAsync(new InvalidOperationException("broker said: payload user 7"));
+        var queue = new SecurityHistoryQueue();
+        while (queue.TryEnqueue(new SecurityHistoryMessage
+        {
+            MessageId = Guid.NewGuid(),
+            UserId = 1,
+            Kind = AccountSecurityEventKind.SignedIn,
+            EventName = "auth.sign_in.succeeded",
+            OccurredAt = OccurredAt,
+        }))
+        {
+        }
+
         var meterFactory = AuthSecurityEventTestSupport.CreateMeterFactory();
         using var recorder = new AuthMetricsRecorder(meterFactory);
         var logger = new ListLogger<SecurityHistoryEventSink>();
         var sink = CreateSink(
-            publisher.Object,
+            queue,
             Context("203.0.113.50", ChromeUserAgent),
             metrics: new AuthSecurityMetrics(meterFactory),
             logger: logger);
 
         var write = () => sink.Write(FactorChanged());
 
+        // The request carries on: a sink must never fail the action that produced the event.
         write.Should().NotThrow();
-        recorder.Measurements.Should().ContainSingle(m => m.Instrument == "auth.security_history.publish_failures");
-        var entry = logger.Entries.Should().ContainSingle().Subject;
-        entry.Level.Should().Be(LogLevel.Warning);
-        entry.Message.Should().Contain(nameof(InvalidOperationException)).And.NotContain("broker said");
-    }
-
-    [Fact]
-    public void Constructor_ShouldNotBuildThePublisher_AndAPublisherThatCannotLoadIsCounted()
-    {
-        var resolved = 0;
-        var services = new ServiceCollection()
-            .AddSingleton<IPublisher>(_ =>
-            {
-                resolved++;
-                throw new DllNotFoundException("librdkafka");
-            })
-            .BuildServiceProvider();
-        var meterFactory = AuthSecurityEventTestSupport.CreateMeterFactory();
-        using var recorder = new AuthMetricsRecorder(meterFactory);
-
-        // Hosts that build the emitter without ever recording (OpenAPI export) must not need Kafka.
-        var sink = new SecurityHistoryEventSink(
-            services,
-            new HttpContextAccessor(),
-            new StaticMonitor(new SecurityHistoryOptions()),
-            new AuthSecurityMetrics(meterFactory),
-            new ListLogger<SecurityHistoryEventSink>());
-        resolved.Should().Be(0);
-
-        var write = () => sink.Write(FactorChanged());
-
-        write.Should().NotThrow();
-        resolved.Should().Be(1);
-        recorder.Measurements.Should().ContainSingle(m => m.Instrument == "auth.security_history.publish_failures");
+        recorder.Measurements.Should().ContainSingle(m => m.Instrument == "auth.security_history.dropped");
+        logger.Entries.Should().ContainSingle().Which.Message.Should().Contain("mfa_enabled");
     }
 
     [Fact]
@@ -236,10 +211,10 @@ public class SecurityHistoryEventSinkTests
     [Fact]
     public void Message_ShouldSerializeEnumsByName()
     {
-        var publisher = new CapturingPublisher();
-        CreateSink(publisher, Context("203.0.113.50", ChromeUserAgent)).Write(FactorChanged());
+        var queue = new SecurityHistoryQueue();
+        CreateSink(queue, Context("203.0.113.50", ChromeUserAgent)).Write(FactorChanged());
 
-        var json = JsonSerializer.Serialize(publisher.Published.Single().Message, JsonOptions.Default);
+        var json = JsonSerializer.Serialize(Queued(queue).Single(), JsonOptions.Default);
 
         json.Should().Contain("\"kind\":\"MfaEnabled\"").And.Contain("\"client\":\"Chrome\"");
     }
@@ -268,29 +243,21 @@ public class SecurityHistoryEventSinkTests
     }
 
     private static SecurityHistoryEventSink CreateSink(
-        IPublisher publisher,
+        SecurityHistoryQueue queue,
         HttpContext? context,
         SecurityHistoryOptions? options = null,
         AuthSecurityMetrics? metrics = null,
         ILogger<SecurityHistoryEventSink>? logger = null) =>
         new(
-            publisher,
+            queue,
             new HttpContextAccessor { HttpContext = context },
             new StaticMonitor(options ?? new SecurityHistoryOptions()),
             metrics ?? new AuthSecurityMetrics(AuthSecurityEventTestSupport.CreateMeterFactory()),
-            logger ?? new ListLogger<SecurityHistoryEventSink>(),
-            Topic);
+            logger ?? new ListLogger<SecurityHistoryEventSink>());
 
-    private sealed class CapturingPublisher : IPublisher
-    {
-        public List<(string Topic, SecurityHistoryMessage Message)> Published { get; } = [];
-
-        public Task PublishAsync<T>(string topic, T message)
-        {
-            Published.Add((topic, (SecurityHistoryMessage)(object)message!));
-            return Task.CompletedTask;
-        }
-    }
+    /// <summary>Everything the sink queued, in order.</summary>
+    private static IReadOnlyList<SecurityHistoryMessage> Queued(SecurityHistoryQueue queue) =>
+        queue.TakeBatch(int.MaxValue);
 
     private sealed class StaticMonitor(SecurityHistoryOptions value) : IOptionsMonitor<SecurityHistoryOptions>
     {

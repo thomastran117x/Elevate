@@ -1,10 +1,7 @@
-using backend.main.infrastructure.database.core;
 using backend.main.shared.providers.messaging;
 using backend.main.shared.utilities.logger;
 
 using Confluent.Kafka;
-
-using Microsoft.EntityFrameworkCore;
 
 namespace backend.worker.security_history_worker;
 
@@ -39,7 +36,9 @@ public sealed class KafkaSecurityHistoryWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await WaitForSchemaAsync(stoppingToken);
+        // Consuming before the API's migration would retry every message against the old schema.
+        if (!await SecurityHistorySchema.WaitUntilReadyAsync(_scopeFactory, _retryDelay, nameof(KafkaSecurityHistoryWorker), stoppingToken))
+            return;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -79,40 +78,6 @@ public sealed class KafkaSecurityHistoryWorker : BackgroundService
                 // message is processed again after reconnecting.
                 Logger.Warn(ex, "Kafka security history worker processing error. Retrying soon...");
                 await Task.Delay(_retryDelay, stoppingToken);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Holds off consuming until the history table exists. The API applies migrations when it
-    /// starts, and a worker that starts first would otherwise retry every message into the DLQ.
-    /// </summary>
-    private async Task WaitForSchemaAsync(CancellationToken stoppingToken)
-    {
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                using var scope = _scopeFactory.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
-                await db.AccountSecurityEvents.AsNoTracking().AnyAsync(stoppingToken);
-                return;
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                return;
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn($"Security history table is not ready ({ex.GetType().Name}). Waiting for the API to apply migrations...");
-                try
-                {
-                    await Task.Delay(_retryDelay, stoppingToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    return;
-                }
             }
         }
     }

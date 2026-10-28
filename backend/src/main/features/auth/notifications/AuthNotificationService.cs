@@ -1,4 +1,5 @@
 using backend.main.features.auth.events;
+using backend.main.features.auth.history;
 using backend.main.shared.providers;
 using backend.main.shared.providers.messages;
 
@@ -215,8 +216,9 @@ namespace backend.main.features.auth.notifications
 
         public Task SendSecurityAlertAsync(
             string email,
-            SecurityHistoryMessage entry,
-            string? recipientName = null)
+            AccountSecurityEvent entry,
+            string? recipientName = null,
+            CancellationToken cancellationToken = default)
         {
             return _publisher.PublishAsync(
                 NotificationTopics.Email,
@@ -226,12 +228,13 @@ namespace backend.main.features.auth.notifications
                     Email = email,
                     RecipientName = recipientName,
                     SecurityAlertKind = AuthSecurityWireNames.Of(entry.Kind),
-                    SecurityAlertOccurredAtUtc = entry.OccurredAt.UtcDateTime,
+                    SecurityAlertOccurredAtUtc = entry.OccurredAtUtc,
                     SecurityAlertMethod = entry.Method,
                     SecurityAlertClient = AuthSecurityWireNames.Of(entry.Client),
                     SecurityAlertDeviceClass = AuthSecurityWireNames.Of(entry.DeviceClass),
                     SecurityAlertNetwork = entry.Network
-                });
+                },
+                cancellationToken);
         }
     }
 }

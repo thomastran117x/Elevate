@@ -1,4 +1,4 @@
-using backend.main.shared.providers.messages;
+using backend.main.features.auth.history;
 
 namespace backend.main.features.auth.notifications
 {
@@ -80,7 +80,8 @@ namespace backend.main.features.auth.notifications
         /// </summary>
         Task SendSecurityAlertAsync(
             string email,
-            SecurityHistoryMessage entry,
-            string? recipientName = null);
+            AccountSecurityEvent entry,
+            string? recipientName = null,
+            CancellationToken cancellationToken = default);
     }
 }

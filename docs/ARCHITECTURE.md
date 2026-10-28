@@ -9,7 +9,7 @@ flowchart LR
     API --> PostgreSQL
     API --> Redis
     API -->|search queries| Elasticsearch
-    API -->|email, SMS, media validation, and security history| Kafka
+    API -->|email, SMS, and media validation requests| Kafka
     PostgreSQL -->|search outbox CDC| Connect[Debezium / Kafka Connect]
     Connect --> Kafka
     Kafka --> Indexers[Event, club, club-post indexers]
@@ -24,6 +24,7 @@ flowchart LR
     Media -->|reads quarantine, writes public| Blob[(Azure Blob Storage)]
     Media -->|validation status| Kafka
     Kafka -->|media status consumer| API
+    PostgreSQL -->|security history outbox CDC| Connect
     Kafka --> History[Security history worker]
     History -->|AccountSecurityEvents| PostgreSQL
     History -->|security alerts| Kafka
@@ -52,7 +53,7 @@ Authentication and authorization outcomes are emitted as structured security eve
 - **PostgreSQL / EF Core:** Application records, transactions, versions, registrations, invitations, and search outbox rows. Migrations live in `backend/Migrations/`.
 - **Redis:** Cached data, shared state, and bloom-filter bitmaps. Read-only availability probes can use bloom results; account writes still check the database. Rebuilds replace filter generations because bloom filters cannot delete individual values.
 - **Elasticsearch:** Event, club, and club-post search documents. Search code includes database fallback behavior; index updates are eventually consistent.
-- **Kafka Connect:** Debezium captures PostgreSQL outbox rows and routes search messages to Kafka. The three connector definitions and registration script live in `docker/kafka-connect/`.
+- **Kafka Connect:** Debezium captures PostgreSQL outbox rows and routes search messages and security history entries to Kafka. The four connector definitions and registration script live in `docker/kafka-connect/`.
 - **Workers:** Three indexers apply search updates/deletes, the email worker sends SMTP messages and publishes invitation status, the SMS worker sends Twilio MFA messages, the media worker validates and re-encodes attached image uploads and publishes each verdict, and the security history worker records the account owner's security events. Only the security history worker connects to PostgreSQL, to append to `AccountSecurityEvents`, read the owner's address for an alert, and purge entries after 90 days; the API records what the email and media workers report and owns every migration. See [account security history](SECURITY_EVENTS.md#account-security-history). Read their [READMEs](../backend/README.md#workers) for configuration and differing failure policies.
 - **Azure Blob Storage:** Two containers in one storage account. The public container, which allows anonymous blob reads, serves every image. The private quarantine container receives browser uploads until they have been validated. The API never creates containers; see [deployment](DEPLOYMENT.md#blob-storage).
 

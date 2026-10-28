@@ -122,13 +122,13 @@ public class AuthNotificationServiceTests
     {
         var publisher = new Mock<IPublisher>();
         var service = new AuthNotificationService(publisher.Object);
-        var occurredAt = new DateTimeOffset(2026, 10, 20, 12, 0, 0, TimeSpan.Zero);
+        var occurredAt = new DateTime(2026, 10, 20, 12, 0, 0, DateTimeKind.Utc);
+        using var cancellation = new CancellationTokenSource();
 
         await service.SendSecurityAlertAsync(
             "member@example.com",
-            new SecurityHistoryMessage
+            new AccountSecurityEvent
             {
-                MessageId = Guid.NewGuid(),
                 UserId = 7,
                 Kind = AccountSecurityEventKind.ProviderLinked,
                 EventName = "auth.provider.linked",
@@ -137,9 +137,10 @@ public class AuthNotificationServiceTests
                 DeviceClass = AuthDeviceClass.Tablet,
                 Network = "2001:db8:abcd::/48",
                 CorrelationId = "request-id",
-                OccurredAt = occurredAt
+                OccurredAtUtc = occurredAt
             },
-            "Member");
+            "Member",
+            cancellation.Token);
 
         publisher.Verify(p => p.PublishAsync(
             NotificationTopics.Email,
@@ -152,9 +153,10 @@ public class AuthNotificationServiceTests
                 && message.SecurityAlertClient == "edge"
                 && message.SecurityAlertDeviceClass == "tablet"
                 && message.SecurityAlertNetwork == "2001:db8:abcd::/48"
-                && message.SecurityAlertOccurredAtUtc == occurredAt.UtcDateTime
+                && message.SecurityAlertOccurredAtUtc == occurredAt
                 && message.Code == null
-                && message.Token == null)), Times.Once);
+                && message.Token == null),
+            cancellation.Token), Times.Once);
     }
 
     [Fact]

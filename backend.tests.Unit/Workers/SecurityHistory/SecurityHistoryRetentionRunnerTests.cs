@@ -1,3 +1,4 @@
+using backend.main.features.auth.history;
 using backend.tests.Unit.Features.Auth.History;
 using backend.worker.security_history_worker;
 
@@ -76,6 +77,22 @@ public class SecurityHistoryRetentionRunnerTests
 
         purged.Should().Be(0);
         (await harness.Db.AccountSecurityEvents.CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_ShouldRemoveOutboxRowsOlderThanADay()
+    {
+        await using var harness = await SecurityHistoryDbHarness.CreateAsync();
+        var now = Now.UtcDateTime;
+        harness.Db.SecurityHistoryOutbox.AddRange(
+            new SecurityHistoryOutbox { AggregateType = "security-history", AggregateId = "1", Type = "record", CreatedAt = now.AddDays(-2) },
+            new SecurityHistoryOutbox { AggregateType = "security-history", AggregateId = "1", Type = "record", CreatedAt = now.AddHours(-1) });
+        await harness.Db.SaveChangesAsync();
+
+        await Runner(harness).RunOnceAsync();
+
+        (await harness.Db.SecurityHistoryOutbox.AsNoTracking().Select(o => o.CreatedAt).ToListAsync())
+            .Should().Equal(now.AddHours(-1));
     }
 
     private static SecurityHistoryRetentionRunner Runner(

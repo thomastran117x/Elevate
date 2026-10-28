@@ -101,7 +101,6 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
     private const string EmailTopicName = "eventxperience-email";
     private const string SmsTopicName = "eventxperience-sms";
     private const string EmailStatusTopicName = "eventxperience-email-status";
-    private const string SecurityHistoryTopicName = "eventxperience-security-history";
 
     private readonly RedisContainer _redisContainer;
     private readonly KafkaContainer _kafkaContainer;
@@ -134,8 +133,6 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
     public string SmsTopic => SmsTopicName;
 
     public string EmailStatusTopic => EmailStatusTopicName;
-
-    public string SecurityHistoryTopic => SecurityHistoryTopicName;
 
     public static async Task<IntegrationTestEnvironment> CreateAsync()
     {
@@ -260,7 +257,7 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
 
         SetEnvironmentVariables();
         await PostgresTestDatabase.InitializeTemplateAsync(this);
-        await EnsureKafkaTopicsCoreAsync([EmailTopicName, SmsTopicName, EmailStatusTopicName, SecurityHistoryTopicName]);
+        await EnsureKafkaTopicsCoreAsync([EmailTopicName, SmsTopicName, EmailStatusTopicName]);
     }
 
     private string BuildPostgresConnectionString(string databaseName) =>
@@ -292,7 +289,6 @@ public sealed class IntegrationTestEnvironment : IAsyncDisposable
         Environment.SetEnvironmentVariable("EMAIL_TOPIC", EmailTopicName);
         Environment.SetEnvironmentVariable("SMS_TOPIC", SmsTopicName);
         Environment.SetEnvironmentVariable("EMAIL_STATUS_TOPIC", EmailStatusTopicName);
-        Environment.SetEnvironmentVariable("SECURITY_HISTORY_TOPIC", SecurityHistoryTopicName);
     }
 
     private async Task FlushRedisAsync(int database)

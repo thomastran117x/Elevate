@@ -10,7 +10,7 @@ Auth code builds an `AuthSecurityEvent` and passes it to `IAuthSecurityEventEmit
 
 - **Logging sink:** one log entry per event at the catalog level, with the catalog `EventId` and every field rendered in the message and kept as structured properties.
 - **Metrics sink:** increments `auth.security_events` on the `EventXperience.Auth` meter.
-- **Security history sink:** publishes the events the account owner should see to the security-history topic, without waiting for Kafka; see [account security history](#account-security-history).
+- **Security history sink:** queues the events the account owner should see for the security history outbox, without waiting on the database or Kafka; see [account security history](#account-security-history).
 
 The emitter runs each sink in its own `try`/`catch`. A failing sink increments `auth.security_events.sink_failures` and logs the exception type (never its message); the other sinks and the request carry on. Sinks run inline, so a new sink must not block.
 
@@ -125,9 +125,15 @@ Account ids, session ids, and hashes are still pseudonymous personal data. Restr
 
 ## Account security history
 
-The owner-facing history (#326) is a separate, persisted record built from this same contract. `SecurityHistoryEventSink` classifies each event with `SecurityHistoryCatalog` and publishes the ones the owner should see to `eventxperience-security-history`. The security-history worker stores them in `AccountSecurityEvents` and sends any alert. `GET /api/auth/security-events` reads them back; see [the API guide](API.md#security-history).
+The owner-facing history (#326) is a separate, persisted record built from this same contract:
 
-The publish is started and left to finish on its own. It never delays, fails, or rolls back the security action. If Kafka cannot take the message, the entry is lost and `auth.security_history.publish_failures` is incremented.
+1. `SecurityHistoryEventSink` classifies each event with `SecurityHistoryCatalog` and queues the ones the owner should see. The request never waits on the database or Kafka, so recording never delays, fails, or rolls back the security action.
+2. A background writer in the API stores queued entries in `security_history_outbox` in batches. It retries with backoff while the database is unavailable.
+3. Debezium relays outbox rows to `eventxperience-security-history`, like the search outboxes.
+4. The security-history worker stores each entry in `AccountSecurityEvents`, together with whether it owes the owner an alert, and its dispatcher sends that alert.
+5. `GET /api/auth/security-events` reads the entries back; see [the API guide](API.md#security-history).
+
+Once its outbox row is committed, an entry survives a broker outage, a slow relay, or a restart. Before that it is held in memory for a moment. An entry refused because the queue (10,000 entries) is full is counted on `auth.security_history.dropped`. A failed outbox write is counted on `auth.security_history.store_failures` and retried. An entry still queued when the API stops is lost only if the database cannot take it within the five-second shutdown flush.
 
 | Event | Recorded as | Notes |
 | --- | --- | --- |
@@ -177,7 +183,8 @@ All instruments are on the `EventXperience.Auth` meter. Every tag value comes fr
 | --- | --- | --- | --- |
 | `auth.security_events` | Counter | `{event}` | `event`, `outcome`, `reason`, `method`, `flow`, `dimension`, `factor` |
 | `auth.security_events.sink_failures` | Counter | `{failure}` | `sink` |
-| `auth.security_history.publish_failures` | Counter | `{failure}` | none |
+| `auth.security_history.dropped` | Counter | `{entry}` | none |
+| `auth.security_history.store_failures` | Counter | `{failure}` | none |
 | `auth.operation.duration` | Histogram | `ms` | `operation`, `outcome` |
 
 `operation` is one of `sign_in`, `oauth_sign_in`, `refresh`, `step_up_verify`, `recovery_request`, `password_reset`, `verification`, or `factor_change`. Its `outcome` is `succeeded` for 2xx and 3xx, `throttled` for 429, `denied` for any other 4xx, and `faulted` for 5xx or an unhandled exception. Requests the client abandons are not recorded. Unset event tags are reported as `none`.
@@ -211,7 +218,7 @@ Recommended panels:
 | Provider linking | `auth.provider.linked` and `auth.provider_link.conflict` by `method` and `reason` |
 | Authorization denials | `authz.denied` by `reason`; top `Route` values from the log |
 | Auth latency and faults | `auth.operation.duration` p50 and p95 by `operation`; share of `outcome="faulted"` |
-| Pipeline health | `auth.security_events.sink_failures` by `sink`; `auth.security_history.publish_failures` |
+| Pipeline health | `auth.security_events.sink_failures` by `sink`; `auth.security_history.dropped` and `auth.security_history.store_failures` |
 
 Example alert conditions follow. The names are as the OpenTelemetry Prometheus exporter renders the instruments (dots become underscores and counters gain `_total`); adapt them to the backend chosen in #330. Enable alerts gradually: run each in notify-only mode for two weeks, set thresholds from the measured baseline (for example, three times the baseline p99), then page.
 
@@ -225,6 +232,6 @@ Example alert conditions follow. The names are as the OpenTelemetry Prometheus e
 | Authorization probing | `sum(rate(auth_security_events_total{event="authz.denied",reason="resource_access"}[5m]))` above baseline | One caller walking resource ids. Group the log by `UserId` and `Route`. |
 | Auth faults | Faulted share of `auth_operation_duration_milliseconds_count` above 2% for 10 minutes | Service errors, as distinct from refusals. |
 | Event pipeline broken | `increase(auth_security_events_sink_failures_total[5m]) > 0` | Events are being lost. |
-| Security history not recording | `increase(auth_security_history_publish_failures_total[5m]) > 0` | Owner-facing history entries are being lost. |
+| Security history not recording | `increase(auth_security_history_dropped_total[5m]) > 0`, or `auth_security_history_store_failures_total` rising for 10 minutes | Entries are being lost, or are piling up because the outbox cannot be written. |
 
 To investigate a user report, ask for the `X-Request-Id` from the failing response, or the support reference shown on a security history entry, and search the log for that `CorrelationId`.

@@ -32,9 +32,14 @@ namespace backend.tests.Integration.Features.Auth;
 
 /// <summary>
 /// The account security history end to end: real auth journeys through the API, read back from the
-/// security-history topic exactly as the worker receives them, run through the worker's processor
-/// against the same database, and read again through the endpoint.
+/// security history outbox exactly as Debezium relays it to the worker, run through the worker's
+/// processor and alert dispatcher against the same database, and read again through the endpoint.
 /// </summary>
+/// <remarks>
+/// The test host does not start hosted services, so each test drains the API's queue into the
+/// outbox itself, and Kafka Connect is not part of the test infrastructure, so the outbox payload
+/// stands in for the relayed message. Its parse by the worker is what the relay delivers.
+/// </remarks>
 public sealed class SecurityHistoryPipelineTests
 {
     private const string ClientAddress = "203.0.113.50";
@@ -45,16 +50,15 @@ public sealed class SecurityHistoryPipelineTests
         await using var app = await CreateAppAsync();
         var user = await app.SeedUserAsync("pipeline-login@example.com");
         await app.SeedKnownDeviceAsync(user.Id, "pipeline-login-device");
-        await app.MarkNotificationBoundaryAsync();
 
         var failed = await LoginAsync(app, "pipeline-login", "wrong passphrase for pipeline", "pipeline-login-device");
         failed.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         var session = await app.LoginApiAsync("pipeline-login", trustedDeviceToken: "pipeline-login-device");
 
-        var published = await app.ReadNewSecurityHistoryJsonAsync(TimeSpan.FromSeconds(10));
+        var outbox = await OutboxForAsync(app, user.Id);
 
         // The failed attempt is deliberately not part of the owner's history.
-        var raw = published.Should().ContainSingle().Subject.GetRawText();
+        var raw = outbox.Should().ContainSingle().Subject.Payload;
         foreach (var secret in new[]
                  {
                      AuthApiTestApp.DefaultPassword,
@@ -71,7 +75,7 @@ public sealed class SecurityHistoryPipelineTests
             raw.Should().NotContain(secret);
         }
 
-        var message = JsonSerializer.Deserialize<SecurityHistoryMessage>(raw, JsonOptions.Default)!;
+        var message = SecurityHistoryMessageParser.Parse(raw);
         message.UserId.Should().Be(user.Id);
         message.Kind.Should().Be(AccountSecurityEventKind.SignedIn);
         message.EventName.Should().Be("auth.sign_in.succeeded");
@@ -82,7 +86,7 @@ public sealed class SecurityHistoryPipelineTests
     }
 
     [Fact]
-    public async Task Logout_ShouldPublishASignedOutEntry()
+    public async Task Logout_ShouldRecordASignedOutEntry()
     {
         await using var app = await CreateAppAsync();
         var user = await app.SeedUserAsync("pipeline-logout@example.com");
@@ -99,8 +103,8 @@ public sealed class SecurityHistoryPipelineTests
             session.AccessToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(response));
 
-        var message = await app.WaitForSecurityHistoryAsync(m =>
-            m.UserId == user.Id && m.Kind == AccountSecurityEventKind.SignedOut);
+        var message = (await MessagesForAsync(app, user.Id))
+            .Should().ContainSingle(m => m.Kind == AccountSecurityEventKind.SignedOut).Subject;
         message.Reason.Should().Be("logout");
         message.EventName.Should().Be("auth.session.revoked");
     }
@@ -111,10 +115,9 @@ public sealed class SecurityHistoryPipelineTests
         await using var app = await CreateAppAsync();
         var user = await app.SeedUserAsync("pipeline-history@example.com");
         await app.SeedKnownDeviceAsync(user.Id, "pipeline-history-device");
-        await app.MarkNotificationBoundaryAsync();
         var session = await app.LoginApiAsync("pipeline-history", trustedDeviceToken: "pipeline-history-device");
-        var published = await app.WaitForSecurityHistoryAsync(m =>
-            m.UserId == user.Id && m.Kind == AccountSecurityEventKind.SignedIn);
+        var published = (await MessagesForAsync(app, user.Id))
+            .Should().ContainSingle(m => m.Kind == AccountSecurityEventKind.SignedIn).Subject;
 
         var outcome = await ProcessAsync(app, published);
 
@@ -152,9 +155,12 @@ public sealed class SecurityHistoryPipelineTests
             session.AccessToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(response));
 
-        var changed = await app.WaitForSecurityHistoryAsync(m =>
-            m.UserId == user.Id && m.Kind == AccountSecurityEventKind.PasswordChanged);
+        var changed = (await MessagesForAsync(app, user.Id))
+            .Should().ContainSingle(m => m.Kind == AccountSecurityEventKind.PasswordChanged).Subject;
         (await ProcessAsync(app, changed)).Should().Be(SecurityHistoryEntryOutcome.Inserted);
+        // A redelivery before the dispatcher runs must neither send a second alert nor lose this one.
+        (await ProcessAsync(app, changed)).Should().Be(SecurityHistoryEntryOutcome.Duplicate);
+        (await DispatchAlertsAsync(app)).Should().BeGreaterThanOrEqualTo(1);
 
         var alert = await app.WaitForEmailAsync(m =>
             m.Type == EmailMessageType.SecurityAlert && m.Email == "pipeline-alert@example.com");
@@ -162,8 +168,9 @@ public sealed class SecurityHistoryPipelineTests
         alert.SecurityAlertNetwork.Should().Be("203.0.113.0/24");
         alert.Token.Should().BeNull();
         alert.Code.Should().BeNull();
-        (await app.QueryDbAsync(db => db.AccountSecurityEvents.CountAsync(e =>
-            e.UserId == user.Id && e.Kind == AccountSecurityEventKind.PasswordChanged))).Should().Be(1);
+        var stored = await app.QueryDbAsync(db => db.AccountSecurityEvents.AsNoTracking().SingleAsync(e =>
+            e.UserId == user.Id && e.Kind == AccountSecurityEventKind.PasswordChanged));
+        stored.AlertState.Should().Be(SecurityAlertState.Sent);
     }
 
     [Fact]
@@ -185,14 +192,23 @@ public sealed class SecurityHistoryPipelineTests
             adminSession.AccessToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(response));
 
-        var disabled = await app.WaitForSecurityHistoryAsync(m =>
-            m.UserId == dormant.Id && m.Kind == AccountSecurityEventKind.AccountDisabled);
+        // Disabling an account that is already disabled changes nothing the owner is told about.
+        var repeat = await app.SendWithBearerAndCsrfAsync(
+            HttpMethod.Patch,
+            $"/api/admin/users/{dormant.Id}/status",
+            new { isDisabled = true, reason = "policy, again" },
+            adminSession.AccessToken);
+        repeat.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(repeat));
+
+        var disabled = (await MessagesForAsync(app, dormant.Id))
+            .Should().ContainSingle(m => m.Kind == AccountSecurityEventKind.AccountDisabled).Subject;
         disabled.EventName.Should().Be("auth.account.status_changed");
         disabled.InitiatedByAdmin.Should().BeTrue();
         // The request was the administrator's, so none of its context is attributed to the owner.
         disabled.Network.Should().BeNull();
         disabled.Client.Should().Be(SecurityHistoryClient.Unknown);
         (await ProcessAsync(app, disabled)).Should().Be(SecurityHistoryEntryOutcome.Inserted);
+        await DispatchAlertsAsync(app);
 
         var alert = await app.WaitForEmailAsync(m =>
             m.Type == EmailMessageType.SecurityAlert && m.Email == "pipeline-dormant@example.com");
@@ -253,18 +269,46 @@ public sealed class SecurityHistoryPipelineTests
         remaining.Should().Equal(current);
     }
 
+    /// <summary>
+    /// Stores what the API has queued and returns the account's outbox rows, oldest first: what the
+    /// security-history-outbox connector would relay.
+    /// </summary>
+    private static async Task<IReadOnlyList<SecurityHistoryOutbox>> OutboxForAsync(AuthApiTestApp app, int userId)
+    {
+        await app.Services.GetRequiredService<SecurityHistoryOutboxDrainer>().DrainAllAsync();
+        var aggregateId = userId.ToString();
+        return await app.QueryDbAsync(db => db.SecurityHistoryOutbox
+            .AsNoTracking()
+            .Where(row => row.AggregateId == aggregateId)
+            .OrderBy(row => row.CreatedAt)
+            .ToListAsync());
+    }
+
+    private static async Task<IReadOnlyList<SecurityHistoryMessage>> MessagesForAsync(AuthApiTestApp app, int userId) =>
+        (await OutboxForAsync(app, userId)).Select(row => SecurityHistoryMessageParser.Parse(row.Payload)).ToList();
+
+    private static async Task<int> DispatchAlertsAsync(AuthApiTestApp app)
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+        var runner = new SecurityHistoryAlertRunner(
+            services.GetRequiredService<AppDatabaseContext>(),
+            services.GetRequiredService<IAuthNotificationService>(),
+            TimeProvider.System,
+            new SecurityHistoryWorkerMetrics(services.GetRequiredService<IMeterFactory>()));
+        return await runner.RunOnceAsync();
+    }
+
     private static async Task<SecurityHistoryEntryOutcome> ProcessAsync(AuthApiTestApp app, SecurityHistoryMessage message)
     {
         await using var scope = app.Services.CreateAsyncScope();
         var services = scope.ServiceProvider;
         var db = services.GetRequiredService<AppDatabaseContext>();
         var options = WorkerOptions();
-        var metrics = new SecurityHistoryWorkerMetrics(services.GetRequiredService<IMeterFactory>());
         var processor = new SecurityHistoryMessageProcessor(
             new SecurityHistoryWriter(db, options, TimeProvider.System),
-            new SecurityHistoryAlertSender(db, services.GetRequiredService<IAuthNotificationService>(), options, metrics),
             new FailingDlqPublisher(),
-            metrics);
+            new SecurityHistoryWorkerMetrics(services.GetRequiredService<IMeterFactory>()));
 
         var envelope = new KafkaMessageEnvelope(
             options.Topic,

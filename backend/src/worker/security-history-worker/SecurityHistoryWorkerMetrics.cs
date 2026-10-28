@@ -25,7 +25,7 @@ public sealed class SecurityHistoryWorkerMetrics
         _alerts = meter.CreateCounter<long>(
             "security_history.alerts",
             unit: "{alert}",
-            description: "Security alert emails handed to the email topic, by outcome.");
+            description: "Security alert delivery attempts, by outcome.");
         _purged = meter.CreateCounter<long>(
             "security_history.purged",
             unit: "{entry}",
@@ -58,6 +58,9 @@ public enum SecurityHistoryEntryOutcome
 public enum SecurityHistoryAlertOutcome
 {
     Sent,
+    /// <summary>The send failed and the alert is scheduled for another attempt.</summary>
+    Retried,
+    /// <summary>The send failed for the last permitted time.</summary>
     Failed,
     NoRecipient,
 }

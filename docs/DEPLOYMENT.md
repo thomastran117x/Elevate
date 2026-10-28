@@ -91,14 +91,18 @@ A save waits up to ten seconds, once, for the worker's verdict on all of its ima
 
 ### Account security history
 
-The API publishes each owner-visible security event to `eventxperience-security-history`, and the [security history worker](../backend/src/worker/security-history-worker/README.md) stores it and sends any alert. To roll it out:
+The API writes each owner-visible security event to `security_history_outbox`. Debezium relays it to `eventxperience-security-history`, and the [security history worker](../backend/src/worker/security-history-worker/README.md) stores it and sends any alert. To roll it out:
 
-1. Run the `accountsecurityevents` migration through the API. The worker never migrates; it waits until the table exists before consuming.
+1. Run the `accountsecurityevents` and `securityhistorydurability` migrations through the API. The worker never migrates; it waits until the table exists before consuming.
 2. Create the security-history topic and its DLQ. Compose's `kafka-init` creates them.
-3. Deploy the email worker before or with the API, because the API appends `SecurityAlert` to the email message types. An older email worker would dead-letter alerts.
-4. Deploy the security history worker with Kafka, `DB_CONNECTION_STRING`, and `EMAIL_TOPIC`.
+3. Register the `security-history-outbox` Debezium connector (`docker/kafka-connect/security-history-outbox-connector.json`). Compose's `kafka-connect-init` registers it with the search connectors.
+4. Deploy the email worker before or with the API, because the API appends `SecurityAlert` to the email message types. An older email worker would dead-letter alerts.
+5. Deploy the security history worker with Kafka, `DB_CONNECTION_STRING`, and `EMAIL_TOPIC`.
 
-The API publishes without waiting for Kafka. A broker outage therefore loses entries rather than failing sign-ins or account changes. Watch `auth.security_history.publish_failures` on the API and the worker's DLQ. To stop recording without removing anything, set `Auth__SecurityHistory__PublishEnabled=false`; existing entries stay readable until they expire. Deleting an account deletes its history through the foreign key.
+Recording never waits on the database or Kafka, so neither can fail a sign-in or account change. Once stored in the outbox, an entry survives a broker or connector outage and is relayed when both are back.
+- Watch `auth.security_history.dropped` and `auth.security_history.store_failures` on the API.
+- Watch the connector's status in Kafka Connect.
+- Watch the worker's DLQ and its `security_history.alerts{outcome="failed"}`. To stop recording without removing anything, set `Auth__SecurityHistory__PublishEnabled=false`; existing entries stay readable until they expire. Deleting an account deletes its history through the foreign key.
 
 ## Kubernetes assets and gaps
 

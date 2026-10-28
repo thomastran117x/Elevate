@@ -149,14 +149,14 @@ Generate a key with `openssl rand -base64 32` and keep it as secret as the JWT k
 
 ### Account security history
 
-The API publishes the events an account owner should see to the security-history topic; see [account security history](SECURITY_EVENTS.md#account-security-history). `Auth:SecurityHistory` is bound at startup:
+The API records the events an account owner should see through the security history outbox, which Debezium relays to the security-history topic; see [account security history](SECURITY_EVENTS.md#account-security-history). `Auth:SecurityHistory` is bound at startup:
 
 | Key | Default | Purpose |
 | --- | --- | --- |
-| `PublishEnabled` | `true` | Publish history entries. When it is off, nothing new is recorded and existing entries are still served. |
+| `PublishEnabled` | `true` | Record history entries. When it is off, nothing new is recorded and existing entries are still served. |
 | `IncludeMaskedNetwork` | `true` | Record the source network truncated to an IPv4 /24 or IPv6 /48. The full address is never recorded. |
 
-Both switches take effect without a restart when the configuration source reloads. Configure them with `Auth__SecurityHistory__...`, or set `AUTH_SECURITY_HISTORY_PUBLISH_ENABLED` under Compose. The topic is `SECURITY_HISTORY_TOPIC` (default `eventxperience-security-history`).
+Both switches take effect without a restart when the configuration source reloads. Configure them with `Auth__SecurityHistory__...`, or set `AUTH_SECURITY_HISTORY_PUBLISH_ENABLED` under Compose. The topic the connector routes to and the worker reads is `SECURITY_HISTORY_TOPIC` (default `eventxperience-security-history`); it is set in the connector configuration and on the worker.
 
 Retention and alerts belong to the [security history worker](../backend/src/worker/security-history-worker/README.md#dependencies-and-settings), which owns the table:
 

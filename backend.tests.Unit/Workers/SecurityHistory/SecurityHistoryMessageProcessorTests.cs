@@ -1,7 +1,6 @@
 using System.Text.Json;
 
 using backend.main.features.auth.history;
-using backend.main.features.auth.notifications;
 using backend.main.shared.providers;
 using backend.main.shared.providers.messages;
 using backend.main.shared.providers.messaging;
@@ -14,8 +13,6 @@ using Microsoft.EntityFrameworkCore;
 
 using Moq;
 
-using Polly;
-
 using static backend.tests.Unit.Workers.SecurityHistory.SecurityHistoryWorkerTestSupport;
 
 namespace backend.tests.Unit.Workers.SecurityHistory;
@@ -23,49 +20,45 @@ namespace backend.tests.Unit.Workers.SecurityHistory;
 public class SecurityHistoryMessageProcessorTests
 {
     [Fact]
-    public async Task ProcessAsync_ShouldStoreTheEntryAndAlert_WhenItIsNew()
+    public async Task ProcessAsync_ShouldStoreTheEntry_WithItsAlertPending()
     {
         await using var harness = await SecurityHistoryDbHarness.CreateAsync();
-        var notifications = new Mock<IAuthNotificationService>();
         var dlq = new Mock<ISecurityHistoryWorkerDlqPublisher>();
-        var message = Message(userId: SecurityHistoryDbHarness.OwnerId);
 
-        var outcome = await Processor(harness, notifications.Object, dlq.Object).ProcessAsync(Envelope(message));
+        var outcome = await Processor(harness, dlq.Object)
+            .ProcessAsync(Envelope(Message(userId: SecurityHistoryDbHarness.OwnerId)));
 
         outcome.Should().Be(SecurityHistoryEntryOutcome.Inserted);
-        (await harness.Db.AccountSecurityEvents.CountAsync()).Should().Be(1);
-        notifications.Verify(n => n.SendSecurityAlertAsync("owner@test.local", It.IsAny<SecurityHistoryMessage>(), "Owner"), Times.Once);
+        var stored = await harness.Db.AccountSecurityEvents.AsNoTracking().SingleAsync();
+        // The alert travels with the row and is sent by the dispatcher, never inline.
+        stored.AlertState.Should().Be(SecurityAlertState.Pending);
         dlq.VerifyNoOtherCalls();
     }
 
     [Fact]
-    public async Task ProcessAsync_ShouldNeverAlertTwice_ForARedelivery()
+    public async Task ProcessAsync_ShouldLeaveARedeliveredEntrysAlertAsItWas()
     {
         await using var harness = await SecurityHistoryDbHarness.CreateAsync();
-        var notifications = new Mock<IAuthNotificationService>();
         var message = Message(userId: SecurityHistoryDbHarness.OwnerId);
-        var processor = Processor(harness, notifications.Object, Mock.Of<ISecurityHistoryWorkerDlqPublisher>());
+        var processor = Processor(harness, Mock.Of<ISecurityHistoryWorkerDlqPublisher>());
 
         await processor.ProcessAsync(Envelope(message));
         var again = await processor.ProcessAsync(Envelope(message));
 
         again.Should().Be(SecurityHistoryEntryOutcome.Duplicate);
-        notifications.Verify(
-            n => n.SendSecurityAlertAsync(It.IsAny<string>(), It.IsAny<SecurityHistoryMessage>(), It.IsAny<string?>()),
-            Times.Once);
+        var stored = await harness.Db.AccountSecurityEvents.AsNoTracking().SingleAsync();
+        stored.AlertState.Should().Be(SecurityAlertState.Pending);
     }
 
     [Fact]
     public async Task ProcessAsync_ShouldDropAnEntryForADeletedAccount_WithoutTheDlq()
     {
         await using var harness = await SecurityHistoryDbHarness.CreateAsync();
-        var notifications = new Mock<IAuthNotificationService>();
         var dlq = new Mock<ISecurityHistoryWorkerDlqPublisher>();
 
-        var outcome = await Processor(harness, notifications.Object, dlq.Object).ProcessAsync(Envelope(Message(userId: 404)));
+        var outcome = await Processor(harness, dlq.Object).ProcessAsync(Envelope(Message(userId: 404)));
 
         outcome.Should().Be(SecurityHistoryEntryOutcome.AccountDeleted);
-        notifications.VerifyNoOtherCalls();
         dlq.VerifyNoOtherCalls();
     }
 
@@ -73,13 +66,12 @@ public class SecurityHistoryMessageProcessorTests
     public async Task ProcessAsync_ShouldSkipAnExpiredEntry()
     {
         await using var harness = await SecurityHistoryDbHarness.CreateAsync();
-        var notifications = new Mock<IAuthNotificationService>();
 
-        var outcome = await Processor(harness, notifications.Object, Mock.Of<ISecurityHistoryWorkerDlqPublisher>())
+        var outcome = await Processor(harness, Mock.Of<ISecurityHistoryWorkerDlqPublisher>())
             .ProcessAsync(Envelope(Message(userId: SecurityHistoryDbHarness.OwnerId, occurredAt: Now.AddDays(-100))));
 
         outcome.Should().Be(SecurityHistoryEntryOutcome.Expired);
-        notifications.VerifyNoOtherCalls();
+        (await harness.Db.AccountSecurityEvents.CountAsync()).Should().Be(0);
     }
 
     [Fact]
@@ -89,59 +81,30 @@ public class SecurityHistoryMessageProcessorTests
         var dlq = new Mock<ISecurityHistoryWorkerDlqPublisher>();
         var envelope = Envelope("{\"kind\":\"Nope\"}");
 
-        var outcome = await Processor(harness, Mock.Of<IAuthNotificationService>(), dlq.Object).ProcessAsync(envelope);
+        var outcome = await Processor(harness, dlq.Object).ProcessAsync(envelope);
 
         outcome.Should().Be(SecurityHistoryEntryOutcome.Rejected);
         dlq.Verify(d => d.PublishAsync(envelope, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task ProcessAsync_ShouldRetryAndThenDeadLetter_WhenStoringKeepsFailing()
+    public async Task ProcessAsync_ShouldLetAStorageFailurePropagate_SoTheMessageIsRetried()
     {
         await using var harness = await SecurityHistoryDbHarness.CreateAsync();
-        // A closed connection makes every attempt fail the way an unreachable database would.
+        // A closed connection fails the insert the way an unreachable database would.
         await harness.Db.Database.CloseConnectionAsync();
         await harness.Db.Database.GetDbConnection().DisposeAsync();
         var dlq = new Mock<ISecurityHistoryWorkerDlqPublisher>();
-        var attempts = 0;
-        var retries = new ResiliencePipelineBuilder()
-            .AddRetry(new Polly.Retry.RetryStrategyOptions
-            {
-                MaxRetryAttempts = 2,
-                Delay = TimeSpan.Zero,
-                ShouldHandle = new PredicateBuilder().Handle<Exception>(),
-                OnRetry = _ =>
-                {
-                    attempts++;
-                    return ValueTask.CompletedTask;
-                }
-            })
-            .Build();
-        var envelope = Envelope(Message(userId: SecurityHistoryDbHarness.OwnerId));
+        var (metrics, collector) = Metrics();
+        using var _ = collector;
 
-        var outcome = await Processor(harness, Mock.Of<IAuthNotificationService>(), dlq.Object, retries).ProcessAsync(envelope);
-
-        outcome.Should().Be(SecurityHistoryEntryOutcome.Failed);
-        attempts.Should().Be(2);
-        dlq.Verify(d => d.PublishAsync(envelope, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task ProcessAsync_ShouldKeepTheEntry_WhenTheAlertFails()
-    {
-        await using var harness = await SecurityHistoryDbHarness.CreateAsync();
-        var notifications = new Mock<IAuthNotificationService>();
-        notifications
-            .Setup(n => n.SendSecurityAlertAsync(It.IsAny<string>(), It.IsAny<SecurityHistoryMessage>(), It.IsAny<string?>()))
-            .ThrowsAsync(new InvalidOperationException("email topic unavailable"));
-        var dlq = new Mock<ISecurityHistoryWorkerDlqPublisher>();
-
-        var outcome = await Processor(harness, notifications.Object, dlq.Object)
+        var process = () => Processor(harness, dlq.Object, metrics)
             .ProcessAsync(Envelope(Message(userId: SecurityHistoryDbHarness.OwnerId)));
 
-        outcome.Should().Be(SecurityHistoryEntryOutcome.Inserted);
-        (await harness.Db.AccountSecurityEvents.CountAsync()).Should().Be(1);
+        // The consumer leaves the offset uncommitted and tries again; an outage is not a dead letter.
+        await process.Should().ThrowAsync<Exception>();
         dlq.VerifyNoOtherCalls();
+        collector.Measurements.Should().ContainSingle(m => m.Instrument == "security_history.entries" && m.Outcome == "failed");
     }
 
     [Fact]
@@ -151,7 +114,7 @@ public class SecurityHistoryMessageProcessorTests
         using var cancelled = new CancellationTokenSource();
         await cancelled.CancelAsync();
 
-        var process = () => Processor(harness, Mock.Of<IAuthNotificationService>(), Mock.Of<ISecurityHistoryWorkerDlqPublisher>())
+        var process = () => Processor(harness, Mock.Of<ISecurityHistoryWorkerDlqPublisher>())
             .ProcessAsync(Envelope(Message(userId: SecurityHistoryDbHarness.OwnerId)), cancelled.Token);
 
         await process.Should().ThrowAsync<OperationCanceledException>();
@@ -159,16 +122,12 @@ public class SecurityHistoryMessageProcessorTests
 
     private static SecurityHistoryMessageProcessor Processor(
         SecurityHistoryDbHarness harness,
-        IAuthNotificationService notifications,
         ISecurityHistoryWorkerDlqPublisher dlq,
-        ResiliencePipeline? retries = null)
-    {
-        var options = Options();
-        var metrics = Metrics().Metrics;
-        var writer = new SecurityHistoryWriter(harness.Db, options, new HistoryClock(Now));
-        var alerts = new SecurityHistoryAlertSender(harness.Db, notifications, options, metrics);
-        return new SecurityHistoryMessageProcessor(writer, alerts, dlq, metrics, retries ?? ResiliencePipeline.Empty);
-    }
+        SecurityHistoryWorkerMetrics? metrics = null) =>
+        new(
+            new SecurityHistoryWriter(harness.Db, Options(), new HistoryClock(Now)),
+            dlq,
+            metrics ?? Metrics().Metrics);
 
     private static KafkaMessageEnvelope Envelope(SecurityHistoryMessage message) =>
         Envelope(JsonSerializer.Serialize(message, JsonOptions.Default));

@@ -7,8 +7,10 @@ namespace backend.main.features.auth.history;
 /// session change, persisted from the auth security event contract by the security-history worker.
 /// </summary>
 /// <remarks>
-/// Append only. Rows are inserted by the worker and removed only by the retention purge or by the
-/// account's deletion cascade; nothing updates them. Every column is a closed classification, a
+/// Append only for what happened: rows are inserted by the worker and removed only by the retention
+/// purge or by the account's deletion cascade. The only columns that change are the alert-delivery
+/// ones, written in the same insert and advanced by the worker's alert dispatcher, so an alert
+/// cannot be lost once its entry is committed. Every column is a closed classification, a
 /// server-generated identifier, or a masked network prefix, so no credential, code, contact
 /// address, or client-supplied text is ever stored.
 /// </remarks>
@@ -99,4 +101,33 @@ public class AccountSecurityEvent
     {
         get; set;
     }
+
+    /// <summary>Whether this entry owes the owner an alert email, and how delivery went.</summary>
+    public SecurityAlertState AlertState { get; set; } = SecurityAlertState.None;
+
+    /// <summary>Delivery attempts made so far, for the dispatcher's backoff and give-up.</summary>
+    public int AlertAttempts
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// When the dispatcher may next try to send a pending alert. A dispatcher that claims the
+    /// alert moves this forward first, so another replica does not send it at the same time.
+    /// </summary>
+    public DateTime? AlertNextAttemptAtUtc
+    {
+        get; set;
+    }
+}
+
+/// <summary>Stored by name, like <see cref="AccountSecurityEventKind"/>; append only.</summary>
+public enum SecurityAlertState
+{
+    /// <summary>The entry's kind is not an alert kind, or alerts were off when it was stored.</summary>
+    None,
+    Pending,
+    Sent,
+    /// <summary>Delivery was given up after the last attempt, or the account had no address.</summary>
+    Failed,
 }

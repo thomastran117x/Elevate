@@ -48,8 +48,6 @@ public sealed class NamespacedKafkaPublisher : IPublisher, IAsyncDisposable
             return _resources.SmsTopic;
         if (topic == _environment.EmailStatusTopic)
             return _resources.EmailStatusTopic;
-        if (topic == _environment.SecurityHistoryTopic)
-            return _resources.SecurityHistoryTopic;
         return topic;
     }
 }

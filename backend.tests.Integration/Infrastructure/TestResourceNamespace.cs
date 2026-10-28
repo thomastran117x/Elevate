@@ -16,9 +16,7 @@ public sealed record TestResourceNamespace(int Slot)
 
     public string EmailStatusTopic => $"itest-{Slot}-email-status";
 
-    public string SecurityHistoryTopic => $"itest-{Slot}-security-history";
-
     public string[] ElasticsearchIndices => [EventsIndex, ClubsIndex, ClubPostsIndex];
 
-    public string[] KafkaTopics => [EmailTopic, SmsTopic, EmailStatusTopic, SecurityHistoryTopic];
+    public string[] KafkaTopics => [EmailTopic, SmsTopic, EmailStatusTopic];
 }

@@ -236,6 +236,9 @@ namespace backend.main.application.bootstrap
             services.AddOptions<SecurityHistoryOptions>()
                 .Bind(config.GetSection(SecurityHistoryOptions.SectionName))
                 .ValidateOnStart();
+            services.AddSingleton<SecurityHistoryQueue>();
+            services.AddSingleton<SecurityHistoryOutboxDrainer>();
+            services.AddScoped<SecurityHistoryOutboxWriter>();
             services.AddSingleton<IAuthSecurityEventSink, SecurityHistoryEventSink>();
             services.AddSingleton<IAuthSecurityEventEmitter, AuthSecurityEventEmitter>();
             services.AddSearchInfrastructure(config, featureFlags);
@@ -421,6 +424,8 @@ namespace backend.main.application.bootstrap
 
             if (includeHostedServices)
             {
+                services.AddHostedService<SecurityHistoryOutboxService>();
+
                 if (featureFlags.IsEnabled(FeatureFlagKeys.Search))
                     services.AddHostedService<ElasticsearchIndexInitializationService>();
 

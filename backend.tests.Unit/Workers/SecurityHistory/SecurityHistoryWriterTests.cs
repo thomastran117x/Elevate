@@ -94,6 +94,29 @@ public class SecurityHistoryWriterTests
         (await harness.Db.AccountSecurityEvents.CountAsync()).Should().Be(0);
     }
 
+    [Theory]
+    [InlineData(AccountSecurityEventKind.PasswordChanged, true, SecurityAlertState.Pending)]
+    [InlineData(AccountSecurityEventKind.SignedIn, true, SecurityAlertState.None)]
+    [InlineData(AccountSecurityEventKind.PasswordChanged, false, SecurityAlertState.None)]
+    public async Task InsertAsync_ShouldStoreWhetherTheEntryOwesAnAlert(
+        AccountSecurityEventKind kind,
+        bool notificationsEnabled,
+        SecurityAlertState expected)
+    {
+        await using var harness = await SecurityHistoryDbHarness.CreateAsync();
+        var writer = new SecurityHistoryWriter(
+            harness.Db,
+            Options(notificationsEnabled: notificationsEnabled),
+            new HistoryClock(Now));
+
+        await writer.InsertAsync(Message(userId: SecurityHistoryDbHarness.OwnerId, kind: kind));
+
+        var stored = await harness.Db.AccountSecurityEvents.AsNoTracking().SingleAsync();
+        stored.AlertState.Should().Be(expected);
+        stored.AlertAttempts.Should().Be(0);
+        stored.AlertNextAttemptAtUtc.Should().Be(expected == SecurityAlertState.Pending ? Now.UtcDateTime : null);
+    }
+
     private static SecurityHistoryWriter Writer(SecurityHistoryDbHarness harness, int retentionDays = 90) =>
         new(harness.Db, Options(retentionDays: retentionDays), new HistoryClock(Now));
 }

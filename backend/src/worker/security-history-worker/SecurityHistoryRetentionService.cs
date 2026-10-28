@@ -23,6 +23,13 @@ public sealed class SecurityHistoryRetentionService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!await SecurityHistorySchema.WaitUntilReadyAsync(
+                _services.GetRequiredService<IServiceScopeFactory>(),
+                TimeSpan.FromSeconds(5),
+                nameof(SecurityHistoryRetentionService),
+                stoppingToken))
+            return;
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try

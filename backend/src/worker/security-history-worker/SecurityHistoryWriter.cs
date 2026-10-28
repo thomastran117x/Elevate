@@ -53,10 +53,7 @@ public sealed class SecurityHistoryWriter
         if (expiresAt <= now)
             return SecurityHistoryWriteResult.Expired;
 
-        // Checked first so the common redelivery costs a read rather than a failed insert; the
-        // unique index still settles the race between two consumers.
-        if (await _db.AccountSecurityEvents.AsNoTracking().AnyAsync(e => e.MessageId == message.MessageId, cancellationToken))
-            return SecurityHistoryWriteResult.Duplicate;
+        var alertDue = _options.NotificationsEnabled && _options.AlertKinds.Contains(message.Kind);
 
         _db.AccountSecurityEvents.Add(new AccountSecurityEvent
         {
@@ -75,6 +72,10 @@ public sealed class SecurityHistoryWriter
             OccurredAtUtc = occurredAt,
             RecordedAtUtc = now,
             ExpiresAtUtc = expiresAt,
+            // Decided here and stored in the same insert, so an alert owed for a committed entry
+            // survives a crash or a redelivery; the alert dispatcher sends it from the row.
+            AlertState = alertDue ? SecurityAlertState.Pending : SecurityAlertState.None,
+            AlertNextAttemptAtUtc = alertDue ? now : null,
         });
 
         try
