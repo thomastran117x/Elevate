@@ -179,15 +179,19 @@ namespace backend.main.features.profile
             var statusReason = isDisabled ? AuthSecurityReason.AccountDisabled : AuthSecurityReason.AccountEnabled;
             // Recorded on its own, after the change is committed: the revocation below is only
             // recorded when it ended a session, and an account with none (a dormant account, or
-            // any account being re-enabled) would otherwise leave no trace of the change.
-            _securityEvents.Emit(new AuthSecurityEvent
+            // any account being re-enabled) would otherwise leave no trace of the change. Only a
+            // real change is recorded, so a retried or repeated update adds no entry and no alert.
+            if (user.StatusChanged)
             {
-                Definition = AuthSecurityEvents.AccountStatusChanged,
-                Outcome = AuthSecurityOutcome.Succeeded,
-                Reason = statusReason,
-                UserId = id,
-                ActorUserId = actorUserId,
-            });
+                _securityEvents.Emit(new AuthSecurityEvent
+                {
+                    Definition = AuthSecurityEvents.AccountStatusChanged,
+                    Outcome = AuthSecurityOutcome.Succeeded,
+                    Reason = statusReason,
+                    UserId = id,
+                    ActorUserId = actorUserId,
+                });
+            }
 
             await _tokenService.RevokeAllRefreshSessionsAsync(
                 id,

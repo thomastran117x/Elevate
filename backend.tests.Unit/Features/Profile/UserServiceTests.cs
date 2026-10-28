@@ -82,7 +82,8 @@ public class UserServiceTests
                 IsDisabled = true,
                 DisabledReason = "policy",
                 DisabledAtUtc = DateTime.UtcNow,
-                AuthVersion = 4
+                AuthVersion = 4,
+                StatusChanged = true
             });
 
         var tokenService = new Mock<ITokenService>();
@@ -111,7 +112,7 @@ public class UserServiceTests
     {
         var authRepository = new Mock<IAuthUserRepository>();
         authRepository.Setup(repo => repo.UpdateUserStatusAsync(9, false, null))
-            .ReturnsAsync(new UserStatusRecord { Id = 9, IsDisabled = false, AuthVersion = 5 });
+            .ReturnsAsync(new UserStatusRecord { Id = 9, IsDisabled = false, AuthVersion = 5, StatusChanged = true });
         var securityEvents = new RecordingAuthSecurityEventEmitter();
         var service = CreateService(authRepository: authRepository, securityEvents: securityEvents);
 
@@ -119,6 +120,21 @@ public class UserServiceTests
 
         securityEvents.Of(AuthSecurityEvents.AccountStatusChanged).Should().ContainSingle()
             .Which.Reason.Should().Be(AuthSecurityReason.AccountEnabled);
+    }
+
+    [Fact]
+    public async Task UpdateUserStatusAsync_ShouldRecordNothing_WhenTheStatusDoesNotChange()
+    {
+        // A retried or repeated disable, or a new reason on an account already disabled.
+        var authRepository = new Mock<IAuthUserRepository>();
+        authRepository.Setup(repo => repo.UpdateUserStatusAsync(9, true, "policy"))
+            .ReturnsAsync(new UserStatusRecord { Id = 9, IsDisabled = true, AuthVersion = 6, StatusChanged = false });
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(authRepository: authRepository, securityEvents: securityEvents);
+
+        await service.UpdateUserStatusAsync(9, true, "policy", actorUserId: 1);
+
+        securityEvents.Of(AuthSecurityEvents.AccountStatusChanged).Should().BeEmpty();
     }
 
     [Fact]

@@ -523,13 +523,18 @@ public class AuthUserRepositoryTests
         disabled.DisabledReason.Should().Be("policy");
         disabled.DisabledAtUtc.Should().NotBeNull();
         disabled.AuthVersion.Should().Be(2);
+        disabled.StatusChanged.Should().BeTrue();
+
+        var disabledAgain = await harness.Repository.UpdateUserStatusAsync(userId, true, "policy");
+        disabledAgain!.StatusChanged.Should().BeFalse();
 
         var enabled = await harness.Repository.UpdateUserStatusAsync(userId, false, "ignored");
         enabled.Should().NotBeNull();
         enabled!.IsDisabled.Should().BeFalse();
         enabled.DisabledReason.Should().BeNull();
         enabled.DisabledAtUtc.Should().BeNull();
-        enabled.AuthVersion.Should().Be(3);
+        enabled.AuthVersion.Should().Be(4);
+        enabled.StatusChanged.Should().BeTrue();
     }
 
     [Fact]

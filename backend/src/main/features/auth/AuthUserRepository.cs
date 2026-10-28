@@ -306,6 +306,7 @@ namespace backend.main.features.auth
             if (user == null)
                 return null;
 
+            var statusChanged = user.IsDisabled != isDisabled;
             user.IsDisabled = isDisabled;
             user.DisabledAtUtc = isDisabled ? DateTime.UtcNow : null;
             user.DisabledReason = isDisabled ? disabledReason : null;
@@ -320,6 +321,7 @@ namespace backend.main.features.auth
                 DisabledAtUtc = user.DisabledAtUtc,
                 DisabledReason = user.DisabledReason,
                 AuthVersion = user.AuthVersion,
+                StatusChanged = statusChanged,
             };
         }
 
