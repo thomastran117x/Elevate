@@ -43,6 +43,8 @@ public sealed class SecurityHistoryService : ISecurityHistoryService
         DeviceClass = AuthSecurityWireNames.Of(entry.DeviceClass),
         Network = entry.Network,
         InitiatedByAdmin = entry.InitiatedByAdmin,
-        Reference = entry.CorrelationId,
+        // An administrator's action carries the administrator's request id. It stays stored for
+        // investigations but is not shown to the owner, any more than the rest of that request.
+        Reference = entry.InitiatedByAdmin ? null : entry.CorrelationId,
     };
 }

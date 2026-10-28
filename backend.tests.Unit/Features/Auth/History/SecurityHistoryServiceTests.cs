@@ -51,4 +51,19 @@ public class SecurityHistoryServiceTests
         item.Reference.Should().Be("req-42");
         item.OccurredAt.Should().Be(entry.OccurredAtUtc);
     }
+
+    [Fact]
+    public void ToResponse_ShouldNotShowTheOwnerAnAdministratorsRequestId()
+    {
+        var response = SecurityHistoryService.ToResponse(new AccountSecurityEvent
+        {
+            Kind = AccountSecurityEventKind.AccountDisabled,
+            EventName = AuthSecurityEvents.AccountStatusChanged.Name,
+            InitiatedByAdmin = true,
+            CorrelationId = "admin-request",
+        });
+
+        response.InitiatedByAdmin.Should().BeTrue();
+        response.Reference.Should().BeNull();
+    }
 }

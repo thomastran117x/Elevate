@@ -55,7 +55,8 @@ namespace backend.main.features.auth.contracts.responses
         }
         /// <summary>
         /// The id of the request that produced the entry. Quoting it lets support find the related
-        /// records without the user ever seeing them.
+        /// records without the user ever seeing them. Null for an entry an administrator caused,
+        /// whose request was the administrator's.
         /// </summary>
         public string? Reference
         {
