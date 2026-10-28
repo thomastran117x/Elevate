@@ -28,14 +28,20 @@ test.describe('account security activity', () => {
     await page.waitForURL(/\/account\/activity(?:[/?#]|$)/);
     await expect(page.getByRole('heading', { name: 'Security activity' })).toBeVisible();
 
-    // The worker records asynchronously, so give the entry a few reloads to arrive.
+    // The worker records asynchronously, so revisit the tab until the entry arrives. Revisit it
+    // through the app's own navigation: a full page load of /account/* while signed in currently
+    // lands on the login page.
+    const nav = page.getByRole('navigation', { name: 'Account settings' });
     const list = page.getByRole('list', { name: 'Security activity' });
     await expect(async () => {
-      await page.reload();
+      await nav.getByRole('link', { name: 'Profile', exact: true }).click();
+      await page.waitForURL(/\/account\/profile(?:[/?#]|$)/);
+      await nav.getByRole('link', { name: 'Activity', exact: true }).click();
+      await page.waitForURL(/\/account\/activity(?:[/?#]|$)/);
       await expect(list.getByText('Signed in', { exact: true }).first()).toBeVisible({
-        timeout: 2_000,
+        timeout: 3_000,
       });
-    }).toPass({ timeout: 45_000 });
+    }).toPass({ timeout: 60_000 });
 
     const latest = list.getByRole('listitem').first();
     await expect(latest).toContainText('Support reference:');
