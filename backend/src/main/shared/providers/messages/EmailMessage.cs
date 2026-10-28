@@ -73,5 +73,38 @@ namespace backend.main.shared.providers.messages
         {
             get; init;
         }
+        /// <summary>
+        /// The security history kind a <see cref="EmailMessageType.SecurityAlert"/> is about, e.g.
+        /// "password_changed". The SecurityAlert* fields are closed classifications and a masked
+        /// network prefix; they never carry an address, session, token, or code.
+        /// </summary>
+        public string? SecurityAlertKind
+        {
+            get; init;
+        }
+        public DateTime? SecurityAlertOccurredAtUtc
+        {
+            get; init;
+        }
+        /// <summary>The sign-in method or linked provider, e.g. "google", when the kind has one.</summary>
+        public string? SecurityAlertMethod
+        {
+            get; init;
+        }
+        /// <summary>The client family, e.g. "chrome".</summary>
+        public string? SecurityAlertClient
+        {
+            get; init;
+        }
+        /// <summary>The device class, e.g. "desktop".</summary>
+        public string? SecurityAlertDeviceClass
+        {
+            get; init;
+        }
+        /// <summary>The source network prefix, e.g. "203.0.113.0/24".</summary>
+        public string? SecurityAlertNetwork
+        {
+            get; init;
+        }
     }
 }

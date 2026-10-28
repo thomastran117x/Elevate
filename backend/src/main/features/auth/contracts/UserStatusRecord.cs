@@ -22,5 +22,14 @@ namespace backend.main.features.auth.contracts
         {
             get; init;
         }
+        /// <summary>
+        /// Whether this update moved the account between enabled and disabled. An update that sets
+        /// the state it already had (a retry, or a new reason) is still written, but changes nothing
+        /// the owner needs to be told about.
+        /// </summary>
+        public bool StatusChanged
+        {
+            get; init;
+        }
     }
 }

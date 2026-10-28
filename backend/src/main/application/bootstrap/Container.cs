@@ -4,6 +4,7 @@ using backend.main.features.auth.abuse;
 using backend.main.features.auth.captcha;
 using backend.main.features.auth.device;
 using backend.main.features.auth.events;
+using backend.main.features.auth.history;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.mfa.totp;
@@ -232,6 +233,13 @@ namespace backend.main.application.bootstrap
             services.AddSingleton<AuthSecurityMetrics>();
             services.AddSingleton<IAuthSecurityEventSink, LoggingAuthSecurityEventSink>();
             services.AddSingleton<IAuthSecurityEventSink, MetricsAuthSecurityEventSink>();
+            services.AddOptions<SecurityHistoryOptions>()
+                .Bind(config.GetSection(SecurityHistoryOptions.SectionName))
+                .ValidateOnStart();
+            services.AddSingleton<SecurityHistoryQueue>();
+            services.AddSingleton<SecurityHistoryOutboxDrainer>();
+            services.AddScoped<SecurityHistoryOutboxWriter>();
+            services.AddSingleton<IAuthSecurityEventSink, SecurityHistoryEventSink>();
             services.AddSingleton<IAuthSecurityEventEmitter, AuthSecurityEventEmitter>();
             services.AddSearchInfrastructure(config, featureFlags);
             services.AddSingleton<IRepositoryResiliencePolicy, RepositoryResiliencePolicy>();
@@ -258,6 +266,7 @@ namespace backend.main.application.bootstrap
             services.AddRepositoryWithProxy<IEventWaitlistRepository, EventWaitlistRepository>();
             services.AddRepositoryWithProxy<IEventFavouriteRepository, EventFavouriteRepository>();
             services.AddRepositoryWithProxy<IRecentlyViewedRepository, RecentlyViewedRepository>();
+            services.AddRepositoryWithProxy<ISecurityHistoryRepository, SecurityHistoryRepository>();
 
             services.AddSingleton<IPublisher, Publisher>();
             services.AddScoped<IAuthNotificationService, AuthNotificationService>();
@@ -271,6 +280,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<ITotpMfaEnrollmentService, TotpMfaEnrollmentService>();
             services.AddScoped<ISessionMfaVerificationService, SessionMfaVerificationService>();
             services.AddScoped<IMfaFactorChangeService, MfaFactorChangeService>();
+            services.AddScoped<ISecurityHistoryService, SecurityHistoryService>();
             services.AddScoped<IOAuthService, OAuthService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IClubService, ClubService>();
@@ -414,6 +424,8 @@ namespace backend.main.application.bootstrap
 
             if (includeHostedServices)
             {
+                services.AddHostedService<SecurityHistoryOutboxService>();
+
                 if (featureFlags.IsEnabled(FeatureFlagKeys.Search))
                     services.AddHostedService<ElasticsearchIndexInitializationService>();
 

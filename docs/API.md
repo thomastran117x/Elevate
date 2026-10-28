@@ -86,6 +86,22 @@ Google requires `email_verified`. For Microsoft:
 
 Completing a pending signup re-runs these checks.
 
+### Security history
+
+`GET /api/auth/security-events?page=1&pageSize=20` returns the signed-in caller's own security history, newest first, as a standard paged envelope. Entries are kept for up to 90 days (`SECURITY_HISTORY_RETENTION_DAYS` can shorten that, never extend it). There is no parameter that names an account; the owner is always the token subject. Reading the history needs a signed-in session but no step-up proof. `page` accepts 1–500 and `pageSize` 1–50, and out-of-range values fail model validation with `400`.
+
+Each entry has:
+
+- a `kind` such as `signed_in`, `password_changed`, `mfa_enabled`, `provider_linked`, or `refresh_token_reuse_detected`;
+- `occurredAt`;
+- optional `method`, `factor`, and `reason` names;
+- coarse `client` and `deviceClass` classes;
+- a `network` prefix (`203.0.113.0/24` or a `/48` for IPv6), never the full address;
+- `initiatedByAdmin`;
+- a `reference`, the id of the request that produced it.
+
+Every classification is a snake_case name, never an ordinal, unlike the enums elsewhere in the API that are sent as integers. Entries are recorded asynchronously by the security-history worker, so a change can take a moment to appear. Failed sign-ins and recovery requests are deliberately not listed. See [security events](SECURITY_EVENTS.md#account-security-history).
+
 ## Authorization
 
 Every endpoint requires an authenticated bearer user unless it explicitly opts out. `AddJwtAuth` sets both the default and the fallback authorization policy to "authenticated Bearer user", so an action, hub, or minimal endpoint without an authorization attribute fails closed rather than open.

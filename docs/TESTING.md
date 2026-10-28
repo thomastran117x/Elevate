@@ -124,6 +124,13 @@ npm run test:e2e:auth-abuse
 
 The backend command also starts its declared infrastructure dependencies. The dedicated Playwright configuration enables only `auth-abuse-protection.spec.ts`; that suite uses the seeded `avaparticipant` account and non-production CAPTCHA tokens through the frontend proxy.
 
+`account-activity.spec.ts` follows the account security history end to end: it signs in, opens **Account settings → Activity** from the keyboard, and waits for the sign-in entry. It needs the same backend settings and a running security-history worker (`docker compose up -d --build backend security-history-worker`). Run it from `frontend/`:
+
+```powershell
+$env:PLAYWRIGHT_LIVE_AUTH = "true"
+npx playwright test tests/account-activity.spec.ts
+```
+
 The root `.mcp.json` configures Playwright; `frontend/.mcp.json` adds Angular CLI MCP. Launch frontend-focused tools from the Angular workspace so the CLI can resolve `angular.json`. Start the desired app server before navigating with browser tools. Equivalent frontend VS Code configuration is in `frontend/.vscode/mcp.json`.
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for formatting, type/build checks, audits, and PR validation expectations.

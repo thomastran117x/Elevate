@@ -20,7 +20,10 @@
     </div>
 
     <!-- Tab navigation -->
-    <nav class="mb-8 flex gap-1 border-b border-line pb-0">
+    <nav
+      class="mb-8 flex gap-1 overflow-x-auto border-b border-line pb-0"
+      aria-label="Account settings"
+    >
       <a
         routerLink="profile"
         routerLinkActive="border-b-2 border-accent text-content font-semibold"
@@ -37,6 +40,16 @@
       >
         Security
       </a>
+      @if (activityTabEnabled) {
+        <a
+          routerLink="activity"
+          routerLinkActive="border-b-2 border-accent text-content font-semibold"
+          [routerLinkActiveOptions]="{ exact: false }"
+          class="px-4 pb-3 pt-2 text-sm font-medium text-subtle transition hover:text-content"
+        >
+          Activity
+        </a>
+      }
       <a
         routerLink="password"
         routerLinkActive="border-b-2 border-accent text-content font-semibold"

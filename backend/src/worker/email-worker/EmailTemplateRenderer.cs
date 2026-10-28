@@ -218,6 +218,20 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
                 Code: null,
                 MutedNote: "If you didn't make this change, review your security settings and change your password immediately."),
 
+            EmailMessageType.SecurityAlert => new Content(
+                Subject: SecurityAlertSubject(message),
+                Preheader: "Review this recent activity on your EventXperience account.",
+                Heading: SecurityAlertSubject(message),
+                Greeting: greeting,
+                Intro:
+                [
+                    SecurityAlertSummary(message),
+                    SecurityAlertContext(message)
+                ],
+                Cta: new Cta($"{baseUrl}/account/activity", "Review account activity"),
+                Code: null,
+                MutedNote: "If this wasn't you, reset your password now, which signs out every session, and review your two-step verification settings."),
+
             EmailMessageType.InvitationAccepted => new Content(
                 Subject: $"{ActorLabel(message)} accepted your invitation to {eventName}",
                 Preheader: $"{ActorLabel(message)} is coming to {eventName}.",
@@ -329,6 +343,84 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
             "disabled" => "turned off",
             "removed" => "removed",
             _ => "changed",
+        };
+
+    // Every SecurityAlert* value is a closed classification or a masked prefix; an unknown kind
+    // still renders a generic notice rather than failing the delivery.
+    private static string SecurityAlertSubject(EmailMessage message) =>
+        message.SecurityAlertKind switch
+        {
+            "password_changed" => "Your password was changed",
+            "provider_linked" => $"{SecurityAlertProvider(message)} sign-in was linked to your account",
+            "refresh_token_reuse_detected" => "We signed out a session after suspicious activity",
+            "account_disabled" => "Your account was disabled",
+            "mfa_disabled" => "Two-step verification was turned off",
+            "mfa_removed" => "A two-step verification method was removed",
+            "email_changed" => "Your email address was changed",
+            _ => "New security activity on your account",
+        };
+
+    private static string SecurityAlertSummary(EmailMessage message) =>
+        message.SecurityAlertKind switch
+        {
+            "password_changed" => "The password for your EventXperience account was changed, and other sessions were signed out.",
+            "provider_linked" => $"{SecurityAlertProvider(message)} can now be used to sign in to your EventXperience account.",
+            "refresh_token_reuse_detected" => "A sign-in token for your account was used after it had been replaced, which can mean it was copied. We signed that session out.",
+            "account_disabled" => "An administrator disabled your EventXperience account, and every session was signed out.",
+            _ => "There was a security change on your EventXperience account.",
+        };
+
+    private static string SecurityAlertContext(EmailMessage message)
+    {
+        var when = message.SecurityAlertOccurredAtUtc is { } occurredAt
+            ? occurredAt.ToUniversalTime().ToString("dddd, dd MMM yyyy 'at' HH:mm 'UTC'", CultureInfo.InvariantCulture)
+            : "recently";
+        var device = SecurityAlertDevice(message);
+        var network = string.IsNullOrWhiteSpace(message.SecurityAlertNetwork)
+            ? string.Empty
+            : $" on network {message.SecurityAlertNetwork!.Trim()}";
+
+        return device is null
+            ? $"When: {when}{network}."
+            : $"When: {when}, from {device}{network}.";
+    }
+
+    private static string? SecurityAlertDevice(EmailMessage message)
+    {
+        var client = message.SecurityAlertClient switch
+        {
+            "chrome" => "Chrome",
+            "edge" => "Edge",
+            "firefox" => "Firefox",
+            "safari" => "Safari",
+            "opera" => "Opera",
+            "api_client" => "an API client",
+            "other" => "another app",
+            _ => null,
+        };
+        var device = message.SecurityAlertDeviceClass switch
+        {
+            "desktop" => "a desktop",
+            "mobile" => "a phone",
+            "tablet" => "a tablet",
+            _ => null,
+        };
+
+        return (client, device) switch
+        {
+            (null, null) => null,
+            (not null, null) => client,
+            (null, not null) => device,
+            _ => $"{client} on {device}",
+        };
+    }
+
+    private static string SecurityAlertProvider(EmailMessage message) =>
+        message.SecurityAlertMethod switch
+        {
+            "google" => "Google",
+            "microsoft" => "Microsoft",
+            _ => "A sign-in provider",
         };
 
     private static string ProviderLabel(EmailMessage message)
