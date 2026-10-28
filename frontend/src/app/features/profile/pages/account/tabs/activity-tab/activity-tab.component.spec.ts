@@ -200,6 +200,29 @@ describe('ActivityTabComponent', () => {
     expect(text(fixture)).toContain('Page 1 of 1');
   });
 
+  it('does not loop when every entry on a page is unreadable', () => {
+    // Page 3 of 3 exists, but the normalizer dropped all of its entries (a renamed field, say).
+    history.getSecurityEvents.and.callFake((page?: number): Observable<SecurityEventsPage> =>
+      of(page === 3 ? makePage(3, [], 25) : makePage(page ?? 1, [makeEntry(page ?? 1)], 25)),
+    );
+
+    const fixture = createFixture();
+    button(fixture, 'Next').click();
+    fixture.detectChanges();
+    button(fixture, 'Next').click();
+    fixture.detectChanges();
+
+    expect(history.getSecurityEvents.calls.allArgs()).toEqual([
+      [1, 10],
+      [2, 10],
+      [3, 10],
+    ]);
+    // There is activity, so the pager stays and the user can page back.
+    expect(text(fixture)).not.toContain('No recent security activity');
+    expect(text(fixture)).toContain('Page 3 of 3');
+    expect(button(fixture, 'Previous').disabled).toBeFalse();
+  });
+
   it('ignores page requests while a page is loading', () => {
     const pending = new Subject<SecurityEventsPage>();
     history.getSecurityEvents.and.returnValue(pending);

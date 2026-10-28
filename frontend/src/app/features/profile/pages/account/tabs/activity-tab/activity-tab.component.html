@@ -37,12 +37,12 @@
       </div>
     }
     @default {
-      @if (entries().length === 0) {
+      @if (totalCount() === 0) {
         <empty-state
           className="mt-6"
           icon="🛡️"
           title="No recent security activity"
-          subtitle="Sign-ins and security changes will appear here."
+          subtitle="Sign-ins and security changes will appear here. New activity can take a few seconds to show up."
         />
       } @else {
         <ol class="mt-6 divide-y divide-line border-t border-line" aria-label="Security activity">
