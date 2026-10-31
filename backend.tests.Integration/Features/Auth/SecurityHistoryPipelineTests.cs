@@ -216,6 +216,28 @@ public sealed class SecurityHistoryPipelineTests
     }
 
     [Fact]
+    public async Task ConcurrentAdminDisables_ShouldRecordOneEntry()
+    {
+        await using var app = await CreateAppAsync();
+        var admin = await app.SeedUserAsync("pipeline-race-admin@example.com", role: "Admin");
+        await app.SeedKnownDeviceAsync(admin.Id, "pipeline-race-admin-device");
+        var adminSession = await app.LoginApiAsync("pipeline-race-admin", trustedDeviceToken: "pipeline-race-admin-device");
+        await app.GrantStepUpProofAsync(adminSession.AccessToken);
+        var target = await app.SeedUserAsync("pipeline-race-target@example.com");
+
+        // A double submit, or two admins at once: both requests read "enabled" before either writes.
+        var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => app.SendWithBearerAndCsrfAsync(
+            HttpMethod.Patch,
+            $"/api/admin/users/{target.Id}/status",
+            new { isDisabled = true, reason = "policy" },
+            adminSession.AccessToken)));
+
+        responses.Should().OnlyContain(r => r.StatusCode == HttpStatusCode.OK);
+        (await MessagesForAsync(app, target.Id))
+            .Should().ContainSingle(m => m.Kind == AccountSecurityEventKind.AccountDisabled);
+    }
+
+    [Fact]
     public async Task AnEntryForADeletedAccount_ShouldBeDropped()
     {
         await using var app = await CreateAppAsync();
