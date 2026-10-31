@@ -6,6 +6,7 @@ using backend.main.features.auth.device;
 using backend.main.features.auth.events;
 using backend.main.features.auth.history;
 using backend.main.features.auth.mfa;
+using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
@@ -249,6 +250,7 @@ namespace backend.main.application.bootstrap
             services.AddRepositoryWithProxy<IUserRepository, AuthUserRepository>();
             services.AddRepositoryWithProxy<IMfaEnrollmentRepository, MfaEnrollmentRepository>();
             services.AddRepositoryWithProxy<ITotpMfaEnrollmentRepository, TotpMfaEnrollmentRepository>();
+            services.AddRepositoryWithProxy<IRecoveryCodeRepository, RecoveryCodeRepository>();
             services.AddRepositoryWithProxy<IClubRepository, ClubRepository>();
             services.AddRepositoryWithProxy<IEventsRepository, EventsRepository>();
             services.AddRepositoryWithProxy<IEventSeriesRepository, EventSeriesRepository>();
