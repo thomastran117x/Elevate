@@ -214,6 +214,11 @@ namespace backend.main.application.bootstrap
             services.AddSingleton<IPasswordHasher, PasswordHasher>();
             services.AddSingleton<IPasswordBlocklist, PasswordBlocklist>();
             services.AddSingleton<IPasswordPolicy, PasswordPolicy>();
+            services.AddOptions<RecoveryCodeOptions>()
+                .Bind(config.GetSection(RecoveryCodeOptions.SectionName))
+                .ValidateOnStart();
+            services.AddSingleton<IValidateOptions<RecoveryCodeOptions>, RecoveryCodeOptionsValidator>();
+            services.AddSingleton<RecoveryCodeHasher>();
             services.AddOptions<BloomFilterOptions>()
                 .Bind(config.GetSection("BloomFilters"))
                 .ValidateDataAnnotations()
@@ -282,6 +287,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<ITotpMfaEnrollmentService, TotpMfaEnrollmentService>();
             services.AddScoped<ISessionMfaVerificationService, SessionMfaVerificationService>();
             services.AddScoped<IMfaFactorChangeService, MfaFactorChangeService>();
+            services.AddScoped<IRecoveryCodeService, RecoveryCodeService>();
             services.AddScoped<ISecurityHistoryService, SecurityHistoryService>();
             services.AddScoped<IOAuthService, OAuthService>();
             services.AddScoped<ITokenService, TokenService>();
