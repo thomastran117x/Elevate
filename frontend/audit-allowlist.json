@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "id": "GHSA-g3hv-75wg-m249",
+    "package": "minimatch",
+    "reason": "Patched only in 11.0.1+, which Karma (3.x default-function export) and ESLint 10 (^10) cannot use. It is dev-only and matches only file patterns from our own karma.conf.js, the Angular builder, and the ESLint config, so no attacker-controlled pattern reaches it.",
+    "tracking": "https://github.com/thomastran117x/Elevate/issues/371"
+  }
+]
