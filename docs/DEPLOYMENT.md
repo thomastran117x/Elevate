@@ -9,10 +9,10 @@ From the repository root, prepare `.env` from `.env.example` without overwriting
 ```powershell
 docker compose up --build -d
 docker compose ps
-docker compose logs -f backend event-indexer club-indexer clubpost-indexer media-worker
+docker compose logs -f backend event-indexer club-indexer clubpost-indexer media-worker security-history-worker
 ```
 
-Compose provisions PostgreSQL with logical replication, Redis, Elasticsearch, Kafka, topic initialization, Kafka Connect, outbox connector registration, the API, frontend, and six workers. Application containers use service DNS names. Browser-facing URLs must be reachable from the user's browser, rather than container-only hostnames.
+Compose provisions PostgreSQL with logical replication, Redis, Elasticsearch, Kafka, topic initialization, Kafka Connect, outbox connector registration, the API, frontend, and seven workers. Application containers use service DNS names. Browser-facing URLs must be reachable from the user's browser, rather than container-only hostnames.
 
 The API listens on 8090 and applies migrations before serving normal traffic. A database connection or migration failure terminates startup. Review migrations and back up persistent data before upgrades; startup migration execution is part of the current implementation and must be accounted for when scaling API replicas. Keep seeding and auth seed-account bypass disabled outside controlled demos.
 
@@ -89,8 +89,23 @@ A save waits up to ten seconds, once, for the worker's verdict on all of its ima
 
 **To roll back quarantine**, set `FEATURE_STORAGE_QUARANTINE=false`. Uploads then go straight to the public container and are checked in place, exactly as before. Uploads issued while quarantine was on but not yet attached need to be uploaded again. The reaper keeps running and deletes what quarantine held.
 
+### Account security history
+
+The API writes each owner-visible security event to `security_history_outbox`. Debezium relays it to `eventxperience-security-history`, and the [security history worker](../backend/src/worker/security-history-worker/README.md) stores it and sends any alert. To roll it out:
+
+1. Run the `accountsecurityevents` and `securityhistorydurability` migrations through the API. The worker never migrates; it waits until the table exists before consuming.
+2. Create the security-history topic and its DLQ. Compose's `kafka-init` creates them.
+3. Register the `security-history-outbox` Debezium connector (`docker/kafka-connect/security-history-outbox-connector.json`), routing to the same `SECURITY_HISTORY_TOPIC` the worker reads. Compose's `kafka-connect-init` registers it with the search connectors and substitutes the variable into the route. Registering the JSON by hand keeps the default topic.
+4. Deploy the email worker before or with the API, because the API appends `SecurityAlert` to the email message types. An older email worker would dead-letter alerts.
+5. Deploy the security history worker with Kafka, `DB_CONNECTION_STRING`, and `EMAIL_TOPIC`.
+
+Recording never waits on the database or Kafka, so neither can fail a sign-in or account change. Once stored in the outbox, an entry survives a broker or connector outage and is relayed when both are back.
+- Watch `auth.security_history.dropped` and `auth.security_history.store_failures` on the API.
+- Watch the connector's status in Kafka Connect.
+- Watch the worker's DLQ and its `security_history.alerts{outcome="failed"}`. To stop recording without removing anything, set `Auth__SecurityHistory__PublishEnabled=false`; existing entries stay readable until they expire. Deleting an account deletes its history through the foreign key.
+
 ## Kubernetes assets and gaps
 
 [`eventxperience.yml`](../eventxperience.yml) supplies namespace, service, deployment, and storage resources for a local cluster. [`bin/k8.ps1`](../bin/k8.ps1), exposed by `.\app.ps1 k8`, builds local images, applies the manifest, waits for core deployments, and starts port forwarding. It builds for `linux/arm64` and assumes those image tags are available to the target cluster; it does not publish them to a registry.
 
-Review and adapt these assets before using them: the helper does not build the SMS or media worker images, the manifest has no media worker deployment, the manifest lacks the club indexer and the Compose Kafka Connect/outbox initialization path, credentials include development defaults/empty provider values, and frontend production SSR packaging and ingress/TLS are not supplied. Do not assume Kubernetes has functional parity with Compose. Complete image delivery, secret management, persistent storage, connector/topic provisioning, rollout probes, and infrastructure security for the intended environment as a separate implementation task.
+Review and adapt these assets before using them: the helper does not build the SMS, media, or security history worker images, the manifest has no media or security history worker deployment, the manifest lacks the club indexer and the Compose Kafka Connect/outbox initialization path, credentials include development defaults/empty provider values, and frontend production SSR packaging and ingress/TLS are not supplied. Do not assume Kubernetes has functional parity with Compose. Complete image delivery, secret management, persistent storage, connector/topic provisioning, rollout probes, and infrastructure security for the intended environment as a separate implementation task.

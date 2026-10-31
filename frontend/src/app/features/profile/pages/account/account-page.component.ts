@@ -18,7 +18,11 @@ export class AccountPageComponent {
    */
   readonly privacyTabEnabled: boolean;
 
+  /** The security history is served by an auth endpoint, so the tab follows the auth feature. */
+  readonly activityTabEnabled: boolean;
+
   constructor(features: FeatureFlagsService) {
     this.privacyTabEnabled = features.isEnabled(FEATURE_KEYS.eventsRecentlyViewed);
+    this.activityTabEnabled = features.isEnabled(FEATURE_KEYS.auth);
   }
 }

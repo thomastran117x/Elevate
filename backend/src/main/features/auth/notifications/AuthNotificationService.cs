@@ -1,3 +1,5 @@
+using backend.main.features.auth.events;
+using backend.main.features.auth.history;
 using backend.main.shared.providers;
 using backend.main.shared.providers.messages;
 
@@ -210,6 +212,29 @@ namespace backend.main.features.auth.notifications
                     Code = code,
                     RecipientName = recipientName
                 });
+        }
+
+        public Task SendSecurityAlertAsync(
+            string email,
+            AccountSecurityEvent entry,
+            string? recipientName = null,
+            CancellationToken cancellationToken = default)
+        {
+            return _publisher.PublishAsync(
+                NotificationTopics.Email,
+                new EmailMessage
+                {
+                    Type = EmailMessageType.SecurityAlert,
+                    Email = email,
+                    RecipientName = recipientName,
+                    SecurityAlertKind = AuthSecurityWireNames.Of(entry.Kind),
+                    SecurityAlertOccurredAtUtc = entry.OccurredAtUtc,
+                    SecurityAlertMethod = entry.Method,
+                    SecurityAlertClient = AuthSecurityWireNames.Of(entry.Client),
+                    SecurityAlertDeviceClass = AuthSecurityWireNames.Of(entry.DeviceClass),
+                    SecurityAlertNetwork = entry.Network
+                },
+                cancellationToken);
         }
     }
 }

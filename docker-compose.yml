@@ -94,6 +94,8 @@ services:
       EMAIL_TOPIC: "${EMAIL_TOPIC:-eventxperience-email}"
       SMS_TOPIC: "${SMS_TOPIC:-eventxperience-sms}"
       MEDIA_VALIDATION_TOPIC: "${MEDIA_VALIDATION_TOPIC:-eventxperience-media-validation}"
+      # The API stores history in its outbox; kafka-connect-init routes the outbox to SECURITY_HISTORY_TOPIC.
+      Auth__SecurityHistory__PublishEnabled: "${AUTH_SECURITY_HISTORY_PUBLISH_ENABLED:-true}"
       # Results the backend consumes from media-worker.
       MEDIA_VALIDATION_STATUS_TOPIC: "${MEDIA_VALIDATION_STATUS_TOPIC:-eventxperience-media-validation-status}"
       MEDIA_VALIDATION_STATUS_GROUP_ID: "${MEDIA_VALIDATION_STATUS_GROUP_ID:-media-validation-status-updater}"
@@ -300,6 +302,38 @@ services:
     networks:
       - event-network
 
+  security-history-worker:
+    container_name: event-security-history-worker
+    build:
+      context: ./backend
+      dockerfile: src/worker/security-history-worker/Dockerfile
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      <<: [*common-env, *kafka-env]
+      # Writes AccountSecurityEvents in the backend's database; the backend owns the migrations.
+      DB_CONNECTION_STRING: "${DB_CONNECTION_STRING:-Host=postgres;Port=5432;Database=appdb;Username=appuser;Password=apppass}"
+      SECURITY_HISTORY_TOPIC: "${SECURITY_HISTORY_TOPIC:-eventxperience-security-history}"
+      SECURITY_HISTORY_GROUP_ID: "${SECURITY_HISTORY_GROUP_ID:-security-history-worker}"
+      SECURITY_HISTORY_DLQ_TOPIC: "${SECURITY_HISTORY_DLQ_TOPIC:-eventxperience-security-history-dlq}"
+      SECURITY_HISTORY_RETENTION_DAYS: "${SECURITY_HISTORY_RETENTION_DAYS:-90}"
+      SECURITY_HISTORY_NOTIFICATIONS_ENABLED: "${SECURITY_HISTORY_NOTIFICATIONS_ENABLED:-true}"
+      SECURITY_HISTORY_ALERT_KINDS: "${SECURITY_HISTORY_ALERT_KINDS:-}"
+      SECURITY_HISTORY_ALERT_MAX_AGE_MINUTES: "${SECURITY_HISTORY_ALERT_MAX_AGE_MINUTES:-1440}"
+      # Alerts are handed to email-worker on its topic.
+      EMAIL_TOPIC: "${EMAIL_TOPIC:-eventxperience-email}"
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      # Debezium relays the API's security_history_outbox to the topic this worker consumes.
+      kafka-connect-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    networks:
+      - event-network
+
   sms-worker:
     container_name: event-sms-worker
     build:
@@ -442,6 +476,8 @@ services:
         kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-media-validation --partitions 1 --replication-factor 1
         kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-media-validation-dlq --partitions 1 --replication-factor 1
         kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-media-validation-status --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ${SECURITY_HISTORY_TOPIC:-eventxperience-security-history} --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ${SECURITY_HISTORY_DLQ_TOPIC:-eventxperience-security-history-dlq} --partitions 1 --replication-factor 1
         echo "All Kafka topics created."
     networks:
       - event-network
@@ -481,6 +517,9 @@ services:
     depends_on:
       kafka-connect:
         condition: service_healthy
+    environment:
+      # Routes the security history outbox to the topic the security-history worker reads.
+      SECURITY_HISTORY_TOPIC: "${SECURITY_HISTORY_TOPIC:-eventxperience-security-history}"
     volumes:
       - ./docker/kafka-connect:/scripts:ro
     entrypoint:

@@ -8,6 +8,19 @@ CLUB_CONNECTOR_NAME="club-search-outbox"
 CLUB_CONFIG_PATH="/scripts/club-outbox-connector.json"
 CLUBPOST_CONNECTOR_NAME="clubpost-search-outbox"
 CLUBPOST_CONFIG_PATH="/scripts/clubpost-outbox-connector.json"
+SECURITY_HISTORY_CONNECTOR_NAME="security-history-outbox"
+SECURITY_HISTORY_CONFIG_PATH="/scripts/security-history-outbox-connector.json"
+# The connector routes to the same topic the security-history worker reads, so both follow
+# SECURITY_HISTORY_TOPIC. The JSON routes to the default; the route is replaced before registering.
+SECURITY_HISTORY_DEFAULT_TOPIC="eventxperience-security-history"
+SECURITY_HISTORY_TOPIC="${SECURITY_HISTORY_TOPIC:-${SECURITY_HISTORY_DEFAULT_TOPIC}}"
+
+case "${SECURITY_HISTORY_TOPIC}" in
+  *[!A-Za-z0-9._-]*)
+    echo "SECURITY_HISTORY_TOPIC must be a Kafka topic name (letters, digits, '.', '_', '-')." >&2
+    exit 1
+    ;;
+esac
 
 echo "Waiting for Kafka Connect at ${CONNECT_URL}..."
 until curl -fsS "${CONNECT_URL}/connectors" >/dev/null 2>&1; do
@@ -40,3 +53,13 @@ curl -fsS \
   --data @"${CLUBPOST_CONFIG_PATH}"
 
 echo "Connector ${CLUBPOST_CONNECTOR_NAME} is configured."
+
+echo "Registering connector ${SECURITY_HISTORY_CONNECTOR_NAME} (routing to ${SECURITY_HISTORY_TOPIC})..."
+sed "/route.topic.replacement/s|\"${SECURITY_HISTORY_DEFAULT_TOPIC}\"|\"${SECURITY_HISTORY_TOPIC}\"|" "${SECURITY_HISTORY_CONFIG_PATH}" |
+  curl -fsS \
+    -X PUT \
+    -H "Content-Type: application/json" \
+    "${CONNECT_URL}/connectors/${SECURITY_HISTORY_CONNECTOR_NAME}/config" \
+    --data @-
+
+echo "Connector ${SECURITY_HISTORY_CONNECTOR_NAME} is configured."

@@ -116,6 +116,46 @@ public class EmailTemplateRendererTests
         Assert.DoesNotContain("secret-token", content.Html);
     }
 
+    [Theory]
+    [InlineData("password_changed", null, "Your password was changed")]
+    [InlineData("provider_linked", "google", "Google sign-in was linked to your account")]
+    [InlineData("refresh_token_reuse_detected", null, "We signed out a session after suspicious activity")]
+    [InlineData("account_disabled", null, "Your account was disabled")]
+    [InlineData("something_new", null, "New security activity on your account")]
+    public void Render_SecurityAlert_NamesTheChange(string kind, string? method, string expectedSubject)
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Type = EmailMessageType.SecurityAlert,
+            SecurityAlertKind = kind,
+            SecurityAlertMethod = method,
+            SecurityAlertOccurredAtUtc = new DateTime(2026, 10, 20, 12, 30, 0, DateTimeKind.Utc),
+            SecurityAlertClient = "firefox",
+            SecurityAlertDeviceClass = "mobile",
+            SecurityAlertNetwork = "203.0.113.0/24"
+        });
+
+        Assert.Equal(expectedSubject, content.Subject);
+        Assert.Contains("Tuesday, 20 Oct 2026 at 12:30 UTC, from Firefox on a phone on network 203.0.113.0/24", content.PlainText);
+        Assert.Contains("/account/activity", content.PlainText);
+        Assert.Contains("/account/activity", content.Html);
+    }
+
+    [Fact]
+    public void Render_SecurityAlert_StillRendersWithoutContext()
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Type = EmailMessageType.SecurityAlert,
+            SecurityAlertKind = "provider_linked"
+        });
+
+        Assert.Equal("A sign-in provider sign-in was linked to your account", content.Subject);
+        Assert.Contains("When: recently.", content.PlainText);
+    }
+
     [Fact]
     public void Render_MfaFactorChanged_FallsBackForUnknownValues()
     {

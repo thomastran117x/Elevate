@@ -69,6 +69,9 @@ public static class AuthSecurityEvents
     public static readonly AuthSecurityEventDefinition AuthorizationDenied =
         new(33090, "authz.denied", LogLevel.Warning);
 
+    public static readonly AuthSecurityEventDefinition AccountStatusChanged =
+        new(33100, "auth.account.status_changed", LogLevel.Information);
+
     public static readonly IReadOnlyList<AuthSecurityEventDefinition> All =
     [
         SignInSucceeded,
@@ -87,5 +90,6 @@ public static class AuthSecurityEvents
         ProviderLinked,
         ProviderLinkConflict,
         AuthorizationDenied,
+        AccountStatusChanged,
     ];
 }

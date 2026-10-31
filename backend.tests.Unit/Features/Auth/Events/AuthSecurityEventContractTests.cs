@@ -31,7 +31,8 @@ public sealed class AuthSecurityEventContractTests
             (33070, "auth.session.revoked"),
             (33080, "auth.provider.linked"),
             (33081, "auth.provider_link.conflict"),
-            (33090, "authz.denied"));
+            (33090, "authz.denied"),
+            (33100, "auth.account.status_changed"));
     }
 
     [Fact]

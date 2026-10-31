@@ -11,6 +11,7 @@ using backend.main.shared.exceptions.http;
 using backend.main.shared.storage;
 using backend.main.shared.storage.imaging;
 
+using backend.tests.Unit.Features.Auth.Events;
 using backend.tests.Unit.Support;
 
 using FluentAssertions;
@@ -81,18 +82,71 @@ public class UserServiceTests
                 IsDisabled = true,
                 DisabledReason = "policy",
                 DisabledAtUtc = DateTime.UtcNow,
-                AuthVersion = 4
+                AuthVersion = 4,
+                StatusChanged = true
             });
 
         var tokenService = new Mock<ITokenService>();
         var refreshCache = new Mock<IRefreshAheadCache>();
-        var service = CreateService(authRepository: authRepository, tokenService: tokenService, refreshCache: refreshCache);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(
+            authRepository: authRepository,
+            tokenService: tokenService,
+            refreshCache: refreshCache,
+            securityEvents: securityEvents);
 
         var result = await service.UpdateUserStatusAsync(9, true, "policy", actorUserId: 1);
 
         result.IsDisabled.Should().BeTrue();
         tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(9, AuthSecurityReason.AccountDisabled, 1), Times.Once);
         refreshCache.Verify(c => c.RemoveAsync("user:9"), Times.Once);
+        // Recorded whether or not the revocation ends any session.
+        var changed = securityEvents.Of(AuthSecurityEvents.AccountStatusChanged).Should().ContainSingle().Subject;
+        changed.Reason.Should().Be(AuthSecurityReason.AccountDisabled);
+        changed.UserId.Should().Be(9);
+        changed.ActorUserId.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task UpdateUserStatusAsync_ShouldRecordAReEnable()
+    {
+        var authRepository = new Mock<IAuthUserRepository>();
+        authRepository.Setup(repo => repo.UpdateUserStatusAsync(9, false, null))
+            .ReturnsAsync(new UserStatusRecord { Id = 9, IsDisabled = false, AuthVersion = 5, StatusChanged = true });
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(authRepository: authRepository, securityEvents: securityEvents);
+
+        await service.UpdateUserStatusAsync(9, false, null, actorUserId: 1);
+
+        securityEvents.Of(AuthSecurityEvents.AccountStatusChanged).Should().ContainSingle()
+            .Which.Reason.Should().Be(AuthSecurityReason.AccountEnabled);
+    }
+
+    [Fact]
+    public async Task UpdateUserStatusAsync_ShouldRecordNothing_WhenTheStatusDoesNotChange()
+    {
+        // A retried or repeated disable, or a new reason on an account already disabled.
+        var authRepository = new Mock<IAuthUserRepository>();
+        authRepository.Setup(repo => repo.UpdateUserStatusAsync(9, true, "policy"))
+            .ReturnsAsync(new UserStatusRecord { Id = 9, IsDisabled = true, AuthVersion = 6, StatusChanged = false });
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(authRepository: authRepository, securityEvents: securityEvents);
+
+        await service.UpdateUserStatusAsync(9, true, "policy", actorUserId: 1);
+
+        securityEvents.Of(AuthSecurityEvents.AccountStatusChanged).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdateUserStatusAsync_ShouldRecordNothing_WhenTheAccountDoesNotExist()
+    {
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var service = CreateService(securityEvents: securityEvents);
+
+        var update = () => service.UpdateUserStatusAsync(404, true, "policy", actorUserId: 1);
+
+        await update.Should().ThrowAsync<ResourceNotFoundException>();
+        securityEvents.Events.Should().BeEmpty();
     }
 
     [Fact]
@@ -562,7 +616,8 @@ public class UserServiceTests
         Mock<ITokenService>? tokenService = null,
         Mock<IRefreshAheadCache>? refreshCache = null,
         TimeProvider? timeProvider = null,
-        ProfileOptions? profileOptions = null)
+        ProfileOptions? profileOptions = null,
+        IAuthSecurityEventEmitter? securityEvents = null)
     {
         userRepository ??= new Mock<IUserRepository>();
         authRepository ??= new Mock<IAuthUserRepository>();
@@ -581,7 +636,8 @@ public class UserServiceTests
             refreshCache.Object,
             new UsernameAvailabilityService(authRepository.Object, new DisabledBloomFilterRegistry()),
             timeProvider ?? TimeProvider.System,
-            Options.Create(profileOptions ?? new ProfileOptions()));
+            Options.Create(profileOptions ?? new ProfileOptions()),
+            securityEvents ?? new RecordingAuthSecurityEventEmitter());
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider

@@ -1,6 +1,7 @@
 using System.Text.Json;
 
 using backend.main.features.auth.device;
+using backend.main.features.auth.history;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.clubs;
@@ -55,6 +56,8 @@ namespace backend.main.infrastructure.database.core
         public DbSet<Device> Devices { get; set; } = null!;
         public DbSet<SmsMfaEnrollment> SmsMfaEnrollments { get; set; } = null!;
         public DbSet<TotpMfaEnrollment> TotpMfaEnrollments { get; set; } = null!;
+        public DbSet<AccountSecurityEvent> AccountSecurityEvents { get; set; } = null!;
+        public DbSet<SecurityHistoryOutbox> SecurityHistoryOutbox { get; set; } = null!;
         public DbSet<ClubPost> ClubPosts { get; set; } = null!;
         public DbSet<PostComment> PostComments { get; set; } = null!;
         public DbSet<PostCommentReaction> PostCommentReactions { get; set; } = null!;
@@ -806,6 +809,82 @@ namespace backend.main.infrastructure.database.core
                 .Property(e => e.EncryptionKeyVersion)
                 .HasDefaultValue(1);
 
+            // Cascade: the history belongs to the account and goes with it, matching the hard
+            // delete every other per-user table gets. Events the worker receives after the
+            // deletion fail this key and are dropped there.
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // The only read: one account's unexpired entries, newest first.
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .HasIndex(e => new { e.UserId, e.OccurredAtUtc, e.Id })
+                .IsDescending(false, true, true);
+
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .HasIndex(e => e.ExpiresAtUtc);
+
+            // Kafka delivers at least once; the unique producer id turns a redelivery into a no-op.
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .HasIndex(e => e.MessageId)
+                .IsUnique();
+
+            // Strings rather than ints, like MediaAsset.Status, so a row reads plainly in psql and
+            // an enum reorder can never silently relabel stored history.
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .Property(e => e.Kind)
+                .HasConversion<string>()
+                .HasMaxLength(48);
+
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .Property(e => e.Client)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .Property(e => e.DeviceClass)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .Property(e => e.EventName)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .Property(e => e.Method)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .Property(e => e.Factor)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .Property(e => e.Reason)
+                .HasMaxLength(48);
+
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .Property(e => e.Network)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .Property(e => e.CorrelationId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .Property(e => e.AlertState)
+                .HasConversion<string>()
+                .HasMaxLength(16)
+                .HasDefaultValue(SecurityAlertState.None);
+
+            // The dispatcher's only query: pending alerts that are due. Filtered, so the index stays
+            // the size of the backlog rather than the whole history.
+            modelBuilder.Entity<AccountSecurityEvent>()
+                .HasIndex(e => e.AlertNextAttemptAtUtc)
+                .HasFilter("\"AlertState\" = 'Pending'");
+
             modelBuilder.Entity<ClubPost>()
                 .HasOne<User>()
                 .WithMany()
@@ -1057,6 +1136,41 @@ namespace backend.main.infrastructure.database.core
                 .HasColumnName("created_at");
 
             modelBuilder.Entity<EventSearchOutbox>()
+                .HasIndex(e => e.CreatedAt);
+
+            // Same column names as the search outboxes, which the Debezium EventRouter expects.
+            modelBuilder.Entity<SecurityHistoryOutbox>()
+                .ToTable("security_history_outbox");
+
+            modelBuilder.Entity<SecurityHistoryOutbox>()
+                .Property(e => e.Id)
+                .HasColumnName("id");
+
+            modelBuilder.Entity<SecurityHistoryOutbox>()
+                .Property(e => e.AggregateType)
+                .HasColumnName("aggregatetype")
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<SecurityHistoryOutbox>()
+                .Property(e => e.AggregateId)
+                .HasColumnName("aggregateid")
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<SecurityHistoryOutbox>()
+                .Property(e => e.Type)
+                .HasColumnName("type")
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<SecurityHistoryOutbox>()
+                .Property(e => e.Payload)
+                .HasColumnName("payload")
+                .HasColumnType("json");
+
+            modelBuilder.Entity<SecurityHistoryOutbox>()
+                .Property(e => e.CreatedAt)
+                .HasColumnName("created_at");
+
+            modelBuilder.Entity<SecurityHistoryOutbox>()
                 .HasIndex(e => e.CreatedAt);
 
             modelBuilder.Entity<ClubSearchOutbox>()

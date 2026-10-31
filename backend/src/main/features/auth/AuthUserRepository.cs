@@ -10,6 +10,7 @@ using backend.main.shared.exceptions.http;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Query;
 
 using Npgsql;
 
@@ -302,25 +303,39 @@ namespace backend.main.features.auth
 
         public async Task<UserStatusRecord?> UpdateUserStatusAsync(int id, bool isDisabled, string? disabledReason)
         {
-            var user = await _context.Users.FindAsync(id);
-            if (user == null)
+            var now = DateTime.UtcNow;
+            Action<UpdateSettersBuilder<User>> apply = setters => setters
+                .SetProperty(u => u.IsDisabled, isDisabled)
+                .SetProperty(u => u.DisabledAtUtc, isDisabled ? now : null)
+                .SetProperty(u => u.DisabledReason, isDisabled ? disabledReason : null)
+                .SetProperty(u => u.AuthVersion, u => u.AuthVersion + 1)
+                .SetProperty(u => u.UpdatedAt, now);
+
+            // Whether this call changed the status is decided by the database, not by a read that
+            // happened earlier: a concurrent update of the same row waits on its lock and then
+            // re-checks the condition, so of two simultaneous disables exactly one reports a change.
+            var changed = await _context.Users
+                .Where(u => u.Id == id && u.IsDisabled != isDisabled)
+                .ExecuteUpdateAsync(apply) > 0;
+
+            // Already in the requested state: still written (a new reason, a fresh AuthVersion),
+            // just not reported as a change.
+            if (!changed && await _context.Users.Where(u => u.Id == id).ExecuteUpdateAsync(apply) == 0)
                 return null;
 
-            user.IsDisabled = isDisabled;
-            user.DisabledAtUtc = isDisabled ? DateTime.UtcNow : null;
-            user.DisabledReason = isDisabled ? disabledReason : null;
-            user.AuthVersion += 1;
-            user.UpdatedAt = DateTime.UtcNow;
-
-            await _context.SaveChangesAsync();
-            return new UserStatusRecord
-            {
-                Id = user.Id,
-                IsDisabled = user.IsDisabled,
-                DisabledAtUtc = user.DisabledAtUtc,
-                DisabledReason = user.DisabledReason,
-                AuthVersion = user.AuthVersion,
-            };
+            return await _context.Users
+                .AsNoTracking()
+                .Where(u => u.Id == id)
+                .Select(u => new UserStatusRecord
+                {
+                    Id = u.Id,
+                    IsDisabled = u.IsDisabled,
+                    DisabledAtUtc = u.DisabledAtUtc,
+                    DisabledReason = u.DisabledReason,
+                    AuthVersion = u.AuthVersion,
+                    StatusChanged = changed,
+                })
+                .SingleAsync();
         }
 
         public async Task<bool> IncrementAuthVersionAsync(int id)
