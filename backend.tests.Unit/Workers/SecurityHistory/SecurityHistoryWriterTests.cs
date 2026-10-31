@@ -117,6 +117,20 @@ public class SecurityHistoryWriterTests
         stored.AlertNextAttemptAtUtc.Should().Be(expected == SecurityAlertState.Pending ? Now.UtcDateTime : null);
     }
 
+    [Fact]
+    public async Task InsertAsync_ShouldNotOweAnAlertForAChangeAlreadyPastTheAgeLimit()
+    {
+        await using var harness = await SecurityHistoryDbHarness.CreateAsync();
+        var stale = Now - SecurityHistoryWorkerOptions.DefaultAlertMaxAge - TimeSpan.FromMinutes(1);
+
+        // A backlog after the worker was down: the entry is kept, the stale alert is not sent.
+        await Writer(harness).InsertAsync(Message(userId: SecurityHistoryDbHarness.OwnerId, occurredAt: stale));
+
+        var stored = await harness.Db.AccountSecurityEvents.AsNoTracking().SingleAsync();
+        stored.AlertState.Should().Be(SecurityAlertState.Skipped);
+        stored.AlertNextAttemptAtUtc.Should().BeNull();
+    }
+
     private static SecurityHistoryWriter Writer(SecurityHistoryDbHarness harness, int retentionDays = 90) =>
         new(harness.Db, Options(retentionDays: retentionDays), new HistoryClock(Now));
 }

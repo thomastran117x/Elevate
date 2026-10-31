@@ -63,4 +63,8 @@ public enum SecurityHistoryAlertOutcome
     /// <summary>The send failed for the last permitted time.</summary>
     Failed,
     NoRecipient,
+    /// <summary>The send timed out and may still be delivered; not retried.</summary>
+    Unconfirmed,
+    /// <summary>The change was too old to alert about.</summary>
+    Skipped,
 }

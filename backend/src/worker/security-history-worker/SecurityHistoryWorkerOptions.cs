@@ -21,7 +21,8 @@ public sealed record SecurityHistoryWorkerOptions(
     int PurgeMaxBatches,
     TimeSpan PurgeInterval,
     bool NotificationsEnabled,
-    IReadOnlySet<AccountSecurityEventKind> AlertKinds)
+    IReadOnlySet<AccountSecurityEventKind> AlertKinds,
+    TimeSpan AlertMaxAge)
 {
     public const string RetentionDaysKey = "SECURITY_HISTORY_RETENTION_DAYS";
     public const string PurgeBatchSizeKey = "SECURITY_HISTORY_PURGE_BATCH_SIZE";
@@ -29,6 +30,13 @@ public sealed record SecurityHistoryWorkerOptions(
     public const string PurgeIntervalMinutesKey = "SECURITY_HISTORY_PURGE_INTERVAL_MINUTES";
     public const string NotificationsEnabledKey = "SECURITY_HISTORY_NOTIFICATIONS_ENABLED";
     public const string AlertKindsKey = "SECURITY_HISTORY_ALERT_KINDS";
+    public const string AlertMaxAgeMinutesKey = "SECURITY_HISTORY_ALERT_MAX_AGE_MINUTES";
+
+    /// <summary>
+    /// How old a change may be and still be alerted about. Past it, a backlog (a worker that was
+    /// down, alerts turned back on) would email owners about changes long gone.
+    /// </summary>
+    public static readonly TimeSpan DefaultAlertMaxAge = TimeSpan.FromHours(24);
 
     /// <summary>
     /// The longest the history may be kept, and the default. The API and the Activity tab promise
@@ -61,7 +69,8 @@ public sealed record SecurityHistoryWorkerOptions(
         ReadInt(configuration, PurgeMaxBatchesKey, 20, 1, 1000),
         TimeSpan.FromMinutes(ReadInt(configuration, PurgeIntervalMinutesKey, 60, 1, 1440)),
         ReadBool(configuration, NotificationsEnabledKey, true),
-        ReadAlertKinds(configuration[AlertKindsKey]));
+        ReadAlertKinds(configuration[AlertKindsKey]),
+        TimeSpan.FromMinutes(ReadInt(configuration, AlertMaxAgeMinutesKey, (int)DefaultAlertMaxAge.TotalMinutes, 5, 10_080)));
 
     internal static string Require(string? value, string settingName)
     {

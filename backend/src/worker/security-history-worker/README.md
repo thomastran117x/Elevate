@@ -23,6 +23,7 @@ You need Kafka, the API's PostgreSQL database, and the `security-history-outbox`
 | `SECURITY_HISTORY_PURGE_MAX_BATCHES`      | `20`, 1–1000 batches per pass. Whatever is left waits for the next pass                                                                                                                        |
 | `SECURITY_HISTORY_NOTIFICATIONS_ENABLED`  | `true`. Email the owner about alert kinds                                                                                                                                                      |
 | `SECURITY_HISTORY_ALERT_KINDS`            | Comma-separated kinds, or `none`. Unset means `password_changed,provider_linked,refresh_token_reuse_detected,account_disabled`                                                                 |
+| `SECURITY_HISTORY_ALERT_MAX_AGE_MINUTES`  | `1440` (24 h), 5–10080. A change older than this is recorded but not alerted about                                                                                                             |
 | `EMAIL_TOPIC`                             | `eventxperience-email`. Where alerts are handed to the email worker                                                                                                                            |
 
 The worker refuses to start if a value is out of range, names an unknown kind, or lists no kinds at all (only `none` turns alerts off). The default alert kinds are the high-risk changes that send nothing of their own. MFA changes, email changes, and password resets already email the owner when they happen, so adding those kinds sends two emails for one change. Options come from the environment. Non-container runs load ancestor `.env` files, and process values take precedence.
@@ -76,7 +77,12 @@ The consumer starts at the earliest offset when its group has no committed posit
 2. Claims each by moving its next attempt a minute ahead, so a second replica skips it.
 3. Hands it to the email topic, with a 10-second timeout and the host's cancellation.
 
-A send that fails is retried after 30 seconds, then with the delay doubling up to 30 minutes. After five failed attempts the alert is marked `Failed`. An account with no address is marked `Failed` without a send. Because the state lives on the row, a crash, a redelivery, or a restart neither loses an alert nor sends it twice; an alert interrupted mid-send is retried once its claim lapses. The owner's address is read from `Users` at send time and never travels on the topic. With `SECURITY_HISTORY_NOTIFICATIONS_ENABLED=false` the dispatcher stays idle and new entries are stored with no alert.
+Each alert's claim and backoff are timed from when that alert is handled, so a slow batch cannot let another replica claim an alert still being sent.
+
+- **A failed send** is retried after 30 seconds, then with the delay doubling up to 30 minutes. After five failed attempts the alert is marked `Failed`.
+- **A send that times out** is marked `Unconfirmed` and not retried. The producer still holds the message and may yet deliver it, so a retry could email the owner twice.
+- **A stale alert** is marked `Skipped` without a send: the change is older than `SECURITY_HISTORY_ALERT_MAX_AGE_MINUTES` (24 hours by default). This covers entries stored from a backlog after an outage, and alerts left `Pending` while alerts were off.
+- **An account with no address** is marked `Failed` without a send. Because the state lives on the row, a crash, a redelivery, or a restart neither loses an alert nor sends it twice; an alert interrupted mid-send is retried once its claim lapses. The owner's address is read from `Users` at send time and never travels on the topic. With `SECURITY_HISTORY_NOTIFICATIONS_ENABLED=false` the dispatcher stays idle and new entries are stored with no alert.
 
 ## Retention
 
@@ -87,7 +93,7 @@ A send that fails is retried after 30 seconds, then with the delay doubling up t
 The `EventXperience.SecurityHistory` meter has three counters:
 
 - `security_history.entries` by `outcome` (`inserted`, `duplicate`, `account_deleted`, `expired`, `rejected`, `failed`);
-- `security_history.alerts` by `outcome` (`sent`, `retried`, `failed`, `no_recipient`);
+- `security_history.alerts` by `outcome` (`sent`, `retried`, `failed`, `unconfirmed`, `skipped`, `no_recipient`);
 - `security_history.purged`.
 
 Read them with `dotnet-counters monitor --counters EventXperience.SecurityHistory` until an exporter is chosen (#330). Watch the DLQ, `failed` entries, and `failed` alerts.

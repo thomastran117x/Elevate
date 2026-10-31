@@ -130,4 +130,11 @@ public enum SecurityAlertState
     Sent,
     /// <summary>Delivery was given up after the last attempt, or the account had no address.</summary>
     Failed,
+    /// <summary>
+    /// The send timed out after the message was handed to the producer, which may still deliver
+    /// it. Not retried, so the owner is not emailed twice.
+    /// </summary>
+    Unconfirmed,
+    /// <summary>The change was older than the alert age limit by the time it could be sent.</summary>
+    Skipped,
 }

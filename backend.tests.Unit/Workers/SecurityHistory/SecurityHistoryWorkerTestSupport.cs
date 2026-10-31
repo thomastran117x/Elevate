@@ -17,7 +17,8 @@ internal static class SecurityHistoryWorkerTestSupport
         int purgeBatchSize = 500,
         int purgeMaxBatches = 20,
         bool notificationsEnabled = true,
-        IReadOnlySet<AccountSecurityEventKind>? alertKinds = null) => new(
+        IReadOnlySet<AccountSecurityEventKind>? alertKinds = null,
+        TimeSpan? alertMaxAge = null) => new(
             BootstrapServers: "kafka:9092",
             Topic: "eventxperience-security-history",
             GroupId: "security-history-worker",
@@ -27,7 +28,8 @@ internal static class SecurityHistoryWorkerTestSupport
             PurgeMaxBatches: purgeMaxBatches,
             PurgeInterval: TimeSpan.FromMinutes(60),
             NotificationsEnabled: notificationsEnabled,
-            AlertKinds: alertKinds ?? SecurityHistoryWorkerOptions.DefaultAlertKinds);
+            AlertKinds: alertKinds ?? SecurityHistoryWorkerOptions.DefaultAlertKinds,
+            AlertMaxAge: alertMaxAge ?? SecurityHistoryWorkerOptions.DefaultAlertMaxAge);
 
     public static SecurityHistoryMessage Message(
         int userId = 1,

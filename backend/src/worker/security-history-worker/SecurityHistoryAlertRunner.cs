@@ -18,9 +18,11 @@ namespace backend.worker.security_history_worker;
 /// </para>
 /// <para>
 /// Each pending alert is claimed first by moving its next attempt forward, so a second replica
-/// skips it. A send is bounded by <see cref="SendTimeout"/> and the host's cancellation, failures
-/// back off exponentially, and after <see cref="MaxAttempts"/> the alert is marked
-/// <see cref="SecurityAlertState.Failed"/> rather than retried forever.
+/// skips it. A send is bounded by <see cref="SendTimeout"/> and the host's cancellation. A send that
+/// fails backs off exponentially and is marked <see cref="SecurityAlertState.Failed"/> after
+/// <see cref="MaxAttempts"/>; one that times out may still be delivered, so it is marked
+/// <see cref="SecurityAlertState.Unconfirmed"/> rather than retried. An alert older than
+/// <see cref="SecurityHistoryWorkerOptions.AlertMaxAge"/> is <see cref="SecurityAlertState.Skipped"/>.
 /// </para>
 /// </remarks>
 public sealed class SecurityHistoryAlertRunner
@@ -38,27 +40,44 @@ public sealed class SecurityHistoryAlertRunner
     private readonly AppDatabaseContext _db;
     private readonly IAuthNotificationService _notifications;
     private readonly TimeProvider _timeProvider;
+    private readonly SecurityHistoryWorkerOptions _options;
     private readonly SecurityHistoryWorkerMetrics _metrics;
+    private readonly TimeSpan _sendTimeout;
 
     public SecurityHistoryAlertRunner(
         AppDatabaseContext db,
         IAuthNotificationService notifications,
         TimeProvider timeProvider,
+        SecurityHistoryWorkerOptions options,
         SecurityHistoryWorkerMetrics metrics)
+        : this(db, notifications, timeProvider, options, metrics, SendTimeout)
+    {
+    }
+
+    /// <summary>Lets tests reach the timeout without waiting it out.</summary>
+    internal SecurityHistoryAlertRunner(
+        AppDatabaseContext db,
+        IAuthNotificationService notifications,
+        TimeProvider timeProvider,
+        SecurityHistoryWorkerOptions options,
+        SecurityHistoryWorkerMetrics metrics,
+        TimeSpan sendTimeout)
     {
         _db = db;
         _notifications = notifications;
         _timeProvider = timeProvider;
+        _options = options;
         _metrics = metrics;
+        _sendTimeout = sendTimeout;
     }
 
     /// <returns>How many due alerts this pass looked at.</returns>
     public async Task<int> RunOnceAsync(CancellationToken cancellationToken = default)
     {
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var passStartedAt = Now();
         var due = await _db.AccountSecurityEvents
             .AsNoTracking()
-            .Where(e => e.AlertState == SecurityAlertState.Pending && e.AlertNextAttemptAtUtc <= now)
+            .Where(e => e.AlertState == SecurityAlertState.Pending && e.AlertNextAttemptAtUtc <= passStartedAt)
             .OrderBy(e => e.AlertNextAttemptAtUtc)
             .Take(BatchSize)
             .ToListAsync(cancellationToken);
@@ -66,23 +85,36 @@ public sealed class SecurityHistoryAlertRunner
         foreach (var entry in due)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await DeliverAsync(entry, now, cancellationToken);
+            await DeliverAsync(entry, cancellationToken);
         }
 
         return due.Count;
     }
 
-    private async Task DeliverAsync(AccountSecurityEvent entry, DateTime now, CancellationToken cancellationToken)
+    private async Task DeliverAsync(AccountSecurityEvent entry, CancellationToken cancellationToken)
     {
+        // Read per alert, not once per pass: earlier sends in the batch can take up to
+        // SendTimeout each, and a lease or backoff computed from the pass's start would already
+        // have run out, letting another replica claim and send the same alert.
+        var claimedAt = Now();
         var claimed = await _db.AccountSecurityEvents
             .Where(e => e.Id == entry.Id
                 && e.AlertState == SecurityAlertState.Pending
                 && e.AlertNextAttemptAtUtc == entry.AlertNextAttemptAtUtc)
             .ExecuteUpdateAsync(
-                setters => setters.SetProperty(e => e.AlertNextAttemptAtUtc, now + ClaimLease),
+                setters => setters.SetProperty(e => e.AlertNextAttemptAtUtc, claimedAt + ClaimLease),
                 cancellationToken);
         if (claimed == 0)
             return;
+
+        // A backlog (a worker that was down, alerts turned back on) must not send the owner a
+        // burst of stale emails about changes long past.
+        if (entry.OccurredAtUtc < claimedAt - _options.AlertMaxAge)
+        {
+            await RecordAsync(entry.Id, SecurityAlertState.Skipped, entry.AlertAttempts, nextAttemptAt: null);
+            _metrics.RecordAlert(SecurityHistoryAlertOutcome.Skipped);
+            return;
+        }
 
         // Read when the alert is sent rather than carried on the message, so no address ever
         // travels with the entry.
@@ -99,16 +131,26 @@ public sealed class SecurityHistoryAlertRunner
         }
 
         var attempts = entry.AlertAttempts + 1;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         try
         {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(SendTimeout);
+            timeout.CancelAfter(_sendTimeout);
             await _notifications.SendSecurityAlertAsync(recipient.Email, entry, recipient.Name, timeout.Token);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Shutting down: the claim lapses and the alert is tried again by the next pass.
             throw;
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            // Only the wait was abandoned. The producer still holds the message and goes on
+            // delivering it, so a retry could email the owner twice; the outcome is unknown, and
+            // it is recorded as such rather than retried.
+            await RecordAsync(entry.Id, SecurityAlertState.Unconfirmed, attempts, nextAttemptAt: null);
+            _metrics.RecordAlert(SecurityHistoryAlertOutcome.Unconfirmed);
+            Logger.Warn($"[SecurityHistoryAlertRunner] Alert for entry {entry.Id} was not confirmed within {_sendTimeout.TotalSeconds:0}s; it is not retried, to avoid a duplicate.");
+            return;
         }
         catch (Exception ex)
         {
@@ -120,7 +162,7 @@ public sealed class SecurityHistoryAlertRunner
                 return;
             }
 
-            await RecordAsync(entry.Id, SecurityAlertState.Pending, attempts, now + RetryDelay(attempts));
+            await RecordAsync(entry.Id, SecurityAlertState.Pending, attempts, Now() + RetryDelay(attempts));
             _metrics.RecordAlert(SecurityHistoryAlertOutcome.Retried);
             Logger.Warn($"[SecurityHistoryAlertRunner] Alert for entry {entry.Id} failed with {ex.GetType().Name}; attempt {attempts} of {MaxAttempts}.");
             return;
@@ -129,6 +171,8 @@ public sealed class SecurityHistoryAlertRunner
         await RecordAsync(entry.Id, SecurityAlertState.Sent, attempts, nextAttemptAt: null);
         _metrics.RecordAlert(SecurityHistoryAlertOutcome.Sent);
     }
+
+    private DateTime Now() => _timeProvider.GetUtcNow().UtcDateTime;
 
     // Not cancellable: once an email has been handed over, recording that fact matters more than a
     // prompt shutdown, or the next pass would send it again.

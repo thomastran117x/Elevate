@@ -317,6 +317,7 @@ public sealed class SecurityHistoryPipelineTests
             services.GetRequiredService<AppDatabaseContext>(),
             services.GetRequiredService<IAuthNotificationService>(),
             TimeProvider.System,
+            WorkerOptions(),
             new SecurityHistoryWorkerMetrics(services.GetRequiredService<IMeterFactory>()));
         return await runner.RunOnceAsync();
     }
@@ -352,7 +353,8 @@ public sealed class SecurityHistoryPipelineTests
         PurgeMaxBatches: 20,
         PurgeInterval: TimeSpan.FromHours(1),
         NotificationsEnabled: true,
-        AlertKinds: SecurityHistoryWorkerOptions.DefaultAlertKinds);
+        AlertKinds: SecurityHistoryWorkerOptions.DefaultAlertKinds,
+        AlertMaxAge: SecurityHistoryWorkerOptions.DefaultAlertMaxAge);
 
     private static AccountSecurityEvent Stored(int userId, Guid messageId, DateTime occurredAt, DateTime expiresAt) => new()
     {

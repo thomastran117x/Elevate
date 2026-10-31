@@ -26,6 +26,7 @@ public class SecurityHistoryWorkerOptionsTests
             AccountSecurityEventKind.RefreshTokenReuseDetected,
             AccountSecurityEventKind.AccountDisabled,
         ]);
+        options.AlertMaxAge.Should().Be(TimeSpan.FromHours(24));
         options.Topic.Should().NotBeNullOrWhiteSpace();
         options.DlqTopic.Should().NotBeNullOrWhiteSpace();
     }
@@ -41,12 +42,14 @@ public class SecurityHistoryWorkerOptionsTests
             [SecurityHistoryWorkerOptions.PurgeIntervalMinutesKey] = "15",
             [SecurityHistoryWorkerOptions.NotificationsEnabledKey] = "false",
             [SecurityHistoryWorkerOptions.AlertKindsKey] = " mfa_disabled , password_changed ",
+            [SecurityHistoryWorkerOptions.AlertMaxAgeMinutesKey] = "90",
         }));
 
         options.RetentionDays.Should().Be(30);
         options.PurgeBatchSize.Should().Be(100);
         options.PurgeMaxBatches.Should().Be(5);
         options.PurgeInterval.Should().Be(TimeSpan.FromMinutes(15));
+        options.AlertMaxAge.Should().Be(TimeSpan.FromMinutes(90));
         options.NotificationsEnabled.Should().BeFalse();
         options.AlertKinds.Should().BeEquivalentTo(
             [AccountSecurityEventKind.MfaDisabled, AccountSecurityEventKind.PasswordChanged]);
@@ -72,6 +75,8 @@ public class SecurityHistoryWorkerOptionsTests
     [InlineData(SecurityHistoryWorkerOptions.PurgeMaxBatchesKey, "0")]
     [InlineData(SecurityHistoryWorkerOptions.PurgeIntervalMinutesKey, "0")]
     [InlineData(SecurityHistoryWorkerOptions.NotificationsEnabledKey, "yes")]
+    [InlineData(SecurityHistoryWorkerOptions.AlertMaxAgeMinutesKey, "4")]
+    [InlineData(SecurityHistoryWorkerOptions.AlertMaxAgeMinutesKey, "10081")]
     [InlineData(SecurityHistoryWorkerOptions.AlertKindsKey, "password_changed,login_failed")]
     [InlineData(SecurityHistoryWorkerOptions.AlertKindsKey, ",")]
     [InlineData(SecurityHistoryWorkerOptions.AlertKindsKey, " , ,, ")]

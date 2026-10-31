@@ -53,7 +53,12 @@ public sealed class SecurityHistoryWriter
         if (expiresAt <= now)
             return SecurityHistoryWriteResult.Expired;
 
-        var alertDue = _options.NotificationsEnabled && _options.AlertKinds.Contains(message.Kind);
+        var alertKind = _options.NotificationsEnabled && _options.AlertKinds.Contains(message.Kind);
+        // A change already older than the alert age (a backlog after an outage) is recorded but
+        // not alerted about, so owners are not emailed about changes long past.
+        var alertState = !alertKind
+            ? SecurityAlertState.None
+            : occurredAt < now - _options.AlertMaxAge ? SecurityAlertState.Skipped : SecurityAlertState.Pending;
 
         _db.AccountSecurityEvents.Add(new AccountSecurityEvent
         {
@@ -74,8 +79,8 @@ public sealed class SecurityHistoryWriter
             ExpiresAtUtc = expiresAt,
             // Decided here and stored in the same insert, so an alert owed for a committed entry
             // survives a crash or a redelivery; the alert dispatcher sends it from the row.
-            AlertState = alertDue ? SecurityAlertState.Pending : SecurityAlertState.None,
-            AlertNextAttemptAtUtc = alertDue ? now : null,
+            AlertState = alertState,
+            AlertNextAttemptAtUtc = alertState == SecurityAlertState.Pending ? now : null,
         });
 
         try

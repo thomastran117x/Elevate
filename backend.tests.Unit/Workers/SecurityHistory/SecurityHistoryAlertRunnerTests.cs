@@ -148,6 +148,106 @@ public class SecurityHistoryAlertRunnerTests
     }
 
     [Fact]
+    public async Task RunOnceAsync_ShouldTimeEachBackoffFromWhenThatAlertIsHandled()
+    {
+        await using var harness = await SecurityHistoryDbHarness.CreateAsync();
+        var first = await SeedPendingAsync(harness, SecurityHistoryDbHarness.OwnerId);
+        var second = await SeedPendingAsync(harness, SecurityHistoryDbHarness.OtherId);
+        var clock = new HistoryClock(Now);
+        var notifications = new Mock<IAuthNotificationService>();
+        notifications
+            .Setup(n => n.SendSecurityAlertAsync(It.IsAny<string>(), It.IsAny<AccountSecurityEvent>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Returns<string, AccountSecurityEvent, string?, CancellationToken>((_, entry, _, _) =>
+            {
+                // Slow sends: every alert in the batch is handled minutes after the pass began.
+                clock.Now += TimeSpan.FromMinutes(5);
+                return entry.Id == second.Id
+                    ? Task.FromException(new InvalidOperationException("email topic unavailable"))
+                    : Task.CompletedTask;
+            });
+
+        await Runner(harness, notifications.Object, clock: clock).RunOnceAsync();
+
+        (await Reload(harness, first.Id)).AlertState.Should().Be(SecurityAlertState.Sent);
+        // The backoff starts from when the send failed, not from when the pass began.
+        (await Reload(harness, second.Id)).AlertNextAttemptAtUtc
+            .Should().Be(Now.UtcDateTime.AddMinutes(10) + SecurityHistoryAlertRunner.RetryDelay(1));
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_ShouldClaimEachAlertFromWhenItIsHandled()
+    {
+        await using var harness = await SecurityHistoryDbHarness.CreateAsync();
+        var first = await SeedPendingAsync(harness, SecurityHistoryDbHarness.OwnerId);
+        var second = await SeedPendingAsync(harness, SecurityHistoryDbHarness.OtherId);
+        var clock = new HistoryClock(Now);
+        DateTime? secondLeaseSeenDuringSend = null;
+        var notifications = new Mock<IAuthNotificationService>();
+        notifications
+            .Setup(n => n.SendSecurityAlertAsync(It.IsAny<string>(), It.IsAny<AccountSecurityEvent>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Returns<string, AccountSecurityEvent, string?, CancellationToken>(async (_, entry, _, _) =>
+            {
+                if (entry.Id == first.Id)
+                    clock.Now += TimeSpan.FromMinutes(2);
+                else
+                    secondLeaseSeenDuringSend = (await Reload(harness, second.Id)).AlertNextAttemptAtUtc;
+            });
+
+        await Runner(harness, notifications.Object, clock: clock).RunOnceAsync();
+
+        // Claimed two minutes into the pass, so the lease still runs past "now" for other replicas.
+        secondLeaseSeenDuringSend.Should().Be(Now.UtcDateTime.AddMinutes(2) + SecurityHistoryAlertRunner.ClaimLease);
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_ShouldNotRetryASendThatTimedOut()
+    {
+        await using var harness = await SecurityHistoryDbHarness.CreateAsync();
+        var entry = await SeedPendingAsync(harness, SecurityHistoryDbHarness.OwnerId);
+        var notifications = new Mock<IAuthNotificationService>();
+        notifications
+            .Setup(n => n.SendSecurityAlertAsync(It.IsAny<string>(), It.IsAny<AccountSecurityEvent>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Returns<string, AccountSecurityEvent, string?, CancellationToken>((_, _, _, token) =>
+                Task.Delay(Timeout.Infinite, token));
+        var (metrics, collector) = Metrics();
+        using var _ = collector;
+        var runner = new SecurityHistoryAlertRunner(
+            harness.CreateContext(),
+            notifications.Object,
+            new HistoryClock(Now),
+            Options(),
+            metrics,
+            TimeSpan.FromMilliseconds(50));
+
+        await runner.RunOnceAsync();
+
+        // The producer may still deliver it, so a retry could email the owner twice.
+        var stored = await Reload(harness, entry.Id);
+        stored.AlertState.Should().Be(SecurityAlertState.Unconfirmed);
+        stored.AlertNextAttemptAtUtc.Should().BeNull();
+        collector.Measurements.Should().ContainSingle(m => m.Outcome == "unconfirmed");
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_ShouldSkipAnAlertOlderThanTheAgeLimit()
+    {
+        await using var harness = await SecurityHistoryDbHarness.CreateAsync();
+        var entry = await SeedPendingAsync(
+            harness,
+            SecurityHistoryDbHarness.OwnerId,
+            occurredAt: Now.UtcDateTime - SecurityHistoryWorkerOptions.DefaultAlertMaxAge - TimeSpan.FromMinutes(1));
+        var notifications = new Mock<IAuthNotificationService>();
+        var (metrics, collector) = Metrics();
+        using var _ = collector;
+
+        await Runner(harness, notifications.Object, metrics).RunOnceAsync();
+
+        (await Reload(harness, entry.Id)).AlertState.Should().Be(SecurityAlertState.Skipped);
+        notifications.VerifyNoOtherCalls();
+        collector.Measurements.Should().ContainSingle(m => m.Outcome == "skipped");
+    }
+
+    [Fact]
     public async Task Service_ShouldStayIdle_WhenAlertsAreOff()
     {
         var scopeFactory = new Mock<IServiceScopeFactory>();
@@ -173,9 +273,10 @@ public class SecurityHistoryAlertRunnerTests
         SecurityHistoryDbHarness harness,
         int userId,
         DateTime? nextAttemptAt = null,
-        int attempts = 0)
+        int attempts = 0,
+        DateTime? occurredAt = null)
     {
-        var entry = SecurityHistoryDbHarness.Entry(userId, Now.UtcDateTime.AddMinutes(-1), AccountSecurityEventKind.PasswordChanged);
+        var entry = SecurityHistoryDbHarness.Entry(userId, occurredAt ?? Now.UtcDateTime.AddMinutes(-1), AccountSecurityEventKind.PasswordChanged);
         entry.AlertState = SecurityAlertState.Pending;
         entry.AlertAttempts = attempts;
         entry.AlertNextAttemptAtUtc = nextAttemptAt ?? Now.UtcDateTime.AddSeconds(-1);
@@ -192,6 +293,12 @@ public class SecurityHistoryAlertRunnerTests
     private static SecurityHistoryAlertRunner Runner(
         SecurityHistoryDbHarness harness,
         IAuthNotificationService notifications,
-        SecurityHistoryWorkerMetrics? metrics = null) =>
-        new(harness.CreateContext(), notifications, new HistoryClock(Now), metrics ?? Metrics().Metrics);
+        SecurityHistoryWorkerMetrics? metrics = null,
+        TimeProvider? clock = null) =>
+        new(
+            harness.CreateContext(),
+            notifications,
+            clock ?? new HistoryClock(Now),
+            Options(),
+            metrics ?? Metrics().Metrics);
 }
