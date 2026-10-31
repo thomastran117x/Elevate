@@ -157,7 +157,7 @@ public class SecurityHistoryEventSinkTests
     }
 
     [Fact]
-    public void Write_ShouldCountAndLogAnEntryTheFullQueueRefuses()
+    public void Write_ShouldCountEveryRefusedEntry_ButLogOnlyWhenTheQueueFillsAndDrains()
     {
         var queue = new SecurityHistoryQueue();
         while (queue.TryEnqueue(new SecurityHistoryMessage
@@ -180,12 +180,25 @@ public class SecurityHistoryEventSinkTests
             metrics: new AuthSecurityMetrics(meterFactory),
             logger: logger);
 
-        var write = () => sink.Write(FactorChanged());
+        var write = () =>
+        {
+            for (var i = 0; i < 50; i++)
+                sink.Write(FactorChanged());
+        };
 
         // The request carries on: a sink must never fail the action that produced the event.
         write.Should().NotThrow();
-        recorder.Measurements.Should().ContainSingle(m => m.Instrument == "auth.security_history.dropped");
-        logger.Entries.Should().ContainSingle().Which.Message.Should().Contain("mfa_enabled");
+        recorder.Measurements.Count(m => m.Instrument == "auth.security_history.dropped").Should().Be(50);
+        // One warning for the outage, not one per request.
+        logger.Entries.Should().ContainSingle().Which.Level.Should().Be(LogLevel.Warning);
+
+        queue.TakeBatch(5);
+        sink.Write(FactorChanged());
+        sink.Write(FactorChanged());
+
+        logger.Entries.Should().HaveCount(2);
+        logger.Entries[1].Level.Should().Be(LogLevel.Information);
+        logger.Entries[1].Message.Should().Contain("accepting entries again");
     }
 
     [Fact]

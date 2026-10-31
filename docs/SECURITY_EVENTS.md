@@ -133,7 +133,7 @@ The owner-facing history (#326) is a separate, persisted record built from this 
 4. The security-history worker stores each entry in `AccountSecurityEvents`, together with whether it owes the owner an alert, and its dispatcher sends that alert.
 5. `GET /api/auth/security-events` reads the entries back; see [the API guide](API.md#security-history).
 
-Once its outbox row is committed, an entry survives a broker outage, a slow relay, or a restart. Before that it is held in memory for a moment. An entry refused because the queue (10,000 entries) is full is counted on `auth.security_history.dropped`. A failed outbox write is counted on `auth.security_history.store_failures` and retried. An entry still queued when the API stops is lost only if the database cannot take it within the five-second shutdown flush.
+Once its outbox row is committed, an entry survives a broker outage, a slow relay, or a restart. Before that it is held in memory for a moment. An entry refused because the queue (10,000 entries) is full is counted on `auth.security_history.dropped`. A warning is logged once when the queue fills, and a note once when it accepts entries again, rather than one line per refused entry. A failed outbox write is counted on `auth.security_history.store_failures` and retried. An entry still queued when the API stops is lost only if the database cannot take it within the five-second shutdown flush.
 
 | Event | Recorded as | Notes |
 | --- | --- | --- |

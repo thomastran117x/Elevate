@@ -20,12 +20,17 @@ namespace backend.main.features.auth.history;
 public sealed class SecurityHistoryEventSink : IAuthSecurityEventSink
 {
     private static readonly EventId DroppedEvent = new(33902, "SecurityHistoryEntryDropped");
+    private static readonly EventId RecoveredEvent = new(33903, "SecurityHistoryQueueRecovered");
 
     private readonly SecurityHistoryQueue _queue;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IOptionsMonitor<SecurityHistoryOptions> _options;
     private readonly AuthSecurityMetrics _metrics;
     private readonly ILogger<SecurityHistoryEventSink> _logger;
+
+    // 1 while the queue is refusing entries. Logged on the way in and out of that state only: once
+    // full, it refuses on every request, and the dropped counter already counts each one.
+    private int _dropping;
 
     public SecurityHistoryEventSink(
         SecurityHistoryQueue queue,
@@ -52,13 +57,24 @@ public sealed class SecurityHistoryEventSink : IAuthSecurityEventSink
             return;
 
         if (_queue.TryEnqueue(message))
+        {
+            if (Interlocked.Exchange(ref _dropping, 0) == 1)
+            {
+                _logger.LogInformation(
+                    RecoveredEvent,
+                    "Security history queue is accepting entries again.");
+            }
+
             return;
+        }
 
         _metrics.RecordSecurityHistoryDropped();
-        _logger.LogWarning(
-            DroppedEvent,
-            "Security history queue is full; the {Kind} entry was not recorded.",
-            AuthSecurityWireNames.Of(message.Kind));
+        if (Interlocked.Exchange(ref _dropping, 1) == 0)
+        {
+            _logger.LogWarning(
+                DroppedEvent,
+                "Security history queue is full; entries are being dropped until the outbox writer catches up. Each one is counted on auth.security_history.dropped.");
+        }
     }
 
     internal SecurityHistoryMessage? CreateMessage(AuthSecurityEvent securityEvent, bool includeNetwork)
