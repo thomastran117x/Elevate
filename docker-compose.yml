@@ -94,7 +94,7 @@ services:
       EMAIL_TOPIC: "${EMAIL_TOPIC:-eventxperience-email}"
       SMS_TOPIC: "${SMS_TOPIC:-eventxperience-sms}"
       MEDIA_VALIDATION_TOPIC: "${MEDIA_VALIDATION_TOPIC:-eventxperience-media-validation}"
-      SECURITY_HISTORY_TOPIC: "${SECURITY_HISTORY_TOPIC:-eventxperience-security-history}"
+      # The API stores history in its outbox; kafka-connect-init routes the outbox to SECURITY_HISTORY_TOPIC.
       Auth__SecurityHistory__PublishEnabled: "${AUTH_SECURITY_HISTORY_PUBLISH_ENABLED:-true}"
       # Results the backend consumes from media-worker.
       MEDIA_VALIDATION_STATUS_TOPIC: "${MEDIA_VALIDATION_STATUS_TOPIC:-eventxperience-media-validation-status}"
@@ -475,8 +475,8 @@ services:
         kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-media-validation --partitions 1 --replication-factor 1
         kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-media-validation-dlq --partitions 1 --replication-factor 1
         kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-media-validation-status --partitions 1 --replication-factor 1
-        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-security-history --partitions 1 --replication-factor 1
-        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic eventxperience-security-history-dlq --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ${SECURITY_HISTORY_TOPIC:-eventxperience-security-history} --partitions 1 --replication-factor 1
+        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ${SECURITY_HISTORY_DLQ_TOPIC:-eventxperience-security-history-dlq} --partitions 1 --replication-factor 1
         echo "All Kafka topics created."
     networks:
       - event-network
@@ -516,6 +516,9 @@ services:
     depends_on:
       kafka-connect:
         condition: service_healthy
+    environment:
+      # Routes the security history outbox to the topic the security-history worker reads.
+      SECURITY_HISTORY_TOPIC: "${SECURITY_HISTORY_TOPIC:-eventxperience-security-history}"
     volumes:
       - ./docker/kafka-connect:/scripts:ro
     entrypoint:

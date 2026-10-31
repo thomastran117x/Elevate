@@ -95,7 +95,7 @@ The API writes each owner-visible security event to `security_history_outbox`. D
 
 1. Run the `accountsecurityevents` and `securityhistorydurability` migrations through the API. The worker never migrates; it waits until the table exists before consuming.
 2. Create the security-history topic and its DLQ. Compose's `kafka-init` creates them.
-3. Register the `security-history-outbox` Debezium connector (`docker/kafka-connect/security-history-outbox-connector.json`). Compose's `kafka-connect-init` registers it with the search connectors.
+3. Register the `security-history-outbox` Debezium connector (`docker/kafka-connect/security-history-outbox-connector.json`), routing to the same `SECURITY_HISTORY_TOPIC` the worker reads. Compose's `kafka-connect-init` registers it with the search connectors and substitutes the variable into the route. Registering the JSON by hand keeps the default topic.
 4. Deploy the email worker before or with the API, because the API appends `SecurityAlert` to the email message types. An older email worker would dead-letter alerts.
 5. Deploy the security history worker with Kafka, `DB_CONNECTION_STRING`, and `EMAIL_TOPIC`.
 

@@ -156,7 +156,7 @@ The API records the events an account owner should see through the security hist
 | `PublishEnabled` | `true` | Record history entries. When it is off, nothing new is recorded and existing entries are still served. |
 | `IncludeMaskedNetwork` | `true` | Record the source network truncated to an IPv4 /24 or IPv6 /48. The full address is never recorded. |
 
-Both switches take effect without a restart when the configuration source reloads. Configure them with `Auth__SecurityHistory__...`, or set `AUTH_SECURITY_HISTORY_PUBLISH_ENABLED` under Compose. The topic the connector routes to and the worker reads is `SECURITY_HISTORY_TOPIC` (default `eventxperience-security-history`); it is set in the connector configuration and on the worker.
+Both switches take effect without a restart when the configuration source reloads. Configure them with `Auth__SecurityHistory__...`, or set `AUTH_SECURITY_HISTORY_PUBLISH_ENABLED` under Compose. The topic the connector routes to and the worker reads is `SECURITY_HISTORY_TOPIC` (default `eventxperience-security-history`). Set it where the connector is registered (Compose passes it to `kafka-connect-init`, which writes it into the connector's route) and on the worker, so both follow the same value. The API does not read it.
 
 Retention and alerts belong to the [security history worker](../backend/src/worker/security-history-worker/README.md#dependencies-and-settings), which owns the table:
 
