@@ -52,6 +52,9 @@ export interface SecurityEventsPage {
 /** The largest page the API serves. */
 export const SECURITY_EVENTS_MAX_PAGE_SIZE = 50;
 
+/** The furthest page the API accepts (`AuthSecurityHistoryController.MaxPage`); later pages answer 400. */
+export const SECURITY_EVENTS_MAX_PAGE = 500;
+
 function normalizeSecurityEvent(value: unknown): AccountSecurityEvent | null {
   const source = asRecord(value);
   if (!source) {
@@ -124,7 +127,7 @@ export class SecurityHistoryService {
   /** One page of the caller's own security history, newest first. */
   getSecurityEvents(page = 1, pageSize = 20): Observable<SecurityEventsPage> {
     const params = new HttpParams()
-      .set('page', Math.max(1, Math.trunc(page)))
+      .set('page', Math.min(SECURITY_EVENTS_MAX_PAGE, Math.max(1, Math.trunc(page))))
       .set('pageSize', Math.min(SECURITY_EVENTS_MAX_PAGE_SIZE, Math.max(1, Math.trunc(pageSize))));
 
     return from(this.authToken.ensureCsrfToken()).pipe(

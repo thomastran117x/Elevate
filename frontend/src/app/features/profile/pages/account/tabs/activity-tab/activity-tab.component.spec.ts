@@ -167,6 +167,24 @@ describe('ActivityTabComponent', () => {
     expect(text(fixture)).toContain('Page 1 of 2');
   });
 
+  it('stops at the furthest page the API accepts', () => {
+    // 6,000 entries at ten a page would be 600 pages, but the API refuses anything past 500.
+    history.getSecurityEvents.and.callFake((page?: number): Observable<SecurityEventsPage> =>
+      of({ ...makePage(page ?? 1, [makeEntry(page ?? 1)], 6000), page: page ?? 1 }),
+    );
+    const fixture = createFixture();
+
+    expect(text(fixture)).toContain('Page 1 of 500');
+
+    fixture.componentInstance.goToPage(500);
+    fixture.detectChanges();
+
+    expect(text(fixture)).toContain('Page 500 of 500');
+    expect(button(fixture, 'Next').disabled).toBeTrue();
+    fixture.componentInstance.goToPage(501);
+    expect(history.getSecurityEvents).not.toHaveBeenCalledWith(501, 10);
+  });
+
   it('ignores page requests outside the range or for the current page', () => {
     history.getSecurityEvents.and.returnValue(of(makePage(1, [makeEntry(1)], 12)));
     const fixture = createFixture();

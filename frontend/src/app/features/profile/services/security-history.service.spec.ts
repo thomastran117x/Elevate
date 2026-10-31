@@ -72,6 +72,15 @@ describe('SecurityHistoryService', () => {
     request.flush(envelope({ items: [], totalCount: 0, page: 1, pageSize: 50, totalPages: 0 }));
   }));
 
+  it('never asks for a page past the furthest the API accepts', fakeAsync(() => {
+    service.getSecurityEvents(900, 10).subscribe();
+    tick();
+
+    const request = httpMock.expectOne((req) => req.url === url);
+    expect(request.request.params.get('page')).toBe('500');
+    request.flush(envelope({ items: [], totalCount: 0, page: 500, pageSize: 10, totalPages: 0 }));
+  }));
+
   it('reads a PascalCase payload', fakeAsync(() => {
     let page: SecurityEventsPage | undefined;
     service.getSecurityEvents().subscribe((value) => (page = value));

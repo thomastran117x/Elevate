@@ -19,11 +19,16 @@ import { getApiClientMessage } from '../../../../../../core/api/models/api-clien
 import { EmptyStateComponent } from '../../../../../../shared/common/empty-state/empty-state.component';
 import {
   SecurityEventsPage,
+  SECURITY_EVENTS_MAX_PAGE,
   SecurityHistoryService,
 } from '../../../../services/security-history.service';
 import { toSecurityActivityView } from './security-activity-labels';
 
 type LoadState = 'loading' | 'ready' | 'error';
+
+function reachablePages(totalPages: number): number {
+  return Math.min(SECURITY_EVENTS_MAX_PAGE, Math.max(1, totalPages));
+}
 
 /**
  * The signed-in user's security history: sign-ins, recovery, factor, provider, and session changes,
@@ -49,7 +54,8 @@ export class ActivityTabComponent {
 
   readonly entries = computed(() => (this.result()?.items ?? []).map(toSecurityActivityView));
   readonly totalCount = computed(() => this.result()?.totalCount ?? 0);
-  readonly totalPages = computed(() => Math.max(1, this.result()?.totalPages ?? 1));
+  /** Capped at the furthest page the API accepts, so Next never leads to a refused request. */
+  readonly totalPages = computed(() => reachablePages(this.result()?.totalPages ?? 1));
   readonly hasPrevious = computed(() => this.page() > 1);
   readonly hasNext = computed(() => this.page() < this.totalPages());
 
@@ -77,7 +83,7 @@ export class ActivityTabComponent {
               // leaves the requested page past the end. Decided from the server's page count, not
               // from the entries that survived normalization, so the target always exists and a
               // page whose entries were all unreadable cannot send this into a loop.
-              const lastPage = Math.max(1, result.totalPages);
+              const lastPage = reachablePages(result.totalPages);
               if (page > lastPage) {
                 this.requests.next({ page: lastPage, moveFocus });
                 return;
