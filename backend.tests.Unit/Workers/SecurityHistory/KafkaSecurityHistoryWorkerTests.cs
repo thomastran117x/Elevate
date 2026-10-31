@@ -45,7 +45,7 @@ public class KafkaSecurityHistoryWorkerTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_ShouldLeaveTheOffset_WhenTheDlqIsUnreachable()
+    public async Task ExecuteAsync_ShouldRewindAndLeaveTheOffset_WhenTheDlqIsUnreachable()
     {
         await using var harness = await SecurityHistoryDbHarness.CreateAsync();
         using var stopping = new CancellationTokenSource();
@@ -54,16 +54,51 @@ public class KafkaSecurityHistoryWorkerTests
             .Callback(() => stopping.Cancel())
             .ThrowsAsync(new InvalidOperationException("DLQ unreachable"));
         var consumer = new Mock<IConsumer<string, string>>();
-        consumer.Setup(c => c.Consume(It.IsAny<CancellationToken>())).Returns(Result("{ not json", 1));
+        var poison = Result("{ not json", 1);
+        consumer.Setup(c => c.Consume(It.IsAny<CancellationToken>())).Returns(poison);
 
-        var act = () => InvokeExecuteAsync(Worker(harness, consumer.Object, dlq.Object), stopping.Token);
+        await InvokeExecuteAsync(Worker(harness, consumer.Object, dlq.Object), stopping.Token);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        consumer.Verify(c => c.Seek(poison.TopicPartitionOffset), Times.Once);
         consumer.Verify(c => c.Commit(It.IsAny<ConsumeResult<string, string>>()), Times.Never);
+        consumer.Verify(c => c.Close(), Times.Once);
     }
 
     [Fact]
-    public async Task ExecuteAsync_ShouldWaitToReconnect_AfterAConsumeError()
+    public async Task ExecuteAsync_ShouldRetryAStorageFailureOnTheSameConsumer()
+    {
+        await using var harness = await SecurityHistoryDbHarness.CreateAsync();
+        using var stopping = new CancellationTokenSource();
+        var consumer = new Mock<IConsumer<string, string>>();
+        var message = Result(JsonSerializer.Serialize(Message(userId: SecurityHistoryDbHarness.OwnerId), JsonOptions.Default), 7);
+        // Kafka hands the same message back after the rewind.
+        var results = new Queue<ConsumeResult<string, string>>([message, message]);
+        consumer.Setup(c => c.Consume(It.IsAny<CancellationToken>()))
+            .Returns(() => results.Count > 0 ? results.Dequeue() : throw Stop(stopping));
+        var consumersBuilt = 0;
+        var saves = 0;
+        var worker = Worker(
+            harness,
+            consumer.Object,
+            Mock.Of<ISecurityHistoryWorkerDlqPublisher>(),
+            onConsumerBuilt: () => consumersBuilt++,
+            beforeSave: () =>
+            {
+                if (++saves == 1)
+                    throw new InvalidOperationException("database unavailable");
+            });
+
+        await InvokeExecuteAsync(worker, stopping.Token);
+
+        // One consumer throughout: a storage failure must not make it leave and rejoin the group.
+        consumersBuilt.Should().Be(1);
+        consumer.Verify(c => c.Seek(message.TopicPartitionOffset), Times.Once);
+        consumer.Verify(c => c.Commit(message), Times.Once);
+        (await harness.Db.AccountSecurityEvents.CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldCloseAndRebuildTheConsumer_AfterAConsumeError()
     {
         await using var harness = await SecurityHistoryDbHarness.CreateAsync();
         using var stopping = new CancellationTokenSource();
@@ -75,10 +110,11 @@ public class KafkaSecurityHistoryWorkerTests
                 throw new ConsumeException(new ConsumeResult<byte[], byte[]>(), new Error(ErrorCode.BrokerNotAvailable));
             });
 
-        var act = () => InvokeExecuteAsync(Worker(harness, consumer.Object, Mock.Of<ISecurityHistoryWorkerDlqPublisher>()), stopping.Token);
+        await InvokeExecuteAsync(Worker(harness, consumer.Object, Mock.Of<ISecurityHistoryWorkerDlqPublisher>()), stopping.Token);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
         consumer.Verify(c => c.Commit(It.IsAny<ConsumeResult<string, string>>()), Times.Never);
+        // Left the group cleanly, so its partitions move at once rather than after the session timeout.
+        consumer.Verify(c => c.Close(), Times.Once);
     }
 
     [Fact]
@@ -137,11 +173,19 @@ public class KafkaSecurityHistoryWorkerTests
     private static KafkaSecurityHistoryWorker Worker(
         SecurityHistoryDbHarness harness,
         IConsumer<string, string> consumer,
-        ISecurityHistoryWorkerDlqPublisher dlq)
+        ISecurityHistoryWorkerDlqPublisher dlq,
+        Action? onConsumerBuilt = null,
+        Action? beforeSave = null)
     {
         var options = Options();
         var services = new ServiceCollection();
-        services.AddScoped(_ => harness.CreateContext());
+        services.AddScoped(_ =>
+        {
+            var db = harness.CreateContext();
+            if (beforeSave is not null)
+                db.SavingChanges += (_, _) => beforeSave();
+            return db;
+        });
         services.AddScoped(sp =>
         {
             var db = sp.GetRequiredService<AppDatabaseContext>();
@@ -156,7 +200,11 @@ public class KafkaSecurityHistoryWorkerTests
         return new KafkaSecurityHistoryWorker(
             provider.GetRequiredService<IServiceScopeFactory>(),
             options,
-            () => consumer,
+            () =>
+            {
+                onConsumerBuilt?.Invoke();
+                return consumer;
+            },
             TimeSpan.Zero);
     }
 

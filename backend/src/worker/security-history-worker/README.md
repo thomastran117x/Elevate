@@ -62,8 +62,9 @@ Use `backend/` as the build context, because the worker shares the entity, messa
 - **An entry for a deleted account** fails the foreign key and is dropped. The history went with the account.
 - **An entry already past retention**, for example after a long outage, is skipped.
 - **A malformed payload** goes to the DLQ, since retrying cannot fix it.
-- **A storage failure** is retried by EF's execution strategy and then propagates. The offset stays uncommitted, the consumer reconnects after five seconds, and the message runs again once the database answers. An outage delays the history; it does not send it to the DLQ.
-- **A DLQ publish that fails** propagates the same way.
+- **A storage failure** is retried by EF's execution strategy first. If it still fails, the offset stays uncommitted, and the consumer seeks back to the message and tries it again after five seconds. It keeps the same consumer, so it does not leave and rejoin the group. An outage delays the history; it does not send it to the DLQ.
+- **A DLQ publish that fails** is retried the same way.
+- **A consumer or broker error** closes the consumer, so it leaves the group cleanly and its partitions move at once. A new consumer is built after five seconds.
 
 The consumer starts at the earliest offset when its group has no committed position, and it disables auto-commit. It commits after processing returns, including after a successful DLQ publication.
 

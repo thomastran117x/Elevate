@@ -42,9 +42,9 @@ public sealed class KafkaSecurityHistoryWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            var consumer = _consumerFactory();
             try
             {
-                using var consumer = _consumerFactory();
                 consumer.Subscribe(_options.Topic);
 
                 Logger.Info($"Kafka security history worker subscribed to '{_options.Topic}'.");
@@ -55,11 +55,16 @@ public sealed class KafkaSecurityHistoryWorker : BackgroundService
                     if (result?.Message == null)
                         continue;
 
-                    // One scope, and so one DbContext, per message.
-                    using var scope = _scopeFactory.CreateScope();
-                    var processor = scope.ServiceProvider.GetRequiredService<SecurityHistoryMessageProcessor>();
+                    if (!await TryProcessAsync(result, stoppingToken))
+                    {
+                        // Storing failed (the database is unavailable) or the DLQ publish failed.
+                        // Nothing was committed, so rewind to this message and try it again on the
+                        // same consumer: rebuilding it would leave and rejoin the group every time.
+                        consumer.Seek(result.TopicPartitionOffset);
+                        await Task.Delay(_retryDelay, stoppingToken);
+                        continue;
+                    }
 
-                    await processor.ProcessAsync(KafkaMessageEnvelope.FromConsumeResult(result), stoppingToken);
                     consumer.Commit(result);
                 }
             }
@@ -67,18 +72,62 @@ public sealed class KafkaSecurityHistoryWorker : BackgroundService
             {
                 break;
             }
-            catch (ConsumeException ex)
-            {
-                Logger.Warn(ex, "Kafka security history worker consumer error. Reconnecting soon...");
-                await Task.Delay(_retryDelay, stoppingToken);
-            }
             catch (Exception ex)
             {
-                // Only a DLQ publish failure reaches here; the offset stays uncommitted and the
-                // message is processed again after reconnecting.
-                Logger.Warn(ex, "Kafka security history worker processing error. Retrying soon...");
-                await Task.Delay(_retryDelay, stoppingToken);
+                // The consumer itself failed (a broker or group error); build a new one.
+                Logger.Warn(ex, "Kafka security history worker consumer error. Reconnecting soon...");
+                await DelayUnlessStoppingAsync(stoppingToken);
             }
+            finally
+            {
+                CloseQuietly(consumer);
+            }
+        }
+    }
+
+    /// <returns>False when the message must be tried again; its offset is left uncommitted.</returns>
+    private async Task<bool> TryProcessAsync(ConsumeResult<string, string> result, CancellationToken stoppingToken)
+    {
+        try
+        {
+            // One scope, and so one DbContext, per attempt.
+            using var scope = _scopeFactory.CreateScope();
+            var processor = scope.ServiceProvider.GetRequiredService<SecurityHistoryMessageProcessor>();
+            await processor.ProcessAsync(KafkaMessageEnvelope.FromConsumeResult(result), stoppingToken);
+            return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+        {
+            Logger.Warn(ex, $"Kafka security history worker will retry partition {result.Partition.Value}, offset {result.Offset.Value}.");
+            return false;
+        }
+    }
+
+    private async Task DelayUnlessStoppingAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await Task.Delay(_retryDelay, stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    /// <summary>Leaves the group cleanly so its partitions are reassigned at once, not after the session timeout.</summary>
+    private static void CloseQuietly(IConsumer<string, string> consumer)
+    {
+        try
+        {
+            consumer.Close();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Kafka security history worker could not close its consumer cleanly ({ex.GetType().Name}).");
+        }
+        finally
+        {
+            consumer.Dispose();
         }
     }
 
