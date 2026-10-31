@@ -25,4 +25,6 @@ public enum AccountSecurityEventKind
     RefreshTokenReuseDetected,
     AccountDisabled,
     AccountEnabled,
+    RecoveryCodesGenerated,
+    RecoveryCodesRegenerated,
 }

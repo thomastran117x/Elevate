@@ -23,13 +23,12 @@ namespace backend.main.features.auth.mfa.recovery
                 {
                     Remaining = g.Count(c => c.UsedAtUtc == null),
                     GeneratedAtUtc = g.Min(c => c.CreatedAtUtc),
-                    LastUsedAtUtc = g.Max(c => c.UsedAtUtc),
                 })
                 .FirstOrDefaultAsync();
 
             return summary == null
-                ? new RecoveryCodeStatus(0, null, null)
-                : new RecoveryCodeStatus(summary.Remaining, summary.GeneratedAtUtc, summary.LastUsedAtUtc);
+                ? new RecoveryCodeStatus(0, null)
+                : new RecoveryCodeStatus(summary.Remaining, summary.GeneratedAtUtc);
         }
 
         public async Task<bool> HasUnusedAsync(int userId)

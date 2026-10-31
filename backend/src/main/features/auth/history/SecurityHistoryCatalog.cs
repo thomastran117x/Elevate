@@ -124,6 +124,8 @@ public static class SecurityHistoryCatalog
             (AuthSecurityFactor.Sms or AuthSecurityFactor.Totp, AuthFactorChange.Enabled) => AccountSecurityEventKind.MfaEnabled,
             (AuthSecurityFactor.Sms or AuthSecurityFactor.Totp, AuthFactorChange.Disabled) => AccountSecurityEventKind.MfaDisabled,
             (AuthSecurityFactor.Sms or AuthSecurityFactor.Totp, AuthFactorChange.Removed) => AccountSecurityEventKind.MfaRemoved,
+            (AuthSecurityFactor.RecoveryCodes, AuthFactorChange.Enabled) => AccountSecurityEventKind.RecoveryCodesGenerated,
+            (AuthSecurityFactor.RecoveryCodes, AuthFactorChange.Regenerated) => AccountSecurityEventKind.RecoveryCodesRegenerated,
             _ => null,
         };
 

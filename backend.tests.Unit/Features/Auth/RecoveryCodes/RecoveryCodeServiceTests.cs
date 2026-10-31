@@ -173,7 +173,7 @@ public class RecoveryCodeServiceTests
     [Fact]
     public async Task GetStatusAsync_AndHasUnusedAsync_ShouldReadTheRepository()
     {
-        var status = new RecoveryCodeStatus(4, _time.GetUtcNow().UtcDateTime, null);
+        var status = new RecoveryCodeStatus(4, _time.GetUtcNow().UtcDateTime);
         _repository.Setup(r => r.GetStatusAsync(UserId)).ReturnsAsync(status);
         _repository.Setup(r => r.HasUnusedAsync(UserId)).ReturnsAsync(true);
 

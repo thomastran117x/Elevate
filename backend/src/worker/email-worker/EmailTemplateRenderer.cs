@@ -204,6 +204,20 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
                 Code: null,
                 MutedNote: "If you didn't make this change, contact support immediately."),
 
+            EmailMessageType.MfaFactorChanged when IsRecoveryCodes(message) => new Content(
+                Subject: "New recovery codes were generated for your account",
+                Preheader: "A new set of recovery codes was created for your account.",
+                Heading: "New recovery codes",
+                Greeting: greeting,
+                Intro:
+                [
+                    RecoveryCodesSummary(message),
+                    "Other signed-in sessions will need to verify again before changing security settings."
+                ],
+                Cta: new Cta($"{baseUrl}/account/security", "Review security settings"),
+                Code: null,
+                MutedNote: "If you didn't make this change, generate new recovery codes, change your password, and review your two-step verification settings immediately."),
+
             EmailMessageType.MfaFactorChanged => new Content(
                 Subject: "Your two-step verification settings changed",
                 Preheader: "A sign-in verification method on your account was updated.",
@@ -335,6 +349,15 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
             "totp" => "Authenticator app",
             _ => "A two-step",
         };
+
+    private static bool IsRecoveryCodes(EmailMessage message) =>
+        string.Equals(message.MfaFactor?.Trim(), "recovery_codes", StringComparison.OrdinalIgnoreCase);
+
+    // The codes themselves are never part of the message, only whether a set was replaced.
+    private static string RecoveryCodesSummary(EmailMessage message) =>
+        string.Equals(message.MfaChange?.Trim(), "regenerated", StringComparison.OrdinalIgnoreCase)
+            ? "A new set of recovery codes was generated for your EventXperience account. Your previous recovery codes no longer work."
+            : "Recovery codes were generated for your EventXperience account. Each one can be used once to verify your identity if your other methods are unavailable.";
 
     private static string MfaChangeLabel(EmailMessage message) =>
         message.MfaChange?.Trim().ToLowerInvariant() switch

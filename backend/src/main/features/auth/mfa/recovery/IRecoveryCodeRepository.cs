@@ -32,5 +32,6 @@ namespace backend.main.features.auth.mfa.recovery
         Task<bool> ReplaceSetAsync(int userId, IReadOnlyList<RecoveryCode> codes);
     }
 
-    public sealed record RecoveryCodeStatus(int RemainingCount, DateTime? GeneratedAtUtc, DateTime? LastUsedAtUtc);
+    /// <param name="GeneratedAtUtc">When the current set was generated; null when there is none.</param>
+    public sealed record RecoveryCodeStatus(int RemainingCount, DateTime? GeneratedAtUtc);
 }

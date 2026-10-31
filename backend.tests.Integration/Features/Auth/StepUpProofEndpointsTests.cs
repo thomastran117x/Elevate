@@ -46,6 +46,7 @@ public class StepUpProofEndpointsTests
         { "POST", "/api/auth/mfa/totp/enable" },
         { "POST", "/api/auth/mfa/totp/disable" },
         { "POST", "/api/auth/mfa/totp/remove" },
+        { "POST", "/api/auth/mfa/recovery-codes/regenerate" },
     };
 
     [Theory]

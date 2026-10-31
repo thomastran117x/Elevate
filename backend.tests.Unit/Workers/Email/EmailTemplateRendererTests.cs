@@ -97,6 +97,27 @@ public class EmailTemplateRendererTests
         Assert.Contains("/account/security", content.PlainText);
     }
 
+    [Theory]
+    [InlineData("enabled", "Recovery codes were generated")]
+    [InlineData("regenerated", "Your previous recovery codes no longer work")]
+    public void Render_RecoveryCodesChanged_DescribesTheSetWithoutAnyCode(string change, string expected)
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Type = EmailMessageType.MfaFactorChanged,
+            MfaFactor = "recovery_codes",
+            MfaChange = change,
+            Code = "ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-2345"
+        });
+
+        Assert.Equal("New recovery codes were generated for your account", content.Subject);
+        Assert.Contains(expected, content.PlainText);
+        Assert.Contains("/account/security", content.PlainText);
+        Assert.DoesNotContain("ABCD-EFGH", content.PlainText);
+        Assert.DoesNotContain("ABCD-EFGH", content.Html);
+    }
+
     [Fact]
     public void Render_MfaFactorChanged_ShouldNotRenderCodesOrSecrets_EvenWhenPresent()
     {

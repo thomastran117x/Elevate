@@ -206,6 +206,7 @@ public enum AuthSecurityFactor
     Totp,
     Password,
     Email,
+    RecoveryCodes,
 }
 
 public enum AuthFactorChange
@@ -214,6 +215,7 @@ public enum AuthFactorChange
     Disabled,
     Removed,
     Changed,
+    Regenerated,
 }
 
 public enum AuthClientClass

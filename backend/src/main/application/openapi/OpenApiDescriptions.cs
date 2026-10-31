@@ -89,6 +89,14 @@ namespace backend.main.application.openapi
                 ["POST /api/auth/mfa/totp/enable"] = new("Re-enable authenticator app MFA", StepUpRequired),
                 ["POST /api/auth/mfa/totp/disable"] = new("Disable authenticator app MFA", StepUpRequired),
                 ["POST /api/auth/mfa/totp/remove"] = new("Remove authenticator app MFA", StepUpRequired),
+                ["GET /api/auth/mfa/recovery-codes/status"] = new(
+                    "Get recovery code status",
+                    "Returns how many of the caller's single-use recovery codes remain and when the set was generated. Never returns the codes."
+                ),
+                ["POST /api/auth/mfa/recovery-codes/regenerate"] = new(
+                    "Generate recovery codes",
+                    "Generates ten single-use recovery codes and returns them once; they cannot be fetched again. Any earlier codes stop working. " + StepUpRequired
+                ),
                 ["POST /api/auth/forgot-password"] = new("Start password recovery by username (compatibility alias)"),
                 ["POST /api/auth/change-password"] = new("Reset the account password (compatibility alias)"),
                 ["POST /api/auth/recovery/password"] = new("Start password recovery by username"),
