@@ -179,7 +179,17 @@ Completing sign-in verification trusts the device for 90 days: the `Devices` tab
 
 ### Step-up verification
 
-Sensitive account mutations (`[RequireMfa]` routes) need a step-up proof from a TOTP, SMS, or email code verified in the same session. The proof is stored transiently in Redis under `mfa:step-up-proof:{sessionId}`. It is bound to the user, the session, and the access token's auth version. `Auth:StepUp:ProofLifetimeMinutes` (Compose: `AUTH_STEP_UP_PROOF_LIFETIME_MINUTES`) defaults to 10 and is validated at startup to be between 1 and 10. The window is measured from verification and never slides. Logout and session revocation delete the session and its proof in one atomic Redis operation; if Redis cannot confirm that, the revocation fails instead of reporting success. A proof is only written while its refresh session still exists. An auth-version change makes it unusable. Each proof also records the committed SMS/TOTP enrollment state from the database, so a completed factor change retires older proofs as part of its own commit. The change also advances the user's `mfa:step-up-generation:{userId}` counter, which retires proofs on every session and refuses any verification already in flight; if that counter cannot be updated the request returns 503. When Redis cannot return the proof and generation together, the gate treats the proof as missing.
+Sensitive account mutations (`[RequireMfa]` routes) need a step-up proof from a TOTP, SMS, recovery, or email code verified in the same session. The proof is stored transiently in Redis under `mfa:step-up-proof:{sessionId}`. It is bound to the user, the session, and the access token's auth version. `Auth:StepUp:ProofLifetimeMinutes` (Compose: `AUTH_STEP_UP_PROOF_LIFETIME_MINUTES`) defaults to 10 and is validated at startup to be between 1 and 10. The window is measured from verification and never slides. Logout and session revocation delete the session and its proof in one atomic Redis operation; if Redis cannot confirm that, the revocation fails instead of reporting success. A proof is only written while its refresh session still exists. An auth-version change makes it unusable. Each proof also records the committed SMS/TOTP enrollment state from the database, so a completed factor change retires older proofs as part of its own commit. The change also advances the user's `mfa:step-up-generation:{userId}` counter, which retires proofs on every session and refuses any verification already in flight; if that counter cannot be updated the request returns 503. When Redis cannot return the proof and generation together, the gate treats the proof as missing.
+
+### Recovery codes
+
+Single-use MFA recovery codes ([API](API.md#recovery-codes)) are stored only as Argon2id hashes. They use the `Auth:PasswordPolicy:Hashing:Argon2` cost parameters, with a pepper as Argon2's secret input and the owning account as its associated data. The pepper also keys the HMAC-SHA256 selector used to find a code's row, so each check costs one Argon2id derivation.
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `Auth:RecoveryCodes:Pepper` | development value | Base64 secret, at least 32 bytes. Required outside development and test, where a missing value or the public development value fails startup. |
+
+Generate it with `openssl rand -base64 32` and keep it out of the database, as secret as the JWT keys. Configure it with `Auth__RecoveryCodes__Pepper`, or `AUTH_RECOVERY_CODE_PEPPER` under Compose. It is read at startup. Changing it invalidates every stored recovery code: users still have their other methods and must generate a new set, so rotate it only if it may have leaked, and tell affected users.
 
 ### Password policy and hashing
 

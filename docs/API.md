@@ -60,7 +60,23 @@ Protected HTTP endpoints use JWT bearer access tokens: `Authorization: Bearer <a
 
 Fetch `GET /api/auth/csrf` and send its request token in `X-CSRF-TOKEN`, with the antiforgery cookie retained. The antiforgery cookie is named `XSRF-TOKEN`. CSRF validation applies to the configured auth POST paths and state-changing profile requests; it is not a blanket rule for every API action. The endpoint schema and `CsrfConfiguration` define the protected requests.
 
-Some operations require MFA step-up as well as a signed-in session. Username, password, and email changes, account deletion, every SMS or TOTP enrollment, enable, disable, or remove call, and an administrator enabling or disabling another account (`PATCH /api/admin/users/{id}/status`) need a step-up proof. For the admin route the proof belongs to the acting admin's session; there is no admin UI yet, so API clients complete step-up first, and a future admin UI should reuse `<app-mfa-gate>`. The other admin routes do not require step-up: the `reindex` routes only rebuild derived search indexes from the database, and the rest only read. The proof comes from `POST /api/auth/mfa/step-up/start` and `/verify` (TOTP, SMS, or the always-available email fallback). It is bound to the session and its auth version and expires a fixed 10 minutes after verification (`Auth:StepUp:ProofLifetimeMinutes`). Without it, these routes return `403` with error code `MFA_REQUIRED`. The step-up `options`, `start`, and `verify` routes never require a proof. Logout, credential rotation, and any completed MFA factor change discard the proof. New sensitive mutations, including future provider, session, device, or recovery-code changes, must use `[RequireMfa]` and be added to the registry in `backend.tests.Unit/Application/Security/SensitiveEndpointStepUpTests.cs`. SMS and TOTP enrollment/step-up have separate configuration switches. Role and resource ownership checks remain authoritative on the backend. Email changes additionally verify the current password when applicable, require confirmation at the new address, and invalidate sessions on completion.
+Some operations require MFA step-up as well as a signed-in session. Username, password, and email changes, account deletion, every SMS or TOTP enrollment, enable, disable, or remove call, recovery-code generation, and an administrator enabling or disabling another account (`PATCH /api/admin/users/{id}/status`) need a step-up proof. For the admin route the proof belongs to the acting admin's session; there is no admin UI yet, so API clients complete step-up first, and a future admin UI should reuse `<app-mfa-gate>`. The other admin routes do not require step-up: the `reindex` routes only rebuild derived search indexes from the database, and the rest only read. The proof comes from `POST /api/auth/mfa/step-up/start` and `/verify` (TOTP, SMS, a recovery code, or the always-available email fallback). It is bound to the session and its auth version and expires a fixed 10 minutes after verification (`Auth:StepUp:ProofLifetimeMinutes`). Without it, these routes return `403` with error code `MFA_REQUIRED`. The step-up `options`, `start`, and `verify` routes never require a proof. Logout, credential rotation, and any completed MFA factor change discard the proof. New sensitive mutations, including future provider, session, or device changes, must use `[RequireMfa]` and be added to the registry in `backend.tests.Unit/Application/Security/SensitiveEndpointStepUpTests.cs`. SMS and TOTP enrollment/step-up have separate configuration switches. Role and resource ownership checks remain authoritative on the backend. Email changes additionally verify the current password when applicable, require confirmation at the new address, and invalidate sessions on completion.
+
+### Recovery codes
+
+Recovery codes are a backup way to verify when a user's authenticator app or phone is unavailable.
+
+- `POST /api/auth/mfa/recovery-codes/regenerate` needs a fresh step-up proof. It returns ten single-use codes once, with `Cache-Control: no-store`. They cannot be fetched again. Each call replaces the whole set, so every earlier code stops working. Like other factor changes, it discards the step-up proof on every session and emails the owner. The email never contains a code.
+- `GET /api/auth/mfa/recovery-codes/status` returns `remainingCount`, `totalCount` (10), and `generatedAtUtc` (null before the first set). It never returns codes and needs no step-up.
+- Codes are 28 characters from the Crockford base32 alphabet (140 random bits), shown as seven hyphen-separated groups of four. Input ignores case, spaces, and hyphens, and reads `O` as `0` and `I` or `L` as `1`. Anything else that cannot be a code is refused with `400` before it is checked.
+- While any code remains unused, `recovery_code` appears in the step-up `options` and in a sign-in challenge's `availableMethods`. In-session step-up sends it to `POST /api/auth/mfa/step-up/verify` with `method: "recovery_code"`. Sign-in step-up sends the challenge and code to `POST /api/auth/mfa/verify/recovery-code`. Neither method needs a `start` call, but `start` accepts it.
+- A code works once. A wrong, used, or replaced code answers `401`, and failed attempts are capped like TOTP.
+- At sign-in, the code is spent only after the account and challenge are confirmed valid, so a disabled account or stale challenge never uses one up. A sign-in completed with a recovery code does not trust the device.
+- Each use is recorded in the security history as `recovery_code_used` and emailed to the owner as a security alert.
+
+Codes are stored as Argon2id hashes keyed by `Auth:RecoveryCodes:Pepper`; see [configuration](CONFIGURATION.md#recovery-codes). The plaintext is never stored, logged, or cached.
+
+**Email fallback.** ADR 0001 asked for this policy to be defined. Recovery codes are offered alongside email, not instead of it. Email stays the universal step-up fallback for every account, including accounts with recovery codes. Removing email as a step-up method once an account has codes is deferred to a follow-up decision.
 
 ### Passwords
 
@@ -92,7 +108,7 @@ Completing a pending signup re-runs these checks.
 
 Each entry has:
 
-- a `kind` such as `signed_in`, `password_changed`, `mfa_enabled`, `provider_linked`, or `refresh_token_reuse_detected`;
+- a `kind` such as `signed_in`, `password_changed`, `mfa_enabled`, `recovery_code_used`, `provider_linked`, or `refresh_token_reuse_detected`;
 - `occurredAt`;
 - optional `method`, `factor`, and `reason` names;
 - coarse `client` and `deviceClass` classes;
