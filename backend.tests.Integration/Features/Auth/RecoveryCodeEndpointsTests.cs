@@ -135,6 +135,37 @@ public class RecoveryCodeEndpointsTests
     }
 
     [Fact]
+    public async Task ReplacingTheSet_ShouldRetireEarlierProofs_EvenWithoutTheCacheGenerationBump()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var session = await app.SignUpAndVerifyByTokenAsync("rc-proof@example.com", transport: SessionTransportResolver.ApiValue);
+        var user = await app.FindUserByEmailAsync("rc-proof@example.com");
+        await GenerateAsync(app, session.AccessToken);
+        await app.GrantStepUpProofAsync(session.AccessToken);
+        (await app.GetWithBearerAsync("/api/auth/mfa/step-up/status", session.AccessToken))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Replace the set the way a regeneration commits it, but skip the factor-change follow-up
+        // that advances the Redis generation, as if Redis had been unreachable at that moment.
+        await using (var scope = app.Services.CreateAsyncScope())
+        {
+            var hasher = scope.ServiceProvider.GetRequiredService<RecoveryCodeHasher>();
+            var repository = new RecoveryCodeRepository(scope.ServiceProvider.GetRequiredService<AppDatabaseContext>());
+            var generatedAt = DateTime.UtcNow;
+            var rows = RecoveryCodeFormat.GenerateSet().Select(code => new RecoveryCode
+            {
+                Selector = hasher.Selector(user!.Id, code),
+                CodeHash = hasher.Hash(user.Id, code),
+                CreatedAtUtc = generatedAt,
+            }).ToList();
+            (await repository.ReplaceSetAsync(user!.Id, rows)).Should().BeTrue();
+        }
+
+        (await app.GetWithBearerAsync("/api/auth/mfa/step-up/status", session.AccessToken))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
     public async Task Codes_ShouldBeDeletedWithTheAccount()
     {
         await using var app = await AuthApiTestApp.CreateAsync();

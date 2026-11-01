@@ -392,7 +392,11 @@ public sealed class AuthApiTestApp : IAsyncDisposable
             Generation = long.TryParse(generation, out var current) ? current : 0,
             FactorState = StepUpFactorState.From(
                 await QueryDbAsync(db => db.SmsMfaEnrollments.AsNoTracking().FirstOrDefaultAsync(e => e.UserId == userId)),
-                await QueryDbAsync(db => db.TotpMfaEnrollments.AsNoTracking().FirstOrDefaultAsync(e => e.UserId == userId))),
+                await QueryDbAsync(db => db.TotpMfaEnrollments.AsNoTracking().FirstOrDefaultAsync(e => e.UserId == userId)),
+                await QueryDbAsync(db => db.RecoveryCodes.AsNoTracking()
+                    .Where(c => c.UserId == userId)
+                    .Select(c => (DateTime?)c.CreatedAtUtc)
+                    .MinAsync())),
         };
 
         await Cache.SetValueAsync(

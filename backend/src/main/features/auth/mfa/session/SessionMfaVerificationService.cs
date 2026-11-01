@@ -446,7 +446,8 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
         private async Task<string> GetFactorStateAsync(int userId) =>
             StepUpFactorState.From(
                 await _smsEnrollmentRepository.GetByUserIdAsync(userId),
-                await _totpMfaEnrollmentService.GetEnrollmentAsync(userId)
+                await _totpMfaEnrollmentService.GetEnrollmentAsync(userId),
+                (await _recoveryCodeService.GetStatusAsync(userId)).GeneratedAtUtc
             );
 
         private static (string? Proof, string? Generation) ReadPair(object value)

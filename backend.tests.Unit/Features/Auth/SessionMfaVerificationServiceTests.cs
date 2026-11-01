@@ -451,6 +451,31 @@ public class SessionMfaVerificationServiceTests
     }
 
     [Fact]
+    public async Task HasFreshProofAsync_ShouldReject_AfterRecoveryCodesWereReplaced_EvenWithoutAGenerationBump()
+    {
+        // Codes were regenerated in the database, but the cache-side generation bump failed. The
+        // set's generation time is part of the durable factor state, so the replacement alone
+        // retires every proof made before it.
+        var recoveryCodes = new Mock<IRecoveryCodeService>();
+        var totp = new Mock<ITotpMfaEnrollmentService>();
+        totp.Setup(t => t.VerifyPersistedCodeAsync(UserId, "123456")).Returns(Task.CompletedTask);
+        var (service, _, _) = CreateService(totp: totp, recoveryCodes: recoveryCodes);
+        recoveryCodes.Setup(r => r.GetStatusAsync(UserId))
+            .ReturnsAsync(new RecoveryCodeStatus(10, Start.UtcDateTime.AddMinutes(-30)));
+        await service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "totp", "123456");
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeTrue();
+
+        // Spending a code is not a factor change, so it leaves the proof alone.
+        recoveryCodes.Setup(r => r.GetStatusAsync(UserId))
+            .ReturnsAsync(new RecoveryCodeStatus(9, Start.UtcDateTime.AddMinutes(-30)));
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeTrue();
+
+        recoveryCodes.Setup(r => r.GetStatusAsync(UserId))
+            .ReturnsAsync(new RecoveryCodeStatus(10, Start.UtcDateTime.AddMinutes(1)));
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task ClearUserProofsAsync_ShouldFail_WhenTheGenerationCannotBeAdvanced()
     {
         // CacheService reports an unreachable Redis as 0; a real INCR never returns 0.
@@ -660,9 +685,16 @@ public class SessionMfaVerificationServiceTests
             time,
             Options.Create(new StepUpOptions { ProofLifetimeMinutes = lifetimeMinutes }),
             securityEvents ?? NullAuthSecurityEventEmitter.Instance,
-            (recoveryCodes ?? new Mock<IRecoveryCodeService>()).Object);
+            WithNoRecoveryCodeSet(recoveryCodes ?? new Mock<IRecoveryCodeService>()).Object);
 
         return (service, time);
+    }
+
+    /// <summary>The factor state reads the recovery-code set; by default the account has none.</summary>
+    private static Mock<IRecoveryCodeService> WithNoRecoveryCodeSet(Mock<IRecoveryCodeService> recoveryCodes)
+    {
+        recoveryCodes.Setup(r => r.GetStatusAsync(It.IsAny<int>())).ReturnsAsync(new RecoveryCodeStatus(0, null));
+        return recoveryCodes;
     }
 
     private static async Task<StepUpProof> ReadProofAsync(InMemoryCacheService cache)
@@ -681,7 +713,7 @@ public class SessionMfaVerificationServiceTests
             VerifiedAtUtc = verifiedAt,
             Generation = generation,
             // Matches an account with no committed SMS or TOTP enrollment (the default mocks).
-            FactorState = StepUpFactorState.From(null, null),
+            FactorState = StepUpFactorState.From(null, null, null),
         });
 
     /// <summary>A cache whose atomic proof read returns the given proof and generation.</summary>
