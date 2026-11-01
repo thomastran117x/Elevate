@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 
@@ -14,6 +14,11 @@ import {
   StartLoginStepUpResponse,
 } from '../../services/auth.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
+import {
+  RECOVERY_CODE_HINT,
+  RECOVERY_CODE_MAX_INPUT_LENGTH,
+  verificationCodeValidators,
+} from '../../validators/recovery-code.validator';
 
 @Component({
   selector: 'app-step-up-verify',
@@ -27,8 +32,11 @@ export class StepUpVerifyComponent {
   private readonly fb = new FormBuilder();
 
   readonly codeForm = this.fb.nonNullable.group({
-    code: this.fb.nonNullable.control('', [Validators.required, Validators.pattern(/^\d{6}$/)]),
+    code: this.fb.nonNullable.control('', verificationCodeValidators(null)),
   });
+
+  readonly recoveryCodeHint = RECOVERY_CODE_HINT;
+  readonly recoveryCodeMaxLength = RECOVERY_CODE_MAX_INPUT_LENGTH;
 
   readonly status = signal<'ready' | 'starting' | 'verifying' | 'success' | 'error'>('ready');
   readonly message = signal('Choose how you want to verify this sign-in.');
@@ -74,6 +82,15 @@ export class StepUpVerifyComponent {
     return this.activeMethod() === 'totp';
   }
 
+  get isRecoveryCodeActive(): boolean {
+    return this.activeMethod() === 'recovery_code';
+  }
+
+  /** Whether the active method is finished by typing a code here, rather than an email link. */
+  get isCodeEntryActive(): boolean {
+    return this.isSmsActive || this.isTotpActive || this.isRecoveryCodeActive;
+  }
+
   selectMethod(method: LoginStepUpMethod): void {
     const pending = this.pending();
     if (!pending || !pending.AvailableMethods.includes(method) || this.status() === 'starting') {
@@ -88,7 +105,9 @@ export class StepUpVerifyComponent {
         ? 'Sending a security code...'
         : method === 'email'
           ? 'Sending a verification email...'
-          : 'Preparing authenticator verification...',
+          : method === 'recovery_code'
+            ? 'Preparing recovery code verification...'
+            : 'Preparing authenticator verification...',
     );
 
     this.auth
@@ -108,20 +127,17 @@ export class StepUpVerifyComponent {
           this.delivery.set(response);
           this.activeMethod.set(response.SelectedMethod);
           this.persistPendingState(nextPending);
+          this.applyCodeValidators(response.SelectedMethod);
           this.codeForm.reset();
           this.success =
             response.SelectedMethod === 'sms'
               ? `Security code sent to ${response.MaskedDestination}.`
               : response.SelectedMethod === 'email'
                 ? `Verification email sent to ${response.MaskedDestination}.`
-                : 'Open your authenticator app and enter the current 6-digit code.';
-          this.message.set(
-            response.SelectedMethod === 'sms'
-              ? 'Enter the code from your text message.'
-              : response.SelectedMethod === 'email'
-                ? 'Check your email and open the verification link to finish signing in.'
-                : 'Enter the 6-digit code from your authenticator app to finish signing in.',
-          );
+                : response.SelectedMethod === 'recovery_code'
+                  ? ''
+                  : 'Open your authenticator app and enter the current 6-digit code.';
+          this.message.set(this.codePrompt(response.SelectedMethod));
         },
         error: (err) => {
           this.error = getApiClientMessage(err, 'Unable to start sign-in verification.');
@@ -134,7 +150,7 @@ export class StepUpVerifyComponent {
     const pending = this.pending();
     if (
       !pending ||
-      (!this.isSmsActive && !this.isTotpActive) ||
+      !this.isCodeEntryActive ||
       this.codeForm.invalid ||
       this.status() === 'verifying'
     ) {
@@ -147,9 +163,12 @@ export class StepUpVerifyComponent {
     this.status.set('verifying');
     this.message.set('Verifying your code and finishing sign-in...');
 
+    const { code } = this.codeForm.getRawValue();
     const verificationRequest = this.isTotpActive
-      ? this.auth.verifyTotpLoginStepUp(pending.Challenge, this.codeForm.getRawValue().code)
-      : this.auth.verifyLoginStepUp(pending.Challenge, this.codeForm.getRawValue().code);
+      ? this.auth.verifyTotpLoginStepUp(pending.Challenge, code)
+      : this.isRecoveryCodeActive
+        ? this.auth.verifyRecoveryCodeLoginStepUp(pending.Challenge, code)
+        : this.auth.verifyLoginStepUp(pending.Challenge, code);
 
     verificationRequest.pipe(finalize(() => this.status.set('ready'))).subscribe({
       next: async (session) => {
@@ -167,11 +186,7 @@ export class StepUpVerifyComponent {
       },
       error: (err) => {
         this.error = getApiClientMessage(err, 'That code could not be verified.');
-        this.message.set(
-          this.isTotpActive
-            ? 'Enter the 6-digit code from your authenticator app.'
-            : 'Enter the code from your text message.',
-        );
+        this.message.set(this.codePrompt(this.activeMethod()));
       },
     });
   }
@@ -183,6 +198,26 @@ export class StepUpVerifyComponent {
     this.delivery.set(null);
     this.codeForm.reset();
     this.message.set('Choose how you want to verify this sign-in.');
+  }
+
+  private codePrompt(method: LoginStepUpMethod | null): string {
+    switch (method) {
+      case 'sms':
+        return 'Enter the code from your text message.';
+      case 'email':
+        return 'Check your email and open the verification link to finish signing in.';
+      case 'recovery_code':
+        return 'Enter one of your saved recovery codes to finish signing in.';
+      default:
+        return 'Enter the 6-digit code from your authenticator app to finish signing in.';
+    }
+  }
+
+  /** A recovery code is not six digits, so the field's rules follow the chosen method. */
+  private applyCodeValidators(method: LoginStepUpMethod): void {
+    const control = this.codeForm.controls.code;
+    control.setValidators(verificationCodeValidators(method));
+    control.updateValueAndValidity();
   }
 
   private loadPendingState(): void {

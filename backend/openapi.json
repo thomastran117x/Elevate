@@ -18420,6 +18420,79 @@
         "x-authorization": "anonymous"
       }
     },
+    "/api/auth/mfa/verify/recovery-code": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Verify a recovery code to sign in",
+        "description": "Spends one single-use recovery code for an active sign-in verification challenge and completes login on success. The device is not trusted afterwards.",
+        "operationId": "Auth_VerifyRecoveryCodeStepUp_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyLoginStepUpRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyLoginStepUpRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyLoginStepUpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfAuthenticatedSessionResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfAuthenticatedSessionResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfAuthenticatedSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "x-authorization": "anonymous"
+      }
+    },
     "/api/auth/recovery/password": {
       "post": {
         "tags": [
@@ -20849,6 +20922,162 @@
         "x-authorization": "authenticated"
       }
     },
+    "/api/auth/mfa/recovery-codes/status": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Get recovery code status",
+        "description": "Returns how many of the caller's single-use recovery codes remain and when the set was generated. Never returns the codes.",
+        "operationId": "AuthRecoveryCodes_GetStatus_get",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfRecoveryCodeStatusResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfRecoveryCodeStatusResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfRecoveryCodeStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      }
+    },
+    "/api/auth/mfa/recovery-codes/regenerate": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Generate recovery codes",
+        "description": "Generates ten single-use recovery codes and returns them once; they cannot be fetched again. Any earlier codes stop working. Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
+        "operationId": "AuthRecoveryCodes_Regenerate_post",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfRecoveryCodesResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfRecoveryCodesResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfRecoveryCodesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      }
+    },
     "/api/auth/security-events": {
       "get": {
         "tags": [
@@ -21027,7 +21256,7 @@
                 "type": "null"
               },
               {
-                "description": "The id of the request that produced the entry. Quoting it lets support find the related\r\nrecords without the user ever seeing them.",
+                "description": "The id of the request that produced the entry. Quoting it lets support find the related\r\nrecords without the user ever seeing them. Null for an entry an administrator caused,\r\nwhose request was the administrator's.",
                 "$ref": "#/components/schemas/String"
               }
             ]
@@ -24660,6 +24889,90 @@
               {
                 "description": "Endpoint-specific response payload.",
                 "$ref": "#/components/schemas/RecordEventViewResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
+      "ApiResponseOfRecoveryCodesResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/RecoveryCodesResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
+      "ApiResponseOfRecoveryCodeStatusResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/RecoveryCodeStatusResponse"
               }
             ],
             "description": "Endpoint-specific response payload. `null` on error responses."
@@ -31815,6 +32128,44 @@
           }
         },
         "description": "The outcome of recording one view."
+      },
+      "RecoveryCodesResponse": {
+        "required": [
+          "codes"
+        ],
+        "type": "object",
+        "properties": {
+          "codes": {
+            "$ref": "#/components/schemas/IReadOnlyListOfString"
+          },
+          "generatedAtUtc": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        },
+        "description": "A newly generated set of recovery codes. This response is the only place the plaintext\r\never appears; it cannot be fetched again."
+      },
+      "RecoveryCodeStatusResponse": {
+        "type": "object",
+        "properties": {
+          "remainingCount": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "totalCount": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "generatedAtUtc": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Null when the account has never generated codes.",
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ]
+          }
+        },
+        "description": "How many recovery codes remain, and when the set was made. Never the codes."
       },
       "RefreshTokenRequest": {
         "type": "object",

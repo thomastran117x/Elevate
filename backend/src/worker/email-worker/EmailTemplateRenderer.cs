@@ -204,6 +204,20 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
                 Code: null,
                 MutedNote: "If you didn't make this change, contact support immediately."),
 
+            EmailMessageType.MfaFactorChanged when IsRecoveryCodes(message) => new Content(
+                Subject: "New recovery codes were generated for your account",
+                Preheader: "A new set of recovery codes was created for your account.",
+                Heading: "New recovery codes",
+                Greeting: greeting,
+                Intro:
+                [
+                    RecoveryCodesSummary(message),
+                    "Other signed-in sessions will need to verify again before changing security settings."
+                ],
+                Cta: new Cta($"{baseUrl}/account/security", "Review security settings"),
+                Code: null,
+                MutedNote: "If you didn't make this change, generate new recovery codes, change your password, and review your two-step verification settings immediately."),
+
             EmailMessageType.MfaFactorChanged => new Content(
                 Subject: "Your two-step verification settings changed",
                 Preheader: "A sign-in verification method on your account was updated.",
@@ -336,6 +350,15 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
             _ => "A two-step",
         };
 
+    private static bool IsRecoveryCodes(EmailMessage message) =>
+        string.Equals(message.MfaFactor?.Trim(), "recovery_codes", StringComparison.OrdinalIgnoreCase);
+
+    // The codes themselves are never part of the message, only whether a set was replaced.
+    private static string RecoveryCodesSummary(EmailMessage message) =>
+        string.Equals(message.MfaChange?.Trim(), "regenerated", StringComparison.OrdinalIgnoreCase)
+            ? "A new set of recovery codes was generated for your EventXperience account. Your previous recovery codes no longer work."
+            : "Recovery codes were generated for your EventXperience account. Each one can be used once to verify your identity if your other methods are unavailable.";
+
     private static string MfaChangeLabel(EmailMessage message) =>
         message.MfaChange?.Trim().ToLowerInvariant() switch
         {
@@ -357,6 +380,7 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
             "mfa_disabled" => "Two-step verification was turned off",
             "mfa_removed" => "A two-step verification method was removed",
             "email_changed" => "Your email address was changed",
+            "recovery_code_used" => "A recovery code was used on your account",
             _ => "New security activity on your account",
         };
 
@@ -367,6 +391,7 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
             "provider_linked" => $"{SecurityAlertProvider(message)} can now be used to sign in to your EventXperience account.",
             "refresh_token_reuse_detected" => "A sign-in token for your account was used after it had been replaced, which can mean it was copied. We signed that session out.",
             "account_disabled" => "An administrator disabled your EventXperience account, and every session was signed out.",
+            "recovery_code_used" => "One of your recovery codes was used to verify your identity on your EventXperience account. It can't be used again. If you're running low, generate a new set in your security settings.",
             _ => "There was a security change on your EventXperience account.",
         };
 

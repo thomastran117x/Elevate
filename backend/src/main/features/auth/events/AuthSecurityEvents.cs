@@ -72,6 +72,9 @@ public static class AuthSecurityEvents
     public static readonly AuthSecurityEventDefinition AccountStatusChanged =
         new(33100, "auth.account.status_changed", LogLevel.Information);
 
+    public static readonly AuthSecurityEventDefinition RecoveryCodeUsed =
+        new(33110, "auth.recovery_code.used", LogLevel.Information);
+
     public static readonly IReadOnlyList<AuthSecurityEventDefinition> All =
     [
         SignInSucceeded,
@@ -91,5 +94,6 @@ public static class AuthSecurityEvents
         ProviderLinkConflict,
         AuthorizationDenied,
         AccountStatusChanged,
+        RecoveryCodeUsed,
     ];
 }

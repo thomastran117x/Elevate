@@ -20,32 +20,44 @@ namespace backend.main.features.auth.password
         private const int HashLength = 32;
 
         private readonly Argon2Options _options;
+        private readonly byte[]? _secret;
 
-        public Argon2idPasswordFormat(Argon2Options options)
+        /// <param name="secret">
+        /// Argon2's optional secret input (a pepper). It is not written into the PHC string, so a
+        /// hash made with one verifies only through a format holding the same secret.
+        /// </param>
+        public Argon2idPasswordFormat(Argon2Options options, byte[]? secret = null)
         {
             _options = options;
+            _secret = secret;
         }
 
         public static bool Matches(string storedHash) =>
             storedHash.StartsWith(Prefix, StringComparison.Ordinal);
 
-        public string Hash(string password)
+        /// <param name="associatedData">
+        /// Argon2's optional associated data, binding the hash to a context such as its owner. The
+        /// same value must be passed to <see cref="Verify"/>.
+        /// </param>
+        public string Hash(string password, byte[]? associatedData = null)
         {
             var salt = RandomNumberGenerator.GetBytes(SaltLength);
             var hash = Derive(
-                password, salt, _options.MemoryKiB, _options.Iterations, _options.Parallelism, HashLength);
+                password, salt, _options.MemoryKiB, _options.Iterations, _options.Parallelism, HashLength,
+                _secret, associatedData);
 
             return string.Create(CultureInfo.InvariantCulture,
                 $"{Prefix}v={Version}$m={_options.MemoryKiB},t={_options.Iterations},p={_options.Parallelism}${Encode(salt)}${Encode(hash)}");
         }
 
-        public bool Verify(string password, string storedHash)
+        public bool Verify(string password, string storedHash, byte[]? associatedData = null)
         {
             if (!TryParse(storedHash, out var parsed))
                 return false;
 
             var actual = Derive(
-                password, parsed.Salt, parsed.MemoryKiB, parsed.Iterations, parsed.Parallelism, parsed.Hash.Length);
+                password, parsed.Salt, parsed.MemoryKiB, parsed.Iterations, parsed.Parallelism, parsed.Hash.Length,
+                _secret, associatedData);
             return CryptographicOperations.FixedTimeEquals(actual, parsed.Hash);
         }
 
@@ -58,7 +70,14 @@ namespace backend.main.features.auth.password
             && parsed.Hash.Length == HashLength;
 
         private static byte[] Derive(
-            string password, byte[] salt, int memoryKiB, int iterations, int parallelism, int length)
+            string password,
+            byte[] salt,
+            int memoryKiB,
+            int iterations,
+            int parallelism,
+            int length,
+            byte[]? secret,
+            byte[]? associatedData)
         {
             var passwordBytes = Encoding.UTF8.GetBytes(PasswordText.Normalize(password));
             try
@@ -70,6 +89,10 @@ namespace backend.main.features.auth.password
                     Iterations = iterations,
                     DegreeOfParallelism = parallelism,
                 };
+                if (secret is not null)
+                    argon2.KnownSecret = secret;
+                if (associatedData is not null)
+                    argon2.AssociatedData = associatedData;
                 return argon2.GetBytes(length);
             }
             finally

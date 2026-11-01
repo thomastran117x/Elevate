@@ -69,6 +69,8 @@ type AuthSpy = jasmine.SpyObj<
     | 'disableTotp'
     | 'removeTotp'
     | 'getSessionMfaStatus'
+    | 'getRecoveryCodeStatus'
+    | 'regenerateRecoveryCodes'
   >
 >;
 
@@ -91,8 +93,13 @@ describe('SecurityTabComponent', () => {
       'disableTotp',
       'removeTotp',
       'getSessionMfaStatus',
+      'getRecoveryCodeStatus',
+      'regenerateRecoveryCodes',
     ]);
     auth.getMfaStatus.and.returnValue(of(makeSettings()));
+    auth.getRecoveryCodeStatus.and.returnValue(
+      of({ remainingCount: 0, totalCount: 10, generatedAtUtc: null }),
+    );
     // The gate starts unverified; specs call onMfaVerified() to stand in for its emission.
     auth.getSessionMfaStatus.and.returnValue(
       throwError(() => new ApiClientClientError('Verify first', 401, 'MFA_REQUIRED')),
@@ -480,6 +487,58 @@ describe('SecurityTabComponent', () => {
     const mfaRequired = () => new ApiClientClientError('Verify again', 403, 'MFA_REQUIRED');
 
     beforeEach(() => verifyGate());
+
+    it('shows the recovery codes card once the settings load', () => {
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('app-recovery-codes-card')).not.toBeNull();
+      expect(auth.getRecoveryCodeStatus).toHaveBeenCalled();
+    });
+
+    it('re-locks when recovery code generation needs a fresh proof', () => {
+      auth.regenerateRecoveryCodes.and.returnValue(throwError(mfaRequired));
+      fixture.detectChanges();
+      const generate = Array.from(
+        fixture.nativeElement.querySelectorAll('app-recovery-codes-card button'),
+      ).find((button) => (button as HTMLButtonElement).textContent?.includes('Generate codes')) as
+        HTMLButtonElement | undefined;
+
+      generate!.click();
+
+      expect(component.mfaVerified).toBeFalse();
+      expect(component.stepUpLapsed).toBeTrue();
+    });
+
+    it('shows unsaved recovery codes again after the tab re-locks and is verified', () => {
+      const codes = Array.from({ length: 10 }, (_, i) => `AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GG${i}0`);
+      auth.regenerateRecoveryCodes.and.returnValue(
+        of({ codes, generatedAtUtc: '2026-10-31T12:00:00Z' }),
+      );
+      auth.getRecoveryCodeStatus.and.returnValue(
+        of({ remainingCount: 10, totalCount: 10, generatedAtUtc: '2026-10-31T12:00:00Z' }),
+      );
+      fixture.detectChanges();
+      const card = () => fixture.nativeElement.querySelector('app-recovery-codes-card');
+      Array.from(card().querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
+        .find((b) => b.textContent?.includes('Generate new codes'))!
+        .click();
+      fixture.detectChanges();
+      Array.from(card().querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
+        .find((b) => b.textContent?.includes('Replace codes'))!
+        .click();
+      fixture.detectChanges();
+      expect(card().querySelectorAll('ol li').length).toBe(10);
+
+      // Generation spent the proof, so the next change re-locks the tab and drops the card.
+      component.onStepUpRequired();
+      fixture.detectChanges();
+      expect(card()).toBeNull();
+
+      component.onMfaVerified();
+      fixture.detectChanges();
+      expect(card().querySelectorAll('ol li').length).toBe(10);
+      expect(card().textContent).toContain(codes[0]);
+    });
 
     it('re-locks with an immediate prompt instead of reporting an error', () => {
       auth.disableMfa.and.returnValue(throwError(mfaRequired));

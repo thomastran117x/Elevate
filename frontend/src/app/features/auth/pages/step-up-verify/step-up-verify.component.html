@@ -116,6 +116,27 @@
                 </p>
               </button>
             }
+            @if (availableMethods.includes('recovery_code')) {
+              <button
+                type="button"
+                class="rounded-3xl border px-6 py-5 text-left transition"
+                [ngClass]="{
+                  'border-accent/60 bg-accent/10 shadow-lg shadow-accent/10': isRecoveryCodeActive,
+                  'border-line bg-surface-raised hover:border-accent/40 hover:bg-accent/5':
+                    !isRecoveryCodeActive,
+                }"
+                [disabled]="status() === 'starting'"
+                (click)="selectMethod('recovery_code')"
+              >
+                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
+                  Recovery code
+                </p>
+                <h3 class="mt-2 text-xl font-bold text-content">Use a recovery code</h3>
+                <p class="mt-2 text-sm leading-6 text-subtle">
+                  Lost your phone or authenticator? Enter one of your saved single-use codes.
+                </p>
+              </button>
+            }
           </div>
         } @else {
           <div
@@ -126,7 +147,7 @@
           </div>
         }
 
-        @if (isSmsActive || isTotpActive) {
+        @if (isCodeEntryActive) {
           <form
             class="space-y-5 rounded-3xl border border-accent/30 bg-accent/10 px-6 py-6"
             [formGroup]="codeForm"
@@ -140,34 +161,66 @@
                 {{
                   isTotpActive
                     ? 'Finish sign-in with your authenticator app'
-                    : 'Finish sign-in with SMS'
+                    : isRecoveryCodeActive
+                      ? 'Finish sign-in with a recovery code'
+                      : 'Finish sign-in with SMS'
                 }}
               </h3>
               <p class="text-sm leading-6 text-subtle">
                 {{
                   isTotpActive
                     ? 'Open your authenticator app and enter the current 6-digit code.'
-                    : 'Enter the 6-digit code sent to ' +
-                      (delivery()?.MaskedDestination || maskedPhone) +
-                      '.'
+                    : isRecoveryCodeActive
+                      ? 'Each recovery code works once. This device will still be asked to verify next time.'
+                      : 'Enter the 6-digit code sent to ' +
+                        (delivery()?.MaskedDestination || maskedPhone) +
+                        '.'
                 }}
               </p>
             </div>
             <div class="space-y-2">
-              <label class="text-sm font-semibold text-content" for="step-up-code"
-                >Security code</label
-              >
-              <input
-                id="step-up-code"
-                type="text"
-                inputmode="numeric"
-                maxlength="6"
-                formControlName="code"
-                placeholder="123456"
-                class="w-full rounded-2xl border border-line bg-surface-raised px-4 py-3 text-base tracking-[0.35em] text-content outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/20"
-              />
+              @if (isRecoveryCodeActive) {
+                <label class="text-sm font-semibold text-content" for="step-up-code"
+                  >Recovery code</label
+                >
+                <p id="step-up-code-hint" class="text-xs leading-5 text-subtle">
+                  {{ recoveryCodeHint }}
+                </p>
+                <input
+                  id="step-up-code"
+                  type="text"
+                  inputmode="text"
+                  autocapitalize="characters"
+                  autocomplete="off"
+                  spellcheck="false"
+                  [attr.maxlength]="recoveryCodeMaxLength"
+                  aria-describedby="step-up-code-hint"
+                  formControlName="code"
+                  placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+                  class="w-full rounded-2xl border border-line bg-surface-raised px-4 py-3 font-mono text-base tracking-wider text-content outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/20"
+                />
+              } @else {
+                <label class="text-sm font-semibold text-content" for="step-up-code"
+                  >Security code</label
+                >
+                <input
+                  id="step-up-code"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="6"
+                  formControlName="code"
+                  placeholder="123456"
+                  class="w-full rounded-2xl border border-line bg-surface-raised px-4 py-3 text-base tracking-[0.35em] text-content outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/20"
+                />
+              }
               @if (codeForm.controls.code.invalid && codeForm.controls.code.touched) {
-                <p class="text-sm text-danger">Enter the 6-digit security code.</p>
+                <p class="text-sm text-danger">
+                  {{
+                    isRecoveryCodeActive
+                      ? 'Enter a recovery code in the format shown when it was generated.'
+                      : 'Enter the 6-digit security code.'
+                  }}
+                </p>
               }
             </div>
             <div class="flex flex-col gap-3 sm:flex-row">

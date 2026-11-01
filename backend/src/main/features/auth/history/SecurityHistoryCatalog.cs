@@ -29,6 +29,7 @@ public static class SecurityHistoryCatalog
             AuthSecurityEvents.SessionRevoked,
             AuthSecurityEvents.ProviderLinked,
             AuthSecurityEvents.AccountStatusChanged,
+            AuthSecurityEvents.RecoveryCodeUsed,
         };
 
     public static readonly IReadOnlySet<AuthSecurityEventDefinition> NotRecorded =
@@ -84,6 +85,9 @@ public static class SecurityHistoryCatalog
         if (definition == AuthSecurityEvents.SessionRevoked && securityEvent.Outcome == AuthSecurityOutcome.Succeeded)
             return ClassifyRevocation(securityEvent.Reason);
 
+        if (definition == AuthSecurityEvents.RecoveryCodeUsed)
+            return AccountSecurityEventKind.RecoveryCodeUsed;
+
         if (definition == AuthSecurityEvents.AccountStatusChanged)
         {
             return securityEvent.Reason switch
@@ -124,6 +128,8 @@ public static class SecurityHistoryCatalog
             (AuthSecurityFactor.Sms or AuthSecurityFactor.Totp, AuthFactorChange.Enabled) => AccountSecurityEventKind.MfaEnabled,
             (AuthSecurityFactor.Sms or AuthSecurityFactor.Totp, AuthFactorChange.Disabled) => AccountSecurityEventKind.MfaDisabled,
             (AuthSecurityFactor.Sms or AuthSecurityFactor.Totp, AuthFactorChange.Removed) => AccountSecurityEventKind.MfaRemoved,
+            (AuthSecurityFactor.RecoveryCodes, AuthFactorChange.Enabled) => AccountSecurityEventKind.RecoveryCodesGenerated,
+            (AuthSecurityFactor.RecoveryCodes, AuthFactorChange.Regenerated) => AccountSecurityEventKind.RecoveryCodesRegenerated,
             _ => null,
         };
 
