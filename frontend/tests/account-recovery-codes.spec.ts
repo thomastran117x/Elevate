@@ -51,11 +51,16 @@ test.describe('MFA recovery codes', () => {
       expect(code.trim()).toMatch(/^([0-9A-HJKMNP-TV-Z]{4}-){6}[0-9A-HJKMNP-TV-Z]{4}$/),
     );
 
+    await page.screenshot({
+      path: 'test-results/account-recovery-codes-shown.png',
+      fullPage: true,
+    });
+
     await page.getByRole('button', { name: 'Copy all' }).click();
     await expect(page.getByText('Copied to your clipboard.')).toBeVisible();
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
-      shown.map((code) => code.trim()).join('\n'),
-    );
+    // The Windows clipboard hands text back with CRLF line endings.
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied.replace(/\r\n/g, '\n')).toBe(shown.map((code) => code.trim()).join('\n'));
 
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Download .txt' }).click();
