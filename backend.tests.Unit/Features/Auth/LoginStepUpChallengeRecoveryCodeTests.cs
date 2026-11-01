@@ -9,6 +9,7 @@ using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
+using backend.main.shared.utilities;
 
 using backend.tests.Unit.Features.Auth.Events;
 using backend.tests.Unit.Support;
@@ -24,6 +25,7 @@ public class LoginStepUpChallengeRecoveryCodeTests
     private const int UserId = 9;
 
     private static readonly string ValidCode = RecoveryCodeFormat.Display(RecoveryCodeFormat.GenerateSet()[0]);
+    private static readonly RecoveryCodeSpend Spend = new(3, new DateTime(2026, 10, 31, 12, 0, 0, DateTimeKind.Utc));
 
     private readonly InMemoryCacheService _cache = new();
     private readonly Mock<IRecoveryCodeService> _recoveryCodes = new();
@@ -83,7 +85,7 @@ public class LoginStepUpChallengeRecoveryCodeTests
     [Fact]
     public async Task VerifyRecoveryCodeAsync_ShouldSignIn_WithoutTrustingTheDevice()
     {
-        _recoveryCodes.Setup(r => r.TryConsumeAsync(UserId, ValidCode)).ReturnsAsync(true);
+        _recoveryCodes.Setup(r => r.TryConsumeAsync(UserId, ValidCode)).ReturnsAsync(Spend);
         var challenge = await _service.CreateChallengeAsync(_user, SessionTransport.ApiToken, false, "/events/4");
 
         var result = await _service.VerifyRecoveryCodeAsync(challenge.Challenge, ValidCode);
@@ -94,6 +96,8 @@ public class LoginStepUpChallengeRecoveryCodeTests
         var used = _securityEvents.Of(AuthSecurityEvents.RecoveryCodeUsed).Should().ContainSingle().Subject;
         used.UserId.Should().Be(UserId);
         used.Flow.Should().Be(AuthSecurityFlow.LoginStepUp);
+        used.SessionId.Should().Be(result.UserToken.token.SessionId);
+        _recoveryCodes.Verify(r => r.ReleaseAsync(It.IsAny<int>(), It.IsAny<RecoveryCodeSpend>()), Times.Never);
         _securityEvents.Of(AuthSecurityEvents.StepUpSucceeded).Should().ContainSingle()
             .Which.Method.Should().Be(AuthSecurityMethod.RecoveryCode);
 
@@ -122,6 +126,41 @@ public class LoginStepUpChallengeRecoveryCodeTests
         _securityEvents.Of(AuthSecurityEvents.StepUpFailed)
             .Select(e => e.Reason)
             .Should().Contain(AuthSecurityReason.AttemptsExhausted);
+    }
+
+    [Fact]
+    public async Task VerifyRecoveryCodeAsync_ShouldReleaseTheCode_WhenNoSessionCouldBeIssued()
+    {
+        _recoveryCodes.Setup(r => r.TryConsumeAsync(UserId, ValidCode)).ReturnsAsync(Spend);
+        _sessions
+            .Setup(s => s.IssueAsync(It.IsAny<User>(), It.IsAny<SessionTransport>(), It.IsAny<string?>(), It.IsAny<bool?>()))
+            .ThrowsAsync(new NotAvailableException());
+        var challenge = await _service.CreateChallengeAsync(_user, SessionTransport.ApiToken, false, null);
+
+        var act = () => _service.VerifyRecoveryCodeAsync(challenge.Challenge, ValidCode);
+
+        await act.Should().ThrowAsync<NotAvailableException>();
+        _recoveryCodes.Verify(r => r.ReleaseAsync(UserId, Spend), Times.Once);
+        _securityEvents.Of(AuthSecurityEvents.RecoveryCodeUsed).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task VerifyRecoveryCodeAsync_ShouldNotReviveAChallengeDiscardedWhileItWaited()
+    {
+        var challenge = await _service.CreateChallengeAsync(_user, SessionTransport.ApiToken, false, null);
+        // Another attempt exhausts and discards the challenge after this one has read it, but
+        // before this one reaches the completion lock's checks (the account read runs under it).
+        _users.Setup(r => r.GetUserAsync(UserId))
+            .Callback(() => _cache.DeleteKeyAsync($"auth:stepup:challenge:{CryptoHelper.HashToken(challenge.Challenge)}").GetAwaiter().GetResult())
+            .ReturnsAsync(_user);
+
+        var act = () => _service.VerifyRecoveryCodeAsync(challenge.Challenge, ValidCode);
+
+        await act.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage("Invalid or expired sign-in verification challenge.");
+        _recoveryCodes.Verify(r => r.TryConsumeAsync(It.IsAny<int>(), It.IsAny<string>()), Times.Never);
+        (await _cache.GetValueAsync($"auth:stepup:challenge:{CryptoHelper.HashToken(challenge.Challenge)}"))
+            .Should().BeNull("a stale copy must not be written back");
     }
 
     [Fact]
@@ -182,7 +221,7 @@ public class LoginStepUpChallengeRecoveryCodeTests
         }
 
         // Still usable: malformed input never touched the attempt budget.
-        _recoveryCodes.Setup(r => r.TryConsumeAsync(UserId, ValidCode)).ReturnsAsync(true);
+        _recoveryCodes.Setup(r => r.TryConsumeAsync(UserId, ValidCode)).ReturnsAsync(Spend);
         (await _service.VerifyRecoveryCodeAsync(challenge.Challenge, ValidCode)).Should().NotBeNull();
     }
 }

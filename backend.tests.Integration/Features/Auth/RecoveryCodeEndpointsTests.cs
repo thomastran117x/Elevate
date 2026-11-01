@@ -260,6 +260,37 @@ public class RecoveryCodeEndpointsTests
     }
 
     [Fact]
+    public async Task ReleasingASpend_ShouldReturnOnlyThatSpend_AndNotAReplacedCode()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var session = await app.SignUpAndVerifyByTokenAsync("rc-release@example.com", transport: SessionTransportResolver.ApiValue);
+        var user = await app.FindUserByEmailAsync("rc-release@example.com");
+        var codes = await GenerateAsync(app, session.AccessToken);
+
+        await using (var scope = app.Services.CreateAsyncScope())
+        {
+            var service = scope.ServiceProvider.GetRequiredService<IRecoveryCodeService>();
+            var spend = await service.TryConsumeAsync(user!.Id, codes[0]);
+            spend.Should().NotBeNull();
+            (await ReadStatusAsync(app, session.AccessToken)).RemainingCount.Should().Be(9);
+
+            // The stored use time round-trips, so the release matches it exactly.
+            var repository = new RecoveryCodeRepository(scope.ServiceProvider.GetRequiredService<AppDatabaseContext>());
+            (await repository.TryReleaseAsync(spend!.CodeId, user.Id, spend.UsedAtUtc.AddSeconds(1))).Should().BeFalse();
+            await service.ReleaseAsync(user.Id, spend);
+            (await ReadStatusAsync(app, session.AccessToken)).RemainingCount.Should().Be(10);
+            (await service.TryConsumeAsync(user.Id, codes[0])).Should().NotBeNull("a released code works again");
+
+            // A code replaced by a regeneration stays gone even if its spend is released late.
+            var late = await service.TryConsumeAsync(user.Id, codes[1]);
+            await GenerateAsync(app, session.AccessToken);
+            await service.ReleaseAsync(user.Id, late!);
+            (await ReadStatusAsync(app, session.AccessToken)).RemainingCount.Should().Be(10);
+            (await service.TryConsumeAsync(user.Id, codes[1])).Should().BeNull();
+        }
+    }
+
+    [Fact]
     public async Task LoginStepUp_ShouldAcceptARecoveryCode_WithoutTrustingTheDevice()
     {
         await using var app = await AuthApiTestApp.CreateAsync();

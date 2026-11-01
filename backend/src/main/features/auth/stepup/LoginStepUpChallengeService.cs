@@ -401,13 +401,30 @@ namespace backend.main.features.auth.stepup
                     throw new BadRequestException("Enter a recovery code in the format shown when it was generated.");
                 }
 
-                return await CompletePendingChallengeAsync(
+                RecoveryCodeSpend? spend = null;
+                var result = await CompletePendingChallengeAsync(
                     state,
                     AuthSecurityMethod.RecoveryCode,
-                    beforeIssue: () => ConsumeRecoveryCodeAsync(state, challengeHash, code),
+                    beforeIssue: async () => spend = await ConsumeRecoveryCodeAsync(state.UserId, challengeHash, code),
+                    // No session came of it, so the code goes back rather than being burned.
+                    onIssueFailed: () => spend is null
+                        ? Task.CompletedTask
+                        : _recoveryCodeService.ReleaseAsync(state.UserId, spend),
                     // A recovery code is for when the usual factor is gone; it signs this one
                     // session in but does not let the device skip verification for 90 days.
                     trustDevice: false);
+
+                // Recorded only once the sign-in it paid for exists; a released code was not used.
+                _securityEvents.Emit(new AuthSecurityEvent
+                {
+                    Definition = AuthSecurityEvents.RecoveryCodeUsed,
+                    Outcome = AuthSecurityOutcome.Succeeded,
+                    Method = AuthSecurityMethod.RecoveryCode,
+                    Flow = AuthSecurityFlow.LoginStepUp,
+                    UserId = state.UserId,
+                    SessionId = result.UserToken.token.SessionId,
+                });
+                return result;
             }
             catch (Exception ex)
             {
@@ -419,38 +436,41 @@ namespace backend.main.features.auth.stepup
             }
         }
 
-        private async Task ConsumeRecoveryCodeAsync(PendingStepUpState state, string challengeHash, string code)
+        /// <summary>
+        /// Runs under the completion lock. The challenge is read again here rather than trusted
+        /// from before the lock: another attempt may have counted a failure or discarded the
+        /// challenge since, and writing back the older copy would undo that.
+        /// </summary>
+        private async Task<RecoveryCodeSpend> ConsumeRecoveryCodeAsync(int userId, string challengeHash, string code)
         {
-            if (await _recoveryCodeService.TryConsumeAsync(state.UserId, code))
-            {
-                _securityEvents.Emit(new AuthSecurityEvent
-                {
-                    Definition = AuthSecurityEvents.RecoveryCodeUsed,
-                    Outcome = AuthSecurityOutcome.Succeeded,
-                    Method = AuthSecurityMethod.RecoveryCode,
-                    Flow = AuthSecurityFlow.LoginStepUp,
-                    UserId = state.UserId,
-                });
-                return;
-            }
+            var current = await GetStateByHashAsync(challengeHash)
+                ?? throw StepUpRejected(
+                    AuthSecurityMethod.RecoveryCode,
+                    AuthSecurityReason.Expired,
+                    "Invalid or expired sign-in verification challenge.",
+                    userId);
 
-            state.RecoveryFailedAttempts += 1;
-            if (state.RecoveryFailedAttempts >= MaxRecoveryCodeAttempts)
+            var spend = await _recoveryCodeService.TryConsumeAsync(current.UserId, code);
+            if (spend is not null)
+                return spend;
+
+            current.RecoveryFailedAttempts += 1;
+            if (current.RecoveryFailedAttempts >= MaxRecoveryCodeAttempts)
             {
-                await DeleteStateAsync(state);
+                await DeleteStateAsync(current);
             }
-            else if (!await PersistStateAsync(state, challengeHash, state.EmailTokenHash))
+            else if (!await PersistStateAsync(current, challengeHash, current.EmailTokenHash))
             {
                 throw new NotAvailableException();
             }
 
             throw StepUpRejected(
                 AuthSecurityMethod.RecoveryCode,
-                state.RecoveryFailedAttempts >= MaxRecoveryCodeAttempts
+                current.RecoveryFailedAttempts >= MaxRecoveryCodeAttempts
                     ? AuthSecurityReason.AttemptsExhausted
                     : AuthSecurityReason.InvalidCode,
                 "Invalid or already used recovery code.",
-                state.UserId);
+                current.UserId);
         }
 
         public async Task<AuthenticatedSessionResult?> TryVerifyEmailAsync(string token)
@@ -501,11 +521,16 @@ namespace backend.main.features.auth.stepup
         /// Runs under the completion lock once the account and challenge have been checked, and
         /// before any session exists; throwing from it refuses the sign-in.
         /// </param>
+        /// <param name="onIssueFailed">
+        /// Runs when <paramref name="beforeIssue"/> succeeded but the sign-in then failed, so
+        /// whatever it spent can be handed back.
+        /// </param>
         /// <param name="trustDevice">Whether a completed sign-in also trusts the device.</param>
         private async Task<AuthenticatedSessionResult> CompletePendingChallengeAsync(
             PendingStepUpState state,
             AuthSecurityMethod method,
             Func<Task>? beforeIssue = null,
+            Func<Task>? onIssueFailed = null,
             bool trustDevice = true)
         {
             var lockValue = CreateRandomToken();
@@ -552,60 +577,68 @@ namespace backend.main.features.auth.stepup
                 if (beforeIssue is not null)
                     await beforeIssue();
 
-                var userToken = await _authSessionService.IssueAsync(
-                    user,
-                    state.Transport,
-                    rememberMe: state.RememberMe
-                );
-
-                // The check above is not enough on its own: a rotation can commit between it and
-                // the line above, running its revocation before this session existed. Trust is
-                // also the one thing this path grants that outlives the session - 90 days of
-                // skipping MFA, and an email change leaves the password intact - so it must never
-                // land for a sign-in that is then rejected. Both are settled here, once the session
-                // exists: the trust is written only if the version still matches, compared under
-                // the account's row lock, so no rotation can commit between that comparison and
-                // the write. A sign-in that grants no trust has nothing here that outlives its
-                // session, which is itself bound to the auth version and refused once it moves.
-                var trusted = !trustDevice || await _deviceTrustService.TrustAsync(
-                    state.UserId,
-                    state.AuthVersion,
-                    state.TrustedDeviceId,
-                    state.DeviceType,
-                    state.ClientName,
-                    state.IpAddress
-                );
-                if (!trusted)
+                try
                 {
-                    // Revoking the account's sessions rather than just this one: a rotation has
-                    // happened, so everything is meant to be gone, and this is idempotent with the
-                    // revocation the rotation already ran.
-                    await _tokenService.RevokeAllRefreshSessionsAsync(state.UserId, AuthSecurityReason.AuthVersionMismatch);
+                    var userToken = await _authSessionService.IssueAsync(
+                        user,
+                        state.Transport,
+                        rememberMe: state.RememberMe
+                    );
+
+                    // The check above is not enough on its own: a rotation can commit between it and
+                    // the line above, running its revocation before this session existed. Trust is
+                    // also the one thing this path grants that outlives the session - 90 days of
+                    // skipping MFA, and an email change leaves the password intact - so it must never
+                    // land for a sign-in that is then rejected. Both are settled here, once the session
+                    // exists: the trust is written only if the version still matches, compared under
+                    // the account's row lock, so no rotation can commit between that comparison and
+                    // the write. A sign-in that grants no trust has nothing here that outlives its
+                    // session, which is itself bound to the auth version and refused once it moves.
+                    var trusted = !trustDevice || await _deviceTrustService.TrustAsync(
+                        state.UserId,
+                        state.AuthVersion,
+                        state.TrustedDeviceId,
+                        state.DeviceType,
+                        state.ClientName,
+                        state.IpAddress
+                    );
+                    if (!trusted)
+                    {
+                        // Revoking the account's sessions rather than just this one: a rotation has
+                        // happened, so everything is meant to be gone, and this is idempotent with the
+                        // revocation the rotation already ran.
+                        await _tokenService.RevokeAllRefreshSessionsAsync(state.UserId, AuthSecurityReason.AuthVersionMismatch);
+                        await DeleteStateAsync(state);
+                        throw StepUpRejected(
+                            method,
+                            AuthSecurityReason.AuthVersionMismatch,
+                            "This sign-in verification challenge is no longer valid. Please sign in again.",
+                            state.UserId);
+                    }
+
                     await DeleteStateAsync(state);
-                    throw StepUpRejected(
-                        method,
-                        AuthSecurityReason.AuthVersionMismatch,
-                        "This sign-in verification challenge is no longer valid. Please sign in again.",
-                        state.UserId);
+
+                    _securityEvents.Emit(new AuthSecurityEvent
+                    {
+                        Definition = AuthSecurityEvents.StepUpSucceeded,
+                        Outcome = AuthSecurityOutcome.Succeeded,
+                        Method = method,
+                        Flow = AuthSecurityFlow.LoginStepUp,
+                        UserId = state.UserId,
+                        SessionId = userToken.token.SessionId,
+                    });
+
+                    return new AuthenticatedSessionResult
+                    {
+                        UserToken = _securityEvents.SignedIn(userToken, method, AuthSecurityFlow.LoginStepUp),
+                        ReturnPath = state.ReturnPath
+                    };
                 }
-
-                await DeleteStateAsync(state);
-
-                _securityEvents.Emit(new AuthSecurityEvent
+                catch when (onIssueFailed is not null)
                 {
-                    Definition = AuthSecurityEvents.StepUpSucceeded,
-                    Outcome = AuthSecurityOutcome.Succeeded,
-                    Method = method,
-                    Flow = AuthSecurityFlow.LoginStepUp,
-                    UserId = state.UserId,
-                    SessionId = userToken.token.SessionId,
-                });
-
-                return new AuthenticatedSessionResult
-                {
-                    UserToken = _securityEvents.SignedIn(userToken, method, AuthSecurityFlow.LoginStepUp),
-                    ReturnPath = state.ReturnPath
-                };
+                    await onIssueFailed!();
+                    throw;
+                }
             }
             finally
             {

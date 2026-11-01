@@ -16,7 +16,9 @@ public class RecoveryCodeServiceTests
     private readonly Mock<IRecoveryCodeRepository> _repository = new();
     private readonly Mock<IAuthUserRepository> _users = new();
     private readonly RecoveryCodeHasher _hasher = RecoveryCodeHasherTests.Create();
-    private readonly FixedTimeProvider _time = new(new DateTimeOffset(2026, 10, 31, 12, 0, 0, TimeSpan.Zero));
+    // Sub-microsecond ticks on purpose: a spend's use time must be cut to what PostgreSQL stores.
+    private readonly FixedTimeProvider _time = new(
+        new DateTimeOffset(new DateTime(2026, 10, 31, 12, 0, 0, 123, 456, DateTimeKind.Utc).AddTicks(7)));
     private readonly RecoveryCodeService _service;
 
     public RecoveryCodeServiceTests()
@@ -62,10 +64,12 @@ public class RecoveryCodeServiceTests
         var code = Seed(id: 3);
         _repository.Setup(r => r.TryConsumeAsync(3, UserId, It.IsAny<DateTime>())).ReturnsAsync(true);
 
-        (await _service.TryConsumeAsync(UserId, RecoveryCodeFormat.Display(code).ToLowerInvariant()))
-            .Should().BeTrue();
+        var spend = await _service.TryConsumeAsync(UserId, RecoveryCodeFormat.Display(code).ToLowerInvariant());
 
-        _repository.Verify(r => r.TryConsumeAsync(3, UserId, _time.GetUtcNow().UtcDateTime), Times.Once);
+        // The use time is whole microseconds, as stored, so a release can match it exactly.
+        var expectedUse = new DateTime(2026, 10, 31, 12, 0, 0, 123, 456, DateTimeKind.Utc);
+        spend.Should().Be(new RecoveryCodeSpend(3, expectedUse));
+        _repository.Verify(r => r.TryConsumeAsync(3, UserId, expectedUse), Times.Once);
     }
 
     [Fact]
@@ -74,7 +78,7 @@ public class RecoveryCodeServiceTests
         var code = Seed(id: 3);
         _repository.Setup(r => r.TryConsumeAsync(3, UserId, It.IsAny<DateTime>())).ReturnsAsync(false);
 
-        (await _service.TryConsumeAsync(UserId, code)).Should().BeFalse();
+        (await _service.TryConsumeAsync(UserId, code)).Should().BeNull();
     }
 
     [Fact]
@@ -82,7 +86,7 @@ public class RecoveryCodeServiceTests
     {
         // The repository returns only unused codes of the current set, so a used or replaced code
         // looks exactly like an unknown one.
-        (await _service.TryConsumeAsync(UserId, RecoveryCodeFormat.GenerateSet()[0])).Should().BeFalse();
+        (await _service.TryConsumeAsync(UserId, RecoveryCodeFormat.GenerateSet()[0])).Should().BeNull();
 
         _repository.Verify(r => r.TryConsumeAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<DateTime>()), Times.Never);
     }
@@ -101,7 +105,7 @@ public class RecoveryCodeServiceTests
                 CodeHash = _hasher.Hash(UserId, RecoveryCodeFormat.GenerateSet()[0]),
             });
 
-        (await _service.TryConsumeAsync(UserId, code)).Should().BeFalse();
+        (await _service.TryConsumeAsync(UserId, code)).Should().BeNull();
 
         _repository.Verify(r => r.TryConsumeAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<DateTime>()), Times.Never);
     }
@@ -122,7 +126,7 @@ public class RecoveryCodeServiceTests
                 CodeHash = _hasher.Hash(99, code),
             });
 
-        (await _service.TryConsumeAsync(UserId, code)).Should().BeFalse();
+        (await _service.TryConsumeAsync(UserId, code)).Should().BeNull();
     }
 
     [Theory]
@@ -135,7 +139,7 @@ public class RecoveryCodeServiceTests
             ? new User { Id = UserId, Email = "member@example.com", Usertype = "Participant", IsDisabled = true }
             : null);
 
-        (await _service.TryConsumeAsync(UserId, code)).Should().BeFalse();
+        (await _service.TryConsumeAsync(UserId, code)).Should().BeNull();
 
         _repository.Verify(r => r.TryConsumeAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<DateTime>()), Times.Never);
     }
@@ -162,23 +166,53 @@ public class RecoveryCodeServiceTests
             .Setup(r => r.ReplaceSetAsync(UserId, It.IsAny<IReadOnlyList<RecoveryCode>>()))
             .ThrowsAsync(new InvalidOperationException("db"));
         _repository.Setup(r => r.FindUnusedAsync(UserId, It.IsAny<string>())).ThrowsAsync(new InvalidOperationException("db"));
+        _repository.Setup(r => r.GetSetGeneratedAtAsync(UserId)).ThrowsAsync(new InvalidOperationException("db"));
 
         await FluentActions.Awaiting(() => _service.GetStatusAsync(UserId)).Should().ThrowAsync<InternalServerErrorException>();
         await FluentActions.Awaiting(() => _service.HasUnusedAsync(UserId)).Should().ThrowAsync<InternalServerErrorException>();
+        await FluentActions.Awaiting(() => _service.GetSetGeneratedAtAsync(UserId)).Should().ThrowAsync<InternalServerErrorException>();
         await FluentActions.Awaiting(() => _service.RegenerateAsync(UserId)).Should().ThrowAsync<InternalServerErrorException>();
         await FluentActions.Awaiting(() => _service.TryConsumeAsync(UserId, RecoveryCodeFormat.GenerateSet()[0]))
             .Should().ThrowAsync<InternalServerErrorException>();
     }
 
     [Fact]
-    public async Task GetStatusAsync_AndHasUnusedAsync_ShouldReadTheRepository()
+    public async Task GetStatusAsync_HasUnusedAsync_AndGetSetGeneratedAtAsync_ShouldReadTheRepository()
     {
         var status = new RecoveryCodeStatus(4, _time.GetUtcNow().UtcDateTime);
         _repository.Setup(r => r.GetStatusAsync(UserId)).ReturnsAsync(status);
         _repository.Setup(r => r.HasUnusedAsync(UserId)).ReturnsAsync(true);
+        _repository.Setup(r => r.GetSetGeneratedAtAsync(UserId)).ReturnsAsync(status.GeneratedAtUtc);
 
         (await _service.GetStatusAsync(UserId)).Should().Be(status);
         (await _service.HasUnusedAsync(UserId)).Should().BeTrue();
+        (await _service.GetSetGeneratedAtAsync(UserId)).Should().Be(status.GeneratedAtUtc);
+    }
+
+    [Fact]
+    public async Task ReleaseAsync_ShouldUndoExactlyThatSpend()
+    {
+        var spend = new RecoveryCodeSpend(3, _time.GetUtcNow().UtcDateTime);
+        _repository.Setup(r => r.TryReleaseAsync(3, UserId, spend.UsedAtUtc)).ReturnsAsync(true);
+
+        await _service.ReleaseAsync(UserId, spend);
+
+        _repository.Verify(r => r.TryReleaseAsync(3, UserId, spend.UsedAtUtc), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReleaseAsync_ShouldNeverThrow_WhenTheCodeCannotBeReleased(bool fault)
+    {
+        var spend = new RecoveryCodeSpend(3, _time.GetUtcNow().UtcDateTime);
+        var setup = _repository.Setup(r => r.TryReleaseAsync(3, UserId, spend.UsedAtUtc));
+        if (fault)
+            setup.ThrowsAsync(new InvalidOperationException("db"));
+        else
+            setup.ReturnsAsync(false);
+
+        await FluentActions.Awaiting(() => _service.ReleaseAsync(UserId, spend)).Should().NotThrowAsync();
     }
 
     private string Seed(int id)

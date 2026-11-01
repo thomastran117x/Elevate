@@ -8,6 +8,12 @@ namespace backend.main.features.auth.mfa.recovery
 
         Task<bool> HasUnusedAsync(int userId);
 
+        /// <summary>
+        /// When the account's current set was generated, or null with no set. Every code in a set
+        /// shares it and every regeneration replaces it, so it identifies the set.
+        /// </summary>
+        Task<DateTime?> GetSetGeneratedAtAsync(int userId);
+
         /// <summary>The unused code with this selector in the account's set, if any.</summary>
         Task<RecoveryCode?> FindUnusedAsync(int userId, string selector);
 
@@ -17,6 +23,13 @@ namespace backend.main.features.auth.mfa.recovery
         /// and an attempt racing a regeneration finds the row gone and returns false.
         /// </summary>
         Task<bool> TryConsumeAsync(int codeId, int userId, DateTime usedAtUtc);
+
+        /// <summary>
+        /// Undoes <see cref="TryConsumeAsync"/> for a sign-in or proof that then failed. Matching
+        /// on the recorded use time means only that spend is undone, and a code already replaced
+        /// by a regeneration stays gone.
+        /// </summary>
+        Task<bool> TryReleaseAsync(int codeId, int userId, DateTime usedAtUtc);
 
         /// <summary>
         /// Replaces the account's whole set with <paramref name="codes"/>, under the account's row

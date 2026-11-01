@@ -395,8 +395,7 @@ public sealed class AuthApiTestApp : IAsyncDisposable
                 await QueryDbAsync(db => db.TotpMfaEnrollments.AsNoTracking().FirstOrDefaultAsync(e => e.UserId == userId)),
                 await QueryDbAsync(db => db.RecoveryCodes.AsNoTracking()
                     .Where(c => c.UserId == userId)
-                    .Select(c => (DateTime?)c.CreatedAtUtc)
-                    .MinAsync())),
+                    .MaxAsync(c => (DateTime?)c.CreatedAtUtc))),
         };
 
         await Cache.SetValueAsync(

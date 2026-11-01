@@ -38,6 +38,14 @@ namespace backend.main.features.auth.mfa.recovery
                 .AnyAsync(c => c.UserId == userId && c.UsedAtUtc == null);
         }
 
+        public async Task<DateTime?> GetSetGeneratedAtAsync(int userId)
+        {
+            return await _context.RecoveryCodes
+                .AsNoTracking()
+                .Where(c => c.UserId == userId)
+                .MaxAsync(c => (DateTime?)c.CreatedAtUtc);
+        }
+
         public async Task<RecoveryCode?> FindUnusedAsync(int userId, string selector)
         {
             return await _context.RecoveryCodes
@@ -53,6 +61,14 @@ namespace backend.main.features.auth.mfa.recovery
             var affected = await _context.RecoveryCodes
                 .Where(c => c.Id == codeId && c.UserId == userId && c.UsedAtUtc == null)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.UsedAtUtc, usedAtUtc));
+            return affected == 1;
+        }
+
+        public async Task<bool> TryReleaseAsync(int codeId, int userId, DateTime usedAtUtc)
+        {
+            var affected = await _context.RecoveryCodes
+                .Where(c => c.Id == codeId && c.UserId == userId && c.UsedAtUtc == usedAtUtc)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.UsedAtUtc, (DateTime?)null));
             return affected == 1;
         }
 

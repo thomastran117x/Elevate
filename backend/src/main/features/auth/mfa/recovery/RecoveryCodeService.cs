@@ -58,6 +58,22 @@ namespace backend.main.features.auth.mfa.recovery
             }
         }
 
+        public async Task<DateTime?> GetSetGeneratedAtAsync(int userId)
+        {
+            try
+            {
+                return await _repository.GetSetGeneratedAtAsync(userId);
+            }
+            catch (Exception ex)
+            {
+                if (ex is AppException)
+                    throw;
+
+                Logger.Error($"[RecoveryCodeService] GetSetGeneratedAtAsync failed: {ex}");
+                throw new InternalServerErrorException();
+            }
+        }
+
         public async Task<RecoveryCodeSet> RegenerateAsync(int userId)
         {
             try
@@ -92,7 +108,7 @@ namespace backend.main.features.auth.mfa.recovery
             }
         }
 
-        public async Task<bool> TryConsumeAsync(int userId, string code)
+        public async Task<RecoveryCodeSpend?> TryConsumeAsync(int userId, string code)
         {
             if (!RecoveryCodeFormat.TryNormalize(code, out var normalized))
                 throw new BadRequestException("Enter a recovery code in the format shown when it was generated.");
@@ -101,15 +117,21 @@ namespace backend.main.features.auth.mfa.recovery
             {
                 var user = await _userRepository.GetUserAsync(userId);
                 if (user == null || user.IsDisabled)
-                    return false;
+                    return null;
 
                 var match = await _repository.FindUnusedAsync(userId, _hasher.Selector(userId, normalized));
 
                 // One derivation either way: a miss is checked against a dummy hash.
                 if (!_hasher.Verify(userId, normalized, match?.CodeHash) || match == null)
-                    return false;
+                    return null;
 
-                return await _repository.TryConsumeAsync(match.Id, userId, _timeProvider.GetUtcNow().UtcDateTime);
+                // Whole microseconds, as PostgreSQL stores them, so a release can match the spend
+                // on its use time exactly.
+                var now = _timeProvider.GetUtcNow().UtcDateTime;
+                var usedAtUtc = new DateTime(now.Ticks - now.Ticks % 10, DateTimeKind.Utc);
+                return await _repository.TryConsumeAsync(match.Id, userId, usedAtUtc)
+                    ? new RecoveryCodeSpend(match.Id, usedAtUtc)
+                    : null;
             }
             catch (Exception ex)
             {
@@ -119,6 +141,19 @@ namespace backend.main.features.auth.mfa.recovery
                 // The exception type only: nothing on this path should echo the submitted code.
                 Logger.Error($"[RecoveryCodeService] TryConsumeAsync failed for userId={userId}: {ex.GetType().Name}");
                 throw new InternalServerErrorException();
+            }
+        }
+
+        public async Task ReleaseAsync(int userId, RecoveryCodeSpend spend)
+        {
+            try
+            {
+                if (!await _repository.TryReleaseAsync(spend.CodeId, userId, spend.UsedAtUtc))
+                    Logger.Warn($"[RecoveryCodeService] Spent code {spend.CodeId} for userId={userId} was not released; it was replaced or already released.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[RecoveryCodeService] ReleaseAsync failed for userId={userId}: {ex.GetType().Name}");
             }
         }
     }

@@ -318,10 +318,19 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
             long generation,
             string factorState)
         {
-            bool consumed;
+            // The cap is checked before the code is: once it is reached, no further guess is
+            // verified, so it bounds both the guesses and the Argon2id derivations they cost.
+            if (int.TryParse(await _cacheService.GetValueAsync(RecoveryAttemptKey(userId)), out var spentAttempts)
+                && spentAttempts >= MaxOtpAttempts)
+            {
+                EmitThrottled(userId, AuthSecurityFlow.SessionStepUp, AuthThrottleDimension.Attempts);
+                throw new TooManyRequestException("Too many verification attempts. Please try again later.");
+            }
+
+            RecoveryCodeSpend? spend;
             try
             {
-                consumed = await _recoveryCodeService.TryConsumeAsync(userId, code);
+                spend = await _recoveryCodeService.TryConsumeAsync(userId, code);
             }
             catch (BadRequestException)
             {
@@ -330,10 +339,8 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
                 throw;
             }
 
-            if (!consumed)
+            if (spend is null)
             {
-                // The same short-window cap as TOTP: guessing 140 bits is hopeless, but every
-                // guess still costs an Argon2id derivation.
                 var attempts = await _cacheService.IncrementAsync(RecoveryAttemptKey(userId));
                 if (attempts == 1)
                     await _cacheService.SetExpiryAsync(RecoveryAttemptKey(userId), ChallengeTtl);
@@ -347,8 +354,18 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
                 throw new UnauthorizedException("Invalid or already used recovery code.");
             }
 
-            // The code is spent from here on, whether or not the proof can be stored, so its use
-            // is recorded first: the owner must hear about it either way.
+            try
+            {
+                await RecordProofAsync(userId, sessionId, authVersion, RecoveryCodeMethod, generation, factorState);
+            }
+            catch
+            {
+                // No proof, so nothing was bought with the code: hand it back rather than burn one
+                // of the user's few remaining codes on a session that ended or a cache outage.
+                await _recoveryCodeService.ReleaseAsync(userId, spend);
+                throw;
+            }
+
             _securityEvents.Emit(new AuthSecurityEvent
             {
                 Definition = AuthSecurityEvents.RecoveryCodeUsed,
@@ -360,7 +377,6 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
             });
 
             await _cacheService.DeleteKeyAsync(RecoveryAttemptKey(userId));
-            await RecordProofAsync(userId, sessionId, authVersion, RecoveryCodeMethod, generation, factorState);
             EmitStepUp(userId, sessionId, RecoveryCodeMethod, null);
         }
 
@@ -447,7 +463,7 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
             StepUpFactorState.From(
                 await _smsEnrollmentRepository.GetByUserIdAsync(userId),
                 await _totpMfaEnrollmentService.GetEnrollmentAsync(userId),
-                (await _recoveryCodeService.GetStatusAsync(userId)).GeneratedAtUtc
+                await _recoveryCodeService.GetSetGeneratedAtAsync(userId)
             );
 
         private static (string? Proof, string? Generation) ReadPair(object value)
