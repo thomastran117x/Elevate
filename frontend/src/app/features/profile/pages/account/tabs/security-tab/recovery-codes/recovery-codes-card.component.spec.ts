@@ -4,6 +4,7 @@ import { Subject, of, throwError } from 'rxjs';
 
 import { flushPromises } from '@testing';
 
+import { PendingRecoveryCodes } from './pending-recovery-codes';
 import {
   RECOVERY_CODES_FILE_NAME,
   RecoveryCodesCardComponent,
@@ -47,6 +48,7 @@ describe('RecoveryCodesCardComponent', () => {
       providers: [
         { provide: AuthService, useValue: auth },
         { provide: PLATFORM_ID, useValue: platformId },
+        PendingRecoveryCodes,
       ],
     }).compileComponents();
 
@@ -292,9 +294,10 @@ describe('RecoveryCodesCardComponent', () => {
       }
     });
 
+    // The URL's delayed revocation is covered by the download helper's own spec.
     it('downloads the codes as a text file', async () => {
       const createObjectURL = spyOn(URL, 'createObjectURL').and.returnValue('blob:codes');
-      const revokeObjectURL = spyOn(URL, 'revokeObjectURL');
+      spyOn(URL, 'revokeObjectURL');
       const click = spyOn(HTMLAnchorElement.prototype, 'click');
 
       button('Download .txt').click();
@@ -303,10 +306,20 @@ describe('RecoveryCodesCardComponent', () => {
       const anchor = click.calls.mostRecent().object as HTMLAnchorElement;
       expect(anchor.download).toBe(RECOVERY_CODES_FILE_NAME);
       expect(anchor.href).toBe('blob:codes');
-      const blob = createObjectURL.calls.mostRecent().args[0] as Blob;
-      const content = await blob.text();
+      const content = await (createObjectURL.calls.mostRecent().args[0] as Blob).text();
       CODES.forEach((code, index) => expect(content).toContain(`${index + 1}. ${code}`));
-      expect(revokeObjectURL).toHaveBeenCalledOnceWith('blob:codes');
+    });
+
+    it('keeps an unsaved set in the holder, so a recreated card shows it again', () => {
+      const pending = TestBed.inject(PendingRecoveryCodes);
+      expect(pending.codes()).toEqual(CODES);
+
+      fixture.destroy();
+      const again = TestBed.createComponent(RecoveryCodesCardComponent);
+      again.detectChanges();
+
+      const items = again.nativeElement.querySelectorAll('ol li');
+      expect(items.length).toBe(CODES.length);
     });
 
     it('keeps the codes until the user confirms they saved them, then forgets them', () => {

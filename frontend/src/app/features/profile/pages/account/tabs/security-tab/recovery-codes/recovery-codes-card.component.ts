@@ -20,18 +20,19 @@ import { finalize } from 'rxjs/operators';
 import {
   getApiClientMessage,
   isApiClientErrorCode,
+  MFA_REQUIRED_ERROR_CODE,
 } from '../../../../../../../core/api/models/api-client-error.model';
 import {
   AuthService,
   RecoveryCodeStatusResponse,
 } from '../../../../../../auth/services/auth.service';
+import { downloadFile } from '../../../../../../../shared/download/download-file';
+import { PendingRecoveryCodes } from './pending-recovery-codes';
 
 /** At or below this many unused codes the card asks the user to make a new set. */
 export const RECOVERY_CODES_LOW_THRESHOLD = 3;
 
 export const RECOVERY_CODES_FILE_NAME = 'eventxperience-recovery-codes.txt';
-
-const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
 
 type CopyState = 'idle' | 'copied' | 'failed';
 type StatusLevel = 'none' | 'ok' | 'low' | 'empty';
@@ -41,7 +42,9 @@ type StatusLevel = 'none' | 'ok' | 'low' | 'empty';
  * cleared from memory when the user confirms they saved it; the server never returns it again.
  *
  * It lives inside the security tab's step-up gate. Generation spends the step-up proof, so a refusal
- * for a missing proof is handed to the tab, which re-locks and prompts as for any other factor.
+ * for a missing proof is handed to the tab, which re-locks and prompts as for any other factor. The
+ * unsaved set is held by {@link PendingRecoveryCodes}, which the tab provides, so re-locking the tab
+ * hides the codes until the user verifies again rather than losing them.
  */
 @Component({
   selector: 'app-recovery-codes-card',
@@ -58,8 +61,10 @@ export class RecoveryCodesCardComponent implements OnInit {
   readonly loading = signal(true);
   readonly confirming = signal(false);
   readonly generating = signal(false);
-  readonly codes = signal<string[] | null>(null);
-  readonly acknowledged = signal(false);
+  private readonly pending = inject(PendingRecoveryCodes);
+
+  readonly codes = this.pending.codes;
+  readonly acknowledged = this.pending.acknowledged;
   readonly copyState = signal<CopyState>('idle');
   readonly error = signal('');
   readonly notice = signal('');
@@ -108,17 +113,16 @@ export class RecoveryCodesCardComponent implements OnInit {
     this.error.set('');
     this.generating.set(true);
 
+    // Deliberately not cut short when the card is destroyed: the response is the only copy of the
+    // new codes, so it must reach the tab-scoped holder even if the tab re-locks meanwhile. A
+    // single HTTP response completes the subscription on its own.
     this.auth
       .regenerateRecoveryCodes()
-      .pipe(
-        finalize(() => this.generating.set(false)),
-        takeUntilDestroyed(this.destroyRef),
-      )
+      .pipe(finalize(() => this.generating.set(false)))
       .subscribe({
         next: (result) => {
           this.confirming.set(false);
-          this.codes.set(result.codes);
-          this.acknowledged.set(false);
+          this.pending.show(result.codes);
           this.copyState.set('idle');
           this.status.set({
             remainingCount: result.codes.length,
@@ -156,7 +160,7 @@ export class RecoveryCodesCardComponent implements OnInit {
 
   download(): void {
     const codes = this.codes();
-    if (!codes || !this.isBrowser || typeof URL.createObjectURL !== 'function') {
+    if (!codes || !this.isBrowser) {
       return;
     }
 
@@ -170,12 +174,7 @@ export class RecoveryCodesCardComponent implements OnInit {
       '',
     ].join('\n');
 
-    const href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
-    const anchor = document.createElement('a');
-    anchor.href = href;
-    anchor.download = RECOVERY_CODES_FILE_NAME;
-    anchor.click();
-    URL.revokeObjectURL(href);
+    downloadFile(text, RECOVERY_CODES_FILE_NAME, 'text/plain;charset=utf-8');
   }
 
   setAcknowledged(value: boolean): void {
@@ -187,8 +186,7 @@ export class RecoveryCodesCardComponent implements OnInit {
     if (!this.acknowledged()) {
       return;
     }
-    this.codes.set(null);
-    this.acknowledged.set(false);
+    this.pending.clear();
     this.copyState.set('idle');
     this.notice.set('Your recovery codes are ready. Each one works once.');
   }

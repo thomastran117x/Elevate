@@ -6,6 +6,7 @@ import { finalize } from 'rxjs/operators';
 import {
   getApiClientMessage,
   isApiClientErrorCode,
+  MFA_REQUIRED_ERROR_CODE,
 } from '../../../../../../core/api/models/api-client-error.model';
 import {
   AuthService,
@@ -14,12 +15,11 @@ import {
   TotpEnrollmentStartResponse,
 } from '../../../../../auth/services/auth.service';
 import { MfaGateComponent } from '../../mfa-gate/mfa-gate.component';
+import { PendingRecoveryCodes } from './recovery-codes/pending-recovery-codes';
 import { RecoveryCodesCardComponent } from './recovery-codes/recovery-codes-card.component';
 
 type SmsFlow = 'enroll' | 'enable' | null;
 type TotpManageAction = 'enable' | 'disable' | 'remove' | null;
-
-const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
 
 @Component({
   selector: 'app-security-tab',
@@ -27,6 +27,8 @@ const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
   imports: [CommonModule, ReactiveFormsModule, MfaGateComponent, RecoveryCodesCardComponent],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './security-tab.component.html',
+  // Outlives the recovery-codes card, which re-locking the tab destroys, so unsaved codes survive.
+  providers: [PendingRecoveryCodes],
 })
 export class SecurityTabComponent implements OnInit {
   private readonly fb = new FormBuilder();
