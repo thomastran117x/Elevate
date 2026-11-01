@@ -3,6 +3,7 @@ using backend.main.features.auth.events;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.notifications;
+using backend.main.shared.exceptions.http;
 
 using FluentAssertions;
 
@@ -81,6 +82,25 @@ public class MfaFactorChangeServiceTests
         await act.Should().ThrowAsync<InvalidOperationException>();
         _securityEvents.Of(AuthSecurityEvents.FactorChanged).Should().ContainSingle()
             .Which.Change.Should().Be(AuthFactorChange.Disabled);
+    }
+
+    [Fact]
+    public async Task RecordAsync_ShouldStillNotify_WhenRecoveryCodeProofCleanupFails()
+    {
+        // The new codes exist only in the response: a cache failure must not withhold them, and
+        // the factor state already retires the older proofs.
+        var sessionMfa = new Mock<ISessionMfaVerificationService>();
+        sessionMfa.Setup(s => s.ClearUserProofsAsync(42)).ThrowsAsync(new NotAvailableException());
+        var notifications = new Mock<IAuthNotificationService>();
+        var service = new MfaFactorChangeService(sessionMfa.Object, notifications.Object, _securityEvents);
+
+        var act = () => service.RecordAsync(42, "member@example.com", MfaFactorKind.RecoveryCodes, MfaFactorChange.Regenerated);
+
+        await act.Should().NotThrowAsync();
+        notifications.Verify(
+            n => n.SendMfaFactorChangedAsync("member@example.com", "recovery_codes", "regenerated", null),
+            Times.Once);
+        _securityEvents.Of(AuthSecurityEvents.FactorChanged).Should().ContainSingle();
     }
 
     [Fact]
