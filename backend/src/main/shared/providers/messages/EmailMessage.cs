@@ -62,13 +62,17 @@ namespace backend.main.shared.providers.messages
         }
         /// <summary>
         /// The second factor a <see cref="EmailMessageType.MfaFactorChanged"/> notice is about
-        /// ("sms" or "totp"). Never carries the phone number, secret, or a code.
+        /// ("sms", "totp", or "recovery_codes"). Never carries the phone number, secret, or a code.
         /// </summary>
         public string? MfaFactor
         {
             get; init;
         }
-        /// <summary>What happened to <see cref="MfaFactor"/>: "enabled", "disabled", or "removed".</summary>
+        /// <summary>
+        /// What happened to <see cref="MfaFactor"/>: "enabled", "disabled", "removed", or
+        /// "regenerated". Recovery codes report "enabled" for a first set and "regenerated" when
+        /// a set is replaced.
+        /// </summary>
         public string? MfaChange
         {
             get; init;
