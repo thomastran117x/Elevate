@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 
@@ -17,10 +17,8 @@ import { AuthReturnUrlService } from '../../services/auth-return-url.service';
 import {
   RECOVERY_CODE_HINT,
   RECOVERY_CODE_MAX_INPUT_LENGTH,
-  recoveryCodeValidator,
+  verificationCodeValidators,
 } from '../../validators/recovery-code.validator';
-
-const SIX_DIGIT_CODE = /^\d{6}$/;
 
 @Component({
   selector: 'app-step-up-verify',
@@ -34,10 +32,7 @@ export class StepUpVerifyComponent {
   private readonly fb = new FormBuilder();
 
   readonly codeForm = this.fb.nonNullable.group({
-    code: this.fb.nonNullable.control('', [
-      Validators.required,
-      Validators.pattern(SIX_DIGIT_CODE),
-    ]),
+    code: this.fb.nonNullable.control('', verificationCodeValidators(null)),
   });
 
   readonly recoveryCodeHint = RECOVERY_CODE_HINT;
@@ -221,11 +216,7 @@ export class StepUpVerifyComponent {
   /** A recovery code is not six digits, so the field's rules follow the chosen method. */
   private applyCodeValidators(method: LoginStepUpMethod): void {
     const control = this.codeForm.controls.code;
-    control.setValidators(
-      method === 'recovery_code'
-        ? [Validators.required, recoveryCodeValidator]
-        : [Validators.required, Validators.pattern(SIX_DIGIT_CODE)],
-    );
+    control.setValidators(verificationCodeValidators(method));
     control.updateValueAndValidity();
   }
 

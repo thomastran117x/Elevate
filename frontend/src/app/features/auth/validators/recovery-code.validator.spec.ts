@@ -4,6 +4,7 @@ import {
   normalizeRecoveryCode,
   RECOVERY_CODE_LENGTH,
   recoveryCodeValidator,
+  verificationCodeValidators,
 } from './recovery-code.validator';
 
 describe('recovery code validator', () => {
@@ -35,5 +36,20 @@ describe('recovery code validator', () => {
     expect(recoveryCodeValidator(new FormControl(''))).toBeNull();
     expect(recoveryCodeValidator(new FormControl('ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-2345'))).toBeNull();
     expect(recoveryCodeValidator(new FormControl('123456'))).toEqual({ recoveryCode: true });
+  });
+
+  it('switches a code field between six digits and recovery codes by method', () => {
+    const errorsFor = (method: string | null, value: string) =>
+      new FormControl(value, verificationCodeValidators(method)).errors;
+    const recovery = 'ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-2345';
+
+    for (const method of [null, 'totp', 'sms', 'email']) {
+      expect(errorsFor(method, '123456')).withContext(String(method)).toBeNull();
+      expect(errorsFor(method, recovery)).withContext(String(method)).not.toBeNull();
+      expect(errorsFor(method, '')).withContext(String(method)).toEqual({ required: true });
+    }
+    expect(errorsFor('recovery_code', recovery)).toBeNull();
+    expect(errorsFor('recovery_code', '123456')).toEqual({ recoveryCode: true });
+    expect(errorsFor('recovery_code', '')).toEqual({ required: true });
   });
 });

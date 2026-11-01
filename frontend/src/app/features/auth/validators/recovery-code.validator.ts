@@ -1,4 +1,4 @@
-import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
+import { AbstractControl, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
 
 /**
  * The client-side mirror of the server's `RecoveryCodeFormat`
@@ -10,6 +10,9 @@ import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
  */
 
 export const RECOVERY_CODE_LENGTH = 28;
+
+/** A code from an authenticator app, a text message, or an email. */
+export const SIX_DIGIT_CODE = /^\d{6}$/;
 
 /** Longest input the form accepts, leaving room for separators and stray spaces. */
 export const RECOVERY_CODE_MAX_INPUT_LENGTH = 64;
@@ -47,3 +50,13 @@ export const recoveryCodeValidator: ValidatorFn = (
 
   return normalizeRecoveryCode(value) ? null : { recoveryCode: true };
 };
+
+/**
+ * The rules for a verification-code field. A recovery code is not six digits, so forms that offer
+ * several methods switch rules with the selected method.
+ */
+export function verificationCodeValidators(method: string | null): ValidatorFn[] {
+  return method === 'recovery_code'
+    ? [Validators.required, recoveryCodeValidator]
+    : [Validators.required, Validators.pattern(SIX_DIGIT_CODE)];
+}

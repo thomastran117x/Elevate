@@ -7,7 +7,7 @@ import {
   Output,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { from } from 'rxjs';
 import { finalize } from 'rxjs/operators';
@@ -15,6 +15,7 @@ import { finalize } from 'rxjs/operators';
 import {
   getApiClientMessage,
   isApiClientErrorCode,
+  MFA_REQUIRED_ERROR_CODE,
 } from '../../../../../core/api/models/api-client-error.model';
 import { AuthTokenService } from '../../../../../core/api/services/auth-token.service';
 import {
@@ -25,11 +26,9 @@ import {
 import {
   RECOVERY_CODE_HINT,
   RECOVERY_CODE_MAX_INPUT_LENGTH,
-  recoveryCodeValidator,
+  verificationCodeValidators,
 } from '../../../../auth/validators/recovery-code.validator';
 import { StepUpResumeService } from './step-up-resume.service';
-
-const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
 
 /**
  * Reusable in-session MFA gate. On init it probes whether the current session
@@ -60,7 +59,7 @@ export class MfaGateComponent implements OnInit {
   private readonly fb = new FormBuilder();
 
   readonly codeForm = this.fb.nonNullable.group({
-    code: this.fb.nonNullable.control('', [Validators.required, Validators.pattern(/^\d{6}$/)]),
+    code: this.fb.nonNullable.control('', verificationCodeValidators(null)),
   });
 
   readonly recoveryCodeHint = RECOVERY_CODE_HINT;
@@ -230,11 +229,7 @@ export class MfaGateComponent implements OnInit {
   /** A recovery code is not six digits, so the field's rules follow the chosen method. */
   private applyCodeValidators(): void {
     const control = this.codeForm.controls.code;
-    control.setValidators(
-      this.isRecoveryCode
-        ? [Validators.required, recoveryCodeValidator]
-        : [Validators.required, Validators.pattern(/^\d{6}$/)],
-    );
+    control.setValidators(verificationCodeValidators(this.method));
     control.updateValueAndValidity();
   }
 

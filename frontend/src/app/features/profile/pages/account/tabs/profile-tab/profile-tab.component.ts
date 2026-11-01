@@ -10,6 +10,7 @@ import { environment } from '@environments/environment';
 import {
   getApiClientMessage,
   isApiClientErrorCode,
+  MFA_REQUIRED_ERROR_CODE,
 } from '../../../../../../core/api/models/api-client-error.model';
 import { AuthTokenService } from '../../../../../../core/api/services/auth-token.service';
 import { setUser } from '../../../../../../core/stores/user.actions';
@@ -33,8 +34,6 @@ import {
 import { MfaGateComponent } from '../../mfa-gate/mfa-gate.component';
 import { IMAGE_ACCEPT, screenImageFile } from '@shared/upload/image-file-validation';
 import { createPreviewUrl, revokePreviewUrl } from '@shared/upload/image-preview';
-
-const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
 
 import { UsernameSuggestionsComponent } from '../../../../../auth/components/username-suggestions/username-suggestions.component';
 
