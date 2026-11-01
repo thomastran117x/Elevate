@@ -380,6 +380,7 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
             "mfa_disabled" => "Two-step verification was turned off",
             "mfa_removed" => "A two-step verification method was removed",
             "email_changed" => "Your email address was changed",
+            "recovery_code_used" => "A recovery code was used on your account",
             _ => "New security activity on your account",
         };
 
@@ -390,6 +391,7 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
             "provider_linked" => $"{SecurityAlertProvider(message)} can now be used to sign in to your EventXperience account.",
             "refresh_token_reuse_detected" => "A sign-in token for your account was used after it had been replaced, which can mean it was copied. We signed that session out.",
             "account_disabled" => "An administrator disabled your EventXperience account, and every session was signed out.",
+            "recovery_code_used" => "One of your recovery codes was used to verify your identity on your EventXperience account. It can't be used again. If you're running low, generate a new set in your security settings.",
             _ => "There was a security change on your EventXperience account.",
         };
 

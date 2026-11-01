@@ -29,6 +29,7 @@ public static class SecurityHistoryCatalog
             AuthSecurityEvents.SessionRevoked,
             AuthSecurityEvents.ProviderLinked,
             AuthSecurityEvents.AccountStatusChanged,
+            AuthSecurityEvents.RecoveryCodeUsed,
         };
 
     public static readonly IReadOnlySet<AuthSecurityEventDefinition> NotRecorded =
@@ -83,6 +84,9 @@ public static class SecurityHistoryCatalog
 
         if (definition == AuthSecurityEvents.SessionRevoked && securityEvent.Outcome == AuthSecurityOutcome.Succeeded)
             return ClassifyRevocation(securityEvent.Reason);
+
+        if (definition == AuthSecurityEvents.RecoveryCodeUsed)
+            return AccountSecurityEventKind.RecoveryCodeUsed;
 
         if (definition == AuthSecurityEvents.AccountStatusChanged)
         {

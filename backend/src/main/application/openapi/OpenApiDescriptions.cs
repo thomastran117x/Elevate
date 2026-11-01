@@ -69,6 +69,7 @@ namespace backend.main.application.openapi
                 ["POST /api/auth/mfa/start"] = new("Start sign-in verification delivery", "Chooses SMS, email, or authenticator verification for an active sign-in challenge, rotates the challenge token when needed, and starts the selected delivery flow."),
                 ["POST /api/auth/mfa/verify"] = new("Verify an SMS sign-in code", "Validates an SMS code for an active sign-in verification challenge and completes login on success."),
                 ["POST /api/auth/mfa/verify/totp"] = new("Verify an authenticator sign-in code", "Validates a TOTP code for an active sign-in verification challenge and completes login on success."),
+                ["POST /api/auth/mfa/verify/recovery-code"] = new("Verify a recovery code to sign in", "Spends one single-use recovery code for an active sign-in verification challenge and completes login on success. The device is not trusted afterwards."),
                 ["GET /api/auth/mfa"] = new("Get MFA security settings"),
                 ["GET /api/auth/security-events"] = new(
                     "List the current user's security history",

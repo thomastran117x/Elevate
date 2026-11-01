@@ -142,6 +142,7 @@ public class EmailTemplateRendererTests
     [InlineData("provider_linked", "google", "Google sign-in was linked to your account")]
     [InlineData("refresh_token_reuse_detected", null, "We signed out a session after suspicious activity")]
     [InlineData("account_disabled", null, "Your account was disabled")]
+    [InlineData("recovery_code_used", null, "A recovery code was used on your account")]
     [InlineData("something_new", null, "New security activity on your account")]
     public void Render_SecurityAlert_NamesTheChange(string kind, string? method, string expectedSubject)
     {

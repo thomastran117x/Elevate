@@ -164,6 +164,7 @@ public enum AuthSecurityMethod
     Totp,
     Email,
     RefreshToken,
+    RecoveryCode,
 }
 
 /// <summary>The auth flow, verification purpose, or throttled budget an event belongs to.</summary>

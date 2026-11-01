@@ -2,6 +2,7 @@ using backend.main.features.auth;
 using backend.main.features.auth.device;
 using backend.main.features.auth.events;
 using backend.main.features.auth.mfa;
+using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.stepup;
@@ -589,7 +590,8 @@ public class LoginStepUpChallengeServiceTests
             authSessionService.Object,
             tokenService.Object,
             TestRequestInfoFactory.Browser(),
-            securityEvents ?? NullAuthSecurityEventEmitter.Instance);
+            securityEvents ?? NullAuthSecurityEventEmitter.Instance,
+            new Mock<IRecoveryCodeService>().Object);
     }
 
     private static UserToken CreateUserToken(User user) =>

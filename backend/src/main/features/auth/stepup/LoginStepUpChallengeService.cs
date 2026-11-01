@@ -6,6 +6,7 @@ using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.device;
 using backend.main.features.auth.events;
 using backend.main.features.auth.mfa;
+using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.token;
@@ -29,12 +30,14 @@ namespace backend.main.features.auth.stepup
         private static readonly TimeSpan CompletionLockTtl = TimeSpan.FromSeconds(30);
         private const int MaxSmsAttempts = 5;
         private const int MaxTotpAttempts = 5;
+        private const int MaxRecoveryCodeAttempts = 5;
         private const int MaxMethodSends = 3;
         private const int MaxUserSends = 6;
         private const int MaxIpSends = 20;
         private const string EmailMethod = "email";
         private const string SmsMethod = "sms";
         private const string TotpMethod = "totp";
+        private const string RecoveryCodeMethod = "recovery_code";
 
         /// <summary>
         /// Prefix of step-up email tokens. Step-up and new-device links share one endpoint, so the
@@ -53,6 +56,7 @@ namespace backend.main.features.auth.stepup
         private readonly ITokenService _tokenService;
         private readonly ClientRequestInfo _requestInfo;
         private readonly IAuthSecurityEventEmitter _securityEvents;
+        private readonly IRecoveryCodeService _recoveryCodeService;
 
         public LoginStepUpChallengeService(
             ICacheService cacheService,
@@ -64,7 +68,8 @@ namespace backend.main.features.auth.stepup
             IAuthSessionService authSessionService,
             ITokenService tokenService,
             ClientRequestInfo requestInfo,
-            IAuthSecurityEventEmitter securityEvents
+            IAuthSecurityEventEmitter securityEvents,
+            IRecoveryCodeService recoveryCodeService
         )
         {
             _cacheService = cacheService;
@@ -77,6 +82,7 @@ namespace backend.main.features.auth.stepup
             _tokenService = tokenService;
             _requestInfo = requestInfo;
             _securityEvents = securityEvents;
+            _recoveryCodeService = recoveryCodeService;
         }
 
         public async Task<LoginStepUpChallengeResponse> CreateChallengeAsync(
@@ -100,6 +106,7 @@ namespace backend.main.features.auth.stepup
                     Email = user.Email,
                     PhoneNumber = CanUseSms(smsEnrollment) ? smsEnrollment!.PhoneNumber : null,
                     HasTotp = totpEnrollment?.IsTotpMfaEnabled == true && EnvironmentSetting.AuthTotpMfaStepUpEnabled,
+                    HasRecoveryCodes = await _recoveryCodeService.HasUnusedAsync(user.Id),
                     Transport = transport,
                     RememberMe = rememberMe,
                     TrustedDeviceId = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)),
@@ -139,15 +146,15 @@ namespace backend.main.features.auth.stepup
                 EnsureMethodAllowed(state, normalizedMethod);
                 var now = DateTime.UtcNow;
 
-                // TOTP requires no delivery â€” return immediately with the existing challenge.
-                if (normalizedMethod == TotpMethod)
+                // TOTP and recovery codes need no delivery: return the existing challenge as is.
+                if (normalizedMethod is TotpMethod or RecoveryCodeMethod)
                 {
                     return new StartLoginStepUpResponse
                     {
                         Challenge = challenge,
                         ExpiresAtUtc = state.ExpiresAtUtc,
-                        SelectedMethod = TotpMethod,
-                        MaskedDestination = "authenticator app",
+                        SelectedMethod = normalizedMethod,
+                        MaskedDestination = normalizedMethod == TotpMethod ? "authenticator app" : "recovery code",
                         CooldownEndsAtUtc = DateTime.MinValue,
                         AvailableMethods = GetAvailableMethods(state),
                         MaskedPhone = CanUseSms(state) ? PhoneNumberFormatter.Mask(state.PhoneNumber!) : null,
@@ -369,6 +376,83 @@ namespace backend.main.features.auth.stepup
             }
         }
 
+        public async Task<AuthenticatedSessionResult> VerifyRecoveryCodeAsync(string challenge, string code)
+        {
+            try
+            {
+                var challengeHash = CryptoHelper.HashToken(challenge);
+                var state = await GetStateByHashAsync(challengeHash)
+                    ?? throw StepUpRejected(
+                        AuthSecurityMethod.RecoveryCode,
+                        AuthSecurityReason.Expired,
+                        "Invalid or expired sign-in verification challenge.");
+
+                if (!state.HasRecoveryCodes)
+                    throw StepUpRejected(
+                        AuthSecurityMethod.RecoveryCode,
+                        AuthSecurityReason.InvalidState,
+                        "Recovery codes are not available for this sign-in challenge.",
+                        state.UserId);
+
+                // Input that cannot be a code is refused before it is checked, so it costs no attempt.
+                if (!RecoveryCodeFormat.TryNormalize(code, out _))
+                {
+                    EmitStepUpFailed(AuthSecurityMethod.RecoveryCode, AuthSecurityReason.InvalidRequest, state.UserId);
+                    throw new BadRequestException("Enter a recovery code in the format shown when it was generated.");
+                }
+
+                return await CompletePendingChallengeAsync(
+                    state,
+                    AuthSecurityMethod.RecoveryCode,
+                    beforeIssue: () => ConsumeRecoveryCodeAsync(state, challengeHash, code),
+                    // A recovery code is for when the usual factor is gone; it signs this one
+                    // session in but does not let the device skip verification for 90 days.
+                    trustDevice: false);
+            }
+            catch (Exception ex)
+            {
+                if (ex is AppException)
+                    throw;
+
+                Logger.Error($"[LoginStepUpChallengeService] VerifyRecoveryCodeAsync failed: {ex.GetType().Name}");
+                throw new InternalServerErrorException();
+            }
+        }
+
+        private async Task ConsumeRecoveryCodeAsync(PendingStepUpState state, string challengeHash, string code)
+        {
+            if (await _recoveryCodeService.TryConsumeAsync(state.UserId, code))
+            {
+                _securityEvents.Emit(new AuthSecurityEvent
+                {
+                    Definition = AuthSecurityEvents.RecoveryCodeUsed,
+                    Outcome = AuthSecurityOutcome.Succeeded,
+                    Method = AuthSecurityMethod.RecoveryCode,
+                    Flow = AuthSecurityFlow.LoginStepUp,
+                    UserId = state.UserId,
+                });
+                return;
+            }
+
+            state.RecoveryFailedAttempts += 1;
+            if (state.RecoveryFailedAttempts >= MaxRecoveryCodeAttempts)
+            {
+                await DeleteStateAsync(state);
+            }
+            else if (!await PersistStateAsync(state, challengeHash, state.EmailTokenHash))
+            {
+                throw new NotAvailableException();
+            }
+
+            throw StepUpRejected(
+                AuthSecurityMethod.RecoveryCode,
+                state.RecoveryFailedAttempts >= MaxRecoveryCodeAttempts
+                    ? AuthSecurityReason.AttemptsExhausted
+                    : AuthSecurityReason.InvalidCode,
+                "Invalid or already used recovery code.",
+                state.UserId);
+        }
+
         public async Task<AuthenticatedSessionResult?> TryVerifyEmailAsync(string token)
         {
             try
@@ -413,9 +497,16 @@ namespace backend.main.features.auth.stepup
             }
         }
 
+        /// <param name="beforeIssue">
+        /// Runs under the completion lock once the account and challenge have been checked, and
+        /// before any session exists; throwing from it refuses the sign-in.
+        /// </param>
+        /// <param name="trustDevice">Whether a completed sign-in also trusts the device.</param>
         private async Task<AuthenticatedSessionResult> CompletePendingChallengeAsync(
             PendingStepUpState state,
-            AuthSecurityMethod method)
+            AuthSecurityMethod method,
+            Func<Task>? beforeIssue = null,
+            bool trustDevice = true)
         {
             var lockValue = CreateRandomToken();
             var lockKey = CompletionLockKey(state.PendingId);
@@ -458,6 +549,9 @@ namespace backend.main.features.auth.stepup
                         state.UserId);
                 }
 
+                if (beforeIssue is not null)
+                    await beforeIssue();
+
                 var userToken = await _authSessionService.IssueAsync(
                     user,
                     state.Transport,
@@ -471,8 +565,9 @@ namespace backend.main.features.auth.stepup
                 // land for a sign-in that is then rejected. Both are settled here, once the session
                 // exists: the trust is written only if the version still matches, compared under
                 // the account's row lock, so no rotation can commit between that comparison and
-                // the write.
-                var trusted = await _deviceTrustService.TrustAsync(
+                // the write. A sign-in that grants no trust has nothing here that outlives its
+                // session, which is itself bound to the auth version and refused once it moves.
+                var trusted = !trustDevice || await _deviceTrustService.TrustAsync(
                     state.UserId,
                     state.AuthVersion,
                     state.TrustedDeviceId,
@@ -684,6 +779,8 @@ namespace backend.main.features.auth.stepup
                 methods.Add(TotpMethod);
             if (CanUseSms(state))
                 methods.Add(SmsMethod);
+            if (state.HasRecoveryCodes)
+                methods.Add(RecoveryCodeMethod);
             methods.Add(EmailMethod);
             return [.. methods];
         }
@@ -708,6 +805,7 @@ namespace backend.main.features.auth.stepup
                 EmailMethod => EmailMethod,
                 SmsMethod => SmsMethod,
                 TotpMethod => TotpMethod,
+                RecoveryCodeMethod => RecoveryCodeMethod,
                 _ => throw new BadRequestException("Unsupported sign-in verification method.")
             };
         }
@@ -774,6 +872,10 @@ namespace backend.main.features.auth.stepup
             {
                 get; set;
             }
+            public bool HasRecoveryCodes
+            {
+                get; set;
+            }
             public SessionTransport Transport
             {
                 get; set;
@@ -819,6 +921,10 @@ namespace backend.main.features.auth.stepup
                 get; set;
             }
             public int TotpFailedAttempts
+            {
+                get; set;
+            }
+            public int RecoveryFailedAttempts
             {
                 get; set;
             }

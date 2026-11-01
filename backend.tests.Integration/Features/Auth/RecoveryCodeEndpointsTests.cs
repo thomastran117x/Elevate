@@ -1,7 +1,9 @@
 using System.Net;
 
+using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.mfa.recovery;
+using backend.main.infrastructure.database.core;
 using backend.main.features.auth.token;
 using backend.main.shared.providers.messages;
 
@@ -12,17 +14,16 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
+using OtpNet;
+
 namespace backend.tests.Integration.Features.Auth;
 
 /// <summary>
-/// Recovery-code generation, status, and storage against PostgreSQL.
+/// Recovery-code generation, storage, and single-use consumption against PostgreSQL.
 /// </summary>
 [Collection(IntegrationTestCollection.Name)]
 public class RecoveryCodeEndpointsTests
 {
-    private const string StatusPath = "/api/auth/mfa/recovery-codes/status";
-    private const string RegeneratePath = "/api/auth/mfa/recovery-codes/regenerate";
-
     [Fact]
     public async Task Status_ShouldReportNoCodes_BeforeAnyAreGenerated()
     {
@@ -148,6 +149,154 @@ public class RecoveryCodeEndpointsTests
         (await app.QueryDbAsync(db => db.RecoveryCodes.CountAsync(c => c.UserId == user!.Id))).Should().Be(0);
     }
 
+    [Fact]
+    public async Task SessionStepUp_ShouldAcceptACodeOnce_AndCountItDown()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var session = await app.SignUpAndVerifyByTokenAsync("rc-stepup@example.com", transport: SessionTransportResolver.ApiValue);
+        var codes = await GenerateAsync(app, session.AccessToken);
+
+        var options = await app.GetWithBearerAsync("/api/auth/mfa/step-up/options", session.AccessToken);
+        (await app.ReadApiResponseAsync<SessionMfaOptionsResponse>(options)).Data!.AvailableMethods
+            .Should().Equal("recovery_code", "email");
+
+        // Lowercase and without separators: entry is forgiving.
+        var first = await VerifyStepUpAsync(app, session.AccessToken, codes[0].Replace("-", string.Empty).ToLowerInvariant());
+        first.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(first));
+        (await app.ReadStepUpProofAsync(session.AccessToken))!.Method.Should().Be("recovery_code");
+        (await app.GetWithBearerAsync("/api/auth/mfa/step-up/status", session.AccessToken))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        (await ReadStatusAsync(app, session.AccessToken)).RemainingCount.Should().Be(9);
+
+        (await VerifyStepUpAsync(app, session.AccessToken, codes[0])).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await VerifyStepUpAsync(app, session.AccessToken, RecoveryCodeFormat.Display(RecoveryCodeFormat.GenerateSet()[0])))
+            .StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await VerifyStepUpAsync(app, session.AccessToken, "123456")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await ReadStatusAsync(app, session.AccessToken)).RemainingCount.Should().Be(9);
+    }
+
+    [Fact]
+    public async Task SessionStepUp_ShouldRefuseAnotherAccountsCode_AndCodesFromAReplacedSet()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var owner = await app.SignUpAndVerifyByTokenAsync("rc-owner@example.com", transport: SessionTransportResolver.ApiValue);
+        var other = await app.SignUpAndVerifyByTokenAsync("rc-other@example.com", transport: SessionTransportResolver.ApiValue);
+        var ownerCodes = await GenerateAsync(app, owner.AccessToken);
+        await GenerateAsync(app, other.AccessToken);
+
+        (await VerifyStepUpAsync(app, other.AccessToken, ownerCodes[0])).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        await GenerateAsync(app, owner.AccessToken);
+        (await VerifyStepUpAsync(app, owner.AccessToken, ownerCodes[1])).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await ReadStatusAsync(app, owner.AccessToken)).RemainingCount.Should().Be(10);
+    }
+
+    [Fact]
+    public async Task ConcurrentStepUps_WithOneCode_ShouldSucceedExactlyOnce()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var session = await app.SignUpAndVerifyByTokenAsync("rc-concurrent@example.com", transport: SessionTransportResolver.ApiValue);
+        var codes = await GenerateAsync(app, session.AccessToken);
+
+        var responses = await Task.WhenAll(
+            Enumerable.Range(0, 6).Select(_ => VerifyStepUpAsync(app, session.AccessToken, codes[0])));
+
+        responses.Count(r => r.StatusCode == HttpStatusCode.OK).Should().Be(1);
+        responses.Where(r => r.StatusCode != HttpStatusCode.OK)
+            .Should().OnlyContain(r => r.StatusCode == HttpStatusCode.Unauthorized || r.StatusCode == HttpStatusCode.TooManyRequests);
+        (await ReadStatusAsync(app, session.AccessToken)).RemainingCount.Should().Be(9);
+    }
+
+    [Fact]
+    public async Task ConcurrentConsumption_InTheDatabase_ShouldSpendACodeExactlyOnce()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var session = await app.SignUpAndVerifyByTokenAsync("rc-db-race@example.com", transport: SessionTransportResolver.ApiValue);
+        var user = await app.FindUserByEmailAsync("rc-db-race@example.com");
+        await GenerateAsync(app, session.AccessToken);
+        var codeId = await app.QueryDbAsync(db => db.RecoveryCodes.Where(c => c.UserId == user!.Id).Select(c => c.Id).FirstAsync());
+
+        // Each attempt gets its own scope, so its own DbContext and connection, like separate requests.
+        var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ =>
+        {
+            await using var scope = app.Services.CreateAsyncScope();
+            var repository = new RecoveryCodeRepository(scope.ServiceProvider.GetRequiredService<AppDatabaseContext>());
+            return await repository.TryConsumeAsync(codeId, user!.Id, DateTime.UtcNow);
+        }));
+
+        results.Count(spent => spent).Should().Be(1);
+        (await app.QueryDbAsync(db => db.RecoveryCodes.CountAsync(c => c.Id == codeId && c.UsedAtUtc != null))).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task LoginStepUp_ShouldAcceptARecoveryCode_WithoutTrustingTheDevice()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var session = await app.SignUpAndVerifyByTokenAsync("rc-login@example.com", transport: SessionTransportResolver.ApiValue);
+        var user = await app.FindUserByEmailAsync("rc-login@example.com");
+        await EnrollTotpAsync(app, session.AccessToken);
+        var codes = await GenerateAsync(app, session.AccessToken);
+        var devicesBefore = await app.QueryDbAsync(db => db.Devices.CountAsync(d => d.UserId == user!.Id));
+
+        var challenge = await StartLoginAsync(app, "rc-login");
+        challenge.AvailableMethods.Should().Equal("totp", "recovery_code", "email");
+
+        var start = await app.PostJsonWithCsrfAsync("/api/auth/mfa/start", new StartLoginStepUpRequest
+        {
+            Challenge = challenge.Challenge,
+            Method = "recovery_code",
+        });
+        start.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(start));
+
+        var wrong = await VerifyLoginAsync(app, challenge.Challenge, RecoveryCodeFormat.Display(RecoveryCodeFormat.GenerateSet()[0]));
+        wrong.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var verified = await VerifyLoginAsync(app, challenge.Challenge, codes[3]);
+        verified.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(verified));
+        var signedIn = (await app.ReadApiResponseAsync<AuthenticatedSessionResponse>(verified)).Data!;
+        signedIn.AccessToken.Should().NotBeNullOrWhiteSpace();
+
+        (await app.QueryDbAsync(db => db.Devices.CountAsync(d => d.UserId == user!.Id))).Should().Be(devicesBefore);
+        (await ReadStatusAsync(app, signedIn.AccessToken)).RemainingCount.Should().Be(9);
+
+        // The spent code cannot complete another sign-in.
+        var again = await StartLoginAsync(app, "rc-login");
+        (await VerifyLoginAsync(app, again.Challenge, codes[3])).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task LoginStepUp_ShouldNotSpendACode_ForADisabledAccount()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var session = await app.SignUpAndVerifyByTokenAsync("rc-disabled@example.com", transport: SessionTransportResolver.ApiValue);
+        var user = await app.FindUserByEmailAsync("rc-disabled@example.com");
+        await EnrollTotpAsync(app, session.AccessToken);
+        var codes = await GenerateAsync(app, session.AccessToken);
+        var challenge = await StartLoginAsync(app, "rc-disabled");
+
+        await app.QueryDbAsync(db => db.Users
+            .Where(u => u.Id == user!.Id)
+            .ExecuteUpdateAsync(set => set.SetProperty(u => u.IsDisabled, true)));
+
+        (await VerifyLoginAsync(app, challenge.Challenge, codes[0])).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await app.QueryDbAsync(db => db.RecoveryCodes.CountAsync(c => c.UserId == user!.Id && c.UsedAtUtc != null)))
+            .Should().Be(0);
+    }
+
+    [Fact]
+    public async Task LoginStepUp_ShouldNotSpendACode_ForAnExpiredChallenge()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var session = await app.SignUpAndVerifyByTokenAsync("rc-expired@example.com", transport: SessionTransportResolver.ApiValue);
+        var user = await app.FindUserByEmailAsync("rc-expired@example.com");
+        await EnrollTotpAsync(app, session.AccessToken);
+        var codes = await GenerateAsync(app, session.AccessToken);
+
+        (await VerifyLoginAsync(app, "expired-or-unknown-challenge", codes[0])).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await app.QueryDbAsync(db => db.RecoveryCodes.CountAsync(c => c.UserId == user!.Id && c.UsedAtUtc != null)))
+            .Should().Be(0);
+    }
+
     internal static async Task<IReadOnlyList<string>> GenerateAsync(AuthApiTestApp app, string accessToken)
     {
         await app.GrantStepUpProofAsync(accessToken);
@@ -158,13 +307,54 @@ public class RecoveryCodeEndpointsTests
 
     internal static async Task<RecoveryCodeStatusResponse> ReadStatusAsync(AuthApiTestApp app, string accessToken)
     {
-        var response = await app.GetWithBearerAsync(StatusPath, accessToken);
+        var response = await app.GetWithBearerAsync("/api/auth/mfa/recovery-codes/status", accessToken);
         response.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(response));
         return (await app.ReadApiResponseAsync<RecoveryCodeStatusResponse>(response)).Data!;
     }
 
+    private static Task<HttpResponseMessage> VerifyStepUpAsync(AuthApiTestApp app, string accessToken, string code) =>
+        app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/step-up/verify",
+            new SessionMfaVerifyRequest { Method = "recovery_code", Code = code },
+            accessToken);
+
+    private static Task<HttpResponseMessage> VerifyLoginAsync(AuthApiTestApp app, string challenge, string code) =>
+        app.PostJsonWithCsrfAsync("/api/auth/mfa/verify/recovery-code", new VerifyLoginStepUpRequest
+        {
+            Challenge = challenge,
+            Code = code,
+        });
+
+    private static async Task<LoginStepUpChallengeResponse> StartLoginAsync(AuthApiTestApp app, string username)
+    {
+        var login = await app.PostJsonWithCsrfAsync("/api/auth/login", new LoginRequest
+        {
+            Username = username,
+            Password = AuthApiTestApp.DefaultPassword,
+            Captcha = "captcha",
+            Transport = SessionTransportResolver.ApiValue,
+        });
+        login.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(login));
+        var body = (await app.ReadApiResponseAsync<LoginAuthenticationResponse>(login)).Data!;
+        body.Type.Should().Be("requires_step_up");
+        return body.StepUp!;
+    }
+
+    /// <summary>Turns on TOTP, which is what makes an unknown device face a step-up challenge.</summary>
+    private static async Task EnrollTotpAsync(AuthApiTestApp app, string accessToken)
+    {
+        await app.GrantStepUpProofAsync(accessToken);
+        var start = await app.PostJsonWithBearerAndCsrfAsync("/api/auth/mfa/totp/enroll/start", new { }, accessToken);
+        var secret = (await app.ReadApiResponseAsync<TotpEnrollmentStartResponse>(start)).Data!.SecretKey;
+        var verify = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/totp/enroll/verify",
+            new TotpEnrollmentVerifyRequest { Code = new Totp(Base32Encoding.ToBytes(secret)).ComputeTotp() },
+            accessToken);
+        verify.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(verify));
+    }
+
     private static Task<HttpResponseMessage> PostRegenerateAsync(AuthApiTestApp app, string accessToken) =>
-        app.SendWithBearerAndCsrfAsync(HttpMethod.Post, RegeneratePath, null, accessToken);
+        app.PostJsonWithBearerAndCsrfAsync("/api/auth/mfa/recovery-codes/regenerate", new { }, accessToken);
 
     private static string Selector(RecoveryCodeHasher hasher, int userId, string code)
     {

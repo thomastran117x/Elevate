@@ -42,6 +42,7 @@ Ids and names are append-only: never renumber, rename, or reuse one. Persist and
 | 33081 | `auth.provider_link.conflict` | Warning | An email match is refused because the account is linked to another identity, or Microsoft did not verify the address. | `denied` | `email_bound_to_other_provider`, `email_unverified` |
 | 33090 | `authz.denied` | Warning | Any 403 response that no other event describes. | `denied` | `policy`, `mfa_required`, `resource_access` |
 | 33100 | `auth.account.status_changed` | Information | An administrator disables or re-enables an account. Recorded whether or not any session was revoked. | `succeeded` | `account_disabled`, `account_enabled` |
+| 33110 | `auth.recovery_code.used` | Information | A recovery code is spent to complete a login or in-session step-up. Recorded once the code is spent, even if the sign-in or proof then fails. | `succeeded` | `none` |
 
 `auth.recovery.requested` reasons tell operators whether anything was sent. The API response deliberately hides that, so the reason must never be shown to the requester or in the user-facing history. A `throttled` factor change is recorded as `auth.throttled` with flow `mfa_enrollment`.
 

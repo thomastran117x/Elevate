@@ -45,6 +45,7 @@ public class SecurityHistoryCatalogTests
         { Event(AuthSecurityEvents.FactorChanged, factor: AuthSecurityFactor.Totp, change: AuthFactorChange.Removed), AccountSecurityEventKind.MfaRemoved },
         { Event(AuthSecurityEvents.FactorChanged, factor: AuthSecurityFactor.RecoveryCodes, change: AuthFactorChange.Enabled), AccountSecurityEventKind.RecoveryCodesGenerated },
         { Event(AuthSecurityEvents.FactorChanged, factor: AuthSecurityFactor.RecoveryCodes, change: AuthFactorChange.Regenerated), AccountSecurityEventKind.RecoveryCodesRegenerated },
+        { Event(AuthSecurityEvents.RecoveryCodeUsed), AccountSecurityEventKind.RecoveryCodeUsed },
         { Event(AuthSecurityEvents.ProviderLinked), AccountSecurityEventKind.ProviderLinked },
         { Event(AuthSecurityEvents.RefreshTokenReused, AuthSecurityOutcome.Denied, AuthSecurityReason.Replayed), AccountSecurityEventKind.RefreshTokenReuseDetected },
         { Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.Logout), AccountSecurityEventKind.SignedOut },

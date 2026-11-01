@@ -908,6 +908,22 @@ namespace backend.main.features.auth
             }
         }
 
+        public async Task<AuthenticatedSessionResult> VerifyRecoveryCodeLoginStepUpAsync(string challenge, string code)
+        {
+            try
+            {
+                return await _loginStepUpChallengeService.VerifyRecoveryCodeAsync(challenge, code);
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    throw;
+
+                Logger.Error($"[AuthService] VerifyRecoveryCodeLoginStepUpAsync failed: {e.GetType().Name}");
+                throw new InternalServerErrorException();
+            }
+        }
+
         public async Task HandleLogoutAsync(
             string refreshToken,
             string? sessionBindingToken,

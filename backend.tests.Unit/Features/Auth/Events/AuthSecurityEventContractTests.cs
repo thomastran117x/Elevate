@@ -32,7 +32,8 @@ public sealed class AuthSecurityEventContractTests
             (33080, "auth.provider.linked"),
             (33081, "auth.provider_link.conflict"),
             (33090, "authz.denied"),
-            (33100, "auth.account.status_changed"));
+            (33100, "auth.account.status_changed"),
+            (33110, "auth.recovery_code.used"));
     }
 
     [Fact]

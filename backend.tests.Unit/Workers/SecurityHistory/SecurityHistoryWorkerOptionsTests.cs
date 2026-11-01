@@ -25,6 +25,7 @@ public class SecurityHistoryWorkerOptionsTests
             AccountSecurityEventKind.ProviderLinked,
             AccountSecurityEventKind.RefreshTokenReuseDetected,
             AccountSecurityEventKind.AccountDisabled,
+            AccountSecurityEventKind.RecoveryCodeUsed,
         ]);
         options.AlertMaxAge.Should().Be(TimeSpan.FromHours(24));
         options.Topic.Should().NotBeNullOrWhiteSpace();
