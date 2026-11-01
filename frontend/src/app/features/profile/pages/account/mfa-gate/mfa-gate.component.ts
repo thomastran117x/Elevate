@@ -22,6 +22,11 @@ import {
   SessionMfaMethod,
   SessionMfaOptionsResponse,
 } from '../../../../auth/services/auth.service';
+import {
+  RECOVERY_CODE_HINT,
+  RECOVERY_CODE_MAX_INPUT_LENGTH,
+  recoveryCodeValidator,
+} from '../../../../auth/validators/recovery-code.validator';
 import { StepUpResumeService } from './step-up-resume.service';
 
 const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
@@ -30,7 +35,7 @@ const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
  * Reusable in-session MFA gate. On init it probes whether the current session
  * holds a fresh step-up proof (it lasts 10 minutes from verification); if not, it
  * shows a locked state with a modal that walks the user through picking a method
- * and entering a 6-digit code. Emits {@link verified} once the session is
+ * and entering a 6-digit code, or one of their recovery codes. Emits {@link verified} once the session is
  * verified (already or after the modal), so the host can reveal the protected
  * content. When it locks it remembers the allowlisted account route that asked,
  * and returns there after verification.
@@ -57,6 +62,9 @@ export class MfaGateComponent implements OnInit {
   readonly codeForm = this.fb.nonNullable.group({
     code: this.fb.nonNullable.control('', [Validators.required, Validators.pattern(/^\d{6}$/)]),
   });
+
+  readonly recoveryCodeHint = RECOVERY_CODE_HINT;
+  readonly recoveryCodeMaxLength = RECOVERY_CODE_MAX_INPUT_LENGTH;
 
   checking = true;
   modalOpen = false;
@@ -85,20 +93,34 @@ export class MfaGateComponent implements OnInit {
     return this.method === 'sms' || this.method === 'email';
   }
 
+  get isRecoveryCode(): boolean {
+    return this.method === 'recovery_code';
+  }
+
   methodLabel(method: SessionMfaMethod): string {
-    return method === 'totp'
-      ? 'Authenticator app'
-      : method === 'sms'
-        ? 'Text message (SMS)'
-        : 'Email';
+    switch (method) {
+      case 'totp':
+        return 'Authenticator app';
+      case 'sms':
+        return 'Text message (SMS)';
+      case 'recovery_code':
+        return 'Recovery code';
+      default:
+        return 'Email';
+    }
   }
 
   methodDescription(method: SessionMfaMethod): string {
-    return method === 'totp'
-      ? 'Enter a 6-digit code from your authenticator app.'
-      : method === 'sms'
-        ? 'We text a 6-digit code to your verified phone.'
-        : 'We email a 6-digit code to your inbox.';
+    switch (method) {
+      case 'totp':
+        return 'Enter a 6-digit code from your authenticator app.';
+      case 'sms':
+        return 'We text a 6-digit code to your verified phone.';
+      case 'recovery_code':
+        return 'Use one of your saved single-use recovery codes.';
+      default:
+        return 'We email a 6-digit code to your inbox.';
+    }
   }
 
   openModal(): void {
@@ -132,7 +154,9 @@ export class MfaGateComponent implements OnInit {
       return;
     }
 
-    // TOTP needs no delivery — go straight to code entry. SMS/email send first.
+    this.applyCodeValidators();
+
+    // TOTP and recovery codes need no delivery — go straight to code entry. SMS/email send first.
     if (!this.selectedNeedsDelivery) {
       this.error = '';
       this.codeForm.reset();
@@ -201,6 +225,17 @@ export class MfaGateComponent implements OnInit {
           this.error = getApiClientMessage(err, 'Unable to verify the code. Please try again.');
         },
       });
+  }
+
+  /** A recovery code is not six digits, so the field's rules follow the chosen method. */
+  private applyCodeValidators(): void {
+    const control = this.codeForm.controls.code;
+    control.setValidators(
+      this.isRecoveryCode
+        ? [Validators.required, recoveryCodeValidator]
+        : [Validators.required, Validators.pattern(/^\d{6}$/)],
+    );
+    control.updateValueAndValidity();
   }
 
   private checkStatus(): void {

@@ -69,6 +69,8 @@ type AuthSpy = jasmine.SpyObj<
     | 'disableTotp'
     | 'removeTotp'
     | 'getSessionMfaStatus'
+    | 'getRecoveryCodeStatus'
+    | 'regenerateRecoveryCodes'
   >
 >;
 
@@ -91,8 +93,13 @@ describe('SecurityTabComponent', () => {
       'disableTotp',
       'removeTotp',
       'getSessionMfaStatus',
+      'getRecoveryCodeStatus',
+      'regenerateRecoveryCodes',
     ]);
     auth.getMfaStatus.and.returnValue(of(makeSettings()));
+    auth.getRecoveryCodeStatus.and.returnValue(
+      of({ remainingCount: 0, totalCount: 10, generatedAtUtc: null }),
+    );
     // The gate starts unverified; specs call onMfaVerified() to stand in for its emission.
     auth.getSessionMfaStatus.and.returnValue(
       throwError(() => new ApiClientClientError('Verify first', 401, 'MFA_REQUIRED')),
@@ -480,6 +487,27 @@ describe('SecurityTabComponent', () => {
     const mfaRequired = () => new ApiClientClientError('Verify again', 403, 'MFA_REQUIRED');
 
     beforeEach(() => verifyGate());
+
+    it('shows the recovery codes card once the settings load', () => {
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('app-recovery-codes-card')).not.toBeNull();
+      expect(auth.getRecoveryCodeStatus).toHaveBeenCalled();
+    });
+
+    it('re-locks when recovery code generation needs a fresh proof', () => {
+      auth.regenerateRecoveryCodes.and.returnValue(throwError(mfaRequired));
+      fixture.detectChanges();
+      const generate = Array.from(
+        fixture.nativeElement.querySelectorAll('app-recovery-codes-card button'),
+      ).find((button) => (button as HTMLButtonElement).textContent?.includes('Generate codes')) as
+        HTMLButtonElement | undefined;
+
+      generate!.click();
+
+      expect(component.mfaVerified).toBeFalse();
+      expect(component.stepUpLapsed).toBeTrue();
+    });
 
     it('re-locks with an immediate prompt instead of reporting an error', () => {
       auth.disableMfa.and.returnValue(throwError(mfaRequired));

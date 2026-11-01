@@ -1,0 +1,174 @@
+<article
+  class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl"
+  aria-labelledby="recovery-codes-title"
+>
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div class="space-y-1">
+      <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">Backup</p>
+      <h2 id="recovery-codes-title" class="text-2xl font-bold">Recovery codes</h2>
+      <p class="max-w-2xl text-sm leading-6 text-subtle">
+        Single-use codes for verifying your identity when your authenticator app or phone isn't
+        available. Store them somewhere private, like a password manager.
+      </p>
+    </div>
+
+    @if (!loading() && !codes() && !confirming()) {
+      <button
+        type="button"
+        (click)="requestGeneration()"
+        [disabled]="generating()"
+        class="inline-flex flex-none items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {{ generating() ? 'Generating...' : hasSet() ? 'Generate new codes' : 'Generate codes' }}
+      </button>
+    }
+  </div>
+
+  <div class="mt-5 space-y-4">
+    @if (loading()) {
+      <p class="text-sm text-faint">Loading recovery code status...</p>
+    } @else if (!codes()) {
+      @switch (level()) {
+        @case ('none') {
+          <p class="text-sm text-muted">You haven't generated recovery codes yet.</p>
+        }
+        @case ('ok') {
+          <p class="text-sm text-muted" data-testid="recovery-codes-status">
+            <span class="font-semibold text-content">{{ remaining() }} of {{ total() }}</span>
+            codes remaining. Generated
+            {{ status()?.generatedAtUtc | date: 'medium' }}.
+          </p>
+        }
+        @case ('low') {
+          <div
+            role="status"
+            class="rounded-2xl border border-warning/30 bg-warning/10 px-5 py-4 text-sm text-warning"
+            data-testid="recovery-codes-status"
+          >
+            Only {{ remaining() }} of {{ total() }} recovery codes left. Generate a new set before
+            you run out.
+          </div>
+        }
+        @case ('empty') {
+          <div
+            role="alert"
+            class="rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
+            data-testid="recovery-codes-status"
+          >
+            You've used every recovery code. Generate a new set so you still have a backup.
+          </div>
+        }
+      }
+    }
+
+    @if (confirming()) {
+      <div
+        role="alertdialog"
+        aria-labelledby="recovery-codes-confirm-title"
+        aria-describedby="recovery-codes-confirm-body"
+        class="space-y-4 rounded-2xl border border-warning/30 bg-warning/10 px-5 py-5"
+      >
+        <h3 id="recovery-codes-confirm-title" class="text-base font-bold text-content">
+          Replace your recovery codes?
+        </h3>
+        <p id="recovery-codes-confirm-body" class="text-sm leading-6 text-muted">
+          Your current recovery codes will stop working as soon as the new ones are generated.
+        </p>
+        <div class="flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            (click)="generate()"
+            [disabled]="generating()"
+            class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {{ generating() ? 'Generating...' : 'Replace codes' }}
+          </button>
+          <button
+            type="button"
+            (click)="cancelGeneration()"
+            [disabled]="generating()"
+            class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-content transition hover:bg-glass-strong disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Keep current codes
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (codes(); as shown) {
+      <section class="space-y-4 rounded-2xl border border-accent/30 bg-accent/5 px-5 py-5">
+        <h3
+          #codesHeading
+          tabindex="-1"
+          id="recovery-codes-list-title"
+          class="text-base font-bold text-content outline-none"
+        >
+          Save your recovery codes
+        </h3>
+        <p role="status" class="text-sm leading-6 text-warning">
+          These codes won't be shown again. Each one works once.
+        </p>
+        <ol
+          aria-labelledby="recovery-codes-list-title"
+          class="grid gap-2 font-mono text-sm text-content sm:grid-cols-2"
+        >
+          @for (code of shown; track code) {
+            <li class="rounded-xl border border-line bg-glass-strong px-3 py-2">{{ code }}</li>
+          }
+        </ol>
+
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            (click)="copyAll()"
+            class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-content transition hover:bg-glass-strong"
+          >
+            Copy all
+          </button>
+          <button
+            type="button"
+            (click)="download()"
+            class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-content transition hover:bg-glass-strong"
+          >
+            Download .txt
+          </button>
+          <span role="status" class="text-sm" aria-live="polite">
+            @if (copyState() === 'copied') {
+              <span class="text-success">Copied to your clipboard.</span>
+            } @else if (copyState() === 'failed') {
+              <span class="text-danger"
+                >Copying isn't available here. Download the file instead.</span
+              >
+            }
+          </span>
+        </div>
+
+        <label class="flex items-start gap-3 text-sm text-content">
+          <input
+            type="checkbox"
+            [checked]="acknowledged()"
+            (change)="setAcknowledged($any($event.target).checked)"
+            class="mt-1 h-4 w-4 rounded border-line-strong"
+          />
+          <span>I've saved these codes somewhere safe.</span>
+        </label>
+
+        <button
+          type="button"
+          (click)="finish()"
+          [disabled]="!acknowledged()"
+          class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Done
+        </button>
+      </section>
+    }
+
+    @if (notice()) {
+      <p role="status" class="text-sm text-success">{{ notice() }}</p>
+    }
+    @if (error()) {
+      <p role="alert" class="text-sm text-danger">{{ error() }}</p>
+    }
+  </div>
+</article>
