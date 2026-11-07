@@ -292,6 +292,10 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IRecoveryCodeService, RecoveryCodeService>();
             services.AddScoped<ISecurityHistoryService, SecurityHistoryService>();
             services.AddScoped<IOAuthService, OAuthService>();
+            services.AddScoped<IProviderLinkStateStore, ProviderLinkStateStore>();
+            services.AddScoped<IProviderLinkFlow, GoogleProviderLinkFlow>();
+            services.AddScoped<IProviderLinkFlow, MicrosoftProviderLinkFlow>();
+            services.AddScoped<IProviderLinkService, ProviderLinkService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IClubService, ClubService>();
             services.AddScoped<IClubInvitationService, ClubInvitationService>();

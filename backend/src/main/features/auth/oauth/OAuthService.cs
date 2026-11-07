@@ -239,6 +239,13 @@ namespace backend.main.features.auth.oauth
             return new OAuthUser(sub, email, name, "microsoft", emailVerified);
         }
 
+        public bool IsProviderConfigured(string provider) => provider switch
+        {
+            "google" => _googleClientId != null && _googleClientSecret != null,
+            "microsoft" => _microsoftClientId != null && _microsoftConfigManager != null,
+            _ => false,
+        };
+
         /// <summary>
         /// Accepts only the issuer of the tenant that issued the token.
         /// </summary>

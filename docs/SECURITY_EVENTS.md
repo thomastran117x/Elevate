@@ -38,8 +38,9 @@ Ids and names are append-only: never renumber, rename, or reuse one. Persist and
 | 33051 | `auth.factor.change_failed` | Warning | A second-factor change or authenticated password change is refused or fails with a service fault. | `denied`, `faulted` | `invalid_credentials`, `account_disabled`, `invalid_code`, `invalid_state`, `invalid_request`, `rejected`, `none` |
 | 33060 | `auth.refresh_token.reused` | Warning | A rotated refresh token is presented after the 10-second grace window, a theft signal. | `denied` | `replayed` |
 | 33070 | `auth.session.revoked` | Information | One refresh session, or every session of an account, is ended. An account-wide sweep is recorded only when it removed at least one session, and as `faulted` when the session list could not be read. | `succeeded`, `faulted` | `logout`, `token_reuse`, `binding_missing`, `binding_mismatch`, `transport_mismatch`, `user_mismatch`, `auth_version_mismatch`, `password_changed`, `password_reset`, `email_changed`, `account_disabled`, `account_enabled`, `account_deleted` |
-| 33080 | `auth.provider.linked` | Information | A Google or Microsoft identity is linked to an existing account through a verified email match. | `succeeded` | `none` |
-| 33081 | `auth.provider_link.conflict` | Warning | An email match is refused because the account is linked to another identity, or Microsoft did not verify the address. | `denied` | `email_bound_to_other_provider`, `email_unverified` |
+| 33080 | `auth.provider.linked` | Information | A Google or Microsoft identity is linked to an account: explicitly from security settings (flow `provider_link`), or when the owner confirms a link that a verified email match proposed at sign-in (flow `provider_link_confirmation`). | `succeeded` | `none` |
+| 33081 | `auth.provider_link.conflict` | Warning | A link is refused. Either an email match hit an account linked to another identity, Microsoft did not verify the address, the identity is already linked to another account, or the account already links a different identity for that provider. | `denied` | `email_bound_to_other_provider`, `email_unverified`, `provider_bound_to_other_account`, `provider_already_connected` |
+| 33082 | `auth.provider.unlinked` | Information | The owner removes a Google or Microsoft link from security settings (flow `provider_unlink`). | `succeeded` | `none` |
 | 33090 | `authz.denied` | Warning | Any 403 response that no other event describes. | `denied` | `policy`, `mfa_required`, `resource_access` |
 | 33100 | `auth.account.status_changed` | Information | An administrator disables or re-enables an account. Recorded whether or not any session was revoked. | `succeeded` | `account_disabled`, `account_enabled` |
 | 33110 | `auth.recovery_code.used` | Information | A recovery code is spent to complete a login or in-session step-up. Recorded once the code is spent, even if the sign-in or proof then fails. | `succeeded` | `none` |
@@ -56,7 +57,7 @@ Login step-up email links and new-device links share `POST /api/auth/device/veri
 | `Outcome` | `succeeded`, `denied` (an expected refusal), `throttled`, or `faulted` (a service error). Clients never see this classification. |
 | `Reason` | A code from the closed set below; never exception or request text. |
 | `Method` | `password`, `google`, `microsoft`, `sms`, `totp`, `email`, `refresh_token`, or `recovery_code`. |
-| `Flow` | The flow, verification purpose, or throttled budget, such as `login`, `signup`, `password_reset`, `email_change`, `device_verification`, `login_step_up`, `session_step_up`, `mfa_delivery`, or `mfa_enrollment`. |
+| `Flow` | The flow, verification purpose, or throttled budget, such as `login`, `signup`, `password_reset`, `email_change`, `device_verification`, `login_step_up`, `session_step_up`, `mfa_delivery`, `mfa_enrollment`, `provider_link`, `provider_link_confirmation`, or `provider_unlink`. |
 | `Dimension` | For throttles: `source_ip`, `target`, `account`, `attempts`, `rate_limiter`, or `concurrency` (a request that lost a race for a verification lock). |
 | `Factor`, `Change` | For factor events: `sms`, `totp`, `password`, `email`, or `recovery_codes`; `enabled`, `disabled`, `removed`, `changed`, or `regenerated`. Recovery codes report `enabled` for an account's first set and `regenerated` when a set is replaced. |
 | `UserId` | The account the event is about, when known. It is stated by the code that emits the event and never inferred from a bearer token, since many auth endpoints are anonymous and act on a link, code, or name. The exception is `authz.denied`, which is about the caller. |
@@ -105,6 +106,8 @@ Login step-up email links and new-device links share `POST /api/auth/device/veri
 | `session_ended` | The refresh session ended (sign-out or revocation) before a verified step-up proof could be stored. |
 | `account_deleted` | The user deleted the account. |
 | `email_bound_to_other_provider` | The email belongs to an account linked to a different Google or Microsoft identity. |
+| `provider_bound_to_other_account` | The provider identity being linked is already linked to a different account. |
+| `provider_already_connected` | The account already links a different identity from the same provider. |
 | `policy` | An authorization policy or role check failed. |
 | `mfa_required` | A `[RequireMfa]` route was called without a fresh step-up proof. |
 | `resource_access` | A service refused access to a resource (ownership, staff role, account state). |
@@ -142,7 +145,8 @@ Once its outbox row is committed, an entry survives a broker outage, a slow rela
 | `auth.sign_in.challenged` | `new_device_challenge` or `sign_in_challenge` | For `device_verification_required` and `step_up_required`. |
 | `auth.recovery.completed` | `password_reset` | |
 | `auth.factor.changed` | `password_changed`, `email_changed`, `mfa_enabled`, `mfa_disabled`, `mfa_removed`, `recovery_codes_generated`, `recovery_codes_regenerated` | MFA entries carry the `factor`. |
-| `auth.provider.linked` | `provider_linked` | The provider is the `method`. |
+| `auth.provider.linked` | `provider_linked` | The provider is the `method`. Alerted on by default. |
+| `auth.provider.unlinked` | `provider_unlinked` | The provider is the `method`. Alerted on by default. |
 | `auth.refresh_token.reused` | `refresh_token_reuse_detected` | |
 | `auth.session.revoked` | `signed_out`, `sessions_revoked`, `session_ended_for_security` | Keeps the revocation `reason`. `token_reuse` is left out because the reuse event already records it. `account_disabled` and `account_enabled` are left out because `auth.account.status_changed` records them, even when no session was revoked. `account_deleted` is left out because the history goes with the account. |
 | `auth.account.status_changed` | `account_disabled`, `account_enabled` | Marked `initiatedByAdmin`. The administrator's id is never stored. |

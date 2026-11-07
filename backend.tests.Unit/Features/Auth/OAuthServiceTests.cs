@@ -446,6 +446,27 @@ public class OAuthServiceTests
         await action.Should().ThrowAsync<UnauthorizedException>().WithMessage("Microsoft nonce validation failed");
     }
 
+    [Fact]
+    public void IsProviderConfigured_ShouldRequireEachProvidersCredentials()
+    {
+        var unconfigured = CreateService();
+        SetPrivateField(unconfigured, "_googleClientId", null);
+        SetPrivateField(unconfigured, "_googleClientSecret", null);
+        SetPrivateField(unconfigured, "_microsoftClientId", null);
+        SetPrivateField(unconfigured, "_microsoftConfigManager", null);
+
+        unconfigured.IsProviderConfigured("google").Should().BeFalse();
+        unconfigured.IsProviderConfigured("microsoft").Should().BeFalse();
+        unconfigured.IsProviderConfigured("apple").Should().BeFalse();
+
+        var (configured, _) = CreateMicrosoftService();
+        SetPrivateField(configured, "_googleClientId", "google-client");
+        SetPrivateField(configured, "_googleClientSecret", "google-secret");
+
+        configured.IsProviderConfigured("google").Should().BeTrue();
+        configured.IsProviderConfigured("microsoft").Should().BeTrue();
+    }
+
     [Theory]
     [InlineData("not-a-jwt")]
     [InlineData("")]

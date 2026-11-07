@@ -11361,6 +11361,350 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfObject'
       x-authorization: anonymous
+  /api/auth/providers:
+    get:
+      tags:
+        - auth
+      summary: List
+      operationId: AuthProviderLinks_List_get
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfProviderLinksResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfProviderLinksResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfProviderLinksResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - bearerAuth: [ ]
+      x-authorization: authenticated
+  '/api/auth/providers/{provider}/link/start':
+    post:
+      tags:
+        - auth
+      summary: Start
+      operationId: AuthProviderLinks_Start_post
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/String'
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfProviderLinkStartResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfProviderLinkStartResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfProviderLinkStartResponse'
+        '409':
+          description: Conflict
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - bearerAuth: [ ]
+      x-authorization: authenticated
+  '/api/auth/providers/{provider}/link/complete':
+    post:
+      tags:
+        - auth
+      summary: Complete
+      operationId: AuthProviderLinks_Complete_post
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/String'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteProviderLinkRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/CompleteProviderLinkRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/CompleteProviderLinkRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfProviderLinkResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfProviderLinkResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfProviderLinkResponse'
+        '409':
+          description: Conflict
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '410':
+          description: Gone
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - bearerAuth: [ ]
+      x-authorization: authenticated
+  /api/auth/providers/link/confirm:
+    post:
+      tags:
+        - auth
+      summary: Confirm
+      operationId: AuthProviderLinks_Confirm_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmProviderLinkRequest'
+          text/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmProviderLinkRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/ConfirmProviderLinkRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfProviderLinkResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfProviderLinkResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfProviderLinkResponse'
+        '409':
+          description: Conflict
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '410':
+          description: Gone
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - bearerAuth: [ ]
+      x-authorization: authenticated
+  '/api/auth/providers/{provider}':
+    delete:
+      tags:
+        - auth
+      summary: Unlink
+      operationId: AuthProviderLinks_Unlink_delete
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/String'
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '409':
+          description: Conflict
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - bearerAuth: [ ]
+      x-authorization: authenticated
   /api/auth/mfa:
     get:
       tags:
@@ -14845,6 +15189,81 @@ components:
           description: Optional metadata such as pagination or response source details.
           $ref: '#/components/schemas/Object'
       description: Standard JSON envelope returned by all API endpoints.
+    ApiResponseOfProviderLinkResponse:
+      type: object
+      properties:
+        success:
+          description: Indicates whether the request succeeded.
+          $ref: '#/components/schemas/Boolean'
+        message:
+          description: Human-readable message summarizing the outcome.
+          $ref: '#/components/schemas/String'
+        data:
+          oneOf:
+            - type: 'null'
+            - description: Endpoint-specific response payload.
+              $ref: '#/components/schemas/ProviderLinkResponse'
+          description: Endpoint-specific response payload. `null` on error responses.
+        error:
+          oneOf:
+            - type: 'null'
+            - description: Structured error details when the request fails.
+              $ref: '#/components/schemas/ApiError'
+          description: Structured error details. Present only when `success` is `false`.
+        meta:
+          description: Optional metadata such as pagination or response source details.
+          $ref: '#/components/schemas/Object'
+      description: Standard JSON envelope returned by all API endpoints.
+    ApiResponseOfProviderLinksResponse:
+      type: object
+      properties:
+        success:
+          description: Indicates whether the request succeeded.
+          $ref: '#/components/schemas/Boolean'
+        message:
+          description: Human-readable message summarizing the outcome.
+          $ref: '#/components/schemas/String'
+        data:
+          oneOf:
+            - type: 'null'
+            - description: Endpoint-specific response payload.
+              $ref: '#/components/schemas/ProviderLinksResponse'
+          description: Endpoint-specific response payload. `null` on error responses.
+        error:
+          oneOf:
+            - type: 'null'
+            - description: Structured error details when the request fails.
+              $ref: '#/components/schemas/ApiError'
+          description: Structured error details. Present only when `success` is `false`.
+        meta:
+          description: Optional metadata such as pagination or response source details.
+          $ref: '#/components/schemas/Object'
+      description: Standard JSON envelope returned by all API endpoints.
+    ApiResponseOfProviderLinkStartResponse:
+      type: object
+      properties:
+        success:
+          description: Indicates whether the request succeeded.
+          $ref: '#/components/schemas/Boolean'
+        message:
+          description: Human-readable message summarizing the outcome.
+          $ref: '#/components/schemas/String'
+        data:
+          oneOf:
+            - type: 'null'
+            - description: Endpoint-specific response payload.
+              $ref: '#/components/schemas/ProviderLinkStartResponse'
+          description: Endpoint-specific response payload. `null` on error responses.
+        error:
+          oneOf:
+            - type: 'null'
+            - description: Structured error details when the request fails.
+              $ref: '#/components/schemas/ApiError'
+          description: Structured error details. Present only when `success` is `false`.
+        meta:
+          description: Optional metadata such as pagination or response source details.
+          $ref: '#/components/schemas/Object'
+      description: Standard JSON envelope returned by all API endpoints.
     ApiResponseOfPublicProfileResponse:
       type: object
       properties:
@@ -16384,6 +16803,31 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/String'
+    CompleteProviderLinkRequest:
+      required:
+        - state
+      type: object
+      properties:
+        state:
+          description: The OAuth `state` link-start issued.
+          $ref: '#/components/schemas/String'
+        code:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/String'
+        idToken:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/String'
+      description: "What the provider callback returned for a link started by link-start. Google returns a\r\nstring? CompleteProviderLinkRequest.Code the server redeems; for Microsoft the browser redeems the code and sends\r\nthe string? CompleteProviderLinkRequest.IdToken."
+    ConfirmProviderLinkRequest:
+      required:
+        - linkToken
+      type: object
+      properties:
+        linkToken:
+          $ref: '#/components/schemas/String'
+      description: Confirms the link a provider sign-in proposed after matching this account by email.
     CreateClubMemberInvitationRequest:
       required:
         - identifier
@@ -17966,6 +18410,10 @@ components:
       type: array
       items:
         $ref: '#/components/schemas/EventVersionFieldChangeResponse'
+    IReadOnlyListOfProviderLinkStatusResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/ProviderLinkStatusResponse'
     IReadOnlyListOfString:
       type: array
       items:
@@ -18448,6 +18896,27 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/OAuthRoleSelectionResponse'
+        linkConfirmation:
+          oneOf:
+            - type: 'null'
+            - description: Set when string OAuthAuthenticationResponse.Type is `requires_link_confirmation`.
+              $ref: '#/components/schemas/OAuthLinkConfirmationResponse'
+    OAuthLinkConfirmationResponse:
+      required:
+        - linkToken
+        - provider
+        - maskedEmail
+      type: object
+      properties:
+        linkToken:
+          $ref: '#/components/schemas/String'
+        provider:
+          $ref: '#/components/schemas/String'
+        maskedEmail:
+          $ref: '#/components/schemas/String'
+        expiresAtUtc:
+          $ref: '#/components/schemas/DateTime'
+      description: "A provider sign-in matched an existing account by its verified email, but that account\r\nhas no provider link. Nothing is linked or signed in until the owner signs in to the\r\naccount and confirms with string OAuthLinkConfirmationResponse.LinkToken."
     OAuthRoleSelectionResponse:
       required:
         - signupToken
@@ -18954,6 +19423,76 @@ components:
         recurrence:
           $ref: '#/components/schemas/EventRecurrenceRuleRequest'
       description: 'Dry-run expansion, used by the wizard''s live preview.'
+    ProviderLinkResponse:
+      required:
+        - provider
+      type: object
+      properties:
+        provider:
+          $ref: '#/components/schemas/String'
+        email:
+          oneOf:
+            - type: 'null'
+            - description: The address the provider last reported. Display only; never used to sign in.
+              $ref: '#/components/schemas/String'
+        displayName:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/String'
+        linkedAtUtc:
+          $ref: '#/components/schemas/DateTime'
+        lastUsedAtUtc:
+          oneOf:
+            - type: 'null'
+            - description: Null until the link is first used to sign in.
+              $ref: '#/components/schemas/DateTime'
+      description: A linked provider identity. The provider subject itself is never returned.
+    ProviderLinksResponse:
+      required:
+        - providers
+      type: object
+      properties:
+        hasPassword:
+          $ref: '#/components/schemas/Boolean'
+        providers:
+          $ref: '#/components/schemas/IReadOnlyListOfProviderLinkStatusResponse'
+      description: 'The account''s sign-in methods: its password and each linkable provider.'
+    ProviderLinkStartResponse:
+      required:
+        - authorizationUrl
+        - state
+      type: object
+      properties:
+        authorizationUrl:
+          description: 'Where to send the browser. It carries the state, nonce, and PKCE challenge.'
+          $ref: '#/components/schemas/String'
+        state:
+          description: 'The OAuth `state`, so the callback can tell this link from a sign-in.'
+          $ref: '#/components/schemas/String'
+        codeVerifier:
+          oneOf:
+            - type: 'null'
+            - description: "The PKCE verifier, only for a provider whose code the browser redeems (Microsoft). Null\r\nfor Google, whose verifier never leaves the server."
+              $ref: '#/components/schemas/String'
+    ProviderLinkStatusResponse:
+      required:
+        - provider
+      type: object
+      properties:
+        provider:
+          description: '`google` or `microsoft`; `apple` is reserved.'
+          $ref: '#/components/schemas/String'
+        available:
+          description: Whether this deployment can start a link with the provider.
+          $ref: '#/components/schemas/Boolean'
+        link:
+          oneOf:
+            - type: 'null'
+            - description: Null when the provider is not linked.
+              $ref: '#/components/schemas/ProviderLinkResponse'
+        canUnlink:
+          description: Whether removing the link leaves another way to sign in.
+          $ref: '#/components/schemas/Boolean'
     PublicProfileResponse:
       type: object
       properties:

@@ -30,6 +30,7 @@ namespace backend.main.features.auth
     {
         private readonly IAuthUserRepository _userRepository;
         private readonly IUserIdentityLinkRepository _identityLinks;
+        private readonly IProviderLinkStateStore _providerLinkStates;
         private readonly IOAuthService _oauthService;
         private readonly ITokenService _tokenService;
         private readonly ICacheService _cacheService;
@@ -51,6 +52,7 @@ namespace backend.main.features.auth
         public AuthService(
             IAuthUserRepository userRepository,
             IUserIdentityLinkRepository identityLinks,
+            IProviderLinkStateStore providerLinkStates,
             IOAuthService oauthService,
             ITokenService tokenService,
             ICacheService cacheService,
@@ -71,6 +73,7 @@ namespace backend.main.features.auth
         {
             _userRepository = userRepository;
             _identityLinks = identityLinks;
+            _providerLinkStates = providerLinkStates;
             _oauthService = oauthService;
             _tokenService = tokenService;
             _cacheService = cacheService;
@@ -601,7 +604,11 @@ namespace backend.main.features.auth
                 if (oauthUser == null)
                     throw ProviderRejected(AuthSecurityMethod.Google, "Invalid Google Token");
 
-                var user = await ResolveProviderUserAsync(oauthUser, AuthSecurityMethod.Google);
+                var resolution = await ResolveProviderUserAsync(oauthUser, AuthSecurityMethod.Google);
+                if (resolution.LinkConfirmation != null)
+                    return OAuthAuthenticationResult.LinkConfirmationRequired(resolution.LinkConfirmation);
+
+                var user = resolution.User;
                 if (user == null)
                 {
                     return OAuthAuthenticationResult.RoleSelectionRequired(
@@ -669,7 +676,11 @@ namespace backend.main.features.auth
                 if (oauthUser == null)
                     throw ProviderRejected(AuthSecurityMethod.Microsoft, "Invalid Microsoft Token");
 
-                var user = await ResolveProviderUserAsync(oauthUser, AuthSecurityMethod.Microsoft);
+                var resolution = await ResolveProviderUserAsync(oauthUser, AuthSecurityMethod.Microsoft);
+                if (resolution.LinkConfirmation != null)
+                    return OAuthAuthenticationResult.LinkConfirmationRequired(resolution.LinkConfirmation);
+
+                var user = resolution.User;
                 if (user == null)
                 {
                     return OAuthAuthenticationResult.RoleSelectionRequired(
@@ -724,7 +735,15 @@ namespace backend.main.features.auth
                 if (pending.Provider is not (IdentityProviders.Google or IdentityProviders.Microsoft))
                     throw new BadRequestException("Unsupported OAuth provider.");
 
-                var user = await ResolveProviderUserAsync(oauthUser, ProviderMethod(pending.Provider));
+                var resolution = await ResolveProviderUserAsync(oauthUser, ProviderMethod(pending.Provider));
+
+                // An account took this address between the sign-in and now. It is not linked from
+                // here: the owner signs in to it and confirms, as at sign-in.
+                if (resolution.LinkConfirmation != null)
+                    throw new ConflictException(
+                        "An account already uses this email address. Sign in to it, then link this provider from your security settings.");
+
+                var user = resolution.User;
 
                 if (user == null)
                 {
@@ -1067,7 +1086,9 @@ namespace backend.main.features.auth
         /// someone else the two lookups disagree permanently — comparing them here would lock the
         /// original account out of the only sign-in method it may have.
         /// </remarks>
-        private async Task<User?> ResolveProviderUserAsync(OAuthUser oauthUser, AuthSecurityMethod method)
+        private async Task<ProviderUserResolution> ResolveProviderUserAsync(
+            OAuthUser oauthUser,
+            AuthSecurityMethod method)
         {
             var providerUser = await _userRepository.GetOAuthByProviderSubjectAsync(
                 oauthUser.Provider,
@@ -1075,7 +1096,7 @@ namespace backend.main.features.auth
             if (providerUser != null)
             {
                 await TouchIdentityLinkAsync(providerUser, oauthUser);
-                return ToUser(providerUser);
+                return new ProviderUserResolution(ToUser(providerUser), null);
             }
 
             // Without a linked subject the address is all there is to go on, so a token that
@@ -1087,16 +1108,45 @@ namespace backend.main.features.auth
             // existing account, though the new account holds an address nobody has proven.
             var emailUser = await _userRepository.GetOAuthByEmailAsync(oauthUser.Email);
             if (emailUser == null)
-                return null;
+                return new ProviderUserResolution(null, null);
 
             EnsureEmailFallbackAllowed(emailUser, method);
             EnsureEmailVerifiedForLinking(emailUser, oauthUser, method);
 
-            await AddEmailMatchedLinkAsync(emailUser.Id, oauthUser);
-            EmitProviderLinked(emailUser.Id, method);
-
-            return ToUser(emailUser);
+            // A verified address proves the caller controls the account's inbox, but not that they
+            // mean to attach this provider to it. Nothing is linked or signed in here: the owner
+            // signs in to the account as usual and confirms the link from there.
+            return new ProviderUserResolution(null, await ProposeEmailLinkAsync(emailUser, oauthUser));
         }
+
+        private async Task<PendingProviderLinkChallenge> ProposeEmailLinkAsync(
+            UserOAuthRecord emailUser,
+            OAuthUser oauthUser)
+        {
+            var now = DateTime.UtcNow;
+            var email = oauthUser.Email!;
+            var linkToken = await _providerLinkStates.CreatePendingEmailLinkAsync(new PendingEmailLink
+            {
+                UserId = emailUser.Id,
+                Provider = oauthUser.Provider,
+                Subject = oauthUser.Id,
+                Email = email,
+                Name = string.IsNullOrWhiteSpace(oauthUser.Name) ? null : oauthUser.Name,
+                CreatedAtUtc = now,
+            });
+
+            return new PendingProviderLinkChallenge
+            {
+                LinkToken = linkToken,
+                Provider = oauthUser.Provider,
+                MaskedEmail = PhoneNumberFormatter.MaskEmail(email),
+                ExpiresAtUtc = now + ProviderLinkStateLifetime.Lifetime,
+            };
+        }
+
+        private sealed record ProviderUserResolution(
+            User? User,
+            PendingProviderLinkChallenge? LinkConfirmation);
 
         /// <summary>
         /// Refuses to link by email unless the provider proved the caller controls the address.
@@ -1116,18 +1166,6 @@ namespace backend.main.features.auth
 
             EmitProviderLinkConflict(emailUser.Id, method, AuthSecurityReason.EmailUnverified);
             throw new MicrosoftEmailUnverifiedException();
-        }
-
-        private async Task AddEmailMatchedLinkAsync(int userId, OAuthUser oauthUser)
-        {
-            var link = NewIdentityLink(oauthUser);
-            link.UserId = userId;
-
-            // Another request for the same subject or account won the race between the lookup and
-            // this insert; whichever link it wrote stands.
-            if (await _identityLinks.AddAsync(link) != IdentityLinkAddResult.Added)
-                throw new ConflictException(
-                    "This Google or Microsoft account is already linked to another account.");
         }
 
         private static UserIdentityLink NewIdentityLink(OAuthUser oauthUser)
@@ -1175,11 +1213,11 @@ namespace backend.main.features.auth
         /// after the link was made. Both providers are checked because the new holder of the
         /// address can authenticate through either one. Password recovery never emails a reset to
         /// an account without a local password, so a provider link may be the account's only
-        /// credential and an address match must not stand in for it. An account with no link
-        /// still links on an address match; control of that inbox could already reset its password.
-        /// That holds only when the provider proves the caller controls the inbox: Google requires
-        /// <c>email_verified</c>, and Microsoft resolution refuses an unverified address after this
-        /// check with <see cref="MicrosoftEmailUnverifiedException"/>.
+        /// credential and an address match must not stand in for it. An account with no link may
+        /// still be proposed a link on an address match, which its owner confirms after signing in.
+        /// Only a verified address is proposed: Google requires <c>email_verified</c>, and
+        /// Microsoft resolution refuses an unverified address after this check with
+        /// <see cref="MicrosoftEmailUnverifiedException"/>.
         /// </remarks>
         private void EnsureEmailFallbackAllowed(UserOAuthRecord emailUser, AuthSecurityMethod provider)
         {
@@ -1435,15 +1473,6 @@ namespace backend.main.features.auth
                 Outcome = AuthSecurityOutcome.Succeeded,
                 Method = AuthSecurityMethod.Email,
                 Flow = AuthSecurityFlow.PasswordReset,
-                UserId = userId,
-            });
-
-        private void EmitProviderLinked(int userId, AuthSecurityMethod provider) =>
-            _securityEvents.Emit(new AuthSecurityEvent
-            {
-                Definition = AuthSecurityEvents.ProviderLinked,
-                Outcome = AuthSecurityOutcome.Succeeded,
-                Method = provider,
                 UserId = userId,
             });
 

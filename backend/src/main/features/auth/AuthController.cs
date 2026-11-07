@@ -730,7 +730,7 @@ namespace backend.main.features.auth
                 if (e is AppException)
                     return HandleError.Resolve(e);
 
-                Logger.Error($"[AuthController] ChangePassword failed: {e}");
+                Logger.Error($"[AuthController] MicrosoftAuthenticate failed: {e}");
                 return HandleError.Resolve(e);
             }
         }
@@ -1404,6 +1404,15 @@ namespace backend.main.features.auth
                         Email = result.PendingSignup.Email,
                         Name = result.PendingSignup.Name,
                         Provider = result.PendingSignup.Provider,
+                    },
+                LinkConfirmation = result.LinkConfirmation == null
+                    ? null
+                    : new OAuthLinkConfirmationResponse
+                    {
+                        LinkToken = result.LinkConfirmation.LinkToken,
+                        Provider = result.LinkConfirmation.Provider,
+                        MaskedEmail = result.LinkConfirmation.MaskedEmail,
+                        ExpiresAtUtc = result.LinkConfirmation.ExpiresAtUtc,
                     }
             };
         }
@@ -1418,6 +1427,8 @@ namespace backend.main.features.auth
         {
             AuthFlowResponseTypes.RequiresRoleSelection => "Role selection is required to complete signup.",
             AuthFlowResponseTypes.RequiresStepUp => "Additional sign-in verification is required.",
+            AuthFlowResponseTypes.RequiresLinkConfirmation =>
+                "An account already uses this email address. Sign in to it to link this provider.",
             _ => "Login successful"
         };
 

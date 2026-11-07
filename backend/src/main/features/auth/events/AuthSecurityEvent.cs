@@ -153,6 +153,8 @@ public enum AuthSecurityReason
     Policy,
     MfaRequired,
     ResourceAccess,
+    ProviderBoundToOtherAccount,
+    ProviderAlreadyConnected,
 }
 
 public enum AuthSecurityMethod
@@ -189,6 +191,9 @@ public enum AuthSecurityFlow
     UsernameAvailability,
     UsernameSuggestions,
     Refresh,
+    ProviderLink,
+    ProviderLinkConfirmation,
+    ProviderUnlink,
 }
 
 public enum AuthThrottleDimension

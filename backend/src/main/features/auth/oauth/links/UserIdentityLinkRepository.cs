@@ -65,6 +65,58 @@ namespace backend.main.features.auth.oauth.links
                     .SetProperty(l => l.DisplayName, l => displayName ?? l.DisplayName));
         }
 
+        public async Task<IdentityLinkRemoveResult> RemoveIfAnotherMethodRemainsAsync(int userId, string provider)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    // Two removals each counting the other's link as remaining would otherwise
+                    // leave an account with neither. The account row serializes them.
+                    if (_context.Database.IsNpgsql())
+                    {
+                        await _context.Users
+                            .FromSqlInterpolated(
+                                $"SELECT * FROM \"Users\" WHERE \"Id\" = {userId} FOR UPDATE")
+                            .AsNoTracking()
+                            .SingleOrDefaultAsync();
+                    }
+
+                    var links = await _context.UserIdentityLinks
+                        .Where(l => l.UserId == userId)
+                        .Select(l => new { l.Id, l.Provider })
+                        .ToListAsync();
+                    var target = links.FirstOrDefault(l => l.Provider == provider);
+                    if (target == null)
+                    {
+                        await transaction.RollbackAsync();
+                        return IdentityLinkRemoveResult.NotLinked;
+                    }
+
+                    var hasPassword = await _context.Users
+                        .AnyAsync(u => u.Id == userId && u.Password != null);
+                    if (!hasPassword && links.Count == 1)
+                    {
+                        await transaction.RollbackAsync();
+                        return IdentityLinkRemoveResult.LastSignInMethod;
+                    }
+
+                    await _context.UserIdentityLinks
+                        .Where(l => l.Id == target.Id)
+                        .ExecuteDeleteAsync();
+                    await transaction.CommitAsync();
+                    return IdentityLinkRemoveResult.Removed;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
+        }
+
         /// <summary>
         /// Which unique index an insert violated, or null for any other failure. Postgres names
         /// the index; SQLite, used by the repository tests, only names the columns.

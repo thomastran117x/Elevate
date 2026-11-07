@@ -212,6 +212,7 @@ public class AuthTotpStepUpServiceTests
         return new AuthService(
             userRepository.Object,
             new Mock<IUserIdentityLinkRepository>().Object,
+            new Mock<IProviderLinkStateStore>().Object,
             oauthService.Object,
             tokenService.Object,
             cacheService.Object,

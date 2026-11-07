@@ -66,6 +66,9 @@ public static class AuthSecurityEvents
     public static readonly AuthSecurityEventDefinition ProviderLinkConflict =
         new(33081, "auth.provider_link.conflict", LogLevel.Warning);
 
+    public static readonly AuthSecurityEventDefinition ProviderUnlinked =
+        new(33082, "auth.provider.unlinked", LogLevel.Information);
+
     public static readonly AuthSecurityEventDefinition AuthorizationDenied =
         new(33090, "authz.denied", LogLevel.Warning);
 
@@ -92,6 +95,7 @@ public static class AuthSecurityEvents
         SessionRevoked,
         ProviderLinked,
         ProviderLinkConflict,
+        ProviderUnlinked,
         AuthorizationDenied,
         AccountStatusChanged,
         RecoveryCodeUsed,

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using backend.main.features.auth;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.mfa.session;
@@ -882,8 +883,13 @@ public class AuthEndpointsTests
             .Should().BeNull();
     }
 
+    /// <summary>
+    /// A verified Microsoft address that matches an unlinked account proposes a link and signs no
+    /// one in. The owner links it by signing in to the account, stepping up, and confirming; an
+    /// unverified address proposes nothing.
+    /// </summary>
     [Fact]
-    public async Task MicrosoftSignIn_ShouldLinkByEmail_OnlyWhenMicrosoftVerifiedTheEmail()
+    public async Task MicrosoftSignIn_ShouldProposeAnEmailLink_ThatOnlyTheSignedInOwnerConfirms()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
         var account = await app.SeedUserAsync("ms.target@example.com");
@@ -924,12 +930,54 @@ public class AuthEndpointsTests
             trustedDeviceToken: "ms-target-device"));
 
         verified.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await app.ReadApiResponseAsync<OAuthAuthenticationResponse>(verified);
-        body.Data!.RequiresRoleSelection.Should().BeFalse();
-        body.Data.Auth.Should().NotBeNull();
-        body.Data.Auth!.AccessToken.Should().NotBeNullOrWhiteSpace();
+        var proposal = (await app.ReadApiResponseAsync<OAuthAuthenticationResponse>(verified)).Data!;
+        proposal.Type.Should().Be(AuthFlowResponseTypes.RequiresLinkConfirmation);
+        proposal.Auth.Should().BeNull();
+        proposal.LinkConfirmation!.Provider.Should().Be("microsoft");
+        proposal.LinkConfirmation.MaskedEmail.Should().NotBe("ms.target@example.com");
+        verified.Headers.TryGetValues("Set-Cookie", out var proposalCookies);
+        (proposalCookies ?? []).Should().NotContain(cookie => cookie.Contains("refresh", StringComparison.OrdinalIgnoreCase));
+        (await app.FindLinkedSubjectAsync("ms.target@example.com", IdentityProviders.Microsoft)).Should().BeNull();
+
+        var owner = await app.LoginApiAsync("ms.target", trustedDeviceToken: "ms-target-device");
+
+        // Confirming is a link change, so it needs the same fresh step-up as any other.
+        var withoutProof = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/providers/link/confirm",
+            new ConfirmProviderLinkRequest { LinkToken = proposal.LinkConfirmation.LinkToken },
+            owner.AccessToken);
+        withoutProof.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        await app.GrantStepUpProofAsync(owner.AccessToken);
+        var confirmed = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/providers/link/confirm",
+            new ConfirmProviderLinkRequest { LinkToken = proposal.LinkConfirmation.LinkToken },
+            owner.AccessToken);
+
+        confirmed.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(confirmed));
         (await app.FindLinkedSubjectAsync("ms.target@example.com", IdentityProviders.Microsoft))
             .Should().Be("ms-mailbox-owner");
+
+        // The proposal is spent.
+        var replay = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/providers/link/confirm",
+            new ConfirmProviderLinkRequest { LinkToken = proposal.LinkConfirmation.LinkToken },
+            owner.AccessToken);
+        replay.StatusCode.Should().Be(HttpStatusCode.Gone);
+
+        // From now on the subject signs in directly.
+        var signIn = await app.Client.SendAsync(await CreateCsrfRequestAsync(
+            app,
+            "/api/auth/microsoft",
+            new MicrosoftRequest
+            {
+                Token = "ms-verified",
+                Transport = SessionTransportResolver.ApiValue
+            },
+            trustedDeviceToken: "ms-target-device"));
+        var signedIn = (await app.ReadApiResponseAsync<OAuthAuthenticationResponse>(signIn)).Data!;
+        signedIn.Type.Should().Be(AuthFlowResponseTypes.Authenticated);
+        signedIn.Auth!.AccessToken.Should().NotBeNullOrWhiteSpace();
     }
 
     /// <summary>

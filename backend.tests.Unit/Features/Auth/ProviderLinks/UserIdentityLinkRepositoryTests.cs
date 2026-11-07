@@ -131,6 +131,62 @@ public class UserIdentityLinkRepositoryTests
         (await harness.Db.UserIdentityLinks.AsNoTracking().AnyAsync()).Should().BeFalse();
     }
 
+    [Fact]
+    public async Task RemoveIfAnotherMethodRemainsAsync_ShouldRemove_WhenTheAccountHasAPassword()
+    {
+        await using var harness = await LinkRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync("owner@example.com");
+        await harness.Repository.AddAsync(NewLink(userId, IdentityProviders.Google, "google-1"));
+
+        var result = await harness.Repository.RemoveIfAnotherMethodRemainsAsync(userId, IdentityProviders.Google);
+
+        result.Should().Be(IdentityLinkRemoveResult.Removed);
+        (await harness.Repository.ListForUserAsync(userId)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RemoveIfAnotherMethodRemainsAsync_ShouldRemove_WhenAnotherLinkRemains()
+    {
+        await using var harness = await LinkRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync("owner@example.com", password: null);
+        await harness.Repository.AddAsync(NewLink(userId, IdentityProviders.Google, "google-1"));
+        await harness.Repository.AddAsync(NewLink(userId, IdentityProviders.Microsoft, "ms-1"));
+
+        var result = await harness.Repository.RemoveIfAnotherMethodRemainsAsync(userId, IdentityProviders.Google);
+
+        result.Should().Be(IdentityLinkRemoveResult.Removed);
+        (await harness.Repository.ListForUserAsync(userId)).Select(l => l.Provider)
+            .Should().Equal(IdentityProviders.Microsoft);
+    }
+
+    [Fact]
+    public async Task RemoveIfAnotherMethodRemainsAsync_ShouldKeepTheLastSignInMethod()
+    {
+        await using var harness = await LinkRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync("owner@example.com", password: null);
+        await harness.Repository.AddAsync(NewLink(userId, IdentityProviders.Microsoft, "ms-1"));
+
+        var result = await harness.Repository.RemoveIfAnotherMethodRemainsAsync(userId, IdentityProviders.Microsoft);
+
+        result.Should().Be(IdentityLinkRemoveResult.LastSignInMethod);
+        (await harness.Repository.ListForUserAsync(userId)).Should().ContainSingle();
+    }
+
+    /// <summary>Only the caller's own link is ever removed: another account's is not reachable.</summary>
+    [Fact]
+    public async Task RemoveIfAnotherMethodRemainsAsync_ShouldReportNotLinked_ForAnotherAccountsLink()
+    {
+        await using var harness = await LinkRepositoryHarness.CreateAsync();
+        var owner = await harness.SeedUserAsync("owner@example.com");
+        var other = await harness.SeedUserAsync("other@example.com");
+        await harness.Repository.AddAsync(NewLink(owner, IdentityProviders.Google, "google-1"));
+
+        var result = await harness.Repository.RemoveIfAnotherMethodRemainsAsync(other, IdentityProviders.Google);
+
+        result.Should().Be(IdentityLinkRemoveResult.NotLinked);
+        (await harness.Repository.ListForUserAsync(owner)).Should().ContainSingle();
+    }
+
     private static UserIdentityLink NewLink(int userId, string provider, string subject) => new()
     {
         UserId = userId,

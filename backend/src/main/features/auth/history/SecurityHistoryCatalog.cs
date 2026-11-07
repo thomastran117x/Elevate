@@ -28,6 +28,7 @@ public static class SecurityHistoryCatalog
             AuthSecurityEvents.RefreshTokenReused,
             AuthSecurityEvents.SessionRevoked,
             AuthSecurityEvents.ProviderLinked,
+            AuthSecurityEvents.ProviderUnlinked,
             AuthSecurityEvents.AccountStatusChanged,
             AuthSecurityEvents.RecoveryCodeUsed,
         };
@@ -78,6 +79,9 @@ public static class SecurityHistoryCatalog
 
         if (definition == AuthSecurityEvents.ProviderLinked)
             return AccountSecurityEventKind.ProviderLinked;
+
+        if (definition == AuthSecurityEvents.ProviderUnlinked)
+            return AccountSecurityEventKind.ProviderUnlinked;
 
         if (definition == AuthSecurityEvents.RefreshTokenReused)
             return AccountSecurityEventKind.RefreshTokenReuseDetected;

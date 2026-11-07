@@ -462,11 +462,16 @@ public class AuthServiceTests
         return await service.LoginAsync("rehash-user", password, SessionTransport.BrowserCookie);
     }
 
+    /// <summary>
+    /// A verified address proves the caller controls the account's inbox, not that the owner
+    /// wants this provider attached. Sign-in proposes the link and neither links nor signs in.
+    /// </summary>
     [Fact]
-    public async Task GoogleAsync_ShouldAttachProviderIdForExistingEmailUser()
+    public async Task GoogleAsync_ShouldProposeALink_InsteadOfLinkingByEmail()
     {
         var userRepository = new Mock<IAuthUserRepository>();
         var identityLinks = new Mock<IUserIdentityLinkRepository>();
+        var linkStates = new Mock<IProviderLinkStateStore>();
         userRepository.Setup(repository => repository.GetOAuthByProviderSubjectAsync("google", "google-1"))
             .ReturnsAsync((UserOAuthRecord?)null);
         userRepository.Setup(repository => repository.GetOAuthByEmailAsync("existing@example.com"))
@@ -477,57 +482,44 @@ public class AuthServiceTests
                 Usertype = "Participant",
                 AuthVersion = 1
             });
-        identityLinks.Setup(repository => repository.AddAsync(It.Is<UserIdentityLink>(l => l.UserId == 9 && l.Provider == "google" && l.Subject == "google-1")))
-            .ReturnsAsync(IdentityLinkAddResult.Added);
+        linkStates.Setup(store => store.CreatePendingEmailLinkAsync(It.IsAny<PendingEmailLink>()))
+            .ReturnsAsync("link-token");
 
         var oauthService = new Mock<IOAuthService>();
         oauthService.Setup(service => service.VerifyGoogleTokenAsync("google-token", null))
-            .ReturnsAsync(new OAuthUser("google-1", "existing@example.com", "Existing User", "google"));
+            .ReturnsAsync(new OAuthUser("google-1", "existing@example.com", "Existing User", "google", emailVerified: true));
 
-        var tokenService = new Mock<ITokenService>();
-        tokenService.Setup(service => service.GenerateAccessToken(It.IsAny<backend.main.features.profile.User>(), It.IsAny<string>()))
-            .Returns(new AccessTokenIssue("access-token", DateTime.UtcNow.AddMinutes(15)));
-        tokenService.Setup(service => service.GenerateRefreshToken(
-                9,
-                It.IsAny<int>(),
-                It.IsAny<backend.main.shared.requests.ClientRequestInfo>(),
-                SessionTransport.BrowserCookie,
-                null,
-                null))
-            .ReturnsAsync(new RefreshTokenIssue(
-                "refresh-token",
-                "binding-token",
-                TimeSpan.FromDays(1),
-                SessionTransport.BrowserCookie,
-                "session-9"));
-
-        var deviceService = new Mock<IDeviceService>();
-        var authSessionService = CreateAuthSessionServiceForUser(new backend.main.features.profile.User
-        {
-            Id = 9,
-            Email = "existing@example.com",
-            Usertype = "Participant",
-        });
+        var authSessionService = new Mock<IAuthSessionService>();
         var securityEvents = new RecordingAuthSecurityEventEmitter();
         var service = CreateService(
             securityEvents: securityEvents,
             userRepository: userRepository,
             identityLinks: identityLinks,
+            providerLinkStates: linkStates,
             oauthService: oauthService,
-            tokenService: tokenService,
-            deviceService: deviceService,
             authSessionService: authSessionService);
 
         var result = await service.GoogleAsync("google-token", SessionTransport.BrowserCookie);
 
-        result.RequiresRoleSelection.Should().BeFalse();
-        result.UserToken.Should().NotBeNull();
-        result.UserToken!.user.Id.Should().Be(9);
-        identityLinks.Verify(repository => repository.AddAsync(It.Is<UserIdentityLink>(l => l.UserId == 9 && l.Provider == "google" && l.Subject == "google-1")), Times.Once);
-        deviceService.Verify(s => s.EnsureDeviceKnownAsync(9, "existing@example.com", 1, It.IsAny<backend.main.shared.requests.ClientRequestInfo>(), It.IsAny<string?>()), Times.Once);
-        var linked = securityEvents.Of(AuthSecurityEvents.ProviderLinked).Should().ContainSingle().Subject;
-        linked.UserId.Should().Be(9);
-        linked.Method.Should().Be(AuthSecurityMethod.Google);
+        result.Type.Should().Be(AuthFlowResponseTypes.RequiresLinkConfirmation);
+        result.UserToken.Should().BeNull();
+        result.LinkConfirmation!.LinkToken.Should().Be("link-token");
+        result.LinkConfirmation.Provider.Should().Be("google");
+        result.LinkConfirmation.MaskedEmail.Should().NotContain("existing@");
+        linkStates.Verify(store => store.CreatePendingEmailLinkAsync(It.Is<PendingEmailLink>(pending =>
+            pending.UserId == 9
+            && pending.Provider == "google"
+            && pending.Subject == "google-1"
+            && pending.Email == "existing@example.com")), Times.Once);
+        identityLinks.Verify(repository => repository.AddAsync(It.IsAny<UserIdentityLink>()), Times.Never);
+        authSessionService.Verify(
+            s => s.IssueAsync(
+                It.IsAny<backend.main.features.profile.User>(),
+                It.IsAny<SessionTransport>(),
+                It.IsAny<string?>(),
+                It.IsAny<bool?>()),
+            Times.Never);
+        securityEvents.Of(AuthSecurityEvents.ProviderLinked).Should().BeEmpty();
     }
 
     /// <summary>
@@ -1121,10 +1113,11 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task MicrosoftAsync_ShouldLinkByEmail_WhenEmailIsVerified()
+    public async Task MicrosoftAsync_ShouldProposeALink_WhenTheEmailIsVerified()
     {
         var userRepository = new Mock<IAuthUserRepository>();
         var identityLinks = new Mock<IUserIdentityLinkRepository>();
+        var linkStates = new Mock<IProviderLinkStateStore>();
         userRepository.Setup(repository => repository.GetOAuthByProviderSubjectAsync("microsoft", "ms-owner"))
             .ReturnsAsync((UserOAuthRecord?)null);
         userRepository.Setup(repository => repository.GetOAuthByEmailAsync("owner@example.com"))
@@ -1135,31 +1128,36 @@ public class AuthServiceTests
                 Usertype = "Participant",
                 AuthVersion = 1
             });
-        identityLinks.Setup(repository => repository.AddAsync(It.Is<UserIdentityLink>(l => l.UserId == 9 && l.Provider == "microsoft" && l.Subject == "ms-owner")))
-            .ReturnsAsync(IdentityLinkAddResult.Added);
+        linkStates.Setup(store => store.CreatePendingEmailLinkAsync(It.IsAny<PendingEmailLink>()))
+            .ReturnsAsync("ms-link-token");
 
         var oauthService = new Mock<IOAuthService>();
         oauthService.Setup(service => service.VerifyMicrosoftTokenAsync("ms-token", null))
             .ReturnsAsync(new OAuthUser("ms-owner", "owner@example.com", "Owner", "microsoft", emailVerified: true));
 
-        var authSessionService = CreateAuthSessionServiceForUser(new backend.main.features.profile.User
-        {
-            Id = 9,
-            Email = "owner@example.com",
-            Usertype = "Participant",
-        });
+        var authSessionService = new Mock<IAuthSessionService>();
         var service = CreateService(
             userRepository: userRepository,
             identityLinks: identityLinks,
+            providerLinkStates: linkStates,
             oauthService: oauthService,
             authSessionService: authSessionService);
 
         var result = await service.MicrosoftAsync("ms-token", SessionTransport.BrowserCookie);
 
-        result.RequiresRoleSelection.Should().BeFalse();
-        result.UserToken.Should().NotBeNull();
-        result.UserToken!.user.Id.Should().Be(9);
-        identityLinks.Verify(repository => repository.AddAsync(It.Is<UserIdentityLink>(l => l.UserId == 9 && l.Provider == "microsoft" && l.Subject == "ms-owner")), Times.Once);
+        result.Type.Should().Be(AuthFlowResponseTypes.RequiresLinkConfirmation);
+        result.LinkConfirmation!.LinkToken.Should().Be("ms-link-token");
+        result.LinkConfirmation.Provider.Should().Be("microsoft");
+        linkStates.Verify(store => store.CreatePendingEmailLinkAsync(It.Is<PendingEmailLink>(pending =>
+            pending.UserId == 9 && pending.Provider == "microsoft" && pending.Subject == "ms-owner")), Times.Once);
+        identityLinks.Verify(repository => repository.AddAsync(It.IsAny<UserIdentityLink>()), Times.Never);
+        authSessionService.Verify(
+            s => s.IssueAsync(
+                It.IsAny<backend.main.features.profile.User>(),
+                It.IsAny<SessionTransport>(),
+                It.IsAny<string?>(),
+                It.IsAny<bool?>()),
+            Times.Never);
     }
 
     /// <summary>
@@ -1533,14 +1531,14 @@ public class AuthServiceTests
     }
 
     /// <summary>
-    /// The address can be registered between starting a Microsoft signup and completing it. The
-    /// pending state keeps whether Microsoft verified the address, so completing applies the same
-    /// rule as a direct sign-in instead of linking on an unproven address.
+    /// The address can be registered between starting a Microsoft signup and completing it.
+    /// Completing never links onto that account: an unverified address is refused as at sign-in,
+    /// and a verified one is refused too, because only the owner may confirm a link.
     /// </summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task CompleteOAuthSignupAsync_ShouldLinkMicrosoftByEmail_OnlyWhenThePendingEmailIsVerified(bool emailVerified)
+    public async Task CompleteOAuthSignupAsync_ShouldNeverLinkByEmail_WhenTheAddressWasTakenMeanwhile(bool emailVerified)
     {
         var pendingJson = JsonConvert.SerializeObject(new
         {
@@ -1570,20 +1568,15 @@ public class AuthServiceTests
                 Usertype = "Participant",
                 AuthVersion = 1
             });
-        identityLinks.Setup(repository => repository.AddAsync(It.Is<UserIdentityLink>(l => l.UserId == 84 && l.Provider == "microsoft" && l.Subject == "ms-pending")))
-            .ReturnsAsync(IdentityLinkAddResult.Added);
+        var linkStates = new Mock<IProviderLinkStateStore>();
+        linkStates.Setup(store => store.CreatePendingEmailLinkAsync(It.IsAny<PendingEmailLink>()))
+            .ReturnsAsync("link-token");
 
-        var authSessionService = CreateAuthSessionServiceForUser(new backend.main.features.profile.User
-        {
-            Id = 84,
-            Email = "taken@example.com",
-            Usertype = "Participant",
-        });
         var service = CreateService(
             userRepository: userRepository,
             identityLinks: identityLinks,
-            cacheService: cache,
-            authSessionService: authSessionService);
+            providerLinkStates: linkStates,
+            cacheService: cache);
 
         var act = () => service.CompleteOAuthSignupAsync(
             "signup-token",
@@ -1592,14 +1585,10 @@ public class AuthServiceTests
             SessionTransport.BrowserCookie);
 
         if (emailVerified)
-        {
-            var result = await act();
-            result.user.Id.Should().Be(84);
-            identityLinks.Verify(repository => repository.AddAsync(It.Is<UserIdentityLink>(l => l.UserId == 84 && l.Provider == "microsoft" && l.Subject == "ms-pending")), Times.Once);
-            return;
-        }
+            await act.Should().ThrowAsync<ConflictException>().WithMessage("An account already uses this email address*");
+        else
+            await act.Should().ThrowAsync<MicrosoftEmailUnverifiedException>();
 
-        await act.Should().ThrowAsync<MicrosoftEmailUnverifiedException>();
         identityLinks.Verify(
             repository => repository.AddAsync(It.IsAny<UserIdentityLink>()),
             Times.Never);
@@ -2620,6 +2609,7 @@ public class AuthServiceTests
     private static AuthService CreateService(
         Mock<IAuthUserRepository>? userRepository = null,
         Mock<IUserIdentityLinkRepository>? identityLinks = null,
+        Mock<IProviderLinkStateStore>? providerLinkStates = null,
         Mock<IOAuthService>? oauthService = null,
         Mock<ITokenService>? tokenService = null,
         Mock<IAuthNotificationService>? authNotificationService = null,
@@ -2638,6 +2628,7 @@ public class AuthServiceTests
     {
         userRepository ??= new Mock<IAuthUserRepository>();
         identityLinks ??= new Mock<IUserIdentityLinkRepository>();
+        providerLinkStates ??= new Mock<IProviderLinkStateStore>();
         oauthService ??= new Mock<IOAuthService>();
         tokenService ??= new Mock<ITokenService>();
         authNotificationService ??= new Mock<IAuthNotificationService>();
@@ -2660,6 +2651,7 @@ public class AuthServiceTests
         return new AuthService(
             userRepository.Object,
             identityLinks.Object,
+            providerLinkStates.Object,
             oauthService.Object,
             tokenService.Object,
             cacheService.Object,

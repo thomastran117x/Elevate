@@ -23,6 +23,7 @@ public class SecurityHistoryWorkerOptionsTests
         [
             AccountSecurityEventKind.PasswordChanged,
             AccountSecurityEventKind.ProviderLinked,
+            AccountSecurityEventKind.ProviderUnlinked,
             AccountSecurityEventKind.RefreshTokenReuseDetected,
             AccountSecurityEventKind.AccountDisabled,
             AccountSecurityEventKind.RecoveryCodeUsed,

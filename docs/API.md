@@ -58,9 +58,9 @@ frontend's normal escaping rather than as HTML.
 
 Protected HTTP endpoints use JWT bearer access tokens: `Authorization: Bearer <access-token>`. Refresh sessions use cookies; browser clients must retain cookies and send credentials on the relevant requests. Use the existing frontend interceptors and session flow rather than inventing an alternative token-storage contract.
 
-Fetch `GET /api/auth/csrf` and send its request token in `X-CSRF-TOKEN`, with the antiforgery cookie retained. The antiforgery cookie is named `XSRF-TOKEN`. CSRF validation applies to the configured auth POST paths and state-changing profile requests; it is not a blanket rule for every API action. The endpoint schema and `CsrfConfiguration` define the protected requests.
+Fetch `GET /api/auth/csrf` and send its request token in `X-CSRF-TOKEN`, with the antiforgery cookie retained. The antiforgery cookie is named `XSRF-TOKEN`. CSRF validation applies to the configured auth POST paths and to state-changing profile and `/api/auth/providers` requests; it is not a blanket rule for every API action. The endpoint schema and `CsrfConfiguration` define the protected requests.
 
-Some operations require MFA step-up as well as a signed-in session. Username, password, and email changes, account deletion, every SMS or TOTP enrollment, enable, disable, or remove call, recovery-code generation, and an administrator enabling or disabling another account (`PATCH /api/admin/users/{id}/status`) need a step-up proof. For the admin route the proof belongs to the acting admin's session; there is no admin UI yet, so API clients complete step-up first, and a future admin UI should reuse `<app-mfa-gate>`. The other admin routes do not require step-up: the `reindex` routes only rebuild derived search indexes from the database, and the rest only read. The proof comes from `POST /api/auth/mfa/step-up/start` and `/verify` (TOTP, SMS, a recovery code, or the always-available email fallback). It is bound to the session and its auth version and expires a fixed 10 minutes after verification (`Auth:StepUp:ProofLifetimeMinutes`). Without it, these routes return `403` with error code `MFA_REQUIRED`. The step-up `options`, `start`, and `verify` routes never require a proof. Logout, credential rotation, and any completed MFA factor change discard the proof. New sensitive mutations, including future provider, session, or device changes, must use `[RequireMfa]` and be added to the registry in `backend.tests.Unit/Application/Security/SensitiveEndpointStepUpTests.cs`. SMS and TOTP enrollment/step-up have separate configuration switches. Role and resource ownership checks remain authoritative on the backend. Email changes additionally verify the current password when applicable, require confirmation at the new address, and invalidate sessions on completion.
+Some operations require MFA step-up as well as a signed-in session. Username, password, and email changes, account deletion, every SMS or TOTP enrollment, enable, disable, or remove call, recovery-code generation, every provider link or unlink, and an administrator enabling or disabling another account (`PATCH /api/admin/users/{id}/status`) need a step-up proof. For the admin route the proof belongs to the acting admin's session; there is no admin UI yet, so API clients complete step-up first, and a future admin UI should reuse `<app-mfa-gate>`. The other admin routes do not require step-up: the `reindex` routes only rebuild derived search indexes from the database, and the rest only read. The proof comes from `POST /api/auth/mfa/step-up/start` and `/verify` (TOTP, SMS, a recovery code, or the always-available email fallback). It is bound to the session and its auth version and expires a fixed 10 minutes after verification (`Auth:StepUp:ProofLifetimeMinutes`). Without it, these routes return `403` with error code `MFA_REQUIRED`. The step-up `options`, `start`, and `verify` routes never require a proof. Logout, credential rotation, and any completed MFA factor change discard the proof. New sensitive mutations, including future session or device changes, must use `[RequireMfa]` and be added to the registry in `backend.tests.Unit/Application/Security/SensitiveEndpointStepUpTests.cs`. SMS and TOTP enrollment/step-up have separate configuration switches. Role and resource ownership checks remain authoritative on the backend. Email changes additionally verify the current password when applicable, require confirmation at the new address, and invalidate sessions on completion.
 
 ### Recovery codes
 
@@ -90,7 +90,7 @@ Otherwise the provider's email is matched against existing accounts:
 
 - **No match.** The response asks for role selection, and `POST /api/auth/oauth/complete` creates the account.
 - **The account is linked to a different Google or Microsoft identity.** The request answers `409`, and nothing is linked.
-- **The account has no provider link.** The subject is linked to it, and the caller is signed in. This happens only when the provider proves the caller controls the address.
+- **The account has no provider link.** Nothing is linked and no one is signed in. The response is `200` with `Type` `requires_link_confirmation` and a `LinkConfirmation` holding `linkToken`, `provider`, `maskedEmail`, and `expiresAtUtc` (10 minutes). The owner signs in to the account as usual, passes step-up, and confirms with `POST /api/auth/providers/link/confirm`; see [provider linking](#provider-linking). This is offered only when the provider proves the caller controls the address.
 
 Google requires `email_verified`. For Microsoft:
 
@@ -100,7 +100,32 @@ Google requires `email_verified`. For Microsoft:
 - An unverified address with no matching account can still create a new account.
 - A token with no `email` claim signs in only with a subject that is already linked. Otherwise it answers `401`.
 
-Completing a pending signup re-runs these checks.
+Completing a pending signup re-runs these checks. If an account took the address in the meantime, completion answers `409` and links nothing; the owner links the provider after signing in.
+
+### Provider linking
+
+The signed-in owner manages Google and Microsoft links under `/api/auth/providers`. A provider subject maps to at most one account, and an account holds at most one link per provider. Every change needs a fresh step-up proof (`403` `MFA_REQUIRED` without one) and a CSRF token.
+
+| Request | Purpose |
+| --- | --- |
+| `GET /api/auth/providers` | `hasPassword`, and for each provider: `available` (configured here), `link` (`email`, `displayName`, `linkedAtUtc`, `lastUsedAtUtc`, or null), and `canUnlink`. The provider subject is never returned. No step-up needed. |
+| `POST /api/auth/providers/{provider}/link/start` | Issues a `state`, `nonce`, and PKCE verifier bound to the caller's account, session, and auth version, held on the server for 10 minutes. Returns `authorizationUrl`, `state`, and, for Microsoft only, `codeVerifier`. The redirect URI is the server's own (`{FRONTEND_URL}/auth/{provider}`), never the client's. `409` `PROVIDER_ALREADY_CONNECTED` if the provider is already linked. |
+| `POST /api/auth/providers/{provider}/link/complete` | `{ state, code }` for Google, whose code the server redeems with the verifier it kept. `{ state, idToken }` for Microsoft, whose public SPA client redeems the code in the browser. The state is spent on first use. The ID token's signature, issuer, audience, lifetime, and the stored nonce are all checked. |
+| `POST /api/auth/providers/link/confirm` | `{ linkToken }` from a `requires_link_confirmation` sign-in. Only the account the email matched can confirm it. |
+| `DELETE /api/auth/providers/{provider}` | Removes the link unless it is the account's last way to sign in (no password and no other link). Concurrent removals are serialized on the account row. |
+
+Errors a client tells apart by code:
+
+- `410` `PROVIDER_LINK_EXPIRED`: the state or link token expired, was already used, or was revoked. Start again.
+- `403` `PROVIDER_LINK_MISMATCH`: the state or link token belongs to another account or session, or the auth version changed. It is spent anyway.
+- `409` `PROVIDER_ALREADY_LINKED`: the provider identity is linked to a different account. Email never overrides this.
+- `409` `PROVIDER_ALREADY_CONNECTED`: the account already links a different identity from that provider.
+- `409` `LAST_SIGN_IN_METHOD`: the link is the only way left to sign in.
+- `400`: the provider refused the code or token, or the nonce did not match. This is never `401`, so it cannot be mistaken for an expired session.
+
+Linking or unlinking revokes every link flow and email-link proposal the account still has outstanding. It is recorded as `auth.provider.linked` or `auth.provider.unlinked`, appears in the security history as `provider_linked` or `provider_unlinked`, and emails the owner a security alert. Unlinking does not end existing sessions.
+
+Apple is a reserved provider name (`apple`). It is not offered until its flow exists, and adding it does not change these routes or shapes.
 
 ### Security history
 
@@ -108,7 +133,7 @@ Completing a pending signup re-runs these checks.
 
 Each entry has:
 
-- a `kind` such as `signed_in`, `password_changed`, `mfa_enabled`, `recovery_code_used`, `provider_linked`, or `refresh_token_reuse_detected`;
+- a `kind` such as `signed_in`, `password_changed`, `mfa_enabled`, `recovery_code_used`, `provider_linked`, `provider_unlinked`, or `refresh_token_reuse_detected`;
 - `occurredAt`;
 - optional `method`, `factor`, and `reason` names;
 - coarse `client` and `deviceClass` classes;

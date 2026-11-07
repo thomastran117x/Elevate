@@ -26,6 +26,27 @@ namespace backend.main.features.auth.oauth.links
         /// reported. The subject never changes.
         /// </summary>
         Task TouchAsync(int linkId, string? email, string? displayName, DateTime usedAtUtc);
+
+        /// <summary>
+        /// Removes the account's link for the provider, unless it is the account's last way to
+        /// sign in. Runs under the account's row lock, so two concurrent removals of an account's
+        /// last two links cannot both succeed.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="NoRetryAttribute"/> for the same reason as <see cref="AddAsync"/>: a rerun
+        /// after a lost commit acknowledgement would report the removal as never linked.
+        /// </remarks>
+        [NoRetry]
+        Task<IdentityLinkRemoveResult> RemoveIfAnotherMethodRemainsAsync(int userId, string provider);
+    }
+
+    public enum IdentityLinkRemoveResult
+    {
+        Removed,
+        NotLinked,
+
+        /// <summary>The account has no password and no other link, so the link stays.</summary>
+        LastSignInMethod,
     }
 
     public enum IdentityLinkAddResult
