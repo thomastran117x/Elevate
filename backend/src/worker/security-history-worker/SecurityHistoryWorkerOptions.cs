@@ -48,7 +48,8 @@ public sealed record SecurityHistoryWorkerOptions(
     /// <summary>
     /// The changes that send nothing of their own today. MFA, email, and password-reset changes
     /// already notify the owner directly when they happen, so alerting on them too would send two
-    /// emails for one change.
+    /// emails for one change. A recovery code being spent sends nothing directly: its alert, with
+    /// the device and network it came from, is the owner's notice.
     /// </summary>
     public static readonly IReadOnlySet<AccountSecurityEventKind> DefaultAlertKinds =
         new HashSet<AccountSecurityEventKind>
@@ -57,6 +58,7 @@ public sealed record SecurityHistoryWorkerOptions(
             AccountSecurityEventKind.ProviderLinked,
             AccountSecurityEventKind.RefreshTokenReuseDetected,
             AccountSecurityEventKind.AccountDisabled,
+            AccountSecurityEventKind.RecoveryCodeUsed,
         };
 
     public static SecurityHistoryWorkerOptions FromConfiguration(IConfiguration configuration) => new(

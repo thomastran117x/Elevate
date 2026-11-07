@@ -4,6 +4,7 @@ using System.Text;
 using backend.main.application.environment;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.events;
+using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.token;
@@ -22,8 +23,9 @@ namespace backend.main.features.auth.mfa.session
 {
     /// <summary>
     /// Records a short-lived <see cref="StepUpProof"/> for the session after the user proves a
-    /// second factor (TOTP, SMS, or email). Email is the universal fallback and always
-    /// available, so any authenticated user can satisfy a <c>[RequireMfa]</c> gate.
+    /// second factor (TOTP, SMS, a recovery code, or email). Email is the universal fallback and
+    /// always available, so any authenticated user can satisfy a <c>[RequireMfa]</c> gate;
+    /// recovery codes are offered alongside it, not instead of it.
     /// </summary>
     public sealed class SessionMfaVerificationService : ISessionMfaVerificationService
     {
@@ -36,6 +38,7 @@ namespace backend.main.features.auth.mfa.session
         private const string TotpMethod = "totp";
         private const string SmsMethod = "sms";
         private const string EmailMethod = "email";
+        private const string RecoveryCodeMethod = "recovery_code";
 
         // Returns the session's proof and the user's step-up generation in one round trip.
         private const string ReadProofScript = @"
@@ -50,6 +53,7 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
         private readonly TimeSpan _proofLifetime;
         private readonly string _proofSecret;
         private readonly IAuthSecurityEventEmitter _securityEvents;
+        private readonly IRecoveryCodeService _recoveryCodeService;
 
         public SessionMfaVerificationService(
             ICacheService cacheService,
@@ -59,7 +63,8 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
             ITokenService tokenService,
             TimeProvider timeProvider,
             IOptions<StepUpOptions> stepUpOptions,
-            IAuthSecurityEventEmitter securityEvents
+            IAuthSecurityEventEmitter securityEvents,
+            IRecoveryCodeService recoveryCodeService
         )
         {
             _cacheService = cacheService;
@@ -71,6 +76,7 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
             _proofLifetime = stepUpOptions.Value.ProofLifetime;
             _proofSecret = EnvironmentSetting.JwtSecretKeyVerification;
             _securityEvents = securityEvents;
+            _recoveryCodeService = recoveryCodeService;
         }
 
         public async Task<SessionMfaOptionsResponse> GetOptionsAsync(int userId, string email)
@@ -109,14 +115,14 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
                 var now = DateTime.UtcNow;
                 var expiresAtUtc = now.Add(ChallengeTtl);
 
-                // TOTP is stateless — the code is validated live against the enrollment,
-                // so there is nothing to deliver or persist here.
-                if (normalizedMethod == TotpMethod)
+                // TOTP and recovery codes are stateless — the code is checked live against the
+                // enrollment or the stored set, so there is nothing to deliver or persist here.
+                if (normalizedMethod is TotpMethod or RecoveryCodeMethod)
                 {
                     return new SessionMfaStartResponse
                     {
-                        SelectedMethod = TotpMethod,
-                        MaskedDestination = "authenticator app",
+                        SelectedMethod = normalizedMethod,
+                        MaskedDestination = normalizedMethod == TotpMethod ? "authenticator app" : "recovery code",
                         ExpiresAtUtc = expiresAtUtc,
                         CooldownEndsAtUtc = DateTime.MinValue,
                     };
@@ -251,6 +257,12 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
                     return;
                 }
 
+                if (normalizedMethod == RecoveryCodeMethod)
+                {
+                    await VerifyRecoveryCodeAsync(userId, sessionId, authVersion, code, generation, factorState);
+                    return;
+                }
+
                 var state = await GetStateAsync(userId);
                 if (state == null || state.Method != normalizedMethod)
                 {
@@ -296,6 +308,76 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
                 Logger.Error($"[SessionMfaVerificationService] VerifyAsync failed: {ex}");
                 throw new InternalServerErrorException();
             }
+        }
+
+        private async Task VerifyRecoveryCodeAsync(
+            int userId,
+            string sessionId,
+            int authVersion,
+            string code,
+            long generation,
+            string factorState)
+        {
+            // The cap is checked before the code is: once it is reached, no further guess is
+            // verified, so it bounds both the guesses and the Argon2id derivations they cost.
+            if (int.TryParse(await _cacheService.GetValueAsync(RecoveryAttemptKey(userId)), out var spentAttempts)
+                && spentAttempts >= MaxOtpAttempts)
+            {
+                EmitThrottled(userId, AuthSecurityFlow.SessionStepUp, AuthThrottleDimension.Attempts);
+                throw new TooManyRequestException("Too many verification attempts. Please try again later.");
+            }
+
+            RecoveryCodeSpend? spend;
+            try
+            {
+                spend = await _recoveryCodeService.TryConsumeAsync(userId, code);
+            }
+            catch (BadRequestException)
+            {
+                // Input that cannot be a code is refused before it is checked, so it costs no attempt.
+                EmitStepUp(userId, sessionId, RecoveryCodeMethod, AuthSecurityReason.InvalidRequest);
+                throw;
+            }
+
+            if (spend is null)
+            {
+                var attempts = await _cacheService.IncrementAsync(RecoveryAttemptKey(userId));
+                if (attempts == 1)
+                    await _cacheService.SetExpiryAsync(RecoveryAttemptKey(userId), ChallengeTtl);
+                if (attempts >= MaxOtpAttempts)
+                {
+                    EmitThrottled(userId, AuthSecurityFlow.SessionStepUp, AuthThrottleDimension.Attempts);
+                    throw new TooManyRequestException("Too many verification attempts. Please try again later.");
+                }
+
+                EmitStepUp(userId, sessionId, RecoveryCodeMethod, AuthSecurityReason.InvalidCode);
+                throw new UnauthorizedException("Invalid or already used recovery code.");
+            }
+
+            try
+            {
+                await RecordProofAsync(userId, sessionId, authVersion, RecoveryCodeMethod, generation, factorState);
+            }
+            catch
+            {
+                // No proof, so nothing was bought with the code: hand it back rather than burn one
+                // of the user's few remaining codes on a session that ended or a cache outage.
+                await _recoveryCodeService.ReleaseAsync(userId, spend);
+                throw;
+            }
+
+            _securityEvents.Emit(new AuthSecurityEvent
+            {
+                Definition = AuthSecurityEvents.RecoveryCodeUsed,
+                Outcome = AuthSecurityOutcome.Succeeded,
+                Method = AuthSecurityMethod.RecoveryCode,
+                Flow = AuthSecurityFlow.SessionStepUp,
+                UserId = userId,
+                SessionId = sessionId,
+            });
+
+            await _cacheService.DeleteKeyAsync(RecoveryAttemptKey(userId));
+            EmitStepUp(userId, sessionId, RecoveryCodeMethod, null);
         }
 
         public async Task<bool> HasFreshProofAsync(int userId, string? sessionId, int authVersion)
@@ -380,7 +462,8 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
         private async Task<string> GetFactorStateAsync(int userId) =>
             StepUpFactorState.From(
                 await _smsEnrollmentRepository.GetByUserIdAsync(userId),
-                await _totpMfaEnrollmentService.GetEnrollmentAsync(userId)
+                await _totpMfaEnrollmentService.GetEnrollmentAsync(userId),
+                await _recoveryCodeService.GetSetGeneratedAtAsync(userId)
             );
 
         private static (string? Proof, string? Generation) ReadPair(object value)
@@ -467,6 +550,9 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
             if (CanUseSms(smsEnrollment))
                 methods.Add(SmsMethod);
 
+            if (await _recoveryCodeService.HasUnusedAsync(userId))
+                methods.Add(RecoveryCodeMethod);
+
             // Email always works and requires no prior enrollment — the universal fallback.
             methods.Add(EmailMethod);
             return [.. methods];
@@ -550,6 +636,7 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
                 TotpMethod => TotpMethod,
                 SmsMethod => SmsMethod,
                 EmailMethod => EmailMethod,
+                RecoveryCodeMethod => RecoveryCodeMethod,
                 _ => throw new BadRequestException("Unsupported verification method.")
             };
         }
@@ -570,6 +657,7 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
                 {
                     TotpMethod => AuthSecurityMethod.Totp,
                     SmsMethod => AuthSecurityMethod.Sms,
+                    RecoveryCodeMethod => AuthSecurityMethod.RecoveryCode,
                     _ => AuthSecurityMethod.Email,
                 },
                 Flow = AuthSecurityFlow.SessionStepUp,
@@ -591,6 +679,7 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
         private static string UserKey(int userId) => $"mfa:stepup:user:{userId}";
         private static string StartKey(int userId) => $"mfa:stepup:start:user:{userId}";
         private static string TotpAttemptKey(int userId) => $"mfa:stepup:totp-attempts:user:{userId}";
+        private static string RecoveryAttemptKey(int userId) => $"mfa:stepup:recovery-attempts:user:{userId}";
 
         private sealed class PendingState
         {

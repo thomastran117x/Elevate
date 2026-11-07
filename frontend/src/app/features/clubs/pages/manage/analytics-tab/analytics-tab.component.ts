@@ -7,6 +7,7 @@ import { finalize } from 'rxjs/operators';
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
 import { ClubAnalytics, TrendPoint } from '../../../models/club-management.types';
 import { ClubManagementService } from '../../../services/club-management.service';
+import { downloadFile } from '../../../../../shared/download/download-file';
 
 interface TrendWindow {
   label: string;
@@ -164,13 +165,7 @@ export class AnalyticsTabComponent implements OnInit {
       lines.push(row([p.date, p.value, this.toDollars(revByDate.get(p.date) ?? 0).toFixed(2)]));
     }
 
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `club-${this.clubId}-analytics.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadFile(lines.join('\n'), `club-${this.clubId}-analytics.csv`, 'text/csv;charset=utf-8;');
   }
 
   private buildSparkline(points: TrendPoint[]): Sparkline {

@@ -19,12 +19,11 @@ import {
 import {
   getApiClientMessage,
   isApiClientErrorCode,
+  MFA_REQUIRED_ERROR_CODE,
 } from '../../../../../../core/api/models/api-client-error.model';
 import { AuthTokenService } from '../../../../../../core/api/services/auth-token.service';
 import { ProfileService } from '../../../../services/profile.service';
 import { MfaGateComponent } from '../../mfa-gate/mfa-gate.component';
-
-const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
 
 const passwordsMatchValidator: ValidatorFn = (group: AbstractControl): ValidationErrors | null => {
   const newPassword = group.get('newPassword')?.value;

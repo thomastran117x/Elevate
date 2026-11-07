@@ -164,6 +164,7 @@ public enum AuthSecurityMethod
     Totp,
     Email,
     RefreshToken,
+    RecoveryCode,
 }
 
 /// <summary>The auth flow, verification purpose, or throttled budget an event belongs to.</summary>
@@ -206,6 +207,7 @@ public enum AuthSecurityFactor
     Totp,
     Password,
     Email,
+    RecoveryCodes,
 }
 
 public enum AuthFactorChange
@@ -214,6 +216,7 @@ public enum AuthFactorChange
     Disabled,
     Removed,
     Changed,
+    Regenerated,
 }
 
 public enum AuthClientClass

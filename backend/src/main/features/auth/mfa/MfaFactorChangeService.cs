@@ -9,6 +9,7 @@ namespace backend.main.features.auth.mfa
     {
         Sms,
         Totp,
+        RecoveryCodes,
     }
 
     public enum MfaFactorChange
@@ -16,6 +17,7 @@ namespace backend.main.features.auth.mfa
         Enabled,
         Disabled,
         Removed,
+        Regenerated,
     }
 
     /// <summary>
@@ -51,11 +53,17 @@ namespace backend.main.features.auth.mfa
             {
                 Definition = AuthSecurityEvents.FactorChanged,
                 Outcome = AuthSecurityOutcome.Succeeded,
-                Factor = factor == MfaFactorKind.Sms ? AuthSecurityFactor.Sms : AuthSecurityFactor.Totp,
+                Factor = factor switch
+                {
+                    MfaFactorKind.Sms => AuthSecurityFactor.Sms,
+                    MfaFactorKind.Totp => AuthSecurityFactor.Totp,
+                    _ => AuthSecurityFactor.RecoveryCodes,
+                },
                 Change = change switch
                 {
                     MfaFactorChange.Enabled => AuthFactorChange.Enabled,
                     MfaFactorChange.Disabled => AuthFactorChange.Disabled,
+                    MfaFactorChange.Regenerated => AuthFactorChange.Regenerated,
                     _ => AuthFactorChange.Removed,
                 },
                 UserId = userId,
@@ -63,15 +71,27 @@ namespace backend.main.features.auth.mfa
 
             // The proof that authorized this change is spent: the next sensitive change, on this
             // or any other session, needs a new verification against the new factor set.
-            await _sessionMfaVerificationService.ClearUserProofsAsync(userId);
+            try
+            {
+                await _sessionMfaVerificationService.ClearUserProofsAsync(userId);
+            }
+            catch (Exception ex) when (factor == MfaFactorKind.RecoveryCodes)
+            {
+                // A regeneration's new codes exist only in the response being built, and the old
+                // ones are already gone, so failing here would leave the user with neither. The
+                // proofs are retired anyway: the recovery-code set is part of every proof's
+                // factor state, which this committed change has already moved.
+                Logger.Error($"[MfaFactorChangeService] Could not advance the step-up generation for userId={userId} after a recovery-code change: {ex.GetType().Name}");
+            }
 
             // The change is already committed; a lost notice must not turn it into an error.
             try
             {
+                // Names the factor and the change only: a recovery-code notice never carries codes.
                 await _notificationService.SendMfaFactorChangedAsync(
                     email,
-                    factor.ToString().ToLowerInvariant(),
-                    change.ToString().ToLowerInvariant());
+                    AuthSecurityWireNames.Of(factor),
+                    AuthSecurityWireNames.Of(change));
             }
             catch (Exception ex)
             {

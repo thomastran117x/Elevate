@@ -160,24 +160,49 @@
           {{
             method === 'totp'
               ? 'Code from your authenticator app'
-              : 'Code sent to ' + maskedDestination
+              : isRecoveryCode
+                ? 'Recovery code'
+                : 'Code sent to ' + maskedDestination
           }}
         </label>
+        <p *ngIf="isRecoveryCode" id="mfa-gate-code-hint" class="text-xs leading-5 text-subtle">
+          {{ recoveryCodeHint }} Each code works once.
+        </p>
         <input
+          *ngIf="isRecoveryCode; else digitCode"
           id="mfa-gate-code"
           type="text"
-          inputmode="numeric"
-          maxlength="6"
-          autocomplete="one-time-code"
+          inputmode="text"
+          autocapitalize="characters"
+          autocomplete="off"
+          spellcheck="false"
+          [attr.maxlength]="recoveryCodeMaxLength"
+          aria-describedby="mfa-gate-code-hint"
           formControlName="code"
-          placeholder="123456"
-          class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-center text-lg tracking-[0.5em] text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+          placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+          class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-center font-mono text-base tracking-wider text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
         />
+        <ng-template #digitCode>
+          <input
+            id="mfa-gate-code"
+            type="text"
+            inputmode="numeric"
+            maxlength="6"
+            autocomplete="one-time-code"
+            formControlName="code"
+            placeholder="123456"
+            class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-center text-lg tracking-[0.5em] text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+          />
+        </ng-template>
         <p
           *ngIf="codeForm.controls.code.invalid && codeForm.controls.code.touched"
           class="text-sm text-danger"
         >
-          Enter the 6-digit verification code.
+          {{
+            isRecoveryCode
+              ? 'Enter a recovery code in the format shown when it was generated.'
+              : 'Enter the 6-digit verification code.'
+          }}
         </p>
       </div>
 

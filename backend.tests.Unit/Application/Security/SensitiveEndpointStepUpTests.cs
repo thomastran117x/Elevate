@@ -2,6 +2,7 @@ using System.Reflection;
 
 using backend.main.application.security;
 using backend.main.features.auth.mfa;
+using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.profile;
@@ -35,6 +36,7 @@ public class SensitiveEndpointStepUpTests
         { typeof(AuthTotpMfaController), nameof(AuthTotpMfaController.Disable) },
         { typeof(AuthTotpMfaController), nameof(AuthTotpMfaController.Remove) },
         { typeof(UserAdminController), nameof(UserAdminController.UpdateUserStatus) },
+        { typeof(AuthRecoveryCodesController), nameof(AuthRecoveryCodesController.Regenerate) },
     };
 
     // Step-up itself must stay reachable without a proof, or users could never obtain one.

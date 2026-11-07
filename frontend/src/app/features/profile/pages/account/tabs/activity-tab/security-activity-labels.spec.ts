@@ -22,6 +22,22 @@ describe('toSecurityActivityView', () => {
   const cases: [Partial<AccountSecurityEvent>, string, string | null][] = [
     [{ kind: 'signed_in', method: 'password' }, 'Signed in', 'Signed in with your password.'],
     [{ kind: 'signed_in', method: 'google' }, 'Signed in', 'Signed in with Google.'],
+    [
+      { kind: 'signed_in', method: 'recovery_code' },
+      'Signed in',
+      'Signed in with a recovery code.',
+    ],
+    [{ kind: 'recovery_codes_generated' }, 'Recovery codes generated', null],
+    [
+      { kind: 'recovery_codes_regenerated' },
+      'Recovery codes regenerated',
+      'A new set was generated, and the previous codes stopped working.',
+    ],
+    [
+      { kind: 'recovery_code_used' },
+      'Recovery code used',
+      'One of your recovery codes was used to verify your identity. It cannot be used again.',
+    ],
     [{ kind: 'signed_in', method: 'carrier-pigeon' }, 'Signed in', null],
     [
       { kind: 'new_device_challenge' },
@@ -105,6 +121,10 @@ describe('toSecurityActivityView', () => {
       toSecurityActivityView(entry({ kind: 'refresh_token_reuse_detected' })).important,
     ).toBeTrue();
     expect(toSecurityActivityView(entry({ kind: 'mfa_disabled' })).important).toBeTrue();
+    expect(toSecurityActivityView(entry({ kind: 'recovery_code_used' })).important).toBeTrue();
+    expect(
+      toSecurityActivityView(entry({ kind: 'recovery_codes_generated' })).important,
+    ).toBeFalse();
     expect(toSecurityActivityView(entry({ kind: 'signed_in' })).important).toBeFalse();
   });
 

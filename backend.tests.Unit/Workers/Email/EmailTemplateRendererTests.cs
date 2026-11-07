@@ -97,6 +97,27 @@ public class EmailTemplateRendererTests
         Assert.Contains("/account/security", content.PlainText);
     }
 
+    [Theory]
+    [InlineData("enabled", "Recovery codes were generated")]
+    [InlineData("regenerated", "Your previous recovery codes no longer work")]
+    public void Render_RecoveryCodesChanged_DescribesTheSetWithoutAnyCode(string change, string expected)
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Type = EmailMessageType.MfaFactorChanged,
+            MfaFactor = "recovery_codes",
+            MfaChange = change,
+            Code = "ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-2345"
+        });
+
+        Assert.Equal("New recovery codes were generated for your account", content.Subject);
+        Assert.Contains(expected, content.PlainText);
+        Assert.Contains("/account/security", content.PlainText);
+        Assert.DoesNotContain("ABCD-EFGH", content.PlainText);
+        Assert.DoesNotContain("ABCD-EFGH", content.Html);
+    }
+
     [Fact]
     public void Render_MfaFactorChanged_ShouldNotRenderCodesOrSecrets_EvenWhenPresent()
     {
@@ -121,6 +142,7 @@ public class EmailTemplateRendererTests
     [InlineData("provider_linked", "google", "Google sign-in was linked to your account")]
     [InlineData("refresh_token_reuse_detected", null, "We signed out a session after suspicious activity")]
     [InlineData("account_disabled", null, "Your account was disabled")]
+    [InlineData("recovery_code_used", null, "A recovery code was used on your account")]
     [InlineData("something_new", null, "New security activity on your account")]
     public void Render_SecurityAlert_NamesTheChange(string kind, string? method, string expectedSubject)
     {

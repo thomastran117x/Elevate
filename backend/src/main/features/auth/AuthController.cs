@@ -1133,6 +1133,41 @@ namespace backend.main.features.auth
             }
         }
 
+        [HttpPost("mfa/verify/recovery-code")]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [ProducesResponseType(typeof(ApiResponse<AuthenticatedSessionResponse>), StatusCodes.Status200OK)]
+        [AuthOperation(AuthOperation.StepUpVerify)]
+        public async Task<IActionResult> VerifyRecoveryCodeStepUp([FromBody] VerifyLoginStepUpRequest request)
+        {
+            try
+            {
+                await EnsureSharedSourceAllowedAsync(AuthAbuseFlow.Verification);
+                await _abuseProtection.EnsureTargetAllowedAsync(
+                    AuthAbuseFlow.Verification,
+                    AuthAbuseTargetKind.Challenge,
+                    request.Challenge,
+                    HttpContext.RequestAborted);
+
+                var response = await _authService.VerifyRecoveryCodeLoginStepUpAsync(request.Challenge, request.Code);
+                return Ok(
+                    new ApiResponse<AuthenticatedSessionResponse>(
+                        "Sign-in verification successful.",
+                        CreateSessionResponse(response)
+                    )
+                );
+            }
+            catch (Exception e)
+            {
+                if (e is AppException)
+                    return HandleError.Resolve(e);
+
+                Logger.Error($"[AuthController] VerifyRecoveryCodeStepUp failed: {e.GetType().Name}");
+                return HandleError.Resolve(e);
+            }
+        }
+
         [HttpPost("recovery/password")]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]

@@ -255,6 +255,186 @@ describe('AuthService', () => {
     });
   }));
 
+  it('posts a recovery code to finish a sign-in challenge', fakeAsync(() => {
+    let verifyResponse: unknown;
+
+    service
+      .verifyRecoveryCodeLoginStepUp('challenge-3', 'ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-2345')
+      .subscribe((response) => {
+        verifyResponse = response;
+      });
+    tick();
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/verify/recovery-code'));
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      challenge: 'challenge-3',
+      code: 'ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-2345',
+    });
+    request.flush({
+      success: true,
+      message: 'ok',
+      data: {
+        AccessToken: 'token',
+        ExpiresAtUtc: '2026-10-31T15:31:00Z',
+        ReturnPath: '/dashboard',
+      },
+      error: null,
+      meta: null,
+    });
+
+    expect(verifyResponse).toEqual({
+      AccessToken: 'token',
+      ExpiresAtUtc: '2026-10-31T15:31:00Z',
+      ReturnPath: '/dashboard',
+    });
+  }));
+
+  it('keeps recovery_code among the sign-in methods it understands', fakeAsync(() => {
+    let response: unknown;
+
+    service.startLoginStepUp('challenge-4', 'recovery_code').subscribe((value) => {
+      response = value;
+    });
+    tick();
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/auth/mfa/start'));
+    expect(request.request.body).toEqual({ challenge: 'challenge-4', method: 'recovery_code' });
+    request.flush({
+      success: true,
+      message: 'ok',
+      data: {
+        Challenge: 'challenge-4',
+        ExpiresAtUtc: '2026-10-31T15:31:00Z',
+        SelectedMethod: 'recovery_code',
+        MaskedDestination: 'recovery code',
+        CooldownEndsAtUtc: '0001-01-01T00:00:00',
+        AvailableMethods: ['totp', 'recovery_code', 'email', 'unknown'],
+        MaskedEmail: 'm***@example.com',
+      },
+      error: null,
+      meta: null,
+    });
+
+    expect(response).toEqual(
+      jasmine.objectContaining({
+        SelectedMethod: 'recovery_code',
+        AvailableMethods: ['totp', 'recovery_code', 'email'],
+      }),
+    );
+  }));
+
+  describe('recovery codes', () => {
+    it('reads the status, accepting either casing', fakeAsync(() => {
+      const results: unknown[] = [];
+
+      service.getRecoveryCodeStatus().subscribe((value) => results.push(value));
+      tick();
+      httpMock
+        .expectOne((req) => req.url.endsWith('/auth/mfa/recovery-codes/status'))
+        .flush({
+          success: true,
+          message: 'ok',
+          data: { remainingCount: 4, totalCount: 10, generatedAtUtc: '2026-10-31T12:00:00Z' },
+          error: null,
+          meta: null,
+        });
+
+      service.getRecoveryCodeStatus().subscribe((value) => results.push(value));
+      tick();
+      httpMock
+        .expectOne((req) => req.url.endsWith('/auth/mfa/recovery-codes/status'))
+        .flush({
+          success: true,
+          message: 'ok',
+          data: { RemainingCount: 0, TotalCount: 10, GeneratedAtUtc: null },
+          error: null,
+          meta: null,
+        });
+
+      expect(results).toEqual([
+        { remainingCount: 4, totalCount: 10, generatedAtUtc: '2026-10-31T12:00:00Z' },
+        { remainingCount: 0, totalCount: 10, generatedAtUtc: null },
+      ]);
+    }));
+
+    it('refuses a status without counts', fakeAsync(() => {
+      let failure: unknown;
+
+      service.getRecoveryCodeStatus().subscribe({ error: (err) => (failure = err) });
+      tick();
+      httpMock
+        .expectOne((req) => req.url.endsWith('/auth/mfa/recovery-codes/status'))
+        .flush({ success: true, message: 'ok', data: { totalCount: 10 }, error: null, meta: null });
+
+      expect((failure as Error).message).toBe('Recovery code status response was incomplete.');
+    }));
+
+    it('posts a regeneration and returns the codes', fakeAsync(() => {
+      let response: unknown;
+
+      service.regenerateRecoveryCodes().subscribe((value) => (response = value));
+      tick();
+      const request = httpMock.expectOne((req) =>
+        req.url.endsWith('/auth/mfa/recovery-codes/regenerate'),
+      );
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toEqual({});
+      request.flush({
+        success: true,
+        message: 'ok',
+        data: { Codes: ['AAAA-BBBB'], GeneratedAtUtc: '2026-10-31T12:00:00Z' },
+        error: null,
+        meta: null,
+      });
+
+      expect(response).toEqual({ codes: ['AAAA-BBBB'], generatedAtUtc: '2026-10-31T12:00:00Z' });
+    }));
+
+    it('refuses a regeneration response without usable codes', fakeAsync(() => {
+      const failures: unknown[] = [];
+
+      for (const data of [
+        { codes: [], generatedAtUtc: '2026-10-31T12:00:00Z' },
+        { codes: ['AAAA', 7], generatedAtUtc: '2026-10-31T12:00:00Z' },
+        { codes: ['AAAA'] },
+      ]) {
+        service.regenerateRecoveryCodes().subscribe({ error: (err) => failures.push(err) });
+        tick();
+        httpMock
+          .expectOne((req) => req.url.endsWith('/auth/mfa/recovery-codes/regenerate'))
+          .flush({ success: true, message: 'ok', data, error: null, meta: null });
+      }
+
+      expect(failures.length).toBe(3);
+      failures.forEach((err) =>
+        expect((err as Error).message).toBe('Recovery code response was incomplete.'),
+      );
+    }));
+
+    it('passes a missing step-up proof through as MFA_REQUIRED', fakeAsync(() => {
+      let failure: unknown;
+
+      service.regenerateRecoveryCodes().subscribe({ error: (err) => (failure = err) });
+      tick();
+      httpMock
+        .expectOne((req) => req.url.endsWith('/auth/mfa/recovery-codes/regenerate'))
+        .flush(
+          {
+            success: false,
+            message: 'Verify again',
+            data: null,
+            error: { code: 'MFA_REQUIRED', details: null },
+            meta: null,
+          },
+          { status: 403, statusText: 'Forbidden' },
+        );
+
+      expect(failure instanceof ApiClientClientError).toBeTrue();
+      expect((failure as ApiClientClientError).code).toBe('MFA_REQUIRED');
+    }));
+  });
+
   it('posts device verification without bootstrapping csrf', fakeAsync(() => {
     let responseBody: unknown;
 

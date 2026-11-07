@@ -17,7 +17,7 @@ import {
 } from '../../../core/models/auth-response.model';
 
 export type SignupRole = 'participant' | 'organizer' | 'volunteer';
-export type LoginStepUpMethod = 'sms' | 'email' | 'totp';
+export type LoginStepUpMethod = 'sms' | 'email' | 'totp' | 'recovery_code';
 
 export interface LoginRequest {
   username: string;
@@ -125,7 +125,7 @@ export interface TotpEnrollmentStartResponse {
   ExpiresAtUtc: string;
 }
 
-export type SessionMfaMethod = 'sms' | 'email' | 'totp';
+export type SessionMfaMethod = 'sms' | 'email' | 'totp' | 'recovery_code';
 
 export interface SessionMfaOptionsResponse {
   availableMethods: SessionMfaMethod[];
@@ -138,6 +138,19 @@ export interface SessionMfaStartResponse {
   maskedDestination: string;
   expiresAtUtc: string;
   cooldownEndsAtUtc: string;
+}
+
+export interface RecoveryCodeStatusResponse {
+  remainingCount: number;
+  totalCount: number;
+  /** Null until the account generates its first set. */
+  generatedAtUtc: string | null;
+}
+
+/** The only response that ever carries plaintext recovery codes; it is never refetched. */
+export interface RecoveryCodesResponse {
+  codes: string[];
+  generatedAtUtc: string;
 }
 
 export interface LoginStepUpChallengeResponse {
@@ -376,6 +389,26 @@ export class AuthService {
     );
   }
 
+  verifyRecoveryCodeLoginStepUp(
+    challenge: string,
+    code: string,
+  ): Observable<AuthenticatedSessionResponse> {
+    return this.postWithCsrf<ApiEnvelope<AuthenticatedSessionResponse>>(
+      `${this.baseUrl}/mfa/verify/recovery-code`,
+      {
+        challenge,
+        code,
+      },
+    ).pipe(
+      map((res) =>
+        this.requireNormalizedSession(
+          this.requireData(res, 'Recovery code verification response was incomplete.'),
+          'Recovery code verification response was incomplete.',
+        ),
+      ),
+    );
+  }
+
   googleVerify(
     idToken: string,
     nonce: string,
@@ -515,6 +548,32 @@ export class AuthService {
 
   verifySessionMfa(method: SessionMfaMethod, code: string): Observable<void> {
     return this.postWithCsrf<void>(`${this.baseUrl}/mfa/step-up/verify`, { method, code });
+  }
+
+  getRecoveryCodeStatus(): Observable<RecoveryCodeStatusResponse> {
+    return this.getWithCsrf<ApiEnvelope<unknown>>(`${this.baseUrl}/mfa/recovery-codes/status`).pipe(
+      map((res) =>
+        this.normalizeRecoveryCodeStatus(
+          this.requireData(res, 'Recovery code status response was incomplete.'),
+          'Recovery code status response was incomplete.',
+        ),
+      ),
+    );
+  }
+
+  /** Requires a fresh step-up; errors with MFA_REQUIRED otherwise. Replaces any earlier codes. */
+  regenerateRecoveryCodes(): Observable<RecoveryCodesResponse> {
+    return this.postWithCsrf<ApiEnvelope<unknown>>(
+      `${this.baseUrl}/mfa/recovery-codes/regenerate`,
+      {},
+    ).pipe(
+      map((res) =>
+        this.normalizeRecoveryCodes(
+          this.requireData(res, 'Recovery code response was incomplete.'),
+          'Recovery code response was incomplete.',
+        ),
+      ),
+    );
   }
 
   startMfaEnrollment(phoneNumber: string): Observable<MfaChallengeResponse> {
@@ -767,6 +826,42 @@ export class AuthService {
     };
   }
 
+  private normalizeRecoveryCodeStatus(
+    value: unknown,
+    fallbackMessage: string,
+  ): RecoveryCodeStatusResponse {
+    const source = this.asRecord(value);
+    const remainingCount = source?.['remainingCount'] ?? source?.['RemainingCount'];
+    const totalCount = source?.['totalCount'] ?? source?.['TotalCount'];
+
+    if (typeof remainingCount !== 'number' || typeof totalCount !== 'number') {
+      throw new Error(fallbackMessage);
+    }
+
+    return {
+      remainingCount,
+      totalCount,
+      generatedAtUtc: this.readNullableString(source, 'generatedAtUtc', 'GeneratedAtUtc') ?? null,
+    };
+  }
+
+  private normalizeRecoveryCodes(value: unknown, fallbackMessage: string): RecoveryCodesResponse {
+    const source = this.asRecord(value);
+    const codes = source?.['codes'] ?? source?.['Codes'];
+    const generatedAtUtc = this.readString(source, 'generatedAtUtc', 'GeneratedAtUtc');
+
+    if (
+      !Array.isArray(codes) ||
+      codes.length === 0 ||
+      !codes.every((code): code is string => typeof code === 'string') ||
+      !generatedAtUtc
+    ) {
+      throw new Error(fallbackMessage);
+    }
+
+    return { codes: [...codes], generatedAtUtc };
+  }
+
   private normalizeOAuthRoleSelectionPayload(
     value: unknown,
     fallbackMessage: string,
@@ -868,7 +963,7 @@ export class AuthService {
       }
 
       const methods = value.filter((item): item is LoginStepUpMethod => {
-        return item === 'sms' || item === 'email' || item === 'totp';
+        return item === 'sms' || item === 'email' || item === 'totp' || item === 'recovery_code';
       });
 
       if (methods.length > 0) {

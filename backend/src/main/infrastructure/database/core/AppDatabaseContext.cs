@@ -3,6 +3,7 @@ using System.Text.Json;
 using backend.main.features.auth.device;
 using backend.main.features.auth.history;
 using backend.main.features.auth.mfa;
+using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.clubs;
 using backend.main.features.clubs.discussions;
@@ -56,6 +57,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<Device> Devices { get; set; } = null!;
         public DbSet<SmsMfaEnrollment> SmsMfaEnrollments { get; set; } = null!;
         public DbSet<TotpMfaEnrollment> TotpMfaEnrollments { get; set; } = null!;
+        public DbSet<RecoveryCode> RecoveryCodes { get; set; } = null!;
         public DbSet<AccountSecurityEvent> AccountSecurityEvents { get; set; } = null!;
         public DbSet<SecurityHistoryOutbox> SecurityHistoryOutbox { get; set; } = null!;
         public DbSet<ClubPost> ClubPosts { get; set; } = null!;
@@ -808,6 +810,31 @@ namespace backend.main.infrastructure.database.core
             modelBuilder.Entity<TotpMfaEnrollment>()
                 .Property(e => e.EncryptionKeyVersion)
                 .HasDefaultValue(1);
+
+            modelBuilder.Entity<RecoveryCode>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(c => c.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<RecoveryCode>()
+                .Property(c => c.Selector)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<RecoveryCode>()
+                .Property(c => c.CodeHash)
+                .HasMaxLength(160);
+
+            // Verification looks a code up by its selector within the account's set.
+            modelBuilder.Entity<RecoveryCode>()
+                .HasIndex(c => new { c.UserId, c.Selector })
+                .IsUnique();
+
+            // Status and method availability count only the codes still usable.
+            modelBuilder.Entity<RecoveryCode>()
+                .HasIndex(c => c.UserId)
+                .HasFilter("\"UsedAtUtc\" IS NULL");
 
             // Cascade: the history belongs to the account and goes with it, matching the hard
             // delete every other per-user table gets. Events the worker receives after the

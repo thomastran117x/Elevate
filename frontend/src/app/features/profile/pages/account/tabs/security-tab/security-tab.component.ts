@@ -6,6 +6,7 @@ import { finalize } from 'rxjs/operators';
 import {
   getApiClientMessage,
   isApiClientErrorCode,
+  MFA_REQUIRED_ERROR_CODE,
 } from '../../../../../../core/api/models/api-client-error.model';
 import {
   AuthService,
@@ -14,18 +15,20 @@ import {
   TotpEnrollmentStartResponse,
 } from '../../../../../auth/services/auth.service';
 import { MfaGateComponent } from '../../mfa-gate/mfa-gate.component';
+import { PendingRecoveryCodes } from './recovery-codes/pending-recovery-codes';
+import { RecoveryCodesCardComponent } from './recovery-codes/recovery-codes-card.component';
 
 type SmsFlow = 'enroll' | 'enable' | null;
 type TotpManageAction = 'enable' | 'disable' | 'remove' | null;
 
-const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
-
 @Component({
   selector: 'app-security-tab',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, MfaGateComponent],
+  imports: [CommonModule, ReactiveFormsModule, MfaGateComponent, RecoveryCodesCardComponent],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './security-tab.component.html',
+  // Outlives the recovery-codes card, which re-locking the tab destroys, so unsaved codes survive.
+  providers: [PendingRecoveryCodes],
 })
 export class SecurityTabComponent implements OnInit {
   private readonly fb = new FormBuilder();
@@ -366,10 +369,15 @@ export class SecurityTabComponent implements OnInit {
     this.clearMessages();
   }
 
+  /** A change elsewhere on the tab was refused for a missing proof: re-lock and prompt. */
+  onStepUpRequired(): void {
+    this.stepUpLapsed = true;
+    this.mfaVerified = false;
+  }
+
   private handleMutationError(err: unknown, fallback: string, refresh: boolean): void {
     if (isApiClientErrorCode(err, MFA_REQUIRED_ERROR_CODE)) {
-      this.stepUpLapsed = true;
-      this.mfaVerified = false;
+      this.onStepUpRequired();
       return;
     }
 

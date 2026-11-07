@@ -34,7 +34,7 @@ Ids and names are append-only: never renumber, rename, or reuse one. Persist and
 | 33030 | `auth.verification.failed` | Warning | An emailed link or code for signup, password reset, email change, or a new device is refused. | `denied` | `expired`, `invalid_state`, `invalid_code`, `attempts_exhausted`, `auth_version_mismatch` |
 | 33040 | `auth.step_up.succeeded` | Information | A login or in-session step-up code is verified. | `succeeded` | `none` |
 | 33041 | `auth.step_up.failed` | Warning | A login or in-session step-up is refused, including a correct code whose proof could not be stored. | `denied`, `faulted` | `expired`, `invalid_state`, `invalid_code`, `invalid_request`, `attempts_exhausted`, `replayed`, `auth_version_mismatch`, `session_ended`, `none` |
-| 33050 | `auth.factor.changed` | Information | SMS or TOTP MFA is enabled, disabled, or removed, or the password or email changes. | `succeeded` | `none` |
+| 33050 | `auth.factor.changed` | Information | SMS or TOTP MFA is enabled, disabled, or removed, recovery codes are generated or regenerated, or the password or email changes. | `succeeded` | `none` |
 | 33051 | `auth.factor.change_failed` | Warning | A second-factor change or authenticated password change is refused or fails with a service fault. | `denied`, `faulted` | `invalid_credentials`, `account_disabled`, `invalid_code`, `invalid_state`, `invalid_request`, `rejected`, `none` |
 | 33060 | `auth.refresh_token.reused` | Warning | A rotated refresh token is presented after the 10-second grace window, a theft signal. | `denied` | `replayed` |
 | 33070 | `auth.session.revoked` | Information | One refresh session, or every session of an account, is ended. An account-wide sweep is recorded only when it removed at least one session, and as `faulted` when the session list could not be read. | `succeeded`, `faulted` | `logout`, `token_reuse`, `binding_missing`, `binding_mismatch`, `transport_mismatch`, `user_mismatch`, `auth_version_mismatch`, `password_changed`, `password_reset`, `email_changed`, `account_disabled`, `account_enabled`, `account_deleted` |
@@ -42,6 +42,7 @@ Ids and names are append-only: never renumber, rename, or reuse one. Persist and
 | 33081 | `auth.provider_link.conflict` | Warning | An email match is refused because the account is linked to another identity, or Microsoft did not verify the address. | `denied` | `email_bound_to_other_provider`, `email_unverified` |
 | 33090 | `authz.denied` | Warning | Any 403 response that no other event describes. | `denied` | `policy`, `mfa_required`, `resource_access` |
 | 33100 | `auth.account.status_changed` | Information | An administrator disables or re-enables an account. Recorded whether or not any session was revoked. | `succeeded` | `account_disabled`, `account_enabled` |
+| 33110 | `auth.recovery_code.used` | Information | A recovery code is spent to complete a login or in-session step-up. Recorded once the code is spent, even if the sign-in or proof then fails. | `succeeded` | `none` |
 
 `auth.recovery.requested` reasons tell operators whether anything was sent. The API response deliberately hides that, so the reason must never be shown to the requester or in the user-facing history. A `throttled` factor change is recorded as `auth.throttled` with flow `mfa_enrollment`.
 
@@ -54,10 +55,10 @@ Login step-up email links and new-device links share `POST /api/auth/device/veri
 | `EventName`, `EventId` | The catalog name and id. |
 | `Outcome` | `succeeded`, `denied` (an expected refusal), `throttled`, or `faulted` (a service error). Clients never see this classification. |
 | `Reason` | A code from the closed set below; never exception or request text. |
-| `Method` | `password`, `google`, `microsoft`, `sms`, `totp`, `email`, or `refresh_token`. |
+| `Method` | `password`, `google`, `microsoft`, `sms`, `totp`, `email`, `refresh_token`, or `recovery_code`. |
 | `Flow` | The flow, verification purpose, or throttled budget, such as `login`, `signup`, `password_reset`, `email_change`, `device_verification`, `login_step_up`, `session_step_up`, `mfa_delivery`, or `mfa_enrollment`. |
 | `Dimension` | For throttles: `source_ip`, `target`, `account`, `attempts`, `rate_limiter`, or `concurrency` (a request that lost a race for a verification lock). |
-| `Factor`, `Change` | For factor events: `sms`, `totp`, `password`, or `email`; `enabled`, `disabled`, `removed`, or `changed`. |
+| `Factor`, `Change` | For factor events: `sms`, `totp`, `password`, `email`, or `recovery_codes`; `enabled`, `disabled`, `removed`, `changed`, or `regenerated`. Recovery codes report `enabled` for an account's first set and `regenerated` when a set is replaced. |
 | `UserId` | The account the event is about, when known. It is stated by the code that emits the event and never inferred from a bearer token, since many auth endpoints are anonymous and act on a link, code, or name. The exception is `authz.denied`, which is about the caller. |
 | `ActorUserId` | The account that caused the event when it is not `UserId`, such as an administrator disabling an account. Set only where that account authorized the action. |
 | `SessionId` | The server-generated refresh session id. Absent on `auth.session.revoked` when every session of the account was revoked. |
@@ -140,11 +141,12 @@ Once its outbox row is committed, an entry survives a broker outage, a slow rela
 | `auth.sign_in.succeeded` | `signed_in` | Includes the sign-in `method`. |
 | `auth.sign_in.challenged` | `new_device_challenge` or `sign_in_challenge` | For `device_verification_required` and `step_up_required`. |
 | `auth.recovery.completed` | `password_reset` | |
-| `auth.factor.changed` | `password_changed`, `email_changed`, `mfa_enabled`, `mfa_disabled`, `mfa_removed` | MFA entries carry the `factor`. |
+| `auth.factor.changed` | `password_changed`, `email_changed`, `mfa_enabled`, `mfa_disabled`, `mfa_removed`, `recovery_codes_generated`, `recovery_codes_regenerated` | MFA entries carry the `factor`. |
 | `auth.provider.linked` | `provider_linked` | The provider is the `method`. |
 | `auth.refresh_token.reused` | `refresh_token_reuse_detected` | |
 | `auth.session.revoked` | `signed_out`, `sessions_revoked`, `session_ended_for_security` | Keeps the revocation `reason`. `token_reuse` is left out because the reuse event already records it. `account_disabled` and `account_enabled` are left out because `auth.account.status_changed` records them, even when no session was revoked. `account_deleted` is left out because the history goes with the account. |
 | `auth.account.status_changed` | `account_disabled`, `account_enabled` | Marked `initiatedByAdmin`. The administrator's id is never stored. |
+| `auth.recovery_code.used` | `recovery_code_used` | Alerted on by default: no other email tells the owner a code was spent. |
 
 Everything else is deliberately left out:
 

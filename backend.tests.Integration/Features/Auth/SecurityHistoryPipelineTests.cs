@@ -9,6 +9,7 @@ using backend.main.application.security;
 using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.history;
+using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.token;
 using backend.main.features.profile.contracts.requests;
@@ -171,6 +172,48 @@ public sealed class SecurityHistoryPipelineTests
         var stored = await app.QueryDbAsync(db => db.AccountSecurityEvents.AsNoTracking().SingleAsync(e =>
             e.UserId == user.Id && e.Kind == AccountSecurityEventKind.PasswordChanged));
         stored.AlertState.Should().Be(SecurityAlertState.Sent);
+    }
+
+    [Fact]
+    public async Task RecoveryCodes_ShouldRecordGenerationAndUse_AndAlertOnUse_WithoutAnyCode()
+    {
+        await using var app = await CreateAppAsync();
+        var user = await app.SeedUserAsync("pipeline-recovery@example.com");
+        await app.SeedKnownDeviceAsync(user.Id, "pipeline-recovery-device");
+        var session = await app.LoginApiAsync("pipeline-recovery", trustedDeviceToken: "pipeline-recovery-device");
+        await app.GrantStepUpProofAsync(session.AccessToken);
+
+        var generated = await app.SendWithBearerAndCsrfAsync(
+            HttpMethod.Post, "/api/auth/mfa/recovery-codes/regenerate", null, session.AccessToken);
+        generated.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(generated));
+        var codes = (await app.ReadApiResponseAsync<RecoveryCodesResponse>(generated)).Data!.Codes;
+        await app.MarkNotificationBoundaryAsync();
+
+        var verified = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/mfa/step-up/verify",
+            new SessionMfaVerifyRequest { Method = "recovery_code", Code = codes[0] },
+            session.AccessToken);
+        verified.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(verified));
+
+        var outbox = await OutboxForAsync(app, user.Id);
+        foreach (var code in codes)
+        {
+            RecoveryCodeFormat.TryNormalize(code, out var normalized).Should().BeTrue();
+            outbox.Should().OnlyContain(row => !row.Payload.Contains(code) && !row.Payload.Contains(normalized));
+        }
+
+        var messages = outbox.Select(row => SecurityHistoryMessageParser.Parse(row.Payload)).ToList();
+        messages.Should().ContainSingle(m => m.Kind == AccountSecurityEventKind.RecoveryCodesGenerated);
+        var used = messages.Should().ContainSingle(m => m.Kind == AccountSecurityEventKind.RecoveryCodeUsed).Subject;
+        (await ProcessAsync(app, used)).Should().Be(SecurityHistoryEntryOutcome.Inserted);
+        (await DispatchAlertsAsync(app)).Should().BeGreaterThanOrEqualTo(1);
+
+        var alert = await app.WaitForEmailAsync(m =>
+            m.Type == EmailMessageType.SecurityAlert && m.Email == "pipeline-recovery@example.com");
+        alert.SecurityAlertKind.Should().Be("recovery_code_used");
+        alert.SecurityAlertNetwork.Should().Be("203.0.113.0/24");
+        alert.Code.Should().BeNull();
+        alert.Token.Should().BeNull();
     }
 
     [Fact]

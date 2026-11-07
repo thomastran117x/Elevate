@@ -375,6 +375,69 @@ describe('MfaGateComponent', () => {
     });
   });
 
+  describe('recovery codes', () => {
+    const code = 'ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-2345';
+
+    beforeEach(() => {
+      auth.getSessionMfaStatus.and.returnValue(throwError(gated));
+      auth.getSessionMfaOptions.and.returnValue(
+        of(options({ availableMethods: ['totp', 'recovery_code', 'email'] })),
+      );
+      fixture.detectChanges();
+      component.openModal();
+    });
+
+    it('labels and describes the method, which needs no delivery', () => {
+      expect(component.methodLabel('recovery_code')).toBe('Recovery code');
+      expect(component.methodDescription('recovery_code')).toContain('single-use recovery codes');
+
+      component.selectMethod('recovery_code');
+
+      expect(component.selectedNeedsDelivery).toBeFalse();
+      expect(component.isRecoveryCode).toBeTrue();
+    });
+
+    it('asks for a recovery code with its own accessible field and verifies it', () => {
+      component.selectMethod('recovery_code');
+      component.continueToCode();
+      fixture.detectChanges();
+
+      expect(auth.startSessionMfa).not.toHaveBeenCalled();
+      const input = fixture.nativeElement.querySelector('#mfa-gate-code') as HTMLInputElement;
+      expect(input.getAttribute('inputmode')).toBe('text');
+      expect(input.getAttribute('autocomplete')).toBe('off');
+      expect(input.getAttribute('aria-describedby')).toBe('mfa-gate-code-hint');
+      expect(
+        fixture.nativeElement.querySelector('label[for="mfa-gate-code"]').textContent,
+      ).toContain('Recovery code');
+
+      component.codeForm.setValue({ code });
+      component.verifyCode();
+
+      expect(auth.verifySessionMfa).toHaveBeenCalledOnceWith('recovery_code', code);
+      expect(verified).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses a six-digit code for the recovery method, and the reverse', () => {
+      component.selectMethod('recovery_code');
+      component.continueToCode();
+      component.codeForm.setValue({ code: '123456' });
+      component.verifyCode();
+      fixture.detectChanges();
+
+      expect(auth.verifySessionMfa).not.toHaveBeenCalled();
+      expect(fixture.nativeElement.textContent).toContain('Enter a recovery code in the format');
+
+      component.backToMethodStep();
+      component.selectMethod('totp');
+      component.continueToCode();
+      component.codeForm.setValue({ code });
+      component.verifyCode();
+
+      expect(auth.verifySessionMfa).not.toHaveBeenCalled();
+    });
+  });
+
   describe('step-up lapse and resume', () => {
     let router: Router;
     let resume: StepUpResumeService;

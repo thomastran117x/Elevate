@@ -114,6 +114,9 @@ export function isApiClientClientError(error: unknown): error is ApiClientClient
  * errors `ApiClient` throws and a raw `HttpErrorResponse` from a service that calls `HttpClient`
  * directly, which is read the same way `ApiClient` reads it.
  */
+/** The code a `[RequireMfa]` route answers with when the session has no fresh step-up proof. */
+export const MFA_REQUIRED_ERROR_CODE = 'MFA_REQUIRED';
+
 export function isApiClientErrorCode(error: unknown, code: string): boolean {
   if (isApiClientError(error)) {
     return error.kind === 'client' && error.code === code;

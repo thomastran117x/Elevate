@@ -36,7 +36,8 @@ namespace backend.main.features.auth.mfa.session
             get; set;
         }
         /// <summary>
-        /// The committed SMS/TOTP enrollment state in the database when verification began.
+        /// The committed SMS/TOTP enrollment and recovery-code set in the database when
+        /// verification began.
         /// Every committed factor change rewrites it, so the change itself retires older proofs
         /// even if the cache-side generation could not be advanced.
         /// </summary>
@@ -46,15 +47,21 @@ namespace backend.main.features.auth.mfa.session
     /// <summary>
     /// Formats <see cref="StepUpProof.FactorState"/> from the committed enrollments. Pending
     /// enrollments live in the cache, so only completed factor changes move it; each of them
-    /// rewrites UpdatedAt or deletes the row.
+    /// rewrites UpdatedAt or deletes the row. A recovery-code set is identified by its generation
+    /// time, which every code in it shares and every regeneration replaces. Spending a code does
+    /// not move it, since that is a verification rather than a factor change.
     /// </summary>
     public static class StepUpFactorState
     {
-        public static string From(SmsMfaEnrollment? sms, totp.TotpMfaEnrollment? totp) =>
+        public static string From(
+            SmsMfaEnrollment? sms,
+            totp.TotpMfaEnrollment? totp,
+            DateTime? recoveryCodesGeneratedAtUtc) =>
             string.Join(
                 "|",
                 $"sms:{sms?.UpdatedAt.ToUniversalTime().Ticks ?? 0}",
-                $"totp:{totp?.UpdatedAtUtc.ToUniversalTime().Ticks ?? 0}"
+                $"totp:{totp?.UpdatedAtUtc.ToUniversalTime().Ticks ?? 0}",
+                $"recovery:{recoveryCodesGeneratedAtUtc?.ToUniversalTime().Ticks ?? 0}"
             );
     }
 

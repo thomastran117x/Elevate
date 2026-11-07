@@ -46,6 +46,7 @@ public class EndpointAuthorizationAuditTests
         "POST /api/auth/logout",
         "POST /api/auth/mfa/start",
         "POST /api/auth/mfa/verify",
+        "POST /api/auth/mfa/verify/recovery-code",
         "POST /api/auth/mfa/verify/totp",
         "POST /api/auth/microsoft",
         "POST /api/auth/oauth/complete",

@@ -1,5 +1,6 @@
 using backend.main.features.auth.events;
 using backend.main.features.auth.mfa;
+using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
@@ -27,6 +28,7 @@ public class SessionMfaVerificationServiceTests
     private const string Email = "member@example.com";
     private const string SessionId = "session-xyz";
     private static readonly DateTimeOffset Start = new(2026, 10, 8, 12, 0, 0, TimeSpan.Zero);
+    private static readonly RecoveryCodeSpend Spend = new(3, Start.UtcDateTime);
 
     [Fact]
     public async Task VerifyAsync_WithEmailCode_ShouldRecordBoundProof()
@@ -450,6 +452,31 @@ public class SessionMfaVerificationServiceTests
     }
 
     [Fact]
+    public async Task HasFreshProofAsync_ShouldReject_AfterRecoveryCodesWereReplaced_EvenWithoutAGenerationBump()
+    {
+        // Codes were regenerated in the database, but the cache-side generation bump failed. The
+        // set's generation time is part of the durable factor state, so the replacement alone
+        // retires every proof made before it.
+        var recoveryCodes = new Mock<IRecoveryCodeService>();
+        var totp = new Mock<ITotpMfaEnrollmentService>();
+        totp.Setup(t => t.VerifyPersistedCodeAsync(UserId, "123456")).Returns(Task.CompletedTask);
+        var (service, _, _) = CreateService(totp: totp, recoveryCodes: recoveryCodes);
+        recoveryCodes.Setup(r => r.GetSetGeneratedAtAsync(UserId))
+            .ReturnsAsync(Start.UtcDateTime.AddMinutes(-30));
+        await service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "totp", "123456");
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeTrue();
+
+        // Spending a code is not a factor change, so it leaves the proof alone.
+        recoveryCodes.Setup(r => r.GetSetGeneratedAtAsync(UserId))
+            .ReturnsAsync(Start.UtcDateTime.AddMinutes(-30));
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeTrue();
+
+        recoveryCodes.Setup(r => r.GetSetGeneratedAtAsync(UserId))
+            .ReturnsAsync(Start.UtcDateTime.AddMinutes(1));
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task ClearUserProofsAsync_ShouldFail_WhenTheGenerationCannotBeAdvanced()
     {
         // CacheService reports an unreachable Redis as 0; a real INCR never returns 0.
@@ -461,6 +488,142 @@ public class SessionMfaVerificationServiceTests
         var act = () => service.ClearUserProofsAsync(UserId);
 
         await act.Should().ThrowAsync<NotAvailableException>();
+    }
+
+    [Fact]
+    public async Task GetOptionsAsync_ShouldOfferRecoveryCodes_OnlyWhileSomeRemain_AlongsideEmail()
+    {
+        var recoveryCodes = new Mock<IRecoveryCodeService>();
+        var (service, _, _) = CreateService(recoveryCodes: recoveryCodes);
+
+        (await service.GetOptionsAsync(UserId, Email)).AvailableMethods.Should().Equal("email");
+
+        recoveryCodes.Setup(r => r.HasUnusedAsync(UserId)).ReturnsAsync(true);
+        (await service.GetOptionsAsync(UserId, Email)).AvailableMethods.Should().Equal("recovery_code", "email");
+    }
+
+    [Fact]
+    public async Task StartAsync_WithRecoveryCode_ShouldNeitherDeliverNorStoreAnything()
+    {
+        var recoveryCodes = new Mock<IRecoveryCodeService>();
+        recoveryCodes.Setup(r => r.HasUnusedAsync(UserId)).ReturnsAsync(true);
+        var notifications = new Mock<IAuthNotificationService>();
+        var (service, _, _) = CreateService(notifications: notifications, recoveryCodes: recoveryCodes);
+
+        var started = await service.StartAsync(UserId, Email, "RECOVERY_CODE");
+
+        started.SelectedMethod.Should().Be("recovery_code");
+        started.MaskedDestination.Should().Be("recovery code");
+        notifications.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task StartAsync_WithRecoveryCode_ShouldBeRefused_WhenNoneRemain()
+    {
+        var (service, _, _) = CreateService();
+
+        var act = () => service.StartAsync(UserId, Email, "recovery_code");
+
+        await act.Should().ThrowAsync<BadRequestException>();
+    }
+
+    [Fact]
+    public async Task VerifyAsync_WithRecoveryCode_ShouldRecordTheProof_AndTheCodesUse()
+    {
+        var recoveryCodes = new Mock<IRecoveryCodeService>();
+        recoveryCodes.Setup(r => r.TryConsumeAsync(UserId, "good-code")).ReturnsAsync(Spend);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var (service, cache, _) = CreateService(securityEvents: securityEvents, recoveryCodes: recoveryCodes);
+
+        await service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "recovery_code", "good-code");
+
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeTrue();
+        (await ReadProofAsync(cache)).Method.Should().Be("recovery_code");
+        var used = securityEvents.Of(AuthSecurityEvents.RecoveryCodeUsed).Should().ContainSingle().Subject;
+        used.UserId.Should().Be(UserId);
+        used.SessionId.Should().Be(SessionId);
+        used.Flow.Should().Be(AuthSecurityFlow.SessionStepUp);
+        used.Method.Should().Be(AuthSecurityMethod.RecoveryCode);
+        securityEvents.Of(AuthSecurityEvents.StepUpSucceeded).Should().ContainSingle()
+            .Which.Method.Should().Be(AuthSecurityMethod.RecoveryCode);
+    }
+
+    [Fact]
+    public async Task VerifyAsync_WithAWrongOrSpentRecoveryCode_ShouldThrow_AndThrottleAfterMaxAttempts()
+    {
+        var recoveryCodes = new Mock<IRecoveryCodeService>();
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var (service, _, _) = CreateService(securityEvents: securityEvents, recoveryCodes: recoveryCodes);
+
+        for (var attempt = 1; attempt < 5; attempt++)
+        {
+            var act = () => service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "recovery_code", "spent-code");
+            await act.Should().ThrowAsync<UnauthorizedException>();
+        }
+
+        var throttled = () => service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "recovery_code", "spent-code");
+        await throttled.Should().ThrowAsync<TooManyRequestException>();
+
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
+        securityEvents.Of(AuthSecurityEvents.StepUpFailed).Should().HaveCount(4)
+            .And.OnlyContain(e => e.Reason == AuthSecurityReason.InvalidCode && e.Method == AuthSecurityMethod.RecoveryCode);
+        securityEvents.Of(AuthSecurityEvents.Throttled).Should().ContainSingle();
+        securityEvents.Of(AuthSecurityEvents.RecoveryCodeUsed).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task VerifyAsync_WithMalformedRecoveryCode_ShouldNotCountAnAttempt()
+    {
+        var recoveryCodes = new Mock<IRecoveryCodeService>();
+        recoveryCodes.Setup(r => r.TryConsumeAsync(UserId, "nope")).ThrowsAsync(new BadRequestException("malformed"));
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var (service, cache, _) = CreateService(securityEvents: securityEvents, recoveryCodes: recoveryCodes);
+
+        var act = () => service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "recovery_code", "nope");
+
+        await act.Should().ThrowAsync<BadRequestException>();
+        (await cache.GetValueAsync($"mfa:stepup:recovery-attempts:user:{UserId}")).Should().BeNull();
+        securityEvents.Of(AuthSecurityEvents.StepUpFailed).Should().ContainSingle()
+            .Which.Reason.Should().Be(AuthSecurityReason.InvalidRequest);
+    }
+
+    [Fact]
+    public async Task VerifyAsync_WithRecoveryCode_ShouldReleaseTheCode_WhenNoProofCouldBeStored()
+    {
+        var recoveryCodes = new Mock<IRecoveryCodeService>();
+        recoveryCodes.Setup(r => r.TryConsumeAsync(UserId, "good-code")).ReturnsAsync(Spend);
+        var securityEvents = new RecordingAuthSecurityEventEmitter();
+        var (service, _, _) = CreateService(
+            storeResult: StepUpProofWriteResult.SessionEnded,
+            securityEvents: securityEvents,
+            recoveryCodes: recoveryCodes);
+
+        var act = () => service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "recovery_code", "good-code");
+
+        await act.Should().ThrowAsync<UnauthorizedException>();
+        recoveryCodes.Verify(r => r.ReleaseAsync(UserId, Spend), Times.Once);
+        securityEvents.Of(AuthSecurityEvents.RecoveryCodeUsed).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task VerifyAsync_WithRecoveryCode_ShouldRefuseEveryGuess_OnceTheCapIsReached()
+    {
+        var recoveryCodes = new Mock<IRecoveryCodeService>();
+        var (service, _, _) = CreateService(recoveryCodes: recoveryCodes);
+        for (var attempt = 1; attempt <= 5; attempt++)
+        {
+            var guess = () => service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "recovery_code", "spent-code");
+            await guess.Should().ThrowAsync<AppException>();
+        }
+
+        recoveryCodes.Invocations.Clear();
+        recoveryCodes.Setup(r => r.TryConsumeAsync(UserId, "good-code")).ReturnsAsync(Spend);
+        var act = () => service.VerifyAsync(UserId, Email, SessionId, AuthVersion, "recovery_code", "good-code");
+
+        // Even a valid code is not checked, or spent, once the cap is reached.
+        await act.Should().ThrowAsync<TooManyRequestException>();
+        recoveryCodes.Verify(r => r.TryConsumeAsync(It.IsAny<int>(), It.IsAny<string>()), Times.Never);
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
     }
 
     [Fact]
@@ -492,11 +655,12 @@ public class SessionMfaVerificationServiceTests
         Mock<ITokenService>? tokenService = null,
         int lifetimeMinutes = 10,
         StepUpProofWriteResult? storeResult = null,
-        IAuthSecurityEventEmitter? securityEvents = null)
+        IAuthSecurityEventEmitter? securityEvents = null,
+        Mock<IRecoveryCodeService>? recoveryCodes = null)
     {
         var cache = new InMemoryCacheService();
         var (service, time) = CreateService(
-            cache, notifications, totp, smsRepository, tokenService, lifetimeMinutes, storeResult, securityEvents);
+            cache, notifications, totp, smsRepository, tokenService, lifetimeMinutes, storeResult, securityEvents, recoveryCodes);
         return (service, cache, time);
     }
 
@@ -508,7 +672,8 @@ public class SessionMfaVerificationServiceTests
         Mock<ITokenService>? tokenService = null,
         int lifetimeMinutes = 10,
         StepUpProofWriteResult? storeResult = null,
-        IAuthSecurityEventEmitter? securityEvents = null)
+        IAuthSecurityEventEmitter? securityEvents = null,
+        Mock<IRecoveryCodeService>? recoveryCodes = null)
     {
         notifications ??= new Mock<IAuthNotificationService>();
         totp ??= new Mock<ITotpMfaEnrollmentService>();
@@ -542,7 +707,8 @@ public class SessionMfaVerificationServiceTests
             tokenService.Object,
             time,
             Options.Create(new StepUpOptions { ProofLifetimeMinutes = lifetimeMinutes }),
-            securityEvents ?? NullAuthSecurityEventEmitter.Instance);
+            securityEvents ?? NullAuthSecurityEventEmitter.Instance,
+            (recoveryCodes ?? new Mock<IRecoveryCodeService>()).Object);
 
         return (service, time);
     }
@@ -563,7 +729,7 @@ public class SessionMfaVerificationServiceTests
             VerifiedAtUtc = verifiedAt,
             Generation = generation,
             // Matches an account with no committed SMS or TOTP enrollment (the default mocks).
-            FactorState = StepUpFactorState.From(null, null),
+            FactorState = StepUpFactorState.From(null, null, null),
         });
 
     /// <summary>A cache whose atomic proof read returns the given proof and generation.</summary>

@@ -17,7 +17,7 @@ namespace backend.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "citext");
@@ -231,6 +231,44 @@ namespace backend.Migrations
                     b.HasKey("UserId");
 
                     b.ToTable("SmsMfaEnrollments");
+                });
+
+            modelBuilder.Entity("backend.main.features.auth.mfa.recovery.RecoveryCode", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Selector")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("UsedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .HasFilter("\"UsedAtUtc\" IS NULL");
+
+                    b.HasIndex("UserId", "Selector")
+                        .IsUnique();
+
+                    b.ToTable("RecoveryCodes");
                 });
 
             modelBuilder.Entity("backend.main.features.auth.mfa.totp.TotpMfaEnrollment", b =>
@@ -1835,6 +1873,15 @@ namespace backend.Migrations
                     b.HasOne("backend.main.features.profile.User", null)
                         .WithOne()
                         .HasForeignKey("backend.main.features.auth.mfa.SmsMfaEnrollment", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("backend.main.features.auth.mfa.recovery.RecoveryCode", b =>
+                {
+                    b.HasOne("backend.main.features.profile.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

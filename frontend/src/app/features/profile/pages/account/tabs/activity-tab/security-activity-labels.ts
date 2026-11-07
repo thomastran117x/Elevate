@@ -21,6 +21,7 @@ const METHOD_LABELS: Record<string, string> = {
   email: 'with an emailed link or code',
   sms: 'with a text message code',
   totp: 'with an authenticator app',
+  recovery_code: 'with a recovery code',
 };
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -64,6 +65,7 @@ const IMPORTANT_KINDS = new Set([
   'provider_linked',
   'refresh_token_reuse_detected',
   'account_disabled',
+  'recovery_code_used',
 ]);
 
 function factorLabel(factor: string | null): string {
@@ -136,6 +138,19 @@ function describe(entry: AccountSecurityEvent): { title: string; detail: string 
       return { title: 'Account disabled', detail: 'Every session was signed out.' };
     case 'account_enabled':
       return { title: 'Account re-enabled', detail: null };
+    case 'recovery_codes_generated':
+      return { title: 'Recovery codes generated', detail: null };
+    case 'recovery_codes_regenerated':
+      return {
+        title: 'Recovery codes regenerated',
+        detail: 'A new set was generated, and the previous codes stopped working.',
+      };
+    case 'recovery_code_used':
+      return {
+        title: 'Recovery code used',
+        detail:
+          'One of your recovery codes was used to verify your identity. It cannot be used again.',
+      };
     default:
       return { title: 'Security activity', detail: null };
   }

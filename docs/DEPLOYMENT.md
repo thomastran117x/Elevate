@@ -34,7 +34,7 @@ Public environment values and frontend flags are baked into the build. Rebuild f
 
 ## Production configuration and operations
 
-- Supply deployment-specific JWT signing secrets, a valid TOTP encryption key, a security-event identifier hash key (`Auth__SecurityEvents__IdentifierHashKey`, or `AUTH_SECURITY_EVENTS_HASH_KEY` under Compose), provider credentials, and trusted proxy/CORS/host settings. Keep server secrets out of frontend build configuration and source control.
+- Supply deployment-specific JWT signing secrets, a valid TOTP encryption key, a security-event identifier hash key (`Auth__SecurityEvents__IdentifierHashKey`, or `AUTH_SECURITY_EVENTS_HASH_KEY` under Compose), a recovery-code pepper (`Auth__RecoveryCodes__Pepper`, or `AUTH_RECOVERY_CODE_PEPPER`), provider credentials, and trusted proxy/CORS/host settings. Keep server secrets out of frontend build configuration and source control.
 - Terminate TLS through the chosen ingress/reverse proxy, configure forwarded headers to match it, and preserve cookies, authorization headers, and WebSocket upgrades. `/api/hubs/clubs` also requires support for long-lived connections.
 - Coordinate shared feature flags between the backend and frontend build. Verify flags absent from Compose mappings explicitly rather than assuming every backend option is forwarded.
 - Provision persistent storage and backups for authoritative database data and the infrastructure state you intend to retain. Monitor database connectivity, connector state, Kafka consumer lag and DLQs, Elasticsearch updates, notification delivery, API error rates, and logs.
