@@ -1,0 +1,182 @@
+<article
+  class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl"
+  aria-labelledby="linked-providers-title"
+>
+  <div class="space-y-1">
+    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">Sign-in methods</p>
+    <h2 id="linked-providers-title" class="text-2xl font-bold">Linked accounts</h2>
+    <p class="max-w-2xl text-sm leading-6 text-subtle">
+      Sign in with Google or Microsoft as well as, or instead of, a password. You can't remove your
+      only way to sign in.
+    </p>
+  </div>
+
+  <div class="mt-5 space-y-4">
+    @if (banner(); as shown) {
+      <p
+        #bannerRef
+        tabindex="-1"
+        [attr.role]="shown.tone === 'error' ? 'alert' : 'status'"
+        class="rounded-2xl border px-5 py-4 text-sm outline-none"
+        [class.border-success/30]="shown.tone === 'success'"
+        [class.bg-success/10]="shown.tone === 'success'"
+        [class.text-success]="shown.tone === 'success'"
+        [class.border-danger/30]="shown.tone === 'error'"
+        [class.bg-danger/10]="shown.tone === 'error'"
+        [class.text-danger]="shown.tone === 'error'"
+        data-testid="linked-providers-banner"
+      >
+        {{ shown.text }}
+      </p>
+    }
+
+    @if (proposal(); as pending) {
+      <section
+        aria-labelledby="provider-proposal-title"
+        class="space-y-3 rounded-2xl border border-accent/30 bg-accent/5 px-5 py-5"
+        data-testid="provider-link-proposal"
+      >
+        <h3 id="provider-proposal-title" class="text-base font-bold text-content">
+          Link {{ labels[pending.provider] }} to this account?
+        </h3>
+        <p class="text-sm leading-6 text-muted">
+          You tried to sign in with a {{ labels[pending.provider] }} account using
+          {{ pending.maskedEmail }}, which matches this account. Link it only if that
+          {{ labels[pending.provider] }} account is yours.
+        </p>
+        <div class="flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            (click)="confirmProposal()"
+            [disabled]="confirmingProposal()"
+            class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {{ confirmingProposal() ? 'Linking...' : 'Link ' + labels[pending.provider] }}
+          </button>
+          <button
+            type="button"
+            (click)="dismissProposal()"
+            [disabled]="confirmingProposal()"
+            class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-content transition hover:bg-glass-strong disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Don't link
+          </button>
+        </div>
+      </section>
+    }
+
+    @if (loading() && !overview()) {
+      <p class="text-sm text-faint">Loading your sign-in providers...</p>
+    } @else {
+      <ul class="space-y-3" aria-label="Sign-in providers">
+        <li
+          class="flex flex-col gap-3 rounded-2xl border border-line bg-glass-strong px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <p class="text-sm font-semibold text-content">Password</p>
+            <p class="text-sm text-muted">
+              {{
+                overview()?.hasPassword
+                  ? 'Set. Change it on the Password tab.'
+                  : 'Not set. You sign in with a linked account.'
+              }}
+            </p>
+          </div>
+        </li>
+
+        @for (status of providers(); track status.provider) {
+          <li
+            class="flex flex-col gap-3 rounded-2xl border border-line bg-glass-strong px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+            [attr.data-testid]="'provider-' + status.provider"
+          >
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-content">{{ labels[status.provider] }}</p>
+              @if (status.link; as link) {
+                <p class="truncate text-sm text-muted">
+                  Linked{{ link.email ? ' as ' + link.email : '' }} on
+                  {{ link.linkedAtUtc | date: 'mediumDate' }}.
+                  {{
+                    link.lastUsedAtUtc
+                      ? 'Last used ' + (link.lastUsedAtUtc | date: 'medium') + '.'
+                      : 'Not used to sign in yet.'
+                  }}
+                </p>
+              } @else if (status.available) {
+                <p class="text-sm text-muted">Not linked.</p>
+              } @else {
+                <p class="text-sm text-faint">Not available right now.</p>
+              }
+            </div>
+
+            @if (status.link) {
+              @if (confirmingUnlink() === status.provider) {
+                <div
+                  role="alertdialog"
+                  [attr.aria-labelledby]="'unlink-' + status.provider + '-title'"
+                  class="flex flex-col gap-3 sm:items-end"
+                >
+                  <p
+                    [id]="'unlink-' + status.provider + '-title'"
+                    class="text-sm font-semibold text-content"
+                  >
+                    Stop signing in with {{ labels[status.provider] }}?
+                  </p>
+                  <div class="flex gap-3">
+                    <button
+                      type="button"
+                      (click)="unlink(status.provider)"
+                      [disabled]="busyProvider() === status.provider"
+                      class="inline-flex items-center justify-center rounded-2xl bg-danger px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {{ busyProvider() === status.provider ? 'Unlinking...' : 'Unlink' }}
+                    </button>
+                    <button
+                      type="button"
+                      (click)="cancelUnlink()"
+                      [disabled]="busyProvider() === status.provider"
+                      class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-4 py-2 text-sm font-semibold text-content transition hover:bg-glass disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Keep it
+                    </button>
+                  </div>
+                </div>
+              } @else {
+                <div class="flex flex-col gap-1 sm:items-end">
+                  <button
+                    type="button"
+                    (click)="requestUnlink(status.provider)"
+                    [disabled]="!status.canUnlink || !!busyProvider()"
+                    [attr.aria-describedby]="
+                      status.canUnlink ? null : 'unlink-' + status.provider + '-blocked'
+                    "
+                    class="inline-flex flex-none items-center justify-center rounded-2xl border border-line-strong px-4 py-2 text-sm font-semibold text-content transition hover:bg-glass disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Unlink {{ labels[status.provider] }}
+                  </button>
+                  @if (!status.canUnlink) {
+                    <p [id]="'unlink-' + status.provider + '-blocked'" class="text-xs text-faint">
+                      It's your only way to sign in.
+                    </p>
+                  }
+                </div>
+              }
+            } @else if (status.available) {
+              <button
+                type="button"
+                (click)="link(status.provider)"
+                [disabled]="!!busyProvider()"
+                class="inline-flex flex-none items-center justify-center rounded-2xl bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {{
+                  busyProvider() === status.provider
+                    ? 'Redirecting...'
+                    : 'Link ' + labels[status.provider]
+                }}
+              </button>
+            }
+          </li>
+        }
+      </ul>
+    }
+  </div>
+</article>

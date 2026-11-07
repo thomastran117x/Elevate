@@ -69,6 +69,11 @@ describe('toSecurityActivityView', () => {
       'Sign-in provider sign-in linked',
       'You can now sign in with this provider.',
     ],
+    [
+      { kind: 'provider_unlinked', method: 'google' },
+      'Google sign-in removed',
+      'You can no longer sign in with this provider.',
+    ],
     [{ kind: 'signed_out' }, 'Signed out', null],
     [
       { kind: 'sessions_revoked', reason: 'email_changed' },

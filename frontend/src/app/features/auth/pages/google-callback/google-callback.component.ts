@@ -26,6 +26,10 @@ import {
   PendingOAuthSignupStorageKey,
 } from '../../services/auth.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
+import {
+  PROVIDER_LINK_RETURN_PATH,
+  ProviderLinkFlowService,
+} from '../../services/provider-link-flow.service';
 
 @Component({
   selector: 'app-google-callback',
@@ -46,6 +50,7 @@ export class GoogleCallbackComponent implements OnInit {
   message = signal('Completing Google sign-in...');
 
   private authToken = inject(AuthTokenService);
+  private providerLinkFlow = inject(ProviderLinkFlowService);
 
   constructor(
     private auth: AuthService,
@@ -56,6 +61,13 @@ export class GoogleCallbackComponent implements OnInit {
 
   ngOnInit(): void {
     if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
+    // Linking from security settings returns here too, from a signed-in session, so it is told
+    // apart by the state it started before the signed-in redirect below can send it away.
+    if (this.providerLinkFlow.isLinkCallback('google', window.location.search)) {
+      void this.completeProviderLink();
       return;
     }
 
@@ -118,6 +130,17 @@ export class GoogleCallbackComponent implements OnInit {
               return;
             }
 
+            if (res.Type === 'requires_link_confirmation') {
+              this.providerLinkFlow.storeEmailProposal(res.LinkConfirmation);
+              this.authReturnUrl.set(PROVIDER_LINK_RETURN_PATH);
+              this.status.set('success');
+              this.message.set(
+                'An account already uses this email. Sign in to it to link Google...',
+              );
+              setTimeout(() => this.router.navigate(['/auth/login']), 250);
+              return;
+            }
+
             try {
               await this.sessionManager.bootstrapSession(res.Auth);
               this.status.set('success');
@@ -156,5 +179,14 @@ export class GoogleCallbackComponent implements OnInit {
     this.status.set('loading');
     this.message.set('Retrying Google sign-in...');
     void this.handleGoogleCallback();
+  }
+
+  private async completeProviderLink(): Promise<void> {
+    this.message.set('Linking your Google account...');
+    const target = await this.providerLinkFlow.completeFromCallback(
+      'google',
+      window.location.search,
+    );
+    await this.router.navigateByUrl(target);
   }
 }

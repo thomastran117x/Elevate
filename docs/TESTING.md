@@ -133,6 +133,8 @@ npx playwright test tests/account-activity.spec.ts
 
 `account-recovery-codes.spec.ts` needs the same backend settings, because the seeded account's step-up bypass opens the Security tab. It generates recovery codes on **Account settings → Security**, checks that they are shown once, copied, downloaded, and cleared after the user confirms they saved them, and then drives the sign-in verification page's recovery-code option against mocked challenge responses. Running it replaces the seeded account's recovery codes. Run it with `npx playwright test tests/account-recovery-codes.spec.ts` and the same `PLAYWRIGHT_LIVE_AUTH` setting.
 
+`account-linked-providers.spec.ts` needs no backend. It mocks the API and opens the shared provider callback pages as Google would redirect to them. It covers a completed link, a declined consent, an identity linked to another account, an expired request, unlinking with the last-method guard, and the link a sign-in proposes when its email matches an existing account. It never contacts Google or Microsoft. Run it with `npx playwright test tests/account-linked-providers.spec.ts`.
+
 The root `.mcp.json` configures Playwright; `frontend/.mcp.json` adds Angular CLI MCP. Launch frontend-focused tools from the Angular workspace so the CLI can resolve `angular.json`. Start the desired app server before navigating with browser tools. Equivalent frontend VS Code configuration is in `frontend/.vscode/mcp.json`.
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for formatting, type/build checks, audits, and PR validation expectations.

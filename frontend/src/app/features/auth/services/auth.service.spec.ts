@@ -159,6 +159,56 @@ describe('AuthService', () => {
     });
   }));
 
+  it('reads a provider sign-in that proposes linking an existing account', fakeAsync(() => {
+    let response: unknown;
+
+    service.microsoftVerify('id-token', 'nonce').subscribe((value) => (response = value));
+    tick();
+
+    httpMock
+      .expectOne((req) => req.url.endsWith('/auth/microsoft'))
+      .flush({
+        success: true,
+        message: 'ok',
+        data: {
+          Type: 'requires_link_confirmation',
+          LinkConfirmation: {
+            linkToken: 'link-token',
+            provider: 'microsoft',
+            maskedEmail: 'o***@example.com',
+            expiresAtUtc: '2026-11-07T12:10:00Z',
+          },
+        },
+      });
+
+    expect(response).toEqual({
+      Type: 'requires_link_confirmation',
+      LinkConfirmation: {
+        linkToken: 'link-token',
+        provider: 'microsoft',
+        maskedEmail: 'o***@example.com',
+        expiresAtUtc: '2026-11-07T12:10:00Z',
+      },
+    });
+  }));
+
+  it('refuses a link proposal it cannot read', fakeAsync(() => {
+    let error: unknown;
+
+    service.googleVerify('id-token', 'nonce').subscribe({ error: (err) => (error = err) });
+    tick();
+
+    httpMock
+      .expectOne((req) => req.url.endsWith('/auth/google'))
+      .flush({
+        success: true,
+        message: 'ok',
+        data: { Type: 'requires_link_confirmation', LinkConfirmation: { provider: 'apple' } },
+      });
+
+    expect(error).toEqual(jasmine.any(Error));
+  }));
+
   it('posts step-up start and verify payloads', fakeAsync(() => {
     let startResponse: unknown;
     let verifyResponse: unknown;
