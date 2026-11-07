@@ -308,6 +308,52 @@ namespace backend.Migrations
                     b.ToTable("TotpMfaEnrollments");
                 });
 
+            modelBuilder.Entity("backend.main.features.auth.oauth.links.UserIdentityLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<DateTime?>("LastUsedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("LinkedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Provider", "Subject")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "Provider")
+                        .IsUnique();
+
+                    b.ToTable("UserIdentityLinks");
+                });
+
             modelBuilder.Entity("backend.main.features.clubs.Club", b =>
                 {
                     b.Property<int>("Id")
@@ -1775,16 +1821,10 @@ namespace backend.Migrations
                         .IsRequired()
                         .HasColumnType("citext");
 
-                    b.Property<string>("GoogleID")
-                        .HasColumnType("text");
-
                     b.Property<bool>("IsDisabled")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
-
-                    b.Property<string>("MicrosoftID")
-                        .HasColumnType("text");
 
                     b.Property<string>("Name")
                         .HasColumnType("text");
@@ -1815,12 +1855,6 @@ namespace backend.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
-                        .IsUnique();
-
-                    b.HasIndex("GoogleID")
-                        .IsUnique();
-
-                    b.HasIndex("MicrosoftID")
                         .IsUnique();
 
                     b.HasIndex("Username")
@@ -1891,6 +1925,15 @@ namespace backend.Migrations
                     b.HasOne("backend.main.features.profile.User", null)
                         .WithOne()
                         .HasForeignKey("backend.main.features.auth.mfa.totp.TotpMfaEnrollment", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("backend.main.features.auth.oauth.links.UserIdentityLink", b =>
+                {
+                    b.HasOne("backend.main.features.profile.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

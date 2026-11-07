@@ -1,4 +1,5 @@
 using backend.main.features.auth;
+using backend.main.features.auth.oauth.links;
 using backend.main.features.clubs;
 using backend.main.features.media;
 using backend.main.features.profile;
@@ -84,7 +85,7 @@ public class AuthUserRepositoryTests
     }
 
     /// <summary>
-    /// Narrow on purpose: the same insert can collide on Email, GoogleID or MicrosoftID, and
+    /// Narrow on purpose: the same insert can collide on Email or an initial provider link, and
     /// reporting one of those as a taken username would send the caller to fix the wrong field.
     /// </summary>
     [Fact]
@@ -498,17 +499,86 @@ public class AuthUserRepositoryTests
     }
 
     [Fact]
-    public async Task UpdateProviderIdsAsync_ShouldUpdateProviderValues_AndReturnOAuthRecord()
+    public async Task CreateUserAsync_ShouldCommitTheInitialProviderLinkWithTheAccount()
     {
         await using var harness = await AuthUserRepositoryHarness.CreateAsync();
-        var userId = await harness.SeedUserAsync();
 
-        var updated = await harness.Repository.UpdateProviderIdsAsync(userId, "google-123", "ms-456");
+        var created = await harness.Repository.CreateUserAsync(
+            new User
+            {
+                Email = "provider-signup@example.com",
+                Username = "provider-signup",
+                Usertype = "participant",
+            },
+            new UserIdentityLink
+            {
+                Provider = IdentityProviders.Google,
+                Subject = "google-signup",
+                Email = "provider-signup@example.com",
+                LinkedAtUtc = DateTime.UtcNow,
+            });
 
-        updated.Should().NotBeNull();
-        updated!.GoogleID.Should().Be("google-123");
-        updated.MicrosoftID.Should().Be("ms-456");
-        updated.Usertype.Should().Be("Participant");
+        created.LinkedProviders.Should().Equal(IdentityProviders.Google);
+        var link = await harness.Db.UserIdentityLinks.AsNoTracking().SingleAsync();
+        link.UserId.Should().Be(created.Id);
+        link.Subject.Should().Be("google-signup");
+    }
+
+    /// <summary>
+    /// A provider sign-up whose subject another account claimed first must not leave an account
+    /// behind: the link is that account's only credential.
+    /// </summary>
+    [Fact]
+    public async Task CreateUserAsync_ShouldRollBackTheAccount_WhenTheProviderSubjectIsTaken()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        await harness.SeedUserAsync(googleId: "google-taken");
+
+        var act = () => harness.Repository.CreateUserAsync(
+            new User
+            {
+                Email = "late-signup@example.com",
+                Username = "late-signup",
+                Usertype = "participant",
+            },
+            new UserIdentityLink
+            {
+                Provider = IdentityProviders.Google,
+                Subject = "google-taken",
+                LinkedAtUtc = DateTime.UtcNow,
+            });
+
+        await act.Should().ThrowAsync<ConflictException>();
+        (await harness.Db.Users.AsNoTracking().AnyAsync(u => u.Email == "late-signup@example.com"))
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetUserAsync_ShouldListTheLinkedProviders()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync(googleId: "google-seed", microsoftId: "ms-seed");
+
+        var user = await harness.Repository.GetUserAsync(userId);
+
+        user!.LinkedProviders.Should().Equal(IdentityProviders.Google, IdentityProviders.Microsoft);
+    }
+
+    [Fact]
+    public async Task UpdatePartialAsync_ShouldKeepReportingTheLinkedProviders()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync(microsoftId: "ms-seed");
+
+        var updated = await harness.Repository.UpdatePartialAsync(new User
+        {
+            Id = userId,
+            Email = "ignored@example.com",
+            Usertype = "participant",
+            Name = "Renamed",
+        });
+
+        updated!.LinkedProviders.Should().Equal(IdentityProviders.Microsoft);
     }
 
     [Fact]
@@ -638,16 +708,52 @@ public class AuthUserRepositoryTests
         await harness.SeedUserAsync(googleId: "google-seed", microsoftId: "ms-seed");
 
         var byEmail = await harness.Repository.GetOAuthByEmailAsync("seed@example.com");
-        var byGoogle = await harness.Repository.GetOAuthByGoogleIdAsync("google-seed");
-        var byMicrosoft = await harness.Repository.GetOAuthByMicrosoftIdAsync("ms-seed");
+        var byGoogle = await harness.Repository.GetOAuthByProviderSubjectAsync(IdentityProviders.Google, "google-seed");
+        var byMicrosoft = await harness.Repository.GetOAuthByProviderSubjectAsync(IdentityProviders.Microsoft, "ms-seed");
 
         byEmail.Should().NotBeNull();
-        byEmail!.GoogleID.Should().Be("google-seed");
-        byEmail.MicrosoftID.Should().Be("ms-seed");
+        byEmail!.HasProviderLink.Should().BeTrue();
+        byEmail.LinkId.Should().BeNull();
         byEmail.Usertype.Should().Be("Participant");
 
         byGoogle!.Email.Should().Be("seed@example.com");
+        byGoogle.LinkId.Should().NotBeNull();
         byMicrosoft!.Email.Should().Be("seed@example.com");
+        byMicrosoft.LinkId.Should().NotBe(byGoogle.LinkId);
+    }
+
+    [Fact]
+    public async Task OAuthLookupMethods_ShouldMatchTheSubjectOnlyUnderItsOwnProvider()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        await harness.SeedUserAsync(googleId: "shared-subject");
+
+        (await harness.Repository.GetOAuthByProviderSubjectAsync(IdentityProviders.Microsoft, "shared-subject"))
+            .Should().BeNull();
+        (await harness.Repository.GetOAuthByEmailAsync("seed@example.com"))!.HasProviderLink.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetOAuthByEmailAsync_ShouldReportNoProviderLink_ForAPasswordOnlyAccount()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        await harness.SeedUserAsync();
+
+        var record = await harness.Repository.GetOAuthByEmailAsync("seed@example.com");
+
+        record!.HasProviderLink.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetRecoveryByEmailAsync_ShouldReportLinkedProviders()
+    {
+        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
+        await harness.SeedUserAsync(microsoftId: "ms-seed");
+
+        var record = await harness.Repository.GetRecoveryByEmailAsync("seed@example.com");
+
+        record!.HasGoogleProvider.Should().BeFalse();
+        record.HasMicrosoftProvider.Should().BeTrue();
     }
 
     [Fact]
@@ -1166,8 +1272,6 @@ public class AuthUserRepositoryTests
                 Avatar = "/avatars/seed.png",
                 Address = "1 Seed Street",
                 Phone = "555-0000",
-                GoogleID = googleId,
-                MicrosoftID = microsoftId,
                 IsDisabled = disabled,
                 DisabledAtUtc = disabled ? DateTime.UtcNow : null,
                 DisabledReason = disabled ? "disabled" : null,
@@ -1175,6 +1279,26 @@ public class AuthUserRepositoryTests
             };
 
             Db.Users.Add(user);
+            await Db.SaveChangesAsync();
+
+            foreach (var (provider, subject) in new[]
+                     {
+                         (IdentityProviders.Google, googleId),
+                         (IdentityProviders.Microsoft, microsoftId),
+                     })
+            {
+                if (subject == null)
+                    continue;
+
+                Db.UserIdentityLinks.Add(new UserIdentityLink
+                {
+                    UserId = user.Id,
+                    Provider = provider,
+                    Subject = subject,
+                    LinkedAtUtc = DateTime.UtcNow,
+                });
+            }
+
             await Db.SaveChangesAsync();
             return user.Id;
         }

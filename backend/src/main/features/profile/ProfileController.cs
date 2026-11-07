@@ -4,6 +4,7 @@ using backend.main.features.auth;
 using backend.main.features.auth.abuse;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.events;
+using backend.main.features.auth.oauth.links;
 using backend.main.features.auth.token;
 using backend.main.features.profile.contracts.requests;
 using backend.main.features.profile.contracts.responses;
@@ -402,8 +403,8 @@ namespace backend.main.features.profile
                 Phone = user.Phone,
                 Address = user.Address,
                 HasLocalPassword = user.HasLocalPassword,
-                GoogleLinked = !string.IsNullOrEmpty(user.GoogleID),
-                MicrosoftLinked = !string.IsNullOrEmpty(user.MicrosoftID),
+                GoogleLinked = user.LinkedProviders.Contains(IdentityProviders.Google),
+                MicrosoftLinked = user.LinkedProviders.Contains(IdentityProviders.Microsoft),
                 CreatedAtUtc = user.CreatedAt,
                 UpdatedAtUtc = user.UpdatedAt,
             };

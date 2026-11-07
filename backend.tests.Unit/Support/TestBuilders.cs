@@ -53,18 +53,6 @@ internal sealed class TestUserBuilder
         return this;
     }
 
-    public TestUserBuilder WithGoogleId(string googleId)
-    {
-        _user.GoogleID = googleId;
-        return this;
-    }
-
-    public TestUserBuilder WithMicrosoftId(string microsoftId)
-    {
-        _user.MicrosoftID = microsoftId;
-        return this;
-    }
-
     public User Build() => new()
     {
         Id = _user.Id,
@@ -76,8 +64,6 @@ internal sealed class TestUserBuilder
         Avatar = _user.Avatar,
         Address = _user.Address,
         Phone = _user.Phone,
-        MicrosoftID = _user.MicrosoftID,
-        GoogleID = _user.GoogleID,
         IsDisabled = _user.IsDisabled,
         DisabledReason = _user.DisabledReason,
         DisabledAtUtc = _user.DisabledAtUtc,

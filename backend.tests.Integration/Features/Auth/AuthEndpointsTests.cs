@@ -5,6 +5,7 @@ using backend.main.features.auth.contracts.requests;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.oauth;
+using backend.main.features.auth.oauth.links;
 using backend.main.features.auth.password;
 using backend.main.features.auth.token;
 using backend.main.infrastructure.database.core;
@@ -871,12 +872,14 @@ public class AuthEndpointsTests
             (cookies ?? []).Should().NotContain(cookie => cookie.Contains("refresh", StringComparison.OrdinalIgnoreCase));
         }
 
-        var googleOwner = await app.FindUserByEmailAsync("linked.owner@example.com");
-        googleOwner!.GoogleID.Should().Be("google-owner");
-        googleOwner.MicrosoftID.Should().BeNull();
-        var microsoftOwner = await app.FindUserByEmailAsync("ms.owner@example.com");
-        microsoftOwner!.MicrosoftID.Should().Be("ms-owner");
-        microsoftOwner.GoogleID.Should().BeNull();
+        (await app.FindLinkedSubjectAsync("linked.owner@example.com", IdentityProviders.Google))
+            .Should().Be("google-owner");
+        (await app.FindLinkedSubjectAsync("linked.owner@example.com", IdentityProviders.Microsoft))
+            .Should().BeNull();
+        (await app.FindLinkedSubjectAsync("ms.owner@example.com", IdentityProviders.Microsoft))
+            .Should().Be("ms-owner");
+        (await app.FindLinkedSubjectAsync("ms.owner@example.com", IdentityProviders.Google))
+            .Should().BeNull();
     }
 
     [Fact]
@@ -908,7 +911,7 @@ public class AuthEndpointsTests
         (await unverified.Content.ReadAsStringAsync()).Should().Contain(MicrosoftEmailUnverifiedException.Code);
         unverified.Headers.TryGetValues("Set-Cookie", out var cookies);
         (cookies ?? []).Should().NotContain(cookie => cookie.Contains("refresh", StringComparison.OrdinalIgnoreCase));
-        (await app.FindUserByEmailAsync("ms.target@example.com"))!.MicrosoftID.Should().BeNull();
+        (await app.FindLinkedSubjectAsync("ms.target@example.com", IdentityProviders.Microsoft)).Should().BeNull();
 
         var verified = await app.Client.SendAsync(await CreateCsrfRequestAsync(
             app,
@@ -925,7 +928,8 @@ public class AuthEndpointsTests
         body.Data!.RequiresRoleSelection.Should().BeFalse();
         body.Data.Auth.Should().NotBeNull();
         body.Data.Auth!.AccessToken.Should().NotBeNullOrWhiteSpace();
-        (await app.FindUserByEmailAsync("ms.target@example.com"))!.MicrosoftID.Should().Be("ms-mailbox-owner");
+        (await app.FindLinkedSubjectAsync("ms.target@example.com", IdentityProviders.Microsoft))
+            .Should().Be("ms-mailbox-owner");
     }
 
     /// <summary>

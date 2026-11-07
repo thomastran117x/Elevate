@@ -11,6 +11,7 @@ using backend.main.features.auth.events;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
+using backend.main.features.auth.oauth.links;
 using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.profile.email;
@@ -210,6 +211,7 @@ public class AuthTotpStepUpServiceTests
 
         return new AuthService(
             userRepository.Object,
+            new Mock<IUserIdentityLinkRepository>().Object,
             oauthService.Object,
             tokenService.Object,
             cacheService.Object,

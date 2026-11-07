@@ -1,3 +1,4 @@
+using backend.main.features.auth.oauth.links;
 using backend.main.features.events.contracts.responses;
 using System.Net.Http.Headers;
 using System.Net;
@@ -203,13 +204,46 @@ public sealed class AuthApiTestApp : IAsyncDisposable
             Password = passwordHash,
             Usertype = role,
             IsDisabled = disabled,
-            GoogleID = googleId,
-            MicrosoftID = microsoftId
         };
 
         db.Users.Add(user);
         await db.SaveChangesAsync();
+
+        foreach (var (provider, subject) in new[]
+                 {
+                     (IdentityProviders.Google, googleId),
+                     (IdentityProviders.Microsoft, microsoftId),
+                 })
+        {
+            if (subject == null)
+                continue;
+
+            db.UserIdentityLinks.Add(new UserIdentityLink
+            {
+                UserId = user.Id,
+                Provider = provider,
+                Subject = subject,
+                Email = email,
+                LinkedAtUtc = DateTime.UtcNow,
+            });
+            user.LinkedProviders.Add(provider);
+        }
+
+        await db.SaveChangesAsync();
         return user;
+    }
+
+    /// <summary>The provider subject linked to the account with this email, if any.</summary>
+    public async Task<string?> FindLinkedSubjectAsync(string email, string provider)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
+        return await db.UserIdentityLinks
+            .Where(link => link.Provider == provider)
+            .Join(db.Users, link => link.UserId, user => user.Id, (link, user) => new { link, user })
+            .Where(pair => pair.user.Email == email)
+            .Select(pair => pair.link.Subject)
+            .SingleOrDefaultAsync();
     }
 
     public async Task SeedKnownDeviceAsync(

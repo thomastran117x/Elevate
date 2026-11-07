@@ -1,4 +1,5 @@
 using backend.main.features.auth.contracts;
+using backend.main.features.auth.oauth.links;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 
@@ -6,7 +7,11 @@ namespace backend.main.features.auth
 {
     public interface IAuthUserRepository
     {
-        Task<User> CreateUserAsync(User user);
+        /// <summary>
+        /// Creates the account. A provider sign-up passes its <paramref name="initialLink"/>, which
+        /// commits with the account; a subject another account already holds is a 409.
+        /// </summary>
+        Task<User> CreateUserAsync(User user, UserIdentityLink? initialLink = null);
         Task<User?> UpdateUserAsync(int id, User updated);
         Task<UserStatusRecord?> UpdateUserStatusAsync(int id, bool isDisabled, string? disabledReason);
         Task<bool> IncrementAuthVersionAsync(int id);
@@ -60,9 +65,9 @@ namespace backend.main.features.auth
             DateTime utcNow,
             CancellationToken cancellationToken = default);
         Task<UserOAuthRecord?> GetOAuthByEmailAsync(string email);
-        Task<UserOAuthRecord?> GetOAuthByMicrosoftIdAsync(string microsoftId);
-        Task<UserOAuthRecord?> GetOAuthByGoogleIdAsync(string googleId);
-        Task<UserOAuthRecord?> UpdateProviderIdsAsync(int id, string? googleId, string? microsoftId);
+
+        /// <summary>The account linked to this provider subject, if any.</summary>
+        Task<UserOAuthRecord?> GetOAuthByProviderSubjectAsync(string provider, string subject);
         Task<bool> EmailExistsAsync(string email);
         /// <summary>
         /// Swaps the account's address and bumps <c>AuthVersion</c> in one commit, so outstanding
