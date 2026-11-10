@@ -170,7 +170,6 @@ namespace backend.main.features.auth
             user.Phone = updated.Phone ?? user.Phone;
 
             await _context.SaveChangesAsync();
-            user.LinkedProviders = await GetLinkedProvidersAsync(user.Id);
             return user;
         }
 
@@ -193,17 +192,8 @@ namespace backend.main.features.auth
                 existing.Phone = updated.Phone;
 
             await _context.SaveChangesAsync();
-            existing.LinkedProviders = await GetLinkedProvidersAsync(existing.Id);
             return existing;
         }
-
-        private async Task<List<string>> GetLinkedProvidersAsync(int userId) =>
-            await _context.UserIdentityLinks
-                .AsNoTracking()
-                .Where(l => l.UserId == userId)
-                .OrderBy(l => l.Provider)
-                .Select(l => l.Provider)
-                .ToListAsync();
 
         public async Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default) =>
             await _context.Users.AsNoTracking().AnyAsync(u => u.Id == id, cancellationToken);

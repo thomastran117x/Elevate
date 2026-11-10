@@ -565,23 +565,6 @@ public class AuthUserRepositoryTests
     }
 
     [Fact]
-    public async Task UpdatePartialAsync_ShouldKeepReportingTheLinkedProviders()
-    {
-        await using var harness = await AuthUserRepositoryHarness.CreateAsync();
-        var userId = await harness.SeedUserAsync(microsoftId: "ms-seed");
-
-        var updated = await harness.Repository.UpdatePartialAsync(new User
-        {
-            Id = userId,
-            Email = "ignored@example.com",
-            Usertype = "participant",
-            Name = "Renamed",
-        });
-
-        updated!.LinkedProviders.Should().Equal(IdentityProviders.Microsoft);
-    }
-
-    [Fact]
     public async Task UpdateUserStatusAsync_ShouldToggleDisabledState_ClearReasonOnEnable_AndIncrementAuthVersion()
     {
         await using var harness = await AuthUserRepositoryHarness.CreateAsync();

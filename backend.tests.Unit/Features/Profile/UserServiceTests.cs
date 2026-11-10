@@ -31,7 +31,7 @@ public class UserServiceTests
         var refreshCache = new Mock<IRefreshAheadCache>();
         refreshCache
             .Setup(c => c.GetOrSetAsync<User>(
-                "user:44",
+                UserCacheKeys.For(44),
                 It.IsAny<Func<Task<User?>>>(),
                 It.IsAny<TimeSpan>(),
                 It.IsAny<TimeSpan?>(),
@@ -54,7 +54,7 @@ public class UserServiceTests
         var refreshCache = new Mock<IRefreshAheadCache>();
         refreshCache
             .Setup(c => c.GetOrSetAsync<User>(
-                "user:5",
+                UserCacheKeys.For(5),
                 It.IsAny<Func<Task<User?>>>(),
                 It.IsAny<TimeSpan>(),
                 It.IsAny<TimeSpan?>(),
@@ -99,7 +99,7 @@ public class UserServiceTests
 
         result.IsDisabled.Should().BeTrue();
         tokenService.Verify(service => service.RevokeAllRefreshSessionsAsync(9, AuthSecurityReason.AccountDisabled, 1), Times.Once);
-        refreshCache.Verify(c => c.RemoveAsync("user:9"), Times.Once);
+        refreshCache.Verify(c => c.RemoveAsync(UserCacheKeys.For(9)), Times.Once);
         // Recorded whether or not the revocation ends any session.
         var changed = securityEvents.Of(AuthSecurityEvents.AccountStatusChanged).Should().ContainSingle().Subject;
         changed.Reason.Should().Be(AuthSecurityReason.AccountDisabled);
@@ -170,7 +170,7 @@ public class UserServiceTests
         var updated = await service.UpdateAvatarAsync(7, formFile);
 
         updated!.Avatar.Should().Be("https://cdn.test/users/avatar.webp");
-        refreshCache.Verify(c => c.RemoveAsync("user:7"), Times.Once);
+        refreshCache.Verify(c => c.RemoveAsync(UserCacheKeys.For(7)), Times.Once);
     }
 
     [Fact]
@@ -185,7 +185,7 @@ public class UserServiceTests
 
         await service.UpdateUserAsync(3, user);
 
-        refreshCache.Verify(c => c.RemoveAsync("user:3"), Times.Once);
+        refreshCache.Verify(c => c.RemoveAsync(UserCacheKeys.For(3)), Times.Once);
     }
 
     [Fact]
@@ -213,7 +213,7 @@ public class UserServiceTests
         var result = await service.ChangeUsernameAsync(3, "  NEW-NAME  ");
 
         result.Username.Should().Be("new-name");
-        refreshCache.Verify(cache => cache.RemoveAsync("user:3"), Times.Once);
+        refreshCache.Verify(cache => cache.RemoveAsync(UserCacheKeys.For(3)), Times.Once);
     }
 
     /// <summary>
@@ -244,6 +244,51 @@ public class UserServiceTests
 
         profile.Username.Should().Be("legacy..name");
         repository.VerifyAll();
+    }
+
+    /// <summary>
+    /// A write returns the tracked entity, which never loads the provider links; every profile
+    /// response is read back through the projection that does, so it keeps reporting them.
+    /// </summary>
+    [Fact]
+    public async Task ChangeUsernameAsync_ShouldReturnTheProfileWithItsLinkedProviders()
+    {
+        var now = new DateTimeOffset(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
+        var written = new TestUserBuilder().WithId(3).Build();
+        var reloaded = new TestUserBuilder().WithId(3).Build();
+        reloaded.LinkedProviders = ["google"];
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(repo => repo.ChangeUsernameAsync(
+                3, "new-name", "new-name", now.UtcDateTime, now.UtcDateTime.AddDays(30)))
+            .ReturnsAsync(new UsernameChangeRecord(UsernameChangeStatus.Changed, written));
+        repository.Setup(repo => repo.GetUserAsync(3)).ReturnsAsync(reloaded);
+        var service = CreateService(userRepository: repository, timeProvider: new FixedTimeProvider(now));
+
+        var result = await service.ChangeUsernameAsync(3, "new-name");
+
+        result.LinkedProviders.Should().Equal("google");
+    }
+
+    [Fact]
+    public async Task UpdateUserAsync_ShouldReturnTheProfileWithItsLinkedProviders()
+    {
+        var written = new TestUserBuilder().WithId(3).Build();
+        var reloaded = new TestUserBuilder().WithId(3).Build();
+        reloaded.LinkedProviders = ["microsoft"];
+        var repository = new Mock<IUserRepository>();
+        repository.Setup(r => r.UpdatePartialAsync(written)).ReturnsAsync(written);
+        repository.Setup(r => r.GetUserAsync(3)).ReturnsAsync(reloaded);
+        var service = CreateService(userRepository: repository);
+
+        var result = await service.UpdateUserAsync(3, written);
+
+        result!.LinkedProviders.Should().Equal("microsoft");
+    }
+
+    [Fact]
+    public void UserCacheKeys_ShouldBeVersioned_SoEntriesWithoutLinkedProvidersAreSkipped()
+    {
+        UserCacheKeys.For(7).Should().Be("user:v2:7");
     }
 
     [Fact]
@@ -290,7 +335,7 @@ public class UserServiceTests
 
         blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/users/a.png"), Times.Once);
         blobService.Verify(b => b.DeleteBlobAsync("https://cdn.test/clubs/b.png"), Times.Once);
-        refreshCache.Verify(c => c.RemoveAsync("user:5"), Times.Once);
+        refreshCache.Verify(c => c.RemoveAsync(UserCacheKeys.For(5)), Times.Once);
     }
 
     [Fact]
@@ -364,7 +409,7 @@ public class UserServiceTests
         var act = () => service.UpdateAvatarAsync(7, formFile);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
-        refreshCache.Verify(c => c.RemoveAsync("user:7"), Times.Once);
+        refreshCache.Verify(c => c.RemoveAsync(UserCacheKeys.For(7)), Times.Once);
     }
 
     [Fact]
