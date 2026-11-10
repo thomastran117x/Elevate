@@ -278,18 +278,26 @@ public class ProviderLinkEndpointsTests
             IdToken = "solo-ms-token",
         })).StatusCode.Should().Be(HttpStatusCode.OK);
 
+        var versionBefore = await AuthVersionAsync(app, userId);
         var removed = await UnlinkAsync(app, session, "google");
 
         removed.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(removed));
         (await app.FindLinkedSubjectAsync(Email("solo-google"), IdentityProviders.Google)).Should().BeNull();
-        await AssertErrorAsync(app, await UnlinkAsync(app, session, "microsoft"), HttpStatusCode.Conflict,
-            ProviderLinkConflictException.LastSignInMethodCode);
-        await AssertErrorAsync(app, await UnlinkAsync(app, session, "google"), HttpStatusCode.NotFound, null);
+        (await app.FindLinkedSubjectAsync(Email("solo-google"), IdentityProviders.Microsoft)).Should().Be("ms-solo");
+
+        // Nothing issued before the removal keeps access, the caller's own session included.
+        (await AuthVersionAsync(app, userId)).Should().Be(versionBefore + 1);
+        (await app.GetWithBearerAsync("/api/auth/providers", session.AccessToken))
+            .StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
         var history = await HistoryKindsAsync(app, userId);
         history.Should().Contain(AccountSecurityEventKind.ProviderLinked);
         history.Should().Contain(AccountSecurityEventKind.ProviderUnlinked);
+        history.Should().Contain(AccountSecurityEventKind.SessionsRevoked);
     }
+
+    private static Task<int> AuthVersionAsync(AuthApiTestApp app, int userId) =>
+        app.QueryDbAsync(db => db.Users.Where(u => u.Id == userId).Select(u => u.AuthVersion).SingleAsync());
 
     /// <summary>
     /// Two removals of a password-less account's last two links, at once: the account row lock

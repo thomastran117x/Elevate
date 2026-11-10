@@ -5,10 +5,15 @@ namespace backend.main.features.auth.oauth.links
     public interface IUserIdentityLinkRepository
     {
         /// <summary>The link holding this provider subject, whichever account owns it.</summary>
-        Task<UserIdentityLink?> FindBySubjectAsync(string provider, string subject);
+        Task<UserIdentityLink?> FindBySubjectAsync(
+            string provider,
+            string subject,
+            CancellationToken cancellationToken = default);
 
         /// <summary>The account's links, in provider order.</summary>
-        Task<IReadOnlyList<UserIdentityLink>> ListForUserAsync(int userId);
+        Task<IReadOnlyList<UserIdentityLink>> ListForUserAsync(
+            int userId,
+            CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Inserts the link. The unique indexes decide a race: of concurrent inserts for one
@@ -19,25 +24,38 @@ namespace backend.main.features.auth.oauth.links
         /// lost would report the caller's own link as taken.
         /// </remarks>
         [NoRetry]
-        Task<IdentityLinkAddResult> AddAsync(UserIdentityLink link);
+        Task<IdentityLinkAddResult> AddAsync(
+            UserIdentityLink link,
+            CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Records a sign-in through the link and refreshes the display metadata the provider
-        /// reported. The subject never changes.
+        /// Records a completed sign-in through the link and refreshes the display metadata the
+        /// provider reported. The subject never changes.
         /// </summary>
-        Task TouchAsync(int linkId, string? email, string? displayName, DateTime usedAtUtc);
+        Task TouchAsync(
+            int linkId,
+            string? email,
+            string? displayName,
+            DateTime usedAtUtc,
+            CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Removes the account's link for the provider, unless it is the account's last way to
+        /// Removes the account's link for the provider and bumps the account's
+        /// <c>AuthVersion</c> in the same commit, unless the link is the account's last way to
         /// sign in. Runs under the account's row lock, so two concurrent removals of an account's
         /// last two links cannot both succeed.
         /// </summary>
         /// <remarks>
-        /// <see cref="NoRetryAttribute"/> for the same reason as <see cref="AddAsync"/>: a rerun
-        /// after a lost commit acknowledgement would report the removal as never linked.
+        /// The version bump makes every access token, refresh session, step-up proof, and
+        /// in-flight sign-in issued before the removal stop validating, including any a sign-in
+        /// through the removed provider created. <see cref="NoRetryAttribute"/> for the same
+        /// reason as <see cref="AddAsync"/>.
         /// </remarks>
         [NoRetry]
-        Task<IdentityLinkRemoveResult> RemoveIfAnotherMethodRemainsAsync(int userId, string provider);
+        Task<IdentityLinkRemoveResult> RemoveIfAnotherMethodRemainsAsync(
+            int userId,
+            string provider,
+            CancellationToken cancellationToken = default);
     }
 
     public enum IdentityLinkRemoveResult

@@ -143,7 +143,8 @@ public static class SecurityHistoryCatalog
             AuthSecurityReason.Logout => AccountSecurityEventKind.SignedOut,
             AuthSecurityReason.PasswordChanged
                 or AuthSecurityReason.PasswordReset
-                or AuthSecurityReason.EmailChanged => AccountSecurityEventKind.SessionsRevoked,
+                or AuthSecurityReason.EmailChanged
+                or AuthSecurityReason.ProviderUnlinked => AccountSecurityEventKind.SessionsRevoked,
             AuthSecurityReason.TransportMismatch
                 or AuthSecurityReason.BindingMissing
                 or AuthSecurityReason.BindingMismatch

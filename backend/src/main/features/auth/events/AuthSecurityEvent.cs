@@ -155,6 +155,7 @@ public enum AuthSecurityReason
     ResourceAccess,
     ProviderBoundToOtherAccount,
     ProviderAlreadyConnected,
+    ProviderUnlinked,
 }
 
 public enum AuthSecurityMethod

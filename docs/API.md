@@ -109,10 +109,10 @@ The signed-in owner manages Google and Microsoft links under `/api/auth/provider
 | Request | Purpose |
 | --- | --- |
 | `GET /api/auth/providers` | `hasPassword`, and for each provider: `available` (configured here), `link` (`email`, `displayName`, `linkedAtUtc`, `lastUsedAtUtc`, or null), and `canUnlink`. The provider subject is never returned. No step-up needed. |
-| `POST /api/auth/providers/{provider}/link/start` | Issues a `state`, `nonce`, and PKCE verifier bound to the caller's account, session, and auth version, held on the server for 10 minutes. Returns `authorizationUrl`, `state`, and, for Microsoft only, `codeVerifier`. The redirect URI is the server's own (`{FRONTEND_URL}/auth/{provider}`), never the client's. `409` `PROVIDER_ALREADY_CONNECTED` if the provider is already linked. |
+| `POST /api/auth/providers/{provider}/link/start` | Issues a `state`, `nonce`, and PKCE verifier bound to the caller's account, session, and auth version, held on the server for 10 minutes. Returns `authorizationUrl`, `state`, `redirectUri`, and, for Microsoft only, `codeVerifier`. The redirect URI is the server's own (`{FRONTEND_URL}/auth/{provider}`), never the client's; a browser that redeems the code sends back exactly the returned `redirectUri`. `409` `PROVIDER_ALREADY_CONNECTED` if the provider is already linked. |
 | `POST /api/auth/providers/{provider}/link/complete` | `{ state, code }` for Google, whose code the server redeems with the verifier it kept. `{ state, idToken }` for Microsoft, whose public SPA client redeems the code in the browser. The state is spent on first use. The ID token's signature, issuer, audience, lifetime, and the stored nonce are all checked. |
 | `POST /api/auth/providers/link/confirm` | `{ linkToken }` from a `requires_link_confirmation` sign-in. Only the account the email matched can confirm it. |
-| `DELETE /api/auth/providers/{provider}` | Removes the link unless it is the account's last way to sign in (no password and no other link). Concurrent removals are serialized on the account row. |
+| `DELETE /api/auth/providers/{provider}` | Removes the link unless it is the account's last way to sign in (no password and no other link). Concurrent removals are serialized on the account row. The removal bumps `AuthVersion` in the same commit and ends every session of the account, the caller's included, so nothing the removed provider signed in keeps access. |
 
 Errors a client tells apart by code:
 
@@ -123,7 +123,9 @@ Errors a client tells apart by code:
 - `409` `LAST_SIGN_IN_METHOD`: the link is the only way left to sign in.
 - `400`: the provider refused the code or token, or the nonce did not match. This is never `401`, so it cannot be mistaken for an expired session.
 
-Linking or unlinking revokes every link flow and email-link proposal the account still has outstanding. It is recorded as `auth.provider.linked` or `auth.provider.unlinked`, appears in the security history as `provider_linked` or `provider_unlinked`, and emails the owner a security alert. Unlinking does not end existing sessions.
+Linking or unlinking revokes every link flow and email-link proposal the account still has outstanding. It is recorded as `auth.provider.linked` or `auth.provider.unlinked`, appears in the security history as `provider_linked` or `provider_unlinked`, and emails the owner a security alert. Unlinking also signs out every session, recorded as `sessions_revoked` with reason `provider_unlinked`.
+
+A link's `lastUsedAtUtc` changes only when a sign-in through it completes: the account is enabled, any login step-up has been passed, and a session has been issued. A refused or abandoned sign-in does not count as a use.
 
 Apple is a reserved provider name (`apple`). It is not offered until its flow exists, and adding it does not change these routes or shapes.
 

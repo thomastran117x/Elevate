@@ -53,15 +53,17 @@ namespace backend.Migrations
 
             // Carry every existing link across before the columns go. When each link was made was
             // never recorded, so the account's creation time stands in for it; the email is the
-            // account's own, which is the address the email-fallback link was made on.
+            // account's own, which is the address the email-fallback link was made on. Users.Name
+            // and Users.Email are unbounded, so the copies are cut to the display columns rather
+            // than letting one long value abort the migration.
             migrationBuilder.Sql("""
                 INSERT INTO "UserIdentityLinks" ("UserId", "Provider", "Subject", "Email", "DisplayName", "LinkedAtUtc", "LastUsedAtUtc")
-                SELECT "Id", 'google', "GoogleID", "Email", "Name", "CreatedAt", NULL
+                SELECT "Id", 'google', "GoogleID", LEFT("Email", 320), LEFT("Name", 255), "CreatedAt", NULL
                 FROM "Users"
                 WHERE "GoogleID" IS NOT NULL AND btrim("GoogleID") <> '';
 
                 INSERT INTO "UserIdentityLinks" ("UserId", "Provider", "Subject", "Email", "DisplayName", "LinkedAtUtc", "LastUsedAtUtc")
-                SELECT "Id", 'microsoft', "MicrosoftID", "Email", "Name", "CreatedAt", NULL
+                SELECT "Id", 'microsoft', "MicrosoftID", LEFT("Email", 320), LEFT("Name", 255), "CreatedAt", NULL
                 FROM "Users"
                 WHERE "MicrosoftID" IS NOT NULL AND btrim("MicrosoftID") <> '';
                 """);

@@ -3,7 +3,9 @@ using backend.main.features.auth.contracts;
 using backend.main.features.auth.events;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.oauth.links;
+using backend.main.features.auth.token;
 using backend.main.features.cache;
+using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
 using backend.tests.Unit.Features.Auth.Events;
 
@@ -27,14 +29,15 @@ public class ProviderLinkServiceTests
     private readonly Mock<IAuthUserRepository> _users = new();
     private readonly Mock<IProviderLinkStateStore> _states = new();
     private readonly Mock<IRefreshAheadCache> _refreshCache = new();
+    private readonly Mock<ITokenService> _tokens = new();
     private readonly Mock<IProviderLinkFlow> _google = Flow(IdentityProviders.Google, browserRedeemsCode: false);
     private readonly Mock<IProviderLinkFlow> _microsoft = Flow(IdentityProviders.Microsoft, browserRedeemsCode: true);
     private readonly RecordingAuthSecurityEventEmitter _events = new();
 
     public ProviderLinkServiceTests()
     {
-        _links.Setup(r => r.ListForUserAsync(It.IsAny<int>())).ReturnsAsync([]);
-        _links.Setup(r => r.AddAsync(It.IsAny<UserIdentityLink>())).ReturnsAsync(IdentityLinkAddResult.Added);
+        _links.Setup(r => r.ListForUserAsync(It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        _links.Setup(r => r.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>())).ReturnsAsync(IdentityLinkAddResult.Added);
         _users.Setup(r => r.GetAuthByIdAsync(UserId)).ReturnsAsync(new UserAuthRecord
         {
             Id = UserId,
@@ -48,7 +51,7 @@ public class ProviderLinkServiceTests
     [Fact]
     public async Task GetOverviewAsync_ShouldListEveryLinkableProvider_WithItsLinkAndUnlinkRule()
     {
-        _links.Setup(r => r.ListForUserAsync(UserId)).ReturnsAsync([Link(IdentityProviders.Google, "google-1")]);
+        _links.Setup(r => r.ListForUserAsync(UserId, It.IsAny<CancellationToken>())).ReturnsAsync([Link(IdentityProviders.Google, "google-1")]);
         _users.Setup(r => r.GetAuthByIdAsync(UserId)).ReturnsAsync(PasswordlessUser());
         _microsoft.Setup(f => f.IsAvailable).Returns(false);
 
@@ -88,6 +91,7 @@ public class ProviderLinkServiceTests
 
         start.State.Should().Be("state-token");
         start.CodeVerifier.Should().BeNull();
+        start.RedirectUri.Should().Be("https://app.example/auth/google");
         stored!.UserId.Should().Be(UserId);
         stored.SessionId.Should().Be(SessionId);
         stored.AuthVersion.Should().Be(AuthVersion);
@@ -112,12 +116,14 @@ public class ProviderLinkServiceTests
         var start = await CreateService().StartAsync(Session, IdentityProviders.Microsoft);
 
         start.CodeVerifier.Should().Be(stored!.CodeVerifier);
+        // The browser redeems with exactly the redirect the authorization request named.
+        start.RedirectUri.Should().Be(stored.RedirectUri);
     }
 
     [Fact]
     public async Task StartAsync_ShouldRefuse_WhenTheAccountAlreadyLinksTheProvider()
     {
-        _links.Setup(r => r.ListForUserAsync(UserId)).ReturnsAsync([Link(IdentityProviders.Google, "google-1")]);
+        _links.Setup(r => r.ListForUserAsync(UserId, It.IsAny<CancellationToken>())).ReturnsAsync([Link(IdentityProviders.Google, "google-1")]);
 
         var act = () => CreateService().StartAsync(Session, IdentityProviders.Google);
 
@@ -151,13 +157,27 @@ public class ProviderLinkServiceTests
         link.Email.Should().Be("Other@Example.com");
         link.LinkedAtUtc.Should().Be(Now);
         _links.Verify(r => r.AddAsync(It.Is<UserIdentityLink>(l =>
-            l.UserId == UserId && l.Provider == IdentityProviders.Google && l.Subject == "google-new")), Times.Once);
+            l.UserId == UserId && l.Provider == IdentityProviders.Google && l.Subject == "google-new"), It.IsAny<CancellationToken>()), Times.Once);
         _states.Verify(s => s.RevokeAllForUserAsync(UserId), Times.Once);
-        _refreshCache.Verify(c => c.RemoveAsync($"user:{UserId}"), Times.Once);
+        _refreshCache.Verify(c => c.RemoveAsync(UserCacheKeys.For(UserId)), Times.Once);
         var linked = _events.Of(AuthSecurityEvents.ProviderLinked).Should().ContainSingle().Subject;
         linked.UserId.Should().Be(UserId);
         linked.Method.Should().Be(AuthSecurityMethod.Google);
         linked.Flow.Should().Be(AuthSecurityFlow.ProviderLink);
+    }
+
+    /// <summary>Providers do not bound their claims; an oversized name must not fail the link.</summary>
+    [Fact]
+    public async Task CompleteAsync_ShouldCutOversizedMetadataToTheColumns()
+    {
+        GivenState(State());
+        _google.Setup(f => f.ResolveIdentityAsync(It.IsAny<ProviderLinkState>(), "code", null))
+            .ReturnsAsync(new OAuthUser("google-long", "  a@b.com  ", new string('n', 400), IdentityProviders.Google, true));
+
+        var link = await CreateService().CompleteAsync(Session, IdentityProviders.Google, "state-token", "code", null);
+
+        link.DisplayName.Should().HaveLength(UserIdentityLink.DisplayNameMaxLength);
+        link.Email.Should().Be("a@b.com");
     }
 
     [Fact]
@@ -198,7 +218,7 @@ public class ProviderLinkServiceTests
         var act = () => CreateService().CompleteAsync(Session, IdentityProviders.Google, "state-token", "code", null);
 
         await act.Should().ThrowAsync<ProviderLinkMismatchException>(because);
-        _links.Verify(r => r.AddAsync(It.IsAny<UserIdentityLink>()), Times.Never);
+        _links.Verify(r => r.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     /// <summary>A refused token is a bad request, never a 401 the client would treat as sign-out.</summary>
@@ -212,7 +232,7 @@ public class ProviderLinkServiceTests
         var act = () => CreateService().CompleteAsync(Session, IdentityProviders.Google, "state-token", "code", null);
 
         await act.Should().ThrowAsync<BadRequestException>();
-        _links.Verify(r => r.AddAsync(It.IsAny<UserIdentityLink>()), Times.Never);
+        _links.Verify(r => r.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     /// <summary>A provider subject maps to at most one account, whatever its email says.</summary>
@@ -221,14 +241,14 @@ public class ProviderLinkServiceTests
     {
         GivenState(State());
         GivenIdentity("google-taken");
-        _links.Setup(r => r.FindBySubjectAsync(IdentityProviders.Google, "google-taken"))
+        _links.Setup(r => r.FindBySubjectAsync(IdentityProviders.Google, "google-taken", It.IsAny<CancellationToken>()))
             .ReturnsAsync(Link(IdentityProviders.Google, "google-taken", userId: 99));
 
         var act = () => CreateService().CompleteAsync(Session, IdentityProviders.Google, "state-token", "code", null);
 
         (await act.Should().ThrowAsync<ProviderLinkConflictException>())
             .Which.ErrorCode.Should().Be(ProviderLinkConflictException.AlreadyLinkedCode);
-        _links.Verify(r => r.AddAsync(It.IsAny<UserIdentityLink>()), Times.Never);
+        _links.Verify(r => r.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>()), Times.Never);
         var conflict = _events.Of(AuthSecurityEvents.ProviderLinkConflict).Should().ContainSingle().Subject;
         conflict.Reason.Should().Be(AuthSecurityReason.ProviderBoundToOtherAccount);
         conflict.UserId.Should().Be(UserId);
@@ -240,12 +260,12 @@ public class ProviderLinkServiceTests
         GivenState(State());
         GivenIdentity("google-mine");
         var existing = Link(IdentityProviders.Google, "google-mine");
-        _links.Setup(r => r.FindBySubjectAsync(IdentityProviders.Google, "google-mine")).ReturnsAsync(existing);
+        _links.Setup(r => r.FindBySubjectAsync(IdentityProviders.Google, "google-mine", It.IsAny<CancellationToken>())).ReturnsAsync(existing);
 
         var link = await CreateService().CompleteAsync(Session, IdentityProviders.Google, "state-token", "code", null);
 
         link.Should().BeSameAs(existing);
-        _links.Verify(r => r.AddAsync(It.IsAny<UserIdentityLink>()), Times.Never);
+        _links.Verify(r => r.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>()), Times.Never);
         _events.Of(AuthSecurityEvents.ProviderLinked).Should().BeEmpty();
     }
 
@@ -255,10 +275,10 @@ public class ProviderLinkServiceTests
     {
         GivenState(State());
         GivenIdentity("google-raced");
-        _links.SetupSequence(r => r.FindBySubjectAsync(IdentityProviders.Google, "google-raced"))
+        _links.SetupSequence(r => r.FindBySubjectAsync(IdentityProviders.Google, "google-raced", It.IsAny<CancellationToken>()))
             .ReturnsAsync((UserIdentityLink?)null)
             .ReturnsAsync(Link(IdentityProviders.Google, "google-raced", userId: 99));
-        _links.Setup(r => r.AddAsync(It.IsAny<UserIdentityLink>())).ReturnsAsync(IdentityLinkAddResult.SubjectTaken);
+        _links.Setup(r => r.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>())).ReturnsAsync(IdentityLinkAddResult.SubjectTaken);
 
         var act = () => CreateService().CompleteAsync(Session, IdentityProviders.Google, "state-token", "code", null);
 
@@ -272,7 +292,7 @@ public class ProviderLinkServiceTests
     {
         GivenState(State());
         GivenIdentity("google-second");
-        _links.Setup(r => r.AddAsync(It.IsAny<UserIdentityLink>())).ReturnsAsync(IdentityLinkAddResult.ProviderTaken);
+        _links.Setup(r => r.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>())).ReturnsAsync(IdentityLinkAddResult.ProviderTaken);
 
         var act = () => CreateService().CompleteAsync(Session, IdentityProviders.Google, "state-token", "code", null);
 
@@ -304,7 +324,7 @@ public class ProviderLinkServiceTests
         var act = () => CreateService().ConfirmEmailLinkAsync(UserId, "link-token");
 
         await act.Should().ThrowAsync<ProviderLinkMismatchException>();
-        _links.Verify(r => r.AddAsync(It.IsAny<UserIdentityLink>()), Times.Never);
+        _links.Verify(r => r.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -321,22 +341,24 @@ public class ProviderLinkServiceTests
     [Fact]
     public async Task UnlinkAsync_ShouldRemoveTheLink_AndRecordIt()
     {
-        _links.Setup(r => r.RemoveIfAnotherMethodRemainsAsync(UserId, IdentityProviders.Microsoft))
+        _links.Setup(r => r.RemoveIfAnotherMethodRemainsAsync(UserId, IdentityProviders.Microsoft, It.IsAny<CancellationToken>()))
             .ReturnsAsync(IdentityLinkRemoveResult.Removed);
 
         await CreateService().UnlinkAsync(UserId, "microsoft");
 
         _states.Verify(s => s.RevokeAllForUserAsync(UserId), Times.Once);
-        _refreshCache.Verify(c => c.RemoveAsync($"user:{UserId}"), Times.Once);
+        _refreshCache.Verify(c => c.RemoveAsync(UserCacheKeys.For(UserId)), Times.Once);
         var unlinked = _events.Of(AuthSecurityEvents.ProviderUnlinked).Should().ContainSingle().Subject;
         unlinked.Method.Should().Be(AuthSecurityMethod.Microsoft);
         unlinked.Flow.Should().Be(AuthSecurityFlow.ProviderUnlink);
+        // Nothing the removed provider signed in keeps access: every session ends.
+        _tokens.Verify(t => t.RevokeAllRefreshSessionsAsync(UserId, AuthSecurityReason.ProviderUnlinked, null), Times.Once);
     }
 
     [Fact]
     public async Task UnlinkAsync_ShouldRefuse_TheLastSignInMethod()
     {
-        _links.Setup(r => r.RemoveIfAnotherMethodRemainsAsync(UserId, IdentityProviders.Google))
+        _links.Setup(r => r.RemoveIfAnotherMethodRemainsAsync(UserId, IdentityProviders.Google, It.IsAny<CancellationToken>()))
             .ReturnsAsync(IdentityLinkRemoveResult.LastSignInMethod);
 
         var act = () => CreateService().UnlinkAsync(UserId, IdentityProviders.Google);
@@ -345,12 +367,15 @@ public class ProviderLinkServiceTests
             .Which.ErrorCode.Should().Be(ProviderLinkConflictException.LastSignInMethodCode);
         _events.Of(AuthSecurityEvents.ProviderUnlinked).Should().BeEmpty();
         _states.Verify(s => s.RevokeAllForUserAsync(It.IsAny<int>()), Times.Never);
+        _tokens.Verify(
+            t => t.RevokeAllRefreshSessionsAsync(It.IsAny<int>(), It.IsAny<AuthSecurityReason>(), It.IsAny<int?>()),
+            Times.Never);
     }
 
     [Fact]
     public async Task UnlinkAsync_ShouldReportAProviderThatIsNotLinked_AsNotFound()
     {
-        _links.Setup(r => r.RemoveIfAnotherMethodRemainsAsync(UserId, IdentityProviders.Google))
+        _links.Setup(r => r.RemoveIfAnotherMethodRemainsAsync(UserId, IdentityProviders.Google, It.IsAny<CancellationToken>()))
             .ReturnsAsync(IdentityLinkRemoveResult.NotLinked);
         var service = CreateService();
 
@@ -364,7 +389,7 @@ public class ProviderLinkServiceTests
     [Fact]
     public async Task UnlinkAsync_ShouldSucceed_WhenRevocationFails()
     {
-        _links.Setup(r => r.RemoveIfAnotherMethodRemainsAsync(UserId, IdentityProviders.Google))
+        _links.Setup(r => r.RemoveIfAnotherMethodRemainsAsync(UserId, IdentityProviders.Google, It.IsAny<CancellationToken>()))
             .ReturnsAsync(IdentityLinkRemoveResult.Removed);
         _states.Setup(s => s.RevokeAllForUserAsync(UserId)).ThrowsAsync(new InvalidOperationException("cache down"));
         _refreshCache.Setup(c => c.RemoveAsync(It.IsAny<string>())).ThrowsAsync(new InvalidOperationException("cache down"));
@@ -381,6 +406,7 @@ public class ProviderLinkServiceTests
         [_google.Object, _microsoft.Object],
         _refreshCache.Object,
         _events,
+        _tokens.Object,
         new FixedTimeProvider(Now));
 
     private void GivenState(ProviderLinkState state) =>

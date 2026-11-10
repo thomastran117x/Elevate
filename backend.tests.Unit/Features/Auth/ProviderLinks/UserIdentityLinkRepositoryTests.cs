@@ -159,6 +159,48 @@ public class UserIdentityLinkRepositoryTests
             .Should().Equal(IdentityProviders.Microsoft);
     }
 
+    /// <summary>
+    /// The removal bumps AuthVersion in its own commit, so nothing issued before it, including
+    /// a session the removed provider signed in, stays valid.
+    /// </summary>
+    [Fact]
+    public async Task RemoveIfAnotherMethodRemainsAsync_ShouldBumpTheAuthVersion_OnlyWhenItRemoves()
+    {
+        await using var harness = await LinkRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync("owner@example.com", password: null);
+        await harness.Repository.AddAsync(NewLink(userId, IdentityProviders.Google, "google-1"));
+        await harness.Repository.AddAsync(NewLink(userId, IdentityProviders.Microsoft, "ms-1"));
+        var before = await AuthVersionAsync(harness, userId);
+
+        await harness.Repository.RemoveIfAnotherMethodRemainsAsync(userId, IdentityProviders.Google);
+        var afterRemoval = await AuthVersionAsync(harness, userId);
+        await harness.Repository.RemoveIfAnotherMethodRemainsAsync(userId, IdentityProviders.Microsoft);
+        await harness.Repository.RemoveIfAnotherMethodRemainsAsync(userId, IdentityProviders.Google);
+
+        afterRemoval.Should().Be(before + 1);
+        (await AuthVersionAsync(harness, userId)).Should().Be(afterRemoval);
+    }
+
+    [Fact]
+    public async Task AddAndTouch_ShouldCutOversizedMetadataToTheColumns()
+    {
+        await using var harness = await LinkRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync("owner@example.com");
+        var link = NewLink(userId, IdentityProviders.Google, "google-1");
+        link.DisplayName = new string('n', 400);
+
+        await harness.Repository.AddAsync(link);
+        var stored = await harness.Repository.FindBySubjectAsync(IdentityProviders.Google, "google-1");
+        stored!.DisplayName.Should().HaveLength(UserIdentityLink.DisplayNameMaxLength);
+
+        await harness.Repository.TouchAsync(stored.Id, new string('e', 400), null, DateTime.UtcNow);
+        (await harness.Repository.FindBySubjectAsync(IdentityProviders.Google, "google-1"))!
+            .Email.Should().HaveLength(UserIdentityLink.EmailMaxLength);
+    }
+
+    private static Task<int> AuthVersionAsync(LinkRepositoryHarness harness, int userId) =>
+        harness.Db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.AuthVersion).SingleAsync();
+
     [Fact]
     public async Task RemoveIfAnotherMethodRemainsAsync_ShouldKeepTheLastSignInMethod()
     {

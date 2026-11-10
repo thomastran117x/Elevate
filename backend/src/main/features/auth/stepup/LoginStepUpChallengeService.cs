@@ -9,6 +9,7 @@ using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
+using backend.main.features.auth.oauth.links;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.profile;
@@ -58,6 +59,8 @@ namespace backend.main.features.auth.stepup
         private readonly IAuthSecurityEventEmitter _securityEvents;
         private readonly IRecoveryCodeService _recoveryCodeService;
 
+        private readonly IUserIdentityLinkRepository _identityLinks;
+
         public LoginStepUpChallengeService(
             ICacheService cacheService,
             IAuthNotificationService notificationService,
@@ -69,9 +72,11 @@ namespace backend.main.features.auth.stepup
             ITokenService tokenService,
             ClientRequestInfo requestInfo,
             IAuthSecurityEventEmitter securityEvents,
-            IRecoveryCodeService recoveryCodeService
+            IRecoveryCodeService recoveryCodeService,
+            IUserIdentityLinkRepository identityLinks
         )
         {
+            _identityLinks = identityLinks;
             _cacheService = cacheService;
             _notificationService = notificationService;
             _mfaEnrollmentRepository = mfaEnrollmentRepository;
@@ -89,7 +94,8 @@ namespace backend.main.features.auth.stepup
             User user,
             SessionTransport transport,
             bool rememberMe,
-            string? returnUrl
+            string? returnUrl,
+            ProviderLinkUse? providerLinkUse = null
         )
         {
             try
@@ -114,6 +120,7 @@ namespace backend.main.features.auth.stepup
                     ClientName = _requestInfo.ClientName,
                     IpAddress = _requestInfo.IpAddress,
                     ReturnPath = NormalizeReturnPath(returnUrl),
+                    ProviderLinkUse = providerLinkUse,
                     ExpiresAtUtc = DateTime.UtcNow.Add(ChallengeTtl),
                     Sms = new DeliveryState(),
                     EmailDelivery = new DeliveryState()
@@ -617,6 +624,7 @@ namespace backend.main.features.auth.stepup
                     }
 
                     await DeleteStateAsync(state);
+                    await RecordProviderLinkUseAsync(state.ProviderLinkUse);
 
                     _securityEvents.Emit(new AuthSecurityEvent
                     {
@@ -871,8 +879,36 @@ namespace backend.main.features.auth.stepup
         private static string UserSendKey(int userId) => $"auth:stepup:send:user:{userId}";
         private static string IpSendKey(string ipAddress) => $"auth:stepup:send:ip:{ipAddress}";
 
+        /// <summary>
+        /// Records a provider sign-in on its link now that the step-up it needed has completed.
+        /// Best effort, like the direct sign-in path: it must not fail a session already issued.
+        /// </summary>
+        private async Task RecordProviderLinkUseAsync(ProviderLinkUse? use)
+        {
+            if (use == null)
+                return;
+
+            try
+            {
+                await _identityLinks.TouchAsync(use.LinkId, use.Email, use.DisplayName, DateTime.UtcNow);
+            }
+            catch (Exception e)
+            {
+                Logger.Warn($"[LoginStepUpChallengeService] Recording provider link use failed: {e.Message}");
+            }
+        }
+
         private sealed class PendingStepUpState
         {
+            /// <summary>
+            /// The provider link a provider sign-in came through, recorded as used once this
+            /// challenge completes. Null for a password sign-in.
+            /// </summary>
+            public ProviderLinkUse? ProviderLinkUse
+            {
+                get; set;
+            }
+
             public required string PendingId
             {
                 get; set;

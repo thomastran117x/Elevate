@@ -34,11 +34,11 @@ namespace backend.main.features.auth.oauth.links
 
         [HttpGet]
         [ProducesResponseType(typeof(ApiResponse<ProviderLinksResponse>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> List()
+        public async Task<IActionResult> List(CancellationToken cancellationToken)
         {
             try
             {
-                var overview = await _providerLinks.GetOverviewAsync(User.GetUserPayload().Id);
+                var overview = await _providerLinks.GetOverviewAsync(User.GetUserPayload().Id, cancellationToken);
 
                 return Ok(new ApiResponse<ProviderLinksResponse>(
                     "Sign-in providers fetched.",
@@ -77,11 +77,11 @@ namespace backend.main.features.auth.oauth.links
         [ProducesResponseType(typeof(ApiResponse<ProviderLinkStartResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status409Conflict)]
         [AuthOperation(AuthOperation.FactorChange)]
-        public async Task<IActionResult> Start(string provider)
+        public async Task<IActionResult> Start(string provider, CancellationToken cancellationToken)
         {
             try
             {
-                var start = await _providerLinks.StartAsync(CurrentSession(), provider);
+                var start = await _providerLinks.StartAsync(CurrentSession(), provider, cancellationToken);
 
                 return Ok(new ApiResponse<ProviderLinkStartResponse>(
                     "Continue with the provider to link it.",
@@ -89,6 +89,7 @@ namespace backend.main.features.auth.oauth.links
                     {
                         AuthorizationUrl = start.AuthorizationUrl,
                         State = start.State,
+                        RedirectUri = start.RedirectUri,
                         CodeVerifier = start.CodeVerifier,
                     }));
             }
@@ -109,7 +110,10 @@ namespace backend.main.features.auth.oauth.links
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status409Conflict)]
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status410Gone)]
         [AuthOperation(AuthOperation.FactorChange)]
-        public async Task<IActionResult> Complete(string provider, [FromBody] CompleteProviderLinkRequest request)
+        public async Task<IActionResult> Complete(
+            string provider,
+            [FromBody] CompleteProviderLinkRequest request,
+            CancellationToken cancellationToken)
         {
             try
             {
@@ -118,7 +122,8 @@ namespace backend.main.features.auth.oauth.links
                     provider,
                     request.State,
                     request.Code,
-                    request.IdToken);
+                    request.IdToken,
+                    cancellationToken);
 
                 return Ok(new ApiResponse<ProviderLinkResponse>("Provider linked.", ToResponse(link)));
             }
@@ -143,11 +148,16 @@ namespace backend.main.features.auth.oauth.links
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status409Conflict)]
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status410Gone)]
         [AuthOperation(AuthOperation.FactorChange)]
-        public async Task<IActionResult> Confirm([FromBody] ConfirmProviderLinkRequest request)
+        public async Task<IActionResult> Confirm(
+            [FromBody] ConfirmProviderLinkRequest request,
+            CancellationToken cancellationToken)
         {
             try
             {
-                var link = await _providerLinks.ConfirmEmailLinkAsync(User.GetUserPayload().Id, request.LinkToken);
+                var link = await _providerLinks.ConfirmEmailLinkAsync(
+                    User.GetUserPayload().Id,
+                    request.LinkToken,
+                    cancellationToken);
 
                 return Ok(new ApiResponse<ProviderLinkResponse>("Provider linked.", ToResponse(link)));
             }
@@ -167,12 +177,12 @@ namespace backend.main.features.auth.oauth.links
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status409Conflict)]
         [AuthOperation(AuthOperation.FactorChange)]
-        public async Task<IActionResult> Unlink(string provider)
+        public async Task<IActionResult> Unlink(string provider, CancellationToken cancellationToken)
         {
             try
             {
-                await _providerLinks.UnlinkAsync(User.GetUserPayload().Id, provider);
-                return Ok(new MessageResponse("Provider unlinked."));
+                await _providerLinks.UnlinkAsync(User.GetUserPayload().Id, provider, cancellationToken);
+                return Ok(new MessageResponse("Provider unlinked. Every session was signed out."));
             }
             catch (Exception ex)
             {

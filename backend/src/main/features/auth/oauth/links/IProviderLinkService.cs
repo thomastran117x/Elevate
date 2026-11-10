@@ -6,20 +6,31 @@ namespace backend.main.features.auth.oauth.links
     /// </summary>
     public interface IProviderLinkService
     {
-        Task<ProviderLinkOverview> GetOverviewAsync(int userId);
+        Task<ProviderLinkOverview> GetOverviewAsync(int userId, CancellationToken cancellationToken = default);
 
-        Task<ProviderLinkStart> StartAsync(ProviderLinkSession session, string provider);
+        Task<ProviderLinkStart> StartAsync(
+            ProviderLinkSession session,
+            string provider,
+            CancellationToken cancellationToken = default);
 
         Task<UserIdentityLink> CompleteAsync(
             ProviderLinkSession session,
             string provider,
             string state,
             string? code,
-            string? idToken);
+            string? idToken,
+            CancellationToken cancellationToken = default);
 
-        Task<UserIdentityLink> ConfirmEmailLinkAsync(int userId, string linkToken);
+        Task<UserIdentityLink> ConfirmEmailLinkAsync(
+            int userId,
+            string linkToken,
+            CancellationToken cancellationToken = default);
 
-        Task UnlinkAsync(int userId, string provider);
+        /// <summary>
+        /// Removes the link and ends every session of the account, the caller's included, so
+        /// nothing signed in through the removed provider keeps access.
+        /// </summary>
+        Task UnlinkAsync(int userId, string provider, CancellationToken cancellationToken = default);
     }
 
     /// <summary>The caller's identity as its access token states it.</summary>
@@ -35,6 +46,14 @@ namespace backend.main.features.auth.oauth.links
         UserIdentityLink? Link,
         bool CanUnlink);
 
+    /// <param name="RedirectUri">
+    /// The exact redirect URI the authorization request names. A browser that redeems the code
+    /// itself must send this value, not one it derives on its own.
+    /// </param>
     /// <param name="CodeVerifier">Set only when the browser redeems the code itself.</param>
-    public sealed record ProviderLinkStart(string AuthorizationUrl, string State, string? CodeVerifier);
+    public sealed record ProviderLinkStart(
+        string AuthorizationUrl,
+        string State,
+        string RedirectUri,
+        string? CodeVerifier);
 }

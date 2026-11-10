@@ -32867,7 +32867,8 @@
       "ProviderLinkStartResponse": {
         "required": [
           "authorizationUrl",
-          "state"
+          "state",
+          "redirectUri"
         ],
         "type": "object",
         "properties": {
@@ -32877,6 +32878,10 @@
           },
           "state": {
             "description": "The OAuth `state`, so the callback can tell this link from a sign-in.",
+            "$ref": "#/components/schemas/String"
+          },
+          "redirectUri": {
+            "description": "The exact redirect URI the authorization request names. A browser that redeems the\r\ncode itself must send this value rather than one it derives from its own configuration.",
             "$ref": "#/components/schemas/String"
           },
           "codeVerifier": {

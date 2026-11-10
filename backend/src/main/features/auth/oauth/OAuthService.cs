@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Text.Json;
 
 using backend.main.application.environment;
+using backend.main.features.auth.oauth.links;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.http;
 
@@ -241,8 +242,8 @@ namespace backend.main.features.auth.oauth
 
         public bool IsProviderConfigured(string provider) => provider switch
         {
-            "google" => _googleClientId != null && _googleClientSecret != null,
-            "microsoft" => _microsoftClientId != null && _microsoftConfigManager != null,
+            IdentityProviders.Google => _googleClientId != null && _googleClientSecret != null,
+            IdentityProviders.Microsoft => _microsoftClientId != null && _microsoftConfigManager != null,
             _ => false,
         };
 

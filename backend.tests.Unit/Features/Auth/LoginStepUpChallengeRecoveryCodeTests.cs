@@ -5,6 +5,7 @@ using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
+using backend.main.features.auth.oauth.links;
 using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.profile;
@@ -56,7 +57,8 @@ public class LoginStepUpChallengeRecoveryCodeTests
             new Mock<ITokenService>().Object,
             TestRequestInfoFactory.Browser(),
             _securityEvents,
-            _recoveryCodes.Object);
+            _recoveryCodes.Object,
+            new Mock<IUserIdentityLinkRepository>().Object);
     }
 
     [Fact]

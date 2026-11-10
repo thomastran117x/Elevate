@@ -19,28 +19,38 @@ namespace backend.main.features.auth.oauth.links
             _context = context;
         }
 
-        public async Task<UserIdentityLink?> FindBySubjectAsync(string provider, string subject)
+        public async Task<UserIdentityLink?> FindBySubjectAsync(
+            string provider,
+            string subject,
+            CancellationToken cancellationToken = default)
         {
             return await _context.UserIdentityLinks
                 .AsNoTracking()
-                .FirstOrDefaultAsync(l => l.Provider == provider && l.Subject == subject);
+                .FirstOrDefaultAsync(l => l.Provider == provider && l.Subject == subject, cancellationToken);
         }
 
-        public async Task<IReadOnlyList<UserIdentityLink>> ListForUserAsync(int userId)
+        public async Task<IReadOnlyList<UserIdentityLink>> ListForUserAsync(
+            int userId,
+            CancellationToken cancellationToken = default)
         {
             return await _context.UserIdentityLinks
                 .AsNoTracking()
                 .Where(l => l.UserId == userId)
                 .OrderBy(l => l.Provider)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
         }
 
-        public async Task<IdentityLinkAddResult> AddAsync(UserIdentityLink link)
+        public async Task<IdentityLinkAddResult> AddAsync(
+            UserIdentityLink link,
+            CancellationToken cancellationToken = default)
         {
+            link.Email = UserIdentityLink.ClampMetadata(link.Email, UserIdentityLink.EmailMaxLength);
+            link.DisplayName = UserIdentityLink.ClampMetadata(link.DisplayName, UserIdentityLink.DisplayNameMaxLength);
+
             try
             {
-                await _context.UserIdentityLinks.AddAsync(link);
-                await _context.SaveChangesAsync();
+                await _context.UserIdentityLinks.AddAsync(link, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
                 return IdentityLinkAddResult.Added;
             }
             catch (DbUpdateException exception) when (ClassifyUniqueViolation(exception) is { } result)
@@ -50,27 +60,36 @@ namespace backend.main.features.auth.oauth.links
             }
         }
 
-        public async Task TouchAsync(int linkId, string? email, string? displayName, DateTime usedAtUtc)
+        public async Task TouchAsync(
+            int linkId,
+            string? email,
+            string? displayName,
+            DateTime usedAtUtc,
+            CancellationToken cancellationToken = default)
         {
             // Blank metadata keeps what was stored: a provider that omits a claim on one sign-in
             // has not reported that the value changed.
-            email = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
-            displayName = string.IsNullOrWhiteSpace(displayName) ? null : displayName.Trim();
+            email = UserIdentityLink.ClampMetadata(email, UserIdentityLink.EmailMaxLength);
+            displayName = UserIdentityLink.ClampMetadata(displayName, UserIdentityLink.DisplayNameMaxLength);
 
             await _context.UserIdentityLinks
                 .Where(l => l.Id == linkId)
                 .ExecuteUpdateAsync(set => set
                     .SetProperty(l => l.LastUsedAtUtc, usedAtUtc)
                     .SetProperty(l => l.Email, l => email ?? l.Email)
-                    .SetProperty(l => l.DisplayName, l => displayName ?? l.DisplayName));
+                    .SetProperty(l => l.DisplayName, l => displayName ?? l.DisplayName),
+                    cancellationToken);
         }
 
-        public async Task<IdentityLinkRemoveResult> RemoveIfAnotherMethodRemainsAsync(int userId, string provider)
+        public async Task<IdentityLinkRemoveResult> RemoveIfAnotherMethodRemainsAsync(
+            int userId,
+            string provider,
+            CancellationToken cancellationToken = default)
         {
             var strategy = _context.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
             {
-                await using var transaction = await _context.Database.BeginTransactionAsync();
+                await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
                 try
                 {
                     // Two removals each counting the other's link as remaining would otherwise
@@ -81,37 +100,46 @@ namespace backend.main.features.auth.oauth.links
                             .FromSqlInterpolated(
                                 $"SELECT * FROM \"Users\" WHERE \"Id\" = {userId} FOR UPDATE")
                             .AsNoTracking()
-                            .SingleOrDefaultAsync();
+                            .SingleOrDefaultAsync(cancellationToken);
                     }
 
                     var links = await _context.UserIdentityLinks
                         .Where(l => l.UserId == userId)
                         .Select(l => new { l.Id, l.Provider })
-                        .ToListAsync();
+                        .ToListAsync(cancellationToken);
                     var target = links.FirstOrDefault(l => l.Provider == provider);
                     if (target == null)
                     {
-                        await transaction.RollbackAsync();
+                        await transaction.RollbackAsync(cancellationToken);
                         return IdentityLinkRemoveResult.NotLinked;
                     }
 
                     var hasPassword = await _context.Users
-                        .AnyAsync(u => u.Id == userId && u.Password != null);
+                        .AnyAsync(u => u.Id == userId && u.Password != null, cancellationToken);
                     if (!hasPassword && links.Count == 1)
                     {
-                        await transaction.RollbackAsync();
+                        await transaction.RollbackAsync(cancellationToken);
                         return IdentityLinkRemoveResult.LastSignInMethod;
                     }
 
                     await _context.UserIdentityLinks
                         .Where(l => l.Id == target.Id)
-                        .ExecuteDeleteAsync();
-                    await transaction.CommitAsync();
+                        .ExecuteDeleteAsync(cancellationToken);
+
+                    // In the same commit as the removal, so nothing the removed provider signed in
+                    // outlives it, not even for the moment before the sessions are swept.
+                    await _context.Users
+                        .Where(u => u.Id == userId)
+                        .ExecuteUpdateAsync(
+                            set => set.SetProperty(u => u.AuthVersion, u => u.AuthVersion + 1),
+                            cancellationToken);
+
+                    await transaction.CommitAsync(cancellationToken);
                     return IdentityLinkRemoveResult.Removed;
                 }
                 catch
                 {
-                    await transaction.RollbackAsync();
+                    await transaction.RollbackAsync(CancellationToken.None);
                     throw;
                 }
             });

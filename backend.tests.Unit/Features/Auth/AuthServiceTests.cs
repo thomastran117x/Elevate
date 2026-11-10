@@ -14,6 +14,7 @@ using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.profile;
+using backend.main.shared.exceptions.app;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.requests;
 
@@ -285,7 +286,7 @@ public class AuthServiceTests
                 It.Is<User>(user => user.Id == 27),
                 SessionTransport.BrowserCookie,
                 false,
-                "/security"))
+                "/security", It.IsAny<ProviderLinkUse?>()))
             .ReturnsAsync(new LoginStepUpChallengeResponse
             {
                 Challenge = "stepup-challenge",
@@ -444,7 +445,7 @@ public class AuthServiceTests
                 It.Is<User>(user => user.Id == 61),
                 SessionTransport.BrowserCookie,
                 false,
-                It.IsAny<string?>()))
+                It.IsAny<string?>(), It.IsAny<ProviderLinkUse?>()))
             .ReturnsAsync(new LoginStepUpChallengeResponse
             {
                 Challenge = "stepup-challenge",
@@ -511,7 +512,7 @@ public class AuthServiceTests
             && pending.Provider == "google"
             && pending.Subject == "google-1"
             && pending.Email == "existing@example.com")), Times.Once);
-        identityLinks.Verify(repository => repository.AddAsync(It.IsAny<UserIdentityLink>()), Times.Never);
+        identityLinks.Verify(repository => repository.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>()), Times.Never);
         authSessionService.Verify(
             s => s.IssueAsync(
                 It.IsAny<backend.main.features.profile.User>(),
@@ -535,6 +536,127 @@ public class AuthServiceTests
     /// also simply the right answer: the caller proved control of that provider identity, and the
     /// other account merely happens to hold an address the provider still remembers.
     /// </remarks>
+    private static Mock<IAuthUserRepository> LinkedGoogleAccount(bool disabled = false)
+    {
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(repository => repository.GetOAuthByProviderSubjectAsync("google", "google-linked"))
+            .ReturnsAsync(new UserOAuthRecord
+            {
+                Id = 61,
+                Email = "linked@example.com",
+                Usertype = "Participant",
+                HasProviderLink = true,
+                LinkId = 5,
+                IsDisabled = disabled,
+                AuthVersion = 1
+            });
+        return userRepository;
+    }
+
+    private static Mock<IOAuthService> LinkedGoogleToken()
+    {
+        var oauthService = new Mock<IOAuthService>();
+        oauthService.Setup(service => service.VerifyGoogleTokenAsync("google-token", null))
+            .ReturnsAsync(new OAuthUser("google-linked", "linked@gmail.com", "Linked Person", "google", emailVerified: true));
+        return oauthService;
+    }
+
+    [Fact]
+    public async Task GoogleAsync_ShouldRecordTheLinkUse_OnceTheSessionIsIssued()
+    {
+        var identityLinks = new Mock<IUserIdentityLinkRepository>();
+        var service = CreateService(
+            userRepository: LinkedGoogleAccount(),
+            identityLinks: identityLinks,
+            oauthService: LinkedGoogleToken(),
+            authSessionService: CreateAuthSessionServiceForUser(new backend.main.features.profile.User
+            {
+                Id = 61,
+                Email = "linked@example.com",
+                Usertype = "Participant",
+            }));
+
+        var result = await service.GoogleAsync("google-token", SessionTransport.BrowserCookie);
+
+        result.UserToken.Should().NotBeNull();
+        identityLinks.Verify(
+            repository => repository.TouchAsync(5, "linked@gmail.com", "Linked Person", It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// A refused sign-in must not read as a use of the link: the owner reviews last-used to spot
+    /// sign-ins they did not make.
+    /// </summary>
+    [Fact]
+    public async Task GoogleAsync_ShouldNotRecordTheLinkUse_ForADisabledAccount()
+    {
+        var identityLinks = new Mock<IUserIdentityLinkRepository>();
+        var service = CreateService(
+            userRepository: LinkedGoogleAccount(disabled: true),
+            identityLinks: identityLinks,
+            oauthService: LinkedGoogleToken());
+
+        var act = () => service.GoogleAsync("google-token", SessionTransport.BrowserCookie);
+
+        await act.Should().ThrowAsync<AppException>();
+        identityLinks.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// A sign-in that stops at step-up has not completed; the use travels with the challenge and
+    /// is recorded only if the challenge completes.
+    /// </summary>
+    [Fact]
+    public async Task GoogleAsync_ShouldDeferTheLinkUseToTheStepUp_WhenOneIsRequired()
+    {
+        using var scope = new TemporaryEnvironmentVariableScope(new Dictionary<string, string?>
+        {
+            ["AUTH_SMS_MFA_ENFORCEMENT_ENABLED"] = "false",
+            ["AUTH_TOTP_MFA_STEP_UP_ENABLED"] = "true"
+        });
+        var totpService = new Mock<ITotpMfaEnrollmentService>();
+        totpService.Setup(service => service.GetEnrollmentAsync(61))
+            .ReturnsAsync(new TotpMfaEnrollment
+            {
+                UserId = 61,
+                EncryptedSecret = "v1:encrypted",
+                IsTotpMfaEnabled = true
+            });
+        var challengeService = new Mock<ILoginStepUpChallengeService>();
+        challengeService.Setup(service => service.CreateChallengeAsync(
+                It.Is<User>(user => user.Id == 61),
+                SessionTransport.BrowserCookie,
+                false,
+                It.IsAny<string?>(),
+                It.IsAny<ProviderLinkUse?>()))
+            .ReturnsAsync(new LoginStepUpChallengeResponse
+            {
+                Challenge = "stepup-challenge",
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(15),
+                AvailableMethods = ["totp", "email"],
+                MaskedEmail = "l***@example.com"
+            });
+        var identityLinks = new Mock<IUserIdentityLinkRepository>();
+        var service = CreateService(
+            userRepository: LinkedGoogleAccount(),
+            identityLinks: identityLinks,
+            oauthService: LinkedGoogleToken(),
+            loginStepUpChallengeService: challengeService,
+            totpMfaEnrollmentService: totpService);
+
+        var result = await service.GoogleAsync("google-token", SessionTransport.BrowserCookie);
+
+        result.Type.Should().Be(AuthFlowResponseTypes.RequiresStepUp);
+        identityLinks.VerifyNoOtherCalls();
+        challengeService.Verify(service => service.CreateChallengeAsync(
+            It.IsAny<User>(),
+            It.IsAny<SessionTransport>(),
+            It.IsAny<bool>(),
+            It.IsAny<string?>(),
+            It.Is<ProviderLinkUse?>(use => use != null && use.LinkId == 5 && use.Email == "linked@gmail.com")), Times.Once);
+    }
+
     [Fact]
     public async Task GoogleAsync_ShouldPreferTheProviderLink_WhenAnotherAccountHoldsThatAddress()
     {
@@ -582,7 +704,7 @@ public class AuthServiceTests
 
         // The account holding the address is left entirely alone.
         identityLinks.Verify(
-            repository => repository.AddAsync(It.Is<UserIdentityLink>(l => l.UserId == 2 && l.Provider == "google" && l.Subject == It.IsAny<string?>())),
+            repository => repository.AddAsync(It.Is<UserIdentityLink>(l => l.UserId == 2 && l.Provider == "google" && l.Subject == It.IsAny<string?>()), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -630,7 +752,7 @@ public class AuthServiceTests
         await act.Should().ThrowAsync<ConflictException>()
             .WithMessage("This email address belongs to an account that signs in with a different Google or Microsoft account.");
         identityLinks.Verify(
-            repository => repository.AddAsync(It.IsAny<UserIdentityLink>()),
+            repository => repository.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>()),
             Times.Never);
         authSessionService.Verify(
             s => s.IssueAsync(
@@ -679,7 +801,7 @@ public class AuthServiceTests
         await act.Should().ThrowAsync<ConflictException>()
             .WithMessage("This email address belongs to an account that signs in with a different Google or Microsoft account.");
         identityLinks.Verify(
-            repository => repository.AddAsync(It.IsAny<UserIdentityLink>()),
+            repository => repository.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>()),
             Times.Never);
         authSessionService.Verify(
             s => s.IssueAsync(
@@ -737,7 +859,7 @@ public class AuthServiceTests
 
         await act.Should().ThrowAsync<ConflictException>();
         identityLinks.Verify(
-            repository => repository.AddAsync(It.IsAny<UserIdentityLink>()),
+            repository => repository.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>()),
             Times.Never);
         authSessionService.Verify(
             s => s.IssueAsync(
@@ -1101,7 +1223,7 @@ public class AuthServiceTests
         error.Which.StatusCode.Should().Be(409);
         error.Which.ErrorCode.Should().Be(MicrosoftEmailUnverifiedException.Code);
         identityLinks.Verify(
-            repository => repository.AddAsync(It.IsAny<UserIdentityLink>()),
+            repository => repository.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>()),
             Times.Never);
         authSessionService.Verify(
             s => s.IssueAsync(
@@ -1150,7 +1272,7 @@ public class AuthServiceTests
         result.LinkConfirmation.Provider.Should().Be("microsoft");
         linkStates.Verify(store => store.CreatePendingEmailLinkAsync(It.Is<PendingEmailLink>(pending =>
             pending.UserId == 9 && pending.Provider == "microsoft" && pending.Subject == "ms-owner")), Times.Once);
-        identityLinks.Verify(repository => repository.AddAsync(It.IsAny<UserIdentityLink>()), Times.Never);
+        identityLinks.Verify(repository => repository.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>()), Times.Never);
         authSessionService.Verify(
             s => s.IssueAsync(
                 It.IsAny<backend.main.features.profile.User>(),
@@ -1519,7 +1641,7 @@ public class AuthServiceTests
             repository => repository.CreateUserAsync(It.IsAny<backend.main.features.profile.User>(), It.IsAny<UserIdentityLink?>()),
             Times.Never);
         identityLinks.Verify(
-            repository => repository.AddAsync(It.IsAny<UserIdentityLink>()),
+            repository => repository.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>()),
             Times.Never);
         authSessionService.Verify(
             s => s.IssueAsync(
@@ -1589,8 +1711,13 @@ public class AuthServiceTests
         else
             await act.Should().ThrowAsync<MicrosoftEmailUnverifiedException>();
 
+        // Nobody could receive a proposal from here, so none is written.
+        linkStates.Verify(
+            store => store.CreatePendingEmailLinkAsync(It.IsAny<PendingEmailLink>()),
+            Times.Never);
+
         identityLinks.Verify(
-            repository => repository.AddAsync(It.IsAny<UserIdentityLink>()),
+            repository => repository.AddAsync(It.IsAny<UserIdentityLink>(), It.IsAny<CancellationToken>()),
             Times.Never);
         userRepository.Verify(
             repository => repository.CreateUserAsync(It.IsAny<backend.main.features.profile.User>(), It.IsAny<UserIdentityLink?>()),

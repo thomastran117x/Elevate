@@ -839,19 +839,19 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<UserIdentityLink>()
                 .Property(l => l.Provider)
-                .HasMaxLength(32);
+                .HasMaxLength(UserIdentityLink.ProviderMaxLength);
 
             modelBuilder.Entity<UserIdentityLink>()
                 .Property(l => l.Subject)
-                .HasMaxLength(255);
+                .HasMaxLength(UserIdentityLink.SubjectMaxLength);
 
             modelBuilder.Entity<UserIdentityLink>()
                 .Property(l => l.Email)
-                .HasMaxLength(320);
+                .HasMaxLength(UserIdentityLink.EmailMaxLength);
 
             modelBuilder.Entity<UserIdentityLink>()
                 .Property(l => l.DisplayName)
-                .HasMaxLength(255);
+                .HasMaxLength(UserIdentityLink.DisplayNameMaxLength);
 
             // A provider subject maps to at most one account: email never stands in for it.
             modelBuilder.Entity<UserIdentityLink>()

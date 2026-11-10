@@ -604,7 +604,10 @@ namespace backend.main.features.auth
                 if (oauthUser == null)
                     throw ProviderRejected(AuthSecurityMethod.Google, "Invalid Google Token");
 
-                var resolution = await ResolveProviderUserAsync(oauthUser, AuthSecurityMethod.Google);
+                var resolution = await ResolveProviderUserAsync(
+                    oauthUser,
+                    AuthSecurityMethod.Google,
+                    proposeEmailLink: true);
                 if (resolution.LinkConfirmation != null)
                     return OAuthAuthenticationResult.LinkConfirmationRequired(resolution.LinkConfirmation);
 
@@ -622,7 +625,8 @@ namespace backend.main.features.auth
                 return await ResolvePostAuthOutcomeAsync(
                     user, AuthSecurityMethod.Google, transport, rememberMe: false, returnUrl,
                     OAuthAuthenticationResult.Authenticated,
-                    OAuthAuthenticationResult.RequiresStepUp
+                    OAuthAuthenticationResult.RequiresStepUp,
+                    resolution.LinkUse
                 );
             }
             catch (Exception e)
@@ -676,7 +680,10 @@ namespace backend.main.features.auth
                 if (oauthUser == null)
                     throw ProviderRejected(AuthSecurityMethod.Microsoft, "Invalid Microsoft Token");
 
-                var resolution = await ResolveProviderUserAsync(oauthUser, AuthSecurityMethod.Microsoft);
+                var resolution = await ResolveProviderUserAsync(
+                    oauthUser,
+                    AuthSecurityMethod.Microsoft,
+                    proposeEmailLink: true);
                 if (resolution.LinkConfirmation != null)
                     return OAuthAuthenticationResult.LinkConfirmationRequired(resolution.LinkConfirmation);
 
@@ -694,7 +701,8 @@ namespace backend.main.features.auth
                 return await ResolvePostAuthOutcomeAsync(
                     user, AuthSecurityMethod.Microsoft, transport, rememberMe: false, returnUrl,
                     OAuthAuthenticationResult.Authenticated,
-                    OAuthAuthenticationResult.RequiresStepUp
+                    OAuthAuthenticationResult.RequiresStepUp,
+                    resolution.LinkUse
                 );
             }
             catch (Exception e)
@@ -735,13 +743,12 @@ namespace backend.main.features.auth
                 if (pending.Provider is not (IdentityProviders.Google or IdentityProviders.Microsoft))
                     throw new BadRequestException("Unsupported OAuth provider.");
 
-                var resolution = await ResolveProviderUserAsync(oauthUser, ProviderMethod(pending.Provider));
-
-                // An account took this address between the sign-in and now. It is not linked from
-                // here: the owner signs in to it and confirms, as at sign-in.
-                if (resolution.LinkConfirmation != null)
-                    throw new ConflictException(
-                        "An account already uses this email address. Sign in to it, then link this provider from your security settings.");
+                // An account that took this address between the sign-in and now is not linked
+                // from here, and no link is proposed for it: the owner signs in and links it.
+                var resolution = await ResolveProviderUserAsync(
+                    oauthUser,
+                    ProviderMethod(pending.Provider),
+                    proposeEmailLink: false);
 
                 var user = resolution.User;
 
@@ -776,10 +783,12 @@ namespace backend.main.features.auth
                 }
 
                 await _cacheService.DeleteKeyAsync(PendingOAuthSignupKey(signupToken));
-                return _securityEvents.SignedIn(
+                var session = _securityEvents.SignedIn(
                     await _authSessionService.IssueAsync(user, transport),
                     ProviderMethod(pending.Provider),
                     AuthSecurityFlow.OAuthCompletion);
+                await RecordProviderLinkUseAsync(resolution.LinkUse);
+                return session;
             }
             catch (Exception e)
             {
@@ -1086,37 +1095,54 @@ namespace backend.main.features.auth
         /// someone else the two lookups disagree permanently — comparing them here would lock the
         /// original account out of the only sign-in method it may have.
         /// </remarks>
+        /// <param name="proposeEmailLink">
+        /// Whether a verified email match on an unlinked account may propose a link. Only an
+        /// interactive sign-in can deliver the proposal to its owner; elsewhere the match is a 409.
+        /// </param>
         private async Task<ProviderUserResolution> ResolveProviderUserAsync(
             OAuthUser oauthUser,
-            AuthSecurityMethod method)
+            AuthSecurityMethod method,
+            bool proposeEmailLink)
         {
             var providerUser = await _userRepository.GetOAuthByProviderSubjectAsync(
                 oauthUser.Provider,
                 oauthUser.Id);
             if (providerUser != null)
             {
-                await TouchIdentityLinkAsync(providerUser, oauthUser);
-                return new ProviderUserResolution(ToUser(providerUser), null);
+                // Recorded on the link only once the sign-in completes, never here: a disabled
+                // account or an abandoned step-up must not look like a use to the owner.
+                var use = providerUser.LinkId is { } linkId
+                    ? new ProviderLinkUse(linkId, oauthUser.Email, oauthUser.Name)
+                    : null;
+                return new ProviderUserResolution(ToUser(providerUser), null, use);
             }
 
             // Without a linked subject the address is all there is to go on, so a token that
             // reports none cannot sign in or sign up.
             if (string.IsNullOrWhiteSpace(oauthUser.Email))
-                throw ProviderRejected(method, $"Missing {ProviderDisplayName(method)} email claim");
+                throw ProviderRejected(
+                    method,
+                    $"Missing {IdentityProviders.DisplayName(oauthUser.Provider)} email claim");
 
             // An unverified address can still start a new account. That signs no one into an
             // existing account, though the new account holds an address nobody has proven.
             var emailUser = await _userRepository.GetOAuthByEmailAsync(oauthUser.Email);
             if (emailUser == null)
-                return new ProviderUserResolution(null, null);
+                return new ProviderUserResolution(null, null, null);
 
             EnsureEmailFallbackAllowed(emailUser, method);
             EnsureEmailVerifiedForLinking(emailUser, oauthUser, method);
 
+            if (!proposeEmailLink)
+            {
+                throw new ConflictException(
+                    "An account already uses this email address. Sign in to it, then link this provider from your security settings.");
+            }
+
             // A verified address proves the caller controls the account's inbox, but not that they
             // mean to attach this provider to it. Nothing is linked or signed in here: the owner
             // signs in to the account as usual and confirms the link from there.
-            return new ProviderUserResolution(null, await ProposeEmailLinkAsync(emailUser, oauthUser));
+            return new ProviderUserResolution(null, await ProposeEmailLinkAsync(emailUser, oauthUser), null);
         }
 
         private async Task<PendingProviderLinkChallenge> ProposeEmailLinkAsync(
@@ -1131,7 +1157,7 @@ namespace backend.main.features.auth
                 Provider = oauthUser.Provider,
                 Subject = oauthUser.Id,
                 Email = email,
-                Name = string.IsNullOrWhiteSpace(oauthUser.Name) ? null : oauthUser.Name,
+                Name = UserIdentityLink.ClampMetadata(oauthUser.Name, UserIdentityLink.DisplayNameMaxLength),
                 CreatedAtUtc = now,
             });
 
@@ -1146,7 +1172,8 @@ namespace backend.main.features.auth
 
         private sealed record ProviderUserResolution(
             User? User,
-            PendingProviderLinkChallenge? LinkConfirmation);
+            PendingProviderLinkChallenge? LinkConfirmation,
+            ProviderLinkUse? LinkUse);
 
         /// <summary>
         /// Refuses to link by email unless the provider proved the caller controls the address.
@@ -1175,34 +1202,31 @@ namespace backend.main.features.auth
             {
                 Provider = oauthUser.Provider,
                 Subject = oauthUser.Id,
-                Email = string.IsNullOrWhiteSpace(oauthUser.Email) ? null : oauthUser.Email,
-                DisplayName = string.IsNullOrWhiteSpace(oauthUser.Name) ? null : oauthUser.Name,
+                Email = UserIdentityLink.ClampMetadata(oauthUser.Email, UserIdentityLink.EmailMaxLength),
+                DisplayName = UserIdentityLink.ClampMetadata(oauthUser.Name, UserIdentityLink.DisplayNameMaxLength),
                 LinkedAtUtc = now,
                 LastUsedAtUtc = now,
             };
         }
 
         /// <summary>
-        /// Records the sign-in on the link. Best effort: last-used is shown to the owner, but
-        /// failing to record it must not fail a sign-in that has otherwise succeeded.
+        /// Records a completed sign-in on its link. Best effort: last-used is shown to the owner,
+        /// but failing to record it must not fail a sign-in that has otherwise succeeded.
         /// </summary>
-        private async Task TouchIdentityLinkAsync(UserOAuthRecord providerUser, OAuthUser oauthUser)
+        private async Task RecordProviderLinkUseAsync(ProviderLinkUse? use)
         {
-            if (providerUser.LinkId is not { } linkId)
+            if (use == null)
                 return;
 
             try
             {
-                await _identityLinks.TouchAsync(linkId, oauthUser.Email, oauthUser.Name, DateTime.UtcNow);
+                await _identityLinks.TouchAsync(use.LinkId, use.Email, use.DisplayName, DateTime.UtcNow);
             }
             catch (Exception e)
             {
                 Logger.Warn($"[AuthService] Recording provider link use failed: {e.Message}");
             }
         }
-
-        private static string ProviderDisplayName(AuthSecurityMethod method) =>
-            method == AuthSecurityMethod.Microsoft ? "Microsoft" : "Google";
 
         /// <summary>
         /// Refuses to sign in to an account by email match once it has any provider link.
@@ -1305,30 +1329,21 @@ namespace backend.main.features.auth
             bool rememberMe,
             string? returnUrl,
             Func<AuthenticatedSessionResult, T> onAuthenticated,
-            Func<LoginStepUpChallengeResponse, T> onStepUp
+            Func<LoginStepUpChallengeResponse, T> onStepUp,
+            ProviderLinkUse? providerLinkUse = null
         )
         {
             // Dev/test-only: seed accounts skip the MFA step-up challenge entirely.
             if (_seedBypass.IsBypassEnabledFor(user.Email))
             {
-                return onAuthenticated(new AuthenticatedSessionResult
-                {
-                    UserToken = _securityEvents.SignedIn(
-                        await _authSessionService.IssueAsync(user, transport, rememberMe: rememberMe),
-                        method,
-                        AuthSecurityFlow.Login)
-                });
+                return onAuthenticated(
+                    await IssueSignedInAsync(user, method, transport, rememberMe, providerLinkUse));
             }
 
             if (await _deviceTrustService.IsTrustedAsync(user.Id, _requestInfo))
             {
-                return onAuthenticated(new AuthenticatedSessionResult
-                {
-                    UserToken = _securityEvents.SignedIn(
-                        await _authSessionService.IssueAsync(user, transport, rememberMe: rememberMe),
-                        method,
-                        AuthSecurityFlow.Login)
-                });
+                return onAuthenticated(
+                    await IssueSignedInAsync(user, method, transport, rememberMe, providerLinkUse));
             }
 
             var shouldRequireTotpStepUp = false;
@@ -1349,18 +1364,38 @@ namespace backend.main.features.auth
                     throw;
                 }
 
-                return onAuthenticated(new AuthenticatedSessionResult
-                {
-                    UserToken = _securityEvents.SignedIn(
-                        await _authSessionService.IssueAsync(user, transport, rememberMe: rememberMe),
-                        method,
-                        AuthSecurityFlow.Login)
-                });
+                return onAuthenticated(
+                    await IssueSignedInAsync(user, method, transport, rememberMe, providerLinkUse));
             }
 
-            var stepUp = await _loginStepUpChallengeService.CreateChallengeAsync(user, transport, rememberMe, returnUrl);
+            // A provider sign-in that needs step-up is recorded on its link when the step-up
+            // completes, not now.
+            var stepUp = await _loginStepUpChallengeService.CreateChallengeAsync(
+                user,
+                transport,
+                rememberMe,
+                returnUrl,
+                providerLinkUse);
             EmitChallenged(user, method, AuthSecurityReason.StepUpRequired);
             return onStepUp(stepUp);
+        }
+
+        private async Task<AuthenticatedSessionResult> IssueSignedInAsync(
+            User user,
+            AuthSecurityMethod method,
+            SessionTransport transport,
+            bool rememberMe,
+            ProviderLinkUse? providerLinkUse)
+        {
+            var result = new AuthenticatedSessionResult
+            {
+                UserToken = _securityEvents.SignedIn(
+                    await _authSessionService.IssueAsync(user, transport, rememberMe: rememberMe),
+                    method,
+                    AuthSecurityFlow.Login)
+            };
+            await RecordProviderLinkUseAsync(providerLinkUse);
+            return result;
         }
 
         private void EmitChallenged(User user, AuthSecurityMethod method, AuthSecurityReason reason) =>
@@ -1443,7 +1478,7 @@ namespace backend.main.features.auth
             });
 
         private static AuthSecurityMethod ProviderMethod(string provider) =>
-            provider == "google" ? AuthSecurityMethod.Google : AuthSecurityMethod.Microsoft;
+            IdentityProviders.ToSecurityMethod(provider);
 
         /// <remarks>
         /// The reason says whether anything was sent, which the response deliberately hides. It is

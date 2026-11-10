@@ -2,7 +2,9 @@ using System.Security.Cryptography;
 using System.Text;
 
 using backend.main.features.auth.events;
+using backend.main.features.auth.token;
 using backend.main.features.cache;
+using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.utilities.logger;
 
@@ -18,6 +20,7 @@ namespace backend.main.features.auth.oauth.links
         private readonly IReadOnlyDictionary<string, IProviderLinkFlow> _flows;
         private readonly IRefreshAheadCache _refreshCache;
         private readonly IAuthSecurityEventEmitter _securityEvents;
+        private readonly ITokenService _tokenService;
         private readonly TimeProvider _timeProvider;
 
         public ProviderLinkService(
@@ -27,6 +30,7 @@ namespace backend.main.features.auth.oauth.links
             IEnumerable<IProviderLinkFlow> flows,
             IRefreshAheadCache refreshCache,
             IAuthSecurityEventEmitter securityEvents,
+            ITokenService tokenService,
             TimeProvider timeProvider)
         {
             _links = links;
@@ -35,12 +39,15 @@ namespace backend.main.features.auth.oauth.links
             _flows = flows.ToDictionary(flow => flow.Provider, StringComparer.Ordinal);
             _refreshCache = refreshCache;
             _securityEvents = securityEvents;
+            _tokenService = tokenService;
             _timeProvider = timeProvider;
         }
 
-        public async Task<ProviderLinkOverview> GetOverviewAsync(int userId)
+        public async Task<ProviderLinkOverview> GetOverviewAsync(
+            int userId,
+            CancellationToken cancellationToken = default)
         {
-            var links = await _links.ListForUserAsync(userId);
+            var links = await _links.ListForUserAsync(userId, cancellationToken);
             var hasPassword = (await _users.GetAuthByIdAsync(userId))?.Password != null;
 
             var providers = IdentityProviders.Linkable
@@ -59,18 +66,22 @@ namespace backend.main.features.auth.oauth.links
             return new ProviderLinkOverview(hasPassword, providers);
         }
 
-        public async Task<ProviderLinkStart> StartAsync(ProviderLinkSession session, string provider)
+        public async Task<ProviderLinkStart> StartAsync(
+            ProviderLinkSession session,
+            string provider,
+            CancellationToken cancellationToken = default)
         {
             var flow = RequireAvailableFlow(provider);
 
             // Refused up front rather than after the provider round trip: the account must unlink
             // its current identity for this provider before it can link another.
-            var links = await _links.ListForUserAsync(session.UserId);
+            var links = await _links.ListForUserAsync(session.UserId, cancellationToken);
             if (links.Any(l => l.Provider == flow.Provider))
                 throw ProviderLinkConflictException.AlreadyConnected();
 
             var nonce = RandomToken();
             var codeVerifier = RandomToken();
+            var redirectUri = flow.RedirectUri;
             var state = await _states.CreateLinkStateAsync(new ProviderLinkState
             {
                 Provider = flow.Provider,
@@ -79,13 +90,14 @@ namespace backend.main.features.auth.oauth.links
                 AuthVersion = session.AuthVersion,
                 Nonce = nonce,
                 CodeVerifier = codeVerifier,
-                RedirectUri = flow.RedirectUri,
+                RedirectUri = redirectUri,
                 CreatedAtUtc = UtcNow,
             });
 
             return new ProviderLinkStart(
                 flow.BuildAuthorizationUrl(state, nonce, CodeChallenge(codeVerifier)),
                 state,
+                redirectUri,
                 flow.BrowserRedeemsCode ? codeVerifier : null);
         }
 
@@ -94,7 +106,8 @@ namespace backend.main.features.auth.oauth.links
             string provider,
             string state,
             string? code,
-            string? idToken)
+            string? idToken,
+            CancellationToken cancellationToken = default)
         {
             var flow = RequireAvailableFlow(provider);
 
@@ -125,16 +138,20 @@ namespace backend.main.features.auth.oauth.links
             // the client as a 401 its interceptors would answer by refreshing or signing out.
             catch (UnauthorizedException)
             {
-                throw new BadRequestException($"{ProviderLabel(flow.Provider)} did not confirm the account. Try again.");
+                throw new BadRequestException(
+                    $"{IdentityProviders.DisplayName(flow.Provider)} did not confirm the account. Try again.");
             }
 
             if (identity.Provider != flow.Provider)
                 throw new BadRequestException("The provider response did not match the link request.");
 
-            return await LinkAsync(session.UserId, identity, AuthSecurityFlow.ProviderLink);
+            return await LinkAsync(session.UserId, identity, AuthSecurityFlow.ProviderLink, cancellationToken);
         }
 
-        public async Task<UserIdentityLink> ConfirmEmailLinkAsync(int userId, string linkToken)
+        public async Task<UserIdentityLink> ConfirmEmailLinkAsync(
+            int userId,
+            string linkToken,
+            CancellationToken cancellationToken = default)
         {
             var pending = await _states.ConsumePendingEmailLinkAsync(linkToken)
                 ?? throw new ProviderLinkExpiredException();
@@ -154,36 +171,47 @@ namespace backend.main.features.auth.oauth.links
                 pending.Provider,
                 emailVerified: true);
 
-            return await LinkAsync(userId, identity, AuthSecurityFlow.ProviderLinkConfirmation);
+            return await LinkAsync(userId, identity, AuthSecurityFlow.ProviderLinkConfirmation, cancellationToken);
         }
 
-        public async Task UnlinkAsync(int userId, string provider)
+        public async Task UnlinkAsync(int userId, string provider, CancellationToken cancellationToken = default)
         {
             if (!IdentityProviders.TryParseLinkable(provider, out var name))
                 throw new ResourceNotFoundException("That sign-in provider is not supported.");
 
-            switch (await _links.RemoveIfAnotherMethodRemainsAsync(userId, name))
+            switch (await _links.RemoveIfAnotherMethodRemainsAsync(userId, name, cancellationToken))
             {
                 case IdentityLinkRemoveResult.NotLinked:
-                    throw new ResourceNotFoundException($"{ProviderLabel(name)} is not linked to your account.");
+                    throw new ResourceNotFoundException(
+                        $"{IdentityProviders.DisplayName(name)} is not linked to your account.");
                 case IdentityLinkRemoveResult.LastSignInMethod:
                     throw ProviderLinkConflictException.LastSignInMethod();
             }
 
-            await AfterLinksChangedAsync(userId);
             _securityEvents.Emit(new AuthSecurityEvent
             {
                 Definition = AuthSecurityEvents.ProviderUnlinked,
                 Outcome = AuthSecurityOutcome.Succeeded,
-                Method = SecurityMethod(name),
+                Method = IdentityProviders.ToSecurityMethod(name),
                 Flow = AuthSecurityFlow.ProviderUnlink,
                 UserId = userId,
             });
+
+            // The removal already bumped AuthVersion, so no session from before it can refresh.
+            // Sweeping them also ends them now rather than when their access tokens expire, and
+            // records the revocation in the owner's history. Deliberately not tied to the request:
+            // the removal has committed, and the sweep must finish even if the caller goes away.
+            await _tokenService.RevokeAllRefreshSessionsAsync(userId, AuthSecurityReason.ProviderUnlinked);
+            await AfterLinksChangedAsync(userId);
         }
 
-        private async Task<UserIdentityLink> LinkAsync(int userId, OAuthUser identity, AuthSecurityFlow flow)
+        private async Task<UserIdentityLink> LinkAsync(
+            int userId,
+            OAuthUser identity,
+            AuthSecurityFlow flow,
+            CancellationToken cancellationToken)
         {
-            var existing = await _links.FindBySubjectAsync(identity.Provider, identity.Id);
+            var existing = await _links.FindBySubjectAsync(identity.Provider, identity.Id, cancellationToken);
             if (existing != null)
             {
                 if (existing.UserId == userId)
@@ -198,18 +226,18 @@ namespace backend.main.features.auth.oauth.links
                 UserId = userId,
                 Provider = identity.Provider,
                 Subject = identity.Id,
-                Email = string.IsNullOrWhiteSpace(identity.Email) ? null : identity.Email,
-                DisplayName = string.IsNullOrWhiteSpace(identity.Name) ? null : identity.Name,
+                Email = UserIdentityLink.ClampMetadata(identity.Email, UserIdentityLink.EmailMaxLength),
+                DisplayName = UserIdentityLink.ClampMetadata(identity.Name, UserIdentityLink.DisplayNameMaxLength),
                 LinkedAtUtc = now,
                 LastUsedAtUtc = null,
             };
 
-            switch (await _links.AddAsync(link))
+            switch (await _links.AddAsync(link, cancellationToken))
             {
                 case IdentityLinkAddResult.SubjectTaken:
                     // Lost a race to a concurrent link of the same identity. If the winner was
                     // this account, the outcome the caller asked for already holds.
-                    var winner = await _links.FindBySubjectAsync(identity.Provider, identity.Id);
+                    var winner = await _links.FindBySubjectAsync(identity.Provider, identity.Id, cancellationToken);
                     if (winner?.UserId == userId)
                         return winner;
 
@@ -224,7 +252,7 @@ namespace backend.main.features.auth.oauth.links
             {
                 Definition = AuthSecurityEvents.ProviderLinked,
                 Outcome = AuthSecurityOutcome.Succeeded,
-                Method = SecurityMethod(identity.Provider),
+                Method = IdentityProviders.ToSecurityMethod(identity.Provider),
                 Flow = flow,
                 UserId = userId,
             });
@@ -239,7 +267,7 @@ namespace backend.main.features.auth.oauth.links
                 Definition = AuthSecurityEvents.ProviderLinkConflict,
                 Outcome = AuthSecurityOutcome.Denied,
                 Reason = reason,
-                Method = SecurityMethod(provider),
+                Method = IdentityProviders.ToSecurityMethod(provider),
                 UserId = userId,
             });
 
@@ -269,8 +297,7 @@ namespace backend.main.features.auth.oauth.links
 
             try
             {
-                // Same key UserService caches the profile under.
-                await _refreshCache.RemoveAsync($"user:{userId}");
+                await _refreshCache.RemoveAsync(UserCacheKeys.For(userId));
             }
             catch (Exception e)
             {
@@ -287,7 +314,7 @@ namespace backend.main.features.auth.oauth.links
             }
 
             if (!flow.IsAvailable)
-                throw new NotAvailableException($"{ProviderLabel(name)} sign-in is not available.");
+                throw new NotAvailableException($"{IdentityProviders.DisplayName(name)} sign-in is not available.");
 
             return flow;
         }
@@ -300,11 +327,6 @@ namespace backend.main.features.auth.oauth.links
         private static string CodeChallenge(string codeVerifier) =>
             WebEncoders.Base64UrlEncode(SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier)));
 
-        private static AuthSecurityMethod SecurityMethod(string provider) =>
-            provider == IdentityProviders.Microsoft ? AuthSecurityMethod.Microsoft : AuthSecurityMethod.Google;
-
-        private static string ProviderLabel(string provider) =>
-            provider == IdentityProviders.Microsoft ? "Microsoft" : "Google";
     }
 
     /// <summary>Which sign-in methods an account keeps when one provider link is removed.</summary>

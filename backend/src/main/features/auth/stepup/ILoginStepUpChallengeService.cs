@@ -1,4 +1,5 @@
 using backend.main.features.auth.contracts.responses;
+using backend.main.features.auth.oauth.links;
 using backend.main.features.auth.token;
 using backend.main.features.profile;
 
@@ -10,7 +11,8 @@ namespace backend.main.features.auth.stepup
             User user,
             SessionTransport transport,
             bool rememberMe,
-            string? returnUrl
+            string? returnUrl,
+            ProviderLinkUse? providerLinkUse = null
         );
         Task<StartLoginStepUpResponse> StartAsync(string challenge, string method);
         Task<AuthenticatedSessionResult> VerifySmsAsync(string challenge, string code);

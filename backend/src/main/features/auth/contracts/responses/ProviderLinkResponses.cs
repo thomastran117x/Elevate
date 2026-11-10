@@ -102,6 +102,16 @@ namespace backend.main.features.auth.contracts.responses
         }
 
         /// <summary>
+        /// The exact redirect URI the authorization request names. A browser that redeems the
+        /// code itself must send this value rather than one it derives from its own configuration.
+        /// </summary>
+        [JsonPropertyName("redirectUri")]
+        public required string RedirectUri
+        {
+            get; set;
+        }
+
+        /// <summary>
         /// The PKCE verifier, only for a provider whose code the browser redeems (Microsoft). Null
         /// for Google, whose verifier never leaves the server.
         /// </summary>

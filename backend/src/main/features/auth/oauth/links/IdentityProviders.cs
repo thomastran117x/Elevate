@@ -1,3 +1,5 @@
+using backend.main.features.auth.events;
+
 namespace backend.main.features.auth.oauth.links
 {
     /// <summary>
@@ -37,5 +39,25 @@ namespace backend.main.features.auth.oauth.links
 
             return false;
         }
+
+        /// <summary>The provider's name as users see it.</summary>
+        public static string DisplayName(string provider) => provider switch
+        {
+            Google => "Google",
+            Microsoft => "Microsoft",
+            Apple => "Apple",
+            _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, "Unknown identity provider."),
+        };
+
+        /// <summary>
+        /// The security-event method for a provider. An unknown name is a programming error, never
+        /// silently reported as another provider.
+        /// </summary>
+        public static AuthSecurityMethod ToSecurityMethod(string provider) => provider switch
+        {
+            Google => AuthSecurityMethod.Google,
+            Microsoft => AuthSecurityMethod.Microsoft,
+            _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, "Unknown identity provider."),
+        };
     }
 }
