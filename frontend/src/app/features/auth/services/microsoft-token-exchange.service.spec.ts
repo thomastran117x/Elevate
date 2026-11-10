@@ -37,13 +37,17 @@ describe('MicrosoftTokenExchangeService', () => {
     expect(body.get('scope')).toBe(MICROSOFT_SIGN_IN_SCOPE);
   });
 
-  it('asks for the scope it is given', async () => {
+  it('asks for the scope and redirect it is given', async () => {
     respond(200, JSON.stringify({ id_token: 'id-token' }));
 
-    await service.exchange('code', 'verifier', 'openid profile email');
+    await service.exchange('code', 'verifier', {
+      scope: 'openid profile email',
+      redirectUri: 'https://issued.example/auth/microsoft',
+    });
 
     const body = new URLSearchParams(fetchSpy.calls.mostRecent().args[1]!.body as string);
     expect(body.get('scope')).toBe('openid profile email');
+    expect(body.get('redirect_uri')).toBe('https://issued.example/auth/microsoft');
   });
 
   it('reports a refused code with the fallback message', async () => {

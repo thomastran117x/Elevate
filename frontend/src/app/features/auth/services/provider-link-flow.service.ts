@@ -8,6 +8,7 @@ import {
 } from '../../../core/api/models/api-client-error.model';
 import { AuthTokenService } from '../../../core/api/services/auth-token.service';
 import { SessionManagerService } from '../../../core/services/session-manager.service';
+import { AuthReturnUrlService } from './auth-return-url.service';
 import { MicrosoftTokenExchangeService } from './microsoft-token-exchange.service';
 import {
   isLinkableProvider,
@@ -65,6 +66,7 @@ export const PROVIDER_LINK_OUTCOMES: readonly ProviderLinkOutcome[] = [
 interface PendingProviderLink {
   provider: LinkableProvider;
   state: string;
+  redirectUri: string | null;
   codeVerifier: string | null;
   startedAt: number;
 }
@@ -80,6 +82,7 @@ export class ProviderLinkFlowService {
   private readonly microsoftExchange = inject(MicrosoftTokenExchangeService);
   private readonly session = inject(SessionManagerService);
   private readonly authToken = inject(AuthTokenService);
+  private readonly authReturnUrl = inject(AuthReturnUrlService);
   private readonly injector = inject(Injector);
 
   /** Asks the server to start a link, then sends the browser to the provider. */
@@ -89,6 +92,7 @@ export class ProviderLinkFlowService {
         write(PendingProviderLinkStorageKey, {
           provider,
           state: start.state,
+          redirectUri: start.redirectUri,
           codeVerifier: start.codeVerifier,
           startedAt: Date.now(),
         } satisfies PendingProviderLink);
@@ -133,14 +137,15 @@ export class ProviderLinkFlowService {
 
     try {
       if (provider === 'microsoft') {
-        if (!pending.codeVerifier) {
+        if (!pending.codeVerifier || !pending.redirectUri) {
           return resultUrl('failed', provider);
         }
-        const idToken = await this.microsoftExchange.exchange(
-          code,
-          pending.codeVerifier,
-          MICROSOFT_LINK_SCOPE,
-        );
+        // Redeemed with the redirect the server put in the authorization request, never one
+        // rebuilt from this app's configuration, which Microsoft would refuse on any mismatch.
+        const idToken = await this.microsoftExchange.exchange(code, pending.codeVerifier, {
+          scope: MICROSOFT_LINK_SCOPE,
+          redirectUri: pending.redirectUri,
+        });
         await firstValueFrom(this.providerLinks.completeLink(provider, { state, idToken }));
       } else {
         await firstValueFrom(this.providerLinks.completeLink(provider, { state, code }));
@@ -151,8 +156,28 @@ export class ProviderLinkFlowService {
     }
   }
 
-  storeEmailProposal(proposal: PendingEmailLinkProposal): void {
-    write(PendingEmailLinkStorageKey, proposal);
+  /**
+   * Keeps a proposal for its owner and sends the next sign-in to the page that confirms it.
+   * Where the user was headed is kept with the proposal, so declining it restores that.
+   */
+  proposeEmailLink(proposal: PendingEmailLinkProposal): void {
+    const returnUrl = attempt(() => this.authReturnUrl.peek());
+    write(PendingEmailLinkStorageKey, { ...proposal, returnUrl });
+    attempt(() => this.authReturnUrl.set(PROVIDER_LINK_RETURN_PATH));
+  }
+
+  /** Forgets the proposal before signing in, and restores where the user was headed. */
+  declineEmailProposal(): void {
+    const stored = read(PendingEmailLinkStorageKey);
+    const returnUrl = typeof stored?.['returnUrl'] === 'string' ? stored['returnUrl'] : null;
+    remove(PendingEmailLinkStorageKey);
+
+    attempt(() => {
+      if (this.authReturnUrl.peek() === PROVIDER_LINK_RETURN_PATH) {
+        this.authReturnUrl.consume();
+      }
+      this.authReturnUrl.set(returnUrl);
+    });
   }
 
   /** The proposal still waiting for its owner, or null once it expired or was used. */
@@ -205,6 +230,7 @@ export class ProviderLinkFlowService {
     return {
       provider: value['provider'],
       state: value['state'],
+      redirectUri: typeof value['redirectUri'] === 'string' ? value['redirectUri'] : null,
       codeVerifier: typeof value['codeVerifier'] === 'string' ? value['codeVerifier'] : null,
       startedAt: value['startedAt'],
     };
@@ -240,6 +266,15 @@ function resultUrl(outcome: ProviderLinkOutcome, provider: LinkableProvider): st
     [PROVIDER_LINK_PROVIDER_PARAM]: provider,
   });
   return `${PROVIDER_LINK_RETURN_PATH}?${query.toString()}`;
+}
+
+/** Runs a storage-backed step that a blocked storage (a private window) may refuse. */
+function attempt<T>(step: () => T): T | null {
+  try {
+    return step();
+  } catch {
+    return null;
+  }
 }
 
 function read(key: string): Record<string, unknown> | null {

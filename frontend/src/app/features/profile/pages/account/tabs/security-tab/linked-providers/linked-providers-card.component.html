@@ -113,6 +113,7 @@
                 <div
                   role="alertdialog"
                   [attr.aria-labelledby]="'unlink-' + status.provider + '-title'"
+                  [attr.aria-describedby]="'unlink-' + status.provider + '-body'"
                   class="flex flex-col gap-3 sm:items-end"
                 >
                   <p
@@ -120,6 +121,12 @@
                     class="text-sm font-semibold text-content"
                   >
                     Stop signing in with {{ labels[status.provider] }}?
+                  </p>
+                  <p
+                    [id]="'unlink-' + status.provider + '-body'"
+                    class="max-w-xs text-xs text-muted sm:text-right"
+                  >
+                    You'll be signed out on every device, including this one.
                   </p>
                   <div class="flex gap-3">
                     <button

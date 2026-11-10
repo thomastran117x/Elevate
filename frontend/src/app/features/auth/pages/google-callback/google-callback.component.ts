@@ -26,10 +26,7 @@ import {
   PendingOAuthSignupStorageKey,
 } from '../../services/auth.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
-import {
-  PROVIDER_LINK_RETURN_PATH,
-  ProviderLinkFlowService,
-} from '../../services/provider-link-flow.service';
+import { ProviderLinkFlowService } from '../../services/provider-link-flow.service';
 
 @Component({
   selector: 'app-google-callback',
@@ -131,8 +128,7 @@ export class GoogleCallbackComponent implements OnInit {
             }
 
             if (res.Type === 'requires_link_confirmation') {
-              this.providerLinkFlow.storeEmailProposal(res.LinkConfirmation);
-              this.authReturnUrl.set(PROVIDER_LINK_RETURN_PATH);
+              this.providerLinkFlow.proposeEmailLink(res.LinkConfirmation);
               this.status.set('success');
               this.message.set(
                 'An account already uses this email. Sign in to it to link Google...',

@@ -10,6 +10,7 @@ import {
 } from '../../../core/api/models/api-client-error.model';
 import { AuthTokenService } from '../../../core/api/services/auth-token.service';
 import { SessionManagerService } from '../../../core/services/session-manager.service';
+import { AuthReturnUrlService } from './auth-return-url.service';
 import { MicrosoftTokenExchangeService } from './microsoft-token-exchange.service';
 import {
   PendingEmailLinkStorageKey,
@@ -85,7 +86,12 @@ describe('ProviderLinkFlowService', () => {
     it('remembers the server state and sends the browser to the provider', () => {
       setup();
       providerLinks.startLink.and.returnValue(
-        of({ authorizationUrl: 'https://accounts.example/auth', state: 's', codeVerifier: 'v' }),
+        of({
+          authorizationUrl: 'https://accounts.example/auth',
+          state: 's',
+          redirectUri: 'https://app.example/auth/microsoft',
+          codeVerifier: 'v',
+        }),
       );
 
       service.begin('microsoft').subscribe();
@@ -93,7 +99,12 @@ describe('ProviderLinkFlowService', () => {
       expect(service.redirectedTo).toBe('https://accounts.example/auth');
       const stored = JSON.parse(sessionStorage.getItem(PendingProviderLinkStorageKey)!);
       expect(stored).toEqual(
-        jasmine.objectContaining({ provider: 'microsoft', state: 's', codeVerifier: 'v' }),
+        jasmine.objectContaining({
+          provider: 'microsoft',
+          state: 's',
+          redirectUri: 'https://app.example/auth/microsoft',
+          codeVerifier: 'v',
+        }),
       );
     });
 
@@ -161,7 +172,11 @@ describe('ProviderLinkFlowService', () => {
 
     it('redeems a Microsoft code in the browser with the issued verifier', fakeAsync(() => {
       setup({
-        [PendingProviderLinkStorageKey]: pending({ provider: 'microsoft', codeVerifier: 'v' }),
+        [PendingProviderLinkStorageKey]: pending({
+          provider: 'microsoft',
+          codeVerifier: 'v',
+          redirectUri: 'https://issued.example/auth/microsoft',
+        }),
       });
       exchange.exchange.and.resolveTo('id-token');
       providerLinks.completeLink.and.returnValue(
@@ -178,7 +193,11 @@ describe('ProviderLinkFlowService', () => {
       service.completeFromCallback('microsoft', '?code=c&state=state-1').then((t) => (target = t));
       flushMicrotasks();
 
-      expect(exchange.exchange).toHaveBeenCalledWith('c', 'v', 'openid profile email');
+      // Redeemed with exactly the redirect the server issued, not one this app rebuilt.
+      expect(exchange.exchange).toHaveBeenCalledWith('c', 'v', {
+        scope: 'openid profile email',
+        redirectUri: 'https://issued.example/auth/microsoft',
+      });
       expect(providerLinks.completeLink).toHaveBeenCalledWith('microsoft', {
         state: 'state-1',
         idToken: 'id-token',
@@ -268,6 +287,19 @@ describe('ProviderLinkFlowService', () => {
       expect(target).toContain('providerLink=signed_out');
     }));
 
+    it('fails a Microsoft return without the redirect it was issued', fakeAsync(() => {
+      setup({
+        [PendingProviderLinkStorageKey]: pending({ provider: 'microsoft', codeVerifier: 'v' }),
+      });
+      let target: string | undefined;
+
+      service.completeFromCallback('microsoft', '?code=c&state=state-1').then((t) => (target = t));
+      flushMicrotasks();
+
+      expect(target).toContain('providerLink=failed');
+      expect(exchange.exchange).not.toHaveBeenCalled();
+    }));
+
     it('fails a Microsoft return without the verifier it needs', fakeAsync(() => {
       setup({ [PendingProviderLinkStorageKey]: pending({ provider: 'microsoft' }) });
       let target: string | undefined;
@@ -315,11 +347,34 @@ describe('ProviderLinkFlowService', () => {
     it('stores, reads back, and clears a proposal', () => {
       setup();
 
-      service.storeEmailProposal(proposal);
+      service.proposeEmailLink(proposal);
       expect(service.readEmailProposal()).toEqual(proposal);
 
       service.clearEmailProposal();
       expect(service.readEmailProposal()).toBeNull();
+    });
+
+    it('sends the next sign-in to confirm the proposal, and declining restores the original destination', () => {
+      setup();
+      const returnUrl = TestBed.inject(AuthReturnUrlService);
+      returnUrl.set('/events/42');
+
+      service.proposeEmailLink(proposal);
+      expect(returnUrl.peek()).toBe('/account/security');
+
+      service.declineEmailProposal();
+      expect(returnUrl.peek()).toBe('/events/42');
+      expect(service.readEmailProposal()).toBeNull();
+    });
+
+    it('declining leaves no destination when there was none', () => {
+      setup();
+      const returnUrl = TestBed.inject(AuthReturnUrlService);
+
+      service.proposeEmailLink(proposal);
+      service.declineEmailProposal();
+
+      expect(returnUrl.peek()).toBeNull();
     });
 
     it('drops an expired proposal', () => {
@@ -344,7 +399,7 @@ describe('ProviderLinkFlowService', () => {
       restoreStorage();
       restoreStorage = installThrowingStorage('session');
 
-      expect(() => service.storeEmailProposal(proposal)).not.toThrow();
+      expect(() => service.proposeEmailLink(proposal)).not.toThrow();
       expect(service.readEmailProposal()).toBeNull();
       expect(() => service.clearEmailProposal()).not.toThrow();
     });

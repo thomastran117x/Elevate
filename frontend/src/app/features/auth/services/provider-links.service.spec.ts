@@ -86,6 +86,7 @@ describe('ProviderLinksService', () => {
       envelope({
         authorizationUrl: 'https://login.example/authorize',
         state: 's',
+        redirectUri: 'https://app.example/auth/microsoft',
         codeVerifier: 'v',
       }),
     );
@@ -180,6 +181,14 @@ describe('ProviderLinksService', () => {
       expect(normalizeProviderLink({ provider: 'google' })).toBeNull();
       expect(normalizeProviderLink('x')).toBeNull();
       expect(normalizeProviderLinkStart(null)).toBeNull();
+      // Without the issued redirect the browser could not redeem a code the provider accepts.
+      expect(
+        normalizeProviderLinkStart({
+          authorizationUrl: 'https://x',
+          state: 's',
+          codeVerifier: 'v',
+        }),
+      ).toBeNull();
       expect(normalizeEmailLinkProposal({ linkToken: 't', provider: 'apple' })).toBeNull();
       expect(normalizeEmailLinkProposal(undefined)).toBeNull();
     });

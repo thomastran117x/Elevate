@@ -72,7 +72,7 @@ export class LoginComponent {
 
   /** Forgets the proposed link; signing in then simply signs in. */
   dismissLinkProposal(): void {
-    this.providerLinkFlow.clearEmailProposal();
+    this.providerLinkFlow.declineEmailProposal();
     this.linkProposal = null;
   }
 

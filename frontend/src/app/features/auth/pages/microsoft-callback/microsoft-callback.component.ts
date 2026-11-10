@@ -28,10 +28,7 @@ import {
   MICROSOFT_TOKEN_EXCHANGE_FALLBACK_MESSAGE,
   MicrosoftTokenExchangeService,
 } from '../../services/microsoft-token-exchange.service';
-import {
-  PROVIDER_LINK_RETURN_PATH,
-  ProviderLinkFlowService,
-} from '../../services/provider-link-flow.service';
+import { ProviderLinkFlowService } from '../../services/provider-link-flow.service';
 
 @Component({
   selector: 'app-microsoft-callback',
@@ -120,8 +117,7 @@ export class MicrosoftCallbackComponent implements OnInit {
           }
 
           if (res.Type === 'requires_link_confirmation') {
-            this.providerLinkFlow.storeEmailProposal(res.LinkConfirmation);
-            this.authReturnUrl.set(PROVIDER_LINK_RETURN_PATH);
+            this.providerLinkFlow.proposeEmailLink(res.LinkConfirmation);
             this.status.set('success');
             this.message.set(
               'An account already uses this email. Sign in to it to link Microsoft...',

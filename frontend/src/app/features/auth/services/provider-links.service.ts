@@ -57,6 +57,8 @@ export interface ProviderLinksOverview {
 export interface ProviderLinkStart {
   authorizationUrl: string;
   state: string;
+  /** The exact redirect URI the authorization request names; a browser redemption must send it. */
+  redirectUri: string;
   /** Only for a provider whose code the browser redeems itself (Microsoft). */
   codeVerifier: string | null;
 }
@@ -158,13 +160,15 @@ export function normalizeProviderLinkStart(value: unknown): ProviderLinkStart | 
 
   const authorizationUrl = readString(source, 'AuthorizationUrl', 'authorizationUrl');
   const state = readString(source, 'State', 'state');
-  if (!authorizationUrl || !state) {
+  const redirectUri = readString(source, 'RedirectUri', 'redirectUri');
+  if (!authorizationUrl || !state || !redirectUri) {
     return null;
   }
 
   return {
     authorizationUrl,
     state,
+    redirectUri,
     codeVerifier: readNullableString(source, 'CodeVerifier', 'codeVerifier') ?? null,
   };
 }

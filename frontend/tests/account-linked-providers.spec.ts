@@ -194,7 +194,7 @@ test.describe('linked sign-in providers', () => {
     await expect(banner(page)).toHaveText('That Google link request expired. Start again.');
   });
 
-  test('unlinking asks first, and the last sign-in method cannot be removed', async ({ page }) => {
+  test('unlinking asks first, warns, and signs out everywhere', async ({ page }) => {
     let state = { google: GOOGLE_LINK as Json | null, canUnlink: true, hasPassword: true };
     let deleted = false;
     await mockSignedInApi(page, () => overview(state.google, state.canUnlink, state.hasPassword));
@@ -217,6 +217,9 @@ test.describe('linked sign-in providers', () => {
     await google.getByRole('button', { name: 'Unlink Google' }).click();
     const dialog = page.getByRole('alertdialog');
     await expect(dialog).toContainText('Stop signing in with Google?');
+    await expect(dialog).toHaveAccessibleDescription(
+      "You'll be signed out on every device, including this one.",
+    );
     await dialog.getByRole('button', { name: 'Keep it' }).click();
     expect(deleted).toBe(false);
 
@@ -226,9 +229,9 @@ test.describe('linked sign-in providers', () => {
       .getByRole('button', { name: 'Unlink', exact: true })
       .click();
 
-    await expect(banner(page)).toHaveText('Google can no longer be used to sign in.');
+    // The server ended every session, this one included, so the app signs out locally.
+    await page.waitForURL(/\/auth\/login(?:[?#]|$)/);
     expect(deleted).toBe(true);
-    await expect(google.getByRole('button', { name: 'Link Google' })).toBeVisible();
   });
 
   test('the only sign-in method shows why it cannot be unlinked', async ({ page }) => {

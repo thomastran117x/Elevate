@@ -9,6 +9,7 @@ import {
   ApiClientClientError,
   MFA_REQUIRED_ERROR_CODE,
 } from '../../../../../../../core/api/models/api-client-error.model';
+import { AuthTokenService } from '../../../../../../../core/api/services/auth-token.service';
 import { ProviderLinkFlowService } from '../../../../../../auth/services/provider-link-flow.service';
 import {
   LAST_SIGN_IN_METHOD_ERROR_CODE,
@@ -50,6 +51,7 @@ describe('LinkedProvidersCardComponent', () => {
   let providerLinks: jasmine.SpyObj<ProviderLinksService>;
   let linkFlow: jasmine.SpyObj<ProviderLinkFlowService>;
   let router: jasmine.SpyObj<Router>;
+  let authToken: jasmine.SpyObj<AuthTokenService>;
   let stepUpRequired: jasmine.Spy;
 
   const refusal = (code: string, status = 409) => new ApiClientClientError('refused', status, code);
@@ -61,6 +63,7 @@ describe('LinkedProvidersCardComponent', () => {
         { provide: ProviderLinksService, useValue: providerLinks },
         { provide: ProviderLinkFlowService, useValue: linkFlow },
         { provide: Router, useValue: router },
+        { provide: AuthTokenService, useValue: authToken },
         { provide: ActivatedRoute, useValue: fakeActivatedRoute({ queryParams }).route },
       ],
     }).compileComponents();
@@ -110,6 +113,7 @@ describe('LinkedProvidersCardComponent', () => {
     linkFlow.readEmailProposal.and.returnValue(null);
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
     router.navigate.and.resolveTo(true);
+    authToken = jasmine.createSpyObj<AuthTokenService>('AuthTokenService', ['logoutLocal']);
   });
 
   it('lists the password and each provider with its link details', async () => {
@@ -177,22 +181,24 @@ describe('LinkedProvidersCardComponent', () => {
     expect(banner()).toBe('Network down');
   });
 
-  it('asks before unlinking, then unlinks and reloads', async () => {
+  it('asks before unlinking, warns it signs out everywhere, then signs out', async () => {
     providerLinks.unlink.and.returnValue(of(undefined));
     await create();
 
     button('Unlink Google').click();
     await settle();
-    expect(el().querySelector('[role="alertdialog"]')?.textContent).toContain(
-      'Stop signing in with Google?',
-    );
+    const dialog = el().querySelector('[role="alertdialog"]')!;
+    expect(dialog.textContent).toContain('Stop signing in with Google?');
+    const warning = el().querySelector(`#${dialog.getAttribute('aria-describedby')}`);
+    expect(warning?.textContent).toContain('signed out on every device');
 
     button('Unlink').click();
     await settle();
 
     expect(providerLinks.unlink).toHaveBeenCalledWith('google');
-    expect(providerLinks.getProviders).toHaveBeenCalledTimes(2);
-    expect(banner()).toContain('Google can no longer be used to sign in.');
+    // The server ended every session, this one included.
+    expect(authToken.logoutLocal).toHaveBeenCalled();
+    expect(router.navigate).toHaveBeenCalledWith(['/auth/login']);
   });
 
   it('lets the user keep a link', async () => {

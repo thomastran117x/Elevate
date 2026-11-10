@@ -9,6 +9,17 @@ export const MICROSOFT_TOKEN_EXCHANGE_FALLBACK_MESSAGE =
 /** The scope Microsoft sign-in authorizes with. */
 export const MICROSOFT_SIGN_IN_SCOPE = 'openid profile email offline_access';
 
+export interface MicrosoftTokenExchangeOptions {
+  /** Defaults to the sign-in scope. */
+  scope?: string;
+  /**
+   * The redirect URI the authorization request named, which Microsoft requires to match exactly.
+   * Defaults to the sign-in callback this app builds; a flow the server started passes the URI
+   * the server issued instead.
+   */
+  redirectUri?: string;
+}
+
 /**
  * Redeems a Microsoft authorization code in the browser. The app registration is a public SPA
  * client, which Microsoft lets redeem codes only from the browser, with the PKCE verifier that
@@ -19,15 +30,15 @@ export class MicrosoftTokenExchangeService {
   async exchange(
     code: string,
     verifier: string,
-    scope: string = MICROSOFT_SIGN_IN_SCOPE,
+    options: MicrosoftTokenExchangeOptions = {},
   ): Promise<string> {
     const body = new URLSearchParams({
       client_id: environment.msalClientId,
       grant_type: 'authorization_code',
       code,
-      redirect_uri: `${environment.frontendUrl}/auth/microsoft`,
+      redirect_uri: options.redirectUri ?? `${environment.frontendUrl}/auth/microsoft`,
       code_verifier: verifier,
-      scope,
+      scope: options.scope ?? MICROSOFT_SIGN_IN_SCOPE,
     });
 
     let response: Response;

@@ -31,7 +31,7 @@ describe('LoginComponent', () => {
     proposal = null;
     linkFlow = jasmine.createSpyObj<ProviderLinkFlowService>('ProviderLinkFlowService', [
       'readEmailProposal',
-      'clearEmailProposal',
+      'declineEmailProposal',
     ]);
     linkFlow.readEmailProposal.and.callFake(() => proposal);
     auth = jasmine.createSpyObj<AuthService>('AuthService', ['login']);
@@ -95,7 +95,7 @@ describe('LoginComponent', () => {
     (banner.querySelector('button') as HTMLButtonElement).click();
     fixture.detectChanges();
 
-    expect(linkFlow.clearEmailProposal).toHaveBeenCalled();
+    expect(linkFlow.declineEmailProposal).toHaveBeenCalled();
     expect(
       fixture.nativeElement.querySelector('[data-testid="provider-link-proposal"]'),
     ).toBeNull();

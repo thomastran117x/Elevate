@@ -22,6 +22,7 @@ import {
   isApiClientErrorCode,
   MFA_REQUIRED_ERROR_CODE,
 } from '../../../../../../../core/api/models/api-client-error.model';
+import { AuthTokenService } from '../../../../../../../core/api/services/auth-token.service';
 import {
   PROVIDER_LINK_OUTCOMES,
   PROVIDER_LINK_PROVIDER_PARAM,
@@ -85,6 +86,7 @@ export class LinkedProvidersCardComponent implements OnInit {
   private readonly linkFlow = inject(ProviderLinkFlowService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly authToken = inject(AuthTokenService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
 
@@ -135,10 +137,12 @@ export class LinkedProvidersCardComponent implements OnInit {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe({
+        // Unlinking ends every session, this one included, so nothing the removed provider
+        // signed in keeps access. Sign in again, as after a password change.
         next: () => {
           this.confirmingUnlink.set(null);
-          this.show('success', `${this.labels[provider]} can no longer be used to sign in.`);
-          this.load();
+          this.authToken.logoutLocal();
+          void this.router.navigate(['/auth/login']);
         },
         error: (err) => {
           this.confirmingUnlink.set(null);
