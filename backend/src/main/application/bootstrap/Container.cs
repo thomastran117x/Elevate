@@ -310,6 +310,8 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IClubDiscussionReplyService, ClubDiscussionReplyService>();
             services.AddScoped<IDeviceService, DeviceService>();
             services.AddScoped<IDeviceTrustService, DeviceTrustService>();
+            services.AddScoped<ITrustedDeviceManagementService, TrustedDeviceManagementService>();
+            services.AddScoped<ISessionManagementService, SessionManagementService>();
             services.AddScoped<ILoginStepUpChallengeService, LoginStepUpChallengeService>();
             services.AddScoped<IClubPostService, ClubPostService>();
             services.AddSingleton<IClubPresenceStore, ClubPresenceStore>();

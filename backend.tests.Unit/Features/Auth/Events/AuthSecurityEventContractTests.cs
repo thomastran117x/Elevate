@@ -34,7 +34,9 @@ public sealed class AuthSecurityEventContractTests
             (33082, "auth.provider.unlinked"),
             (33090, "authz.denied"),
             (33100, "auth.account.status_changed"),
-            (33110, "auth.recovery_code.used"));
+            (33110, "auth.recovery_code.used"),
+            (33120, "auth.trusted_device.revoked"),
+            (33121, "auth.trusted_device.expired"));
     }
 
     [Fact]

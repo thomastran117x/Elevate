@@ -78,6 +78,12 @@ public static class AuthSecurityEvents
     public static readonly AuthSecurityEventDefinition RecoveryCodeUsed =
         new(33110, "auth.recovery_code.used", LogLevel.Information);
 
+    public static readonly AuthSecurityEventDefinition TrustedDeviceRevoked =
+        new(33120, "auth.trusted_device.revoked", LogLevel.Information);
+
+    public static readonly AuthSecurityEventDefinition TrustedDeviceExpired =
+        new(33121, "auth.trusted_device.expired", LogLevel.Information);
+
     public static readonly IReadOnlyList<AuthSecurityEventDefinition> All =
     [
         SignInSucceeded,
@@ -99,5 +105,7 @@ public static class AuthSecurityEvents
         AuthorizationDenied,
         AccountStatusChanged,
         RecoveryCodeUsed,
+        TrustedDeviceRevoked,
+        TrustedDeviceExpired,
     ];
 }

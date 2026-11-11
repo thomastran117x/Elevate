@@ -98,6 +98,34 @@ namespace backend.main.application.openapi
                     "Generate recovery codes",
                     "Generates ten single-use recovery codes and returns them once; they cannot be fetched again. Any earlier codes stop working. " + StepUpRequired
                 ),
+                ["GET /api/auth/sessions"] = new(
+                    "List the current user's sessions",
+                    "Returns the caller's live sessions, most recently used first, with the one making the request marked `current`. Each carries its transport, coarse client and device classes, a masked network prefix, and its created, last-seen, and expiry times, never token material or a full address."
+                ),
+                ["DELETE /api/auth/sessions/{sessionId}"] = new(
+                    "Sign out one session",
+                    "Revokes one of the caller's live sessions; its refresh and access tokens stop working at once. Revoking the current session also clears its browser cookies. Returns 404 for an id that is not one of the caller's live sessions. " + StepUpRequired
+                ),
+                ["DELETE /api/auth/sessions/others"] = new(
+                    "Sign out every other session",
+                    "Revokes every session of the caller except the one making the request, which keeps its step-up proof. " + StepUpRequired
+                ),
+                ["DELETE /api/auth/sessions"] = new(
+                    "Sign out every session",
+                    "Revokes every session of the caller, the current one included, and clears its browser cookies. " + StepUpRequired
+                ),
+                ["GET /api/auth/devices"] = new(
+                    "List the current user's trusted devices",
+                    "Returns the devices that skip sign-in verification until their trust expires, 90 days after the verification that granted it, with the requesting device marked `current`. Never returns the device token, its hash, or a full address."
+                ),
+                ["DELETE /api/auth/devices/{deviceId}"] = new(
+                    "Forget a trusted device",
+                    "Removes one of the caller's trusted devices, so its next sign-in asks for verification again. Forgetting the current device also clears its cookie. Signed-in sessions are not ended. Returns 404 for an id that is not one of the caller's devices. " + StepUpRequired
+                ),
+                ["DELETE /api/auth/devices"] = new(
+                    "Forget every trusted device",
+                    "Removes every trusted device of the caller and clears the current device's cookie. Signed-in sessions are not ended. " + StepUpRequired
+                ),
                 ["POST /api/auth/forgot-password"] = new("Start password recovery by username (compatibility alias)"),
                 ["POST /api/auth/change-password"] = new("Reset the account password (compatibility alias)"),
                 ["POST /api/auth/recovery/password"] = new("Start password recovery by username"),

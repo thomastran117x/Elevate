@@ -1,11 +1,13 @@
 using System.Reflection;
 
 using backend.main.application.security;
+using backend.main.features.auth.device;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.oauth.links;
+using backend.main.features.auth.sessions;
 using backend.main.features.profile;
 using backend.main.features.profile.admin;
 
@@ -42,12 +44,25 @@ public class SensitiveEndpointStepUpTests
         { typeof(AuthProviderLinksController), nameof(AuthProviderLinksController.Complete) },
         { typeof(AuthProviderLinksController), nameof(AuthProviderLinksController.Confirm) },
         { typeof(AuthProviderLinksController), nameof(AuthProviderLinksController.Unlink) },
+        { typeof(AuthSessionsController), nameof(AuthSessionsController.Revoke) },
+        { typeof(AuthSessionsController), nameof(AuthSessionsController.RevokeOthers) },
+        { typeof(AuthSessionsController), nameof(AuthSessionsController.RevokeAll) },
+        { typeof(AuthTrustedDevicesController), nameof(AuthTrustedDevicesController.Revoke) },
+        { typeof(AuthTrustedDevicesController), nameof(AuthTrustedDevicesController.RevokeAll) },
     };
 
     [Fact]
     public void ProviderLinkList_ShouldNotRequireStepUp()
     {
         IsGated(typeof(AuthProviderLinksController), nameof(AuthProviderLinksController.List)).Should().BeFalse();
+    }
+
+    // Owners can review their sessions and devices before verifying; only changing them is gated.
+    [Fact]
+    public void SessionAndDeviceLists_ShouldNotRequireStepUp()
+    {
+        IsGated(typeof(AuthSessionsController), nameof(AuthSessionsController.List)).Should().BeFalse();
+        IsGated(typeof(AuthTrustedDevicesController), nameof(AuthTrustedDevicesController.List)).Should().BeFalse();
     }
 
     // Step-up itself must stay reachable without a proof, or users could never obtain one.

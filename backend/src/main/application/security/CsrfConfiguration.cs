@@ -69,7 +69,9 @@ namespace backend.main.application.security
         private static readonly string[] ProtectedPathPrefixes =
         [
             $"/{RoutePaths.ApiPrefix}/profile",
-            $"{RoutePaths.ApiAuthPath}/providers"
+            $"{RoutePaths.ApiAuthPath}/providers",
+            $"{RoutePaths.ApiAuthPath}/sessions",
+            $"{RoutePaths.ApiAuthPath}/devices"
         ];
 
         public static IApplicationBuilder UseRefreshCsrfValidation(this IApplicationBuilder app)

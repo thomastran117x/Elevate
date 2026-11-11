@@ -1,8 +1,10 @@
 using backend.main.features.auth.device;
+using backend.main.features.auth.events;
 using backend.main.shared.requests;
 using backend.main.shared.utilities;
 using backend.main.utilities;
 
+using backend.tests.Unit.Features.Auth.Events;
 using backend.tests.Unit.Support;
 
 using FluentAssertions;
@@ -178,6 +180,7 @@ public class DeviceTrustServiceTests
     [Fact]
     public async Task IsTrustedAsync_ShouldRefuseAnExpiredDevice_RemoveIt_AndClearTheCookie()
     {
+        var events = new RecordingAuthSecurityEventEmitter();
         var (service, deviceRepository, httpContext) = CreateWithPresentedDevice(new Device
         {
             Id = 11,
@@ -186,12 +189,14 @@ public class DeviceTrustServiceTests
             DeviceType = "Desktop",
             ClientName = "Chrome",
             ExpiresAt = Now.UtcDateTime,
-        });
+        }, events);
+        deviceRepository.Setup(r => r.DeleteAsync(3, 11)).ReturnsAsync(true);
 
         var trusted = await service.IsTrustedAsync(3, TestRequestInfoFactory.Browser());
 
         trusted.Should().BeFalse();
         deviceRepository.Verify(r => r.DeleteAsync(3, 11), Times.Once);
+        events.Of(AuthSecurityEvents.TrustedDeviceExpired).Should().ContainSingle().Which.UserId.Should().Be(3);
         deviceRepository.Verify(r => r.UpdateLastSeenAsync(It.IsAny<Device>()), Times.Never);
         httpContext.Response.Headers.ContainsKey(HttpUtility.TrustedDeviceHeaderName).Should().BeFalse();
         httpContext.Response.Headers.SetCookie.ToString()
@@ -212,7 +217,7 @@ public class DeviceTrustServiceTests
     }
 
     private static (DeviceTrustService Service, Mock<IDeviceRepository> Repository, DefaultHttpContext Context)
-        CreateWithPresentedDevice(Device? device)
+        CreateWithPresentedDevice(Device? device, IAuthSecurityEventEmitter? events = null)
     {
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers[HttpUtility.TrustedDeviceHeaderName] = "device-id-abc";
@@ -227,7 +232,8 @@ public class DeviceTrustServiceTests
             deviceRepository.Object,
             httpContextAccessor.Object,
             TestRequestInfoFactory.Browser(),
-            new FixedClock(Now));
+            new FixedClock(Now),
+            events);
         return (service, deviceRepository, httpContext);
     }
 

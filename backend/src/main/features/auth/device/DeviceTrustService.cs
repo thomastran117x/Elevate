@@ -1,3 +1,4 @@
+using backend.main.features.auth.events;
 using backend.main.shared.requests;
 using backend.main.shared.utilities;
 using backend.main.utilities;
@@ -10,18 +11,21 @@ namespace backend.main.features.auth.device
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ClientRequestInfo _requestInfo;
         private readonly TimeProvider _timeProvider;
+        private readonly IAuthSecurityEventEmitter _securityEvents;
 
         public DeviceTrustService(
             IDeviceRepository deviceRepository,
             IHttpContextAccessor httpContextAccessor,
             ClientRequestInfo requestInfo,
-            TimeProvider? timeProvider = null
+            TimeProvider? timeProvider = null,
+            IAuthSecurityEventEmitter? securityEvents = null
         )
         {
             _deviceRepository = deviceRepository;
             _httpContextAccessor = httpContextAccessor;
             _requestInfo = requestInfo;
             _timeProvider = timeProvider ?? TimeProvider.System;
+            _securityEvents = securityEvents ?? NullAuthSecurityEventEmitter.Instance;
         }
 
         public async Task<bool> IsTrustedAsync(int userId, ClientRequestInfo requestInfo)
@@ -40,8 +44,15 @@ namespace backend.main.features.auth.device
             {
                 // The expiry is checked here, not left to the cookie, which the client controls. A
                 // stale cookie is cleared and its row removed, so verification is asked for again.
-                if (device != null)
-                    await _deviceRepository.DeleteAsync(userId, device.Id);
+                if (device != null && await _deviceRepository.DeleteAsync(userId, device.Id))
+                {
+                    _securityEvents.Emit(new AuthSecurityEvent
+                    {
+                        Definition = AuthSecurityEvents.TrustedDeviceExpired,
+                        Outcome = AuthSecurityOutcome.Succeeded,
+                        UserId = userId,
+                    });
+                }
 
                 if (httpContext != null)
                     HttpUtility.ClearTrustedDeviceToken(httpContext.Response, requestInfo);
