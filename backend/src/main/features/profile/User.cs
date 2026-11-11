@@ -67,14 +67,15 @@ public class User
     {
         get; set;
     }
-    public string? MicrosoftID
+    /// <summary>
+    /// The providers (names from <c>IdentityProviders</c>) linked to the account. Not persisted:
+    /// the links live in <c>UserIdentityLinks</c>, and reads that serve the profile fill this in.
+    /// </summary>
+    [NotMapped]
+    public List<string> LinkedProviders
     {
         get; set;
-    }
-    public string? GoogleID
-    {
-        get; set;
-    }
+    } = [];
     public bool IsDisabled
     {
         get; set;

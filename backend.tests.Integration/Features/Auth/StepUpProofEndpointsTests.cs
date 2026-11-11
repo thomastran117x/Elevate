@@ -47,6 +47,10 @@ public class StepUpProofEndpointsTests
         { "POST", "/api/auth/mfa/totp/disable" },
         { "POST", "/api/auth/mfa/totp/remove" },
         { "POST", "/api/auth/mfa/recovery-codes/regenerate" },
+        { "POST", "/api/auth/providers/google/link/start" },
+        { "POST", "/api/auth/providers/microsoft/link/complete" },
+        { "POST", "/api/auth/providers/link/confirm" },
+        { "DELETE", "/api/auth/providers/google" },
     };
 
     [Theory]
@@ -408,6 +412,13 @@ public class StepUpProofEndpointsTests
             CurrentPassword = AuthApiTestApp.DefaultPassword
         },
         "/api/profile" => null,
+        "/api/auth/providers/microsoft/link/complete" => new CompleteProviderLinkRequest
+        {
+            State = "missing-state",
+            IdToken = "missing-token"
+        },
+        "/api/auth/providers/link/confirm" => new ConfirmProviderLinkRequest { LinkToken = "missing-link" },
+        "/api/auth/providers/google" => null,
         _ when path.EndsWith("/enroll/start", StringComparison.Ordinal) && !path.Contains("/totp/") =>
             new MfaEnrollmentStartRequest { PhoneNumber = "+14165550123" },
         _ when path.EndsWith("/enroll/verify", StringComparison.Ordinal) && !path.Contains("/totp/") =>

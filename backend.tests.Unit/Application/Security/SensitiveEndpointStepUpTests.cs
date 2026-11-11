@@ -5,6 +5,7 @@ using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.mfa.totp;
+using backend.main.features.auth.oauth.links;
 using backend.main.features.profile;
 using backend.main.features.profile.admin;
 
@@ -37,7 +38,17 @@ public class SensitiveEndpointStepUpTests
         { typeof(AuthTotpMfaController), nameof(AuthTotpMfaController.Remove) },
         { typeof(UserAdminController), nameof(UserAdminController.UpdateUserStatus) },
         { typeof(AuthRecoveryCodesController), nameof(AuthRecoveryCodesController.Regenerate) },
+        { typeof(AuthProviderLinksController), nameof(AuthProviderLinksController.Start) },
+        { typeof(AuthProviderLinksController), nameof(AuthProviderLinksController.Complete) },
+        { typeof(AuthProviderLinksController), nameof(AuthProviderLinksController.Confirm) },
+        { typeof(AuthProviderLinksController), nameof(AuthProviderLinksController.Unlink) },
     };
+
+    [Fact]
+    public void ProviderLinkList_ShouldNotRequireStepUp()
+    {
+        IsGated(typeof(AuthProviderLinksController), nameof(AuthProviderLinksController.List)).Should().BeFalse();
+    }
 
     // Step-up itself must stay reachable without a proof, or users could never obtain one.
     public static TheoryData<string> StepUpActions => new()

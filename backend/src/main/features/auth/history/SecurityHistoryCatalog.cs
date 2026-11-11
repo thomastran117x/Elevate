@@ -28,6 +28,7 @@ public static class SecurityHistoryCatalog
             AuthSecurityEvents.RefreshTokenReused,
             AuthSecurityEvents.SessionRevoked,
             AuthSecurityEvents.ProviderLinked,
+            AuthSecurityEvents.ProviderUnlinked,
             AuthSecurityEvents.AccountStatusChanged,
             AuthSecurityEvents.RecoveryCodeUsed,
         };
@@ -78,6 +79,9 @@ public static class SecurityHistoryCatalog
 
         if (definition == AuthSecurityEvents.ProviderLinked)
             return AccountSecurityEventKind.ProviderLinked;
+
+        if (definition == AuthSecurityEvents.ProviderUnlinked)
+            return AccountSecurityEventKind.ProviderUnlinked;
 
         if (definition == AuthSecurityEvents.RefreshTokenReused)
             return AccountSecurityEventKind.RefreshTokenReuseDetected;
@@ -139,7 +143,8 @@ public static class SecurityHistoryCatalog
             AuthSecurityReason.Logout => AccountSecurityEventKind.SignedOut,
             AuthSecurityReason.PasswordChanged
                 or AuthSecurityReason.PasswordReset
-                or AuthSecurityReason.EmailChanged => AccountSecurityEventKind.SessionsRevoked,
+                or AuthSecurityReason.EmailChanged
+                or AuthSecurityReason.ProviderUnlinked => AccountSecurityEventKind.SessionsRevoked,
             AuthSecurityReason.TransportMismatch
                 or AuthSecurityReason.BindingMissing
                 or AuthSecurityReason.BindingMismatch

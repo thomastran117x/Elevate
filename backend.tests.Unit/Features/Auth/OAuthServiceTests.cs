@@ -398,6 +398,75 @@ public class OAuthServiceTests
         await action.Should().ThrowAsync<UnauthorizedException>().WithMessage("Invalid Microsoft token.");
     }
 
+    /// <summary>
+    /// The issuer must name the tenant the token's claims name. Any tenant can sign a token for
+    /// its own issuer, so a token claiming one tenant under another's issuer is refused.
+    /// </summary>
+    [Fact]
+    public async Task VerifyMicrosoftTokenAsync_ShouldRejectAnIssuerForADifferentTenantThanTheTid()
+    {
+        var (service, key) = CreateMicrosoftService();
+        var token = CreateJwt(
+            $"https://login.microsoftonline.com/{WorkTenantId}/v2.0",
+            "ms-client",
+            key,
+            [new Claim("sub", "microsoft-user-1"), new Claim("tid", MicrosoftConsumerTenantId)]);
+
+        var action = () => service.VerifyMicrosoftTokenAsync(token);
+
+        await action.Should().ThrowAsync<UnauthorizedException>().WithMessage("Invalid Microsoft token.");
+    }
+
+    [Fact]
+    public async Task VerifyMicrosoftTokenAsync_ShouldRejectATokenWithoutATid()
+    {
+        var (service, key) = CreateMicrosoftService();
+        var token = CreateJwt(
+            $"https://login.microsoftonline.com/{WorkTenantId}/v2.0",
+            "ms-client",
+            key,
+            [new Claim("sub", "microsoft-user-1")]);
+
+        var action = () => service.VerifyMicrosoftTokenAsync(token);
+
+        await action.Should().ThrowAsync<UnauthorizedException>().WithMessage("Invalid Microsoft token.");
+    }
+
+    /// <summary>
+    /// Linking always passes the nonce it issued, so a token carrying none cannot complete a link.
+    /// </summary>
+    [Fact]
+    public async Task VerifyMicrosoftTokenAsync_ShouldRejectATokenWithoutANonce_WhenOneIsExpected()
+    {
+        var (service, key) = CreateMicrosoftService();
+        var token = CreateMicrosoftJwt(key, new Claim("sub", "microsoft-user-1"));
+
+        var action = () => service.VerifyMicrosoftTokenAsync(token, "expected-nonce");
+
+        await action.Should().ThrowAsync<UnauthorizedException>().WithMessage("Microsoft nonce validation failed");
+    }
+
+    [Fact]
+    public void IsProviderConfigured_ShouldRequireEachProvidersCredentials()
+    {
+        var unconfigured = CreateService();
+        SetPrivateField(unconfigured, "_googleClientId", null);
+        SetPrivateField(unconfigured, "_googleClientSecret", null);
+        SetPrivateField(unconfigured, "_microsoftClientId", null);
+        SetPrivateField(unconfigured, "_microsoftConfigManager", null);
+
+        unconfigured.IsProviderConfigured("google").Should().BeFalse();
+        unconfigured.IsProviderConfigured("microsoft").Should().BeFalse();
+        unconfigured.IsProviderConfigured("apple").Should().BeFalse();
+
+        var (configured, _) = CreateMicrosoftService();
+        SetPrivateField(configured, "_googleClientId", "google-client");
+        SetPrivateField(configured, "_googleClientSecret", "google-secret");
+
+        configured.IsProviderConfigured("google").Should().BeTrue();
+        configured.IsProviderConfigured("microsoft").Should().BeTrue();
+    }
+
     [Theory]
     [InlineData("not-a-jwt")]
     [InlineData("")]
@@ -423,8 +492,21 @@ public class OAuthServiceTests
         return (service, key);
     }
 
+    /// <summary>
+    /// A Microsoft token as a tenant issues it: the issuer names the token's own <c>tid</c>, which
+    /// defaults to a work tenant when the test does not set one.
+    /// </summary>
     private static string CreateMicrosoftJwt(SecurityKey key, params Claim[] claims)
-        => CreateJwt(MicrosoftIssuer, "ms-client", key, claims);
+    {
+        var tenantId = claims.FirstOrDefault(c => c.Type == "tid")?.Value;
+        if (tenantId == null)
+        {
+            tenantId = WorkTenantId;
+            claims = [.. claims, new Claim("tid", tenantId)];
+        }
+
+        return CreateJwt($"https://login.microsoftonline.com/{tenantId}/v2.0", "ms-client", key, claims);
+    }
 
     private static OAuthService CreateService(Func<HttpRequestMessage, HttpResponseMessage>? responseFactory = null)
     {

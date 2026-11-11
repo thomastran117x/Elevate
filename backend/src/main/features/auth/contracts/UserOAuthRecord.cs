@@ -8,11 +8,15 @@ namespace backend.main.features.auth.contracts
         }
         public string Email { get; init; } = null!;
         public string Usertype { get; init; } = null!;
-        public string? GoogleID
+
+        /// <summary>Whether the account links any provider identity.</summary>
+        public bool HasProviderLink
         {
             get; init;
         }
-        public string? MicrosoftID
+
+        /// <summary>The link a provider-subject lookup matched; null for other lookups.</summary>
+        public int? LinkId
         {
             get; init;
         }

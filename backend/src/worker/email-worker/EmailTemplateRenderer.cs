@@ -375,6 +375,7 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
         {
             "password_changed" => "Your password was changed",
             "provider_linked" => $"{SecurityAlertProvider(message)} sign-in was linked to your account",
+            "provider_unlinked" => $"{SecurityAlertProvider(message)} sign-in was removed from your account",
             "refresh_token_reuse_detected" => "We signed out a session after suspicious activity",
             "account_disabled" => "Your account was disabled",
             "mfa_disabled" => "Two-step verification was turned off",
@@ -389,6 +390,7 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
         {
             "password_changed" => "The password for your EventXperience account was changed, and other sessions were signed out.",
             "provider_linked" => $"{SecurityAlertProvider(message)} can now be used to sign in to your EventXperience account.",
+            "provider_unlinked" => $"{SecurityAlertProvider(message)} can no longer be used to sign in to your EventXperience account.",
             "refresh_token_reuse_detected" => "A sign-in token for your account was used after it had been replaced, which can mean it was copied. We signed that session out.",
             "account_disabled" => "An administrator disabled your EventXperience account, and every session was signed out.",
             "recovery_code_used" => "One of your recovery codes was used to verify your identity on your EventXperience account. It can't be used again. If you're running low, generate a new set in your security settings.",

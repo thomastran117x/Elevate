@@ -5,6 +5,7 @@ using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
+using backend.main.features.auth.oauth.links;
 using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.profile;
@@ -158,6 +159,80 @@ public class LoginStepUpChallengeServiceTests
                 It.IsAny<User>(), It.IsAny<SessionTransport>(),
                 It.IsAny<string?>(), It.IsAny<bool?>()),
             Times.Never);
+    }
+
+    /// <summary>
+    /// A provider sign-in that needed step-up is recorded on its link only once the step-up
+    /// completes into a session, never when the challenge is merely created or refused.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TryVerifyEmailAsync_ShouldRecordTheProviderLinkUse_OnlyWhenTheSignInCompletes(bool trusted)
+    {
+        var mfaRepo = new Mock<IMfaEnrollmentRepository>();
+        mfaRepo.Setup(r => r.GetByUserIdAsync(5)).ReturnsAsync((SmsMfaEnrollment?)null);
+
+        var user = new TestUserBuilder().WithId(5).WithEmail("user@example.com").Build();
+        var userRepository = new Mock<IAuthUserRepository>();
+        userRepository.Setup(r => r.GetUserAsync(5)).ReturnsAsync(user);
+
+        var deviceTrustService = new Mock<IDeviceTrustService>();
+        deviceTrustService
+            .Setup(d => d.TrustAsync(
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(trusted);
+
+        var authSessionService = new Mock<IAuthSessionService>();
+        authSessionService
+            .Setup(s => s.IssueAsync(
+                It.IsAny<User>(), It.IsAny<SessionTransport>(),
+                It.IsAny<string?>(), It.IsAny<bool?>()))
+            .ReturnsAsync(CreateUserToken(user));
+
+        var cache = new InMemoryCacheService();
+        var notifications = new Mock<IAuthNotificationService>();
+        string? capturedToken = null;
+        notifications
+            .Setup(n => n.SendDeviceVerificationAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .Callback<string, string, string?>((_, token, _) => capturedToken = token)
+            .Returns(Task.CompletedTask);
+        var identityLinks = new Mock<IUserIdentityLinkRepository>();
+
+        var service = CreateService(
+            cache,
+            notifications,
+            mfaRepo,
+            deviceTrustService: deviceTrustService,
+            userRepository: userRepository,
+            authSessionService: authSessionService,
+            identityLinks: identityLinks);
+
+        var challenge = await service.CreateChallengeAsync(
+            user,
+            SessionTransport.ApiToken,
+            false,
+            "/dashboard",
+            new ProviderLinkUse(77, "owner@gmail.com", "Owner"));
+        await service.StartAsync(challenge.Challenge, "email");
+        identityLinks.VerifyNoOtherCalls();
+
+        var act = () => service.TryVerifyEmailAsync(capturedToken!);
+
+        if (trusted)
+        {
+            (await act()).Should().NotBeNull();
+            identityLinks.Verify(
+                r => r.TouchAsync(77, "owner@gmail.com", "Owner", It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+                Times.Once);
+        }
+        else
+        {
+            await act.Should().ThrowAsync<UnauthorizedException>();
+            identityLinks.VerifyNoOtherCalls();
+        }
     }
 
     /// <summary>
@@ -569,7 +644,8 @@ public class LoginStepUpChallengeServiceTests
         Mock<IAuthUserRepository>? userRepository = null,
         Mock<IAuthSessionService>? authSessionService = null,
         Mock<ITokenService>? tokenService = null,
-        IAuthSecurityEventEmitter? securityEvents = null)
+        IAuthSecurityEventEmitter? securityEvents = null,
+        Mock<IUserIdentityLinkRepository>? identityLinks = null)
     {
         cache ??= new InMemoryCacheService();
         notifications ??= new Mock<IAuthNotificationService>();
@@ -591,7 +667,8 @@ public class LoginStepUpChallengeServiceTests
             tokenService.Object,
             TestRequestInfoFactory.Browser(),
             securityEvents ?? NullAuthSecurityEventEmitter.Instance,
-            new Mock<IRecoveryCodeService>().Object);
+            new Mock<IRecoveryCodeService>().Object,
+            (identityLinks ?? new Mock<IUserIdentityLinkRepository>()).Object);
     }
 
     private static UserToken CreateUserToken(User user) =>

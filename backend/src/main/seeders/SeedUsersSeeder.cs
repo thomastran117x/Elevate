@@ -1,3 +1,4 @@
+using backend.main.features.auth.oauth.links;
 using backend.main.features.auth.password;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
@@ -75,8 +76,26 @@ public sealed class SeedUsersSeeder : ISeeder
             createdCount++;
         }
 
+        // Seed accounts sign in with the catalog password only, so any provider link made to one
+        // while testing is cleared, as the provider columns were before links had their own table.
+        var existingIds = existingUsers.Select(user => user.Id).ToList();
+        var removedLinks = existingIds.Count == 0
+            ? 0
+            : await _dbContext.UserIdentityLinks
+                .Where(link => existingIds.Contains(link.UserId))
+                .ExecuteDeleteAsync(cancellationToken);
+
         if (createdCount == 0 && updatedCount == 0)
         {
+            if (removedLinks > 0)
+            {
+                _logger.LogInformation(
+                    "[Seeders] Removed {RemovedLinks} provider links from seed users.",
+                    removedLinks);
+                return;
+            }
+
+
             _logger.LogInformation("[Seeders] Seed users already match the thematic catalog.");
             return;
         }
@@ -111,8 +130,6 @@ public sealed class SeedUsersSeeder : ISeeder
             Avatar = null,
             Address = null,
             Phone = null,
-            GoogleID = null,
-            MicrosoftID = null,
             IsDisabled = false,
             DisabledAtUtc = null,
             DisabledReason = null,
@@ -160,8 +177,6 @@ public sealed class SeedUsersSeeder : ISeeder
         changed |= SetNullable(user.Avatar, null, value => user.Avatar = value);
         changed |= SetNullable(user.Address, null, value => user.Address = value);
         changed |= SetNullable(user.Phone, null, value => user.Phone = value);
-        changed |= SetNullable(user.GoogleID, null, value => user.GoogleID = value);
-        changed |= SetNullable(user.MicrosoftID, null, value => user.MicrosoftID = value);
 
         if (user.IsDisabled)
         {

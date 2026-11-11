@@ -9,5 +9,11 @@ namespace backend.main.features.auth.oauth
             string? expectedNonce = null
         );
         Task<OAuthUser> VerifyAppleTokenAsync(string appleToken);
+
+        /// <summary>
+        /// Whether the provider (a name from <c>IdentityProviders</c>) is configured well enough
+        /// to sign in and link: Google needs its client id and secret, Microsoft its client id.
+        /// </summary>
+        bool IsProviderConfigured(string provider);
     }
 }

@@ -140,6 +140,7 @@ public class EmailTemplateRendererTests
     [Theory]
     [InlineData("password_changed", null, "Your password was changed")]
     [InlineData("provider_linked", "google", "Google sign-in was linked to your account")]
+    [InlineData("provider_unlinked", "microsoft", "Microsoft sign-in was removed from your account")]
     [InlineData("refresh_token_reuse_detected", null, "We signed out a session after suspicious activity")]
     [InlineData("account_disabled", null, "Your account was disabled")]
     [InlineData("recovery_code_used", null, "A recovery code was used on your account")]

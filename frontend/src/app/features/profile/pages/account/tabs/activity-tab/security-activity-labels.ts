@@ -63,6 +63,7 @@ const IMPORTANT_KINDS = new Set([
   'mfa_disabled',
   'mfa_removed',
   'provider_linked',
+  'provider_unlinked',
   'refresh_token_reuse_detected',
   'account_disabled',
   'recovery_code_used',
@@ -111,6 +112,11 @@ function describe(entry: AccountSecurityEvent): { title: string; detail: string 
       return {
         title: `${(entry.method && PROVIDER_LABELS[entry.method]) || 'Sign-in provider'} sign-in linked`,
         detail: 'You can now sign in with this provider.',
+      };
+    case 'provider_unlinked':
+      return {
+        title: `${(entry.method && PROVIDER_LABELS[entry.method]) || 'Sign-in provider'} sign-in removed`,
+        detail: 'You can no longer sign in with this provider.',
       };
     case 'signed_out':
       return { title: 'Signed out', detail: null };

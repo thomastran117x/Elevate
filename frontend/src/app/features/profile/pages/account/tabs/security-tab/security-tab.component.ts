@@ -16,6 +16,7 @@ import {
 } from '../../../../../auth/services/auth.service';
 import { MfaGateComponent } from '../../mfa-gate/mfa-gate.component';
 import { PendingRecoveryCodes } from './recovery-codes/pending-recovery-codes';
+import { LinkedProvidersCardComponent } from './linked-providers/linked-providers-card.component';
 import { RecoveryCodesCardComponent } from './recovery-codes/recovery-codes-card.component';
 
 type SmsFlow = 'enroll' | 'enable' | null;
@@ -24,7 +25,13 @@ type TotpManageAction = 'enable' | 'disable' | 'remove' | null;
 @Component({
   selector: 'app-security-tab',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, MfaGateComponent, RecoveryCodesCardComponent],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    MfaGateComponent,
+    RecoveryCodesCardComponent,
+    LinkedProvidersCardComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './security-tab.component.html',
   // Outlives the recovery-codes card, which re-locking the tab destroys, so unsaved codes survive.

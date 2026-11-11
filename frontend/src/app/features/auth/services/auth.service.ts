@@ -15,6 +15,7 @@ import {
   normalizeAuthenticatedSessionResponse,
   normalizeCurrentUserResponse,
 } from '../../../core/models/auth-response.model';
+import { normalizeEmailLinkProposal, PendingEmailLinkProposal } from './provider-links.service';
 
 export type SignupRole = 'participant' | 'organizer' | 'volunteer';
 export type LoginStepUpMethod = 'sms' | 'email' | 'totp' | 'recovery_code';
@@ -214,8 +215,23 @@ export interface OAuthRequiresRoleSelectionResponse {
   RoleSelection: OAuthRoleSelectionPayload;
 }
 
+/**
+ * The provider's verified email matched an existing account with no provider link. Nothing is
+ * linked or signed in; the owner signs in to that account and confirms the link there.
+ */
+export interface OAuthRequiresLinkConfirmationResponse {
+  Type: 'requires_link_confirmation';
+  Auth?: undefined;
+  StepUp?: undefined;
+  RoleSelection?: undefined;
+  LinkConfirmation: PendingEmailLinkProposal;
+}
+
 export type OAuthAuthenticationResponse =
-  OAuthAuthenticatedResponse | OAuthRequiresStepUpResponse | OAuthRequiresRoleSelectionResponse;
+  | OAuthAuthenticatedResponse
+  | OAuthRequiresStepUpResponse
+  | OAuthRequiresRoleSelectionResponse
+  | OAuthRequiresLinkConfirmationResponse;
 
 export const PendingOAuthSignupStorageKey = 'pending_oauth_signup';
 export const PendingLoginStepUpStorageKey = 'pending_login_step_up';
@@ -758,6 +774,16 @@ export class AuthService {
           fallbackMessage,
         ),
       };
+    }
+
+    if (type === 'requires_link_confirmation') {
+      const proposal = normalizeEmailLinkProposal(
+        source?.['LinkConfirmation'] ?? source?.['linkConfirmation'],
+      );
+      if (!proposal) {
+        throw new Error(fallbackMessage);
+      }
+      return { Type: 'requires_link_confirmation', LinkConfirmation: proposal };
     }
 
     return {

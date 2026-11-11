@@ -28,4 +28,5 @@ public enum AccountSecurityEventKind
     RecoveryCodesGenerated,
     RecoveryCodesRegenerated,
     RecoveryCodeUsed,
+    ProviderUnlinked,
 }

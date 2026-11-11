@@ -17,6 +17,8 @@ import { GoogleButtonComponent } from '../../components/google-button/google-but
 import { MicrosoftButtonComponent } from '../../components/microsoft-button/microsoft-button.component';
 import { AuthService, PendingLoginStepUpStorageKey } from '../../services/auth.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
+import { ProviderLinkFlowService } from '../../services/provider-link-flow.service';
+import { PendingEmailLinkProposal, PROVIDER_LABELS } from '../../services/provider-links.service';
 import { RecaptchaV3Service } from '../../services/recaptcha.service';
 
 @Component({
@@ -43,6 +45,9 @@ export class LoginComponent {
   submitted = false;
   captchaRequired = false;
   siteKey = environment.googleSiteKey;
+  /** A provider sign-in matched an existing account by email; signing in to it confirms the link. */
+  linkProposal: PendingEmailLinkProposal | null = null;
+  readonly providerLabels = PROVIDER_LABELS;
 
   constructor(
     private fb: FormBuilder,
@@ -52,15 +57,23 @@ export class LoginComponent {
     private route: ActivatedRoute,
     private recaptcha: RecaptchaV3Service,
     private authReturnUrl: AuthReturnUrlService,
+    private providerLinkFlow: ProviderLinkFlowService,
   ) {}
 
   ngOnInit() {
     this.authReturnUrl.captureFromRoute(this.route);
+    this.linkProposal = this.providerLinkFlow.readEmailProposal();
     this.form = this.fb.nonNullable.group({
       username: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(50)]),
       password: this.fb.nonNullable.control('', [Validators.required, Validators.minLength(6)]),
       rememberMe: this.fb.nonNullable.control(false),
     });
+  }
+
+  /** Forgets the proposed link; signing in then simply signs in. */
+  dismissLinkProposal(): void {
+    this.providerLinkFlow.declineEmailProposal();
+    this.linkProposal = null;
   }
 
   togglePassword() {

@@ -21,6 +21,12 @@ namespace backend.main.features.auth.contracts.responses
             get; set;
         }
 
+        /// <summary>Set when <see cref="Type"/> is <c>requires_link_confirmation</c>.</summary>
+        public OAuthLinkConfirmationResponse? LinkConfirmation
+        {
+            get; set;
+        }
+
         [JsonIgnore]
         public bool RequiresRoleSelection => Type == AuthFlowResponseTypes.RequiresRoleSelection;
 

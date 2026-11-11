@@ -33,7 +33,7 @@ namespace backend.main.features.profile
         private static readonly TimeSpan UserTTL = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan NotFoundTTL = TimeSpan.FromSeconds(15);
 
-        private static string GetUserCacheKey(int userId) => $"user:{userId}";
+        private static string GetUserCacheKey(int userId) => UserCacheKeys.For(userId);
 
         public UserService(
             IUserRepository userRepository,
@@ -107,7 +107,7 @@ namespace backend.main.features.profile
                 throw new ResourceNotFoundException($"User with the id {id} is not found");
 
             await _refreshCache.RemoveAsync(GetUserCacheKey(id));
-            return existingUser;
+            return await ReloadProfileAsync(id, existingUser);
         }
 
         public async Task<User> ChangeUsernameAsync(int id, string username)
@@ -136,7 +136,7 @@ namespace backend.main.features.profile
                     if (!string.IsNullOrEmpty(result.PreviousUsername))
                         await _usernameAvailability.MarkTakenAsync(result.PreviousUsername);
 
-                    return result.User;
+                    return await ReloadProfileAsync(id, result.User);
                 case UsernameChangeStatus.UserNotFound:
                     throw new ResourceNotFoundException($"User with the id {id} is not found");
                 case UsernameChangeStatus.Unchanged:
@@ -152,6 +152,15 @@ namespace backend.main.features.profile
                     throw new InternalServerErrorException();
             }
         }
+
+        /// <summary>
+        /// The profile as every response maps it, read through the one projection that fills the
+        /// values a write does not load, such as <see cref="User.LinkedProviders"/> and
+        /// <see cref="User.HasLocalPassword"/>. Falls back to the written entity only if the row
+        /// vanished between the write and the read.
+        /// </summary>
+        private async Task<User> ReloadProfileAsync(int id, User written) =>
+            await _userRepository.GetUserAsync(id) ?? written;
 
         public async Task<bool> DeleteUserAsync(int id)
         {

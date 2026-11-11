@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Text.Json;
 
 using backend.main.application.environment;
+using backend.main.features.auth.oauth.links;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.http;
 
@@ -206,17 +207,7 @@ namespace backend.main.features.auth.oauth
                 ConfigurationManager = _microsoftConfigManager,
 
                 ValidateIssuer = true,
-                IssuerValidator = (issuer, token, parameters) =>
-                {
-                    if (issuer.StartsWith("https://login.microsoftonline.com/")
-                        && issuer.EndsWith("/v2.0"))
-                    {
-                        return issuer;
-                    }
-
-                    throw new SecurityTokenInvalidIssuerException(
-                        $"Invalid issuer: {issuer}");
-                },
+                IssuerValidator = ValidateMicrosoftIssuer,
 
                 ClockSkew = TimeSpan.FromMinutes(2)
             };
@@ -247,6 +238,46 @@ namespace backend.main.features.auth.oauth
             var emailVerified = email != null && IsMicrosoftEmailVerified(principal);
 
             return new OAuthUser(sub, email, name, "microsoft", emailVerified);
+        }
+
+        public bool IsProviderConfigured(string provider) => provider switch
+        {
+            IdentityProviders.Google => _googleClientId != null && _googleClientSecret != null,
+            IdentityProviders.Microsoft => _microsoftClientId != null && _microsoftConfigManager != null,
+            _ => false,
+        };
+
+        /// <summary>
+        /// Accepts only the issuer of the tenant that issued the token.
+        /// </summary>
+        /// <remarks>
+        /// The multi-tenant <c>common</c> metadata lists its issuer with a <c>{tenantid}</c>
+        /// placeholder, so the issuer cannot be pinned up front. It must still name the token's
+        /// own <c>tid</c>: a token whose issuer names one tenant but whose claims name another was
+        /// not issued the way the claims say.
+        /// </remarks>
+        internal static string ValidateMicrosoftIssuer(
+            string issuer,
+            SecurityToken token,
+            TokenValidationParameters parameters)
+        {
+            var tenantId = token switch
+            {
+                JwtSecurityToken jwt => jwt.Claims.FirstOrDefault(c => c.Type == "tid")?.Value,
+                _ => null,
+            };
+
+            if (!string.IsNullOrWhiteSpace(tenantId)
+                && Guid.TryParse(tenantId, out _)
+                && string.Equals(
+                    issuer,
+                    $"https://login.microsoftonline.com/{tenantId}/v2.0",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return issuer;
+            }
+
+            throw new SecurityTokenInvalidIssuerException($"Invalid issuer: {issuer}");
         }
 
         /// <summary>

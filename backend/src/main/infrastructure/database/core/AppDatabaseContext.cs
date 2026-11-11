@@ -5,6 +5,7 @@ using backend.main.features.auth.history;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.totp;
+using backend.main.features.auth.oauth.links;
 using backend.main.features.clubs;
 using backend.main.features.clubs.discussions;
 using backend.main.features.clubs.discussions.replies;
@@ -58,6 +59,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<SmsMfaEnrollment> SmsMfaEnrollments { get; set; } = null!;
         public DbSet<TotpMfaEnrollment> TotpMfaEnrollments { get; set; } = null!;
         public DbSet<RecoveryCode> RecoveryCodes { get; set; } = null!;
+        public DbSet<UserIdentityLink> UserIdentityLinks { get; set; } = null!;
         public DbSet<AccountSecurityEvent> AccountSecurityEvents { get; set; } = null!;
         public DbSet<SecurityHistoryOutbox> SecurityHistoryOutbox { get; set; } = null!;
         public DbSet<ClubPost> ClubPosts { get; set; } = null!;
@@ -143,14 +145,6 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<UsernameReservation>()
                 .HasIndex(reservation => reservation.ReservedUntilUtc);
-
-            modelBuilder.Entity<User>()
-                .HasIndex(u => u.GoogleID)
-                .IsUnique();
-
-            modelBuilder.Entity<User>()
-                .HasIndex(u => u.MicrosoftID)
-                .IsUnique();
 
             modelBuilder.Entity<User>()
                 .Property(u => u.IsDisabled)
@@ -835,6 +829,39 @@ namespace backend.main.infrastructure.database.core
             modelBuilder.Entity<RecoveryCode>()
                 .HasIndex(c => c.UserId)
                 .HasFilter("\"UsedAtUtc\" IS NULL");
+
+            modelBuilder.Entity<UserIdentityLink>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(l => l.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UserIdentityLink>()
+                .Property(l => l.Provider)
+                .HasMaxLength(UserIdentityLink.ProviderMaxLength);
+
+            modelBuilder.Entity<UserIdentityLink>()
+                .Property(l => l.Subject)
+                .HasMaxLength(UserIdentityLink.SubjectMaxLength);
+
+            modelBuilder.Entity<UserIdentityLink>()
+                .Property(l => l.Email)
+                .HasMaxLength(UserIdentityLink.EmailMaxLength);
+
+            modelBuilder.Entity<UserIdentityLink>()
+                .Property(l => l.DisplayName)
+                .HasMaxLength(UserIdentityLink.DisplayNameMaxLength);
+
+            // A provider subject maps to at most one account: email never stands in for it.
+            modelBuilder.Entity<UserIdentityLink>()
+                .HasIndex(l => new { l.Provider, l.Subject })
+                .IsUnique();
+
+            // One link per provider per account; replacing one means unlinking it first.
+            modelBuilder.Entity<UserIdentityLink>()
+                .HasIndex(l => new { l.UserId, l.Provider })
+                .IsUnique();
 
             // Cascade: the history belongs to the account and goes with it, matching the hard
             // delete every other per-user table gets. Events the worker receives after the

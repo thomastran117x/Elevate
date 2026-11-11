@@ -5,5 +5,6 @@ namespace backend.main.features.auth
         public const string Authenticated = "authenticated";
         public const string RequiresStepUp = "requires_step_up";
         public const string RequiresRoleSelection = "requires_role_selection";
+        public const string RequiresLinkConfirmation = "requires_link_confirmation";
     }
 }

@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { Subject, of, throwError } from 'rxjs';
 
 import { provideHttpTesting, provideTestStore } from '@testing';
@@ -11,6 +12,8 @@ import {
   TotpEnrollmentStartResponse,
 } from '../../../../../auth/services/auth.service';
 import { ApiClientClientError } from '../../../../../../core/api/models/api-client-error.model';
+import { ProviderLinkFlowService } from '../../../../../auth/services/provider-link-flow.service';
+import { ProviderLinksService } from '../../../../../auth/services/provider-links.service';
 
 function makeSettings(overrides: Partial<MfaSettingsResponse> = {}): MfaSettingsResponse {
   return {
@@ -111,6 +114,16 @@ describe('SecurityTabComponent', () => {
       // HTTP backend even though this spec drives the component directly.
       providers: [
         { provide: AuthService, useValue: auth },
+        // The nested <app-linked-providers-card> has its own spec; here it only has to render.
+        {
+          provide: ProviderLinksService,
+          useValue: { getProviders: () => of({ hasPassword: true, providers: [] }) },
+        },
+        {
+          provide: ProviderLinkFlowService,
+          useValue: { readEmailProposal: () => null, clearEmailProposal: () => undefined },
+        },
+        provideRouter([]),
         ...provideHttpTesting(),
         ...provideTestStore(),
       ],

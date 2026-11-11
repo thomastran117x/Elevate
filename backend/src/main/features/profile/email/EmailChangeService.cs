@@ -24,7 +24,7 @@ namespace backend.main.features.profile.email
         private readonly IPasswordHasher _passwordHasher;
         private readonly IAuthSecurityEventEmitter _securityEvents;
 
-        private static string GetUserCacheKey(int userId) => $"user:{userId}";
+        private static string GetUserCacheKey(int userId) => UserCacheKeys.For(userId);
 
         public EmailChangeService(
             IAuthUserRepository userRepository,

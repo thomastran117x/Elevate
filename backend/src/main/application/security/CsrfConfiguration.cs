@@ -68,7 +68,8 @@ namespace backend.main.application.security
         // Unlike the auth endpoints (POST only), these controllers mutate via several verbs.
         private static readonly string[] ProtectedPathPrefixes =
         [
-            $"/{RoutePaths.ApiPrefix}/profile"
+            $"/{RoutePaths.ApiPrefix}/profile",
+            $"{RoutePaths.ApiAuthPath}/providers"
         ];
 
         public static IApplicationBuilder UseRefreshCsrfValidation(this IApplicationBuilder app)

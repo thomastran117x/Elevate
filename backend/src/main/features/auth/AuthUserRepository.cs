@@ -2,6 +2,7 @@ using System.Data;
 
 using backend.main.application.security;
 using backend.main.features.auth.contracts;
+using backend.main.features.auth.oauth.links;
 using backend.main.features.media;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
@@ -67,7 +68,7 @@ namespace backend.main.features.auth
 
         public AuthUserRepository(AppDatabaseContext context) => _context = context;
 
-        public async Task<User> CreateUserAsync(User user)
+        public async Task<User> CreateUserAsync(User user, UserIdentityLink? initialLink = null)
         {
             user.Usertype = AuthRoles.NormalizeStored(user.Usertype);
             if (!string.IsNullOrWhiteSpace(user.Username))
@@ -111,6 +112,17 @@ namespace backend.main.features.auth
 
                     await _context.Users.AddAsync(user);
                     await _context.SaveChangesAsync();
+
+                    // A provider sign-up's link is its only credential, so the account and the
+                    // link commit together or not at all.
+                    if (initialLink != null)
+                    {
+                        initialLink.UserId = user.Id;
+                        await _context.UserIdentityLinks.AddAsync(initialLink);
+                        await _context.SaveChangesAsync();
+                        user.LinkedProviders = [initialLink.Provider];
+                    }
+
                     await transaction.CommitAsync();
                     return user;
                 }
@@ -124,6 +136,15 @@ namespace backend.main.features.auth
                     await transaction.RollbackAsync();
                     _context.ChangeTracker.Clear();
                     throw new UsernameTakenException(user.Username);
+                }
+                // Another sign-up claimed the same provider subject first.
+                catch (Exception exception)
+                    when (initialLink != null && IsIdentityLinkUniqueViolation(exception))
+                {
+                    await transaction.RollbackAsync();
+                    _context.ChangeTracker.Clear();
+                    throw new ConflictException(
+                        "This Google or Microsoft account is already linked to another account.");
                 }
                 catch
                 {
@@ -284,21 +305,6 @@ namespace backend.main.features.auth
             // account. Nothing of this call was committed, so the caller can delete the blob it
             // uploaded without risk of removing one the account still points at.
             throw new ConflictException(AvatarSwapSupersededException.AvatarChangedMessage);
-        }
-
-        public async Task<UserOAuthRecord?> UpdateProviderIdsAsync(int id, string? googleId, string? microsoftId)
-        {
-            var user = await _context.Users.FindAsync(id);
-            if (user == null)
-                return null;
-
-            if (googleId != null)
-                user.GoogleID = googleId;
-            if (microsoftId != null)
-                user.MicrosoftID = microsoftId;
-
-            await _context.SaveChangesAsync();
-            return ToOAuthRecord(user);
         }
 
         public async Task<UserStatusRecord?> UpdateUserStatusAsync(int id, bool isDisabled, string? disabledReason)
@@ -521,8 +527,11 @@ namespace backend.main.features.auth
                     Avatar = u.Avatar,
                     Address = u.Address,
                     Phone = u.Phone,
-                    MicrosoftID = u.MicrosoftID,
-                    GoogleID = u.GoogleID,
+                    LinkedProviders = _context.UserIdentityLinks
+                        .Where(l => l.UserId == u.Id)
+                        .OrderBy(l => l.Provider)
+                        .Select(l => l.Provider)
+                        .ToList(),
                     IsDisabled = u.IsDisabled,
                     DisabledAtUtc = u.DisabledAtUtc,
                     DisabledReason = u.DisabledReason,
@@ -608,8 +617,10 @@ namespace backend.main.features.auth
                     RecipientName = u.Name,
                     IsDisabled = u.IsDisabled,
                     HasLocalPassword = u.Password != null,
-                    HasGoogleProvider = u.GoogleID != null,
-                    HasMicrosoftProvider = u.MicrosoftID != null,
+                    HasGoogleProvider = _context.UserIdentityLinks
+                        .Any(l => l.UserId == u.Id && l.Provider == IdentityProviders.Google),
+                    HasMicrosoftProvider = _context.UserIdentityLinks
+                        .Any(l => l.UserId == u.Id && l.Provider == IdentityProviders.Microsoft),
                 });
 
         private IQueryable<User> GetAuthRecords() => _context.Users.AsNoTracking();
@@ -624,47 +635,32 @@ namespace backend.main.features.auth
                     Id = u.Id,
                     Email = u.Email,
                     Usertype = AuthRoles.NormalizeStored(u.Usertype),
-                    GoogleID = u.GoogleID,
-                    MicrosoftID = u.MicrosoftID,
+                    HasProviderLink = _context.UserIdentityLinks.Any(l => l.UserId == u.Id),
                     IsDisabled = u.IsDisabled,
                     AuthVersion = u.AuthVersion,
                 })
                 .FirstOrDefaultAsync();
         }
 
-        public async Task<UserOAuthRecord?> GetOAuthByMicrosoftIdAsync(string microsoftId)
+        public async Task<UserOAuthRecord?> GetOAuthByProviderSubjectAsync(string provider, string subject)
         {
-            return await _context.Users
+            return await _context.UserIdentityLinks
                 .AsNoTracking()
-                .Where(u => u.MicrosoftID == microsoftId)
-                .Select(u => new UserOAuthRecord
-                {
-                    Id = u.Id,
-                    Email = u.Email,
-                    Usertype = AuthRoles.NormalizeStored(u.Usertype),
-                    GoogleID = u.GoogleID,
-                    MicrosoftID = u.MicrosoftID,
-                    IsDisabled = u.IsDisabled,
-                    AuthVersion = u.AuthVersion,
-                })
-                .FirstOrDefaultAsync();
-        }
-
-        public async Task<UserOAuthRecord?> GetOAuthByGoogleIdAsync(string googleId)
-        {
-            return await _context.Users
-                .AsNoTracking()
-                .Where(u => u.GoogleID == googleId)
-                .Select(u => new UserOAuthRecord
-                {
-                    Id = u.Id,
-                    Email = u.Email,
-                    Usertype = AuthRoles.NormalizeStored(u.Usertype),
-                    GoogleID = u.GoogleID,
-                    MicrosoftID = u.MicrosoftID,
-                    IsDisabled = u.IsDisabled,
-                    AuthVersion = u.AuthVersion,
-                })
+                .Where(l => l.Provider == provider && l.Subject == subject)
+                .Join(
+                    _context.Users,
+                    l => l.UserId,
+                    u => u.Id,
+                    (l, u) => new UserOAuthRecord
+                    {
+                        Id = u.Id,
+                        Email = u.Email,
+                        Usertype = AuthRoles.NormalizeStored(u.Usertype),
+                        HasProviderLink = true,
+                        LinkId = l.Id,
+                        IsDisabled = u.IsDisabled,
+                        AuthVersion = u.AuthVersion,
+                    })
                 .FirstOrDefaultAsync();
         }
 
@@ -1044,7 +1040,7 @@ namespace backend.main.features.auth
         /// <remarks>
         /// Deliberately narrower than <see cref="IsWriteConflict"/>, which answers "lost a race on
         /// something" for any constraint. <see cref="CreateUserAsync"/> can equally collide on
-        /// Email, GoogleID or MicrosoftID, and reporting one of those as a taken username would
+        /// Email or an initial provider link, and reporting one of those as a taken username would
         /// send the caller off to change the wrong field. Postgres names the index it violated;
         /// SQLite, used by the repository tests, only names the columns in its message.
         /// </remarks>
@@ -1064,6 +1060,23 @@ namespace backend.main.features.auth
                         StringComparison.Ordinal),
                 SqliteException { SqliteErrorCode: 19 } sqlite =>
                     sqlite.Message.Contains("Users.Username", StringComparison.OrdinalIgnoreCase),
+                _ => false
+            };
+        }
+
+        private static bool IsIdentityLinkUniqueViolation(Exception exception)
+        {
+            var databaseException = exception is DbUpdateException
+                ? exception.InnerException
+                : exception;
+
+            return databaseException switch
+            {
+                PostgresException postgres =>
+                    postgres.SqlState == PostgresErrorCodes.UniqueViolation
+                    && postgres.TableName == "UserIdentityLinks",
+                SqliteException { SqliteErrorCode: 19 } sqlite =>
+                    sqlite.Message.Contains("UserIdentityLinks.", StringComparison.OrdinalIgnoreCase),
                 _ => false
             };
         }
@@ -1150,20 +1163,6 @@ namespace backend.main.features.auth
                 CreatedAt = null,
                 UpdatedAt = null,
             });
-        }
-
-        private static UserOAuthRecord ToOAuthRecord(User user)
-        {
-            return new UserOAuthRecord
-            {
-                Id = user.Id,
-                Email = user.Email,
-                Usertype = AuthRoles.NormalizeStored(user.Usertype),
-                GoogleID = user.GoogleID,
-                MicrosoftID = user.MicrosoftID,
-                IsDisabled = user.IsDisabled,
-                AuthVersion = user.AuthVersion,
-            };
         }
     }
 }
