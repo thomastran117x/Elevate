@@ -767,6 +767,10 @@ namespace backend.main.infrastructure.database.core
             modelBuilder.Entity<Device>()
                 .HasIndex(d => new { d.UserId, d.DeviceType, d.ClientName });
 
+            // The expiry purge.
+            modelBuilder.Entity<Device>()
+                .HasIndex(d => d.ExpiresAt);
+
             modelBuilder.Entity<AuthSession>()
                 .HasKey(s => s.Id);
 

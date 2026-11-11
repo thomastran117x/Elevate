@@ -1,12 +1,15 @@
+using backend.main.features.auth.device;
+
 namespace backend.main.features.auth.sessions;
 
 /// <summary>
-/// Deletes session rows past their expiry.
+/// Deletes session rows past their expiry, and trusted devices whose trust has ended.
 /// <para>
-/// A revoked row is kept until it expires as well. Until then its Redis session may still exist,
-/// if the cleanup after the revocation never landed, and the row is what stops that session's
-/// next refresh from recording it as a new one. Redis never keeps a session past the expiry
-/// recorded here, so a day later nothing can be brought back.
+/// A revoked session row is kept until it expires as well. Until then its Redis session may still
+/// exist, if the cleanup after the revocation never landed, and the row is what stops that
+/// session's next refresh from recording it as a new one. Redis never keeps a session past the
+/// expiry recorded here, so a day later nothing can be brought back. An expired device needs no
+/// such grace: sign-in already refuses it, and removes it when it is presented.
 /// </para>
 /// <para>
 /// Split from <see cref="AuthSessionCleanupService"/> so the work is a plain scoped class that
@@ -20,26 +23,39 @@ public sealed class AuthSessionCleanupRunner
     internal const int MaxBatchesPerRun = 20;
 
     private readonly IAuthSessionRepository _sessions;
+    private readonly IDeviceRepository _devices;
     private readonly TimeProvider _timeProvider;
 
-    public AuthSessionCleanupRunner(IAuthSessionRepository sessions, TimeProvider timeProvider)
+    public AuthSessionCleanupRunner(
+        IAuthSessionRepository sessions,
+        IDeviceRepository devices,
+        TimeProvider timeProvider)
     {
         _sessions = sessions;
+        _devices = devices;
         _timeProvider = timeProvider;
     }
 
     public async Task RunOnceAsync(CancellationToken cancellationToken = default)
     {
-        var cutoff = _timeProvider.GetUtcNow().UtcDateTime - ExpiredRowGrace;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
 
-        // Bounded rather than "until empty", so a large backlog does not hold one scoped
-        // DbContext open indefinitely; whatever is left waits for the next pass.
+        await PurgeAsync(() => _sessions.DeleteExpiredAsync(now - ExpiredRowGrace, BatchSize), cancellationToken);
+        await PurgeAsync(() => _devices.DeleteExpiredAsync(now, BatchSize), cancellationToken);
+    }
+
+    /// <summary>
+    /// Bounded rather than "until empty", so a large backlog does not hold one scoped DbContext
+    /// open indefinitely; whatever is left waits for the next pass.
+    /// </summary>
+    private static async Task PurgeAsync(Func<Task<int>> deleteBatch, CancellationToken cancellationToken)
+    {
         for (var batch = 0; batch < MaxBatchesPerRun; batch++)
         {
             if (cancellationToken.IsCancellationRequested)
                 return;
 
-            if (await _sessions.DeleteExpiredAsync(cutoff, BatchSize) < BatchSize)
+            if (await deleteBatch() < BatchSize)
                 return;
         }
     }

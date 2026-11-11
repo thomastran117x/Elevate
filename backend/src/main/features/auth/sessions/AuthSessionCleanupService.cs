@@ -37,7 +37,7 @@ public sealed class AuthSessionCleanupService : BackgroundService
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "[AuthSessionCleanupService] Failed to purge expired sessions.");
+                Logger.Warn(ex, "[AuthSessionCleanupService] Failed to purge expired sessions and trusted devices.");
             }
 
             try

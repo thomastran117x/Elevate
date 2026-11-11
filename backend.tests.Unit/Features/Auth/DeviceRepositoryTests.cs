@@ -42,12 +42,79 @@ public class DeviceRepositoryTests
         var refreshed = NewDevice("device-hash");
         refreshed.ClientName = "Firefox";
         refreshed.IpAddress = "10.0.0.2";
+        refreshed.ExpiresAt = Now.AddDays(120);
         var trusted = await harness.Repository.TrustIfAuthVersionAsync(userId, 3, refreshed);
 
         trusted.Should().BeTrue();
         var stored = await harness.Db.Devices.AsNoTracking().SingleAsync();
         stored.ClientName.Should().Be("Firefox");
         stored.IpAddress.Should().Be("10.0.0.2");
+        // Verifying again renews the trust.
+        stored.ExpiresAt.Should().Be(Now.AddDays(120));
+    }
+
+    [Fact]
+    public async Task ListActiveAsync_ShouldReturnOnlyTheAccountsUnexpiredDevices_MostRecentFirst()
+    {
+        await using var harness = await DeviceRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync(authVersion: 1);
+        var otherId = await harness.SeedUserAsync(authVersion: 1, username: "other-device-user");
+        await harness.AddAsync(userId, "older", lastSeenAt: Now.AddDays(-3), expiresAt: Now.AddDays(10));
+        await harness.AddAsync(userId, "newer", lastSeenAt: Now.AddDays(-1), expiresAt: Now.AddDays(10));
+        await harness.AddAsync(userId, "expired", lastSeenAt: Now, expiresAt: Now);
+        await harness.AddAsync(otherId, "theirs", lastSeenAt: Now, expiresAt: Now.AddDays(10));
+
+        var devices = await harness.Repository.ListActiveAsync(userId, Now);
+
+        devices.Select(d => d.DeviceTokenHash).Should().Equal("newer", "older");
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldOnlyRemoveTheAccountsOwnDevice()
+    {
+        await using var harness = await DeviceRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync(authVersion: 1);
+        var otherId = await harness.SeedUserAsync(authVersion: 1, username: "other-device-user");
+        var deviceId = await harness.AddAsync(userId, "mine", lastSeenAt: Now, expiresAt: Now.AddDays(10));
+
+        (await harness.Repository.DeleteAsync(otherId, deviceId)).Should().BeFalse();
+        (await harness.Db.Devices.AsNoTracking().AnyAsync()).Should().BeTrue();
+
+        (await harness.Repository.DeleteAsync(userId, deviceId)).Should().BeTrue();
+        (await harness.Db.Devices.AsNoTracking().AnyAsync()).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task DeleteAllAsync_ShouldRemoveEveryDeviceOfTheAccount_AndNoOther()
+    {
+        await using var harness = await DeviceRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync(authVersion: 1);
+        var otherId = await harness.SeedUserAsync(authVersion: 1, username: "other-device-user");
+        await harness.AddAsync(userId, "laptop", lastSeenAt: Now, expiresAt: Now.AddDays(10));
+        await harness.AddAsync(userId, "phone", lastSeenAt: Now, expiresAt: Now.AddDays(10));
+        await harness.AddAsync(otherId, "theirs", lastSeenAt: Now, expiresAt: Now.AddDays(10));
+
+        (await harness.Repository.DeleteAllAsync(userId)).Should().Be(2);
+
+        (await harness.Db.Devices.AsNoTracking().Select(d => d.DeviceTokenHash).ToListAsync())
+            .Should().Equal("theirs");
+    }
+
+    [Fact]
+    public async Task DeleteExpiredAsync_ShouldRemoveOnlyDevicesWhoseTrustEnded_InBatches()
+    {
+        await using var harness = await DeviceRepositoryHarness.CreateAsync();
+        var userId = await harness.SeedUserAsync(authVersion: 1);
+        await harness.AddAsync(userId, "ended", lastSeenAt: Now.AddDays(-91), expiresAt: Now.AddDays(-1));
+        await harness.AddAsync(userId, "ends-now", lastSeenAt: Now.AddDays(-90), expiresAt: Now);
+        await harness.AddAsync(userId, "live", lastSeenAt: Now, expiresAt: Now.AddDays(1));
+
+        (await harness.Repository.DeleteExpiredAsync(Now, batchSize: 1)).Should().Be(1);
+        (await harness.Repository.DeleteExpiredAsync(Now, batchSize: 10)).Should().Be(1);
+        (await harness.Repository.DeleteExpiredAsync(Now, batchSize: 10)).Should().Be(0);
+
+        (await harness.Db.Devices.AsNoTracking().Select(d => d.DeviceTokenHash).ToListAsync())
+            .Should().Equal("live");
     }
 
     /// <summary>
@@ -79,12 +146,15 @@ public class DeviceRepositoryTests
         (await harness.Db.Devices.AsNoTracking().AnyAsync()).Should().BeFalse();
     }
 
+    private static readonly DateTime Now = new(2026, 11, 11, 12, 0, 0, DateTimeKind.Utc);
+
     private static Device NewDevice(string deviceTokenHash) => new()
     {
         DeviceTokenHash = deviceTokenHash,
         DeviceType = "Desktop",
         ClientName = "Chrome",
-        IpAddress = "127.0.0.1"
+        IpAddress = "127.0.0.1",
+        ExpiresAt = Now.AddDays(90),
     };
 
     private sealed class DeviceRepositoryHarness : IAsyncDisposable
@@ -113,15 +183,15 @@ public class DeviceRepositoryTests
             return new DeviceRepositoryHarness(connection, db);
         }
 
-        public async Task<int> SeedUserAsync(int authVersion)
+        public async Task<int> SeedUserAsync(int authVersion, string username = "device-user")
         {
             var user = new User
             {
-                Email = "device@example.com",
+                Email = $"{username}@example.com",
                 Password = "seed-password",
                 Usertype = "participant",
                 Name = "Seed User",
-                Username = "device-user",
+                Username = username,
                 AuthVersion = authVersion
             };
 
@@ -129,6 +199,18 @@ public class DeviceRepositoryTests
             await Db.SaveChangesAsync();
             Db.ChangeTracker.Clear();
             return user.Id;
+        }
+
+        public async Task<int> AddAsync(int userId, string deviceTokenHash, DateTime lastSeenAt, DateTime expiresAt)
+        {
+            var device = NewDevice(deviceTokenHash);
+            device.UserId = userId;
+            device.LastSeenAt = lastSeenAt;
+            device.ExpiresAt = expiresAt;
+            Db.Devices.Add(device);
+            await Db.SaveChangesAsync();
+            Db.ChangeTracker.Clear();
+            return device.Id;
         }
 
         public async ValueTask DisposeAsync()

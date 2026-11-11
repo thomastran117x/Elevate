@@ -46,6 +46,9 @@ namespace backend.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("IpAddress")
                         .IsRequired()
                         .HasColumnType("text");
@@ -60,6 +63,8 @@ namespace backend.Migrations
 
                     b.HasIndex("DeviceTokenHash")
                         .IsUnique();
+
+                    b.HasIndex("ExpiresAt");
 
                     b.HasIndex("UserId");
 
