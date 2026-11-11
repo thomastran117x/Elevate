@@ -62,6 +62,23 @@ namespace backend.main.features.auth.token
             TimeSpan lifetime
         );
         public Task RevokeRefreshSessionAsync(string sessionId, AuthSecurityReason reason);
+        /// <summary>
+        /// Revokes one of <paramref name="userId"/>'s live sessions, for both its refresh and its
+        /// access tokens.
+        /// </summary>
+        /// <returns>
+        /// False, changing nothing, when the session is not a live session of that account.
+        /// </returns>
+        public Task<bool> RevokeUserRefreshSessionAsync(int userId, string sessionId, AuthSecurityReason reason);
+        /// <summary>
+        /// Revokes every session of <paramref name="userId"/> except
+        /// <paramref name="currentSessionId"/>, which keeps working along with its step-up proof.
+        /// </summary>
+        /// <returns>How many sessions were revoked.</returns>
+        public Task<int> RevokeOtherRefreshSessionsAsync(
+            int userId,
+            string currentSessionId,
+            AuthSecurityReason reason);
         /// <param name="actorUserId">The account that caused the revocation when it is not
         /// <paramref name="userId"/>, such as an administrator.</param>
         public Task RevokeAllRefreshSessionsAsync(int userId, AuthSecurityReason reason, int? actorUserId = null);

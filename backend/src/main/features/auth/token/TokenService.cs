@@ -7,6 +7,7 @@ using backend.main.application.environment;
 using backend.main.application.security;
 using backend.main.features.auth.events;
 using backend.main.features.auth.mfa.session;
+using backend.main.features.auth.sessions;
 using backend.main.features.cache;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
@@ -74,17 +75,24 @@ return 1";
 
         private readonly TimeProvider _timeProvider;
         private readonly IAuthSecurityEventEmitter _securityEvents;
+        private readonly IAuthSessionRepository? _sessions;
 
+        /// <param name="sessions">
+        /// The authoritative session registry. Always supplied by the container; left out only by
+        /// tests that exercise the Redis side alone.
+        /// </param>
         public TokenService(
             ICacheService cacheService,
             TimeProvider? timeProvider = null,
-            IAuthSecurityEventEmitter? securityEvents = null)
+            IAuthSecurityEventEmitter? securityEvents = null,
+            IAuthSessionRepository? sessions = null)
         {
             JWT_ACCESS_SECRET = EnvironmentSetting.JwtSecretKeyAccess;
             JWT_VERIFICATION_SECRET = EnvironmentSetting.JwtSecretKeyVerification;
             _cacheService = cacheService;
             _timeProvider = timeProvider ?? TimeProvider.System;
             _securityEvents = securityEvents ?? NullAuthSecurityEventEmitter.Instance;
+            _sessions = sessions;
         }
 
         public AccessTokenIssue GenerateAccessToken(User user, string sessionId)
@@ -210,6 +218,8 @@ return 1";
                 }
 
                 await _cacheService.SetAddAsync(UserSessionsKey(userId), session.SessionId);
+
+                await RecordSessionUseAsync(session, requestInfo, refreshTtl, isNew: storedSession is null);
 
                 return new RefreshTokenIssue(
                     DeriveRefreshToken(session.SessionId, session.TokenSecret, session.Generation),
@@ -1184,19 +1194,148 @@ return 1";
             };
         }
 
+        /// <summary>
+        /// Writes the session's use to the registry once Redis holds it. The registry, not Redis,
+        /// decides whether the session is alive, so a row revoked in the meantime refuses the
+        /// refresh here, and a new session that could not be recorded is not handed out.
+        /// </summary>
+        private async Task RecordSessionUseAsync(
+            RefreshSessionState session,
+            ClientRequestInfo requestInfo,
+            TimeSpan refreshTtl,
+            bool isNew)
+        {
+            if (_sessions is null)
+                return;
+
+            // Read after the Redis write, so the recorded expiry is never earlier than the key's.
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var record = new AuthSession
+            {
+                Id = session.SessionId,
+                UserId = session.UserId,
+                Transport = session.Transport,
+                RememberMe = session.RememberMe,
+                CreatedAt = isNew ? now : session.CreatedAt,
+                LastSeenAt = now,
+                ExpiresAt = now + refreshTtl,
+            };
+            record.DescribeClient(requestInfo);
+
+            bool recorded;
+            try
+            {
+                recorded = await _sessions.RecordUseAsync(record);
+            }
+            catch when (isNew)
+            {
+                // Nothing has been handed out yet: take the new session back out of Redis so it
+                // cannot be used without a row. An existing session is left for its next refresh.
+                await TryRevokeRefreshSessionCoreAsync(session.SessionId);
+                throw;
+            }
+
+            if (!recorded)
+            {
+                await TryRevokeRefreshSessionCoreAsync(session.SessionId);
+                throw new UnauthorizedException("Refresh session is invalid or expired.");
+            }
+        }
+
         public async Task RevokeRefreshSessionAsync(string sessionId, AuthSecurityReason reason)
         {
-            var userId = await RevokeRefreshSessionCoreAsync(sessionId);
+            // The registry first: once its row is revoked neither kind of token for the session is
+            // accepted, whatever then happens to the Redis cleanup.
+            var recordedUserId = _sessions is null
+                ? null
+                : await _sessions.RevokeAsync(sessionId, reason, _timeProvider.GetUtcNow().UtcDateTime);
+
+            var userId = await CleanUpRefreshSessionAsync(sessionId, revokedInRegistry: recordedUserId is not null)
+                ?? recordedUserId;
             if (userId is not null)
+                EmitSessionRevoked(userId.Value, sessionId, reason);
+        }
+
+        public async Task<bool> RevokeUserRefreshSessionAsync(
+            int userId,
+            string sessionId,
+            AuthSecurityReason reason)
+        {
+            var sessions = _sessions
+                ?? throw new InvalidOperationException("Revoking a session by owner needs the session registry.");
+
+            if (!await sessions.RevokeForUserAsync(userId, sessionId, reason, _timeProvider.GetUtcNow().UtcDateTime))
+                return false;
+
+            await CleanUpRefreshSessionAsync(sessionId, revokedInRegistry: true);
+            EmitSessionRevoked(userId, sessionId, reason);
+            return true;
+        }
+
+        public async Task<int> RevokeOtherRefreshSessionsAsync(
+            int userId,
+            string currentSessionId,
+            AuthSecurityReason reason)
+        {
+            var sessions = _sessions
+                ?? throw new InvalidOperationException("Revoking other sessions needs the session registry.");
+
+            var revoked = await sessions.RevokeAllAsync(
+                userId,
+                reason,
+                _timeProvider.GetUtcNow().UtcDateTime,
+                exceptSessionId: currentSessionId);
+            var cleaned = await SweepRefreshSessionsAsync(userId, revoked, exceptSessionId: currentSessionId);
+
+            // A session from before the registry has no row, so only the Redis sweep ends it. When
+            // the cache cannot list them the caller is told, and can retry, rather than shown a
+            // success that may have left one signed in.
+            var total = revoked.Union(cleaned ?? []).Count();
+            if (total > 0)
+                EmitSessionsRevoked(userId, reason, actorUserId: null, AuthSecurityOutcome.Succeeded);
+            if (cleaned is null)
+                throw new NotAvailableException();
+            return total;
+        }
+
+        private void EmitSessionRevoked(int userId, string sessionId, AuthSecurityReason reason) =>
+            _securityEvents.Emit(new AuthSecurityEvent
             {
-                _securityEvents.Emit(new AuthSecurityEvent
-                {
-                    Definition = AuthSecurityEvents.SessionRevoked,
-                    Outcome = AuthSecurityOutcome.Succeeded,
-                    Reason = reason,
-                    UserId = userId,
-                    SessionId = sessionId,
-                });
+                Definition = AuthSecurityEvents.SessionRevoked,
+                Outcome = AuthSecurityOutcome.Succeeded,
+                Reason = reason,
+                UserId = userId,
+                SessionId = sessionId,
+            });
+
+        /// <summary>
+        /// Removes the session from Redis. When the registry already revoked it, an unreachable
+        /// cache is logged rather than failing the caller: the row refuses both kinds of token, and
+        /// the key ages out with its TTL.
+        /// </summary>
+        private async Task<int?> CleanUpRefreshSessionAsync(string sessionId, bool revokedInRegistry)
+        {
+            try
+            {
+                return await RevokeRefreshSessionCoreAsync(sessionId);
+            }
+            catch (NotAvailableException) when (revokedInRegistry)
+            {
+                Logger.Warn(
+                    $"[TokenService] Session {sessionId} is revoked in the registry; its Redis cleanup is deferred to the key's expiry.");
+                return null;
+            }
+        }
+
+        private async Task TryRevokeRefreshSessionCoreAsync(string sessionId)
+        {
+            try
+            {
+                await RevokeRefreshSessionCoreAsync(sessionId);
+            }
+            catch (Exception e)
+            {
+                Logger.Warn(e, $"[TokenService] Could not withdraw refresh session {sessionId} from Redis.");
             }
         }
 
@@ -1250,32 +1389,27 @@ return 1";
         {
             try
             {
-                // Best effort: callers bump AuthVersion first, and the version stamped on each
-                // session is what stops a surviving one from being refreshed. The session list is
-                // read through a script so that an unreachable cache is told apart from an account
-                // with no sessions; the plain set read reports both as empty.
-                var read = await _cacheService.TryEvalAsync(
-                    ReadSessionIdsScript,
-                    [(StackExchange.Redis.RedisKey)UserSessionsKey(userId)],
-                    []);
-                if (!read.Succeeded)
+                // The registry first, which ends every recorded session at once, access tokens
+                // included. Callers that rotate credentials also bump AuthVersion first, which
+                // covers a session from before the registry that the Redis sweep below misses.
+                IReadOnlyList<string> recorded = _sessions is null
+                    ? []
+                    : await _sessions.RevokeAllAsync(userId, reason, _timeProvider.GetUtcNow().UtcDateTime);
+
+                IReadOnlyList<string>? cleaned = await SweepRefreshSessionsAsync(userId, recorded);
+                if (cleaned is null)
                 {
-                    EmitSessionsRevoked(userId, reason, actorUserId, AuthSecurityOutcome.Faulted);
+                    EmitSessionsRevoked(
+                        userId,
+                        reason,
+                        actorUserId,
+                        recorded.Count > 0 ? AuthSecurityOutcome.Succeeded : AuthSecurityOutcome.Faulted);
                     return;
                 }
 
-                var revoked = 0;
-                foreach (var sessionId in ReadMembers(read.Value))
-                {
-                    if (await RevokeRefreshSessionCoreAsync(sessionId) is not null)
-                        revoked++;
-                }
-
-                await _cacheService.DeleteKeyAsync(UserSessionsKey(userId));
-
                 // One event for the sweep, with no session id: it covers every session. Nothing is
                 // recorded when there was nothing to end, such as a disabled account refreshing again.
-                if (revoked > 0)
+                if (recorded.Union(cleaned).Any())
                     EmitSessionsRevoked(userId, reason, actorUserId, AuthSecurityOutcome.Succeeded);
             }
             catch (Exception e)
@@ -1286,6 +1420,47 @@ return 1";
                 Logger.Error($"[TokenService] RevokeAllRefreshSessionsAsync failed: {e}");
                 throw new InternalServerErrorException();
             }
+        }
+
+        /// <summary>
+        /// Removes the account's sessions from Redis, all of them or all but
+        /// <paramref name="exceptSessionId"/>.
+        /// </summary>
+        /// <param name="revokedInRegistry">
+        /// Sessions whose rows are already revoked, for which an unreachable cache is not a failure.
+        /// </param>
+        /// <returns>
+        /// The sessions found and removed, or null when the cache could not list them.
+        /// </returns>
+        private async Task<IReadOnlyList<string>?> SweepRefreshSessionsAsync(
+            int userId,
+            IReadOnlyList<string> revokedInRegistry,
+            string? exceptSessionId = null)
+        {
+            // Read through a script so that an unreachable cache is told apart from an account
+            // with no sessions; the plain set read reports both as empty.
+            var read = await _cacheService.TryEvalAsync(
+                ReadSessionIdsScript,
+                [(StackExchange.Redis.RedisKey)UserSessionsKey(userId)],
+                []);
+            if (!read.Succeeded)
+                return null;
+
+            var cleaned = new List<string>();
+            foreach (var sessionId in ReadMembers(read.Value))
+            {
+                if (sessionId == exceptSessionId)
+                    continue;
+
+                if (await CleanUpRefreshSessionAsync(sessionId, revokedInRegistry.Contains(sessionId)) is not null)
+                    cleaned.Add(sessionId);
+            }
+
+            // Kept while a session is meant to survive; each removed one left the set above.
+            if (exceptSessionId is null)
+                await _cacheService.DeleteKeyAsync(UserSessionsKey(userId));
+
+            return cleaned;
         }
 
         private void EmitSessionsRevoked(

@@ -33,7 +33,23 @@ public static class SecurityHistoryClients
         if (string.IsNullOrWhiteSpace(userAgent))
             return SecurityHistoryClient.Unknown;
 
-        return ClientRequestClassifier.ResolveClientName(userAgent) switch
+        return FromRecognisedName(ClientRequestClassifier.ResolveClientName(userAgent));
+    }
+
+    /// <summary>
+    /// Maps a name the request classifier produced, such as <c>ClientRequestInfo.ClientName</c>,
+    /// onto the closed set. Its free-text fallback becomes <see cref="SecurityHistoryClient.Other"/>.
+    /// </summary>
+    public static SecurityHistoryClient FromClientName(string? clientName)
+    {
+        if (string.IsNullOrWhiteSpace(clientName) || clientName == "Unknown")
+            return SecurityHistoryClient.Unknown;
+
+        return FromRecognisedName(clientName);
+    }
+
+    private static SecurityHistoryClient FromRecognisedName(string clientName) =>
+        clientName switch
         {
             "Chrome" => SecurityHistoryClient.Chrome,
             "Edge" => SecurityHistoryClient.Edge,
@@ -43,5 +59,4 @@ public static class SecurityHistoryClients
             "Postman" or "cURL" or "Axios" or "HttpClient" => SecurityHistoryClient.ApiClient,
             _ => SecurityHistoryClient.Other,
         };
-    }
 }

@@ -199,7 +199,8 @@ public class StepUpProofEndpointsTests
         var code = await app.WaitForEmailAsync(message =>
             message.Type == EmailMessageType.MfaCode && message.Email == "proof-after-logout@example.com");
 
-        // Logout lands between start and verify; the access token itself is still unexpired.
+        // Logout lands between start and verify. The access token is unexpired, but its session's
+        // revocation already refuses it.
         var logout = await app.Client.PostAsJsonAsync("/api/auth/api/logout", new RefreshTokenRequest
         {
             RefreshToken = session.RefreshToken,
@@ -214,7 +215,8 @@ public class StepUpProofEndpointsTests
 
         verify.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         (await app.ReadStepUpProofAsync(session.AccessToken)).Should().BeNull();
-        await AssertMfaRequiredAsync(await app.GetWithBearerAsync("/api/auth/mfa/step-up/status", session.AccessToken));
+        (await app.GetWithBearerAsync("/api/auth/mfa/step-up/status", session.AccessToken))
+            .StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]

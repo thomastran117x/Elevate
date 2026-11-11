@@ -13,6 +13,7 @@ using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.oauth.links;
 using backend.main.features.auth.password;
+using backend.main.features.auth.sessions;
 using backend.main.features.auth.stepup;
 using backend.main.features.auth.token;
 using backend.main.features.bloom;
@@ -266,6 +267,7 @@ namespace backend.main.application.bootstrap
             services.AddRepositoryWithProxy<IClubDiscussionRepository, ClubDiscussionRepository>();
             services.AddRepositoryWithProxy<IClubDiscussionReplyRepository, ClubDiscussionReplyRepository>();
             services.AddRepositoryWithProxy<IDeviceRepository, DeviceRepository>();
+            services.AddRepositoryWithProxy<IAuthSessionRepository, AuthSessionRepository>();
             services.AddRepositoryWithProxy<IClubPostRepository, ClubPostRepository>();
             services.AddRepositoryWithProxy<IPostCommentRepository, PostCommentRepository>();
             services.AddRepositoryWithProxy<IEventRegistrationRepository, EventRegistrationRepository>();
@@ -302,6 +304,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IClubMemberInvitationService, ClubMemberInvitationService>();
             services.AddScoped<ClubVersionCleanupRunner>();
             services.AddScoped<RecentlyViewedCleanupRunner>();
+            services.AddScoped<AuthSessionCleanupRunner>();
             services.AddScoped<IClubReviewService, ClubReviewService>();
             services.AddScoped<IClubDiscussionService, ClubDiscussionService>();
             services.AddScoped<IClubDiscussionReplyService, ClubDiscussionReplyService>();
@@ -439,6 +442,7 @@ namespace backend.main.application.bootstrap
             if (includeHostedServices)
             {
                 services.AddHostedService<SecurityHistoryOutboxService>();
+                services.AddHostedService<AuthSessionCleanupService>();
 
                 if (featureFlags.IsEnabled(FeatureFlagKeys.Search))
                     services.AddHostedService<ElasticsearchIndexInitializationService>();

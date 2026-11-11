@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using backend.main.application.security;
 using backend.main.features.auth;
+using backend.main.features.auth.sessions;
 using backend.main.features.auth.token;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.app;
@@ -26,7 +27,7 @@ public class JwtConfigurationTests
     [Fact]
     public void AddJwtAuth_ShouldConfigureTokenValidationParameters_AndRolePolicies()
     {
-        using var provider = BuildJwtProvider(new Mock<IAuthUserRepository>());
+        using var provider = BuildJwtProvider(new Mock<IAuthSessionRepository>());
         var optionsMonitor = provider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>();
         var options = optionsMonitor.Get("Bearer");
         var authorization = provider.GetRequiredService<IOptions<AuthorizationOptions>>().Value;
@@ -55,7 +56,7 @@ public class JwtConfigurationTests
     [Fact]
     public void AddJwtAuth_ShouldRequireAnAuthenticatedBearerUser_ByDefaultAndAsFallback()
     {
-        using var provider = BuildJwtProvider(new Mock<IAuthUserRepository>());
+        using var provider = BuildJwtProvider(new Mock<IAuthSessionRepository>());
         var authorization = provider.GetRequiredService<IOptions<AuthorizationOptions>>().Value;
 
         foreach (var policy in new[] { authorization.DefaultPolicy, authorization.FallbackPolicy })
@@ -70,7 +71,7 @@ public class JwtConfigurationTests
     [Fact]
     public void AddJwtAuth_ShouldRegisterTheUnmatchedRouteResultHandler()
     {
-        using var provider = BuildJwtProvider(new Mock<IAuthUserRepository>());
+        using var provider = BuildJwtProvider(new Mock<IAuthSessionRepository>());
 
         provider.GetRequiredService<IAuthorizationMiddlewareResultHandler>()
             .Should().BeOfType<UnmatchedRouteAuthorizationResultHandler>();
@@ -79,7 +80,7 @@ public class JwtConfigurationTests
     [Fact]
     public async Task OnChallenge_ShouldReturnUnauthorizedPayload_ForMissingToken()
     {
-        using var provider = BuildJwtProvider(new Mock<IAuthUserRepository>());
+        using var provider = BuildJwtProvider(new Mock<IAuthSessionRepository>());
         var options = provider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>().Get("Bearer");
         var context = new DefaultHttpContext
         {
@@ -106,7 +107,7 @@ public class JwtConfigurationTests
     [Fact]
     public async Task OnChallenge_ShouldReturnUnauthorizedPayload_ForInvalidToken()
     {
-        using var provider = BuildJwtProvider(new Mock<IAuthUserRepository>());
+        using var provider = BuildJwtProvider(new Mock<IAuthSessionRepository>());
         var options = provider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>().Get("Bearer");
         var context = new DefaultHttpContext
         {
@@ -133,7 +134,7 @@ public class JwtConfigurationTests
     [Fact]
     public async Task OnForbidden_ShouldReturnForbiddenPayload()
     {
-        using var provider = BuildJwtProvider(new Mock<IAuthUserRepository>());
+        using var provider = BuildJwtProvider(new Mock<IAuthSessionRepository>());
         var options = provider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>().Get("Bearer");
         var context = new DefaultHttpContext
         {
@@ -156,7 +157,7 @@ public class JwtConfigurationTests
     [Fact]
     public async Task OnTokenValidated_ShouldFail_WhenClaimsAreInvalid()
     {
-        using var provider = BuildJwtProvider(new Mock<IAuthUserRepository>());
+        using var provider = BuildJwtProvider(new Mock<IAuthSessionRepository>());
         var options = provider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>().Get("Bearer");
         var context = new DefaultHttpContext
         {
@@ -178,79 +179,69 @@ public class JwtConfigurationTests
     }
 
     [Fact]
-    public async Task OnTokenValidated_ShouldFail_WhenUserIsDisabledOrAuthVersionMismatch()
+    public async Task OnTokenValidated_ShouldFail_WhenTheSessionClaimIsMissing()
     {
-        var repository = new Mock<IAuthUserRepository>();
-        repository.Setup(service => service.GetUserAsync(42))
-            .ReturnsAsync(new User
-            {
-                Id = 42,
-                Email = "user@example.com",
-                Usertype = AuthRoles.Participant,
-                IsDisabled = true,
-                AuthVersion = 1
-            });
-
+        var repository = new Mock<IAuthSessionRepository>();
         using var provider = BuildJwtProvider(repository);
-        var options = provider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>().Get("Bearer");
-        var context = new DefaultHttpContext
-        {
-            RequestServices = provider
-        };
+        var tokenValidatedContext = CreateTokenValidatedContext(
+            provider,
+            new Claim(ClaimTypes.NameIdentifier, "42"),
+            new Claim(TokenService.AuthVersionClaimType, "1"));
 
-        var tokenValidatedContext = new TokenValidatedContext(context, CreateScheme(), options)
-        {
-            Principal = new ClaimsPrincipal(
-                new ClaimsIdentity(
-                    [
-                        new Claim(ClaimTypes.NameIdentifier, "42"),
-                        new Claim(TokenService.AuthVersionClaimType, "1")
-                    ],
-                    "Bearer"))
-        };
+        await InvokeOnTokenValidatedAsync(provider, tokenValidatedContext);
 
-        await options.Events!.OnTokenValidated!(tokenValidatedContext);
+        tokenValidatedContext.Result!.Failure!.Message.Should().Be("Invalid token payload.");
+        repository.VerifyNoOtherCalls();
+    }
+
+    public static TheoryData<AccessTokenSessionState?> RejectedStates => new()
+    {
+        null,
+        new AccessTokenSessionState(IsDisabled: true, AuthVersion: 1, SessionActive: true),
+        new AccessTokenSessionState(IsDisabled: false, AuthVersion: 2, SessionActive: true),
+        // Revoked, expired, or never recorded: the registry has no live row for the sid.
+        new AccessTokenSessionState(IsDisabled: false, AuthVersion: 1, SessionActive: false),
+    };
+
+    [Theory]
+    [MemberData(nameof(RejectedStates))]
+    public async Task OnTokenValidated_ShouldFail_UnlessTheAccountAndSessionAreLive(
+        AccessTokenSessionState? state)
+    {
+        var repository = new Mock<IAuthSessionRepository>();
+        repository.Setup(r => r.GetAccessTokenStateAsync(42, SessionId, It.IsAny<DateTime>()))
+            .ReturnsAsync(state);
+        using var provider = BuildJwtProvider(repository);
+        var tokenValidatedContext = CreateTokenValidatedContext(
+            provider,
+            new Claim(ClaimTypes.NameIdentifier, "42"),
+            new Claim(TokenService.AuthVersionClaimType, "1"),
+            new Claim(TokenService.SessionIdClaimType, SessionId));
+
+        await InvokeOnTokenValidatedAsync(provider, tokenValidatedContext);
 
         tokenValidatedContext.Result.Should().NotBeNull();
         tokenValidatedContext.Result!.Failure!.Message.Should().Be("This access token is no longer valid.");
     }
 
     [Fact]
-    public async Task OnTokenValidated_ShouldSucceed_ForActiveUserWithMatchingAuthVersion()
+    public async Task OnTokenValidated_ShouldSucceed_ForALiveSessionOfAnActiveUserWithMatchingAuthVersion()
     {
-        var repository = new Mock<IAuthUserRepository>();
-        repository.Setup(service => service.GetUserAsync(42))
-            .ReturnsAsync(new User
-            {
-                Id = 42,
-                Email = "user@example.com",
-                Usertype = AuthRoles.Organizer,
-                IsDisabled = false,
-                AuthVersion = 2
-            });
+        var now = new DateTimeOffset(2026, 11, 11, 12, 0, 0, TimeSpan.Zero);
+        var repository = new Mock<IAuthSessionRepository>();
+        repository.Setup(r => r.GetAccessTokenStateAsync(42, SessionId, now.UtcDateTime))
+            .ReturnsAsync(new AccessTokenSessionState(IsDisabled: false, AuthVersion: 2, SessionActive: true));
+        using var provider = BuildJwtProvider(repository, new FixedTimeProvider(now));
+        var tokenValidatedContext = CreateTokenValidatedContext(
+            provider,
+            new Claim(ClaimTypes.NameIdentifier, "42"),
+            new Claim(TokenService.AuthVersionClaimType, "2"),
+            new Claim(TokenService.SessionIdClaimType, SessionId));
 
-        using var provider = BuildJwtProvider(repository);
-        var options = provider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>().Get("Bearer");
-        var context = new DefaultHttpContext
-        {
-            RequestServices = provider
-        };
-
-        var tokenValidatedContext = new TokenValidatedContext(context, CreateScheme(), options)
-        {
-            Principal = new ClaimsPrincipal(
-                new ClaimsIdentity(
-                    [
-                        new Claim(ClaimTypes.NameIdentifier, "42"),
-                        new Claim(TokenService.AuthVersionClaimType, "2")
-                    ],
-                    "Bearer"))
-        };
-
-        await options.Events!.OnTokenValidated!(tokenValidatedContext);
+        await InvokeOnTokenValidatedAsync(provider, tokenValidatedContext);
 
         tokenValidatedContext.Result.Should().BeNull();
-        repository.Verify(service => service.GetUserAsync(42), Times.Once);
+        repository.Verify(r => r.GetAccessTokenStateAsync(42, SessionId, now.UtcDateTime), Times.Once);
     }
 
     [Fact]
@@ -285,13 +276,45 @@ public class JwtConfigurationTests
         action.Should().Throw<InvalidTokenPayloadException>();
     }
 
-    private static ServiceProvider BuildJwtProvider(Mock<IAuthUserRepository> repository)
+    private const string SessionId = "0123456789abcdef0123456789abcdef";
+
+    private static ServiceProvider BuildJwtProvider(
+        Mock<IAuthSessionRepository> repository,
+        TimeProvider? timeProvider = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(repository.Object);
+        services.AddSingleton(timeProvider ?? TimeProvider.System);
         services.AddJwtAuth(new ConfigurationBuilder().Build());
         return services.BuildServiceProvider();
+    }
+
+    private static TokenValidatedContext CreateTokenValidatedContext(
+        ServiceProvider provider,
+        params Claim[] claims)
+    {
+        var options = provider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>().Get("Bearer");
+        var context = new DefaultHttpContext
+        {
+            RequestServices = provider
+        };
+
+        return new TokenValidatedContext(context, CreateScheme(), options)
+        {
+            Principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "Bearer"))
+        };
+    }
+
+    private static Task InvokeOnTokenValidatedAsync(ServiceProvider provider, TokenValidatedContext context)
+    {
+        var options = provider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>().Get("Bearer");
+        return options.Events!.OnTokenValidated!(context);
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private static AuthenticationScheme CreateScheme()
