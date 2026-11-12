@@ -25,6 +25,19 @@ namespace backend.main.features.auth.mfa.session
         );
 
         /// <summary>
+        /// The step-up generation and factor state now. A verification captures them before it
+        /// checks anything, so a factor change that completes meanwhile makes its proof fail to
+        /// store instead of outliving the change.
+        /// </summary>
+        Task<StepUpSnapshot> CaptureSnapshotAsync(int userId);
+
+        /// <summary>
+        /// Records the proof for a passkey assertion the passkey service has already verified,
+        /// against the state captured when its ceremony started.
+        /// </summary>
+        Task RecordPasskeyProofAsync(int userId, string sessionId, int authVersion, StepUpSnapshot snapshot);
+
+        /// <summary>
         /// True only when the session holds an unexpired proof for this exact user and
         /// auth version. Reading a proof never extends it.
         /// </summary>

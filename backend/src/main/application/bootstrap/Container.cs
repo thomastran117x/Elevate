@@ -1,3 +1,4 @@
+using backend.main.application.environment;
 using backend.main.application.features;
 using backend.main.features.auth;
 using backend.main.features.auth.abuse;
@@ -222,6 +223,12 @@ namespace backend.main.application.bootstrap
                 .ValidateOnStart();
             services.AddSingleton<IValidateOptions<RecoveryCodeOptions>, RecoveryCodeOptionsValidator>();
             services.AddSingleton<RecoveryCodeHasher>();
+            services.AddOptions<PasskeyOptions>()
+                .Bind(config.GetSection(PasskeyOptions.SectionName))
+                .PostConfigure(options => options.ApplyFrontendDefaults(EnvironmentSetting.FrontendBaseUrl))
+                .ValidateOnStart();
+            services.AddSingleton<IValidateOptions<PasskeyOptions>, PasskeyOptionsValidator>();
+            services.AddSingleton<IWebAuthnRelyingParty, WebAuthnRelyingParty>();
             services.AddOptions<BloomFilterOptions>()
                 .Bind(config.GetSection("BloomFilters"))
                 .ValidateDataAnnotations()
@@ -300,6 +307,9 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IProviderLinkFlow, GoogleProviderLinkFlow>();
             services.AddScoped<IProviderLinkFlow, MicrosoftProviderLinkFlow>();
             services.AddScoped<IProviderLinkService, ProviderLinkService>();
+            services.AddScoped<IPasskeyCeremonyStore, PasskeyCeremonyStore>();
+            services.AddScoped<IPasskeyManagementService, PasskeyManagementService>();
+            services.AddScoped<IPasskeyAuthenticationService, PasskeyAuthenticationService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IClubService, ClubService>();
             services.AddScoped<IClubInvitationService, ClubInvitationService>();

@@ -33,4 +33,7 @@ public enum AccountSecurityEventKind
     OtherSessionsRevoked,
     TrustedDeviceRemoved,
     TrustedDevicesRemoved,
+    PasskeyAdded,
+    PasskeyRemoved,
+    PasskeyCounterAnomaly,
 }

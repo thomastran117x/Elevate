@@ -98,6 +98,38 @@ public class EmailTemplateRendererTests
     }
 
     [Theory]
+    [InlineData("added", "A passkey was added to your account", "can now be used to sign in")]
+    [InlineData("removed", "A passkey was removed from your account", "can no longer be used to sign in")]
+    public void Render_PasskeyChanged_SaysWhetherAPasskeyWasAddedOrRemoved(string change, string subject, string expected)
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Type = EmailMessageType.MfaFactorChanged,
+            MfaFactor = "passkey",
+            MfaChange = change,
+        });
+
+        Assert.Equal(subject, content.Subject);
+        Assert.Contains(expected, content.PlainText);
+        Assert.Contains("/account/security", content.PlainText);
+    }
+
+    [Fact]
+    public void Render_SecurityAlert_ExplainsAPasskeyCounterAnomaly()
+    {
+        var content = CreateRenderer().Render(new EmailMessage
+        {
+            Email = "member@example.com",
+            Type = EmailMessageType.SecurityAlert,
+            SecurityAlertKind = "passkey_counter_anomaly",
+        });
+
+        Assert.Equal("A passkey on your account may have been copied", content.Subject);
+        Assert.Contains("remove the passkey", content.PlainText);
+    }
+
+    [Theory]
     [InlineData("enabled", "Recovery codes were generated")]
     [InlineData("regenerated", "Your previous recovery codes no longer work")]
     public void Render_RecoveryCodesChanged_DescribesTheSetWithoutAnyCode(string change, string expected)

@@ -1,9 +1,11 @@
+using backend.main.application.features;
 using backend.main.features.auth.events;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
+using backend.main.features.auth.passkeys;
 using backend.main.features.auth.token;
 using backend.main.shared.exceptions.http;
 
@@ -656,11 +658,13 @@ public class SessionMfaVerificationServiceTests
         int lifetimeMinutes = 10,
         StepUpProofWriteResult? storeResult = null,
         IAuthSecurityEventEmitter? securityEvents = null,
-        Mock<IRecoveryCodeService>? recoveryCodes = null)
+        Mock<IRecoveryCodeService>? recoveryCodes = null,
+        Mock<IPasskeyCredentialRepository>? passkeys = null,
+        bool passkeysEnabled = true)
     {
         var cache = new InMemoryCacheService();
         var (service, time) = CreateService(
-            cache, notifications, totp, smsRepository, tokenService, lifetimeMinutes, storeResult, securityEvents, recoveryCodes);
+            cache, notifications, totp, smsRepository, tokenService, lifetimeMinutes, storeResult, securityEvents, recoveryCodes, passkeys, passkeysEnabled);
         return (service, cache, time);
     }
 
@@ -673,7 +677,9 @@ public class SessionMfaVerificationServiceTests
         int lifetimeMinutes = 10,
         StepUpProofWriteResult? storeResult = null,
         IAuthSecurityEventEmitter? securityEvents = null,
-        Mock<IRecoveryCodeService>? recoveryCodes = null)
+        Mock<IRecoveryCodeService>? recoveryCodes = null,
+        Mock<IPasskeyCredentialRepository>? passkeys = null,
+        bool passkeysEnabled = true)
     {
         notifications ??= new Mock<IAuthNotificationService>();
         totp ??= new Mock<ITotpMfaEnrollmentService>();
@@ -708,7 +714,9 @@ public class SessionMfaVerificationServiceTests
             time,
             Options.Create(new StepUpOptions { ProofLifetimeMinutes = lifetimeMinutes }),
             securityEvents ?? NullAuthSecurityEventEmitter.Instance,
-            (recoveryCodes ?? new Mock<IRecoveryCodeService>()).Object);
+            (recoveryCodes ?? new Mock<IRecoveryCodeService>()).Object,
+            (passkeys ?? NoPasskeys()).Object,
+            Features(passkeysEnabled));
 
         return (service, time);
     }
@@ -731,6 +739,97 @@ public class SessionMfaVerificationServiceTests
             // Matches an account with no committed SMS or TOTP enrollment (the default mocks).
             FactorState = StepUpFactorState.From(null, null, null),
         });
+
+    private static Mock<IPasskeyCredentialRepository> NoPasskeys()
+    {
+        var passkeys = new Mock<IPasskeyCredentialRepository>();
+        passkeys.Setup(p => p.GetFactorSummaryAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PasskeyFactorSummary(0, null));
+        return passkeys;
+    }
+
+    private static IFeatureFlagEvaluator Features(bool passkeysEnabled)
+    {
+        var flags = new Mock<IFeatureFlagEvaluator>();
+        flags.Setup(f => f.IsEnabled(It.IsAny<string>())).Returns(true);
+        flags.Setup(f => f.IsEnabled(FeatureFlagKeys.AuthPasskeys)).Returns(passkeysEnabled);
+        return flags.Object;
+    }
+
+    private static Mock<IPasskeyCredentialRepository> Passkeys(int count, DateTime? newest = null)
+    {
+        var passkeys = new Mock<IPasskeyCredentialRepository>();
+        passkeys.Setup(p => p.GetFactorSummaryAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PasskeyFactorSummary(count, newest ?? (count > 0 ? Start.UtcDateTime : null)));
+        return passkeys;
+    }
+
+    [Fact]
+    public async Task GetOptionsAsync_ShouldOfferAPasskeyFirst_WhenTheAccountHasOne()
+    {
+        var (service, _, _) = CreateService(passkeys: Passkeys(1));
+
+        var options = await service.GetOptionsAsync(UserId, Email);
+
+        options.AvailableMethods.First().Should().Be("passkey");
+        options.AvailableMethods.Should().Contain("email");
+    }
+
+    [Fact]
+    public async Task GetOptionsAsync_ShouldNotOfferAPasskey_WhenTheFeatureIsOffOrThereIsNone()
+    {
+        var (withoutFeature, _, _) = CreateService(passkeys: Passkeys(1), passkeysEnabled: false);
+        var (withoutPasskey, _, _) = CreateService(passkeys: Passkeys(0));
+
+        (await withoutFeature.GetOptionsAsync(UserId, Email)).AvailableMethods.Should().NotContain("passkey");
+        (await withoutPasskey.GetOptionsAsync(UserId, Email)).AvailableMethods.Should().NotContain("passkey");
+    }
+
+    [Fact]
+    public async Task StartAndVerify_ShouldSendAPasskeyToItsOwnEndpoints()
+    {
+        var (service, _, _) = CreateService(passkeys: Passkeys(1));
+
+        await service.Invoking(s => s.StartAsync(UserId, Email, "passkey")).Should().ThrowAsync<BadRequestException>();
+        await service.Invoking(s => s.VerifyAsync(UserId, Email, SessionId, AuthVersion, "passkey", "123456"))
+            .Should().ThrowAsync<BadRequestException>();
+    }
+
+    [Fact]
+    public async Task RecordPasskeyProofAsync_ShouldSatisfyTheGate_ForTheCapturedFactorState()
+    {
+        var events = new RecordingAuthSecurityEventEmitter();
+        var (service, _, _) = CreateService(passkeys: Passkeys(1), securityEvents: events);
+        var snapshot = await service.CaptureSnapshotAsync(UserId);
+
+        await service.RecordPasskeyProofAsync(UserId, SessionId, AuthVersion, snapshot);
+
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeTrue();
+        events.Of(AuthSecurityEvents.StepUpSucceeded).Single().Method.Should().Be(AuthSecurityMethod.Passkey);
+    }
+
+    /// <summary>Adding or removing a passkey moves the factor state, which retires earlier proofs.</summary>
+    [Fact]
+    public async Task HasFreshProofAsync_ShouldRefuseAProof_OnceThePasskeySetChanged()
+    {
+        var passkeys = Passkeys(1);
+        var (service, _, _) = CreateService(passkeys: passkeys);
+        await service.RecordPasskeyProofAsync(UserId, SessionId, AuthVersion, await service.CaptureSnapshotAsync(UserId));
+
+        passkeys.Setup(p => p.GetFactorSummaryAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PasskeyFactorSummary(2, Start.UtcDateTime.AddMinutes(1)));
+
+        (await service.HasFreshProofAsync(UserId, SessionId, AuthVersion)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RecordPasskeyProofAsync_ShouldRefuseATokenWithoutASession()
+    {
+        var (service, _, _) = CreateService(passkeys: Passkeys(1));
+
+        await service.Invoking(s => s.RecordPasskeyProofAsync(UserId, " ", AuthVersion, new StepUpSnapshot(0, "")))
+            .Should().ThrowAsync<UnauthorizedException>();
+    }
 
     /// <summary>A cache whose atomic proof read returns the given proof and generation.</summary>
     private static Mock<backend.main.features.cache.ICacheService> ProofCache(string? proofJson, string? generation = null)

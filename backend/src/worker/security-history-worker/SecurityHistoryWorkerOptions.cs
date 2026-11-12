@@ -60,6 +60,7 @@ public sealed record SecurityHistoryWorkerOptions(
             AccountSecurityEventKind.RefreshTokenReuseDetected,
             AccountSecurityEventKind.AccountDisabled,
             AccountSecurityEventKind.RecoveryCodeUsed,
+            AccountSecurityEventKind.PasskeyCounterAnomaly,
         };
 
     public static SecurityHistoryWorkerOptions FromConfiguration(IConfiguration configuration) => new(

@@ -204,6 +204,24 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
                 Code: null,
                 MutedNote: "If you didn't make this change, contact support immediately."),
 
+            EmailMessageType.MfaFactorChanged when IsPasskey(message) => new Content(
+                Subject: PasskeyAdded(message)
+                    ? "A passkey was added to your account"
+                    : "A passkey was removed from your account",
+                Preheader: "The passkeys that can sign in to your account changed.",
+                Heading: PasskeyAdded(message) ? "Passkey added" : "Passkey removed",
+                Greeting: greeting,
+                Intro:
+                [
+                    PasskeyAdded(message)
+                        ? "A new passkey was added to your EventXperience account. It can now be used to sign in and to verify your identity."
+                        : "A passkey was removed from your EventXperience account. It can no longer be used to sign in.",
+                    "Other signed-in sessions will need to verify again before changing security settings."
+                ],
+                Cta: new Cta($"{baseUrl}/account/security", "Review your passkeys"),
+                Code: null,
+                MutedNote: "If you didn't make this change, remove any passkey you don't recognize, change your password, and review your signed-in devices immediately."),
+
             EmailMessageType.MfaFactorChanged when IsRecoveryCodes(message) => new Content(
                 Subject: "New recovery codes were generated for your account",
                 Preheader: "A new set of recovery codes was created for your account.",
@@ -350,6 +368,12 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
             _ => "A two-step",
         };
 
+    private static bool IsPasskey(EmailMessage message) =>
+        string.Equals(message.MfaFactor?.Trim(), "passkey", StringComparison.OrdinalIgnoreCase);
+
+    private static bool PasskeyAdded(EmailMessage message) =>
+        string.Equals(message.MfaChange?.Trim(), "added", StringComparison.OrdinalIgnoreCase);
+
     private static bool IsRecoveryCodes(EmailMessage message) =>
         string.Equals(message.MfaFactor?.Trim(), "recovery_codes", StringComparison.OrdinalIgnoreCase);
 
@@ -363,6 +387,7 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
         message.MfaChange?.Trim().ToLowerInvariant() switch
         {
             "enabled" => "turned on",
+            "added" => "added",
             "disabled" => "turned off",
             "removed" => "removed",
             _ => "changed",
@@ -382,6 +407,7 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
             "mfa_removed" => "A two-step verification method was removed",
             "email_changed" => "Your email address was changed",
             "recovery_code_used" => "A recovery code was used on your account",
+            "passkey_counter_anomaly" => "A passkey on your account may have been copied",
             _ => "New security activity on your account",
         };
 
@@ -394,6 +420,7 @@ public sealed class EmailTemplateRenderer : IEmailContentRenderer
             "refresh_token_reuse_detected" => "A sign-in token for your account was used after it had been replaced, which can mean it was copied. We signed that session out.",
             "account_disabled" => "An administrator disabled your EventXperience account, and every session was signed out.",
             "recovery_code_used" => "One of your recovery codes was used to verify your identity on your EventXperience account. It can't be used again. If you're running low, generate a new set in your security settings.",
+            "passkey_counter_anomaly" => "A passkey on your EventXperience account reported a signature counter that didn't move forward, which can happen if a passkey was copied to another device. If you don't recognize this, remove the passkey in your security settings and add a new one.",
             _ => "There was a security change on your EventXperience account.",
         };
 

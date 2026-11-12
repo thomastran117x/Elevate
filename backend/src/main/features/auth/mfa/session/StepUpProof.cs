@@ -36,8 +36,8 @@ namespace backend.main.features.auth.mfa.session
             get; set;
         }
         /// <summary>
-        /// The committed SMS/TOTP enrollment and recovery-code set in the database when
-        /// verification began.
+        /// The committed SMS/TOTP enrollment, recovery-code set, and passkey set in the database
+        /// when verification began.
         /// Every committed factor change rewrites it, so the change itself retires older proofs
         /// even if the cache-side generation could not be advanced.
         /// </summary>
@@ -53,17 +53,30 @@ namespace backend.main.features.auth.mfa.session
     /// </summary>
     public static class StepUpFactorState
     {
+        /// <param name="passkeys">
+        /// The account's passkey count and newest registration: adding a passkey moves the newest
+        /// time and removing one moves the count, while renaming moves neither.
+        /// </param>
         public static string From(
             SmsMfaEnrollment? sms,
             totp.TotpMfaEnrollment? totp,
-            DateTime? recoveryCodesGeneratedAtUtc) =>
+            DateTime? recoveryCodesGeneratedAtUtc,
+            passkeys.PasskeyFactorSummary? passkeys = null) =>
             string.Join(
                 "|",
                 $"sms:{sms?.UpdatedAt.ToUniversalTime().Ticks ?? 0}",
                 $"totp:{totp?.UpdatedAtUtc.ToUniversalTime().Ticks ?? 0}",
-                $"recovery:{recoveryCodesGeneratedAtUtc?.ToUniversalTime().Ticks ?? 0}"
+                $"recovery:{recoveryCodesGeneratedAtUtc?.ToUniversalTime().Ticks ?? 0}",
+                $"passkeys:{passkeys?.Count ?? 0}:{passkeys?.NewestCreatedAtUtc?.ToUniversalTime().Ticks ?? 0}"
             );
     }
+
+    /// <summary>
+    /// What a verification captured before checking anything: the user's step-up generation and
+    /// factor state. The proof it produces carries both, so a factor change completing during the
+    /// verification retires the proof.
+    /// </summary>
+    public sealed record StepUpSnapshot(long Generation, string FactorState);
 
     /// <summary>
     /// Redis keys for <see cref="StepUpProof"/>. Kept static so session revocation in

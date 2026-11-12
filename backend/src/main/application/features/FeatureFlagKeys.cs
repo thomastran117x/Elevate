@@ -5,6 +5,12 @@ public static class FeatureFlagKeys
     public const string Auth = "auth";
 
     /// <summary>
+    /// Passkey registration, sign-in, and step-up. Off removes the endpoints and stops offering a
+    /// passkey for step-up; registered passkeys stay stored and work again when it is turned back on.
+    /// </summary>
+    public const string AuthPasskeys = "auth.passkeys";
+
+    /// <summary>
     /// Probabilistic membership filters fronting uniqueness checks. Turning this off makes every
     /// lookup report Unavailable, so callers fall back to querying the database directly.
     /// </summary>

@@ -10,6 +10,7 @@ public sealed class FeatureFlagRegistry
     } = new(
         [
             FeatureFlagKeys.Auth,
+            FeatureFlagKeys.AuthPasskeys,
             FeatureFlagKeys.Bloom,
             FeatureFlagKeys.Clubs,
             FeatureFlagKeys.ClubsDiscussions,

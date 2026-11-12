@@ -7,6 +7,7 @@ using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.oauth.links;
+using backend.main.features.auth.passkeys;
 using backend.main.features.auth.sessions;
 using backend.main.features.profile;
 using backend.main.features.profile.admin;
@@ -49,7 +50,23 @@ public class SensitiveEndpointStepUpTests
         { typeof(AuthSessionsController), nameof(AuthSessionsController.RevokeAll) },
         { typeof(AuthTrustedDevicesController), nameof(AuthTrustedDevicesController.Revoke) },
         { typeof(AuthTrustedDevicesController), nameof(AuthTrustedDevicesController.RevokeAll) },
+        { typeof(AuthPasskeysController), nameof(AuthPasskeysController.StartRegistration) },
+        { typeof(AuthPasskeysController), nameof(AuthPasskeysController.CompleteRegistration) },
+        { typeof(AuthPasskeysController), nameof(AuthPasskeysController.Rename) },
+        { typeof(AuthPasskeysController), nameof(AuthPasskeysController.Remove) },
     };
+
+    // Passkey sign-in has no session to step up, and passkey step-up is how a proof is obtained.
+    [Theory]
+    [InlineData(nameof(AuthPasskeysController.List))]
+    [InlineData(nameof(AuthPasskeysController.StartSignIn))]
+    [InlineData(nameof(AuthPasskeysController.CompleteSignIn))]
+    [InlineData(nameof(AuthPasskeysController.StartStepUp))]
+    [InlineData(nameof(AuthPasskeysController.CompleteStepUp))]
+    public void PasskeyReadsSignInAndStepUp_ShouldNotRequireStepUp(string action)
+    {
+        IsGated(typeof(AuthPasskeysController), action).Should().BeFalse();
+    }
 
     [Fact]
     public void ProviderLinkList_ShouldNotRequireStepUp()

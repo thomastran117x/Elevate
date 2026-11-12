@@ -10,6 +10,7 @@ namespace backend.main.features.auth.mfa
         Sms,
         Totp,
         RecoveryCodes,
+        Passkey,
     }
 
     public enum MfaFactorChange
@@ -18,6 +19,7 @@ namespace backend.main.features.auth.mfa
         Disabled,
         Removed,
         Regenerated,
+        Added,
     }
 
     /// <summary>
@@ -57,6 +59,7 @@ namespace backend.main.features.auth.mfa
                 {
                     MfaFactorKind.Sms => AuthSecurityFactor.Sms,
                     MfaFactorKind.Totp => AuthSecurityFactor.Totp,
+                    MfaFactorKind.Passkey => AuthSecurityFactor.Passkey,
                     _ => AuthSecurityFactor.RecoveryCodes,
                 },
                 Change = change switch
@@ -64,6 +67,7 @@ namespace backend.main.features.auth.mfa
                     MfaFactorChange.Enabled => AuthFactorChange.Enabled,
                     MfaFactorChange.Disabled => AuthFactorChange.Disabled,
                     MfaFactorChange.Regenerated => AuthFactorChange.Regenerated,
+                    MfaFactorChange.Added => AuthFactorChange.Added,
                     _ => AuthFactorChange.Removed,
                 },
                 UserId = userId,
@@ -75,13 +79,14 @@ namespace backend.main.features.auth.mfa
             {
                 await _sessionMfaVerificationService.ClearUserProofsAsync(userId);
             }
-            catch (Exception ex) when (factor == MfaFactorKind.RecoveryCodes)
+            catch (Exception ex) when (factor is MfaFactorKind.RecoveryCodes or MfaFactorKind.Passkey)
             {
                 // A regeneration's new codes exist only in the response being built, and the old
-                // ones are already gone, so failing here would leave the user with neither. The
-                // proofs are retired anyway: the recovery-code set is part of every proof's
-                // factor state, which this committed change has already moved.
-                Logger.Error($"[MfaFactorChangeService] Could not advance the step-up generation for userId={userId} after a recovery-code change: {ex.GetType().Name}");
+                // ones are already gone, so failing here would leave the user with neither; a
+                // passkey change is likewise already committed. The proofs are retired anyway:
+                // the recovery-code and passkey sets are part of every proof's factor state, which
+                // this committed change has already moved.
+                Logger.Error($"[MfaFactorChangeService] Could not advance the step-up generation for userId={userId} after a {AuthSecurityWireNames.Of(factor)} change: {ex.GetType().Name}");
             }
 
             // The change is already committed; a lost notice must not turn it into an error.

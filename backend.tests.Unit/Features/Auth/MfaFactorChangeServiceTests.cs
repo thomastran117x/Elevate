@@ -20,6 +20,8 @@ public class MfaFactorChangeServiceTests
     [InlineData(MfaFactorKind.Sms, MfaFactorChange.Disabled)]
     [InlineData(MfaFactorKind.Totp, MfaFactorChange.Removed)]
     [InlineData(MfaFactorKind.RecoveryCodes, MfaFactorChange.Regenerated)]
+    [InlineData(MfaFactorKind.Passkey, MfaFactorChange.Added)]
+    [InlineData(MfaFactorKind.Passkey, MfaFactorChange.Removed)]
     public async Task RecordAsync_ShouldClearStepUpProofsOnEverySession(MfaFactorKind factor, MfaFactorChange change)
     {
         var sessionMfa = new Mock<ISessionMfaVerificationService>();
@@ -35,6 +37,7 @@ public class MfaFactorChangeServiceTests
         {
             MfaFactorKind.Sms => AuthSecurityFactor.Sms,
             MfaFactorKind.Totp => AuthSecurityFactor.Totp,
+            MfaFactorKind.Passkey => AuthSecurityFactor.Passkey,
             _ => AuthSecurityFactor.RecoveryCodes,
         });
         recorded.Change.Should().Be(change switch
@@ -42,6 +45,7 @@ public class MfaFactorChangeServiceTests
             MfaFactorChange.Enabled => AuthFactorChange.Enabled,
             MfaFactorChange.Disabled => AuthFactorChange.Disabled,
             MfaFactorChange.Regenerated => AuthFactorChange.Regenerated,
+            MfaFactorChange.Added => AuthFactorChange.Added,
             _ => AuthFactorChange.Removed,
         });
     }
@@ -52,6 +56,7 @@ public class MfaFactorChangeServiceTests
     [InlineData(MfaFactorKind.Totp, MfaFactorChange.Removed, "totp", "removed")]
     [InlineData(MfaFactorKind.RecoveryCodes, MfaFactorChange.Enabled, "recovery_codes", "enabled")]
     [InlineData(MfaFactorKind.RecoveryCodes, MfaFactorChange.Regenerated, "recovery_codes", "regenerated")]
+    [InlineData(MfaFactorKind.Passkey, MfaFactorChange.Added, "passkey", "added")]
     public async Task RecordAsync_ShouldNotifyWithOnlyTheFactorAndChange(
         MfaFactorKind factor,
         MfaFactorChange change,
@@ -82,6 +87,21 @@ public class MfaFactorChangeServiceTests
         await act.Should().ThrowAsync<InvalidOperationException>();
         _securityEvents.Of(AuthSecurityEvents.FactorChanged).Should().ContainSingle()
             .Which.Change.Should().Be(AuthFactorChange.Disabled);
+    }
+
+    /// <summary>The passkey set is part of every proof's factor state, so the change retires them anyway.</summary>
+    [Fact]
+    public async Task RecordAsync_ShouldStillNotify_WhenPasskeyProofCleanupFails()
+    {
+        var sessionMfa = new Mock<ISessionMfaVerificationService>();
+        sessionMfa.Setup(s => s.ClearUserProofsAsync(42)).ThrowsAsync(new NotAvailableException());
+        var notifications = new Mock<IAuthNotificationService>();
+        var service = new MfaFactorChangeService(sessionMfa.Object, notifications.Object, _securityEvents);
+
+        var act = () => service.RecordAsync(42, "member@example.com", MfaFactorKind.Passkey, MfaFactorChange.Removed);
+
+        await act.Should().NotThrowAsync();
+        notifications.Verify(n => n.SendMfaFactorChangedAsync("member@example.com", "passkey", "removed", null), Times.Once);
     }
 
     [Fact]

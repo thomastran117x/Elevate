@@ -25,17 +25,17 @@ Ids and names are append-only: never renumber, rename, or reuse one. Persist and
 
 | Id | Name | Level | Emitted when | Outcomes | Reasons |
 | --- | --- | --- | --- | --- | --- |
-| 33001 | `auth.sign_in.succeeded` | Information | A session is issued by password, OAuth, signup verification, device link, or login step-up sign-in. Refreshes are not sign-ins. | `succeeded` | `none` |
-| 33002 | `auth.sign_in.failed` | Warning | A password, CAPTCHA, or provider token is refused, or a disabled account tries to sign in or refresh. | `denied` | `invalid_credentials`, `captcha_failed`, `account_disabled`, `provider_rejected` |
+| 33001 | `auth.sign_in.succeeded` | Information | A session is issued by password, OAuth, passkey, signup verification, device link, or login step-up sign-in. Refreshes are not sign-ins. | `succeeded` | `none` |
+| 33002 | `auth.sign_in.failed` | Warning | A password, CAPTCHA, provider token, or passkey assertion is refused, or a disabled account tries to sign in or refresh. | `denied` | `invalid_credentials`, `captcha_failed`, `account_disabled`, `provider_rejected`, `expired`, `invalid_request`, `credential_not_found`, `user_mismatch`, `rejected`, `counter_regressed` |
 | 33003 | `auth.sign_in.challenged` | Information | Credentials were accepted but new-device verification or MFA step-up is required first. | `succeeded` | `device_verification_required`, `step_up_required` |
 | 33010 | `auth.throttled` | Warning | An abuse budget, an authentication rate-limiter policy, or an MFA delivery or attempt limit refuses a request. The global per-client limit is not an authentication control and is not recorded. | `throttled` | `limit_exceeded` |
 | 33020 | `auth.recovery.requested` | Information | Password or username recovery is requested. | `succeeded` | `issued`, `suppressed`, `provider_reminder` |
 | 33021 | `auth.recovery.completed` | Information | A password reset completes. | `succeeded` | `none` |
 | 33030 | `auth.verification.failed` | Warning | An emailed link or code for signup, password reset, email change, or a new device is refused. | `denied` | `expired`, `invalid_state`, `invalid_code`, `attempts_exhausted`, `auth_version_mismatch` |
-| 33040 | `auth.step_up.succeeded` | Information | A login or in-session step-up code is verified. | `succeeded` | `none` |
-| 33041 | `auth.step_up.failed` | Warning | A login or in-session step-up is refused, including a correct code whose proof could not be stored. | `denied`, `faulted` | `expired`, `invalid_state`, `invalid_code`, `invalid_request`, `attempts_exhausted`, `replayed`, `auth_version_mismatch`, `session_ended`, `none` |
-| 33050 | `auth.factor.changed` | Information | SMS or TOTP MFA is enabled, disabled, or removed, recovery codes are generated or regenerated, or the password or email changes. | `succeeded` | `none` |
-| 33051 | `auth.factor.change_failed` | Warning | A second-factor change or authenticated password change is refused or fails with a service fault. | `denied`, `faulted` | `invalid_credentials`, `account_disabled`, `invalid_code`, `invalid_state`, `invalid_request`, `rejected`, `none` |
+| 33040 | `auth.step_up.succeeded` | Information | A login or in-session step-up code, or an in-session passkey step-up, is verified. | `succeeded` | `none` |
+| 33041 | `auth.step_up.failed` | Warning | A login or in-session step-up is refused, including a correct code or passkey whose proof could not be stored. | `denied`, `faulted` | `expired`, `invalid_state`, `invalid_code`, `invalid_request`, `attempts_exhausted`, `replayed`, `auth_version_mismatch`, `session_ended`, `credential_not_found`, `user_mismatch`, `rejected`, `counter_regressed`, `none` |
+| 33050 | `auth.factor.changed` | Information | SMS or TOTP MFA is enabled, disabled, or removed, a passkey is added or removed, recovery codes are generated or regenerated, or the password or email changes. | `succeeded` | `none` |
+| 33051 | `auth.factor.change_failed` | Warning | A second-factor change, passkey registration, or authenticated password change is refused or fails with a service fault. | `denied`, `faulted` | `invalid_credentials`, `account_disabled`, `invalid_code`, `invalid_state`, `invalid_request`, `rejected`, `expired`, `user_mismatch`, `auth_version_mismatch`, `limit_exceeded`, `none` |
 | 33060 | `auth.refresh_token.reused` | Warning | A rotated refresh token is presented after the 10-second grace window, a theft signal. | `denied` | `replayed` |
 | 33070 | `auth.session.revoked` | Information | One refresh session, every other session, or every session of an account, is ended. An account-wide sweep is recorded only when it removed at least one session, and as `faulted` when neither the session registry nor Redis could end any. | `succeeded`, `faulted` | `logout`, `token_reuse`, `binding_missing`, `binding_mismatch`, `transport_mismatch`, `user_mismatch`, `auth_version_mismatch`, `password_changed`, `password_reset`, `email_changed`, `provider_unlinked`, `account_disabled`, `account_enabled`, `account_deleted`, `user_revoked_session`, `user_revoked_other_sessions`, `user_revoked_all_sessions` |
 | 33080 | `auth.provider.linked` | Information | A Google or Microsoft identity is linked to an account: explicitly from security settings (flow `provider_link`), or when the owner confirms a link that a verified email match proposed at sign-in (flow `provider_link_confirmation`). | `succeeded` | `none` |
@@ -46,6 +46,7 @@ Ids and names are append-only: never renumber, rename, or reuse one. Persist and
 | 33110 | `auth.recovery_code.used` | Information | A recovery code is spent to complete a login or in-session step-up. Recorded once the code is spent, even if the sign-in or proof then fails. | `succeeded` | `none` |
 | 33120 | `auth.trusted_device.revoked` | Information | The owner forgets one trusted device, or all of them, from account settings. Forgetting all is recorded only when at least one device was removed. | `succeeded` | `user_revoked_trusted_device`, `user_revoked_all_trusted_devices` |
 | 33121 | `auth.trusted_device.expired` | Information | A sign-in presents a trusted device whose 90 days have passed; its row is removed and verification is asked for again. | `succeeded` | `none` |
+| 33130 | `auth.passkey.counter_anomaly` | Warning | A passkey assertion's signature counter did not move forward, which can mean a copied authenticator. A synced (backup-eligible) passkey is still accepted (`succeeded`); a device-bound one is refused (`denied`). The passkey is never disabled. | `succeeded`, `denied` | `counter_regressed` |
 
 `auth.recovery.requested` reasons tell operators whether anything was sent. The API response deliberately hides that, so the reason must never be shown to the requester or in the user-facing history. A `throttled` factor change is recorded as `auth.throttled` with flow `mfa_enrollment`.
 
@@ -58,10 +59,10 @@ Login step-up email links and new-device links share `POST /api/auth/device/veri
 | `EventName`, `EventId` | The catalog name and id. |
 | `Outcome` | `succeeded`, `denied` (an expected refusal), `throttled`, or `faulted` (a service error). Clients never see this classification. |
 | `Reason` | A code from the closed set below; never exception or request text. |
-| `Method` | `password`, `google`, `microsoft`, `sms`, `totp`, `email`, `refresh_token`, or `recovery_code`. |
+| `Method` | `password`, `google`, `microsoft`, `sms`, `totp`, `email`, `refresh_token`, `recovery_code`, or `passkey`. |
 | `Flow` | The flow, verification purpose, or throttled budget, such as `login`, `signup`, `password_reset`, `email_change`, `device_verification`, `login_step_up`, `session_step_up`, `mfa_delivery`, `mfa_enrollment`, `provider_link`, `provider_link_confirmation`, `provider_unlink`, or `session_management`. |
 | `Dimension` | For throttles: `source_ip`, `target`, `account`, `attempts`, `rate_limiter`, or `concurrency` (a request that lost a race for a verification lock). |
-| `Factor`, `Change` | For factor events: `sms`, `totp`, `password`, `email`, or `recovery_codes`; `enabled`, `disabled`, `removed`, `changed`, or `regenerated`. Recovery codes report `enabled` for an account's first set and `regenerated` when a set is replaced. |
+| `Factor`, `Change` | For factor events: `sms`, `totp`, `password`, `email`, `recovery_codes`, or `passkey`; `enabled`, `disabled`, `removed`, `changed`, `regenerated`, or `added`. Recovery codes report `enabled` for an account's first set and `regenerated` when a set is replaced. Passkeys report `added` and `removed`. |
 | `UserId` | The account the event is about, when known. It is stated by the code that emits the event and never inferred from a bearer token, since many auth endpoints are anonymous and act on a link, code, or name. The exception is `authz.denied`, which is about the caller. |
 | `ActorUserId` | The account that caused the event when it is not `UserId`, such as an administrator disabling an account. Set only where that account authorized the action. |
 | `SessionId` | The server-generated refresh session id. Absent on `auth.session.revoked` when every session of the account was revoked. |
@@ -116,6 +117,8 @@ Login step-up email links and new-device links share `POST /api/auth/device/veri
 | `user_revoked_all_sessions` | The owner signed out every session, including the one they were using. |
 | `user_revoked_trusted_device` | The owner forgot one trusted device. |
 | `user_revoked_all_trusted_devices` | The owner forgot every trusted device. |
+| `counter_regressed` | A passkey's signature counter did not move forward. |
+| `credential_not_found` | A passkey assertion named a credential no account holds, or whose account no longer exists. |
 | `policy` | An authorization policy or role check failed. |
 | `mfa_required` | A `[RequireMfa]` route was called without a fresh step-up proof. |
 | `resource_access` | A service refused access to a resource (ownership, staff role, account state). |
@@ -152,7 +155,7 @@ Once its outbox row is committed, an entry survives a broker outage, a slow rela
 | `auth.sign_in.succeeded` | `signed_in` | Includes the sign-in `method`. |
 | `auth.sign_in.challenged` | `new_device_challenge` or `sign_in_challenge` | For `device_verification_required` and `step_up_required`. |
 | `auth.recovery.completed` | `password_reset` | |
-| `auth.factor.changed` | `password_changed`, `email_changed`, `mfa_enabled`, `mfa_disabled`, `mfa_removed`, `recovery_codes_generated`, `recovery_codes_regenerated` | MFA entries carry the `factor`. |
+| `auth.factor.changed` | `password_changed`, `email_changed`, `mfa_enabled`, `mfa_disabled`, `mfa_removed`, `recovery_codes_generated`, `recovery_codes_regenerated`, `passkey_added`, `passkey_removed` | MFA entries carry the `factor`. A passkey change also emails the owner directly, so it is not alerted on. |
 | `auth.provider.linked` | `provider_linked` | The provider is the `method`. Alerted on by default. |
 | `auth.provider.unlinked` | `provider_unlinked` | The provider is the `method`. Alerted on by default. The sessions it ends are recorded separately as `sessions_revoked` with reason `provider_unlinked`. |
 | `auth.refresh_token.reused` | `refresh_token_reuse_detected` | |
@@ -160,6 +163,7 @@ Once its outbox row is committed, an entry survives a broker outage, a slow rela
 | `auth.account.status_changed` | `account_disabled`, `account_enabled` | Marked `initiatedByAdmin`. The administrator's id is never stored. |
 | `auth.recovery_code.used` | `recovery_code_used` | Alerted on by default: no other email tells the owner a code was spent. |
 | `auth.trusted_device.revoked` | `trusted_device_removed`, `trusted_devices_removed` | One device, or all of them. |
+| `auth.passkey.counter_anomaly` | `passkey_counter_anomaly` | Alerted on by default: it is the only sign the owner gets that a passkey may have been copied. |
 
 Everything else is deliberately left out:
 

@@ -161,6 +161,8 @@ public enum AuthSecurityReason
     UserRevokedAllSessions,
     UserRevokedTrustedDevice,
     UserRevokedAllTrustedDevices,
+    CounterRegressed,
+    CredentialNotFound,
 }
 
 public enum AuthSecurityMethod
@@ -173,6 +175,7 @@ public enum AuthSecurityMethod
     Email,
     RefreshToken,
     RecoveryCode,
+    Passkey,
 }
 
 /// <summary>The auth flow, verification purpose, or throttled budget an event belongs to.</summary>
@@ -220,6 +223,7 @@ public enum AuthSecurityFactor
     Password,
     Email,
     RecoveryCodes,
+    Passkey,
 }
 
 public enum AuthFactorChange
@@ -229,6 +233,7 @@ public enum AuthFactorChange
     Removed,
     Changed,
     Regenerated,
+    Added,
 }
 
 public enum AuthClientClass

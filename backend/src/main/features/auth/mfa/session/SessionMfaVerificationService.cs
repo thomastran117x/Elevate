@@ -2,11 +2,13 @@ using System.Security.Cryptography;
 using System.Text;
 
 using backend.main.application.environment;
+using backend.main.application.features;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.events;
 using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
+using backend.main.features.auth.passkeys;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.shared.exceptions.http;
@@ -23,7 +25,8 @@ namespace backend.main.features.auth.mfa.session
 {
     /// <summary>
     /// Records a short-lived <see cref="StepUpProof"/> for the session after the user proves a
-    /// second factor (TOTP, SMS, a recovery code, or email). Email is the universal fallback and
+    /// second factor (a passkey, TOTP, SMS, a recovery code, or email). Passkeys are verified by
+    /// the passkey service, which records its proof here. Email is the universal fallback and
     /// always available, so any authenticated user can satisfy a <c>[RequireMfa]</c> gate;
     /// recovery codes are offered alongside it, not instead of it.
     /// </summary>
@@ -39,6 +42,7 @@ namespace backend.main.features.auth.mfa.session
         private const string SmsMethod = "sms";
         private const string EmailMethod = "email";
         private const string RecoveryCodeMethod = "recovery_code";
+        private const string PasskeyMethod = "passkey";
 
         // Returns the session's proof and the user's step-up generation in one round trip.
         private const string ReadProofScript = @"
@@ -54,6 +58,8 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
         private readonly string _proofSecret;
         private readonly IAuthSecurityEventEmitter _securityEvents;
         private readonly IRecoveryCodeService _recoveryCodeService;
+        private readonly IPasskeyCredentialRepository _passkeys;
+        private readonly IFeatureFlagEvaluator _featureFlags;
 
         public SessionMfaVerificationService(
             ICacheService cacheService,
@@ -64,7 +70,9 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
             TimeProvider timeProvider,
             IOptions<StepUpOptions> stepUpOptions,
             IAuthSecurityEventEmitter securityEvents,
-            IRecoveryCodeService recoveryCodeService
+            IRecoveryCodeService recoveryCodeService,
+            IPasskeyCredentialRepository passkeys,
+            IFeatureFlagEvaluator featureFlags
         )
         {
             _cacheService = cacheService;
@@ -77,6 +85,8 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
             _proofSecret = EnvironmentSetting.JwtSecretKeyVerification;
             _securityEvents = securityEvents;
             _recoveryCodeService = recoveryCodeService;
+            _passkeys = passkeys;
+            _featureFlags = featureFlags;
         }
 
         public async Task<SessionMfaOptionsResponse> GetOptionsAsync(int userId, string email)
@@ -110,6 +120,7 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
             try
             {
                 var normalizedMethod = NormalizeMethod(method);
+                EnsureCodeMethod(normalizedMethod);
                 await EnsureMethodAllowedAsync(userId, normalizedMethod);
 
                 var now = DateTime.UtcNow;
@@ -215,6 +226,7 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
                     throw new UnauthorizedException("This session cannot be verified. Please sign in again.");
 
                 var normalizedMethod = NormalizeMethod(method);
+                EnsureCodeMethod(normalizedMethod);
 
                 // Captured before the code is checked, so a factor change that completes while this
                 // verification is in flight makes the proof write fail instead of outliving it.
@@ -380,6 +392,22 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
             EmitStepUp(userId, sessionId, RecoveryCodeMethod, null);
         }
 
+        public async Task<StepUpSnapshot> CaptureSnapshotAsync(int userId) =>
+            new(await GetGenerationAsync(userId), await GetFactorStateAsync(userId));
+
+        public async Task RecordPasskeyProofAsync(
+            int userId,
+            string sessionId,
+            int authVersion,
+            StepUpSnapshot snapshot)
+        {
+            if (string.IsNullOrWhiteSpace(sessionId))
+                throw new UnauthorizedException("This session cannot be verified. Please sign in again.");
+
+            await RecordProofAsync(userId, sessionId, authVersion, PasskeyMethod, snapshot.Generation, snapshot.FactorState);
+            EmitStepUp(userId, sessionId, PasskeyMethod, null);
+        }
+
         public async Task<bool> HasFreshProofAsync(int userId, string? sessionId, int authVersion)
         {
             if (string.IsNullOrWhiteSpace(sessionId))
@@ -463,7 +491,8 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
             StepUpFactorState.From(
                 await _smsEnrollmentRepository.GetByUserIdAsync(userId),
                 await _totpMfaEnrollmentService.GetEnrollmentAsync(userId),
-                await _recoveryCodeService.GetSetGeneratedAtAsync(userId)
+                await _recoveryCodeService.GetSetGeneratedAtAsync(userId),
+                await _passkeys.GetFactorSummaryAsync(userId)
             );
 
         private static (string? Proof, string? Generation) ReadPair(object value)
@@ -541,6 +570,13 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
         private async Task<string[]> GetAvailableMethodsAsync(int userId)
         {
             var methods = new List<string>();
+
+            // Listed first: the one method a lookalike site cannot relay.
+            if (_featureFlags.IsEnabled(FeatureFlagKeys.AuthPasskeys)
+                && (await _passkeys.GetFactorSummaryAsync(userId)).Count > 0)
+            {
+                methods.Add(PasskeyMethod);
+            }
 
             var totpEnrollment = await _totpMfaEnrollmentService.GetEnrollmentAsync(userId);
             if (totpEnrollment?.IsTotpMfaEnabled == true && EnvironmentSetting.AuthTotpMfaStepUpEnabled)
@@ -637,8 +673,19 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
                 SmsMethod => SmsMethod,
                 EmailMethod => EmailMethod,
                 RecoveryCodeMethod => RecoveryCodeMethod,
+                PasskeyMethod => PasskeyMethod,
                 _ => throw new BadRequestException("Unsupported verification method.")
             };
+        }
+
+        /// <summary>
+        /// A passkey has no code to send or type: it is verified through the passkey step-up
+        /// endpoints, which record their proof through <see cref="RecordPasskeyProofAsync"/>.
+        /// </summary>
+        private static void EnsureCodeMethod(string method)
+        {
+            if (method == PasskeyMethod)
+                throw new BadRequestException("Verify with a passkey through the passkey step-up endpoints.");
         }
 
         /// <param name="failure">Null for a verified proof; otherwise why verification failed.</param>
@@ -658,6 +705,7 @@ return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or fals
                     TotpMethod => AuthSecurityMethod.Totp,
                     SmsMethod => AuthSecurityMethod.Sms,
                     RecoveryCodeMethod => AuthSecurityMethod.RecoveryCode,
+                    PasskeyMethod => AuthSecurityMethod.Passkey,
                     _ => AuthSecurityMethod.Email,
                 },
                 Flow = AuthSecurityFlow.SessionStepUp,

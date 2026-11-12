@@ -31,6 +31,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- One software authenticator for both test projects; see the file for what it stands in for. -->
+    <Compile Include="..\backend.tests.Unit\Support\SoftwareAuthenticator.cs" Link="Support\SoftwareAuthenticator.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\backend\backend.csproj" />
     <!-- Aliased because the worker's top-level Program would otherwise clash with the API's,
          which WebApplicationFactory<Program> names. -->
