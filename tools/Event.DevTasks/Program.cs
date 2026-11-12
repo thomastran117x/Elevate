@@ -409,6 +409,8 @@ internal static partial class DevTasksCli
                 backendProcess,
                 outputBuffer
             );
+            await NormalizeOpenApiLineEndingsAsync(jsonOutputPath);
+            await NormalizeOpenApiLineEndingsAsync(yamlOutputPath);
             Console.WriteLine($"OpenAPI JSON exported to {jsonOutputPath}");
             Console.WriteLine($"OpenAPI YAML exported to {yamlOutputPath}");
             return 0;
@@ -417,6 +419,23 @@ internal static partial class DevTasksCli
         {
             await StopProcessAsync(backendProcess);
         }
+    }
+
+    /// <summary>
+    /// Descriptions come from XML doc comments, which carry the source file's line endings. A
+    /// Windows checkout with CRLF files would otherwise export CRLF line breaks where Linux exports
+    /// LF, and the CI drift check compares byte for byte, so normalize every line break to LF.
+    /// </summary>
+    private static async Task NormalizeOpenApiLineEndingsAsync(string path)
+    {
+        var text = await File.ReadAllTextAsync(path);
+        var normalized = text
+            // Escaped inside JSON and double-quoted YAML strings.
+            .Replace(@"\r\n", @"\n", StringComparison.Ordinal)
+            // Literal line breaks, such as YAML block scalars.
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        if (normalized != text)
+            await File.WriteAllTextAsync(path, normalized);
     }
 
     private static decimal GetDecimalAttribute(XElement element, string name)
