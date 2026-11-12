@@ -1,8 +1,6 @@
 using System.Security.Claims;
-using System.Text;
 
 using backend.main.application.bootstrap;
-using backend.main.application.environment;
 using backend.main.features.auth;
 using backend.main.features.auth.events;
 using backend.main.features.auth.sessions;
@@ -21,25 +19,34 @@ namespace backend.main.application.security
     {
         private const string ISSUER = "EventXperience";
         private const string AUDIENCE = "EventXperienceConsumers";
+        /// <summary>
+        /// Access-token validation: issuer, audience, lifetime, and a signature by any key in the
+        /// ring, so tokens signed before an overlapping rotation keep working until they expire.
+        /// </summary>
+        public static TokenValidationParameters CreateTokenValidationParameters(JwtSigningKeyRing signingKeys) =>
+            new()
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                ValidIssuer = ISSUER,
+                ValidAudience = AUDIENCE,
+                IssuerSigningKeys = signingKeys.ValidationKeys,
+                RequireExpirationTime = true,
+                RequireSignedTokens = true,
+                ClockSkew = TimeSpan.FromSeconds(30)
+            };
+
         public static IServiceCollection AddJwtAuth(this IServiceCollection services, IConfiguration config)
         {
+            var signingKeys = JwtSigningKeyRing.FromEnvironment();
+            services.AddSingleton(signingKeys);
+
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
                 {
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuer = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
-                        ValidIssuer = ISSUER,
-                        ValidAudience = AUDIENCE,
-                        IssuerSigningKey = new SymmetricSecurityKey(
-                            Encoding.UTF8.GetBytes(EnvironmentSetting.JwtSecretKeyAccess)),
-                        RequireExpirationTime = true,
-                        RequireSignedTokens = true,
-                        ClockSkew = TimeSpan.FromSeconds(30)
-                    };
+                    options.TokenValidationParameters = CreateTokenValidationParameters(signingKeys);
 
                     options.Events = new JwtBearerEvents
                     {

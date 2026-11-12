@@ -10,6 +10,7 @@ namespace backend.main.application.environment
         private static readonly string _dbConnectionString;
         private static readonly string _redisConnection;
         private static readonly string _jwtSecretKeyAccess;
+        private static readonly IReadOnlyList<string> _jwtSecretKeyAccessPrevious;
         private static readonly string _jwtSecretKeyVerification;
         private static readonly string? _googleCaptchaSecret;
         private static readonly string[] _corsWhiteList;
@@ -88,6 +89,9 @@ namespace backend.main.application.environment
                 ["JWT_SECRET_ACCESS", "JWT_SECRET_KEY"],
                 DefaultJwtSecretAccess
             );
+
+            // Validation-only keys from an overlapping rotation; see JwtSigningKeyRing.
+            _jwtSecretKeyAccessPrevious = ParseList(GetOptional(["JWT_SECRET_ACCESS_PREVIOUS"]));
 
             _jwtSecretKeyVerification = GetOrDefault(
                 ["JWT_SECRET_VERIFICATION"],
@@ -258,6 +262,11 @@ namespace backend.main.application.environment
         private static string GetOrDefault(string[] keys, string fallback) =>
             GetOptional(keys) ?? fallback;
 
+        private static IReadOnlyList<string> ParseList(string? rawValue) =>
+            string.IsNullOrWhiteSpace(rawValue)
+                ? []
+                : rawValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
         private static bool GetBoolOrDefault(string[] keys, bool fallback)
         {
             var rawValue = GetOptional(keys);
@@ -283,6 +292,7 @@ namespace backend.main.application.environment
         public static string DbConnectionString => _dbConnectionString;
         public static string RedisConnection => _redisConnection;
         public static string JwtSecretKeyAccess => _jwtSecretKeyAccess;
+        public static IReadOnlyList<string> JwtSecretKeyAccessPrevious => _jwtSecretKeyAccessPrevious;
         public static string JwtSecretKeyVerification => _jwtSecretKeyVerification;
         public static string? Email => _email;
         public static string? Password => _password;
@@ -377,6 +387,19 @@ namespace backend.main.application.environment
                 throw new InvalidOperationException(
                     "Production JWT secrets must be configured and cannot use fallback values."
                 );
+            }
+
+            foreach (var previous in _jwtSecretKeyAccessPrevious)
+            {
+                if (previous == DefaultJwtSecretAccess || previous == _jwtSecretKeyAccess)
+                    throw new InvalidOperationException(
+                        "JWT_SECRET_ACCESS_PREVIOUS cannot contain the fallback value or the active JWT_SECRET_ACCESS."
+                    );
+
+                if (System.Text.Encoding.UTF8.GetByteCount(previous) < 32)
+                    throw new InvalidOperationException(
+                        "Each JWT_SECRET_ACCESS_PREVIOUS key must be at least 32 bytes."
+                    );
             }
 
             if (_totpEncryptionKey == DefaultTotpEncryptionKey)

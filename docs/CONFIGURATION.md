@@ -43,7 +43,7 @@ Linking a provider from security settings reuses the sign-in redirect URIs, `{FR
 | Redis                   | `REDIS_URL` (legacy fallback `REDIS_CONNECTION`)                                                            |
 | Search                  | `ELASTICSEARCH_URL`; Elasticsearch options in appsettings                                                   |
 | Kafka                   | `KAFKA_BOOTSTRAP_SERVERS`; worker-specific topic/group/DLQ settings                                         |
-| JWT                     | `JWT_SECRET_ACCESS`, `JWT_SECRET_VERIFICATION`; legacy access-secret fallback `JWT_SECRET_KEY`              |
+| JWT                     | `JWT_SECRET_ACCESS`, validation-only `JWT_SECRET_ACCESS_PREVIOUS`, `JWT_SECRET_VERIFICATION`; legacy access-secret fallback `JWT_SECRET_KEY`; see [access-token keys](#access-token-signing-keys) |
 | Google OAuth            | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`                                                                  |
 | Microsoft / Apple OAuth | `MS_CLIENT_ID`, `MS_TENANT_ID`, `APPLE_CLIENT_ID`                                                           |
 | Captcha                 | `CAPTCHA_PROVIDER`, `GOOGLE_CAPTCHA_SECRET`, non-production-only `CAPTCHA_ALLOW_BYPASS`; public `GOOGLE_SITE_KEY` |
@@ -168,6 +168,12 @@ Retention and alerts belong to the [security history worker](../backend/src/work
 - `SECURITY_HISTORY_ALERT_MAX_AGE_MINUTES` (default 1440) keeps a backlog from emailing owners about changes long past.
 
 The worker validates them at startup and refuses to start on an out-of-range value or an unknown kind.
+
+### Access-token signing keys
+
+Access tokens are HS256 JWTs signed with `JWT_SECRET_ACCESS`. Each token's header carries a `kid`: base64url of the first 8 bytes of SHA-256 of the key that signed it. `JWT_SECRET_ACCESS_PREVIOUS` is an optional comma-separated list of earlier keys. They are accepted for validation only and never sign, so a rotation can overlap instead of signing everyone out. Tokens issued before `kid` support have no `kid`, and are checked against every key.
+
+To rotate, move the current key into `JWT_SECRET_ACCESS_PREVIOUS` and set a new `JWT_SECRET_ACCESS`. Remove the previous key once its tokens have expired, which is 15 minutes plus 30 seconds of clock skew. To roll back, swap the two values. Refresh tokens, verification proofs, and TOTP secrets do not depend on this key, so a rotation leaves sessions intact. Outside development, each previous key must be at least 32 bytes and differ from both the active key and the fallback value. The full procedure is in [key rotation](operations/key-rotation.md).
 
 ### Refresh sessions
 

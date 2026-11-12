@@ -88,6 +88,8 @@ services:
       DB_CONNECTION_STRING: "${DB_CONNECTION_STRING:-Host=postgres;Port=5432;Database=appdb;Username=appuser;Password=apppass}"
       REDIS_URL: "${REDIS_URL:-redis:6379}"
       JWT_SECRET_ACCESS: "${JWT_SECRET_ACCESS:-amazing_secret_key_yup_yes_abcdef123}"
+      # Validation-only keys while an access-key rotation overlaps; see docs/operations/key-rotation.md.
+      JWT_SECRET_ACCESS_PREVIOUS: "${JWT_SECRET_ACCESS_PREVIOUS:-}"
       JWT_SECRET_VERIFICATION: "${JWT_SECRET_VERIFICATION:-amazing_verification_secret_yup_yes_abcdef123}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
       Profile__UsernameChangeCooldownDays: "${PROFILE__USERNAMECHANGECOOLDOWNDAYS:-30}"

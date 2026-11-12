@@ -239,6 +239,50 @@ public class EnvironmentSettingTests
         harness.Invoking(h => h.Validate()).Should().NotThrow();
     }
 
+    [Theory]
+    [InlineData("production-access-secret-1234567890", "*cannot contain the fallback value or the active JWT_SECRET_ACCESS*")]
+    [InlineData("unit_test_secret_12345678901234567890", "*cannot contain the fallback value or the active JWT_SECRET_ACCESS*")]
+    [InlineData("too-short-previous-key", "*must be at least 32 bytes*")]
+    public void Validate_ShouldRejectUnsafePreviousJwtAccessKeys(string previous, string message)
+    {
+        using var scope = new EnvironmentVariableScope(ProductionConfiguration(previous));
+
+        using var harness = EnvironmentSettingHarness.Load();
+
+        harness.Invoking(h => h.Validate())
+            .Should().Throw<TargetInvocationException>()
+            .WithInnerException<InvalidOperationException>()
+            .WithMessage(message);
+    }
+
+    [Fact]
+    public void JwtSecretKeyAccessPrevious_ShouldParseACommaSeparatedListOfValidationKeys()
+    {
+        using var scope = new EnvironmentVariableScope(
+            ProductionConfiguration(" retired-access-secret-a-1234567890abcdef ,, retired-access-secret-b-1234567890abcdef"));
+
+        using var harness = EnvironmentSettingHarness.Load();
+
+        harness.GetStrings("JwtSecretKeyAccessPrevious").Should().Equal(
+            "retired-access-secret-a-1234567890abcdef",
+            "retired-access-secret-b-1234567890abcdef");
+        harness.Invoking(h => h.Validate()).Should().NotThrow();
+    }
+
+    private static Dictionary<string, string?> ProductionConfiguration(string? previousAccessKeys) => new()
+    {
+        ["DOTNET_RUNNING_IN_CONTAINER"] = "true",
+        ["ENVIRONMENT"] = "production",
+        ["DB_CONNECTION_STRING"] = "Server=db;Database=prod;",
+        ["REDIS_URL"] = "redis:6379",
+        ["JWT_SECRET_ACCESS"] = "production-access-secret-1234567890",
+        ["JWT_SECRET_ACCESS_PREVIOUS"] = previousAccessKeys,
+        ["JWT_SECRET_VERIFICATION"] = "production-verification-secret-1234567890",
+        ["AZURE_STORAGE_CONNECTION_STRING"] = "UseDevelopmentStorage=true",
+        ["AZURE_STORAGE_CONTAINER_NAME"] = "images",
+        ["AUTH_TOTP_ENCRYPTION_KEY"] = "cHJvZHVjdGlvbl90b3RwX2tleV8zMmJ5dGVzMTIzNDU="
+    };
+
     private sealed class EnvironmentSettingHarness : IDisposable
     {
         private readonly AssemblyLoadContext _loadContext;
@@ -266,6 +310,9 @@ public class EnvironmentSettingTests
 
         public string? GetNullableString(string propertyName) =>
             (string?)_type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Static)!.GetValue(null);
+
+        public IReadOnlyList<string> GetStrings(string propertyName) =>
+            (IReadOnlyList<string>)_type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Static)!.GetValue(null)!;
 
         public bool GetBool(string propertyName) =>
             (bool)_type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Static)!.GetValue(null)!;
