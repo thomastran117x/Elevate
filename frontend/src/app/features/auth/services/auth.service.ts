@@ -126,7 +126,8 @@ export interface TotpEnrollmentStartResponse {
   ExpiresAtUtc: string;
 }
 
-export type SessionMfaMethod = 'sms' | 'email' | 'totp' | 'recovery_code';
+/** `passkey` is verified through {@link PasskeysService.stepUp}, never with a typed code. */
+export type SessionMfaMethod = 'sms' | 'email' | 'totp' | 'recovery_code' | 'passkey';
 
 export interface SessionMfaOptionsResponse {
   availableMethods: SessionMfaMethod[];
