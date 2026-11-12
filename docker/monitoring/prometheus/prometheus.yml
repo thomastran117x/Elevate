@@ -1,0 +1,33 @@
+# Prometheus for the `ops` Compose profile. The API and workers push metrics to its OTLP
+# receiver (http://prometheus:9090/api/v1/otlp); nothing scrapes the API, which exposes no
+# metrics endpoint. See docs/operations/monitoring.md.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 1m
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+otlp:
+  # Becomes the deployment_environment_name label on every pushed series, so one Prometheus
+  # can hold several environments and every rule groups by it. service.name becomes `job`.
+  promote_resource_attributes:
+    - deployment.environment.name
+
+storage:
+  tsdb:
+    # OTLP pushes from several processes can arrive slightly out of order.
+    out_of_order_time_window: 10m
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]

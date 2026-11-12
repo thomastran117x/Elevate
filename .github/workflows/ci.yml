@@ -237,6 +237,33 @@ jobs:
       - name: Fail on OpenAPI contract drift
         run: git diff --exit-code -- backend/openapi.json backend/openapi.yaml
 
+  monitoring-definitions:
+    name: Monitoring Definitions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Prometheus configuration and rules
+        run: docker run --rm -v "$PWD/docker/monitoring/prometheus:/etc/prometheus:ro" --entrypoint promtool prom/prometheus:v3.15.1 check config /etc/prometheus/prometheus.yml
+
+      # Injects representative series and asserts which auth alerts fire.
+      - name: Run alert rule unit tests
+        run: docker run --rm -v "$PWD/docker/monitoring/prometheus:/etc/prometheus:ro" -w /etc/prometheus/tests --entrypoint promtool prom/prometheus:v3.15.1 test rules auth-alerts.test.yml
+
+      - name: Check Alertmanager configuration
+        run: docker run --rm -v "$PWD/docker/monitoring/alertmanager:/etc/alertmanager:ro" --entrypoint amtool prom/alertmanager:v0.34.1 check-config /etc/alertmanager/alertmanager.yml
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # Owners, runbook links, catalog values, prohibited labels, and dashboard coverage.
+      - name: Check definitions against the code and runbooks
+        run: dotnet test backend.tests.Unit/backend.tests.Unit.csproj --filter "FullyQualifiedName~backend.tests.Unit.Application.Telemetry"
+
   backend-integration-tests:
     name: Backend Integration Tests (${{ matrix.shard }})
     runs-on: ubuntu-latest

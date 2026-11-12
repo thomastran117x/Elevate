@@ -1,0 +1,433 @@
+# promtool unit tests for the auth security rules: each case injects representative series
+# and asserts which alerts fire. Run them with the command in
+# docs/operations/monitoring.md#testing-the-rules; CI runs them in the Monitoring Definitions job.
+rule_files:
+  - ../rules/auth-recording.yml
+  - ../rules/auth-alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # credential stuffing fires on a fresh deployment above the floor
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.sign_in.failed",reason="invalid_credentials",deployment_environment_name="test"}'
+        values: '0+60x30'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthCredentialStuffing",alertstate="firing"}'
+        eval_time: 20m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthCredentialStuffing",alertstate="firing",severity="page",owner="auth-oncall",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # credential stuffing stays silent below the floor
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.sign_in.failed",reason="invalid_credentials",deployment_environment_name="test"}'
+        values: '0+12x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthCredentialStuffing",alertstate="firing"}'
+        eval_time: 30m
+        exp_samples: []
+  # credential stuffing stays silent at a high but normal learned baseline
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.sign_in.failed",reason="invalid_credentials",deployment_environment_name="test"}'
+        values: '0+60x180'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthCredentialStuffing",alertstate="firing"}'
+        eval_time: 2h30m
+        exp_samples: []
+  # credential stuffing fires on a spike above the learned baseline
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.sign_in.failed",reason="invalid_credentials",deployment_environment_name="test"}'
+        values: '0+12x120 1560+120x40'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthCredentialStuffing",alertstate="firing"}'
+        eval_time: 1h50m
+        exp_samples: []
+      - expr: 'ALERTS{alertname="AuthCredentialStuffing",alertstate="firing"}'
+        eval_time: 2h30m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthCredentialStuffing",alertstate="firing",severity="page",owner="auth-oncall",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # other sign-in failures do not count as credential stuffing
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.sign_in.failed",reason="captcha_failed",deployment_environment_name="test"}'
+        values: '0+600x30'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthCredentialStuffing",alertstate="firing"}'
+        eval_time: 20m
+        exp_samples: []
+  # account throttles fire above the floor
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.throttled",flow="login",dimension="account",deployment_environment_name="test"}'
+        values: '0+6x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthTargetedAccountThrottling",alertstate="firing"}'
+        eval_time: 40m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthTargetedAccountThrottling",alertstate="firing",severity="ticket",owner="auth-oncall",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # source-ip throttles are not account attacks
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.throttled",flow="login",dimension="source_ip",deployment_environment_name="test"}'
+        values: '0+60x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthTargetedAccountThrottling",alertstate="firing"}'
+        eval_time: 40m
+        exp_samples: []
+  # a single locked-out account stays below the floor
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.throttled",flow="login",dimension="account",deployment_environment_name="test"}'
+        values: '0+1x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthTargetedAccountThrottling",alertstate="firing"}'
+        eval_time: 40m
+        exp_samples: []
+  # refresh token reuse fires on repeated replays
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.refresh_token.reused",reason="replayed",method="refresh_token",deployment_environment_name="test"}'
+        values: '0+1x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthRefreshTokenReuse",alertstate="firing"}'
+        eval_time: 30m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthRefreshTokenReuse",alertstate="firing",severity="page",owner="security-lead",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # isolated refresh token replays stay below the floor
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.refresh_token.reused",reason="replayed",method="refresh_token",deployment_environment_name="test"}'
+        values: '0+0x10 1+0x10 2+0x40'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthRefreshTokenReuse",alertstate="firing"}'
+        eval_time: 60m
+        exp_samples: []
+  # a faulted account-wide revocation fires at once
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.session.revoked",outcome="faulted",reason="password_reset",deployment_environment_name="test"}'
+        values: '0 0 0 1+0x10'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthSessionRevocationFaulted",alertstate="firing"}'
+        eval_time: 5m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthSessionRevocationFaulted",alertstate="firing",severity="page",owner="auth-oncall",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # successful revocations never fire
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.session.revoked",outcome="succeeded",reason="user_revoked_all_sessions",deployment_environment_name="test"}'
+        values: '0+5x10'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthSessionRevocationFaulted",alertstate="firing"}'
+        eval_time: 5m
+        exp_samples: []
+  # provider link conflicts fire above the floor
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.provider_link.conflict",reason="email_bound_to_other_provider",method="google",deployment_environment_name="test"}'
+        values: '0+1x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthProviderLinkConflicts",alertstate="firing"}'
+        eval_time: 40m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthProviderLinkConflicts",alertstate="firing",severity="ticket",owner="security-lead",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # a few provider link conflicts stay below the floor
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.provider_link.conflict",reason="provider_already_connected",method="microsoft",deployment_environment_name="test"}'
+        values: '0+0x10 1+0x10 2+0x10 3+0x30'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthProviderLinkConflicts",alertstate="firing"}'
+        eval_time: 60m
+        exp_samples: []
+  # exhausted step-up challenges fire above the floor
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.step_up.failed",reason="attempts_exhausted",flow="login_step_up",deployment_environment_name="test"}'
+        values: '0+3x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthStepUpBruteForce",alertstate="firing"}'
+        eval_time: 40m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthStepUpBruteForce",alertstate="firing",severity="page",owner="auth-oncall",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # single wrong step-up codes are not brute force
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.step_up.failed",reason="invalid_code",flow="login_step_up",deployment_environment_name="test"}'
+        values: '0+60x60'
+      - series: 'auth_security_events_total{event="auth.step_up.failed",reason="attempts_exhausted",flow="login_step_up",deployment_environment_name="test"}'
+        values: '0+0.3x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthStepUpBruteForce",alertstate="firing"}'
+        eval_time: 40m
+        exp_samples: []
+  # throttled MFA delivery fires the MFA and recovery abuse alert
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.throttled",flow="mfa_delivery",dimension="target",deployment_environment_name="test"}'
+        values: '0+3x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthMfaRecoveryAbuse",alertstate="firing"}'
+        eval_time: 40m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthMfaRecoveryAbuse",alertstate="firing",severity="ticket",owner="auth-oncall",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # a recovery request surge fires the MFA and recovery abuse alert
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.recovery.requested",reason="suppressed",flow="password_reset",deployment_environment_name="test"}'
+        values: '0+30x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthMfaRecoveryAbuse",alertstate="firing"}'
+        eval_time: 40m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthMfaRecoveryAbuse",alertstate="firing",severity="ticket",owner="auth-oncall",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # normal recovery volume stays silent
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.recovery.requested",reason="issued",flow="password_reset",deployment_environment_name="test"}'
+        values: '0+6x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthMfaRecoveryAbuse",alertstate="firing"}'
+        eval_time: 40m
+        exp_samples: []
+  # failing MFA emails fire the delivery alert
+  - interval: 1m
+    input_series:
+      - series: 'notifications_email_deliveries_total{message_type="mfa_code",outcome="sent",deployment_environment_name="test"}'
+        values: '0+10x60'
+      - series: 'notifications_email_deliveries_total{message_type="mfa_code",outcome="failed",deployment_environment_name="test"}'
+        values: '0+2x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthMfaDeliveryFailures",alertstate="firing"}'
+        eval_time: 40m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthMfaDeliveryFailures",alertstate="firing",severity="ticket",owner="auth-oncall",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # failing SMS codes fire the delivery alert
+  - interval: 1m
+    input_series:
+      - series: 'notifications_sms_deliveries_total{outcome="sent",deployment_environment_name="test"}'
+        values: '0+5x60'
+      - series: 'notifications_sms_deliveries_total{outcome="failed",deployment_environment_name="test"}'
+        values: '0+5x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthMfaDeliveryFailures",alertstate="firing"}'
+        eval_time: 40m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthMfaDeliveryFailures",alertstate="firing",severity="ticket",owner="auth-oncall",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # failing non-security emails do not fire the delivery alert
+  - interval: 1m
+    input_series:
+      - series: 'notifications_email_deliveries_total{message_type="event_invite",outcome="failed",deployment_environment_name="test"}'
+        values: '0+50x60'
+      - series: 'notifications_email_deliveries_total{message_type="mfa_code",outcome="sent",deployment_environment_name="test"}'
+        values: '0+10x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthMfaDeliveryFailures",alertstate="firing"}'
+        eval_time: 40m
+        exp_samples: []
+  # a low failure share stays silent
+  - interval: 1m
+    input_series:
+      - series: 'notifications_email_deliveries_total{message_type="reset_password",outcome="sent",deployment_environment_name="test"}'
+        values: '0+100x60'
+      - series: 'notifications_email_deliveries_total{message_type="reset_password",outcome="failed",deployment_environment_name="test"}'
+        values: '0+1x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthMfaDeliveryFailures",alertstate="firing"}'
+        eval_time: 40m
+        exp_samples: []
+  # a handful of deliveries is too few to judge
+  - interval: 1m
+    input_series:
+      - series: 'notifications_email_deliveries_total{message_type="mfa_code",outcome="sent",deployment_environment_name="test"}'
+        values: '0+0.1x60'
+      - series: 'notifications_email_deliveries_total{message_type="mfa_code",outcome="failed",deployment_environment_name="test"}'
+        values: '0+0.1x60'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthMfaDeliveryFailures",alertstate="firing"}'
+        eval_time: 40m
+        exp_samples: []
+  # resource access denials fire the probing alert
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="authz.denied",reason="resource_access",deployment_environment_name="test"}'
+        values: '0+30x40'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthAuthorizationProbing",alertstate="firing"}'
+        eval_time: 30m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthAuthorizationProbing",alertstate="firing",severity="ticket",owner="security-lead",mode="observe",deployment_environment_name="test"}'
+            value: 1
+      - expr: 'ALERTS{alertname="AuthMassAuthorizationDenial",alertstate="firing"}'
+        eval_time: 30m
+        exp_samples: []
+  # a trickle of resource denials stays silent
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="authz.denied",reason="resource_access",deployment_environment_name="test"}'
+        values: '0+6x40'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthAuthorizationProbing",alertstate="firing"}'
+        eval_time: 30m
+        exp_samples: []
+  # policy and MFA-required denials fire the mass denial alert
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="authz.denied",reason="policy",deployment_environment_name="test"}'
+        values: '0+60x40'
+      - series: 'auth_security_events_total{event="authz.denied",reason="mfa_required",deployment_environment_name="test"}'
+        values: '0+60x40'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthMassAuthorizationDenial",alertstate="firing"}'
+        eval_time: 20m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthMassAuthorizationDenial",alertstate="firing",severity="page",owner="auth-oncall",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # auth faults above the error budget fire
+  - interval: 1m
+    input_series:
+      - series: 'auth_operation_duration_milliseconds_count{operation="sign_in",outcome="succeeded",deployment_environment_name="test"}'
+        values: '0+60x40'
+      - series: 'auth_operation_duration_milliseconds_count{operation="sign_in",outcome="faulted",deployment_environment_name="test"}'
+        values: '0+6x40'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthFaultRate",alertstate="firing"}'
+        eval_time: 30m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthFaultRate",alertstate="firing",severity="page",owner="auth-oncall",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # faults in a quiet hour do not page
+  - interval: 1m
+    input_series:
+      - series: 'auth_operation_duration_milliseconds_count{operation="refresh",outcome="succeeded",deployment_environment_name="test"}'
+        values: '0+1x40'
+      - series: 'auth_operation_duration_milliseconds_count{operation="refresh",outcome="faulted",deployment_environment_name="test"}'
+        values: '0+1x40'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthFaultRate",alertstate="firing"}'
+        eval_time: 30m
+        exp_samples: []
+  # sink failures fire the pipeline alert per sink
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_sink_failures_total{sink="security_history",deployment_environment_name="test"}'
+        values: '0 0 1+1x20'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthEventPipelineBroken",alertstate="firing"}'
+        eval_time: 15m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthEventPipelineBroken",alertstate="firing",severity="page",owner="auth-oncall",mode="observe",deployment_environment_name="test",sink="security_history"}'
+            value: 1
+  # old sink failures that stopped do not fire
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_sink_failures_total{sink="logging",deployment_environment_name="test"}'
+        values: '5+0x30'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthEventPipelineBroken",alertstate="firing"}'
+        eval_time: 20m
+        exp_samples: []
+  # dropped history entries fire the history alert
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_history_dropped_total{deployment_environment_name="test"}'
+        values: '0+1x30'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthSecurityHistoryNotRecording",alertstate="firing"}'
+        eval_time: 25m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthSecurityHistoryNotRecording",alertstate="firing",severity="ticket",owner="auth-oncall",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # failed worker entries fire the history alert
+  - interval: 1m
+    input_series:
+      - series: 'security_history_entries_total{outcome="failed",deployment_environment_name="test"}'
+        values: '0+1x30'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthSecurityHistoryNotRecording",alertstate="firing"}'
+        eval_time: 25m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthSecurityHistoryNotRecording",alertstate="firing",severity="ticket",owner="auth-oncall",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # a healthy history pipeline stays silent
+  - interval: 1m
+    input_series:
+      - series: 'security_history_entries_total{outcome="inserted",deployment_environment_name="test"}'
+        values: '0+10x30'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthSecurityHistoryNotRecording",alertstate="firing"}'
+        eval_time: 25m
+        exp_samples: []
+  # an API that never exported fires the telemetry alert
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_sink_failures_total{sink="logging",deployment_environment_name="test"}'
+        values: '0+0x5'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthTelemetryAbsent",alertstate="firing"}'
+        eval_time: 1m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthTelemetryAbsent",alertstate="firing",job="eventxperience-api",severity="ticket",owner="auth-oncall",mode="observe"}'
+            value: 1
+  # an API that stopped exporting fires the telemetry alert
+  - interval: 1m
+    input_series:
+      - series: 'target_info{job="eventxperience-api",deployment_environment_name="test"}'
+        values: '1+0x10 _x30'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthTelemetryAbsent",alertstate="firing"}'
+        eval_time: 20m
+        exp_samples: []
+      - expr: 'ALERTS{alertname="AuthTelemetryAbsent",alertstate="firing"}'
+        eval_time: 40m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthTelemetryAbsent",alertstate="firing",job="eventxperience-api",severity="ticket",owner="auth-oncall",mode="observe"}'
+            value: 1
+  # AuthCredentialStuffing renders its labels and annotations
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.sign_in.failed",reason="invalid_credentials",deployment_environment_name="test"}'
+        values: '0+60x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: AuthCredentialStuffing
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              owner: auth-oncall
+              mode: observe
+              deployment_environment_name: test
+            exp_annotations:
+              summary: "Failed password sign-ins far above baseline in test"
+              description: "1/s sign-ins are failing with invalid credentials, above 3x the 14-day p99 and the 0.5/s floor, for 10 minutes. Many accounts are likely being tried with leaked passwords."
+              runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/credential-stuffing.md#authcredentialstuffing"
+              dashboard_uid: auth-security
+              threshold_rationale: "3x the 14-day p99 keeps ordinary typo and forgotten-password peaks below the line; the 0.5/s (30/min) floor is roughly 10x a quiet deployment's background and stops a near-zero baseline from paging on a handful of failures."
+  # The baseline is learned from history that excludes the most recent hour
+  - interval: 1m
+    input_series:
+      - series: 'auth_security_events_total{event="auth.sign_in.failed",reason="invalid_credentials",deployment_environment_name="test"}'
+        values: '0+60x180'
+    promql_expr_test:
+      - expr: auth:sign_in_invalid_credentials:rate5m:p99_14d
+        eval_time: 30m
+        exp_samples: []
+      - expr: auth:sign_in_invalid_credentials:rate5m:p99_14d
+        eval_time: 2h30m
+        exp_samples:
+          - labels: 'auth:sign_in_invalid_credentials:rate5m:p99_14d{deployment_environment_name="test"}'
+            value: 1

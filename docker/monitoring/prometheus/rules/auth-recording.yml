@@ -1,0 +1,77 @@
+# Recording rules for the auth security alerts and dashboard.
+#
+# Every signal is summed per deployment environment. Its baseline is the 99th percentile of
+# that signal over the previous 14 days, excluding the most recent hour so an ongoing attack
+# does not raise its own threshold. Alerts compare the current value with
+# max(3 x baseline, floor); see auth-alerts.yml and docs/operations/monitoring.md#thresholds.
+# Metric names are those Prometheus's OTLP receiver produces: dots become underscores,
+# counters gain _total, and the ms histogram gains _milliseconds.
+groups:
+  - name: auth-security-signals
+    interval: 1m
+    rules:
+      - record: auth:sign_in_invalid_credentials:rate5m
+        expr: sum by (deployment_environment_name) (rate(auth_security_events_total{event="auth.sign_in.failed", reason="invalid_credentials"}[5m]))
+      - record: auth:account_throttles:rate15m
+        expr: sum by (deployment_environment_name) (rate(auth_security_events_total{event="auth.throttled", dimension="account"}[15m]))
+      - record: auth:refresh_token_reuse:increase1h
+        expr: sum by (deployment_environment_name) (increase(auth_security_events_total{event="auth.refresh_token.reused"}[1h]))
+      - record: auth:provider_link_conflicts:increase1h
+        expr: sum by (deployment_environment_name) (increase(auth_security_events_total{event="auth.provider_link.conflict"}[1h]))
+      - record: auth:step_up_attempts_exhausted:rate15m
+        expr: sum by (deployment_environment_name) (rate(auth_security_events_total{event="auth.step_up.failed", reason="attempts_exhausted"}[15m]))
+      - record: auth:mfa_delivery_throttles:rate15m
+        expr: sum by (deployment_environment_name) (rate(auth_security_events_total{event="auth.throttled", flow="mfa_delivery"}[15m]))
+      - record: auth:recovery_requests:rate15m
+        expr: sum by (deployment_environment_name) (rate(auth_security_events_total{event="auth.recovery.requested"}[15m]))
+      - record: auth:authz_resource_denials:rate5m
+        expr: sum by (deployment_environment_name) (rate(auth_security_events_total{event="authz.denied", reason="resource_access"}[5m]))
+      - record: auth:authz_policy_denials:rate5m
+        expr: sum by (deployment_environment_name) (rate(auth_security_events_total{event="authz.denied", reason=~"policy|mfa_required"}[5m]))
+      # Share of security-relevant deliveries (codes, links, reminders, alerts) that did not
+      # reach the provider. SMS series have no message_type, which the trailing `|` matches.
+      # A per-outcome series only exists once it has been counted, hence `or ... * 0`.
+      - record: auth:security_deliveries:rate30m
+        expr: sum by (deployment_environment_name) (rate({__name__=~"notifications_(email|sms)_deliveries_total", message_type=~"verify_email|reset_password|new_device|mfa_code|username_reminder|provider_sign_in_reminder|email_change_verify|security_alert|"}[30m]))
+      - record: auth:security_delivery_failure_ratio:rate30m
+        expr: |
+          (
+              sum by (deployment_environment_name) (rate({__name__=~"notifications_(email|sms)_deliveries_total", message_type=~"verify_email|reset_password|new_device|mfa_code|username_reminder|provider_sign_in_reminder|email_change_verify|security_alert|", outcome!="sent"}[30m]))
+            or
+              auth:security_deliveries:rate30m * 0
+          )
+          / auth:security_deliveries:rate30m
+      - record: auth:operations:rate10m
+        expr: sum by (deployment_environment_name) (rate(auth_operation_duration_milliseconds_count[10m]))
+      - record: auth:operation_fault_ratio:rate10m
+        expr: |
+          (
+              sum by (deployment_environment_name) (rate(auth_operation_duration_milliseconds_count{outcome="faulted"}[10m]))
+            or
+              auth:operations:rate10m * 0
+          )
+          / auth:operations:rate10m
+
+  - name: auth-security-baselines
+    interval: 1h
+    rules:
+      - record: auth:sign_in_invalid_credentials:rate5m:p99_14d
+        expr: quantile_over_time(0.99, auth:sign_in_invalid_credentials:rate5m[14d] offset 1h)
+      - record: auth:account_throttles:rate15m:p99_14d
+        expr: quantile_over_time(0.99, auth:account_throttles:rate15m[14d] offset 1h)
+      - record: auth:refresh_token_reuse:increase1h:p99_14d
+        expr: quantile_over_time(0.99, auth:refresh_token_reuse:increase1h[14d] offset 1h)
+      - record: auth:provider_link_conflicts:increase1h:p99_14d
+        expr: quantile_over_time(0.99, auth:provider_link_conflicts:increase1h[14d] offset 1h)
+      - record: auth:step_up_attempts_exhausted:rate15m:p99_14d
+        expr: quantile_over_time(0.99, auth:step_up_attempts_exhausted:rate15m[14d] offset 1h)
+      - record: auth:mfa_delivery_throttles:rate15m:p99_14d
+        expr: quantile_over_time(0.99, auth:mfa_delivery_throttles:rate15m[14d] offset 1h)
+      - record: auth:recovery_requests:rate15m:p99_14d
+        expr: quantile_over_time(0.99, auth:recovery_requests:rate15m[14d] offset 1h)
+      - record: auth:authz_resource_denials:rate5m:p99_14d
+        expr: quantile_over_time(0.99, auth:authz_resource_denials:rate5m[14d] offset 1h)
+      - record: auth:authz_policy_denials:rate5m:p99_14d
+        expr: quantile_over_time(0.99, auth:authz_policy_denials:rate5m[14d] offset 1h)
+      - record: auth:security_delivery_failure_ratio:rate30m:p99_14d
+        expr: quantile_over_time(0.99, auth:security_delivery_failure_ratio:rate30m[14d] offset 1h)
