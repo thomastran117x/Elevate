@@ -18,3 +18,4 @@ Do not rewrite an accepted decision. Add a new record that supersedes it and upd
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-identity-provider-build-vs-buy.md) | Retain first-party identity rather than adopt a managed provider | Accepted |
+| [0002](0002-webauthn-server-library.md) | Verify passkeys with the Fido2 server library | Accepted |
