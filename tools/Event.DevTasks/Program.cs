@@ -429,10 +429,10 @@ internal static partial class DevTasksCli
     private static async Task NormalizeOpenApiLineEndingsAsync(string path)
     {
         var text = await File.ReadAllTextAsync(path);
+        // First the escaped breaks inside JSON and double-quoted YAML strings, then literal ones,
+        // such as YAML block scalars.
         var normalized = text
-            // Escaped inside JSON and double-quoted YAML strings.
             .Replace(@"\r\n", @"\n", StringComparison.Ordinal)
-            // Literal line breaks, such as YAML block scalars.
             .Replace("\r\n", "\n", StringComparison.Ordinal);
         if (normalized != text)
             await File.WriteAllTextAsync(path, normalized);
