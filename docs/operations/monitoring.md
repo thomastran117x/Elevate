@@ -67,6 +67,8 @@ The API exports `EventXperience.Auth`; the security-history worker `EventXperien
 | Pipeline health | Sink failures, history drops and store failures, and the security-history worker |
 | Alert history | Every auth alert that was pending or firing, and the current ones |
 
+A label combination's first event creates its series at 1, and `rate()` and `increase()` only count changes after the first sample, so they miss that event. Rate panels and alerts therefore under-count by one for each new combination. That is negligible at alerting volumes. Use the raw `*_total` value, as the drill does, when an exact count matters.
+
 The dashboard is provisioned read-only, so change the JSON, not the UI. Panels never group by account, session, hash, or address: those exist only in the event log. Each runbook shows how to pull them from there.
 
 ## Alerts

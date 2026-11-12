@@ -77,6 +77,20 @@ Port 8097 matters: it is written into the document's server URL.
 - It also covers seeded public reads, the invalid-token and `403` envelopes, the `AdminOnly` policy against each global role, and club owner, manager, volunteer, unrelated-user, and admin access decided by the services.
 - `RuntimeEndpointAuthorizationAuditTests.cs` is the runtime negative fixture. A throwaway host routes a minimal API and a controller without authorization metadata, and the gate must name both. It needs no containers.
 
+### Monitoring definitions
+
+CI's **Monitoring Definitions** job validates `docker/monitoring/` with the pinned images. It runs `promtool check config`, then `promtool test rules`, which injects representative series and asserts which auth alerts fire, then `amtool check-config`. It also runs `backend.tests.Unit/Application/Telemetry/`. Those tests check that:
+- alert owners and runbook headings exist;
+- every matched event and classification exists in the catalog;
+- no rule or panel uses an identifying label;
+- the dashboard covers every required area.
+
+The local commands are in [monitoring](operations/monitoring.md#testing-the-rules).
+
+### Auth drill
+
+`auth-drill` in Event.DevTasks exercises session revocation, refresh-token reuse, password recovery, and the telemetry pipeline end to end, against a running non-production stack with Mailpit and Prometheus. It is run by hand, monthly; see [drills](operations/drills.md). It is not part of CI.
+
 PowerShell compatibility wrappers remain in `bin/backend-unit-coverage.ps1` and `bin/backend-integration-endpoint-coverage.ps1`.
 
 ## Frontend unit tests

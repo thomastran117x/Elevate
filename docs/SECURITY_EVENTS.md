@@ -226,32 +226,11 @@ dotnet-counters monitor --process-id <api-pid> --counters EventXperience.Auth
 
 ## Dashboards and alerts
 
-Recommended panels:
+The **Auth security** dashboard and the auth alerts are defined as code in `docker/monitoring/`. [Monitoring](operations/monitoring.md) describes them:
+- the dashboard has a row for each area: sign-in outcomes, throttles, recovery and MFA delivery, step-up and verification, token reuse and revocation, provider linking, authorization denials, latency and faults, pipeline health, and alert history;
+- every alert has a severity, an owner, a baseline-relative threshold with its rationale, and a [runbook](operations/README.md);
+- alerts move from observe-only to paging in stages.
 
-| Dashboard | Source |
-| --- | --- |
-| Sign-in outcomes | `auth.security_events` for `auth.sign_in.*` by `outcome`, `reason`, and `method` |
-| Throttling by dimension | `auth.throttled` by `flow` and `dimension` |
-| Recovery and MFA delivery | `auth.recovery.requested` by `reason`; `auth.throttled` with flow `mfa_delivery` |
-| Step-up and verification failures | `auth.step_up.failed` and `auth.verification.failed` by `reason` and `flow` |
-| Token reuse and revocation | `auth.refresh_token.reused`; `auth.session.revoked` by `reason` |
-| Provider linking | `auth.provider.linked` and `auth.provider_link.conflict` by `method` and `reason` |
-| Authorization denials | `authz.denied` by `reason`; top `Route` values from the log |
-| Auth latency and faults | `auth.operation.duration` p50 and p95 by `operation`; share of `outcome="faulted"` |
-| Pipeline health | `auth.security_events.sink_failures` by `sink`; `auth.security_history.dropped` and `auth.security_history.store_failures` |
-
-Example alert conditions follow. The names are as the OpenTelemetry Prometheus exporter renders the instruments (dots become underscores and counters gain `_total`); adapt them to the backend chosen in #330. Enable alerts gradually: run each in notify-only mode for two weeks, set thresholds from the measured baseline (for example, three times the baseline p99), then page.
-
-| Condition | Example | Why |
-| --- | --- | --- |
-| Credential stuffing | `sum(rate(auth_security_events_total{event="auth.sign_in.failed",reason="invalid_credentials"}[5m]))` above baseline | Many failed passwords across accounts. |
-| Targeted account attack | `sum(rate(auth_security_events_total{event="auth.throttled",dimension="account"}[15m]))` above baseline | Repeated failures against individual accounts. |
-| Token theft | `increase(auth_security_events_total{event="auth.refresh_token.reused"}[10m]) > 0` sustained or rising | Replayed refresh tokens. Investigate the user and session ids in the log. |
-| Provider takeover attempts | `increase(auth_security_events_total{event="auth.provider_link.conflict"}[1h])` above baseline | Reassigned addresses or forged tenants. |
-| Step-up brute force | `sum(rate(auth_security_events_total{event="auth.step_up.failed",reason="attempts_exhausted"}[15m]))` above baseline | Code guessing. |
-| Authorization probing | `sum(rate(auth_security_events_total{event="authz.denied",reason="resource_access"}[5m]))` above baseline | One caller walking resource ids. Group the log by `UserId` and `Route`. |
-| Auth faults | Faulted share of `auth_operation_duration_milliseconds_count` above 2% for 10 minutes | Service errors, as distinct from refusals. |
-| Event pipeline broken | `increase(auth_security_events_sink_failures_total[5m]) > 0` | Events are being lost. |
-| Security history not recording | `increase(auth_security_history_dropped_total[5m]) > 0`, or `auth_security_history_store_failures_total` rising for 10 minutes | Entries are being lost, or are piling up because the outbox cannot be written. |
+Panels and alerts read only the instruments above, with their closed tag sets. Anything per account, session, or source is taken from this event log, which the runbooks show how to query.
 
 To investigate a user report, ask for the `X-Request-Id` from the failing response, or the support reference shown on a security history entry, and search the log for that `CorrelationId`.
