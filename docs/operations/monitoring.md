@@ -24,7 +24,7 @@ GRAFANA_ADMIN_PASSWORD=<choose one>
 # Optional, for drills: catch email in Mailpit instead of sending it.
 SMTP_SERVER=mailpit
 SMTP_PORT=1025
-EMAIL_USER=drill
+EMAIL_USER=auth-drill@example.com
 EMAIL_PASSWORD=drill
 ```
 
@@ -38,7 +38,7 @@ docker compose --profile ops up --build -d
 | --- | --- |
 | Grafana (Auth security dashboard is the home page) | http://localhost:3000 |
 | Prometheus (rules, alerts, `ALERTS`) | http://localhost:9090 |
-| Alertmanager | http://localhost:9093 |
+| Alertmanager | http://localhost:9094 |
 | Mailpit | http://localhost:8025 |
 
 The ports bind to localhost only. Grafana has anonymous access and sign-up turned off. For a shared deployment, put all four behind your SSO proxy and restrict access as you would the event log. The metrics carry no identifiers, but the alert history is operational security data.

@@ -580,7 +580,7 @@ services:
       - ./docker/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager_data:/alertmanager
     ports:
-      - "127.0.0.1:${ALERTMANAGER_PORT:-9093}:9093"
+      - "127.0.0.1:${ALERTMANAGER_PORT:-9094}:9093"
     networks:
       - event-network
 
@@ -609,7 +609,8 @@ services:
       - event-network
 
   # Catches email for drills and local runs: point email-worker at it with SMTP_SERVER=mailpit,
-  # SMTP_PORT=1025, and any EMAIL_USER/EMAIL_PASSWORD. Never use it where real mail must flow.
+  # SMTP_PORT=1025, an EMAIL_USER that is an email address (it is the sender), and any EMAIL_PASSWORD.
+  # Never use it where real mail must flow.
   mailpit:
     image: axllent/mailpit:v1.32.0
     container_name: eventxperience-mailpit
