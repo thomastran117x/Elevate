@@ -39,6 +39,7 @@ internal static partial class DevTasksCli
                     await RunBackendIntegrationEndpointCoverageAsync(args[1..]),
                 "export-openapi" => await ExportOpenApiAsync(args[1..]),
                 "storage-provision" => await RunStorageProvisionAsync(args[1..]),
+                "auth-drill" => await RunAuthDrillAsync(args[1..]),
                 _ => Fail($"Unknown command '{args[0]}'.")
             };
         }
@@ -908,6 +909,9 @@ internal static partial class DevTasksCli
         Console.WriteLine(
             "  storage-provision                      Create the public and quarantine blob containers."
         );
+        Console.WriteLine(
+            "  auth-drill                             Run the session-revocation, token-reuse, recovery, and telemetry drills."
+        );
         Console.WriteLine();
         WriteBackendFormatHelp();
         WriteBackendUnitCoverageHelp();
@@ -915,6 +919,7 @@ internal static partial class DevTasksCli
         WriteBackendIntegrationEndpointCoverageHelp();
         WriteExportOpenApiHelp();
         WriteStorageProvisionHelp();
+        WriteAuthDrillHelp();
     }
 
     private static void WriteBackendFormatHelp()
