@@ -1,3 +1,4 @@
+using backend.main.application.environment;
 using backend.main.application.features;
 using backend.main.features.auth;
 using backend.main.features.auth.abuse;
@@ -12,6 +13,7 @@ using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.oauth.links;
+using backend.main.features.auth.passkeys;
 using backend.main.features.auth.password;
 using backend.main.features.auth.sessions;
 using backend.main.features.auth.stepup;
@@ -221,6 +223,12 @@ namespace backend.main.application.bootstrap
                 .ValidateOnStart();
             services.AddSingleton<IValidateOptions<RecoveryCodeOptions>, RecoveryCodeOptionsValidator>();
             services.AddSingleton<RecoveryCodeHasher>();
+            services.AddOptions<PasskeyOptions>()
+                .Bind(config.GetSection(PasskeyOptions.SectionName))
+                .PostConfigure(options => options.ApplyFrontendDefaults(EnvironmentSetting.FrontendBaseUrl))
+                .ValidateOnStart();
+            services.AddSingleton<IValidateOptions<PasskeyOptions>, PasskeyOptionsValidator>();
+            services.AddSingleton<IWebAuthnRelyingParty, WebAuthnRelyingParty>();
             services.AddOptions<BloomFilterOptions>()
                 .Bind(config.GetSection("BloomFilters"))
                 .ValidateDataAnnotations()
@@ -259,6 +267,7 @@ namespace backend.main.application.bootstrap
             services.AddRepositoryWithProxy<ITotpMfaEnrollmentRepository, TotpMfaEnrollmentRepository>();
             services.AddRepositoryWithProxy<IRecoveryCodeRepository, RecoveryCodeRepository>();
             services.AddRepositoryWithProxy<IUserIdentityLinkRepository, UserIdentityLinkRepository>();
+            services.AddRepositoryWithProxy<IPasskeyCredentialRepository, PasskeyCredentialRepository>();
             services.AddRepositoryWithProxy<IClubRepository, ClubRepository>();
             services.AddRepositoryWithProxy<IEventsRepository, EventsRepository>();
             services.AddRepositoryWithProxy<IEventSeriesRepository, EventSeriesRepository>();
@@ -298,6 +307,9 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IProviderLinkFlow, GoogleProviderLinkFlow>();
             services.AddScoped<IProviderLinkFlow, MicrosoftProviderLinkFlow>();
             services.AddScoped<IProviderLinkService, ProviderLinkService>();
+            services.AddScoped<IPasskeyCeremonyStore, PasskeyCeremonyStore>();
+            services.AddScoped<IPasskeyManagementService, PasskeyManagementService>();
+            services.AddScoped<IPasskeyAuthenticationService, PasskeyAuthenticationService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IClubService, ClubService>();
             services.AddScoped<IClubInvitationService, ClubInvitationService>();

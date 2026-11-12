@@ -71,7 +71,8 @@ namespace backend.main.application.security
             $"/{RoutePaths.ApiPrefix}/profile",
             $"{RoutePaths.ApiAuthPath}/providers",
             $"{RoutePaths.ApiAuthPath}/sessions",
-            $"{RoutePaths.ApiAuthPath}/devices"
+            $"{RoutePaths.ApiAuthPath}/devices",
+            $"{RoutePaths.ApiAuthPath}/passkeys"
         ];
 
         public static IApplicationBuilder UseRefreshCsrfValidation(this IApplicationBuilder app)
@@ -88,7 +89,7 @@ namespace backend.main.application.security
             });
         }
 
-        private static bool RequiresCsrfValidation(HttpRequest request)
+        internal static bool RequiresCsrfValidation(HttpRequest request)
         {
             var path = request.Path;
 

@@ -572,6 +572,11 @@
 
         <app-recovery-codes-card (stepUpRequired)="onStepUpRequired()"></app-recovery-codes-card>
 
+        <app-passkeys-card
+          *ngIf="passkeysEnabled"
+          (stepUpRequired)="onStepUpRequired()"
+        ></app-passkeys-card>
+
         <app-linked-providers-card
           (stepUpRequired)="onStepUpRequired()"
         ></app-linked-providers-card>

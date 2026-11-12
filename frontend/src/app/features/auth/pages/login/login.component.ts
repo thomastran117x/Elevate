@@ -1,4 +1,11 @@
-import { Component, ChangeDetectionStrategy } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  DestroyRef,
+  afterNextRender,
+  inject,
+} from '@angular/core';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
@@ -12,11 +19,15 @@ import {
   isApiClientClientError,
   isApiClientErrorCode,
 } from '../../../../core/api/models/api-client-error.model';
+import { FeatureFlagsService } from '../../../../core/features/feature-flags.service';
+import { FEATURE_KEYS } from '../../../../core/features/feature-flags.types';
+import { AuthenticatedSessionResponse } from '../../../../core/models/auth-response.model';
 import { SessionManagerService } from '../../../../core/services/session-manager.service';
 import { GoogleButtonComponent } from '../../components/google-button/google-button.component';
 import { MicrosoftButtonComponent } from '../../components/microsoft-button/microsoft-button.component';
 import { AuthService, PendingLoginStepUpStorageKey } from '../../services/auth.service';
 import { AuthReturnUrlService } from '../../services/auth-return-url.service';
+import { PasskeyOutcome, PasskeysService } from '../../services/passkeys.service';
 import { ProviderLinkFlowService } from '../../services/provider-link-flow.service';
 import { PendingEmailLinkProposal, PROVIDER_LABELS } from '../../services/provider-links.service';
 import { RecaptchaV3Service } from '../../services/recaptcha.service';
@@ -48,6 +59,14 @@ export class LoginComponent {
   /** A provider sign-in matched an existing account by email; signing in to it confirms the link. */
   linkProposal: PendingEmailLinkProposal | null = null;
   readonly providerLabels = PROVIDER_LABELS;
+  /** Set after the first browser render, so server and client render the same markup. */
+  passkeyAvailable = false;
+  passkeyLoading = false;
+
+  private readonly passkeys = inject(PasskeysService);
+  private readonly changeDetector = inject(ChangeDetectorRef);
+  /** The autofill (conditional) passkey request waiting on the username field, if any. */
+  private conditionalRequest: AbortController | null = null;
 
   constructor(
     private fb: FormBuilder,
@@ -58,7 +77,18 @@ export class LoginComponent {
     private recaptcha: RecaptchaV3Service,
     private authReturnUrl: AuthReturnUrlService,
     private providerLinkFlow: ProviderLinkFlowService,
-  ) {}
+  ) {
+    const passkeysEnabled = inject(FeatureFlagsService).isEnabled(FEATURE_KEYS.authPasskeys);
+    afterNextRender(() => {
+      if (!passkeysEnabled || !this.passkeys.isSupported()) {
+        return;
+      }
+      this.passkeyAvailable = true;
+      this.changeDetector.markForCheck();
+      void this.startConditionalPasskeySignIn();
+    });
+    inject(DestroyRef).onDestroy(() => this.abortConditionalPasskeySignIn());
+  }
 
   ngOnInit() {
     this.authReturnUrl.captureFromRoute(this.route);
@@ -88,9 +118,40 @@ export class LoginComponent {
     this.capsLockOn = false;
   }
 
+  /** Asks the browser for any passkey this device holds for the site. */
+  signInWithPasskey(): void {
+    if (this.passkeyLoading) {
+      return;
+    }
+
+    // Only one WebAuthn request can be pending, so the autofill one gives way.
+    this.abortConditionalPasskeySignIn();
+    this.passkeyLoading = true;
+    this.error = '';
+    this.notice = '';
+
+    this.passkeys
+      .signIn(this.form.controls['rememberMe'].value === true)
+      .pipe(
+        finalize(() => {
+          this.passkeyLoading = false;
+          this.changeDetector.markForCheck();
+        }),
+      )
+      .subscribe({
+        next: (outcome) => void this.handlePasskeyOutcome(outcome, true),
+        error: (err) => {
+          this.error = getApiClientMessage(err, 'Passkey sign-in failed. Please try again.');
+          this.changeDetector.markForCheck();
+        },
+      });
+  }
+
   async onSubmit() {
     this.submitted = true;
     if (this.form.invalid) return;
+
+    this.abortConditionalPasskeySignIn();
 
     this.loading = true;
     this.error = '';
@@ -150,6 +211,64 @@ export class LoginComponent {
       this.error = e?.message || 'Captcha failed to initialize.';
       this.notice = '';
     }
+  }
+
+  /**
+   * Offers passkeys in the username field's autofill. The request waits until the user picks
+   * one there, and is aborted as soon as they sign in another way.
+   */
+  private async startConditionalPasskeySignIn(): Promise<void> {
+    if (!(await this.passkeys.isConditionalMediationAvailable())) {
+      return;
+    }
+
+    const request = new AbortController();
+    this.conditionalRequest = request;
+    this.passkeys.signIn(false, { mediation: 'conditional', signal: request.signal }).subscribe({
+      next: (outcome) => {
+        if (this.conditionalRequest === request) {
+          this.conditionalRequest = null;
+        }
+        // A request this page aborted has nothing to report.
+        if (!request.signal.aborted) {
+          void this.handlePasskeyOutcome(outcome, false);
+        }
+      },
+      error: (err) => {
+        if (request.signal.aborted) {
+          return;
+        }
+        this.error = getApiClientMessage(err, 'Passkey sign-in failed. Please try again.');
+        this.changeDetector.markForCheck();
+      },
+    });
+  }
+
+  private abortConditionalPasskeySignIn(): void {
+    this.conditionalRequest?.abort();
+    this.conditionalRequest = null;
+  }
+
+  /** @param explicit The user pressed the passkey button, so a dismissed prompt is not silent. */
+  private async handlePasskeyOutcome(
+    outcome: PasskeyOutcome<AuthenticatedSessionResponse>,
+    explicit: boolean,
+  ): Promise<void> {
+    if (outcome.status === 'done') {
+      try {
+        await this.sessionManager.bootstrapSession(outcome.value);
+        await this.router.navigateByUrl(this.authReturnUrl.consume('/dashboard'));
+      } catch (err: unknown) {
+        this.error = getApiClientMessage(err, 'Passkey sign-in failed. Please try again.');
+      }
+    } else if (outcome.status === 'unsupported') {
+      this.error = "This browser can't use passkeys. Sign in with your password instead.";
+    } else if (outcome.status === 'failed') {
+      this.error = 'Passkey sign-in failed. Try again or sign in with your password.';
+    } else if (explicit && outcome.status === 'cancelled') {
+      this.notice = 'Passkey sign-in was cancelled. Try again or sign in with your password.';
+    }
+    this.changeDetector.markForCheck();
   }
 
   private requiresCaptcha(meta: unknown): boolean {

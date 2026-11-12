@@ -1341,34 +1341,7 @@ namespace backend.main.features.auth
             User user,
             Token token,
             string? returnPath = null
-        )
-        {
-            string? refreshToken = null;
-            string? sessionBindingToken = null;
-
-            if (token.Transport.UsesBrowserCookies())
-            {
-                HttpUtility.SetBrowserRefreshSession(
-                    Response,
-                    token.RefreshToken,
-                    token.SessionBindingToken,
-                    token.RefreshTokenLifetime
-                );
-            }
-            else
-            {
-                refreshToken = token.RefreshToken;
-                sessionBindingToken = token.SessionBindingToken;
-            }
-
-            return new AuthenticatedSessionResponse(
-                token.AccessToken,
-                token.AccessTokenExpiresAtUtc,
-                refreshToken,
-                sessionBindingToken,
-                returnPath
-            );
-        }
+        ) => AuthSessionResponses.Create(Response, token, returnPath);
 
         private AuthenticatedSessionResponse CreateSessionResponse(AuthenticatedSessionResult result)
         {

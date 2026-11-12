@@ -3,6 +3,7 @@ using backend.main.features.auth.contracts;
 using backend.main.features.auth.events;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.oauth.links;
+using backend.main.features.auth.passkeys;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.profile;
@@ -27,6 +28,7 @@ public class ProviderLinkServiceTests
 
     private readonly Mock<IUserIdentityLinkRepository> _links = new();
     private readonly Mock<IAuthUserRepository> _users = new();
+    private readonly Mock<IPasskeyCredentialRepository> _passkeys = NoPasskeys();
     private readonly Mock<IProviderLinkStateStore> _states = new();
     private readonly Mock<IRefreshAheadCache> _refreshCache = new();
     private readonly Mock<ITokenService> _tokens = new();
@@ -70,13 +72,31 @@ public class ProviderLinkServiceTests
         microsoft.CanUnlink.Should().BeFalse();
     }
 
-    [Theory]
-    [InlineData(true, 1, true)]
-    [InlineData(false, 2, true)]
-    [InlineData(false, 1, false)]
-    public void SignInMethods_ShouldRemainOnlyWithAPasswordOrAnotherLink(bool hasPassword, int linkCount, bool expected)
+    [Fact]
+    public async Task GetOverviewAsync_ShouldAllowUnlinkingTheOnlyLink_WhenAPasskeyRemains()
     {
-        SignInMethods.RemainAfterRemoving(hasPassword, linkCount).Should().Be(expected);
+        _links.Setup(r => r.ListForUserAsync(UserId, It.IsAny<CancellationToken>())).ReturnsAsync([Link(IdentityProviders.Google, "google-1")]);
+        _users.Setup(r => r.GetAuthByIdAsync(UserId)).ReturnsAsync(PasswordlessUser());
+        _passkeys.Setup(p => p.GetFactorSummaryAsync(UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PasskeyFactorSummary(1, Now));
+
+        var overview = await CreateService().GetOverviewAsync(UserId);
+
+        overview.Providers[0].CanUnlink.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(true, 1, 0, true)]
+    [InlineData(false, 2, 0, true)]
+    [InlineData(false, 1, 0, false)]
+    [InlineData(false, 1, 1, true)]
+    [InlineData(false, 0, 2, true)]
+    [InlineData(false, 0, 1, false)]
+    [InlineData(true, 0, 1, true)]
+    public void SignInMethods_ShouldRemainOnlyWithAPasswordOrAnotherLinkOrPasskey(
+        bool hasPassword, int linkCount, int passkeyCount, bool expected)
+    {
+        SignInMethods.RemainAfterRemoving(hasPassword, linkCount, passkeyCount).Should().Be(expected);
     }
 
     [Fact]
@@ -402,12 +422,21 @@ public class ProviderLinkServiceTests
     private ProviderLinkService CreateService() => new(
         _links.Object,
         _users.Object,
+        _passkeys.Object,
         _states.Object,
         [_google.Object, _microsoft.Object],
         _refreshCache.Object,
         _events,
         _tokens.Object,
         new FixedTimeProvider(Now));
+
+    private static Mock<IPasskeyCredentialRepository> NoPasskeys()
+    {
+        var passkeys = new Mock<IPasskeyCredentialRepository>();
+        passkeys.Setup(p => p.GetFactorSummaryAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PasskeyFactorSummary(0, null));
+        return passkeys;
+    }
 
     private void GivenState(ProviderLinkState state) =>
         _states.Setup(s => s.ConsumeLinkStateAsync("state-token")).ReturnsAsync(state);

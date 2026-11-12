@@ -84,6 +84,13 @@ public static class AuthSecurityEvents
     public static readonly AuthSecurityEventDefinition TrustedDeviceExpired =
         new(33121, "auth.trusted_device.expired", LogLevel.Information);
 
+    /// <summary>
+    /// An assertion reported a signature counter that did not advance, which can mean a copied
+    /// authenticator. A synced passkey is still accepted; a device-bound one is refused.
+    /// </summary>
+    public static readonly AuthSecurityEventDefinition PasskeyCounterAnomaly =
+        new(33130, "auth.passkey.counter_anomaly", LogLevel.Warning);
+
     public static readonly IReadOnlyList<AuthSecurityEventDefinition> All =
     [
         SignInSucceeded,
@@ -107,5 +114,6 @@ public static class AuthSecurityEvents
         RecoveryCodeUsed,
         TrustedDeviceRevoked,
         TrustedDeviceExpired,
+        PasskeyCounterAnomaly,
     ];
 }

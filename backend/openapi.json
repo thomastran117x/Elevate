@@ -19262,6 +19262,956 @@
         "x-authorization": "authenticated"
       }
     },
+    "/api/auth/passkeys": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "List the current user's passkeys",
+        "description": "Returns each passkey's name, whether it can sync between devices, when it was added and last used, and whether removing it is allowed. Never returns the credential id, public key, or user handle.",
+        "operationId": "AuthPasskeys_List_get",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeysResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeysResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeysResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      }
+    },
+    "/api/auth/passkeys/registration/options": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Start registering a passkey",
+        "description": "Returns WebAuthn creation options requiring a discoverable, user-verified credential, and a single-use ceremony id bound to this session. Returns 409 `PASSKEY_LIMIT_REACHED` at the per-account limit. Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
+        "operationId": "AuthPasskeys_StartRegistration_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyRegistrationOptionsRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyRegistrationOptionsRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyRegistrationOptionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeyCeremonyOptionsResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeyCeremonyOptionsResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeyCeremonyOptionsResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      }
+    },
+    "/api/auth/passkeys/registration": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Finish registering a passkey",
+        "description": "Verifies the authenticator's attestation against the ceremony and stores the passkey's public key. Any refusal answers 401. Registration emails the owner and discards step-up proofs on every session. Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
+        "operationId": "AuthPasskeys_CompleteRegistration_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyCeremonyCompletionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyCeremonyCompletionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyCeremonyCompletionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeyResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeyResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      }
+    },
+    "/api/auth/passkeys/{passkeyId}": {
+      "patch": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Rename a passkey",
+        "description": "Renames one of the caller's passkeys. Returns 404 for an id that is not one of them. Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
+        "operationId": "AuthPasskeys_Rename_patch",
+        "parameters": [
+          {
+            "name": "passkeyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenamePasskeyRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenamePasskeyRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenamePasskeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeyResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeyResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeyResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      },
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Remove a passkey",
+        "description": "Removes one of the caller's passkeys unless it is the account's last way to sign in (409 `LAST_SIGN_IN_METHOD`). Removal emails the owner and discards step-up proofs on every session; sessions are not ended. Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
+        "operationId": "AuthPasskeys_Remove_delete",
+        "parameters": [
+          {
+            "name": "passkeyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      }
+    },
+    "/api/auth/passkeys/sign-in/options": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Start signing in with a passkey",
+        "description": "Returns WebAuthn request options for any discoverable passkey on this site, requiring user verification, and a single-use ceremony id. No username is sent.",
+        "operationId": "AuthPasskeys_StartSignIn_post",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeyCeremonyOptionsResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeyCeremonyOptionsResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeyCeremonyOptionsResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "x-authorization": "anonymous"
+      }
+    },
+    "/api/auth/passkeys/sign-in": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign in with a passkey",
+        "description": "Verifies the assertion and signs its owner in, with the same response as password sign-in. A verified passkey needs no further challenge. Every refusal answers 401 `AUTHENTICATION_FAILED` alike.",
+        "operationId": "AuthPasskeys_CompleteSignIn_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeySignInRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeySignInRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeySignInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfLoginAuthenticationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfLoginAuthenticationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfLoginAuthenticationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "x-authorization": "anonymous"
+      }
+    },
+    "/api/auth/passkeys/step-up/options": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Start a passkey step-up",
+        "description": "Returns WebAuthn request options limited to the caller's own passkeys, and a single-use ceremony id bound to this session. Does not itself require a step-up.",
+        "operationId": "AuthPasskeys_StartStepUp_post",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeyCeremonyOptionsResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeyCeremonyOptionsResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfPasskeyCeremonyOptionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      }
+    },
+    "/api/auth/passkeys/step-up": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Verify a step-up with a passkey",
+        "description": "Verifies the assertion and records the same session-bound step-up proof as a verified code. Every refusal answers 401 `AUTHENTICATION_FAILED` alike.",
+        "operationId": "AuthPasskeys_CompleteStepUp_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyCeremonyCompletionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyCeremonyCompletionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyCeremonyCompletionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      }
+    },
     "/api/auth/providers": {
       "get": {
         "tags": [
@@ -25711,6 +26661,132 @@
         },
         "description": "Standard JSON envelope returned by all API endpoints."
       },
+      "ApiResponseOfPasskeyCeremonyOptionsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/PasskeyCeremonyOptionsResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
+      "ApiResponseOfPasskeyResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/PasskeyResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
+      "ApiResponseOfPasskeysResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/PasskeysResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
       "ApiResponseOfPaymentResponse": {
         "type": "object",
         "properties": {
@@ -31991,6 +33067,7 @@
         },
         "description": "Optional attendee details captured at join time and carried onto the registration\r\nwhen the entry is promoted, so a promoted user does not have to re-enter them."
       },
+      "JsonElement": { },
       "ListOfAuthSessionResponse": {
         "type": "array",
         "items": {
@@ -32085,6 +33162,12 @@
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/MergeRecentlyViewedItem"
+        }
+      },
+      "ListOfPasskeyResponse": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/PasskeyResponse"
         }
       },
       "ListOfString": {
@@ -33280,6 +34363,150 @@
         },
         "description": "Standard pagination payload used inside API response envelopes."
       },
+      "PasskeyCeremonyCompletionRequest": {
+        "required": [
+          "ceremonyId",
+          "credential"
+        ],
+        "type": "object",
+        "properties": {
+          "ceremonyId": {
+            "description": "The ceremony id the options response returned.",
+            "$ref": "#/components/schemas/String"
+          },
+          "credential": {
+            "description": "The `PublicKeyCredential` from `navigator.credentials.create()` or\r\n`get()`, serialized as WebAuthn JSON (its `toJSON()` form).",
+            "$ref": "#/components/schemas/JsonElement"
+          }
+        },
+        "description": "Completes a passkey ceremony with what the authenticator returned."
+      },
+      "PasskeyCeremonyOptionsResponse": {
+        "required": [
+          "ceremonyId",
+          "publicKey"
+        ],
+        "type": "object",
+        "properties": {
+          "ceremonyId": {
+            "description": "Single use: completing the ceremony spends it, whatever the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "publicKey": {
+            "description": "WebAuthn options JSON. Binary values are base64url strings.",
+            "$ref": "#/components/schemas/JsonElement"
+          },
+          "expiresAtUtc": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        },
+        "description": "The options for one passkey ceremony. Pass JsonElement PasskeyCeremonyOptionsResponse.PublicKey to\r\n`PublicKeyCredential.parseCreationOptionsFromJSON()` or\r\n`parseRequestOptionsFromJSON()`, and send string PasskeyCeremonyOptionsResponse.CeremonyId back with the result."
+      },
+      "PasskeyRegistrationOptionsRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "A name to tell this passkey apart, e.g. \"Work laptop\". Defaults to \"Passkey\".",
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          }
+        },
+        "description": "Starts registering a passkey on the signed-in account."
+      },
+      "PasskeyResponse": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "name": {
+            "$ref": "#/components/schemas/String"
+          },
+          "syncable": {
+            "description": "The passkey can sync between devices, e.g. through a password manager.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "backedUp": {
+            "description": "The authenticator last reported the passkey as backed up or synced.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "canRemove": {
+            "description": "False when it is the account's last way to sign in, so removing it is refused.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "lastUsedAt": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ]
+          }
+        },
+        "description": "One registered passkey. The credential id, public key, and user handle are never included."
+      },
+      "PasskeySignInRequest": {
+        "required": [
+          "ceremonyId",
+          "credential"
+        ],
+        "type": "object",
+        "properties": {
+          "rememberMe": {
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "transport": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "`browser` (cookies, the default) or `api` (tokens in the body).",
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          },
+          "ceremonyId": {
+            "description": "The ceremony id the options response returned.",
+            "$ref": "#/components/schemas/String"
+          },
+          "credential": {
+            "description": "The `PublicKeyCredential` from `navigator.credentials.create()` or\r\n`get()`, serialized as WebAuthn JSON (its `toJSON()` form).",
+            "$ref": "#/components/schemas/JsonElement"
+          }
+        },
+        "description": "Completes passkey sign-in."
+      },
+      "PasskeysResponse": {
+        "required": [
+          "passkeys"
+        ],
+        "type": "object",
+        "properties": {
+          "passkeys": {
+            "$ref": "#/components/schemas/ListOfPasskeyResponse"
+          },
+          "limit": {
+            "description": "How many passkeys one account may register.",
+            "$ref": "#/components/schemas/Int32"
+          }
+        },
+        "description": "The caller's passkeys."
+      },
       "PasswordRecoveryRequest": {
         "required": [
           "username",
@@ -33989,6 +35216,17 @@
                 "$ref": "#/components/schemas/String"
               }
             ]
+          }
+        }
+      },
+      "RenamePasskeyRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/String"
           }
         }
       },

@@ -33,6 +33,7 @@ public static class SecurityHistoryCatalog
             AuthSecurityEvents.AccountStatusChanged,
             AuthSecurityEvents.RecoveryCodeUsed,
             AuthSecurityEvents.TrustedDeviceRevoked,
+            AuthSecurityEvents.PasskeyCounterAnomaly,
         };
 
     public static readonly IReadOnlySet<AuthSecurityEventDefinition> NotRecorded =
@@ -105,6 +106,9 @@ public static class SecurityHistoryCatalog
             };
         }
 
+        if (definition == AuthSecurityEvents.PasskeyCounterAnomaly)
+            return AccountSecurityEventKind.PasskeyCounterAnomaly;
+
         if (definition == AuthSecurityEvents.AccountStatusChanged)
         {
             return securityEvent.Reason switch
@@ -147,6 +151,8 @@ public static class SecurityHistoryCatalog
             (AuthSecurityFactor.Sms or AuthSecurityFactor.Totp, AuthFactorChange.Removed) => AccountSecurityEventKind.MfaRemoved,
             (AuthSecurityFactor.RecoveryCodes, AuthFactorChange.Enabled) => AccountSecurityEventKind.RecoveryCodesGenerated,
             (AuthSecurityFactor.RecoveryCodes, AuthFactorChange.Regenerated) => AccountSecurityEventKind.RecoveryCodesRegenerated,
+            (AuthSecurityFactor.Passkey, AuthFactorChange.Added) => AccountSecurityEventKind.PasskeyAdded,
+            (AuthSecurityFactor.Passkey, AuthFactorChange.Removed) => AccountSecurityEventKind.PasskeyRemoved,
             _ => null,
         };
 

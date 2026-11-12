@@ -92,6 +92,14 @@ public class User
     {
         get; set;
     } = 1;
+    /// <summary>
+    /// The WebAuthn user handle every passkey on the account carries: random bytes created with
+    /// the first passkey, never the id, email, or username. Null until then.
+    /// </summary>
+    public byte[]? PasskeyUserHandle
+    {
+        get; set;
+    }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

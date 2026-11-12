@@ -126,6 +126,42 @@ namespace backend.main.application.openapi
                     "Forget every trusted device",
                     "Removes every trusted device of the caller and clears the current device's cookie. Signed-in sessions are not ended. " + StepUpRequired
                 ),
+                ["GET /api/auth/passkeys"] = new(
+                    "List the current user's passkeys",
+                    "Returns each passkey's name, whether it can sync between devices, when it was added and last used, and whether removing it is allowed. Never returns the credential id, public key, or user handle."
+                ),
+                ["POST /api/auth/passkeys/registration/options"] = new(
+                    "Start registering a passkey",
+                    "Returns WebAuthn creation options requiring a discoverable, user-verified credential, and a single-use ceremony id bound to this session. Returns 409 `PASSKEY_LIMIT_REACHED` at the per-account limit. " + StepUpRequired
+                ),
+                ["POST /api/auth/passkeys/registration"] = new(
+                    "Finish registering a passkey",
+                    "Verifies the authenticator's attestation against the ceremony and stores the passkey's public key. Any refusal answers 401. Registration emails the owner and discards step-up proofs on every session. " + StepUpRequired
+                ),
+                ["PATCH /api/auth/passkeys/{passkeyId}"] = new(
+                    "Rename a passkey",
+                    "Renames one of the caller's passkeys. Returns 404 for an id that is not one of them. " + StepUpRequired
+                ),
+                ["DELETE /api/auth/passkeys/{passkeyId}"] = new(
+                    "Remove a passkey",
+                    "Removes one of the caller's passkeys unless it is the account's last way to sign in (409 `LAST_SIGN_IN_METHOD`). Removal emails the owner and discards step-up proofs on every session; sessions are not ended. " + StepUpRequired
+                ),
+                ["POST /api/auth/passkeys/sign-in/options"] = new(
+                    "Start signing in with a passkey",
+                    "Returns WebAuthn request options for any discoverable passkey on this site, requiring user verification, and a single-use ceremony id. No username is sent."
+                ),
+                ["POST /api/auth/passkeys/sign-in"] = new(
+                    "Sign in with a passkey",
+                    "Verifies the assertion and signs its owner in, with the same response as password sign-in. A verified passkey needs no further challenge. Every refusal answers 401 `AUTHENTICATION_FAILED` alike."
+                ),
+                ["POST /api/auth/passkeys/step-up/options"] = new(
+                    "Start a passkey step-up",
+                    "Returns WebAuthn request options limited to the caller's own passkeys, and a single-use ceremony id bound to this session. Does not itself require a step-up."
+                ),
+                ["POST /api/auth/passkeys/step-up"] = new(
+                    "Verify a step-up with a passkey",
+                    "Verifies the assertion and records the same session-bound step-up proof as a verified code. Every refusal answers 401 `AUTHENTICATION_FAILED` alike."
+                ),
                 ["POST /api/auth/forgot-password"] = new("Start password recovery by username (compatibility alias)"),
                 ["POST /api/auth/change-password"] = new("Reset the account password (compatibility alias)"),
                 ["POST /api/auth/recovery/password"] = new("Start password recovery by username"),

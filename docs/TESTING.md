@@ -13,6 +13,8 @@ The unit project covers feature services/controllers/repositories with doubles, 
 
 Auth code that records security events takes `IAuthSecurityEventEmitter`; pass `NullAuthSecurityEventEmitter.Instance` when a test does not care, or `RecordingAuthSecurityEventEmitter` from `Features/Auth/Events` to assert on what was emitted. `docs/SECURITY_EVENTS.md` is copied into the unit test output and checked against the event contract, so changing the catalog, reasons, operations, or metrics means updating that document in the same change.
 
+Passkey tests use `SoftwareAuthenticator` (`backend.tests.Unit/Support`, linked into the integration project). It holds one ES256 key and answers the API's real options with a `none` attestation and signed assertions, so the shipped Fido2 library verifies the ceremonies rather than a mock. Its settings each break one thing a browser or authenticator would get right: the origin, the RP ID, user verification, the counter, the signature, or the user handle.
+
 ### Backend coverage
 
 The enforced default is **90% filtered unit line coverage**. The development task runs Release tests using `backend.coverage.runsettings` and the first-party Microsoft Code Coverage collector, reads Cobertura under `.tmp/backend-unit-coverage/`, and fails below the floor. Branch coverage is reported separately, without a separate branch floor.
@@ -136,6 +138,8 @@ npx playwright test tests/account-activity.spec.ts
 `account-linked-providers.spec.ts` needs no backend. It mocks the API and opens the shared provider callback pages as Google would redirect to them. It covers a completed link, a declined consent, an identity linked to another account, an expired request, unlinking with the last-method guard, and the link a sign-in proposes when its email matches an existing account. It never contacts Google or Microsoft. Run it with `npx playwright test tests/account-linked-providers.spec.ts`.
 
 `account-devices.spec.ts` also mocks the API and needs no backend. On **Account settings → Devices** it checks that both lists load without a step-up and mark this device. It signs out another session after an in-place step-up that then finishes the sign-out, signs out everywhere back to the sign-in page, and forgets a trusted device. Run it with `npx playwright test tests/account-devices.spec.ts`.
+
+`account-passkeys.spec.ts` mocks the API and runs real WebAuthn ceremonies in Chromium's virtual authenticator, added through the DevTools protocol. It adds a passkey on the Security tab, signs in with the passkey button and from the username field's autofill, keeps the password form after a refused prompt, steps up with a passkey, and removes one. It checks the credential JSON the page sends (type, origin, and user handle), while the backend integration tests cover the server's verification. Run it with `npx playwright test tests/account-passkeys.spec.ts`.
 
 The root `.mcp.json` configures Playwright; `frontend/.mcp.json` adds Angular CLI MCP. Launch frontend-focused tools from the Angular workspace so the CLI can resolve `angular.json`. Start the desired app server before navigating with browser tools. Equivalent frontend VS Code configuration is in `frontend/.vscode/mcp.json`.
 

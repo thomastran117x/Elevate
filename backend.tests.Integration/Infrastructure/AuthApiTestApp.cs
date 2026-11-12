@@ -15,6 +15,7 @@ using backend.main.features.auth.device;
 using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.session;
 using backend.main.features.auth.oauth;
+using backend.main.features.auth.passkeys;
 using backend.main.features.auth.password;
 using backend.main.features.auth.token;
 using backend.main.features.bloom;
@@ -431,7 +432,12 @@ public sealed class AuthApiTestApp : IAsyncDisposable
                 await QueryDbAsync(db => db.TotpMfaEnrollments.AsNoTracking().FirstOrDefaultAsync(e => e.UserId == userId)),
                 await QueryDbAsync(db => db.RecoveryCodes.AsNoTracking()
                     .Where(c => c.UserId == userId)
-                    .MaxAsync(c => (DateTime?)c.CreatedAtUtc))),
+                    .MaxAsync(c => (DateTime?)c.CreatedAtUtc)),
+                new PasskeyFactorSummary(
+                    await QueryDbAsync(db => db.PasskeyCredentials.CountAsync(c => c.UserId == userId)),
+                    await QueryDbAsync(db => db.PasskeyCredentials.AsNoTracking()
+                        .Where(c => c.UserId == userId)
+                        .MaxAsync(c => (DateTime?)c.CreatedAtUtc)))),
         };
 
         await Cache.SetValueAsync(

@@ -25,6 +25,7 @@ import {
   SessionMfaMethod,
   SessionMfaOptionsResponse,
 } from '../../../../auth/services/auth.service';
+import { PasskeyOutcome, PasskeysService } from '../../../../auth/services/passkeys.service';
 import {
   RECOVERY_CODE_HINT,
   RECOVERY_CODE_MAX_INPUT_LENGTH,
@@ -36,7 +37,7 @@ import { StepUpResumeService } from './step-up-resume.service';
  * Reusable in-session MFA gate. On init it probes whether the current session
  * holds a fresh step-up proof (it lasts 10 minutes from verification); if not, it
  * shows a locked state with a modal that walks the user through picking a method
- * and entering a 6-digit code, or one of their recovery codes. Emits {@link verified} once the session is
+ * and entering a 6-digit code, or one of their recovery codes, or using a passkey. Emits {@link verified} once the session is
  * verified (already or after the modal), so the host can reveal the protected
  * content. When it locks it remembers the allowlisted account route that asked,
  * and returns there after verification.
@@ -94,6 +95,7 @@ export class MfaGateComponent implements OnInit {
    * the gate after a response. Every async step marks it for check when it settles.
    */
   private readonly changeDetector = inject(ChangeDetectorRef);
+  private readonly passkeys = inject(PasskeysService);
 
   constructor(
     private auth: AuthService,
@@ -114,6 +116,10 @@ export class MfaGateComponent implements OnInit {
     return this.method === 'recovery_code';
   }
 
+  get isPasskey(): boolean {
+    return this.method === 'passkey';
+  }
+
   methodLabel(method: SessionMfaMethod): string {
     switch (method) {
       case 'totp':
@@ -122,6 +128,8 @@ export class MfaGateComponent implements OnInit {
         return 'Text message (SMS)';
       case 'recovery_code':
         return 'Recovery code';
+      case 'passkey':
+        return 'Passkey';
       default:
         return 'Email';
     }
@@ -135,6 +143,8 @@ export class MfaGateComponent implements OnInit {
         return 'We text a 6-digit code to your verified phone.';
       case 'recovery_code':
         return 'Use one of your saved single-use recovery codes.';
+      case 'passkey':
+        return 'Use your fingerprint, face, screen lock, or security key.';
       default:
         return 'We email a 6-digit code to your inbox.';
     }
@@ -171,6 +181,11 @@ export class MfaGateComponent implements OnInit {
 
   continueToCode(): void {
     if (!this.method) {
+      return;
+    }
+
+    if (this.isPasskey) {
+      this.verifyWithPasskey();
       return;
     }
 
@@ -245,6 +260,40 @@ export class MfaGateComponent implements OnInit {
           this.error = getApiClientMessage(err, 'Unable to verify the code. Please try again.');
         },
       });
+  }
+
+  /** A passkey has no code: the browser prompt is the whole verification. */
+  verifyWithPasskey(): void {
+    this.error = '';
+    this.verifying = true;
+
+    this.passkeys
+      .stepUp()
+      .pipe(finalize(() => this.settle(() => (this.verifying = false))))
+      .subscribe({
+        next: (outcome) => this.settle(() => this.handlePasskeyOutcome(outcome)),
+        error: (err) => {
+          this.error = getApiClientMessage(err, 'Passkey verification failed. Please try again.');
+        },
+      });
+  }
+
+  private handlePasskeyOutcome(outcome: PasskeyOutcome<void>): void {
+    switch (outcome.status) {
+      case 'done':
+        this.modalOpen = false;
+        this.verified.emit();
+        this.resumeIntendedRoute();
+        return;
+      case 'cancelled':
+        this.error = 'Passkey verification was cancelled. Try again or choose another method.';
+        return;
+      case 'unsupported':
+        this.error = "This browser can't use passkeys. Choose another method.";
+        return;
+      default:
+        this.error = 'Passkey verification failed. Try again or choose another method.';
+    }
   }
 
   /** A recovery code is not six digits, so the field's rules follow the chosen method. */
@@ -327,8 +376,12 @@ export class MfaGateComponent implements OnInit {
       .pipe(finalize(() => this.settle(() => (this.optionsLoading = false))))
       .subscribe({
         next: (options) => {
-          this.options = options;
-          this.method = options.availableMethods[0] ?? 'email';
+          // A passkey is offered only where this browser can use one.
+          const availableMethods = options.availableMethods.filter(
+            (method) => method !== 'passkey' || this.passkeys.isSupported(),
+          );
+          this.options = { ...options, availableMethods };
+          this.method = availableMethods[0] ?? 'email';
         },
         error: (err) => {
           this.error = getApiClientMessage(err, 'Unable to load verification options.');
