@@ -22,6 +22,13 @@ namespace backend.main.features.auth.passkeys
     /// with one, and use one for a fresh step-up. Each ceremony is two calls: options, then the
     /// authenticator's response with the ceremony id the options returned.
     /// </summary>
+    /// <remarks>
+    /// CSRF is enforced for every state-changing request here by <c>UseRefreshCsrfValidation</c>,
+    /// which runs before authentication. The anonymous sign-in actions deliberately carry no
+    /// <c>[ValidateAntiForgeryToken]</c>: that filter runs after authentication, so a page that
+    /// fetched its token anonymously and then restored a session (sending a bearer token) would
+    /// be refused, as the login page's passkey autofill does on every visit by a signed-in user.
+    /// </remarks>
     [ApiController]
     [Authorize]
     [FeatureGate(FeatureFlagKeys.AuthPasskeys)]
@@ -118,7 +125,6 @@ namespace backend.main.features.auth.passkeys
 
         [HttpPost("sign-in/options")]
         [AllowAnonymous]
-        [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<PasskeyCeremonyOptionsResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status429TooManyRequests)]
@@ -134,7 +140,6 @@ namespace backend.main.features.auth.passkeys
 
         [HttpPost("sign-in")]
         [AllowAnonymous]
-        [ValidateAntiForgeryToken]
         [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
         [AuthOperation(AuthOperation.SignIn)]
         [ProducesResponseType(typeof(ApiResponse<LoginAuthenticationResponse>), StatusCodes.Status200OK)]

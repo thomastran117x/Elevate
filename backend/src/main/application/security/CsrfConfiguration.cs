@@ -89,7 +89,7 @@ namespace backend.main.application.security
             });
         }
 
-        private static bool RequiresCsrfValidation(HttpRequest request)
+        internal static bool RequiresCsrfValidation(HttpRequest request)
         {
             var path = request.Path;
 

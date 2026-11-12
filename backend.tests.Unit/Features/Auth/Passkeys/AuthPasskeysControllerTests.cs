@@ -200,6 +200,24 @@ public class AuthPasskeysControllerTests
         _authentication.VerifyNoOtherCalls();
     }
 
+    /// <summary>
+    /// CSRF on these routes is the middleware's job, before authentication. The MVC filter runs
+    /// after it, so it would refuse a signed-in browser whose token was issued anonymously.
+    /// </summary>
+    [Theory]
+    [InlineData(nameof(AuthPasskeysController.StartSignIn))]
+    [InlineData(nameof(AuthPasskeysController.CompleteSignIn))]
+    public void SignIn_ShouldLeaveCsrfToTheMiddleware(string action)
+    {
+        typeof(AuthPasskeysController).GetMethod(action)!
+            .GetCustomAttributes(typeof(ValidateAntiForgeryTokenAttribute), inherit: true)
+            .Should().BeEmpty();
+        var request = new DefaultHttpContext().Request;
+        request.Method = HttpMethods.Post;
+        request.Path = "/api/auth/passkeys/sign-in";
+        backend.main.application.security.CsrfConfiguration.RequiresCsrfValidation(request).Should().BeTrue();
+    }
+
     private void GivenSignIn(SessionTransport transport) =>
         _authentication.Setup(a => a.CompleteSignInAsync(
                 "ceremony-id", It.IsAny<JsonElement>(), transport, false, It.IsAny<CancellationToken>()))

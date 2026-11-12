@@ -119,6 +119,22 @@ public class PasskeyEndpointsTests
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    /// <summary>
+    /// A browser fetches its CSRF token before restoring a session, so a signed-in visit to the
+    /// login page sends a bearer token with an anonymously issued CSRF token. That pair is valid.
+    /// </summary>
+    [Fact]
+    public async Task SignInOptions_ShouldAcceptAnAnonymousCsrfToken_FromASignedInBrowser()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var (session, _) = await SignUpAsync(app, "passkey-signed-in-csrf");
+
+        var response = await app.PostJsonWithBearerAndCsrfAsync(
+            "/api/auth/passkeys/sign-in/options", new { }, session.AccessToken);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(response));
+    }
+
     [Fact]
     public async Task SignIn_ShouldRefuseAReplayedCeremony()
     {
