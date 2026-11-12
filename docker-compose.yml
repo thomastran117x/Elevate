@@ -19,9 +19,10 @@ x-sms-mfa-env: &sms-mfa-env
   AUTH_SMS_MFA_ENFORCEMENT_ENABLED: "${AUTH_SMS_MFA_ENFORCEMENT_ENABLED:-false}"
   AUTH_SMS_MFA_STEP_UP_SMS_ENABLED: "${AUTH_SMS_MFA_STEP_UP_SMS_ENABLED:-true}"
 
-# Shared by backend + frontend (all 18 feature flags)
+# Shared by backend + frontend (all 19 feature flags)
 x-feature-flags-env: &feature-flags-env
   FEATURE_AUTH: "${FEATURE_AUTH:-true}"
+  FEATURE_AUTH_PASSKEYS: "${FEATURE_AUTH_PASSKEYS:-true}"
   FEATURE_CLUBS: "${FEATURE_CLUBS:-true}"
   FEATURE_CLUBS_DISCUSSIONS: "${FEATURE_CLUBS_DISCUSSIONS:-true}"
   FEATURE_CLUBS_FOLLOW: "${FEATURE_CLUBS_FOLLOW:-true}"
@@ -146,6 +147,8 @@ services:
       Auth__StepUp__ProofLifetimeMinutes: "${AUTH_STEP_UP_PROOF_LIFETIME_MINUTES:-10}"
       Auth__SecurityEvents__IdentifierHashKey: "${AUTH_SECURITY_EVENTS_HASH_KEY:-}"
       Auth__RecoveryCodes__Pepper: "${AUTH_RECOVERY_CODE_PEPPER:-}"
+      Auth__Passkeys__RelyingPartyId: "${AUTH_PASSKEYS_RP_ID:-}"
+      Auth__Passkeys__Origins__0: "${AUTH_PASSKEYS_ORIGIN:-}"
       Auth__PasswordPolicy__BlocklistPath: "${AUTH_PASSWORD_BLOCKLIST_PATH:-}"
       Auth__PasswordPolicy__Hashing__Algorithm: "${AUTH_PASSWORD_HASH_ALGORITHM:-Argon2id}"
       Auth__PasswordPolicy__Hashing__Argon2__MemoryKiB: "${AUTH_PASSWORD_HASH_ARGON2_MEMORY_KIB:-19456}"

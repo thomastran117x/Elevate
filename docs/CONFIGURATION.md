@@ -64,7 +64,7 @@ The backend registry contains the following keys. Environment names are `FEATURE
 
 | Area              | Backend keys                                                                                                                                                                 |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth / bloom      | `auth`, `bloom`                                                                                                                                                              |
+| Auth / bloom      | `auth`, `auth.passkeys`, `bloom`                                                                                                                                             |
 | Clubs             | `clubs`, `clubs.discussions`, `clubs.follow`, `clubs.posts`, `clubs.reviews`, `clubs.versioning`                                                                             |
 | Events            | `events`, `events.analytics`, `events.favourites`, `events.images`, `events.invitations`, `events.recurrence`, `events.registration`, `events.versioning`, `events.waitlist` |
 | Payment / profile | `payment`, `profile`, `profile.admin`                                                                                                                                        |
@@ -187,7 +187,7 @@ Completing sign-in verification trusts the device for 90 days: the `Devices` tab
 
 ### Step-up verification
 
-Sensitive account mutations (`[RequireMfa]` routes) need a step-up proof from a TOTP, SMS, recovery, or email code verified in the same session. The proof is stored transiently in Redis under `mfa:step-up-proof:{sessionId}`. It is bound to the user, the session, and the access token's auth version. `Auth:StepUp:ProofLifetimeMinutes` (Compose: `AUTH_STEP_UP_PROOF_LIFETIME_MINUTES`) defaults to 10 and is validated at startup to be between 1 and 10. The window is measured from verification and never slides. Logout and session revocation delete the session and its proof in one atomic Redis operation. If Redis cannot confirm that, the revocation still succeeds once the session's row is revoked, because a proof is unreachable without an access token for its session; without a row to revoke, the revocation fails instead of reporting success. A proof is only written while its refresh session still exists. An auth-version change makes it unusable. Each proof also records the committed SMS/TOTP enrollment state and the generation time of the recovery-code set from the database, so a completed factor change, including a recovery-code regeneration, retires older proofs as part of its own commit. Spending a recovery code does not. The change also advances the user's `mfa:step-up-generation:{userId}` counter, which retires proofs on every session and refuses any verification already in flight; if that counter cannot be updated the request returns 503. When Redis cannot return the proof and generation together, the gate treats the proof as missing.
+Sensitive account mutations (`[RequireMfa]` routes) need a step-up proof from a passkey, or from a TOTP, SMS, recovery, or email code, verified in the same session. The proof is stored transiently in Redis under `mfa:step-up-proof:{sessionId}`. It is bound to the user, the session, and the access token's auth version. `Auth:StepUp:ProofLifetimeMinutes` (Compose: `AUTH_STEP_UP_PROOF_LIFETIME_MINUTES`) defaults to 10 and is validated at startup to be between 1 and 10. The window is measured from verification and never slides. Logout and session revocation delete the session and its proof in one atomic Redis operation. If Redis cannot confirm that, the revocation still succeeds once the session's row is revoked, because a proof is unreachable without an access token for its session; without a row to revoke, the revocation fails instead of reporting success. A proof is only written while its refresh session still exists. An auth-version change makes it unusable. Each proof also records the committed SMS/TOTP enrollment state, the generation time of the recovery-code set, and the passkey count and newest registration from the database, so a completed factor change, including a recovery-code regeneration, retires older proofs as part of its own commit. Spending a recovery code does not. The change also advances the user's `mfa:step-up-generation:{userId}` counter, which retires proofs on every session and refuses any verification already in flight; if that counter cannot be updated the request returns 503. When Redis cannot return the proof and generation together, the gate treats the proof as missing.
 
 ### Recovery codes
 
@@ -198,6 +198,22 @@ Single-use MFA recovery codes ([API](API.md#recovery-codes)) are stored only as 
 | `Auth:RecoveryCodes:Pepper` | development value | Base64 secret, at least 32 bytes. Required outside development and test, where a missing value or the public development value fails startup. |
 
 Generate it with `openssl rand -base64 32` and keep it out of the database, as secret as the JWT keys. Configure it with `Auth__RecoveryCodes__Pepper`, or `AUTH_RECOVERY_CODE_PEPPER` under Compose. It is read at startup. Changing it invalidates every stored recovery code: users still have their other methods and must generate a new set, so rotate it only if it may have leaked, and tell affected users.
+
+### Passkeys
+
+Passkeys ([API](API.md#passkeys)) are scoped to a relying-party (RP) ID, and each ceremony's client data must name one of the configured origins exactly.
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `Auth:Passkeys:RelyingPartyId` | host of `FRONTEND_URL` | The registrable domain passkeys belong to, such as `example.com`. Lowercase, with no scheme, port, or path, and not an IP address. |
+| `Auth:Passkeys:Origins` | origin of `FRONTEND_URL` | Every origin the frontend is served from. Each must be the RP ID or one of its subdomains, and must use https unless its host is `localhost`. |
+| `Auth:Passkeys:RelyingPartyName` | `EventXperience` | The name authenticators show when a passkey is created. |
+| `Auth:Passkeys:CeremonyTimeoutSeconds` | 300 | How long a ceremony's challenge stays usable (30–600). |
+| `Auth:Passkeys:MaxCredentialsPerUser` | 10 | The most passkeys one account may register (1–50). |
+
+Compose maps `AUTH_PASSKEYS_RP_ID` and `AUTH_PASSKEYS_ORIGIN` to the first two; leave them empty to take both from `FRONTEND_URL`. Startup validates the result. Outside development and test, `localhost` is refused as an RP ID or origin, so a production host that forgot to set `FRONTEND_URL` fails closed. Local development works with the defaults: RP ID `localhost` and origin `http://localhost:3090`. Browsers allow WebAuthn on `http://localhost` only.
+
+Choose the RP ID before users enroll. Changing it orphans every registered passkey, and users must register again. To serve the frontend from several subdomains, set the RP ID to their shared parent domain and list each origin. Ceremonies in a cross-origin frame are refused.
 
 ### Password policy and hashing
 
