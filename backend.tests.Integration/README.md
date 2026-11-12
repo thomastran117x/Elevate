@@ -21,6 +21,6 @@ Windows ARM64 requires a compatible x64 .NET execution environment for Kafka's n
 
 Reuse the provided fixtures and resource namespace. Avoid cross-test assumptions about rows, indices, topics, shared hosts, or ordering. `Testing` suppresses normal startup migrations/seeders/hosted services; the harness sets up infrastructure. Normal request rate limiting is skipped, so those budgets need separate verification.
 
-`Features/` contains endpoint and persistence tests, `Seeders/` verifies thematic data creation, and `Workflows/` follows users across complete business journeys. Workflows are tagged `Category=EndToEnd`; they drive API calls rather than the Angular UI. CI shards authentication, clubs, events, workflows, and other tests.
+`Features/` contains endpoint and persistence tests, `Seeders/` verifies thematic data creation, and `Workflows/` follows users across complete business journeys. Workflows are tagged `Category=EndToEnd`; they drive API calls rather than the Angular UI. CI shards authentication, authorization (`Application/Security/`), clubs, events, workflows, and other tests.
 
 The endpoint audit is static source matching, not runtime coverage; it reports actions without a matching request and fails with `--fail-on-missing`. See [testing](../docs/TESTING.md) for coverage policy and [CONTRIBUTING](../CONTRIBUTING.md) for checks.

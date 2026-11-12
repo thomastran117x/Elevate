@@ -39,7 +39,7 @@ On Windows ARM64, Kafka-backed tests require an x64 .NET runtime/toolchain becau
 
 The harness allows up to four test classes in parallel, migrates a PostgreSQL template database, clones it for direct database tests, and pools four isolated API slots. Each slot separates database, Redis logical database, Elasticsearch indices, and Kafka topics. State is cleared before reuse; custom overrides run in a transient host on the leased slot. Reuse the fixtures and namespacing helpers instead of creating uncoordinated shared resources.
 
-Feature endpoint tests live under `Features/`, seeder tests under `Seeders/`, and cross-feature business journeys under `Workflows/`. Workflow tests carry `Category=EndToEnd`; they exercise multiple users across API features, not the Angular UI. CI runs authentication, clubs, events, workflows, and other shards without duplicating the workflow category.
+Feature endpoint tests live under `Features/`, seeder tests under `Seeders/`, and cross-feature business journeys under `Workflows/`. Workflow tests carry `Category=EndToEnd`; they exercise multiple users across API features, not the Angular UI. CI runs authentication, authorization, clubs, events, workflows, and other shards without duplicating the workflow category.
 
 The application suppresses normal startup side effects under Testing; the harness owns migrations and infrastructure setup. Request rate limiting is skipped in Testing, so endpoint tests do not measure rate-limit enforcement.
 
@@ -53,16 +53,29 @@ This static audit compares discovered controller actions with matching API reque
 
 ### Authorization audit
 
-`backend.tests.Unit/Application/Security/EndpointAuthorizationAuditTests.cs` reflects over the controllers and SignalR hubs that MVC and SignalR discover. It runs with the unit suite, so CI enforces it through `backend-unit-coverage`. It fails when:
+CI runs the **Auth Contract Gate** job on every pull request. It fails when the authorization classification or the public/protected contract regresses.
+
+`backend.tests.Unit/Application/Security/EndpointAuthorizationAuditTests.cs` reflects over the controllers and SignalR hubs that MVC and SignalR discover, and evaluates them with `EndpointAuthorizationGate`. It fails when:
 - an action or hub method has neither `[Authorize]` nor `[AllowAnonymous]` on itself or its class;
 - an `[Authorize]` action sits under a class-level `[AllowAnonymous]`;
-- the anonymous surface differs from the reviewed `ExpectedAnonymousEndpoints` list.
+- the anonymous surface differs from the reviewed list in `ReviewedPublicSurface.cs`, in either direction.
 
-`backend.tests.Integration/Application/Security/AuthorizationMatrixEndpointsTests.cs` repeats the metadata check against the running app's routed endpoints, including hubs and minimal endpoints. It also exercises:
-- anonymous access to the public surface;
-- the `401` and `403` envelopes;
-- the `AdminOnly` policy against each global role;
-- club owner, manager, volunteer, unrelated-user, and admin access decided by the services.
+Negative fixtures in the same file omit metadata, conflict, or drift from the reviewed list, and prove that each case fails the gate.
+
+`backend.tests.Unit/Application/OpenApi/OpenApiAuthorizationContractTests.cs` reads the committed `backend/openapi.json`. Every operation must carry `x-authorization`, protected operations must require `bearerAuth`, and the anonymous operations must equal the reviewed list. The gate job then regenerates the document and fails on any difference from the committed files:
+
+```powershell
+dotnet run --project tools/Event.DevTasks/Event.DevTasks.csproj -- export-openapi --output backend/openapi.json --port 8097
+git diff --exit-code -- backend/openapi.json backend/openapi.yaml
+```
+
+Port 8097 matters: it is written into the document's server URL.
+
+`backend.tests.Integration/Application/Security/` runs as its own `authorization` CI shard:
+- `AuthorizationMatrixEndpointsTests.cs` repeats the metadata check against the running app's routed endpoints, including hubs and minimal endpoints.
+- It sends an anonymous request to **every** protected endpoint and requires the `401` `UNAUTHORIZED` "Missing access token" envelope. It sends one to **every** public endpoint and requires that none of them answers with that challenge. The probes come from the routed endpoints themselves, not a hand-kept list.
+- It also covers seeded public reads, the invalid-token and `403` envelopes, the `AdminOnly` policy against each global role, and club owner, manager, volunteer, unrelated-user, and admin access decided by the services.
+- `RuntimeEndpointAuthorizationAuditTests.cs` is the runtime negative fixture. A throwaway host routes a minimal API and a controller without authorization metadata, and the gate must name both. It needs no containers.
 
 PowerShell compatibility wrappers remain in `bin/backend-unit-coverage.ps1` and `bin/backend-integration-endpoint-coverage.ps1`.
 

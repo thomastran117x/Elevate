@@ -44,6 +44,8 @@
   <ItemGroup>
     <!-- Read by SecurityEventsDocumentationTests, which keeps the documented contract in step with the code. -->
     <None Include="..\docs\SECURITY_EVENTS.md" Link="Docs\SECURITY_EVENTS.md" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Read by OpenApiAuthorizationContractTests, which pins the published contract to the reviewed public surface. -->
+    <None Include="..\backend\openapi.json" Link="Contracts\openapi.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
