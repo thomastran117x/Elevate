@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 
 using backend.main.features.auth.events;
+using backend.main.features.auth.passkeys;
 using backend.main.features.auth.token;
 using backend.main.features.cache;
 using backend.main.features.profile;
@@ -16,6 +17,7 @@ namespace backend.main.features.auth.oauth.links
     {
         private readonly IUserIdentityLinkRepository _links;
         private readonly IAuthUserRepository _users;
+        private readonly IPasskeyCredentialRepository _passkeys;
         private readonly IProviderLinkStateStore _states;
         private readonly IReadOnlyDictionary<string, IProviderLinkFlow> _flows;
         private readonly IRefreshAheadCache _refreshCache;
@@ -26,6 +28,7 @@ namespace backend.main.features.auth.oauth.links
         public ProviderLinkService(
             IUserIdentityLinkRepository links,
             IAuthUserRepository users,
+            IPasskeyCredentialRepository passkeys,
             IProviderLinkStateStore states,
             IEnumerable<IProviderLinkFlow> flows,
             IRefreshAheadCache refreshCache,
@@ -35,6 +38,7 @@ namespace backend.main.features.auth.oauth.links
         {
             _links = links;
             _users = users;
+            _passkeys = passkeys;
             _states = states;
             _flows = flows.ToDictionary(flow => flow.Provider, StringComparer.Ordinal);
             _refreshCache = refreshCache;
@@ -49,6 +53,7 @@ namespace backend.main.features.auth.oauth.links
         {
             var links = await _links.ListForUserAsync(userId, cancellationToken);
             var hasPassword = (await _users.GetAuthByIdAsync(userId))?.Password != null;
+            var passkeyCount = (await _passkeys.GetFactorSummaryAsync(userId, cancellationToken)).Count;
 
             var providers = IdentityProviders.Linkable
                 .Select(provider =>
@@ -59,7 +64,7 @@ namespace backend.main.features.auth.oauth.links
                         provider,
                         available,
                         link,
-                        CanUnlink: link != null && SignInMethods.RemainAfterRemoving(hasPassword, links.Count));
+                        CanUnlink: link != null && SignInMethods.RemainAfterRemoving(hasPassword, links.Count, passkeyCount));
                 })
                 .ToList();
 
@@ -329,14 +334,19 @@ namespace backend.main.features.auth.oauth.links
 
     }
 
-    /// <summary>Which sign-in methods an account keeps when one provider link is removed.</summary>
+    /// <summary>
+    /// Which sign-in methods an account keeps when one provider link or passkey is removed. A
+    /// password, each provider link, and each passkey can sign in on its own; recovery codes and
+    /// other second factors cannot, so they never count.
+    /// </summary>
     public static class SignInMethods
     {
         /// <summary>
-        /// Whether removing one of <paramref name="linkCount"/> links leaves the account a way to
-        /// sign in: its own password, or another link.
+        /// Whether removing one of the account's <paramref name="linkCount"/> links and
+        /// <paramref name="passkeyCount"/> passkeys leaves it a way to sign in: its own password,
+        /// or any other link or passkey.
         /// </summary>
-        public static bool RemainAfterRemoving(bool hasPassword, int linkCount) =>
-            hasPassword || linkCount > 1;
+        public static bool RemainAfterRemoving(bool hasPassword, int linkCount, int passkeyCount = 0) =>
+            hasPassword || linkCount + passkeyCount > 1;
     }
 }

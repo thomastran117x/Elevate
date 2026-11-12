@@ -359,6 +359,74 @@ namespace backend.Migrations
                     b.ToTable("UserIdentityLinks");
                 });
 
+            modelBuilder.Entity("backend.main.features.auth.passkeys.PasskeyCredential", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("AaGuid")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AttestationFormat")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("CounterAnomalyAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("CredentialId")
+                        .IsRequired()
+                        .HasMaxLength(1023)
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("FriendlyName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("IsBackedUp")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsBackupEligible")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastUsedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("PublicKey")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<long>("SignatureCounter")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Transports")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<byte[]>("UserHandle")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CredentialId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PasskeyCredentials");
+                });
+
             modelBuilder.Entity("backend.main.features.auth.sessions.AuthSession", b =>
                 {
                     b.Property<string>("Id")
@@ -1890,6 +1958,9 @@ namespace backend.Migrations
                     b.Property<string>("Name")
                         .HasColumnType("text");
 
+                    b.Property<byte[]>("PasskeyUserHandle")
+                        .HasColumnType("bytea");
+
                     b.Property<string>("Password")
                         .HasColumnType("text");
 
@@ -1916,6 +1987,9 @@ namespace backend.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("PasskeyUserHandle")
                         .IsUnique();
 
                     b.HasIndex("Username")
@@ -1991,6 +2065,15 @@ namespace backend.Migrations
                 });
 
             modelBuilder.Entity("backend.main.features.auth.oauth.links.UserIdentityLink", b =>
+                {
+                    b.HasOne("backend.main.features.profile.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("backend.main.features.auth.passkeys.PasskeyCredential", b =>
                 {
                     b.HasOne("backend.main.features.profile.User", null)
                         .WithMany()

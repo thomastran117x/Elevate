@@ -12,6 +12,7 @@ using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.notifications;
 using backend.main.features.auth.oauth;
 using backend.main.features.auth.oauth.links;
+using backend.main.features.auth.passkeys;
 using backend.main.features.auth.password;
 using backend.main.features.auth.sessions;
 using backend.main.features.auth.stepup;
@@ -259,6 +260,7 @@ namespace backend.main.application.bootstrap
             services.AddRepositoryWithProxy<ITotpMfaEnrollmentRepository, TotpMfaEnrollmentRepository>();
             services.AddRepositoryWithProxy<IRecoveryCodeRepository, RecoveryCodeRepository>();
             services.AddRepositoryWithProxy<IUserIdentityLinkRepository, UserIdentityLinkRepository>();
+            services.AddRepositoryWithProxy<IPasskeyCredentialRepository, PasskeyCredentialRepository>();
             services.AddRepositoryWithProxy<IClubRepository, ClubRepository>();
             services.AddRepositoryWithProxy<IEventsRepository, EventsRepository>();
             services.AddRepositoryWithProxy<IEventSeriesRepository, EventSeriesRepository>();

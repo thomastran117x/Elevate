@@ -6,6 +6,7 @@ using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.oauth.links;
+using backend.main.features.auth.passkeys;
 using backend.main.features.auth.sessions;
 using backend.main.features.clubs;
 using backend.main.features.clubs.discussions;
@@ -62,6 +63,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<TotpMfaEnrollment> TotpMfaEnrollments { get; set; } = null!;
         public DbSet<RecoveryCode> RecoveryCodes { get; set; } = null!;
         public DbSet<UserIdentityLink> UserIdentityLinks { get; set; } = null!;
+        public DbSet<PasskeyCredential> PasskeyCredentials { get; set; } = null!;
         public DbSet<AccountSecurityEvent> AccountSecurityEvents { get; set; } = null!;
         public DbSet<SecurityHistoryOutbox> SecurityHistoryOutbox { get; set; } = null!;
         public DbSet<ClubPost> ClubPosts { get; set; } = null!;
@@ -125,6 +127,11 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Username)
+                .IsUnique();
+
+            // A user handle names exactly one account, so a passkey's handle resolves no other.
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.PasskeyUserHandle)
                 .IsUnique();
 
             modelBuilder.Entity<UsernameReservation>()
@@ -916,6 +923,38 @@ namespace backend.main.infrastructure.database.core
             modelBuilder.Entity<UserIdentityLink>()
                 .HasIndex(l => new { l.UserId, l.Provider })
                 .IsUnique();
+
+            modelBuilder.Entity<PasskeyCredential>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(c => c.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PasskeyCredential>()
+                .Property(c => c.CredentialId)
+                .HasMaxLength(PasskeyCredential.CredentialIdMaxBytes);
+
+            modelBuilder.Entity<PasskeyCredential>()
+                .Property(c => c.FriendlyName)
+                .HasMaxLength(PasskeyCredential.FriendlyNameMaxLength);
+
+            modelBuilder.Entity<PasskeyCredential>()
+                .Property(c => c.Transports)
+                .HasMaxLength(PasskeyCredential.TransportsMaxLength);
+
+            modelBuilder.Entity<PasskeyCredential>()
+                .Property(c => c.AttestationFormat)
+                .HasMaxLength(PasskeyCredential.AttestationFormatMaxLength);
+
+            // A credential id belongs to at most one account: registering it again, to this
+            // account or another, is refused by this index even if two registrations race.
+            modelBuilder.Entity<PasskeyCredential>()
+                .HasIndex(c => c.CredentialId)
+                .IsUnique();
+
+            modelBuilder.Entity<PasskeyCredential>()
+                .HasIndex(c => c.UserId);
 
             // Cascade: the history belongs to the account and goes with it, matching the hard
             // delete every other per-user table gets. Events the worker receives after the

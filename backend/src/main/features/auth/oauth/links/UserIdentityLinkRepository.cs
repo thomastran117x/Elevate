@@ -92,8 +92,9 @@ namespace backend.main.features.auth.oauth.links
                 await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
                 try
                 {
-                    // Two removals each counting the other's link as remaining would otherwise
-                    // leave an account with neither. The account row serializes them.
+                    // Two removals each counting the other's link or passkey as remaining would
+                    // otherwise leave an account with neither. The account row serializes them,
+                    // and passkey removals take the same lock.
                     if (_context.Database.IsNpgsql())
                     {
                         await _context.Users
@@ -116,7 +117,9 @@ namespace backend.main.features.auth.oauth.links
 
                     var hasPassword = await _context.Users
                         .AnyAsync(u => u.Id == userId && u.Password != null, cancellationToken);
-                    if (!hasPassword && links.Count == 1)
+                    var passkeyCount = await _context.PasskeyCredentials
+                        .CountAsync(c => c.UserId == userId, cancellationToken);
+                    if (!SignInMethods.RemainAfterRemoving(hasPassword, links.Count, passkeyCount))
                     {
                         await transaction.RollbackAsync(cancellationToken);
                         return IdentityLinkRemoveResult.LastSignInMethod;
