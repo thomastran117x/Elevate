@@ -19,6 +19,15 @@ x-sms-mfa-env: &sms-mfa-env
   AUTH_SMS_MFA_ENFORCEMENT_ENABLED: "${AUTH_SMS_MFA_ENFORCEMENT_ENABLED:-false}"
   AUTH_SMS_MFA_STEP_UP_SMS_ENABLED: "${AUTH_SMS_MFA_STEP_UP_SMS_ENABLED:-true}"
 
+# Shared by backend + email-worker + sms-worker + security-history-worker.
+# Metrics export stays off unless OTEL_EXPORTER_OTLP_ENDPOINT is set; the `ops`
+# profile's Prometheus receives it at http://prometheus:9090/api/v1/otlp.
+x-telemetry-env: &telemetry-env
+  OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}"
+  OTEL_METRIC_EXPORT_INTERVAL: "${OTEL_METRIC_EXPORT_INTERVAL:-15000}"
+  OTEL_RESOURCE_ATTRIBUTES: "${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment.name=development}"
+
 # Shared by backend + frontend (all 19 feature flags)
 x-feature-flags-env: &feature-flags-env
   FEATURE_AUTH: "${FEATURE_AUTH:-true}"
@@ -83,7 +92,7 @@ services:
       - path: ./.env
         required: false
     environment:
-      <<: [*common-env, *kafka-env, *elasticsearch-env, *sms-mfa-env, *feature-flags-env]
+      <<: [*common-env, *kafka-env, *elasticsearch-env, *sms-mfa-env, *feature-flags-env, *telemetry-env]
       PORT: "${BACKEND_PORT:-8090}"
       DB_CONNECTION_STRING: "${DB_CONNECTION_STRING:-Host=postgres;Port=5432;Database=appdb;Username=appuser;Password=apppass}"
       REDIS_URL: "${REDIS_URL:-redis:6379}"
@@ -270,7 +279,7 @@ services:
       - path: ./.env
         required: false
     environment:
-      <<: [*common-env, *kafka-env]
+      <<: [*common-env, *kafka-env, *telemetry-env]
       EMAIL_TOPIC: "${EMAIL_TOPIC:-eventxperience-email}"
       EMAIL_GROUP_ID: "${EMAIL_GROUP_ID:-email-worker}"
       EMAIL_DLQ_TOPIC: "${EMAIL_DLQ_TOPIC:-eventxperience-email-dlq}"
@@ -319,7 +328,7 @@ services:
       - path: ./.env
         required: false
     environment:
-      <<: [*common-env, *kafka-env]
+      <<: [*common-env, *kafka-env, *telemetry-env]
       # Writes AccountSecurityEvents in the backend's database; the backend owns the migrations.
       DB_CONNECTION_STRING: "${DB_CONNECTION_STRING:-Host=postgres;Port=5432;Database=appdb;Username=appuser;Password=apppass}"
       SECURITY_HISTORY_TOPIC: "${SECURITY_HISTORY_TOPIC:-eventxperience-security-history}"
@@ -351,7 +360,7 @@ services:
       - path: ./.env
         required: false
     environment:
-      <<: [*common-env, *kafka-env, *sms-mfa-env]
+      <<: [*common-env, *kafka-env, *sms-mfa-env, *telemetry-env]
       SMS_TOPIC: "${SMS_TOPIC:-eventxperience-sms}"
       SMS_GROUP_ID: "${SMS_GROUP_ID:-sms-worker}"
       SMS_DLQ_TOPIC: "${SMS_DLQ_TOPIC:-eventxperience-sms-dlq}"

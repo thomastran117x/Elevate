@@ -1,3 +1,5 @@
+using backend.main.application.telemetry;
+using backend.main.shared.providers.messaging;
 using backend.main.shared.utilities.logger;
 using backend.worker.email_worker;
 
@@ -19,6 +21,9 @@ builder.Services.AddSingleton<IEmailWorkerDlqPublisher, KafkaEmailWorkerDlqPubli
 builder.Services.AddSingleton<IEmailDeliveryStatusPublisher, KafkaEmailDeliveryStatusPublisher>();
 builder.Services.AddSingleton<IEmailContentRenderer, EmailTemplateRenderer>();
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+builder.Services.AddMetrics();
+builder.Services.AddSingleton<NotificationDeliveryMetrics>();
+builder.Services.AddMetricsExport(builder.Configuration, "email-worker", NotificationDeliveryMetrics.MeterName);
 builder.Services.AddScoped<EmailMessageProcessor>();
 builder.Services.AddHostedService<KafkaEmailWorker>();
 

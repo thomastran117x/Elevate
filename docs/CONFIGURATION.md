@@ -149,6 +149,27 @@ Authentication outcomes are recorded as structured [security events](SECURITY_EV
 
 Generate a key with `openssl rand -base64 32` and keep it as secret as the JWT keys. Configure it directly with `Auth__SecurityEvents__IdentifierHashKey` or through the `AUTH_SECURITY_EVENTS_HASH_KEY` variable mapped by Compose. Changing it breaks correlation between hashes made before and after the change, and it takes effect on restart. The sink and `Include*` switches take effect without a restart when the configuration source reloads.
 
+### Metrics export
+
+The API, the security-history worker, the email worker, and the SMS worker push metrics over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` (or `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`) is set. Without it nothing is exported, and no metrics endpoint is exposed on the API. They export only the meters whose tags come from closed sets:
+
+| Process | Meters | `service.name` |
+| --- | --- | --- |
+| API | `EventXperience.Auth` | `eventxperience-api` |
+| security-history-worker | `EventXperience.SecurityHistory` | `security-history-worker` |
+| email-worker, sms-worker | `EventXperience.Notifications` | `email-worker`, `sms-worker` |
+
+The standard OpenTelemetry variables apply:
+
+| Variable | Compose default | Purpose |
+| --- | --- | --- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | empty (off) | OTLP base URL. The `ops` Compose profile's Prometheus accepts `http://prometheus:9090/api/v1/otlp`. |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | Prometheus's receiver accepts HTTP only. |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | Export interval in milliseconds. |
+| `OTEL_RESOURCE_ATTRIBUTES` | `deployment.environment.name=development` | Becomes a label on every series; set it per environment. |
+
+Counters are cumulative, which Prometheus's OTLP receiver requires. See [monitoring](operations/monitoring.md) for the stack, dashboards, and alerts.
+
 ### Account security history
 
 The API records the events an account owner should see through the security history outbox, which Debezium relays to the security-history topic; see [account security history](SECURITY_EVENTS.md#account-security-history). `Auth:SecurityHistory` is bound at startup:

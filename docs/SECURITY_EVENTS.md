@@ -209,7 +209,7 @@ All instruments are on the `EventXperience.Auth` meter. Every tag value comes fr
 
 `operation` is one of `sign_in`, `oauth_sign_in`, `refresh`, `step_up_verify`, `recovery_request`, `password_reset`, `verification`, or `factor_change`. Its `outcome` is `succeeded` for 2xx and 3xx, `throttled` for 429, `denied` for any other 4xx, and `faulted` for 5xx or an unhandled exception. Requests the client abandons are not recorded. Unset event tags are reported as `none`.
 
-No exporter is configured yet; choosing one is part of #330. Until then, read the meter from a running API with [`dotnet-counters`](https://learn.microsoft.com/en-us/dotnet/core/diagnostics/dotnet-counters):
+The API pushes this meter over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; see [metrics export](CONFIGURATION.md#metrics-export) and [monitoring](operations/monitoring.md). Delivery of the codes and links these events issue is counted separately by the email and SMS workers, on `notifications.email.deliveries` and `notifications.sms.deliveries` (meter `EventXperience.Notifications`). Without an exporter, read the meter from a running API with [`dotnet-counters`](https://learn.microsoft.com/en-us/dotnet/core/diagnostics/dotnet-counters):
 
 ```sh
 dotnet-counters ps

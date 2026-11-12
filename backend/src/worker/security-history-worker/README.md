@@ -96,7 +96,7 @@ The `EventXperience.SecurityHistory` meter has three counters:
 - `security_history.alerts` by `outcome` (`sent`, `retried`, `failed`, `unconfirmed`, `skipped`, `no_recipient`);
 - `security_history.purged`.
 
-Read them with `dotnet-counters monitor --counters EventXperience.SecurityHistory` until an exporter is chosen (#330). Watch the DLQ, `failed` entries, and `failed` alerts.
+The worker pushes them over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (see [metrics export](../../../../docs/CONFIGURATION.md#metrics-export)); otherwise read them with `dotnet-counters monitor --counters EventXperience.SecurityHistory`. Watch the DLQ, `failed` entries, and `failed` alerts. The [auth security dashboard](../../../../docs/operations/monitoring.md) charts them, and `SecurityHistoryNotRecording` alerts on them.
 
 ## Tests
 

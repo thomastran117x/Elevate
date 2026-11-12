@@ -43,6 +43,10 @@ Kafka auto-commit is disabled and a group without offsets starts at earliest. Th
 
 Other consumer failures reconnect after five seconds. Shutdown cancellation propagates. Submission and Kafka commit are not atomic, so duplicate delivery is also possible after interruption. MFA codes expire; consider expiry and recipient impact before deliberate replay.
 
+## Metrics
+
+The worker counts each MFA code on `notifications.sms.deliveries` (meter `EventXperience.Notifications`), tagged with `outcome`: `sent`, `failed`, or `malformed`. Phone numbers and provider errors are never tags. The worker pushes the meter over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; see [metrics export](../../../../docs/CONFIGURATION.md#metrics-export). The MFA delivery panels and the `MfaDeliveryFailures` alert in the [auth security dashboard](../../../../docs/operations/monitoring.md) read it.
+
 ## Tests
 
 From the repository root:

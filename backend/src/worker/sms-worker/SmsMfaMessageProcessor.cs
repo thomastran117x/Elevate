@@ -14,6 +14,7 @@ public sealed class SmsMfaMessageProcessor
 {
     private readonly ISmsSender _smsSender;
     private readonly ISmsWorkerDlqPublisher _dlqPublisher;
+    private readonly NotificationDeliveryMetrics? _metrics;
 
     private static readonly ResiliencePipeline RetryPipeline = new ResiliencePipelineBuilder()
         .AddRetry(new RetryStrategyOptions
@@ -29,10 +30,12 @@ public sealed class SmsMfaMessageProcessor
 
     public SmsMfaMessageProcessor(
         ISmsSender smsSender,
-        ISmsWorkerDlqPublisher dlqPublisher)
+        ISmsWorkerDlqPublisher dlqPublisher,
+        NotificationDeliveryMetrics? metrics = null)
     {
         _smsSender = smsSender;
         _dlqPublisher = dlqPublisher;
+        _metrics = metrics;
     }
 
     public async Task ProcessAsync(
@@ -50,6 +53,7 @@ public sealed class SmsMfaMessageProcessor
                 async (CancellationToken ct) => await _smsSender.SendAsync(message, ct),
                 cancellationToken
             );
+            _metrics?.RecordSms(NotificationDeliveryOutcome.Sent);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -58,12 +62,14 @@ public sealed class SmsMfaMessageProcessor
         catch (JsonException ex)
         {
             Logger.Warn(ex, "Malformed SMS payload. Publishing to Kafka DLQ.");
+            _metrics?.RecordSms(NotificationDeliveryOutcome.Malformed);
             await TryPublishToDlqAsync(envelope, ex.Message, cancellationToken);
         }
         catch (Exception ex)
         {
             var destination = message?.PhoneNumber ?? "unknown";
             Logger.Warn(ex, $"SMS delivery failed for '{destination}'. Publishing to Kafka DLQ.");
+            _metrics?.RecordSms(NotificationDeliveryOutcome.Failed);
             await TryPublishToDlqAsync(envelope, ex.Message, cancellationToken);
         }
     }

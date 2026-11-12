@@ -4,6 +4,8 @@ using backend.main.application.features;
 using backend.main.application.handlers;
 using backend.main.application.openapi;
 using backend.main.application.security;
+using backend.main.application.telemetry;
+using backend.main.features.auth.events;
 using backend.main.features.cache;
 using backend.main.features.clubs.realtime;
 using backend.main.infrastructure.database.core;
@@ -66,6 +68,8 @@ builder.Services.AddApplicationServices(
 );
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddClientRequestInspection();
+// Off unless OTEL_EXPORTER_OTLP_ENDPOINT is set; see docs/operations/monitoring.md.
+builder.Services.AddMetricsExport(builder.Configuration, "eventxperience-api", AuthSecurityMetrics.MeterName);
 
 builder.Services.AddAppDatabase(
     builder.Configuration,
