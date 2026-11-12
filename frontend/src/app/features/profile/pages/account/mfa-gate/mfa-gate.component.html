@@ -96,6 +96,7 @@
     <!-- Error -->
     <div
       *ngIf="error"
+      role="alert"
       class="mt-5 rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
     >
       {{ error }}
@@ -141,10 +142,19 @@
       <button
         type="button"
         (click)="continueToCode()"
-        [disabled]="!method || sending"
+        [disabled]="!method || sending || verifying"
+        [attr.aria-busy]="verifying"
         class="inline-flex w-full items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {{ sending ? 'Sending code...' : 'Continue' }}
+        {{
+          sending
+            ? 'Sending code...'
+            : verifying
+              ? 'Waiting for your passkey...'
+              : isPasskey
+                ? 'Use passkey'
+                : 'Continue'
+        }}
       </button>
     </div>
 

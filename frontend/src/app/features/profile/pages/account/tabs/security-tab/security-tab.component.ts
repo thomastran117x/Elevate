@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 
@@ -8,6 +8,8 @@ import {
   isApiClientErrorCode,
   MFA_REQUIRED_ERROR_CODE,
 } from '../../../../../../core/api/models/api-client-error.model';
+import { FeatureFlagsService } from '../../../../../../core/features/feature-flags.service';
+import { FEATURE_KEYS } from '../../../../../../core/features/feature-flags.types';
 import {
   AuthService,
   MfaChallengeResponse,
@@ -17,6 +19,7 @@ import {
 import { MfaGateComponent } from '../../mfa-gate/mfa-gate.component';
 import { PendingRecoveryCodes } from './recovery-codes/pending-recovery-codes';
 import { LinkedProvidersCardComponent } from './linked-providers/linked-providers-card.component';
+import { PasskeysCardComponent } from './passkeys/passkeys-card.component';
 import { RecoveryCodesCardComponent } from './recovery-codes/recovery-codes-card.component';
 
 type SmsFlow = 'enroll' | 'enable' | null;
@@ -31,6 +34,7 @@ type TotpManageAction = 'enable' | 'disable' | 'remove' | null;
     MfaGateComponent,
     RecoveryCodesCardComponent,
     LinkedProvidersCardComponent,
+    PasskeysCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './security-tab.component.html',
@@ -79,6 +83,8 @@ export class SecurityTabComponent implements OnInit {
   // previous factor change spent it): the gate prompts at once and in-flight setup
   // steps are kept so the user can finish them after verifying.
   stepUpLapsed = false;
+
+  readonly passkeysEnabled = inject(FeatureFlagsService).isEnabled(FEATURE_KEYS.authPasskeys);
 
   constructor(private auth: AuthService) {}
 

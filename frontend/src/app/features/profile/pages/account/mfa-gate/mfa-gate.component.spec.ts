@@ -15,6 +15,7 @@ import {
   SessionMfaStartResponse,
 } from '../../../../auth/services/auth.service';
 import { ApiClientClientError } from '../../../../../core/api/models/api-client-error.model';
+import { PasskeyOutcome, PasskeysService } from '../../../../auth/services/passkeys.service';
 
 type AuthSpy = jasmine.SpyObj<
   Pick<
@@ -71,6 +72,7 @@ describe('MfaGateComponent', () => {
   let auth: AuthSpy;
   let refreshAccessToken: jasmine.Spy<() => Promise<void>>;
   let verified: jasmine.Spy;
+  let passkeys: jasmine.SpyObj<Pick<PasskeysService, 'isSupported' | 'stepUp'>>;
 
   beforeEach(async () => {
     auth = jasmine.createSpyObj<AuthSpy>('AuthService', [
@@ -85,6 +87,8 @@ describe('MfaGateComponent', () => {
     auth.verifySessionMfa.and.returnValue(of(undefined as void));
 
     refreshAccessToken = jasmine.createSpy('refreshAccessToken').and.resolveTo();
+    passkeys = jasmine.createSpyObj('PasskeysService', ['isSupported', 'stepUp']);
+    passkeys.isSupported.and.returnValue(true);
 
     await TestBed.configureTestingModule({
       imports: [MfaGateComponent],
@@ -92,6 +96,7 @@ describe('MfaGateComponent', () => {
         provideRouter([]),
         { provide: AuthService, useValue: auth },
         { provide: AuthTokenService, useValue: { refreshAccessToken } },
+        { provide: PasskeysService, useValue: passkeys },
       ],
     }).compileComponents();
 
@@ -622,6 +627,93 @@ describe('MfaGateComponent', () => {
 
       expect(component.modalOpen).toBeTrue();
       expect(component.error).toBe('Network down');
+    });
+  });
+
+  describe('passkeys', () => {
+    beforeEach(() => {
+      auth.getSessionMfaStatus.and.returnValue(throwError(gated));
+      auth.getSessionMfaOptions.and.returnValue(
+        of(options({ availableMethods: ['passkey', 'totp', 'email'] })),
+      );
+    });
+
+    function open(): void {
+      fixture.detectChanges();
+      component.openModal();
+      fixture.detectChanges();
+    }
+
+    it('offers a passkey first and verifies with it, with no code to type', () => {
+      passkeys.stepUp.and.returnValue(of({ status: 'done', value: undefined }));
+      open();
+
+      expect(component.method).toBe('passkey');
+      expect(component.methodLabel('passkey')).toBe('Passkey');
+      expect(component.methodDescription('passkey')).toContain('fingerprint');
+      const continueButton = Array.from<HTMLButtonElement>(
+        fixture.nativeElement.querySelectorAll('button'),
+      ).find((button) => button.textContent?.includes('Use passkey'));
+      expect(continueButton).toBeDefined();
+
+      component.continueToCode();
+
+      expect(passkeys.stepUp).toHaveBeenCalledTimes(1);
+      expect(auth.startSessionMfa).not.toHaveBeenCalled();
+      expect(auth.verifySessionMfa).not.toHaveBeenCalled();
+      expect(component.step).toBe('method');
+      expect(component.modalOpen).toBeFalse();
+      expect(verified).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not offer a passkey where this browser cannot use one', () => {
+      passkeys.isSupported.and.returnValue(false);
+      open();
+
+      expect(component.options?.availableMethods).toEqual(['totp', 'email']);
+      expect(component.method).toBe('totp');
+    });
+
+    const outcomes: Array<[PasskeyOutcome<void>['status'], string]> = [
+      ['cancelled', 'was cancelled'],
+      ['unsupported', "can't use passkeys"],
+      ['failed', 'Passkey verification failed'],
+      ['already_registered', 'Passkey verification failed'],
+    ];
+    for (const [status, message] of outcomes) {
+      it(`keeps the modal open with a message when the passkey prompt is ${status}`, () => {
+        passkeys.stepUp.and.returnValue(of({ status } as PasskeyOutcome<void>));
+        open();
+
+        component.continueToCode();
+        fixture.detectChanges();
+
+        expect(component.modalOpen).toBeTrue();
+        expect(verified).not.toHaveBeenCalled();
+        const alert = fixture.nativeElement.querySelector('[role="alert"]') as HTMLElement;
+        expect(alert.textContent).toContain(message);
+        expect(component.verifying).toBeFalse();
+      });
+    }
+
+    it("shows the server's refusal", () => {
+      passkeys.stepUp.and.returnValue(
+        throwError(
+          () =>
+            new ApiClientClientError(
+              'Passkey verification failed. Please try again.',
+              401,
+              'AUTHENTICATION_FAILED',
+            ),
+        ),
+      );
+      open();
+
+      component.continueToCode();
+      fixture.detectChanges();
+
+      expect(component.error).toBe('Passkey verification failed. Please try again.');
+      expect(component.modalOpen).toBeTrue();
     });
   });
 

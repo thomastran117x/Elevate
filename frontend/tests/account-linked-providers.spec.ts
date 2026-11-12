@@ -247,7 +247,9 @@ test.describe('linked sign-in providers', () => {
     const unlink = page.getByRole('button', { name: 'Unlink Google' });
     await expect(unlink).toBeDisabled();
     await expect(unlink).toHaveAccessibleDescription("It's your only way to sign in.");
-    await expect(page.getByText('Not set. You sign in with a linked account.')).toBeVisible();
+    await expect(
+      page.getByText('Not set. You sign in with a linked account or a passkey.'),
+    ).toBeVisible();
   });
 
   test('a sign-in whose email matches an account proposes a link instead of signing in', async ({

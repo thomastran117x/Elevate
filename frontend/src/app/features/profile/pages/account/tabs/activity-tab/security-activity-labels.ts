@@ -22,6 +22,7 @@ const METHOD_LABELS: Record<string, string> = {
   sms: 'with a text message code',
   totp: 'with an authenticator app',
   recovery_code: 'with a recovery code',
+  passkey: 'with a passkey',
 };
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -70,6 +71,9 @@ const IMPORTANT_KINDS = new Set([
   'refresh_token_reuse_detected',
   'account_disabled',
   'recovery_code_used',
+  'passkey_added',
+  'passkey_removed',
+  'passkey_counter_anomaly',
 ]);
 
 function factorLabel(factor: string | null): string {
@@ -179,6 +183,16 @@ function describe(entry: AccountSecurityEvent): { title: string; detail: string 
         title: 'Recovery code used',
         detail:
           'One of your recovery codes was used to verify your identity. It cannot be used again.',
+      };
+    case 'passkey_added':
+      return { title: 'Passkey added', detail: 'It can now sign in and verify your identity.' };
+    case 'passkey_removed':
+      return { title: 'Passkey removed', detail: 'It can no longer sign in.' };
+    case 'passkey_counter_anomaly':
+      return {
+        title: 'Possible copied passkey',
+        detail:
+          "A passkey reported a signature counter that didn't move forward. If you don't recognise this, remove the passkey and add a new one.",
       };
     default:
       return { title: 'Security activity', detail: null };

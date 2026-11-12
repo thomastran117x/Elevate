@@ -1,0 +1,215 @@
+<article
+  class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl"
+  aria-labelledby="passkeys-title"
+  data-testid="passkeys-card"
+>
+  <div class="space-y-1">
+    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">Sign-in methods</p>
+    <h2 id="passkeys-title" class="text-2xl font-bold">Passkeys</h2>
+    <p class="max-w-2xl text-sm leading-6 text-subtle">
+      Sign in and verify with your fingerprint, face, screen lock, or a security key. A passkey
+      can't be phished, and your password keeps working.
+    </p>
+  </div>
+
+  <div class="mt-5 space-y-4">
+    @if (banner(); as shown) {
+      <p
+        #bannerRef
+        tabindex="-1"
+        [attr.role]="shown.tone === 'error' ? 'alert' : 'status'"
+        class="rounded-2xl border px-5 py-4 text-sm outline-none"
+        [class.border-success/30]="shown.tone === 'success'"
+        [class.bg-success/10]="shown.tone === 'success'"
+        [class.text-success]="shown.tone === 'success'"
+        [class.border-danger/30]="shown.tone === 'error'"
+        [class.bg-danger/10]="shown.tone === 'error'"
+        [class.text-danger]="shown.tone === 'error'"
+        data-testid="passkeys-banner"
+      >
+        {{ shown.text }}
+      </p>
+    }
+
+    @if (!supported) {
+      <p
+        class="rounded-2xl border border-warning/30 bg-warning/10 px-5 py-4 text-sm text-warning"
+        data-testid="passkeys-unsupported"
+      >
+        This browser can't create or use passkeys. You can still rename or remove the ones you have,
+        and keep signing in with your password or a linked account.
+      </p>
+    }
+
+    @if (loading() && !list()) {
+      <p class="text-sm text-faint">Loading your passkeys...</p>
+    } @else {
+      <ul class="space-y-3" aria-label="Passkeys">
+        @for (passkey of passkeys(); track passkey.id) {
+          <li
+            class="flex flex-col gap-3 rounded-2xl border border-line bg-glass-strong px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+            [attr.data-testid]="'passkey-' + passkey.id"
+          >
+            @if (editingId() === passkey.id) {
+              <form
+                class="flex w-full flex-col gap-2"
+                (submit)="$event.preventDefault(); saveRename(passkey)"
+              >
+                <label
+                  class="text-sm font-semibold text-content"
+                  [for]="'passkey-name-' + passkey.id"
+                >
+                  Passkey name
+                </label>
+                <div class="flex flex-col gap-3 sm:flex-row">
+                  <input
+                    [id]="'passkey-name-' + passkey.id"
+                    type="text"
+                    autocomplete="off"
+                    [attr.maxlength]="nameMaxLength"
+                    [value]="editName()"
+                    (input)="onEditInput($event)"
+                    (keydown.escape)="cancelRename()"
+                    [attr.aria-invalid]="editError() ? true : null"
+                    [attr.aria-describedby]="
+                      editError() ? 'passkey-name-error-' + passkey.id : null
+                    "
+                    class="w-full rounded-2xl border border-line bg-glass px-4 py-2 text-sm text-content outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+                  />
+                  <div class="flex gap-3">
+                    <button
+                      type="submit"
+                      [disabled]="busyId() === passkey.id"
+                      class="inline-flex items-center justify-center rounded-2xl bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {{ busyId() === passkey.id ? 'Saving...' : 'Save' }}
+                    </button>
+                    <button
+                      type="button"
+                      (click)="cancelRename()"
+                      [disabled]="busyId() === passkey.id"
+                      class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-4 py-2 text-sm font-semibold text-content transition hover:bg-glass disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+                @if (editError()) {
+                  <p
+                    [id]="'passkey-name-error-' + passkey.id"
+                    role="alert"
+                    class="text-sm text-danger"
+                  >
+                    {{ editError() }}
+                  </p>
+                }
+              </form>
+            } @else {
+              <div class="min-w-0">
+                <p class="flex flex-wrap items-center gap-2 text-sm font-semibold text-content">
+                  <span class="truncate">{{ passkey.name }}</span>
+                  <span
+                    class="rounded-full border border-line-strong px-2 py-0.5 text-xs font-medium text-muted"
+                  >
+                    {{ passkey.syncable ? 'Synced' : 'This device only' }}
+                  </span>
+                </p>
+                <p class="text-sm text-muted">
+                  Added {{ passkey.createdAt | date: 'mediumDate' }}.
+                  {{
+                    passkey.lastUsedAt
+                      ? 'Last used ' + (passkey.lastUsedAt | date: 'medium') + '.'
+                      : 'Not used yet.'
+                  }}
+                </p>
+                @if (!passkey.canRemove) {
+                  <p class="mt-1 text-xs text-faint">
+                    Your only way to sign in, so it can't be removed.
+                  </p>
+                }
+              </div>
+              <div class="flex gap-3">
+                <button
+                  type="button"
+                  [id]="'passkey-rename-' + passkey.id"
+                  (click)="startRename(passkey)"
+                  [disabled]="busyId() !== null"
+                  [attr.aria-label]="'Rename ' + passkey.name"
+                  class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-4 py-2 text-sm font-semibold text-content transition hover:bg-glass disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Rename
+                </button>
+                <button
+                  type="button"
+                  (click)="requestRemove(passkey)"
+                  [disabled]="busyId() !== null || !passkey.canRemove"
+                  [attr.aria-label]="'Remove ' + passkey.name"
+                  class="inline-flex items-center justify-center rounded-2xl border border-danger/40 px-4 py-2 text-sm font-semibold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Remove
+                </button>
+              </div>
+            }
+          </li>
+        } @empty {
+          <li class="rounded-2xl border border-dashed border-line px-5 py-4 text-sm text-muted">
+            No passkeys yet.
+          </li>
+        }
+      </ul>
+
+      @if (supported) {
+        <form
+          class="flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-end"
+          (submit)="$event.preventDefault(); add()"
+        >
+          <div class="flex-1 space-y-2">
+            <label for="new-passkey-name" class="text-sm font-semibold text-content">
+              Name (optional)
+            </label>
+            <input
+              id="new-passkey-name"
+              type="text"
+              autocomplete="off"
+              placeholder="e.g. Work laptop"
+              [attr.maxlength]="nameMaxLength"
+              [value]="newName()"
+              (input)="onNameInput($event)"
+              [disabled]="adding() || atLimit()"
+              class="w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-sm text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15 disabled:opacity-60"
+            />
+          </div>
+          <button
+            type="submit"
+            [disabled]="adding() || atLimit()"
+            [attr.aria-busy]="adding()"
+            data-testid="add-passkey"
+            class="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {{ adding() ? 'Waiting for your device...' : 'Add a passkey' }}
+          </button>
+        </form>
+        @if (atLimit()) {
+          <p class="text-xs text-faint">
+            You've added {{ list()?.limit }} passkeys, the most an account can have. Remove one to
+            add another.
+          </p>
+        }
+      }
+    }
+  </div>
+</article>
+
+<app-confirm-dialog
+  [open]="confirmingRemove() !== null"
+  [title]="'Remove ' + (confirmingRemove()?.name ?? 'this passkey') + '?'"
+  body="It will no longer sign you in or verify your identity. Your other sign-in methods keep working."
+  [impacts]="[
+    'Delete the passkey from your device or password manager too, so it isn’t offered again.',
+  ]"
+  confirmLabel="Remove passkey"
+  cancelLabel="Keep it"
+  tone="danger"
+  [busy]="busyId() !== null"
+  (resolve)="onRemoveResolved($event)"
+/>

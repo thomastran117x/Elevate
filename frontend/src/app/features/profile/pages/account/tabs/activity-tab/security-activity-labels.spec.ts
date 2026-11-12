@@ -122,6 +122,14 @@ describe('toSecurityActivityView', () => {
     ],
     [{ kind: 'account_disabled' }, 'Account disabled', 'Every session was signed out.'],
     [{ kind: 'account_enabled' }, 'Account re-enabled', null],
+    [{ kind: 'signed_in', method: 'passkey' }, 'Signed in', 'Signed in with a passkey.'],
+    [{ kind: 'passkey_added' }, 'Passkey added', 'It can now sign in and verify your identity.'],
+    [{ kind: 'passkey_removed' }, 'Passkey removed', 'It can no longer sign in.'],
+    [
+      { kind: 'passkey_counter_anomaly' },
+      'Possible copied passkey',
+      "A passkey reported a signature counter that didn't move forward. If you don't recognise this, remove the passkey and add a new one.",
+    ],
     [{ kind: 'something_added_later' }, 'Security activity', null],
   ];
 
@@ -152,6 +160,8 @@ describe('toSecurityActivityView', () => {
     ).toBeTrue();
     expect(toSecurityActivityView(entry({ kind: 'mfa_disabled' })).important).toBeTrue();
     expect(toSecurityActivityView(entry({ kind: 'recovery_code_used' })).important).toBeTrue();
+    expect(toSecurityActivityView(entry({ kind: 'passkey_added' })).important).toBeTrue();
+    expect(toSecurityActivityView(entry({ kind: 'passkey_counter_anomaly' })).important).toBeTrue();
     expect(
       toSecurityActivityView(entry({ kind: 'recovery_codes_generated' })).important,
     ).toBeFalse();

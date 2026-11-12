@@ -282,7 +282,7 @@ export function outcomeMessage(
     case 'signed_out':
       return `Sign in again, then link ${name} from this page.`;
     case 'last_method':
-      return `${name} is your only way to sign in. Set a password or link another provider first.`;
+      return `${name} is your only way to sign in. Set a password, link another provider, or add a passkey first.`;
     default:
       return `Linking ${name} failed. Try again.`;
   }
