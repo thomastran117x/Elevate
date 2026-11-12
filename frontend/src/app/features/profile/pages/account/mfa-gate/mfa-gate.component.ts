@@ -1,11 +1,13 @@
 import { CommonModule } from '@angular/common';
 import {
+  ChangeDetectorRef,
   Component,
   EventEmitter,
   Input,
   OnInit,
   Output,
   ChangeDetectionStrategy,
+  inject,
 } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -54,7 +56,17 @@ export class MfaGateComponent implements OnInit {
    */
   @Input() autoOpen = false;
 
+  /**
+   * Show only the verification modal, opened straight away, never the locked panel. For hosts
+   * whose content stays visible and only an action needs the proof; they render the gate when
+   * that action is refused and remove it on {@link verified} or {@link dismissed}.
+   */
+  @Input() modalOnly = false;
+
   @Output() verified = new EventEmitter<void>();
+
+  /** The modal of a {@link modalOnly} gate was closed without verifying. */
+  @Output() dismissed = new EventEmitter<void>();
 
   private readonly fb = new FormBuilder();
 
@@ -76,6 +88,12 @@ export class MfaGateComponent implements OnInit {
   verifying = false;
   error = '';
   private refreshAttempted = false;
+
+  /**
+   * State lives in plain fields, so a host using OnPush (the Devices tab) would never re-render
+   * the gate after a response. Every async step marks it for check when it settles.
+   */
+  private readonly changeDetector = inject(ChangeDetectorRef);
 
   constructor(
     private auth: AuthService,
@@ -141,6 +159,9 @@ export class MfaGateComponent implements OnInit {
     this.maskedDestination = '';
     this.error = '';
     this.codeForm.reset();
+    if (this.modalOnly) {
+      this.dismissed.emit();
+    }
   }
 
   selectMethod(method: SessionMfaMethod): void {
@@ -176,7 +197,7 @@ export class MfaGateComponent implements OnInit {
 
     this.auth
       .startSessionMfa(this.method)
-      .pipe(finalize(() => (this.sending = false)))
+      .pipe(finalize(() => this.settle(() => (this.sending = false))))
       .subscribe({
         next: (res) => {
           this.maskedDestination = res.maskedDestination;
@@ -213,7 +234,7 @@ export class MfaGateComponent implements OnInit {
 
     this.auth
       .verifySessionMfa(this.method, code)
-      .pipe(finalize(() => (this.verifying = false)))
+      .pipe(finalize(() => this.settle(() => (this.verifying = false))))
       .subscribe({
         next: () => {
           this.modalOpen = false;
@@ -238,7 +259,7 @@ export class MfaGateComponent implements OnInit {
 
     this.auth
       .getSessionMfaStatus()
-      .pipe(finalize(() => (this.checking = false)))
+      .pipe(finalize(() => this.settle(() => (this.checking = false))))
       .subscribe({
         next: () => this.verified.emit(),
         error: (err) => {
@@ -246,7 +267,12 @@ export class MfaGateComponent implements OnInit {
             this.handleGated();
             return;
           }
-          this.error = getApiClientMessage(err, 'Unable to check verification status.');
+          const message = getApiClientMessage(err, 'Unable to check verification status.');
+          // With no locked panel to show it on, the modal carries the error.
+          if (this.modalOnly && !this.modalOpen) {
+            this.openModal();
+          }
+          this.error = message;
         },
       });
   }
@@ -260,10 +286,11 @@ export class MfaGateComponent implements OnInit {
       this.checking = true;
       from(this.authToken.refreshAccessToken()).subscribe({
         next: () => this.checkStatus(),
-        error: () => {
-          this.checking = false;
-          this.lock();
-        },
+        error: () =>
+          this.settle(() => {
+            this.checking = false;
+            this.lock();
+          }),
       });
       return;
     }
@@ -273,9 +300,14 @@ export class MfaGateComponent implements OnInit {
 
   private lock(): void {
     this.stepUpResume.remember(this.router.url);
-    if (this.autoOpen && !this.modalOpen) {
+    if ((this.autoOpen || this.modalOnly) && !this.modalOpen) {
       this.openModal();
     }
+  }
+
+  private settle(update: () => void): void {
+    update();
+    this.changeDetector.markForCheck();
   }
 
   /** Navigates only to an allowlisted account route, and only if the user has left it. */
@@ -292,7 +324,7 @@ export class MfaGateComponent implements OnInit {
 
     this.auth
       .getSessionMfaOptions()
-      .pipe(finalize(() => (this.optionsLoading = false)))
+      .pipe(finalize(() => this.settle(() => (this.optionsLoading = false))))
       .subscribe({
         next: (options) => {
           this.options = options;
