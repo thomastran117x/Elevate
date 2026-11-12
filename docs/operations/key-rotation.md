@@ -8,13 +8,29 @@ Every secret is a deployment environment variable. Generate new values on a trus
 
 | Secret | Overlap supported | Rotation breaks | Rollback |
 | --- | --- | --- | --- |
-| `JWT_SECRET_ACCESS` | Yes, through `JWT_SECRET_ACCESS_PREVIOUS` | Nothing while the previous key is kept | Swap the two values |
-| `AUTH_TOTP_ENCRYPTION_KEY` | Yes, through `AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS` and the re-encryption sweep | Nothing while the previous key is kept | Swap the two values; the sweep moves secrets back |
+| `JWT_SECRET_ACCESS` | Yes, through `JWT_SECRET_ACCESS_PREVIOUS`, in [three stages](#staged-rollout) | Nothing while both keys are known to every replica | Swap the two values |
+| `AUTH_TOTP_ENCRYPTION_KEY` | Yes, through `AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS` and the re-encryption sweep, in [three stages](#staged-rollout) | Nothing while both keys are known to every replica | Swap the two values; the sweep moves secrets back |
 | `GOOGLE_CLIENT_SECRET` | Yes, at Google, which allows two active client secrets | Nothing | Re-enable the old secret at Google and redeploy it |
 | `JWT_SECRET_VERIFICATION` | No | Codes, links, and step-up proofs in flight (minutes) | Restore the old value; anything issued under the new one is lost |
 | `Auth__RecoveryCodes__Pepper` | No | Every stored recovery code | Restore the old value before users regenerate |
 | `Auth__SecurityEvents__IdentifierHashKey` | No | Correlation of event hashes across the change | Restore the old value |
 | SMTP, Twilio, Stripe, and Azure storage credentials | At the provider | Delivery or payments during the switch | Re-enable the old credential at the provider |
+
+## Staged rollout
+
+API replicas restart one at a time, so during a deployment some run the new configuration and some the old. A key must therefore be **known** to every replica before any replica starts **using** it:
+- a JWT signed with a new key on one replica would be refused by a replica that does not have the key yet;
+- a TOTP secret re-encrypted by one replica could not be decrypted by a replica that does not have the key yet.
+
+Both key rings rotate in three deployments, and each deployment is safe to roll out gradually:
+
+| Stage | Active key | Previous keys | Purpose |
+| --- | --- | --- | --- |
+| 1. Distribute | old | new | Every replica learns the new key. Nothing signs or encrypts with it yet. |
+| 2. Promote | new | old | Replicas start using the new key. Every replica already knows both keys, whichever stage it is on. |
+| 3. Retire | new | (none) | Drop the old key once nothing still needs it. |
+
+Rollback is the same rule in reverse. From stage 2, swap the values back to stage 1. Every replica knows both keys, so this is safe to roll out gradually. From stage 3, first redeploy stage 2.
 
 ## Access-token signing key (`JWT_SECRET_ACCESS`)
 
@@ -23,32 +39,37 @@ Access tokens are HS256 JWTs that live 15 minutes. Each carries a `kid` naming i
 **Rotate:**
 
 1. Generate a new key of at least 32 bytes, for example with `openssl rand -base64 48`.
-2. Deploy with `JWT_SECRET_ACCESS=<new>` and `JWT_SECRET_ACCESS_PREVIOUS=<old>`, on every API replica. Replicas still on the old configuration keep validating new tokens only once they restart, so roll every replica in one deployment.
-3. Verify:
-   - A token issued before the deploy still works on `GET /api/auth/me`.
-   - A new sign-in's access token has the new `kid` in its header. The kid is base64url of the first 8 bytes of SHA-256 of the key; compare it with the token header, never the key.
+2. **Distribute:** deploy `JWT_SECRET_ACCESS=<old>` and `JWT_SECRET_ACCESS_PREVIOUS=<new>`. Wait until every API replica runs this configuration.
+3. **Promote:** deploy `JWT_SECRET_ACCESS=<new>` and `JWT_SECRET_ACCESS_PREVIOUS=<old>`. Verify:
+   - a token issued before the deploy still works on `GET /api/auth/me`;
+   - a new sign-in's access token has the new `kid` in its header. The kid is base64url of the first 8 bytes of SHA-256 of the key; compare it with the token header, never the key;
    - `AuthFaultRate` and the **Sign-in outcomes** row stay flat.
-4. After at least 16 minutes (token lifetime plus clock skew), deploy again with `JWT_SECRET_ACCESS_PREVIOUS` removed.
+4. **Retire:** once every replica is promoted and at least 16 minutes (token lifetime plus clock skew) have passed since the last one was, deploy with `JWT_SECRET_ACCESS_PREVIOUS` removed.
 
-**Roll back:** deploy with the two values swapped: `JWT_SECRET_ACCESS=<old>` and `JWT_SECRET_ACCESS_PREVIOUS=<new>`. Tokens signed by either key keep working. Remove the previous key later, as in step 4.
+**Roll back:** from stage 2, deploy the stage 1 values (`JWT_SECRET_ACCESS=<old>`, `JWT_SECRET_ACCESS_PREVIOUS=<new>`). Tokens signed by either key keep working on every replica. From stage 3, redeploy stage 2 first.
 
-**Suspected leak:** skip the overlap. Deploy the new key **without** a previous key. Every access token is refused at once, and clients refresh transparently, because refresh does not depend on this key; API clients see one 401. Then rotate `JWT_SECRET_VERIFICATION` if it was exposed too.
+**Suspected leak:** skip the overlap. Deploy the new key **without** a previous key. Each replica refuses tokens signed by the leaked key as soon as it restarts. Clients refresh transparently, because refresh does not depend on this key; API clients see one 401. While the deployment rolls out, a token signed by an updated replica fails on an old one, and the client refreshes again. Then rotate `JWT_SECRET_VERIFICATION` if it was exposed too.
 
 ## TOTP encryption key (`AUTH_TOTP_ENCRYPTION_KEY`)
 
 TOTP shared secrets are encrypted at rest with AES-256-GCM. Each stored secret names the key that encrypted it (`v2:{kid}:...`); secrets from before key ids are `v1:...`. See [TOTP secret encryption](../CONFIGURATION.md#totp-secret-encryption).
 
+While any previous key is configured, every replica runs a sweep at startup and then hourly. The sweep re-encrypts stored secrets under **its** active key, in batches, with conditional updates. That is why the new key must reach every replica before any replica makes it active: the first promoted replica rewrites the shared rows at once.
+
 **Rotate:**
 
 1. Generate a new key: `openssl rand -base64 32`, which must decode to exactly 32 bytes.
-2. Deploy with `AUTH_TOTP_ENCRYPTION_KEY=<new>` and `AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS=<old>`. New enrollments use the new key, and existing secrets still decrypt with the old one.
-3. At startup, and then hourly, the API re-encrypts stored secrets under the new key, in batches, with conditional updates. Watch the log for `[TotpKeyRotation]`. It reports how many secrets were re-encrypted, changed concurrently, could not be decrypted, and remain under a previous key, and never logs a secret.
+2. **Distribute:** deploy `AUTH_TOTP_ENCRYPTION_KEY=<old>` and `AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS=<new>`. Wait until every API replica runs this configuration. The sweep keeps secrets under the old key; at most it rewrites legacy `v1` secrets into `v2` under the old key.
+3. **Promote:** deploy `AUTH_TOTP_ENCRYPTION_KEY=<new>` and `AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS=<old>`.
+   - New enrollments use the new key, and the sweep moves existing secrets under it.
+   - Replicas not yet promoted can still decrypt both.
+   - Watch the log for `[TotpKeyRotation]`. It reports how many secrets were re-encrypted, changed concurrently, could not be decrypted, and remain under a previous key, and never logs a secret.
 4. Verify:
-   - A user with TOTP, such as a test account, can still sign in with a TOTP code.
-   - In the database, `SELECT count(*) FROM "TotpMfaEnrollments" WHERE "EncryptedSecret" NOT LIKE 'v2:<new kid>:%'` reaches 0. The new kid is the base64url of the first 8 bytes of SHA-256 of the decoded key bytes; the `[TotpKeyRotation]` log line prints it.
-5. Only once the log reports **0 remaining and 0 undecryptable**, deploy with `AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS` removed. Removing it earlier makes the remaining users' TOTP fail closed: they cannot verify TOTP until the key is restored.
+   - a user with TOTP, such as a test account, can still sign in with a TOTP code;
+   - in the database, `SELECT count(*) FROM "TotpMfaEnrollments" WHERE "EncryptedSecret" NOT LIKE 'v2:<new kid>:%'` reaches 0. The new kid is base64url of the first 8 bytes of SHA-256 of the decoded key bytes, and the `[TotpKeyRotation]` log line prints it.
+5. **Retire:** only once every replica is promoted and the log reports **0 remaining and 0 undecryptable**, deploy with `AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS` removed. Removing it earlier makes the remaining users' TOTP fail closed: they cannot verify TOTP until the key is restored.
 
-**Roll back:** deploy with the values swapped: `AUTH_TOTP_ENCRYPTION_KEY=<old>` and `AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS=<new>`. Every secret still decrypts, and the sweep moves them back under the old key.
+**Roll back:** from stage 2, deploy the stage 1 values (`AUTH_TOTP_ENCRYPTION_KEY=<old>`, `AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS=<new>`). Every replica can decrypt both keys throughout, and the sweep moves secrets back under the old key. From stage 3, redeploy stage 2 first.
 
 **Undecryptable secrets** are secrets that no configured key opens, for example because an older key was removed too early. Restore that key as a previous key; the sweep then re-encrypts them. If the key is lost, those users must remove TOTP and enroll again, using a recovery code or another factor to sign in.
 
@@ -76,9 +97,9 @@ The key behind `TargetHash` and `SourceIpHash` in the event log. Rotating it bre
 Rehearse each quarter in a non-production stack, and before any planned production rotation. Record it in the [drill log](drill-log.md).
 
 1. Sign in, and keep the access token.
-2. Rotate `JWT_SECRET_ACCESS` with the old key as previous, and restart the API. The kept token still works on `GET /api/auth/me`, and a new sign-in's token carries the new `kid`.
+2. Rotate `JWT_SECRET_ACCESS` through the [stages](#staged-rollout). Restart the API at each one; with several replicas, restart them one at a time and keep signing in and calling `GET /api/auth/me` across replicas as you go. After promotion, the kept token still works, and a new sign-in's token carries the new `kid`.
 3. Roll back by swapping the values, and restart. Both tokens work.
 4. Remove the previous key, and restart. The token signed by the removed key is refused with 401; the session's refresh still works.
-5. Enroll TOTP on a test account. Rotate `AUTH_TOTP_ENCRYPTION_KEY` with the old key as previous, and restart. The `[TotpKeyRotation]` log reports the secret re-encrypted, and TOTP step-up still accepts a code.
+5. Enroll TOTP on a test account. Rotate `AUTH_TOTP_ENCRYPTION_KEY` through the same stages. After promotion, the `[TotpKeyRotation]` log reports the secret re-encrypted, and TOTP sign-in and step-up still accept a code on every replica.
 6. Roll back by swapping, and restart. The secret moves back, and TOTP still works.
 7. Confirm nothing else changed: existing sessions and refresh tokens, recovery codes, and the event hashes for a known test username are the same as before.

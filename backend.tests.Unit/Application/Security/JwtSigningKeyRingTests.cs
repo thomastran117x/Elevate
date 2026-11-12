@@ -59,6 +59,19 @@ public class JwtSigningKeyRingTests
     }
 
     [Fact]
+    public void StagedRollout_ShouldAcceptTokensAcrossReplicasOnEitherSideOfThePromotion()
+    {
+        // Replicas restart one at a time, so during the promotion some are still distributing.
+        var distributing = new JwtSigningKeyRing(OldSecret, [NewSecret]);
+        var promoted = new JwtSigningKeyRing(NewSecret, [OldSecret]);
+
+        Validates(Issue(promoted), distributing).Should().BeTrue("a promoted replica's token must work everywhere");
+        Validates(Issue(distributing), promoted).Should().BeTrue();
+        new JwtSecurityTokenHandler().ReadJwtToken(Issue(distributing)).Header.Kid
+            .Should().Be(JwtSigningKeyRing.KeyIdFor(OldSecret), "distributing a key must not start signing with it");
+    }
+
+    [Fact]
     public void RetiringThePreviousKey_ShouldRejectTheTokensItSigned()
     {
         var beforeRotation = Issue(new JwtSigningKeyRing(OldSecret));

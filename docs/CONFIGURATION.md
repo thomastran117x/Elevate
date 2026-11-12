@@ -194,7 +194,13 @@ The worker validates them at startup and refuses to start on an out-of-range val
 
 Access tokens are HS256 JWTs signed with `JWT_SECRET_ACCESS`. Each token's header carries a `kid`: base64url of the first 8 bytes of SHA-256 of the key that signed it. `JWT_SECRET_ACCESS_PREVIOUS` is an optional comma-separated list of earlier keys. They are accepted for validation only and never sign, so a rotation can overlap instead of signing everyone out. Tokens issued before `kid` support have no `kid`, and are checked against every key.
 
-To rotate, move the current key into `JWT_SECRET_ACCESS_PREVIOUS` and set a new `JWT_SECRET_ACCESS`. Remove the previous key once its tokens have expired, which is 15 minutes plus 30 seconds of clock skew. To roll back, swap the two values. Refresh tokens, verification proofs, and TOTP secrets do not depend on this key, so a rotation leaves sessions intact. Outside development, each previous key must be at least 32 bytes and differ from both the active key and the fallback value. The full procedure is in [key rotation](operations/key-rotation.md).
+Rotate in three deployments, so that every replica knows a key before any replica signs with it:
+
+1. Add the new key to `JWT_SECRET_ACCESS_PREVIOUS`.
+2. Swap it into `JWT_SECRET_ACCESS`, keeping the old key as previous.
+3. Remove the old key once its tokens have expired, which is 15 minutes plus 30 seconds of clock skew.
+
+To roll back from step 2, swap the two values. Refresh tokens, verification proofs, and TOTP secrets do not depend on this key, so a rotation leaves sessions intact. Outside development, each previous key must be at least 32 bytes and differ from both the active key and the fallback value. The full procedure is in [key rotation](operations/key-rotation.md).
 
 ### TOTP secret encryption
 
@@ -202,7 +208,13 @@ TOTP shared secrets are stored with AES-256-GCM under `AUTH_TOTP_ENCRYPTION_KEY`
 
 `AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS` is an optional comma-separated list of earlier keys, used only for decryption. While it is set, the API re-encrypts stored secrets under the active key at startup and then hourly. Each row is replaced with a conditional update, so replicas sweeping at the same time, or a user re-enrolling, never lose a change. The API logs counts only: how many secrets were re-encrypted, changed concurrently, could not be decrypted with any configured key, and remain under a previous key.
 
-To rotate, move the current key into the previous list and set a new active key. Remove the previous key only after the log reports none remaining and none undecryptable. To roll back, swap the two values; the sweep moves secrets back. A secret naming a key that is not configured fails closed, and its TOTP verification fails rather than falling back. Outside development, previous keys must be 32 bytes of base64 and differ from both the active key and the fallback value. The full procedure is in [key rotation](operations/key-rotation.md).
+Rotate in three deployments, so that every replica can decrypt with a key before any replica's sweep encrypts with it:
+
+1. Add the new key to the previous list.
+2. Swap it into `AUTH_TOTP_ENCRYPTION_KEY`, keeping the old key as previous.
+3. Remove the old key only after the log reports none remaining and none undecryptable.
+
+To roll back from step 2, swap the two values; the sweep moves secrets back. A secret naming a key that is not configured fails closed, and its TOTP verification fails rather than falling back. Outside development, previous keys must be 32 bytes of base64 and differ from both the active key and the fallback value. The full procedure is in [key rotation](operations/key-rotation.md).
 
 ### Refresh sessions
 

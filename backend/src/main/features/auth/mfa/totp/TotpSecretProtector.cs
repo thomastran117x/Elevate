@@ -18,10 +18,15 @@ namespace backend.main.features.auth.mfa.totp
     /// active first, and the GCM tag rejects the wrong ones.
     /// </para>
     /// <para>
-    /// Rotate by moving the current key to <c>AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS</c> and setting a
-    /// new <c>AUTH_TOTP_ENCRYPTION_KEY</c>; <see cref="TotpKeyRotationService"/> then re-encrypts
-    /// stored secrets under the new key. Roll back by swapping the two. A previous key may only be
-    /// removed once no stored secret still needs it. See docs/operations/key-rotation.md.
+    /// Rotate in three deployments, because <see cref="TotpKeyRotationService"/> on the first
+    /// replica with a new active key rewrites the shared rows at once, and every replica must
+    /// already be able to decrypt them:
+    /// <list type="number">
+    /// <item>Add the new key to <c>AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS</c>.</item>
+    /// <item>Swap it into <c>AUTH_TOTP_ENCRYPTION_KEY</c>, keeping the old one as previous.</item>
+    /// <item>Remove the old one once no stored secret still needs it.</item>
+    /// </list>
+    /// Roll back from the second deployment by swapping the two. See docs/operations/key-rotation.md.
     /// </para>
     /// </remarks>
     public sealed class TotpSecretProtector

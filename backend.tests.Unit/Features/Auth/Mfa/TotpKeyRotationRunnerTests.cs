@@ -44,6 +44,23 @@ public class TotpKeyRotationRunnerTests
     }
 
     [Fact]
+    public async Task DistributingANewKey_ShouldLeaveEverySecretUnderTheCurrentKey()
+    {
+        var store = new FakeSecretStore();
+        var secrets = SeedSecrets(store, new TotpSecretProtector(KeyA), count: 3);
+        var before = new Dictionary<int, string>(store.Rows);
+        var distributing = new TotpSecretProtector(KeyA, [KeyB]);
+
+        var result = await new TotpKeyRotationRunner(store, distributing).RunOnceAsync();
+
+        // Replicas that have not received KeyB yet can still read every row.
+        result.Should().Be(new TotpKeyRotationResult(0, 0, 0, 0));
+        store.Rows.Should().Equal(before);
+        foreach (var (userId, secret) in secrets)
+            new TotpSecretProtector(KeyA).Unprotect(store.Rows[userId]).Should().Equal(secret);
+    }
+
+    [Fact]
     public async Task Rollback_ShouldSweepSecretsBackUnderTheOriginalKey()
     {
         var store = new FakeSecretStore();

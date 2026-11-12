@@ -67,6 +67,18 @@ public class TotpSecretProtectorTests
     }
 
     [Fact]
+    public void StagedRollout_ShouldLetReplicasOnEitherSideOfThePromotionReadEachOthersSecrets()
+    {
+        // Replicas restart one at a time, so during the promotion some are still distributing.
+        var distributing = new TotpSecretProtector(KeyA, [KeyB]);
+        var promoted = new TotpSecretProtector(KeyB, [KeyA]);
+
+        distributing.Unprotect(promoted.Protect(Secret)).Should().Equal(Secret);
+        promoted.Unprotect(distributing.Protect(Secret)).Should().Equal(Secret);
+        distributing.IsProtectedWithActiveKey(distributing.Protect(Secret)).Should().BeTrue("distributing must not encrypt with the new key");
+    }
+
+    [Fact]
     public void Unprotect_ShouldFailClosed_WhenTheNamedKeyIsNotConfigured()
     {
         var stored = new TotpSecretProtector(KeyA).Protect(Secret);

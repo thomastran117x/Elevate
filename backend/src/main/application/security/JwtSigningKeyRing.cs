@@ -13,9 +13,14 @@ namespace backend.main.application.security
     /// derived from the secret, so a token names the key that signed it.
     /// </summary>
     /// <remarks>
-    /// Rotate by moving the current secret to <c>JWT_SECRET_ACCESS_PREVIOUS</c> and setting a new
-    /// <c>JWT_SECRET_ACCESS</c>; roll back by swapping them. Drop the previous key once every token
-    /// it signed has expired (15 minutes plus clock skew). See docs/operations/key-rotation.md.
+    /// Rotate in three deployments, so that every replica can validate a key before any replica
+    /// signs with it:
+    /// <list type="number">
+    /// <item>Add the new secret to <c>JWT_SECRET_ACCESS_PREVIOUS</c>.</item>
+    /// <item>Swap it into <c>JWT_SECRET_ACCESS</c>, keeping the old one as previous.</item>
+    /// <item>Drop the old one once every token it signed has expired (15 minutes plus clock skew).</item>
+    /// </list>
+    /// Roll back from the second deployment by swapping them. See docs/operations/key-rotation.md.
     /// The <c>kid</c> is a truncated SHA-256 of the secret. It reveals nothing a signed token does
     /// not already let an attacker test offline, and nothing at all about a high-entropy secret.
     /// </remarks>
