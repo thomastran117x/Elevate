@@ -135,6 +135,8 @@ npx playwright test tests/account-activity.spec.ts
 
 `account-linked-providers.spec.ts` needs no backend. It mocks the API and opens the shared provider callback pages as Google would redirect to them. It covers a completed link, a declined consent, an identity linked to another account, an expired request, unlinking with the last-method guard, and the link a sign-in proposes when its email matches an existing account. It never contacts Google or Microsoft. Run it with `npx playwright test tests/account-linked-providers.spec.ts`.
 
+`account-devices.spec.ts` also mocks the API and needs no backend. On **Account settings → Devices** it checks that both lists load without a step-up and mark this device. It signs out another session after an in-place step-up that then finishes the sign-out, signs out everywhere back to the sign-in page, and forgets a trusted device. Run it with `npx playwright test tests/account-devices.spec.ts`.
+
 The root `.mcp.json` configures Playwright; `frontend/.mcp.json` adds Angular CLI MCP. Launch frontend-focused tools from the Angular workspace so the CLI can resolve `angular.json`. Start the desired app server before navigating with browser tools. Equivalent frontend VS Code configuration is in `frontend/.vscode/mcp.json`.
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for formatting, type/build checks, audits, and PR validation expectations.
