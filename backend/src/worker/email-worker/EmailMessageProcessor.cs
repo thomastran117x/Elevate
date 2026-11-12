@@ -15,6 +15,7 @@ public sealed class EmailMessageProcessor
     private readonly IEmailSender _emailSender;
     private readonly IEmailWorkerDlqPublisher _dlqPublisher;
     private readonly IEmailDeliveryStatusPublisher _statusPublisher;
+    private readonly NotificationDeliveryMetrics? _metrics;
 
     private static readonly ResiliencePipeline RetryPipeline = new ResiliencePipelineBuilder()
         .AddRetry(new RetryStrategyOptions
@@ -29,11 +30,13 @@ public sealed class EmailMessageProcessor
     public EmailMessageProcessor(
         IEmailSender emailSender,
         IEmailWorkerDlqPublisher dlqPublisher,
-        IEmailDeliveryStatusPublisher statusPublisher)
+        IEmailDeliveryStatusPublisher statusPublisher,
+        NotificationDeliveryMetrics? metrics = null)
     {
         _emailSender = emailSender;
         _dlqPublisher = dlqPublisher;
         _statusPublisher = statusPublisher;
+        _metrics = metrics;
     }
 
     public async Task ProcessAsync(
@@ -54,6 +57,7 @@ public sealed class EmailMessageProcessor
                 cancellationToken
             );
 
+            _metrics?.RecordEmail(message.Type, NotificationDeliveryOutcome.Sent);
             await PublishStatusAsync(message, backend.main.features.events.invitations.EventInvitationDeliveryStatus.Sent, null, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -63,12 +67,14 @@ public sealed class EmailMessageProcessor
         catch (JsonException ex)
         {
             Logger.Warn(ex, "Malformed email payload. Publishing to Kafka DLQ.");
+            _metrics?.RecordEmail(null, NotificationDeliveryOutcome.Malformed);
             await _dlqPublisher.PublishAsync(envelope, ex.Message, cancellationToken);
         }
         catch (Exception ex)
         {
             var destination = message?.Email ?? "unknown";
             Logger.Warn(ex, $"Email delivery failed for '{destination}'. Publishing to Kafka DLQ.");
+            _metrics?.RecordEmail(message?.Type, NotificationDeliveryOutcome.Failed);
             if (message != null)
             {
                 await PublishStatusAsync(

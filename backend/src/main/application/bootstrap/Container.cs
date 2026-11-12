@@ -297,7 +297,10 @@ namespace backend.main.application.bootstrap
             services.AddScoped<IAuthSessionService, AuthSessionService>();
             services.AddScoped<IMfaEnrollmentService, MfaEnrollmentService>();
             services.AddScoped<IMfaSettingsBuilder, MfaSettingsBuilder>();
+            // Built once from the environment; the service and the key-rotation sweep share it.
+            services.AddSingleton(TotpSecretProtector.FromEnvironment());
             services.AddScoped<ITotpMfaEnrollmentService, TotpMfaEnrollmentService>();
+            services.AddScoped<TotpKeyRotationRunner>();
             services.AddScoped<ISessionMfaVerificationService, SessionMfaVerificationService>();
             services.AddScoped<IMfaFactorChangeService, MfaFactorChangeService>();
             services.AddScoped<IRecoveryCodeService, RecoveryCodeService>();
@@ -457,6 +460,8 @@ namespace backend.main.application.bootstrap
             {
                 services.AddHostedService<SecurityHistoryOutboxService>();
                 services.AddHostedService<AuthSessionCleanupService>();
+                // Exits at once unless previous TOTP keys are configured.
+                services.AddHostedService<TotpKeyRotationService>();
 
                 if (featureFlags.IsEnabled(FeatureFlagKeys.Search))
                     services.AddHostedService<ElasticsearchIndexInitializationService>();

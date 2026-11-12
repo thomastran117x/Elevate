@@ -1,3 +1,4 @@
+using backend.main.application.telemetry;
 using backend.main.features.auth.notifications;
 using backend.main.infrastructure.database.core;
 using backend.main.shared.providers;
@@ -27,6 +28,7 @@ builder.Services.AddAppDatabase(builder.Configuration);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddMetrics();
 builder.Services.AddSingleton<SecurityHistoryWorkerMetrics>();
+builder.Services.AddMetricsExport(builder.Configuration, "security-history-worker", SecurityHistoryWorkerMetrics.MeterName);
 builder.Services.AddSingleton<IPublisher, Publisher>();
 builder.Services.AddScoped<IAuthNotificationService, AuthNotificationService>();
 builder.Services.AddSingleton<ISecurityHistoryWorkerDlqPublisher, KafkaSecurityHistoryWorkerDlqPublisher>();

@@ -16280,7 +16280,7 @@
           "auth"
         ],
         "summary": "Check username availability",
-        "description": "Anonymous by necessity — it serves the signup form, where there is no session yet — and\r\ntherefore an enumeration surface, which is why it carries its own rate-limit policy\r\nrather than the global one. It returns nothing beyond a boolean; a caller learns only\r\nwhat they would learn by attempting to sign up.\r\n\r\nThe answer is advisory. It is not a reservation, and a name reported free can be taken\r\na moment later; the unique index is what actually decides.",
+        "description": "Anonymous by necessity — it serves the signup form, where there is no session yet — and\ntherefore an enumeration surface, which is why it carries its own rate-limit policy\nrather than the global one. It returns nothing beyond a boolean; a caller learns only\nwhat they would learn by attempting to sign up.\n\nThe answer is advisory. It is not a reservation, and a name reported free can be taken\na moment later; the unique index is what actually decides.",
         "operationId": "Auth_CheckUsernameAvailability_get",
         "parameters": [
           {
@@ -16342,7 +16342,7 @@
           "auth"
         ],
         "summary": "Suggest usernames",
-        "description": "Anonymous for the same reason the availability probe is: it serves the signup form,\r\nwhere there is no session yet. The account rename form reuses it rather than having an\r\nauthenticated twin — the answer depends on nothing about the caller, and a user's own\r\ncurrent name already reads as unavailable, so it can never be suggested back to them.\r\n\r\nAdvisory, exactly like the probe next to it. Nothing here is reserved: two callers can\r\nbe handed the same name in the same moment, and a name offered here can be claimed\r\nbefore it is submitted. The unique index is what decides.\r\n\r\nA short list, or an empty one, is a normal response rather than an error. Suggestions\r\ndecorate a form that works without them, so an exhausted draw must degrade to no chips\r\ninstead of failing a signup.",
+        "description": "Anonymous for the same reason the availability probe is: it serves the signup form,\nwhere there is no session yet. The account rename form reuses it rather than having an\nauthenticated twin — the answer depends on nothing about the caller, and a user's own\ncurrent name already reads as unavailable, so it can never be suggested back to them.\n\nAdvisory, exactly like the probe next to it. Nothing here is reserved: two callers can\nbe handed the same name in the same moment, and a name offered here can be claimed\nbefore it is submitted. The unique index is what decides.\n\nA short list, or an empty one, is a normal response rather than an error. Suggestions\ndecorate a form that works without them, so an exhausted draw must degrade to no chips\ninstead of failing a signup.",
         "operationId": "Auth_SuggestUsernames_get",
         "responses": {
           "200": {
@@ -16395,7 +16395,7 @@
           "auth"
         ],
         "summary": "Check email availability",
-        "description": "Anonymous by necessity — it serves the signup form, where there is no session yet — and\r\ntherefore an account-existence oracle, accepted deliberately because the signup UX is\r\njudged to be worth it.\r\n\r\nThe POST form requires antiforgery validation and a CAPTCHA. The deprecated GET form\r\nrequires the same CAPTCHA in `X-Captcha-Token`; it never accepts the token in the\r\nquery string. Both forms apply independent shared source-IP and normalized-email\r\nbudgets in addition to the replica-local IP fallback.\r\n\r\nThe answer is advisory. An address reported free can be registered a moment later; the\r\nunique index is what actually decides.",
+        "description": "Anonymous by necessity — it serves the signup form, where there is no session yet — and\ntherefore an account-existence oracle, accepted deliberately because the signup UX is\njudged to be worth it.\n\nThe POST form requires antiforgery validation and a CAPTCHA. The deprecated GET form\nrequires the same CAPTCHA in `X-Captcha-Token`; it never accepts the token in the\nquery string. Both forms apply independent shared source-IP and normalized-email\nbudgets in addition to the replica-local IP fallback.\n\nThe answer is advisory. An address reported free can be registered a moment later; the\nunique index is what actually decides.",
         "operationId": "Auth_CheckEmailAvailability_get",
         "parameters": [
           {
@@ -23383,13 +23383,13 @@
                 "type": "null"
               },
               {
-                "description": "The id of the request that produced the entry. Quoting it lets support find the related\r\nrecords without the user ever seeing them. Null for an entry an administrator caused,\r\nwhose request was the administrator's.",
+                "description": "The id of the request that produced the entry. Quoting it lets support find the related\nrecords without the user ever seeing them. Null for an entry an administrator caused,\nwhose request was the administrator's.",
                 "$ref": "#/components/schemas/String"
               }
             ]
           }
         },
-        "description": "One entry of the caller's account security history. Classification fields are snake_case\r\nnames from closed sets, never ordinals; contact details and raw addresses are never included."
+        "description": "One entry of the caller's account security history. Classification fields are snake_case\nnames from closed sets, never ordinals; contact details and raw addresses are never included."
       },
       "AddEventImageRequest": {
         "required": [
@@ -28075,7 +28075,7 @@
             "$ref": "#/components/schemas/DateTime"
           }
         },
-        "description": "One live session. Classification fields are snake_case names from closed sets; token\r\nmaterial and the raw source address are never included."
+        "description": "One live session. Classification fields are snake_case names from closed sets; token\nmaterial and the raw source address are never included."
       },
       "AuthSessionsResponse": {
         "required": [
@@ -28425,7 +28425,7 @@
         "type": "object",
         "properties": {
           "futureOnly": {
-            "description": "Leave occurrences that have already started alone. On by default — retroactively\r\ncancelling an event people attended is almost never what an organizer means.",
+            "description": "Leave occurrences that have already started alone. On by default — retroactively\ncancelling an event people attended is almost never what an organizer means.",
             "$ref": "#/components/schemas/Boolean"
           }
         },
@@ -28446,7 +28446,7 @@
                 "type": "null"
               },
               {
-                "description": "Required for accounts that have a password; omitted by OAuth-only accounts, which have\r\nnone to prove. MFA step-up gates the endpoint either way.",
+                "description": "Required for accounts that have a password; omitted by OAuth-only accounts, which have\nnone to prove. MFA step-up gates the endpoint either way.",
                 "$ref": "#/components/schemas/String"
               }
             ]
@@ -29100,7 +29100,7 @@
             ]
           }
         },
-        "description": "A club member (follow record) enriched with the member's public profile\r\nfields. Profile fields are null when the referenced user no longer exists."
+        "description": "A club member (follow record) enriched with the member's public profile\nfields. Profile fields are null when the referenced user no longer exists."
       },
       "ClubOwnershipTransferRequest": {
         "type": "object",
@@ -29114,7 +29114,7 @@
                 "type": "null"
               },
               {
-                "description": "Optional username or email of the new owner. When provided, the server resolves it to a\r\nuser id (takes precedence over int ClubOwnershipTransferRequest.NewOwnerUserId).",
+                "description": "Optional username or email of the new owner. When provided, the server resolves it to a\nuser id (takes precedence over int ClubOwnershipTransferRequest.NewOwnerUserId).",
                 "$ref": "#/components/schemas/String"
               }
             ]
@@ -30065,7 +30065,7 @@
                 "type": "null"
               },
               {
-                "description": "Required when the provider account is new, ignored when it resolves to an account that\r\nalready exists. Not `[Required]` for that reason: the caller cannot know in advance\r\nwhich of the two it will be, and the service enforces it on the branch that creates.",
+                "description": "Required when the provider account is new, ignored when it resolves to an account that\nalready exists. Not `[Required]` for that reason: the caller cannot know in advance\nwhich of the two it will be, and the service enforces it on the branch that creates.",
                 "$ref": "#/components/schemas/String"
               }
             ]
@@ -30113,7 +30113,7 @@
             ]
           }
         },
-        "description": "What the provider callback returned for a link started by link-start. Google returns a\r\nstring? CompleteProviderLinkRequest.Code the server redeems; for Microsoft the browser redeems the code and sends\r\nthe string? CompleteProviderLinkRequest.IdToken."
+        "description": "What the provider callback returned for a link started by link-start. Google returns a\nstring? CompleteProviderLinkRequest.Code the server redeems; for Microsoft the browser redeems the code and sends\nthe string? CompleteProviderLinkRequest.IdToken."
       },
       "ConfirmProviderLinkRequest": {
         "required": [
@@ -30174,7 +30174,7 @@
             "$ref": "#/components/schemas/String"
           },
           "role": {
-            "description": "Manager or Volunteer. Annotated so the role can be posted as its string name\r\n(\"Manager\"/\"Volunteer\") regardless of the global enum-serialization setting.",
+            "description": "Manager or Volunteer. Annotated so the role can be posted as its string name\n(\"Manager\"/\"Volunteer\") regardless of the global enum-serialization setting.",
             "$ref": "#/components/schemas/ClubStaffRole"
           }
         }
@@ -30250,7 +30250,7 @@
             "$ref": "#/components/schemas/String"
           },
           "usernameDisplay": {
-            "description": "The username as its owner wrote it, e.g. `ThomasT`. Render this; resolve by\r\n`Username`.",
+            "description": "The username as its owner wrote it, e.g. `ThomasT`. Render this; resolve by\n`Username`.",
             "$ref": "#/components/schemas/String"
           },
           "name": {
@@ -30565,7 +30565,7 @@
             "$ref": "#/components/schemas/String"
           },
           "available": {
-            "description": "True when no account currently uses the address. Advisory only: the address is not reserved\r\nby asking, and signup can still fail with a conflict if someone registers it first.",
+            "description": "True when no account currently uses the address. Advisory only: the address is not reserved\nby asking, and signup can still fail with a conflict if someone registers it first.",
             "$ref": "#/components/schemas/Boolean"
           }
         },
@@ -30605,7 +30605,7 @@
             ]
           }
         },
-        "description": "Confirms an email change by either proof: the token from the emailed link, or the code and\r\nchallenge from the page that requested it."
+        "description": "Confirms an email change by either proof: the token from the emailed link, or the code and\nchallenge from the page that requested it."
       },
       "EmailMfaSettingsDto": {
         "required": [
@@ -30954,7 +30954,7 @@
                 "type": "null"
               },
               {
-                "description": "Null when bool EventFavouriteResponse.IsFavourited is false. Nullable rather than defaulted so a\r\n\"not favourited\" status does not serialize an impossible year-0001 timestamp.",
+                "description": "Null when bool EventFavouriteResponse.IsFavourited is false. Nullable rather than defaulted so a\n\"not favourited\" status does not serialize an impossible year-0001 timestamp.",
                 "$ref": "#/components/schemas/DateTime"
               }
             ]
@@ -31094,7 +31094,7 @@
                 "type": "null"
               },
               {
-                "description": "Null when nobody has written alt text yet. Distinct from a decorative image, which is\r\ndeliberately unlabelled — see bool EventImageResponse.IsDecorative.",
+                "description": "Null when nobody has written alt text yet. Distinct from a decorative image, which is\ndeliberately unlabelled — see bool EventImageResponse.IsDecorative.",
                 "$ref": "#/components/schemas/String"
               }
             ]
@@ -31119,7 +31119,7 @@
             "$ref": "#/components/schemas/DateTime"
           }
         },
-        "description": "One image in an event's gallery, with the metadata a client needs to render it accessibly\r\nand in the organizer's chosen order."
+        "description": "One image in an event's gallery, with the metadata a client needs to render it accessibly\nand in the organizer's chosen order."
       },
       "EventInvitationDecisionResponse": {
         "type": "object",
@@ -31403,7 +31403,7 @@
       },
       "EventLifecycleState": {
         "type": "integer",
-        "description": "    The organizer-controlled state of an event.\r\n    These values are persisted as integers and, because no global\r\nJsonStringEnumConverter is registered, they also travel over the wire as integers.\r\nThe Angular client decodes them positionally against ALL_LIFECYCLE_STATES, so new\r\nmembers must only ever be appended — renumbering silently remaps every stored row."
+        "description": "    The organizer-controlled state of an event.\n    These values are persisted as integers and, because no global\nJsonStringEnumConverter is registered, they also travel over the wire as integers.\nThe Angular client decodes them positionally against ALL_LIFECYCLE_STATES, so new\nmembers must only ever be appended — renumbering silently remaps every stored row."
       },
       "EventLifecycleTransitionResponse": {
         "type": "object",
@@ -31452,14 +31452,14 @@
             ]
           }
         },
-        "description": "Wire shape of EventLifecycleTransition. The client renders its lifecycle\r\nbuttons and confirmation prompts from these, so it never duplicates the state machine."
+        "description": "Wire shape of EventLifecycleTransition. The client renders its lifecycle\nbuttons and confirmation prompts from these, so it never duplicates the state machine."
       },
       "EventMonthlyDayPolicy": {
         "enum": [
           "ClampToMonthEnd",
           "SkipMissingMonths"
         ],
-        "description": "How a monthly series behaves in months too short for its anchor day — only ever relevant\r\nfor anchor days 29, 30 and 31."
+        "description": "How a monthly series behaves in months too short for its anchor day — only ever relevant\nfor anchor days 29, 30 and 31."
       },
       "EventOccurrencePreviewResponse": {
         "type": "object",
@@ -31587,7 +31587,7 @@
             ]
           }
         },
-        "description": "    The repeat rule as it arrives over the wire.\r\n    string EventRecurrenceRuleRequest.StartLocalDateTime is a string on purpose. Binding it as a DateTime\r\nwould let System.Text.Json attach a UTC or local Kind depending on whether the client\r\nhappened to send a Z suffix, quietly reinterpreting the organizer's wall-clock choice\r\nagainst the wrong zone. The zone is carried separately in string EventRecurrenceRuleRequest.TimeZoneId, and the\r\ntwo are combined only by EventRecurrenceExpander."
+        "description": "    The repeat rule as it arrives over the wire.\n    string EventRecurrenceRuleRequest.StartLocalDateTime is a string on purpose. Binding it as a DateTime\nwould let System.Text.Json attach a UTC or local Kind depending on whether the client\nhappened to send a Z suffix, quietly reinterpreting the organizer's wall-clock choice\nagainst the wrong zone. The zone is carried separately in string EventRecurrenceRuleRequest.TimeZoneId, and the\ntwo are combined only by EventRecurrenceExpander."
       },
       "EventRegistrationResponse": {
         "type": "object",
@@ -31673,7 +31673,7 @@
                 "type": "null"
               },
               {
-                "description": "The image representing the event wherever one picture is shown. Null only when the\r\nevent has no images. Also the first entry of List&lt;string&gt; EventResponse.ImageUrls.",
+                "description": "The image representing the event wherever one picture is shown. Null only when the\nevent has no images. Also the first entry of List&lt;string&gt; EventResponse.ImageUrls.",
                 "$ref": "#/components/schemas/String"
               }
             ]
@@ -31800,7 +31800,7 @@
                 "type": "null"
               },
               {
-                "description": "IANA zone the event's wall-clock time is anchored to, when one is known. Lets a client\r\nshow the time at the venue rather than only in the viewer's own zone.",
+                "description": "IANA zone the event's wall-clock time is anchored to, when one is known. Lets a client\nshow the time at the venue rather than only in the viewer's own zone.",
                 "$ref": "#/components/schemas/String"
               }
             ]
@@ -31954,11 +31954,11 @@
             "$ref": "#/components/schemas/ListOfEventSeriesSkippedOccurrence"
           },
           "retimedWithRegistrations": {
-            "description": "Occurrences that were retimed while holding registrations, so the UI can offer to notify\r\nthe people who had already signed up.",
+            "description": "Occurrences that were retimed while holding registrations, so the UI can offer to notify\nthe people who had already signed up.",
             "$ref": "#/components/schemas/ListOfInt32"
           }
         },
-        "description": "Outcome of a bulk series operation. Partial success is the normal case, not an error: one\r\noccurrence that cannot be repriced should not block the other eleven from being updated."
+        "description": "Outcome of a bulk series operation. Partial success is the normal case, not an error: one\noccurrence that cannot be repriced should not block the other eleven from being updated."
       },
       "EventSeriesDeleteScope": {
         "enum": [
@@ -32657,7 +32657,7 @@
             ]
           }
         },
-        "description": "A waitlist entry. PII fields (UserName, UserEmail, Notes, PhoneNumber, DietaryNeeds)\r\nare populated only when the caller can manage the event."
+        "description": "A waitlist entry. PII fields (UserName, UserEmail, Notes, PhoneNumber, DietaryNeeds)\nare populated only when the caller can manage the event."
       },
       "ExtendEventSeriesRequest": {
         "type": "object",
@@ -33065,7 +33065,7 @@
             ]
           }
         },
-        "description": "Optional attendee details captured at join time and carried onto the registration\r\nwhen the entry is promoted, so a promoted user does not have to re-enter them."
+        "description": "Optional attendee details captured at join time and carried onto the registration\nwhen the entry is promoted, so a promoted user does not have to re-enter them."
       },
       "JsonElement": { },
       "ListOfAuthSessionResponse": {
@@ -33345,7 +33345,7 @@
                 "type": "null"
               },
               {
-                "description": "The image representing the event wherever one picture is shown. Null only when the\r\nevent has no images. Also the first entry of List&lt;string&gt; ManagedEventResponse.ImageUrls.",
+                "description": "The image representing the event wherever one picture is shown. Null only when the\nevent has no images. Also the first entry of List&lt;string&gt; ManagedEventResponse.ImageUrls.",
                 "$ref": "#/components/schemas/String"
               }
             ]
@@ -33491,7 +33491,7 @@
             ]
           },
           "seriesOverridden": {
-            "description": "True once this occurrence has been edited on its own, which excludes it from\r\n\"update all future occurrences\" unless the organizer opts back in.",
+            "description": "True once this occurrence has been edited on its own, which excludes it from\n\"update all future occurrences\" unless the organizer opts back in.",
             "$ref": "#/components/schemas/Boolean"
           },
           "timeZoneId": {
@@ -33538,7 +33538,7 @@
                 "type": "null"
               },
               {
-                "description": "Deadline for undoing the most recent lifecycle change, or null when there is nothing\r\nto undo or the window has already lapsed. Drives the \"Undo\" affordance.",
+                "description": "Deadline for undoing the most recent lifecycle change, or null when there is nothing\nto undo or the window has already lapsed. Drives the \"Undo\" affordance.",
                 "$ref": "#/components/schemas/DateTime"
               }
             ]
@@ -33557,7 +33557,7 @@
             "$ref": "#/components/schemas/Guid"
           },
           "status": {
-            "description": "Serialised as a number and decoded by position on the client, so its members are only\r\never appended.",
+            "description": "Serialised as a number and decoded by position on the client, so its members are only\never appended.",
             "$ref": "#/components/schemas/MediaAssetStatus"
           },
           "url": {
@@ -33607,7 +33607,7 @@
             "$ref": "#/components/schemas/ListOfMergeRecentlyViewedItem"
           }
         },
-        "description": "The browser-held history being synced up at login. Every field is client-supplied and\r\ntherefore untrusted: the service clamps timestamps and re-checks visibility on each id."
+        "description": "The browser-held history being synced up at login. Every field is client-supplied and\ntherefore untrusted: the service clamps timestamps and re-checks visibility on each id."
       },
       "MessageResponse": {
         "type": "object",
@@ -33766,7 +33766,7 @@
             "$ref": "#/components/schemas/String"
           },
           "usernameDisplay": {
-            "description": "The username as its owner wrote it, e.g. `ThomasT`. Render this; resolve by\r\n`Username`.",
+            "description": "The username as its owner wrote it, e.g. `ThomasT`. Render this; resolve by\n`Username`.",
             "$ref": "#/components/schemas/String"
           },
           "canChangeUsername": {
@@ -33826,7 +33826,7 @@
             ]
           },
           "hasLocalPassword": {
-            "description": "True when the account has its own password. Independent of the provider flags: linking\r\nGoogle or Microsoft to an existing account leaves its password in place.",
+            "description": "True when the account has its own password. Independent of the provider flags: linking\nGoogle or Microsoft to an existing account leaves its password in place.",
             "$ref": "#/components/schemas/Boolean"
           },
           "googleLinked": {
@@ -33960,7 +33960,7 @@
             "$ref": "#/components/schemas/DateTime"
           }
         },
-        "description": "A provider sign-in matched an existing account by its verified email, but that account\r\nhas no provider link. Nothing is linked or signed in until the owner signs in to the\r\naccount and confirms with string OAuthLinkConfirmationResponse.LinkToken."
+        "description": "A provider sign-in matched an existing account by its verified email, but that account\nhas no provider link. Nothing is linked or signed in until the owner signs in to the\naccount and confirms with string OAuthLinkConfirmationResponse.LinkToken."
       },
       "OAuthRoleSelectionResponse": {
         "required": [
@@ -34375,7 +34375,7 @@
             "$ref": "#/components/schemas/String"
           },
           "credential": {
-            "description": "The `PublicKeyCredential` from `navigator.credentials.create()` or\r\n`get()`, serialized as WebAuthn JSON (its `toJSON()` form).",
+            "description": "The `PublicKeyCredential` from `navigator.credentials.create()` or\n`get()`, serialized as WebAuthn JSON (its `toJSON()` form).",
             "$ref": "#/components/schemas/JsonElement"
           }
         },
@@ -34400,7 +34400,7 @@
             "$ref": "#/components/schemas/DateTime"
           }
         },
-        "description": "The options for one passkey ceremony. Pass JsonElement PasskeyCeremonyOptionsResponse.PublicKey to\r\n`PublicKeyCredential.parseCreationOptionsFromJSON()` or\r\n`parseRequestOptionsFromJSON()`, and send string PasskeyCeremonyOptionsResponse.CeremonyId back with the result."
+        "description": "The options for one passkey ceremony. Pass JsonElement PasskeyCeremonyOptionsResponse.PublicKey to\n`PublicKeyCredential.parseCreationOptionsFromJSON()` or\n`parseRequestOptionsFromJSON()`, and send string PasskeyCeremonyOptionsResponse.CeremonyId back with the result."
       },
       "PasskeyRegistrationOptionsRequest": {
         "type": "object",
@@ -34485,7 +34485,7 @@
             "$ref": "#/components/schemas/String"
           },
           "credential": {
-            "description": "The `PublicKeyCredential` from `navigator.credentials.create()` or\r\n`get()`, serialized as WebAuthn JSON (its `toJSON()` form).",
+            "description": "The `PublicKeyCredential` from `navigator.credentials.create()` or\n`get()`, serialized as WebAuthn JSON (its `toJSON()` form).",
             "$ref": "#/components/schemas/JsonElement"
           }
         },
@@ -34602,14 +34602,14 @@
             ]
           },
           "accessRevoked": {
-            "description": "True when the user can no longer view this event (e.g. a private-event invitation was\r\nrevoked after they starred it). EventResponse PinnedEventResponse.Event is then redacted down to its id,\r\nbut the row is still returned so the user retains a way to unstar it — this page is\r\nthe only place the UI offers that, so omitting the row would strand the star forever.",
+            "description": "True when the user can no longer view this event (e.g. a private-event invitation was\nrevoked after they starred it). EventResponse PinnedEventResponse.Event is then redacted down to its id,\nbut the row is still returned so the user retains a way to unstar it — this page is\nthe only place the UI offers that, so omitting the row would strand the star forever.",
             "$ref": "#/components/schemas/Boolean"
           },
           "event": {
             "$ref": "#/components/schemas/EventResponse"
           }
         },
-        "description": "One row of the user's pinned list — the union of the events they registered for and the\r\nevents they starred. bool PinnedEventResponse.IsRegistered and bool PinnedEventResponse.IsFavourited say which\r\nsignal (or both) put it here; the client groups on bool PinnedEventResponse.IsRegistered."
+        "description": "One row of the user's pinned list — the union of the events they registered for and the\nevents they starred. bool PinnedEventResponse.IsRegistered and bool PinnedEventResponse.IsFavourited say which\nsignal (or both) put it here; the client groups on bool PinnedEventResponse.IsRegistered."
       },
       "PostCommentCreateRequest": {
         "required": [
@@ -34831,7 +34831,7 @@
                 "type": "null"
               },
               {
-                "description": "The media asset tracking this upload, for polling its validation status. Null when\r\nuploads are not quarantined, in which case the image is usable as soon as it is\r\nattached.",
+                "description": "The media asset tracking this upload, for polling its validation status. Null when\nuploads are not quarantined, in which case the image is usable as soon as it is\nattached.",
                 "$ref": "#/components/schemas/Guid"
               }
             ]
@@ -34958,7 +34958,7 @@
             "$ref": "#/components/schemas/String"
           },
           "redirectUri": {
-            "description": "The exact redirect URI the authorization request names. A browser that redeems the\r\ncode itself must send this value rather than one it derives from its own configuration.",
+            "description": "The exact redirect URI the authorization request names. A browser that redeems the\ncode itself must send this value rather than one it derives from its own configuration.",
             "$ref": "#/components/schemas/String"
           },
           "codeVerifier": {
@@ -34967,7 +34967,7 @@
                 "type": "null"
               },
               {
-                "description": "The PKCE verifier, only for a provider whose code the browser redeems (Microsoft). Null\r\nfor Google, whose verifier never leaves the server.",
+                "description": "The PKCE verifier, only for a provider whose code the browser redeems (Microsoft). Null\nfor Google, whose verifier never leaves the server.",
                 "$ref": "#/components/schemas/String"
               }
             ]
@@ -35012,7 +35012,7 @@
             "$ref": "#/components/schemas/String"
           },
           "usernameDisplay": {
-            "description": "The username as its owner wrote it, e.g. `ThomasT`. Render this; resolve by\r\n`Username`.",
+            "description": "The username as its owner wrote it, e.g. `ThomasT`. Render this; resolve by\n`Username`.",
             "$ref": "#/components/schemas/String"
           },
           "name": {
@@ -35042,7 +35042,7 @@
             "$ref": "#/components/schemas/DateTime"
           }
         },
-        "description": "Publicly viewable profile fields for any user, keyed by username.\r\nDeliberately excludes the internal id, email, phone, and address."
+        "description": "Publicly viewable profile fields for any user, keyed by username.\nDeliberately excludes the internal id, email, phone, and address."
       },
       "RecentlyViewedEventResponse": {
         "type": "object",
@@ -35072,7 +35072,7 @@
             "$ref": "#/components/schemas/Int32"
           }
         },
-        "description": "    What a sync of the browser-held history actually did.\r\n    int RecentlyViewedMergeResultResponse.Skipped lumps together every reason an item did not land — expired, or an\r\nevent the caller cannot see. Reporting per-item reasons would turn this endpoint into an\r\noracle for probing which private events exist."
+        "description": "    What a sync of the browser-held history actually did.\n    int RecentlyViewedMergeResultResponse.Skipped lumps together every reason an item did not land — expired, or an\nevent the caller cannot see. Reporting per-item reasons would turn this endpoint into an\noracle for probing which private events exist."
       },
       "RecentlyViewedSettingsResponse": {
         "type": "object",
@@ -35101,7 +35101,7 @@
             "$ref": "#/components/schemas/Int32"
           },
           "recorded": {
-            "description": "False when the user has opted out. Deliberately a successful response rather than a\r\n403: honouring a preference is not an error, and the detail page fires this call and\r\nforgets it, so an error status would only invite the client to branch on one.",
+            "description": "False when the user has opted out. Deliberately a successful response rather than a\n403: honouring a preference is not an error, and the detail page fires this call and\nforgets it, so an error status would only invite the client to branch on one.",
             "$ref": "#/components/schemas/Boolean"
           },
           "viewedAtUtc": {
@@ -35131,7 +35131,7 @@
             "$ref": "#/components/schemas/DateTime"
           }
         },
-        "description": "A newly generated set of recovery codes. This response is the only place the plaintext\r\never appears; it cannot be fetched again."
+        "description": "A newly generated set of recovery codes. This response is the only place the plaintext\never appears; it cannot be fetched again."
       },
       "RecoveryCodeStatusResponse": {
         "type": "object",
@@ -35240,7 +35240,7 @@
             "$ref": "#/components/schemas/ListOfInt32"
           }
         },
-        "description": "The event's images in their new order. Must list every image exactly once — a partial list\r\nis rejected rather than applied, so a client working from a stale gallery cannot silently\r\ndrop an image from the ordering."
+        "description": "The event's images in their new order. Must list every image exactly once — a partial list\nis rejected rather than applied, so a client working from a stale gallery cannot silently\ndrop an image from the ordering."
       },
       "ReplaceEventImageRequest": {
         "required": [
@@ -35375,7 +35375,7 @@
             "$ref": "#/components/schemas/Int32"
           },
           "currentSessionRevoked": {
-            "description": "The session making the request was among those revoked: its tokens no longer work, and\r\nits browser cookies were cleared.",
+            "description": "The session making the request was among those revoked: its tokens no longer work, and\nits browser cookies were cleared.",
             "$ref": "#/components/schemas/Boolean"
           }
         },
@@ -35675,7 +35675,7 @@
             "$ref": "#/components/schemas/DateTime"
           }
         },
-        "description": "One device that skips sign-in verification until DateTime TrustedDeviceResponse.ExpiresAt. The device token,\r\nits hash, and the raw source address are never included."
+        "description": "One device that skips sign-in verification until DateTime TrustedDeviceResponse.ExpiresAt. The device token,\nits hash, and the raw source address are never included."
       },
       "TrustedDeviceRevocationResponse": {
         "type": "object",
@@ -35732,7 +35732,7 @@
             "$ref": "#/components/schemas/Int32"
           },
           "includeOverridden": {
-            "description": "Also rewrite occurrences that were previously edited on their own. Off by default so a\r\ndeliberate one-off change is not silently undone.",
+            "description": "Also rewrite occurrences that were previously edited on their own. Off by default so a\ndeliberate one-off change is not silently undone.",
             "$ref": "#/components/schemas/Boolean"
           },
           "name": {
@@ -35898,7 +35898,7 @@
             ]
           }
         },
-        "description": "    Applies a patch to every future occurrence from a pivot onward.\r\n    There is deliberately no StartTime/EndTime here. Retiming a series is expressed\r\nas a local wall-clock time plus the series' own zone, so a shifted series survives DST the\r\nsame way the original generation did; accepting a UTC instant would reintroduce the drift."
+        "description": "    Applies a patch to every future occurrence from a pivot onward.\n    There is deliberately no StartTime/EndTime here. Retiming a series is expressed\nas a local wall-clock time plus the series' own zone, so a shifted series survives DST the\nsame way the original generation did; accepting a UTC instant would reintroduce the drift."
       },
       "UpdateProfileRequest": {
         "type": "object",
@@ -35947,7 +35947,7 @@
                 "type": "null"
               },
               {
-                "description": "Nullable so an absent field fails validation instead of silently binding to false —\r\na malformed body must not switch tracking off on the user's behalf.",
+                "description": "Nullable so an absent field fails validation instead of silently binding to false —\na malformed body must not switch tracking off on the user's behalf.",
                 "$ref": "#/components/schemas/Boolean"
               }
             ]
@@ -36019,7 +36019,7 @@
             "$ref": "#/components/schemas/String"
           },
           "available": {
-            "description": "True when nothing currently holds the name. Advisory only: the name is not reserved by\r\nasking, and signup can still fail with USERNAME_TAKEN if someone claims it first.",
+            "description": "True when nothing currently holds the name. Advisory only: the name is not reserved by\nasking, and signup can still fail with USERNAME_TAKEN if someone claims it first.",
             "$ref": "#/components/schemas/Boolean"
           }
         },
@@ -36065,7 +36065,7 @@
         "type": "object",
         "properties": {
           "suggestions": {
-            "description": "The suggestions, free at the moment they were drawn. May hold fewer than the usual three,\r\nor none: suggestions are a convenience, so an exhausted draw returns a short list rather\r\nthan failing the request, and the form works without them.",
+            "description": "The suggestions, free at the moment they were drawn. May hold fewer than the usual three,\nor none: suggestions are a convenience, so an exhausted draw returns a short list rather\nthan failing the request, and the form works without them.",
             "$ref": "#/components/schemas/IReadOnlyListOfUsernameSuggestionResponse"
           }
         },
@@ -36168,7 +36168,7 @@
             "$ref": "#/components/schemas/DateTime"
           },
           "accessRevoked": {
-            "description": "True when the user can no longer view this event (e.g. a private-event invitation was\r\nrevoked after they queued). EventResponse WaitlistedEventResponse.Event is then redacted down to its id, but\r\nthe row is still returned so the user retains a way to withdraw and have their stored\r\ncontact details removed — omitting it entirely would strand them in the queue.",
+            "description": "True when the user can no longer view this event (e.g. a private-event invitation was\nrevoked after they queued). EventResponse WaitlistedEventResponse.Event is then redacted down to its id, but\nthe row is still returned so the user retains a way to withdraw and have their stored\ncontact details removed — omitting it entirely would strand them in the queue.",
             "$ref": "#/components/schemas/Boolean"
           },
           "event": {

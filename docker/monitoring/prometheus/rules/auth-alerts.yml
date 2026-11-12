@@ -1,0 +1,255 @@
+# Auth security alerts. Every alert carries:
+#   labels:      severity (page | ticket), owner (a role in docs/operations/ownership.md),
+#                mode (observe | page)
+#   annotations: summary, description, runbook_url, dashboard_uid, threshold_rationale
+# MonitoringDefinitionsTests enforces that contract and checks every runbook link.
+#
+# Rollout (docs/operations/monitoring.md#rollout): every alert starts in mode="observe", which
+# Alertmanager routes to a receiver with no notifications, so firings are only recorded in
+# ALERTS and the Alertmanager UI. After two weeks, compare the recorded baseline with the
+# threshold, then flip that alert's mode to "page" in a reviewed change. Rate thresholds are
+# max(3 x the 14-day p99 baseline, a floor): the floor covers new deployments with no baseline
+# and quiet environments where 3 x a near-zero baseline would page on noise.
+groups:
+  - name: auth-security-alerts
+    rules:
+      - alert: AuthCredentialStuffing
+        expr: |
+          auth:sign_in_invalid_credentials:rate5m
+            > clamp_min((3 * auth:sign_in_invalid_credentials:rate5m:p99_14d) or (auth:sign_in_invalid_credentials:rate5m * 0), 0.5)
+        for: 10m
+        labels:
+          severity: page
+          owner: auth-oncall
+          mode: observe
+        annotations:
+          summary: "Failed password sign-ins far above baseline in {{ $labels.deployment_environment_name }}"
+          description: "{{ $value | humanize }}/s sign-ins are failing with invalid credentials, above 3x the 14-day p99 and the 0.5/s floor, for 10 minutes. Many accounts are likely being tried with leaked passwords."
+          runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/credential-stuffing.md#authcredentialstuffing"
+          dashboard_uid: auth-security
+          threshold_rationale: "3x the 14-day p99 keeps ordinary typo and forgotten-password peaks below the line; the 0.5/s (30/min) floor is roughly 10x a quiet deployment's background and stops a near-zero baseline from paging on a handful of failures."
+
+      - alert: AuthTargetedAccountThrottling
+        expr: |
+          auth:account_throttles:rate15m
+            > clamp_min((3 * auth:account_throttles:rate15m:p99_14d) or (auth:account_throttles:rate15m * 0), 0.05)
+        for: 15m
+        labels:
+          severity: ticket
+          owner: auth-oncall
+          mode: observe
+        annotations:
+          summary: "Per-account sign-in throttles above baseline in {{ $labels.deployment_environment_name }}"
+          description: "{{ $value | humanize }}/s requests are refused by the per-account abuse budget, for 15 minutes. Individual accounts are being attacked from many sources."
+          runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/credential-stuffing.md#authtargetedaccountthrottling"
+          dashboard_uid: auth-security
+          threshold_rationale: "The account budget only trips after repeated failures against one account, so it is rare; the 0.05/s (3/min sustained over 15 minutes) floor separates a campaign from one user locking themselves out."
+
+      - alert: AuthRefreshTokenReuse
+        expr: |
+          auth:refresh_token_reuse:increase1h
+            > clamp_min((3 * auth:refresh_token_reuse:increase1h:p99_14d) or (auth:refresh_token_reuse:increase1h * 0), 3)
+        for: 10m
+        labels:
+          severity: page
+          owner: security-lead
+          mode: observe
+        annotations:
+          summary: "Refresh-token replays above baseline in {{ $labels.deployment_environment_name }}"
+          description: "{{ $value | humanize }} rotated refresh tokens were replayed past the grace window in the last hour. Each one revokes a session; several together suggest stolen tokens."
+          runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/token-theft.md#authrefreshtokenreuse"
+          dashboard_uid: auth-security
+          threshold_rationale: "Isolated replays happen when a client loses a refresh response and retries late, so a single replay is not paged; more than 3 per hour, and above 3x the hourly p99, is not explained by flaky clients."
+
+      - alert: AuthSessionRevocationFaulted
+        expr: sum by (deployment_environment_name) (increase(auth_security_events_total{event="auth.session.revoked", outcome="faulted"}[10m])) > 0
+        for: 0m
+        labels:
+          severity: page
+          owner: auth-oncall
+          mode: observe
+        annotations:
+          summary: "Account-wide session revocation failed in {{ $labels.deployment_environment_name }}"
+          description: "An account-wide revocation could end no sessions because neither the session registry nor Redis answered. A user who reset a password or was disabled may still be signed in."
+          runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/token-theft.md#authsessionrevocationfaulted"
+          dashboard_uid: auth-security
+          threshold_rationale: "Zero tolerance is deliberate: a faulted revocation is a failure of a fail-closed control, never an expected refusal, and each one leaves sessions alive that should be dead."
+
+      - alert: AuthProviderLinkConflicts
+        expr: |
+          auth:provider_link_conflicts:increase1h
+            > clamp_min((3 * auth:provider_link_conflicts:increase1h:p99_14d) or (auth:provider_link_conflicts:increase1h * 0), 5)
+        for: 15m
+        labels:
+          severity: ticket
+          owner: security-lead
+          mode: observe
+        annotations:
+          summary: "Provider link conflicts above baseline in {{ $labels.deployment_environment_name }}"
+          description: "{{ $value | humanize }} Google or Microsoft links were refused in the last hour. Reassigned email addresses or forged tenants may be trying to take over accounts."
+          runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/provider-link-conflict.md#authproviderlinkconflicts"
+          dashboard_uid: auth-security
+          threshold_rationale: "Legitimate conflicts come from users with several Google or Microsoft identities and are a few per day; 5 per hour, and above 3x the hourly p99, is a pattern worth a ticket, not a page, because every conflict was already refused."
+
+      - alert: AuthStepUpBruteForce
+        expr: |
+          auth:step_up_attempts_exhausted:rate15m
+            > clamp_min((3 * auth:step_up_attempts_exhausted:rate15m:p99_14d) or (auth:step_up_attempts_exhausted:rate15m * 0), 0.01)
+        for: 15m
+        labels:
+          severity: page
+          owner: auth-oncall
+          mode: observe
+        annotations:
+          summary: "Step-up challenges exhausted above baseline in {{ $labels.deployment_environment_name }}"
+          description: "{{ $value | humanize }}/s step-up challenges are discarded after the final wrong code, for 15 minutes. Someone holding passwords is guessing second-factor codes."
+          runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/mfa-recovery-abuse.md#authstepupbruteforce"
+          dashboard_uid: auth-security
+          threshold_rationale: "Exhausting every attempt is rare for real users; the 0.01/s floor (about 9 exhausted challenges in 15 minutes) means the attacker already has valid passwords for several accounts, which merits a page."
+
+      - alert: AuthMfaRecoveryAbuse
+        expr: |
+          (
+            auth:mfa_delivery_throttles:rate15m
+              > clamp_min((3 * auth:mfa_delivery_throttles:rate15m:p99_14d) or (auth:mfa_delivery_throttles:rate15m * 0), 0.02)
+          )
+          or
+          (
+            auth:recovery_requests:rate15m
+              > clamp_min((3 * auth:recovery_requests:rate15m:p99_14d) or (auth:recovery_requests:rate15m * 0), 0.2)
+          )
+        for: 15m
+        labels:
+          severity: ticket
+          owner: auth-oncall
+          mode: observe
+        annotations:
+          summary: "MFA delivery throttling or recovery requests above baseline in {{ $labels.deployment_environment_name }}"
+          description: "MFA code delivery is being throttled, or password and username recovery is being requested, well above baseline for 15 minutes ({{ $value | humanize }}/s). This may be SMS pumping, mail bombing, or recovery enumeration."
+          runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/mfa-recovery-abuse.md#authmfarecoveryabuse"
+          dashboard_uid: auth-security
+          threshold_rationale: "Delivery limits and recovery suppression already contain the damage, so this is a ticket; floors of 0.02/s throttles and 0.2/s recovery requests sit an order of magnitude above a quiet deployment's daily peaks."
+
+      - alert: AuthMfaDeliveryFailures
+        expr: |
+          (
+            auth:security_delivery_failure_ratio:rate30m
+              > clamp_min((3 * auth:security_delivery_failure_ratio:rate30m:p99_14d) or (auth:security_delivery_failure_ratio:rate30m * 0), 0.05)
+          )
+          and on (deployment_environment_name) (auth:security_deliveries:rate30m * 1800 > 10)
+        for: 15m
+        labels:
+          severity: ticket
+          owner: auth-oncall
+          mode: observe
+        annotations:
+          summary: "Security codes and links are failing to send in {{ $labels.deployment_environment_name }}"
+          description: "{{ $value | humanizePercentage }} of verification, recovery, MFA, and security-alert deliveries failed over 30 minutes. Users cannot complete sign-in or recovery."
+          runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/mfa-recovery-abuse.md#authmfadeliveryfailures"
+          dashboard_uid: auth-security
+          threshold_rationale: "Providers fail a small share of messages transiently; 5% (and 3x the usual share) over at least 10 deliveries in 30 minutes means the provider or credentials are broken rather than one bad address."
+
+      - alert: AuthAuthorizationProbing
+        expr: |
+          auth:authz_resource_denials:rate5m
+            > clamp_min((3 * auth:authz_resource_denials:rate5m:p99_14d) or (auth:authz_resource_denials:rate5m * 0), 0.2)
+        for: 10m
+        labels:
+          severity: ticket
+          owner: security-lead
+          mode: observe
+        annotations:
+          summary: "Resource access denials above baseline in {{ $labels.deployment_environment_name }}"
+          description: "{{ $value | humanize }}/s requests are refused by ownership or staff-role checks, for 10 minutes. A caller may be walking resource ids."
+          runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/authorization-denial.md#authauthorizationprobing"
+          dashboard_uid: auth-security
+          threshold_rationale: "Stale links and shared URLs cause a steady trickle of resource denials; 0.2/s (12/min) sustained for 10 minutes, and above 3x the p99, is enumeration-shaped. Every request was already refused, so this is a ticket."
+
+      - alert: AuthMassAuthorizationDenial
+        expr: |
+          auth:authz_policy_denials:rate5m
+            > clamp_min((3 * auth:authz_policy_denials:rate5m:p99_14d) or (auth:authz_policy_denials:rate5m * 0), 1)
+        for: 5m
+        labels:
+          severity: page
+          owner: auth-oncall
+          mode: observe
+        annotations:
+          summary: "Policy and MFA-required denials far above baseline in {{ $labels.deployment_environment_name }}"
+          description: "{{ $value | humanize }}/s requests are refused by role policies or [RequireMfa], for 5 minutes. Either a release broke authorization for legitimate users, or the API is being probed at scale."
+          runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/authorization-denial.md#authmassauthorizationdenial"
+          dashboard_uid: auth-security
+          threshold_rationale: "A broken policy or step-up store denies every affected user at once, so the rate jumps rather than drifts; 1/s and 3x the p99 for 5 minutes catches that quickly without paging on one user retrying a forbidden action."
+
+      - alert: AuthFaultRate
+        expr: |
+          (auth:operation_fault_ratio:rate10m > 0.02)
+          and on (deployment_environment_name) (auth:operations:rate10m > 0.05)
+        for: 10m
+        labels:
+          severity: page
+          owner: auth-oncall
+          mode: observe
+        annotations:
+          summary: "Auth endpoints are faulting in {{ $labels.deployment_environment_name }}"
+          description: "{{ $value | humanizePercentage }} of sign-in, refresh, step-up, recovery, and factor-change requests failed with a server fault for 10 minutes."
+          runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/auth-service-health.md#authfaultrate"
+          dashboard_uid: auth-security
+          threshold_rationale: "Faults are service errors, not refusals, so they are compared with a fixed 2% error budget rather than a traffic baseline; at least 0.05/s auth traffic keeps one fault in a quiet hour from paging."
+
+      - alert: AuthEventPipelineBroken
+        expr: sum by (deployment_environment_name, sink) (increase(auth_security_events_sink_failures_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: page
+          owner: auth-oncall
+          mode: observe
+        annotations:
+          summary: "Security event sink {{ $labels.sink }} is failing in {{ $labels.deployment_environment_name }}"
+          description: "The {{ $labels.sink }} sink failed to record security events for 5 minutes. Those events are lost from logs, metrics, or the account history."
+          runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/auth-service-health.md#autheventpipelinebroken"
+          dashboard_uid: auth-security
+          threshold_rationale: "Zero tolerance is deliberate: a sink failure is lost audit data, never an expected refusal, and the 5-minute hold filters a single transient blip."
+
+      - alert: AuthSecurityHistoryNotRecording
+        expr: |
+          (sum by (deployment_environment_name) (increase(auth_security_history_dropped_total[5m])) > 0)
+          or
+          (sum by (deployment_environment_name) (increase(auth_security_history_store_failures_total[10m])) > 0)
+          or
+          (sum by (deployment_environment_name) (increase(security_history_entries_total{outcome="failed"}[10m])) > 0)
+        for: 10m
+        labels:
+          severity: ticket
+          owner: auth-oncall
+          mode: observe
+        annotations:
+          summary: "Account security history is not recording in {{ $labels.deployment_environment_name }}"
+          description: "History entries are being dropped, the outbox cannot be written, or the worker is failing entries. Users' security history and alerts are incomplete."
+          runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/auth-service-health.md#authsecurityhistorynotrecording"
+          dashboard_uid: auth-security
+          threshold_rationale: "Each drop or failure is a missing owner-visible entry, so any sustained occurrence matters; the 10-minute hold rides out the outbox retry backoff after a short database blip."
+
+      # Per environment: an environment that exported within the last 7 days but not in the last
+      # ~15 minutes alerts with its own label, whatever the other environments do. The second
+      # branch covers an API that has never exported at all (no environment to name).
+      - alert: AuthTelemetryAbsent
+        expr: |
+          (
+            group by (deployment_environment_name) (last_over_time(auth:api_exporting[7d]))
+            unless on (deployment_environment_name)
+            group by (deployment_environment_name) (last_over_time(auth:api_exporting[10m]))
+          )
+          or
+          absent_over_time(target_info{job="eventxperience-api"}[7d])
+        for: 0m
+        labels:
+          severity: ticket
+          owner: auth-oncall
+          mode: observe
+        annotations:
+          summary: "The API has stopped exporting metrics in {{ with $labels.deployment_environment_name }}{{ . }}{{ else }}every environment{{ end }}"
+          description: "No OTLP export from eventxperience-api has arrived for about 15 minutes, so every other auth alert for that environment is blind. A deliberately retired environment keeps alerting for 7 days; silence it in Alertmanager."
+          runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/auth-service-health.md#authtelemetryabsent"
+          dashboard_uid: auth-security
+          threshold_rationale: "The exporter pushes every 15 seconds, so about 15 minutes of silence from an environment that exported this week is a stopped API, a broken exporter, or a misconfigured endpoint, not a quiet period; checked per environment so one healthy environment cannot hide another."

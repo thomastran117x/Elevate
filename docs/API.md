@@ -215,12 +215,13 @@ Every endpoint requires an authenticated bearer user unless it explicitly opts o
 - **OpenAPI:**
   - Protected operations carry the `bearerAuth` security requirement and `401`/`403` responses.
   - Every operation carries an `x-authorization` extension: `anonymous`, `authenticated`, or the required policy name.
-- **Audit:** `backend.tests.Unit/Application/Security/EndpointAuthorizationAuditTests.cs` fails when:
-  - an action or hub method is unclassified;
+- **Audit:** the CI Auth Contract Gate (see [testing](TESTING.md#authorization-audit)) fails when:
+  - an action, hub method, or minimal endpoint is unclassified;
   - an `[Authorize]` action sits under a class-level `[AllowAnonymous]`;
-  - the anonymous surface differs from its reviewed `ExpectedAnonymousEndpoints` list.
+  - the anonymous surface differs from the reviewed list in `backend.tests.Unit/Application/Security/ReviewedPublicSurface.cs`;
+  - the regenerated OpenAPI document differs from the committed `backend/openapi.json` or `backend/openapi.yaml`.
 
-  Add a new public endpoint to that list in the same change.
+  Add a new public endpoint to that list, and regenerate the OpenAPI documents, in the same change.
 
 Captcha and external provider credentials are needed for their corresponding auth flows. Login omits CAPTCHA until the generic 401 envelope reports `meta.captchaRequired: true`; the next submission must include a fresh token. Login failures and sensitive delivery/verification operations use independent Redis-backed source-IP and hashed-target limits, with per-replica IP limiting retained during Redis outages.
 

@@ -39,6 +39,7 @@ internal static partial class DevTasksCli
                     await RunBackendIntegrationEndpointCoverageAsync(args[1..]),
                 "export-openapi" => await ExportOpenApiAsync(args[1..]),
                 "storage-provision" => await RunStorageProvisionAsync(args[1..]),
+                "auth-drill" => await RunAuthDrillAsync(args[1..]),
                 _ => Fail($"Unknown command '{args[0]}'.")
             };
         }
@@ -408,6 +409,8 @@ internal static partial class DevTasksCli
                 backendProcess,
                 outputBuffer
             );
+            await NormalizeOpenApiLineEndingsAsync(jsonOutputPath);
+            await NormalizeOpenApiLineEndingsAsync(yamlOutputPath);
             Console.WriteLine($"OpenAPI JSON exported to {jsonOutputPath}");
             Console.WriteLine($"OpenAPI YAML exported to {yamlOutputPath}");
             return 0;
@@ -416,6 +419,23 @@ internal static partial class DevTasksCli
         {
             await StopProcessAsync(backendProcess);
         }
+    }
+
+    /// <summary>
+    /// Descriptions come from XML doc comments, which carry the source file's line endings. A
+    /// Windows checkout with CRLF files would otherwise export CRLF line breaks where Linux exports
+    /// LF, and the CI drift check compares byte for byte, so normalize every line break to LF.
+    /// </summary>
+    private static async Task NormalizeOpenApiLineEndingsAsync(string path)
+    {
+        var text = await File.ReadAllTextAsync(path);
+        // First the escaped breaks inside JSON and double-quoted YAML strings, then literal ones,
+        // such as YAML block scalars.
+        var normalized = text
+            .Replace(@"\r\n", @"\n", StringComparison.Ordinal)
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        if (normalized != text)
+            await File.WriteAllTextAsync(path, normalized);
     }
 
     private static decimal GetDecimalAttribute(XElement element, string name)
@@ -908,6 +928,9 @@ internal static partial class DevTasksCli
         Console.WriteLine(
             "  storage-provision                      Create the public and quarantine blob containers."
         );
+        Console.WriteLine(
+            "  auth-drill                             Run the session-revocation, token-reuse, recovery, and telemetry drills."
+        );
         Console.WriteLine();
         WriteBackendFormatHelp();
         WriteBackendUnitCoverageHelp();
@@ -915,6 +938,7 @@ internal static partial class DevTasksCli
         WriteBackendIntegrationEndpointCoverageHelp();
         WriteExportOpenApiHelp();
         WriteStorageProvisionHelp();
+        WriteAuthDrillHelp();
     }
 
     private static void WriteBackendFormatHelp()

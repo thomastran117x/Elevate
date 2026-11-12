@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using backend.main.application.security;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
 using backend.main.features.clubs.staff;
@@ -32,43 +33,65 @@ public class AuthorizationMatrixEndpointsTests
     {
         await using var app = await AuthApiTestApp.CreateAsync();
 
-        var unclassified = app.Endpoints.Endpoints
-            .OfType<RouteEndpoint>()
-            .Where(endpoint => endpoint.Metadata.GetMetadata<IAllowAnonymous>() is null
-                && endpoint.Metadata.GetMetadata<IAuthorizeData>() is null)
-            .Select(endpoint => endpoint.DisplayName ?? endpoint.RoutePattern.RawText)
-            .ToList();
+        var endpoints = RuntimeEndpointAuthorizationAudit.Audit(app.Endpoints);
+        var act = () => RuntimeEndpointAuthorizationAudit.AssertEveryEndpointIsClassified(endpoints);
 
-        unclassified.Should().BeEmpty("controllers, hubs, and minimal endpoints must each opt in or out explicitly");
+        act.Should().NotThrow("controllers, hubs, and minimal endpoints must each opt in or out explicitly");
     }
 
-    public static TheoryData<string, string> PublicRoutesWithoutData => new()
-    {
-        { "GET", "/api/auth/csrf" },
-        { "GET", "/api/events?page=1&pageSize=20" },
-        { "POST", "/api/events/search" },
-        { "GET", "/api/clubs" },
-        { "POST", "/api/clubs/search" },
-        { "POST", "/api/events/invitations/resolve" },
-        { "POST", "/api/clubs/invitations/resolve" },
-        { "POST", "/api/clubs/members/invitations/resolve" },
-        { "POST", "/api/hubs/clubs/negotiate?negotiateVersion=1" },
-        { "GET", "/openapi.json" },
-    };
-
-    [Theory]
-    [MemberData(nameof(PublicRoutesWithoutData))]
-    public async Task PublicEndpoints_ShouldNotChallengeAnonymousCallers(string method, string path)
+    [Fact]
+    public async Task EveryProtectedEndpoint_ShouldChallengeAnonymousCallers()
     {
         await using var app = await AuthApiTestApp.CreateAsync();
+        var protectedEndpoints = RoutedEndpoints(app)
+            .Where(endpoint => endpoint.Access == RuntimeEndpointAccess.Protected)
+            .ToArray();
+        var failures = new List<string>();
+        // Endpoints with [ValidateAntiForgeryToken] refuse an unsafe request without the CSRF pair
+        // (400) before authentication challenges, so probes carry a valid pair, as a browser does,
+        // to isolate the authentication answer. The client keeps the antiforgery cookie.
+        var csrfToken = await app.GetCsrfTokenAsync();
 
-        var request = new HttpRequestMessage(new HttpMethod(method), path);
-        if (method == "POST" && !path.Contains("/negotiate", StringComparison.Ordinal))
-            request.Content = JsonContent.Create(new { token = "not-a-real-invitation-token" });
+        foreach (var endpoint in protectedEndpoints)
+        {
+            // No body or token: authorization must answer before binding or the action.
+            var request = new HttpRequestMessage(new HttpMethod(endpoint.Method), endpoint.Path);
+            if (endpoint.Method != "GET")
+                request.Headers.Add(CsrfConfiguration.CsrfHeaderName, csrfToken);
+            var response = await app.Client.SendAsync(request);
 
-        var response = await app.Client.SendAsync(request);
+            if (!await IsAuthenticationChallengeAsync(response))
+                failures.Add($"{endpoint.Key} -> {(int)response.StatusCode} {await app.DescribeFailureAsync(response)}");
+        }
 
-        response.StatusCode.Should().NotBe(HttpStatusCode.Unauthorized, await app.DescribeFailureAsync(response));
+        protectedEndpoints.Should().HaveCountGreaterThan(100, "the gate should probe the whole protected surface");
+        failures.Should().BeEmpty("every protected endpoint answers an anonymous caller with the 401 envelope");
+    }
+
+    [Fact]
+    public async Task EveryPublicEndpoint_ShouldBeReachableWithoutAToken()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var publicEndpoints = RoutedEndpoints(app)
+            .Where(endpoint => endpoint.Access == RuntimeEndpointAccess.Anonymous)
+            .ToArray();
+        var failures = new List<string>();
+
+        foreach (var endpoint in publicEndpoints)
+        {
+            var request = new HttpRequestMessage(new HttpMethod(endpoint.Method), endpoint.Path);
+            if (endpoint.Method is "POST" or "PUT" or "PATCH")
+                request.Content = JsonContent.Create(new { });
+
+            // A public endpoint may refuse the empty probe (400, 403 for CSRF, 404), and some answer
+            // their own 401s, but never the authentication challenge that protects everything else.
+            var response = await app.Client.SendAsync(request);
+            if (await IsAuthenticationChallengeAsync(response))
+                failures.Add($"{endpoint.Key} -> challenged");
+        }
+
+        publicEndpoints.Should().Contain(endpoint => endpoint.Key == "POST /api/auth/login");
+        failures.Should().BeEmpty("a reviewed public endpoint must not require a token");
     }
 
     [Fact]
@@ -93,30 +116,6 @@ public class AuthorizationMatrixEndpointsTests
 
         foreach (var response in reads)
             response.StatusCode.Should().Be(HttpStatusCode.OK, await app.DescribeFailureAsync(response));
-    }
-
-    public static TheoryData<string, string> ProtectedRoutes => new()
-    {
-        { "GET", "/api/auth/me" },
-        { "GET", "/api/profile" },
-        { "GET", "/api/clubs/managed" },
-        { "GET", "/api/events/me/favourites/ids" },
-        { "GET", "/api/payments/me" },
-        { "GET", "/api/users/1/reviews" },
-        { "PATCH", "/api/admin/users/1/status" },
-        { "POST", "/api/admin/events/reindex" },
-    };
-
-    [Theory]
-    [MemberData(nameof(ProtectedRoutes))]
-    public async Task ProtectedEndpoints_ShouldReturnTheUnauthorizedEnvelope_WithoutAToken(string method, string path)
-    {
-        await using var app = await AuthApiTestApp.CreateAsync();
-
-        var response = await app.Client.SendAsync(new HttpRequestMessage(new HttpMethod(method), path));
-
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        await AssertEnvelopeAsync(response, "UNAUTHORIZED", "Missing access token");
     }
 
     [Fact]
@@ -352,6 +351,35 @@ public class AuthorizationMatrixEndpointsTests
 
         return eventId;
     }
+
+    private static IEnumerable<ProbedEndpoint> RoutedEndpoints(AuthApiTestApp app) =>
+        app.Endpoints.Endpoints
+            .OfType<RouteEndpoint>()
+            .SelectMany(endpoint => RuntimeEndpointAuthorizationAudit.Audit(new DefaultEndpointDataSource(endpoint))
+                .Select(audited => new ProbedEndpoint(
+                    audited.Method,
+                    RuntimeEndpointAuthorizationAudit.ProbePath(endpoint.RoutePattern),
+                    audited.Access,
+                    audited.Key)))
+            .DistinctBy(endpoint => endpoint.Key);
+
+    private static async Task<bool> IsAuthenticationChallengeAsync(HttpResponseMessage response)
+    {
+        if (response.StatusCode != HttpStatusCode.Unauthorized
+            || response.Content.Headers.ContentType?.MediaType != "application/json")
+        {
+            return false;
+        }
+
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return payload.RootElement.TryGetProperty("error", out var error)
+            && error.TryGetProperty("code", out var code)
+            && code.GetString() == "UNAUTHORIZED"
+            && payload.RootElement.TryGetProperty("message", out var message)
+            && message.GetString() == "Missing access token";
+    }
+
+    private sealed record ProbedEndpoint(string Method, string Path, RuntimeEndpointAccess Access, string Key);
 
     private static HttpRequestMessage CreateAuthorizedRequest(
         HttpMethod method,

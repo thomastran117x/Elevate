@@ -81,5 +81,46 @@ namespace backend.main.features.auth.mfa.totp
             await _context.SaveChangesAsync();
             return true;
         }
+
+        public async Task<IReadOnlyList<TotpStoredSecret>> ListSecretsNotUnderKeyAsync(
+            string activePrefix,
+            int afterUserId,
+            int batchSize,
+            CancellationToken cancellationToken = default)
+        {
+            return await _context.TotpMfaEnrollments
+                .AsNoTracking()
+                .Where(e => e.UserId > afterUserId && !e.EncryptedSecret.StartsWith(activePrefix))
+                .OrderBy(e => e.UserId)
+                .Take(batchSize)
+                .Select(e => new TotpStoredSecret(e.UserId, e.EncryptedSecret))
+                .ToListAsync(cancellationToken);
+        }
+
+        public Task<int> CountSecretsNotUnderKeyAsync(string activePrefix, CancellationToken cancellationToken = default)
+        {
+            return _context.TotpMfaEnrollments
+                .CountAsync(e => !e.EncryptedSecret.StartsWith(activePrefix), cancellationToken);
+        }
+
+        public async Task<bool> ReplaceSecretAsync(
+            int userId,
+            string expectedEncryptedSecret,
+            string newEncryptedSecret,
+            int keyVersion,
+            CancellationToken cancellationToken = default)
+        {
+            // A single conditional UPDATE: replicas sweeping at once, or a user re-enrolling or
+            // removing TOTP meanwhile, make this match nothing rather than overwrite their change.
+            var updated = await _context.TotpMfaEnrollments
+                .Where(e => e.UserId == userId && e.EncryptedSecret == expectedEncryptedSecret)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(e => e.EncryptedSecret, newEncryptedSecret)
+                        .SetProperty(e => e.EncryptionKeyVersion, keyVersion),
+                    cancellationToken);
+
+            return updated == 1;
+        }
     }
 }

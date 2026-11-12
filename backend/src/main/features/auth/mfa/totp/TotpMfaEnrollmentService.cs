@@ -40,24 +40,26 @@ namespace backend.main.features.auth.mfa.totp
         private const int MaxFailedAttempts = 5;
         private const int MaxActionAttempts = 5;
         private const int SecretSizeBytes = 20;
-        private const int TagSizeBytes = 16;
-        private const int NonceSizeBytes = 12;
-        private const int EncryptionKeyVersion = 1;
         private const string IssuerName = "EventXperience";
 
         private readonly ITotpMfaEnrollmentRepository _repository;
         private readonly ICacheService _cacheService;
         private readonly IAuthSecurityEventEmitter _securityEvents;
+        private readonly TotpSecretProtector _protector;
 
+        // The protector encrypts secrets at rest. The container supplies it; tests may leave it
+        // out to use the environment's keys.
         public TotpMfaEnrollmentService(
             ITotpMfaEnrollmentRepository repository,
             ICacheService cacheService,
-            IAuthSecurityEventEmitter securityEvents
+            IAuthSecurityEventEmitter securityEvents,
+            TotpSecretProtector? protector = null
         )
         {
             _repository = repository;
             _cacheService = cacheService;
             _securityEvents = securityEvents;
+            _protector = protector ?? TotpSecretProtector.FromEnvironment();
         }
 
         public async Task<TotpMfaEnrollment?> GetEnrollmentAsync(int userId)
@@ -162,9 +164,10 @@ namespace backend.main.features.auth.mfa.totp
 
                     await CheckAndUpdateReplayGuardAsync(userId, matchedWindow, false);
 
-                    var encryptedSecret = Encrypt(secretBytes);
+                    var encryptedSecret = _protector.Protect(secretBytes);
                     var enrolledAtUtc = DateTime.UtcNow;
-                    var enrollment = await _repository.UpsertAsync(userId, encryptedSecret, EncryptionKeyVersion, enrolledAtUtc);
+                    var enrollment = await _repository.UpsertAsync(
+                        userId, encryptedSecret, TotpSecretProtector.FormatVersion, enrolledAtUtc);
 
                     await _cacheService.DeleteKeyAsync(PendingKey(userId));
                     return enrollment;
@@ -307,7 +310,7 @@ namespace backend.main.features.auth.mfa.totp
                 throw new UnauthorizedException("TOTP MFA is not enabled for this account.");
 
             ValidateCodeFormat(code);
-            var secretBytes = Decrypt(enrollment.EncryptedSecret);
+            var secretBytes = _protector.Unprotect(enrollment.EncryptedSecret);
             var totp = new Totp(secretBytes);
 
             if (!totp.VerifyTotp(DateTime.UtcNow, code, out var matchedWindow, VerificationWindow.RfcSpecifiedNetworkDelay))
@@ -328,7 +331,7 @@ namespace backend.main.features.auth.mfa.totp
         private async Task<long> VerifyConfiguredCodeForManagementAsync(int userId, TotpMfaEnrollment enrollment, string code, string action)
         {
             ValidateCodeFormat(code);
-            var secretBytes = Decrypt(enrollment.EncryptedSecret);
+            var secretBytes = _protector.Unprotect(enrollment.EncryptedSecret);
             var totp = new Totp(secretBytes);
 
             if (!totp.VerifyTotp(DateTime.UtcNow, code, out var matchedWindow, VerificationWindow.RfcSpecifiedNetworkDelay))
@@ -431,47 +434,6 @@ namespace backend.main.features.auth.mfa.totp
             }
 
             return long.TryParse(result.ToString(), out value);
-        }
-
-        private static string Encrypt(byte[] secret)
-        {
-            var key = GetEncryptionKey();
-            var nonce = RandomNumberGenerator.GetBytes(NonceSizeBytes);
-            var ciphertext = new byte[secret.Length];
-            var tag = new byte[TagSizeBytes];
-
-            using var aes = new AesGcm(key, TagSizeBytes);
-            aes.Encrypt(nonce, secret, ciphertext, tag);
-
-            var combined = new byte[NonceSizeBytes + TagSizeBytes + ciphertext.Length];
-            nonce.CopyTo(combined, 0);
-            tag.CopyTo(combined, NonceSizeBytes);
-            ciphertext.CopyTo(combined, NonceSizeBytes + TagSizeBytes);
-
-            return "v1:" + Convert.ToBase64String(combined);
-        }
-
-        internal static byte[] Decrypt(string encrypted)
-        {
-            if (!encrypted.StartsWith("v1:", StringComparison.Ordinal))
-                throw new InvalidOperationException("Unknown TOTP secret encryption version.");
-
-            var combined = Convert.FromBase64String(encrypted["v1:".Length..]);
-            var nonce = combined[..NonceSizeBytes];
-            var tag = combined[NonceSizeBytes..(NonceSizeBytes + TagSizeBytes)];
-            var ciphertext = combined[(NonceSizeBytes + TagSizeBytes)..];
-            var plaintext = new byte[ciphertext.Length];
-
-            var key = GetEncryptionKey();
-            using var aes = new AesGcm(key, TagSizeBytes);
-            aes.Decrypt(nonce, ciphertext, tag, plaintext);
-
-            return plaintext;
-        }
-
-        private static byte[] GetEncryptionKey()
-        {
-            return Convert.FromBase64String(EnvironmentSetting.TotpEncryptionKey);
         }
 
         private static string BuildQrCodeUri(string secretBase32, string email)

@@ -1,0 +1,38 @@
+# Alertmanager for the `ops` Compose profile. See docs/operations/monitoring.md#rollout.
+#
+# mode="observe" (every auth alert today) goes to a receiver with no integrations: firings are
+# recorded in Prometheus's ALERTS series and visible in this UI, and nobody is notified.
+# mode="page" routes by severity to webhooks whose URLs are read from files, so no URL or
+# token is committed. Mount the files at /etc/alertmanager/secrets/ before flipping any alert
+# to mode="page"; until then those receivers are never used.
+route:
+  receiver: observe
+  group_by: [alertname, deployment_environment_name]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - receiver: observe
+      matchers:
+        - mode="observe"
+    - receiver: page
+      matchers:
+        - mode="page"
+        - severity="page"
+      repeat_interval: 1h
+    - receiver: ticket
+      matchers:
+        - mode="page"
+        - severity="ticket"
+      repeat_interval: 12h
+
+receivers:
+  - name: observe
+  - name: page
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/page-webhook-url
+        send_resolved: true
+  - name: ticket
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/ticket-webhook-url
+        send_resolved: true

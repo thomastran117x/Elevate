@@ -26,7 +26,7 @@ namespace backend.main.features.auth.token
         public const string AuthVersionClaimType = "auth_version";
         public const string SessionIdClaimType = "sid";
         private readonly JwtSecurityTokenHandler _tokenHandler = new();
-        private readonly string JWT_ACCESS_SECRET;
+        private readonly JwtSigningKeyRing _signingKeys;
         private readonly string JWT_VERIFICATION_SECRET;
         private readonly TimeSpan JWT_ACCESS_LIFETIME = TimeSpan.FromMinutes(15);
         private const string ISSUER = "EventXperience";
@@ -81,13 +81,17 @@ return 1";
         /// The authoritative session registry. Always supplied by the container; left out only by
         /// tests that exercise the Redis side alone.
         /// </param>
+        /// <param name="signingKeys">
+        /// The access-token keys. Supplied by the container; defaults to the environment's keys.
+        /// </param>
         public TokenService(
             ICacheService cacheService,
             TimeProvider? timeProvider = null,
             IAuthSecurityEventEmitter? securityEvents = null,
-            IAuthSessionRepository? sessions = null)
+            IAuthSessionRepository? sessions = null,
+            JwtSigningKeyRing? signingKeys = null)
         {
-            JWT_ACCESS_SECRET = EnvironmentSetting.JwtSecretKeyAccess;
+            _signingKeys = signingKeys ?? JwtSigningKeyRing.FromEnvironment();
             JWT_VERIFICATION_SECRET = EnvironmentSetting.JwtSecretKeyVerification;
             _cacheService = cacheService;
             _timeProvider = timeProvider ?? TimeProvider.System;
@@ -99,7 +103,8 @@ return 1";
         {
             try
             {
-                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JWT_ACCESS_SECRET));
+                // The key carries its kid, which the handler writes into the token header.
+                var key = _signingKeys.SigningKey;
                 var expiresAtUtc = DateTime.UtcNow.Add(JWT_ACCESS_LIFETIME);
 
                 var claims = new List<Claim>

@@ -34,9 +34,9 @@ See [setup](docs/SETUP.md) for prerequisites, local development, infrastructure 
 | [Security history worker](backend/src/worker/security-history-worker/README.md) | Account security history, alerts, and 90-day retention     |
 | [Backend unit tests](backend.tests.Unit/README.md)                              | Isolated behavior tests                                    |
 | [Backend integration tests](backend.tests.Integration/README.md)                | Real API and container-backed infrastructure tests         |
-| [Development tasks](tools/Event.DevTasks/README.md)                             | Formatting, coverage, integration runs, and OpenAPI export |
+| [Development tasks](tools/Event.DevTasks/README.md)                             | Formatting, coverage, integration runs, OpenAPI export, and auth drills |
 
-`docker/` contains Kafka Connect outbox configuration. `backend.sln` groups the .NET projects; `global.json` selects the SDK.
+`docker/` contains Kafka Connect outbox configuration and, in `docker/monitoring/`, the Prometheus, Alertmanager, and Grafana definitions for the Compose `ops` profile. `backend.sln` groups the .NET projects; `global.json` selects the SDK.
 
 ## Documentation
 
@@ -48,6 +48,7 @@ See [setup](docs/SETUP.md) for prerequisites, local development, infrastructure 
 - [Deployment](docs/DEPLOYMENT.md)
 - [Testing and coverage policy](docs/TESTING.md)
 - [Authentication security events](docs/SECURITY_EVENTS.md)
+- [Auth security operations](docs/operations/README.md): monitoring, runbooks, key rotation, drills, and reviews
 - [Architecture decision records](docs/adr/README.md)
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before making changes. Coding agents must follow [AGENTS.md](AGENTS.md); Claude loads the same instructions through [CLAUDE.md](CLAUDE.md).

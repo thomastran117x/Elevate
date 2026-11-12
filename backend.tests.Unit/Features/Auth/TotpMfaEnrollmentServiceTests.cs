@@ -67,7 +67,8 @@ public class TotpMfaEnrollmentServiceTests
 
         result.IsTotpMfaEnabled.Should().BeTrue();
         storedEnrollment.Should().NotBeNull();
-        storedEnrollment!.EncryptedSecret.Should().StartWith("v1:");
+        storedEnrollment!.EncryptedSecret.Should().StartWith("v2:");
+        storedEnrollment.EncryptionKeyVersion.Should().Be(TotpSecretProtector.FormatVersion);
         storedEnrollment.EncryptedSecret.Should().NotContain(start.SecretKey);
         (await cache.GetValueAsync("totp:enrollment:pending:user:99")).Should().BeNull();
     }

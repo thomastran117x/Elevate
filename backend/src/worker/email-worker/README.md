@@ -45,6 +45,10 @@ Kafka auto-commit is disabled; a group without offsets starts at earliest. The c
 
 Sending and committing are not atomic: a retry after SMTP success can send duplicate mail. Monitor notification lag, delivery/status failures, and DLQs. A successful SMTP submission is not proof of inbox delivery. Inspect status failures before replaying messages.
 
+## Metrics
+
+The worker counts each delivery on `notifications.email.deliveries` (meter `EventXperience.Notifications`). Its tags are `message_type`, the snake_case `EmailMessageType` such as `reset_password` or `mfa_code` (or `unknown` for an unreadable payload), and `outcome`: `sent`, `failed`, or `malformed`. Recipients and provider errors are never tags. The worker pushes the meter over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; see [metrics export](../../../../docs/CONFIGURATION.md#metrics-export). The recovery and MFA delivery panels and the `MfaDeliveryFailures` alert in the [auth security dashboard](../../../../docs/operations/monitoring.md) read it.
+
 ## Tests
 
 From the repository root:

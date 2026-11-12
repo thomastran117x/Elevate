@@ -10,6 +10,7 @@ namespace backend.main.application.environment
         private static readonly string _dbConnectionString;
         private static readonly string _redisConnection;
         private static readonly string _jwtSecretKeyAccess;
+        private static readonly IReadOnlyList<string> _jwtSecretKeyAccessPrevious;
         private static readonly string _jwtSecretKeyVerification;
         private static readonly string? _googleCaptchaSecret;
         private static readonly string[] _corsWhiteList;
@@ -62,6 +63,7 @@ namespace backend.main.application.environment
         private static readonly string? _twilioFromPhoneNumber;
         private static readonly bool _authSmsMfaEnrollmentEnabled;
         private static readonly string _totpEncryptionKey;
+        private static readonly IReadOnlyList<string> _totpEncryptionKeysPrevious;
         private static readonly string _appEnvironment;
         private static readonly string _logLevel;
         private const string DefaultJwtSecretAccess = "unit_test_secret_12345678901234567890";
@@ -88,6 +90,9 @@ namespace backend.main.application.environment
                 ["JWT_SECRET_ACCESS", "JWT_SECRET_KEY"],
                 DefaultJwtSecretAccess
             );
+
+            // Validation-only keys from an overlapping rotation; see JwtSigningKeyRing.
+            _jwtSecretKeyAccessPrevious = ParseList(GetOptional(["JWT_SECRET_ACCESS_PREVIOUS"]));
 
             _jwtSecretKeyVerification = GetOrDefault(
                 ["JWT_SECRET_VERIFICATION"],
@@ -216,6 +221,8 @@ namespace backend.main.application.environment
                 ["AUTH_TOTP_ENCRYPTION_KEY"],
                 DefaultTotpEncryptionKey
             );
+            // Decrypt-only keys from an overlapping rotation; see TotpSecretProtector.
+            _totpEncryptionKeysPrevious = ParseList(GetOptional(["AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS"]));
 
             _appEnvironment = (
                 GetOptional(["ENVIRONMENT", "ASPNETCORE_ENVIRONMENT", "DOTNET_ENVIRONMENT"])
@@ -258,6 +265,11 @@ namespace backend.main.application.environment
         private static string GetOrDefault(string[] keys, string fallback) =>
             GetOptional(keys) ?? fallback;
 
+        private static IReadOnlyList<string> ParseList(string? rawValue) =>
+            string.IsNullOrWhiteSpace(rawValue)
+                ? []
+                : rawValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
         private static bool GetBoolOrDefault(string[] keys, bool fallback)
         {
             var rawValue = GetOptional(keys);
@@ -283,6 +295,7 @@ namespace backend.main.application.environment
         public static string DbConnectionString => _dbConnectionString;
         public static string RedisConnection => _redisConnection;
         public static string JwtSecretKeyAccess => _jwtSecretKeyAccess;
+        public static IReadOnlyList<string> JwtSecretKeyAccessPrevious => _jwtSecretKeyAccessPrevious;
         public static string JwtSecretKeyVerification => _jwtSecretKeyVerification;
         public static string? Email => _email;
         public static string? Password => _password;
@@ -334,6 +347,7 @@ namespace backend.main.application.environment
         public static bool AuthSmsMfaStepUpSmsEnabled =>
             GetBoolOrDefault(["AUTH_SMS_MFA_STEP_UP_SMS_ENABLED"], true);
         public static string TotpEncryptionKey => _totpEncryptionKey;
+        public static IReadOnlyList<string> TotpEncryptionKeysPrevious => _totpEncryptionKeysPrevious;
         public static bool AuthTotpMfaEnrollmentEnabled =>
             GetBoolOrDefault(["AUTH_TOTP_MFA_ENROLLMENT_ENABLED"], true);
         public static bool AuthTotpMfaStepUpEnabled =>
@@ -379,6 +393,19 @@ namespace backend.main.application.environment
                 );
             }
 
+            foreach (var previous in _jwtSecretKeyAccessPrevious)
+            {
+                if (previous == DefaultJwtSecretAccess || previous == _jwtSecretKeyAccess)
+                    throw new InvalidOperationException(
+                        "JWT_SECRET_ACCESS_PREVIOUS cannot contain the fallback value or the active JWT_SECRET_ACCESS."
+                    );
+
+                if (System.Text.Encoding.UTF8.GetByteCount(previous) < 32)
+                    throw new InvalidOperationException(
+                        "Each JWT_SECRET_ACCESS_PREVIOUS key must be at least 32 bytes."
+                    );
+            }
+
             if (_totpEncryptionKey == DefaultTotpEncryptionKey)
                 throw new InvalidOperationException(
                     "AUTH_TOTP_ENCRYPTION_KEY must be configured for production and cannot use the fallback value."
@@ -395,6 +422,26 @@ namespace backend.main.application.environment
             catch (FormatException)
             {
                 throw new InvalidOperationException("AUTH_TOTP_ENCRYPTION_KEY is not valid base64.");
+            }
+
+            foreach (var previous in _totpEncryptionKeysPrevious)
+            {
+                if (previous == DefaultTotpEncryptionKey || previous == _totpEncryptionKey)
+                    throw new InvalidOperationException(
+                        "AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS cannot contain the fallback value or the active AUTH_TOTP_ENCRYPTION_KEY."
+                    );
+
+                try
+                {
+                    if (Convert.FromBase64String(previous).Length != 32)
+                        throw new InvalidOperationException(
+                            "Each AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS key must decode to exactly 32 bytes."
+                        );
+                }
+                catch (FormatException)
+                {
+                    throw new InvalidOperationException("An AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS key is not valid base64.");
+                }
             }
 
             Logger.Info("Environment variables validated successfully.");

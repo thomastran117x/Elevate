@@ -1,0 +1,22 @@
+# Owners of the auth security controls. See docs/operations/ownership.md, which maps these
+# owners to the Auth on-call, Security lead, and Incident commander roles; update both together.
+
+# Authentication, authorization, and security events
+/backend/src/main/features/auth/                                @thomastran117
+/backend/src/main/application/security/                        @thomastran117
+/backend/src/main/application/telemetry/                       @thomastran117
+/backend/src/worker/security-history-worker/                   @thomastran117
+
+# The reviewed public surface and the authorization contract
+/backend.tests.Unit/Application/Security/                      @thomastran117
+/backend.tests.Integration/Application/Security/               @thomastran117
+/backend/openapi.json                                          @thomastran117
+/backend/openapi.yaml                                          @thomastran117
+
+# Monitoring definitions, drills, and operations documents
+/docker/monitoring/                                            @thomastran117
+/tools/Event.DevTasks/AuthDrillCommand.cs                      @thomastran117
+/docs/operations/                                              @thomastran117
+/docs/SECURITY_EVENTS.md                                       @thomastran117
+/.github/workflows/                                            @thomastran117
+/.github/CODEOWNERS                                            @thomastran117

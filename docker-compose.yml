@@ -19,6 +19,15 @@ x-sms-mfa-env: &sms-mfa-env
   AUTH_SMS_MFA_ENFORCEMENT_ENABLED: "${AUTH_SMS_MFA_ENFORCEMENT_ENABLED:-false}"
   AUTH_SMS_MFA_STEP_UP_SMS_ENABLED: "${AUTH_SMS_MFA_STEP_UP_SMS_ENABLED:-true}"
 
+# Shared by backend + email-worker + sms-worker + security-history-worker.
+# Metrics export stays off unless OTEL_EXPORTER_OTLP_ENDPOINT is set; the `ops`
+# profile's Prometheus receives it at http://prometheus:9090/api/v1/otlp.
+x-telemetry-env: &telemetry-env
+  OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}"
+  OTEL_METRIC_EXPORT_INTERVAL: "${OTEL_METRIC_EXPORT_INTERVAL:-15000}"
+  OTEL_RESOURCE_ATTRIBUTES: "${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment.name=development}"
+
 # Shared by backend + frontend (all 19 feature flags)
 x-feature-flags-env: &feature-flags-env
   FEATURE_AUTH: "${FEATURE_AUTH:-true}"
@@ -83,11 +92,13 @@ services:
       - path: ./.env
         required: false
     environment:
-      <<: [*common-env, *kafka-env, *elasticsearch-env, *sms-mfa-env, *feature-flags-env]
+      <<: [*common-env, *kafka-env, *elasticsearch-env, *sms-mfa-env, *feature-flags-env, *telemetry-env]
       PORT: "${BACKEND_PORT:-8090}"
       DB_CONNECTION_STRING: "${DB_CONNECTION_STRING:-Host=postgres;Port=5432;Database=appdb;Username=appuser;Password=apppass}"
       REDIS_URL: "${REDIS_URL:-redis:6379}"
       JWT_SECRET_ACCESS: "${JWT_SECRET_ACCESS:-amazing_secret_key_yup_yes_abcdef123}"
+      # Validation-only keys while an access-key rotation overlaps; see docs/operations/key-rotation.md.
+      JWT_SECRET_ACCESS_PREVIOUS: "${JWT_SECRET_ACCESS_PREVIOUS:-}"
       JWT_SECRET_VERIFICATION: "${JWT_SECRET_VERIFICATION:-amazing_verification_secret_yup_yes_abcdef123}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
       Profile__UsernameChangeCooldownDays: "${PROFILE__USERNAMECHANGECOOLDOWNDAYS:-30}"
@@ -122,6 +133,8 @@ services:
       AZURE_STORAGE_QUARANTINE_CONTAINER_NAME: "${AZURE_STORAGE_QUARANTINE_CONTAINER_NAME:-event-assets-quarantine}"
       # TOTP / MFA. Empty key => code uses the dev fallback (validated in prod).
       AUTH_TOTP_ENCRYPTION_KEY: "${AUTH_TOTP_ENCRYPTION_KEY:-}"
+      # Decrypt-only keys while a TOTP key rotation is under way; see docs/operations/key-rotation.md.
+      AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS: "${AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS:-}"
       AUTH_TOTP_MFA_ENROLLMENT_ENABLED: "${AUTH_TOTP_MFA_ENROLLMENT_ENABLED:-true}"
       AUTH_TOTP_MFA_STEP_UP_ENABLED: "${AUTH_TOTP_MFA_STEP_UP_ENABLED:-true}"
       Auth__AbuseProtection__KeyPrefix: "${AUTH_ABUSE_KEY_PREFIX:-auth:abuse:v1}"
@@ -266,7 +279,7 @@ services:
       - path: ./.env
         required: false
     environment:
-      <<: [*common-env, *kafka-env]
+      <<: [*common-env, *kafka-env, *telemetry-env]
       EMAIL_TOPIC: "${EMAIL_TOPIC:-eventxperience-email}"
       EMAIL_GROUP_ID: "${EMAIL_GROUP_ID:-email-worker}"
       EMAIL_DLQ_TOPIC: "${EMAIL_DLQ_TOPIC:-eventxperience-email-dlq}"
@@ -315,7 +328,7 @@ services:
       - path: ./.env
         required: false
     environment:
-      <<: [*common-env, *kafka-env]
+      <<: [*common-env, *kafka-env, *telemetry-env]
       # Writes AccountSecurityEvents in the backend's database; the backend owns the migrations.
       DB_CONNECTION_STRING: "${DB_CONNECTION_STRING:-Host=postgres;Port=5432;Database=appdb;Username=appuser;Password=apppass}"
       SECURITY_HISTORY_TOPIC: "${SECURITY_HISTORY_TOPIC:-eventxperience-security-history}"
@@ -347,7 +360,7 @@ services:
       - path: ./.env
         required: false
     environment:
-      <<: [*common-env, *kafka-env, *sms-mfa-env]
+      <<: [*common-env, *kafka-env, *sms-mfa-env, *telemetry-env]
       SMS_TOPIC: "${SMS_TOPIC:-eventxperience-sms}"
       SMS_GROUP_ID: "${SMS_GROUP_ID:-sms-worker}"
       SMS_DLQ_TOPIC: "${SMS_DLQ_TOPIC:-eventxperience-sms-dlq}"
@@ -533,6 +546,84 @@ services:
     networks:
       - event-network
 
+  # ---------------------------------------------------------------------------
+  # Monitoring and drills (`docker compose --profile ops up`); see
+  # docs/operations/monitoring.md. Ports bind to localhost only.
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    container_name: eventxperience-prometheus
+    profiles: [ops]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # 13 months of metrics for seasonal baselines, plus ALERTS as the alert audit trail.
+      - --storage.tsdb.retention.time=400d
+      # The API and workers push here (OTEL_EXPORTER_OTLP_ENDPOINT=http://prometheus:9090/api/v1/otlp).
+      - --web.enable-otlp-receiver
+    volumes:
+      - ./docker/monitoring/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    networks:
+      - event-network
+
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    container_name: eventxperience-alertmanager
+    profiles: [ops]
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./docker/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    ports:
+      - "127.0.0.1:${ALERTMANAGER_PORT:-9094}:9093"
+    networks:
+      - event-network
+
+  grafana:
+    image: grafana/grafana:12.4.13
+    container_name: eventxperience-grafana
+    profiles: [ops]
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      # Empty uses Grafana's default, which it forces you to change at first sign-in.
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-}"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/auth-security.json
+    volumes:
+      - ./docker/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    networks:
+      - event-network
+
+  # Catches email for drills and local runs: point email-worker at it with SMTP_SERVER=mailpit,
+  # SMTP_PORT=1025, an EMAIL_USER that is an email address (it is the sender), and any EMAIL_PASSWORD.
+  # Never use it where real mail must flow.
+  mailpit:
+    image: axllent/mailpit:v1.32.0
+    container_name: eventxperience-mailpit
+    profiles: [ops]
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+      MP_MAX_MESSAGES: "5000"
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+    networks:
+      - event-network
+
 networks:
   event-network:
     driver: bridge
@@ -541,3 +632,6 @@ volumes:
   postgres_data:
   redis_data:
   elasticsearch_data:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:
