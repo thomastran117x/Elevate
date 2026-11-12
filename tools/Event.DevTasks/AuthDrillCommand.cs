@@ -86,6 +86,11 @@ internal static partial class DevTasksCli
         {
             await drill.RunAsync();
         }
+        catch (Exception exception)
+        {
+            // Anything the scenarios did not catch still has to fail the auditable report.
+            report.RecordError($"{exception.GetType().Name}: {exception.Message}");
+        }
         finally
         {
             report.FinishedAtUtc = DateTime.UtcNow;
@@ -178,7 +183,23 @@ internal static partial class DevTasksCli
             if (Runs("telemetry") && !telemetry)
                 _report.Scenario("telemetry").Skip("no --prometheus-url");
 
-            var baseline = telemetry ? await ReadCountersAsync() : null;
+            // Read inside a tracked step, so an unreachable Prometheus fails the report instead of
+            // leaving it with no scenarios at all.
+            Dictionary<string, double>? baseline = null;
+            if (telemetry)
+            {
+                var scenario = _report.Scenario("telemetry");
+                try
+                {
+                    baseline = await scenario.StepAsync("read the Prometheus baseline", _ => ReadCountersAsync());
+                }
+                catch (DrillFailure failure)
+                {
+                    scenario.Fail(failure.Message);
+                    telemetry = false;
+                }
+            }
+
             var setup = _report.Scenario("setup");
             try
             {
@@ -196,7 +217,7 @@ internal static partial class DevTasksCli
                 await RunScenarioAsync("token-reuse", TokenReuseAsync);
                 await RunScenarioAsync("recovery", RecoveryAsync);
                 if (telemetry)
-                    await RunScenarioAsync("telemetry", scenario => AuthorizationDenialAsync(scenario));
+                    await RunScenarioAsync("telemetry", scenario => AuthorizationDenialAsync(scenario), append: true);
             }
             finally
             {
@@ -205,9 +226,10 @@ internal static partial class DevTasksCli
                 {
                     await DeleteAccountAsync(cleanup);
                 }
-                catch (DrillFailure failure)
+                catch (Exception exception)
                 {
-                    cleanup.Fail(failure.Message + " Delete the drill account by hand; its id is in the step log.");
+                    cleanup.Fail((exception is DrillFailure ? exception.Message : $"{exception.GetType().Name}: {exception.Message}")
+                        + " Delete the drill account by hand; its id is in the step log.");
                 }
             }
 
@@ -230,9 +252,9 @@ internal static partial class DevTasksCli
             {
                 scenario.Fail(failure.Message);
             }
-            catch (HttpRequestException exception)
+            catch (Exception exception)
             {
-                scenario.Fail($"HTTP request failed: {exception.Message}");
+                scenario.Fail($"{exception.GetType().Name}: {exception.Message}");
             }
         }
 
@@ -796,7 +818,19 @@ internal static partial class DevTasksCli
 
         public DateTime FinishedAtUtc { get; set; }
 
-        public string Outcome => _scenarios.Any(scenario => scenario.Outcome == "failed") ? "failed" : "passed";
+        public string? Error { get; private set; }
+
+        // A run that checked nothing, or stopped on an unexpected error, is a failed drill.
+        public string Outcome =>
+            Error is not null || _scenarios.Count == 0 || _scenarios.Any(scenario => scenario.Outcome == "failed")
+                ? "failed"
+                : "passed";
+
+        public void RecordError(string error)
+        {
+            Error = error;
+            Console.WriteLine($"  [failed] {error}");
+        }
 
         public DrillScenario Scenario(string name, bool append = false)
         {
@@ -824,6 +858,7 @@ internal static partial class DevTasksCli
             startedAtUtc,
             finishedAtUtc = FinishedAtUtc,
             outcome = Outcome,
+            error = Error,
             scenarios = _scenarios.Select(scenario => new
             {
                 scenario.Name,
@@ -871,11 +906,11 @@ internal static partial class DevTasksCli
                 current.Outcome = "passed";
                 return result;
             }
-            catch (Exception exception) when (exception is DrillFailure or HttpRequestException or TaskCanceledException)
+            catch (Exception exception)
             {
                 current.Outcome = "failed";
-                current.Detail = exception.Message;
-                throw exception as DrillFailure ?? new DrillFailure(exception.Message);
+                current.Detail = exception is DrillFailure ? exception.Message : $"{exception.GetType().Name}: {exception.Message}";
+                throw exception as DrillFailure ?? new DrillFailure(current.Detail);
             }
             finally
             {
