@@ -6,6 +6,7 @@ using backend.main.features.auth.mfa;
 using backend.main.features.auth.mfa.recovery;
 using backend.main.features.auth.mfa.totp;
 using backend.main.features.auth.oauth.links;
+using backend.main.features.auth.sessions;
 using backend.main.features.clubs;
 using backend.main.features.clubs.discussions;
 using backend.main.features.clubs.discussions.replies;
@@ -56,6 +57,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<ClubDiscussionReply> ClubDiscussionReplies { get; set; } = null!;
         public DbSet<ClubDiscussionReplyReaction> ClubDiscussionReplyReactions { get; set; } = null!;
         public DbSet<Device> Devices { get; set; } = null!;
+        public DbSet<AuthSession> AuthSessions { get; set; } = null!;
         public DbSet<SmsMfaEnrollment> SmsMfaEnrollments { get; set; } = null!;
         public DbSet<TotpMfaEnrollment> TotpMfaEnrollments { get; set; } = null!;
         public DbSet<RecoveryCode> RecoveryCodes { get; set; } = null!;
@@ -764,6 +766,58 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<Device>()
                 .HasIndex(d => new { d.UserId, d.DeviceType, d.ClientName });
+
+            // The expiry purge.
+            modelBuilder.Entity<Device>()
+                .HasIndex(d => d.ExpiresAt);
+
+            modelBuilder.Entity<AuthSession>()
+                .HasKey(s => s.Id);
+
+            modelBuilder.Entity<AuthSession>()
+                .Property(s => s.Id)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<AuthSession>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(s => s.UserId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // The account's live sessions, for the session list and the bulk revocations.
+            modelBuilder.Entity<AuthSession>()
+                .HasIndex(s => new { s.UserId, s.RevokedAt, s.ExpiresAt });
+
+            // The expiry purge.
+            modelBuilder.Entity<AuthSession>()
+                .HasIndex(s => s.ExpiresAt);
+
+            // Stored by name, like the security history, so a row reads plainly in psql and an
+            // enum reorder can never relabel a stored session.
+            modelBuilder.Entity<AuthSession>()
+                .Property(s => s.Transport)
+                .HasConversion<string>()
+                .HasMaxLength(16);
+
+            modelBuilder.Entity<AuthSession>()
+                .Property(s => s.Client)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<AuthSession>()
+                .Property(s => s.DeviceClass)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<AuthSession>()
+                .Property(s => s.Network)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<AuthSession>()
+                .Property(s => s.RevocationReason)
+                .HasConversion<string>()
+                .HasMaxLength(64);
 
             modelBuilder.Entity<SmsMfaEnrollment>()
                 .HasKey(enrollment => enrollment.UserId);

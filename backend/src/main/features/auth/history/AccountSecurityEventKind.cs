@@ -29,4 +29,8 @@ public enum AccountSecurityEventKind
     RecoveryCodesRegenerated,
     RecoveryCodeUsed,
     ProviderUnlinked,
+    SessionRemoved,
+    OtherSessionsRevoked,
+    TrustedDeviceRemoved,
+    TrustedDevicesRemoved,
 }

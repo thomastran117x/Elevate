@@ -13,7 +13,8 @@ namespace backend.main.features.auth.history;
 /// Left out on purpose: failed sign-ins and verification, which would let anyone who knows a
 /// username write noise into the history; throttling; recovery requests, whose reasons
 /// (issued, suppressed, provider_reminder) must never reach the requester; step-up results;
-/// failed factor changes; provider link conflicts; and authorization denials.
+/// failed factor changes; provider link conflicts; authorization denials; and trusted devices
+/// reaching the end of their 90 days, which the owner did nothing to cause.
 /// </para>
 /// </remarks>
 public static class SecurityHistoryCatalog
@@ -31,6 +32,7 @@ public static class SecurityHistoryCatalog
             AuthSecurityEvents.ProviderUnlinked,
             AuthSecurityEvents.AccountStatusChanged,
             AuthSecurityEvents.RecoveryCodeUsed,
+            AuthSecurityEvents.TrustedDeviceRevoked,
         };
 
     public static readonly IReadOnlySet<AuthSecurityEventDefinition> NotRecorded =
@@ -45,6 +47,7 @@ public static class SecurityHistoryCatalog
             AuthSecurityEvents.FactorChangeFailed,
             AuthSecurityEvents.ProviderLinkConflict,
             AuthSecurityEvents.AuthorizationDenied,
+            AuthSecurityEvents.TrustedDeviceExpired,
         };
 
     /// <summary>
@@ -91,6 +94,16 @@ public static class SecurityHistoryCatalog
 
         if (definition == AuthSecurityEvents.RecoveryCodeUsed)
             return AccountSecurityEventKind.RecoveryCodeUsed;
+
+        if (definition == AuthSecurityEvents.TrustedDeviceRevoked)
+        {
+            return securityEvent.Reason switch
+            {
+                AuthSecurityReason.UserRevokedTrustedDevice => AccountSecurityEventKind.TrustedDeviceRemoved,
+                AuthSecurityReason.UserRevokedAllTrustedDevices => AccountSecurityEventKind.TrustedDevicesRemoved,
+                _ => null,
+            };
+        }
 
         if (definition == AuthSecurityEvents.AccountStatusChanged)
         {
@@ -141,10 +154,13 @@ public static class SecurityHistoryCatalog
         reason switch
         {
             AuthSecurityReason.Logout => AccountSecurityEventKind.SignedOut,
+            AuthSecurityReason.UserRevokedSession => AccountSecurityEventKind.SessionRemoved,
+            AuthSecurityReason.UserRevokedOtherSessions => AccountSecurityEventKind.OtherSessionsRevoked,
             AuthSecurityReason.PasswordChanged
                 or AuthSecurityReason.PasswordReset
                 or AuthSecurityReason.EmailChanged
-                or AuthSecurityReason.ProviderUnlinked => AccountSecurityEventKind.SessionsRevoked,
+                or AuthSecurityReason.ProviderUnlinked
+                or AuthSecurityReason.UserRevokedAllSessions => AccountSecurityEventKind.SessionsRevoked,
             AuthSecurityReason.TransportMismatch
                 or AuthSecurityReason.BindingMissing
                 or AuthSecurityReason.BindingMismatch

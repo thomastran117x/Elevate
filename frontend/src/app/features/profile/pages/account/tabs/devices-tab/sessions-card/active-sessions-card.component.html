@@ -1,0 +1,162 @@
+<article
+  class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl"
+  aria-labelledby="active-sessions-title"
+>
+  <div class="space-y-1">
+    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
+      Where you're signed in
+    </p>
+    <h2 id="active-sessions-title" class="text-2xl font-bold">Sessions</h2>
+    <p class="max-w-2xl text-sm leading-6 text-subtle">
+      Every browser or app signed in to your account. If you don't recognise one, sign it out and
+      change your password. Signing out needs a quick identity check.
+    </p>
+  </div>
+
+  <div class="mt-5 space-y-4">
+    @if (banner(); as shown) {
+      <p
+        #bannerRef
+        tabindex="-1"
+        [attr.role]="shown.tone === 'error' ? 'alert' : 'status'"
+        class="rounded-2xl border px-5 py-4 text-sm outline-none"
+        [class.border-success/30]="shown.tone === 'success'"
+        [class.bg-success/10]="shown.tone === 'success'"
+        [class.text-success]="shown.tone === 'success'"
+        [class.border-danger/30]="shown.tone === 'error'"
+        [class.bg-danger/10]="shown.tone === 'error'"
+        [class.text-danger]="shown.tone === 'error'"
+        data-testid="sessions-banner"
+      >
+        {{ shown.text }}
+      </p>
+    }
+
+    @if (loading() && sessions().length === 0) {
+      <p class="text-sm text-faint">Loading your sessions...</p>
+    } @else if (loadError(); as message) {
+      <div
+        role="alert"
+        class="flex flex-col gap-3 rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger sm:flex-row sm:items-center sm:justify-between"
+      >
+        <span>{{ message }}</span>
+        <button
+          type="button"
+          (click)="load()"
+          class="inline-flex items-center justify-center rounded-2xl border border-danger/40 px-4 py-2 text-sm font-semibold transition hover:bg-danger/10"
+        >
+          Try again
+        </button>
+      </div>
+    } @else {
+      <ul class="space-y-3" aria-label="Signed-in sessions">
+        @for (session of sessions(); track session.id) {
+          <li
+            class="flex flex-col gap-3 rounded-2xl border bg-glass-strong px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+            [class.border-accent/40]="session.current"
+            [class.border-line]="!session.current"
+            [attr.data-testid]="'session-' + session.id"
+          >
+            <div class="min-w-0 space-y-1">
+              <p class="flex flex-wrap items-center gap-2 text-sm font-semibold text-content">
+                {{ describe(session) }}
+                @if (session.current) {
+                  <span
+                    class="rounded-full bg-accent/15 px-2.5 py-0.5 text-xs font-semibold text-accent"
+                  >
+                    This device
+                  </span>
+                }
+                @if (session.transport === 'api') {
+                  <span
+                    class="rounded-full border border-line-strong px-2.5 py-0.5 text-xs font-medium text-muted"
+                  >
+                    API access
+                  </span>
+                }
+              </p>
+              <p class="text-sm text-muted">
+                Last active
+                <time [attr.datetime]="session.lastSeenAt">{{
+                  session.lastSeenAt | date: 'medium'
+                }}</time>
+                @if (session.network) {
+                  · from {{ session.network }}
+                }
+              </p>
+              <p class="text-xs text-faint">
+                Signed in
+                <time [attr.datetime]="session.createdAt">{{
+                  session.createdAt | date: 'mediumDate'
+                }}</time>
+                · ends
+                <time [attr.datetime]="session.expiresAt">{{
+                  session.expiresAt | date: 'medium'
+                }}</time>
+                unless used again
+              </p>
+            </div>
+
+            <button
+              type="button"
+              (click)="request({ kind: 'one', session: session })"
+              [disabled]="busy()"
+              [attr.aria-label]="
+                session.current
+                  ? 'Sign out of this device'
+                  : 'Sign out ' + describe(session) + ' session'
+              "
+              class="inline-flex flex-none items-center justify-center rounded-2xl border border-line-strong px-4 py-2 text-sm font-semibold text-content transition hover:bg-glass disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Sign out
+            </button>
+          </li>
+        } @empty {
+          <li class="text-sm text-muted">No active sessions were found.</li>
+        }
+      </ul>
+
+      @if (sessions().length > 0) {
+        <div class="flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            (click)="request({ kind: 'others' })"
+            [disabled]="busy() || otherCount() === 0"
+            class="inline-flex items-center justify-center rounded-2xl border border-line-strong px-5 py-3 text-sm font-semibold text-content transition hover:bg-glass-strong disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Sign out other sessions
+          </button>
+          <button
+            type="button"
+            (click)="request({ kind: 'all' })"
+            [disabled]="busy()"
+            class="inline-flex items-center justify-center rounded-2xl bg-danger px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Sign out everywhere
+          </button>
+        </div>
+      }
+    }
+  </div>
+</article>
+
+<!-- Kept mounted so closing it hands focus back to the button that opened it. -->
+<app-confirm-dialog
+  [open]="confirmCopy() !== null"
+  [title]="confirmCopy()?.title ?? ''"
+  [body]="confirmCopy()?.body ?? ''"
+  [impacts]="confirmCopy()?.impacts ?? []"
+  [confirmLabel]="confirmCopy()?.confirmLabel ?? 'Sign out'"
+  cancelLabel="Keep signed in"
+  tone="danger"
+  [busy]="busy()"
+  (resolve)="onConfirmResolved($event)"
+/>
+
+@if (stepUp.open()) {
+  <app-mfa-gate
+    [modalOnly]="true"
+    (verified)="stepUp.verified()"
+    (dismissed)="stepUp.dismissed()"
+  />
+}

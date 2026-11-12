@@ -1,0 +1,140 @@
+<article
+  class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl"
+  aria-labelledby="trusted-devices-title"
+>
+  <div class="space-y-1">
+    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-accent">Sign-in checks</p>
+    <h2 id="trusted-devices-title" class="text-2xl font-bold">Trusted devices</h2>
+    <p class="max-w-2xl text-sm leading-6 text-subtle">
+      After you verify a sign-in on a device, it skips that extra check for 90 days. Forget a device
+      to be asked again next time. Forgetting a device needs a quick identity check.
+    </p>
+  </div>
+
+  <div class="mt-5 space-y-4">
+    @if (banner(); as shown) {
+      <p
+        #bannerRef
+        tabindex="-1"
+        [attr.role]="shown.tone === 'error' ? 'alert' : 'status'"
+        class="rounded-2xl border px-5 py-4 text-sm outline-none"
+        [class.border-success/30]="shown.tone === 'success'"
+        [class.bg-success/10]="shown.tone === 'success'"
+        [class.text-success]="shown.tone === 'success'"
+        [class.border-danger/30]="shown.tone === 'error'"
+        [class.bg-danger/10]="shown.tone === 'error'"
+        [class.text-danger]="shown.tone === 'error'"
+        data-testid="trusted-devices-banner"
+      >
+        {{ shown.text }}
+      </p>
+    }
+
+    @if (loading() && devices().length === 0) {
+      <p class="text-sm text-faint">Loading your trusted devices...</p>
+    } @else if (loadError(); as message) {
+      <div
+        role="alert"
+        class="flex flex-col gap-3 rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger sm:flex-row sm:items-center sm:justify-between"
+      >
+        <span>{{ message }}</span>
+        <button
+          type="button"
+          (click)="load()"
+          class="inline-flex items-center justify-center rounded-2xl border border-danger/40 px-4 py-2 text-sm font-semibold transition hover:bg-danger/10"
+        >
+          Try again
+        </button>
+      </div>
+    } @else {
+      <ul class="space-y-3" aria-label="Trusted devices">
+        @for (device of devices(); track device.id) {
+          <li
+            class="flex flex-col gap-3 rounded-2xl border bg-glass-strong px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+            [class.border-accent/40]="device.current"
+            [class.border-line]="!device.current"
+            [attr.data-testid]="'trusted-device-' + device.id"
+          >
+            <div class="min-w-0 space-y-1">
+              <p class="flex flex-wrap items-center gap-2 text-sm font-semibold text-content">
+                {{ describe(device) }}
+                @if (device.current) {
+                  <span
+                    class="rounded-full bg-accent/15 px-2.5 py-0.5 text-xs font-semibold text-accent"
+                  >
+                    This device
+                  </span>
+                }
+              </p>
+              <p class="text-sm text-muted">
+                Trusted until
+                <time [attr.datetime]="device.expiresAt">{{
+                  device.expiresAt | date: 'mediumDate'
+                }}</time>
+                @if (device.network) {
+                  · last seen from {{ device.network }}
+                }
+              </p>
+              <p class="text-xs text-faint">
+                Last used
+                <time [attr.datetime]="device.lastSeenAt">{{
+                  device.lastSeenAt | date: 'medium'
+                }}</time>
+              </p>
+            </div>
+
+            <button
+              type="button"
+              (click)="request({ kind: 'one', device: device })"
+              [disabled]="busy()"
+              [attr.aria-label]="
+                device.current ? 'Forget this device' : 'Forget ' + describe(device)
+              "
+              class="inline-flex flex-none items-center justify-center rounded-2xl border border-line-strong px-4 py-2 text-sm font-semibold text-content transition hover:bg-glass disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Forget
+            </button>
+          </li>
+        } @empty {
+          <li class="text-sm text-muted">
+            No trusted devices. Every sign-in asks for verification.
+          </li>
+        }
+      </ul>
+
+      @if (devices().length > 0) {
+        <div class="flex justify-end border-t border-line pt-4">
+          <button
+            type="button"
+            (click)="request({ kind: 'all' })"
+            [disabled]="busy()"
+            class="inline-flex items-center justify-center rounded-2xl border border-danger/40 px-5 py-3 text-sm font-semibold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Forget all devices
+          </button>
+        </div>
+      }
+    }
+  </div>
+</article>
+
+<!-- Kept mounted so closing it hands focus back to the button that opened it. -->
+<app-confirm-dialog
+  [open]="confirmCopy() !== null"
+  [title]="confirmCopy()?.title ?? ''"
+  [body]="confirmCopy()?.body ?? ''"
+  [impacts]="confirmCopy()?.impacts ?? []"
+  [confirmLabel]="confirmCopy()?.confirmLabel ?? 'Forget device'"
+  cancelLabel="Keep trusting"
+  tone="danger"
+  [busy]="busy()"
+  (resolve)="onConfirmResolved($event)"
+/>
+
+@if (stepUp.open()) {
+  <app-mfa-gate
+    [modalOnly]="true"
+    (verified)="stepUp.verified()"
+    (dismissed)="stepUp.dismissed()"
+  />
+}

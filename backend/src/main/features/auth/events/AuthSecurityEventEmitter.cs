@@ -182,12 +182,5 @@ public sealed class AuthSecurityEventEmitter : IAuthSecurityEventEmitter
     }
 
     private static AuthDeviceClass ClassifyDevice(string userAgent) =>
-        ClientRequestClassifier.ResolveDeviceType(userAgent) switch
-        {
-            "Desktop" => AuthDeviceClass.Desktop,
-            "Mobile" => AuthDeviceClass.Mobile,
-            "Tablet" => AuthDeviceClass.Tablet,
-            "API Client" => AuthDeviceClass.ApiClient,
-            _ => AuthDeviceClass.Unknown,
-        };
+        AuthDeviceClasses.FromDeviceType(ClientRequestClassifier.ResolveDeviceType(userAgent));
 }

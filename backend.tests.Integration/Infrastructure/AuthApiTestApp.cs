@@ -250,7 +250,8 @@ public sealed class AuthApiTestApp : IAsyncDisposable
         int userId,
         string trustedDeviceToken,
         string deviceType = "Desktop",
-        string clientName = "Chrome")
+        string clientName = "Chrome",
+        DateTime? expiresAt = null)
     {
         await using var scope = _factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDatabaseContext>();
@@ -260,7 +261,8 @@ public sealed class AuthApiTestApp : IAsyncDisposable
             DeviceTokenHash = ComputeHash(trustedDeviceToken),
             DeviceType = deviceType,
             ClientName = clientName,
-            IpAddress = "127.0.0.1"
+            IpAddress = "127.0.0.1",
+            ExpiresAt = expiresAt ?? DateTime.UtcNow + Device.TrustLifetime,
         });
         await db.SaveChangesAsync();
     }

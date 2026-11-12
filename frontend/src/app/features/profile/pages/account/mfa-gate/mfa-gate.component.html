@@ -1,6 +1,6 @@
 <!-- Checking whether this session is already MFA-verified -->
 <div
-  *ngIf="checking"
+  *ngIf="checking && !modalOnly"
   class="mx-auto w-full max-w-xl rounded-3xl border border-line bg-glass px-6 py-10 text-center text-sm text-faint backdrop-blur-xl"
 >
   Checking your verification status...
@@ -8,7 +8,7 @@
 
 <!-- Locked state -->
 <div
-  *ngIf="!checking"
+  *ngIf="!checking && !modalOnly"
   class="mx-auto w-full max-w-xl rounded-3xl border border-line bg-glass px-6 py-10 text-center backdrop-blur-xl"
 >
   <div

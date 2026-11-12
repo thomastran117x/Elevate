@@ -156,6 +156,11 @@ public enum AuthSecurityReason
     ProviderBoundToOtherAccount,
     ProviderAlreadyConnected,
     ProviderUnlinked,
+    UserRevokedSession,
+    UserRevokedOtherSessions,
+    UserRevokedAllSessions,
+    UserRevokedTrustedDevice,
+    UserRevokedAllTrustedDevices,
 }
 
 public enum AuthSecurityMethod
@@ -195,6 +200,7 @@ public enum AuthSecurityFlow
     ProviderLink,
     ProviderLinkConfirmation,
     ProviderUnlink,
+    SessionManagement,
 }
 
 public enum AuthThrottleDimension

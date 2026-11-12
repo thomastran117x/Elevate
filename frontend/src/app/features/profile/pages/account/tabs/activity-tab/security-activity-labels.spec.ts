@@ -86,6 +86,31 @@ describe('toSecurityActivityView', () => {
       'Every session was signed out.',
     ],
     [
+      { kind: 'sessions_revoked', reason: 'user_revoked_all_sessions' },
+      'Signed out everywhere',
+      'Every session was signed out from your account settings.',
+    ],
+    [
+      { kind: 'session_removed' },
+      'Signed out a session',
+      'One session was signed out from your account settings.',
+    ],
+    [
+      { kind: 'other_sessions_revoked' },
+      'Signed out other sessions',
+      'Every session except the one in use was signed out from your account settings.',
+    ],
+    [
+      { kind: 'trusted_device_removed' },
+      'Trusted device forgotten',
+      'That device will be asked to verify the next time it signs in.',
+    ],
+    [
+      { kind: 'trusted_devices_removed' },
+      'Trusted devices forgotten',
+      'Every device will be asked to verify the next time it signs in.',
+    ],
+    [
       { kind: 'session_ended_for_security' },
       'Session ended for security',
       'A session no longer matched the device or account it was issued to, so it was ended.',

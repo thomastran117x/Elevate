@@ -1,3 +1,4 @@
+import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { Subject, of, throwError } from 'rxjs';
@@ -42,6 +43,27 @@ function started(overrides: Partial<SessionMfaStartResponse> = {}): SessionMfaSt
 }
 
 const gated = () => new ApiClientClientError('Verify first', 401, 'MFA_REQUIRED');
+
+/** An OnPush host, like a Devices tab card, that only re-renders when marked. */
+@Component({
+  selector: 'app-on-push-host',
+  standalone: true,
+  imports: [MfaGateComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: '<app-mfa-gate [modalOnly]="true" />',
+})
+class OnPushHostComponent {}
+
+/**
+ * The fixture's own view is always refreshed, whatever its strategy, so the OnPush host has to
+ * sit below it, as the cards sit below the Devices tab.
+ */
+@Component({
+  standalone: true,
+  imports: [OnPushHostComponent],
+  template: '<app-on-push-host />',
+})
+class PageComponent {}
 
 describe('MfaGateComponent', () => {
   let fixture: ComponentFixture<MfaGateComponent>;
@@ -461,11 +483,18 @@ describe('MfaGateComponent', () => {
     }
 
     it('stays closed when locked unless asked to prompt', async () => {
+      const dismissed = jasmine.createSpy('dismissed');
+      component.dismissed.subscribe(dismissed);
       fixture.detectChanges();
       await flushPromises();
 
       expect(component.modalOpen).toBeFalse();
       expect(auth.getSessionMfaOptions).not.toHaveBeenCalled();
+
+      // Only a modal-only gate reports closing; the locked panel stays to be retried.
+      component.openModal();
+      component.closeModal();
+      expect(dismissed).not.toHaveBeenCalled();
     });
 
     it('opens the modal as soon as it locks when autoOpen is set', async () => {
@@ -522,6 +551,77 @@ describe('MfaGateComponent', () => {
 
       expect(verified).toHaveBeenCalledTimes(1);
       expect(router.navigateByUrl).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('modal-only gate', () => {
+    let dismissed: jasmine.Spy;
+
+    beforeEach(() => {
+      component.modalOnly = true;
+      dismissed = jasmine.createSpy('dismissed');
+      component.dismissed.subscribe(dismissed);
+      auth.getSessionMfaStatus.and.returnValue(throwError(gated));
+    });
+
+    afterEach(() => sessionStorage.clear());
+
+    function el(): HTMLElement {
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    it('opens the modal straight away and never shows the locked panel', async () => {
+      fixture.detectChanges();
+      expect(el().textContent).not.toContain('Checking your verification status');
+      await flushPromises();
+      fixture.detectChanges();
+
+      expect(component.modalOpen).toBeTrue();
+      expect(el().textContent).not.toContain('Verification required');
+      expect(el().querySelector('[role="dialog"]')).not.toBeNull();
+    });
+
+    it('reports a dismissal so the host can drop the action', async () => {
+      fixture.detectChanges();
+      await flushPromises();
+
+      component.closeModal();
+
+      expect(dismissed).toHaveBeenCalledTimes(1);
+      expect(verified).not.toHaveBeenCalled();
+    });
+
+    it('verifies without asking when the proof is already fresh', () => {
+      auth.getSessionMfaStatus.and.returnValue(of(undefined as void));
+
+      fixture.detectChanges();
+
+      expect(verified).toHaveBeenCalledTimes(1);
+      expect(component.modalOpen).toBeFalse();
+    });
+
+    it('renders its modal inside an OnPush host once the status check settles', async () => {
+      auth.getSessionMfaStatus.and.returnValue(throwError(gated));
+      const host = TestBed.createComponent(PageComponent);
+
+      host.detectChanges();
+      await flushPromises();
+      host.detectChanges();
+
+      const rendered = host.nativeElement as HTMLElement;
+      expect(rendered.querySelector('[role="dialog"]')).not.toBeNull();
+      expect(rendered.textContent).toContain('Verify your identity');
+    });
+
+    it('shows a failed status check in the modal', async () => {
+      auth.getSessionMfaStatus.and.returnValue(throwError(() => new Error('Network down')));
+
+      fixture.detectChanges();
+      await flushPromises();
+      fixture.detectChanges();
+
+      expect(component.modalOpen).toBeTrue();
+      expect(component.error).toBe('Network down');
     });
   });
 

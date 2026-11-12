@@ -24,6 +24,13 @@ export const ACCOUNT_ROUTES: Routes = [
       import('./tabs/activity-tab/activity-tab.component').then((m) => m.ActivityTabComponent),
   },
   {
+    path: 'devices',
+    // Sessions and trusted devices are served by auth endpoints, like the activity tab's.
+    canMatch: [featureCanMatch(FEATURE_KEYS.auth)],
+    loadComponent: () =>
+      import('./tabs/devices-tab/devices-tab.component').then((m) => m.DevicesTabComponent),
+  },
+  {
     path: 'password',
     loadComponent: () =>
       import('./tabs/password-tab/password-tab.component').then((m) => m.PasswordTabComponent),

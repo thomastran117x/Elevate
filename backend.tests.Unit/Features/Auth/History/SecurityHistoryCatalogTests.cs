@@ -60,6 +60,11 @@ public class SecurityHistoryCatalogTests
         { Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.TransportMismatch), AccountSecurityEventKind.SessionEndedForSecurity },
         { Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.UserMismatch), AccountSecurityEventKind.SessionEndedForSecurity },
         { Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.AuthVersionMismatch), AccountSecurityEventKind.SessionEndedForSecurity },
+        { Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.UserRevokedSession), AccountSecurityEventKind.SessionRemoved },
+        { Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.UserRevokedOtherSessions), AccountSecurityEventKind.OtherSessionsRevoked },
+        { Event(AuthSecurityEvents.SessionRevoked, reason: AuthSecurityReason.UserRevokedAllSessions), AccountSecurityEventKind.SessionsRevoked },
+        { Event(AuthSecurityEvents.TrustedDeviceRevoked, reason: AuthSecurityReason.UserRevokedTrustedDevice), AccountSecurityEventKind.TrustedDeviceRemoved },
+        { Event(AuthSecurityEvents.TrustedDeviceRevoked, reason: AuthSecurityReason.UserRevokedAllTrustedDevices), AccountSecurityEventKind.TrustedDevicesRemoved },
     };
 
     [Theory]
@@ -88,6 +93,7 @@ public class SecurityHistoryCatalogTests
         Event(AuthSecurityEvents.SignInChallenged, reason: AuthSecurityReason.LimitExceeded),
         Event(AuthSecurityEvents.FactorChanged, factor: AuthSecurityFactor.Sms, change: AuthFactorChange.Changed),
         Event(AuthSecurityEvents.FactorChanged),
+        Event(AuthSecurityEvents.TrustedDeviceRevoked, reason: AuthSecurityReason.None),
     };
 
     [Theory]

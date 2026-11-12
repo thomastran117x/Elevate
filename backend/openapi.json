@@ -18922,6 +18922,346 @@
         "x-authorization": "anonymous"
       }
     },
+    "/api/auth/sessions": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "List the current user's sessions",
+        "description": "Returns the caller's live sessions, most recently used first, with the one making the request marked `current`. Each carries its transport, coarse client and device classes, a masked network prefix, and its created, last-seen, and expiry times, never token material or a full address.",
+        "operationId": "AuthSessions_List_get",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfAuthSessionsResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfAuthSessionsResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfAuthSessionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      },
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign out every session",
+        "description": "Revokes every session of the caller, the current one included, and clears its browser cookies. Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
+        "operationId": "AuthSessions_RevokeAll_delete",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfSessionRevocationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfSessionRevocationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfSessionRevocationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      }
+    },
+    "/api/auth/sessions/others": {
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign out every other session",
+        "description": "Revokes every session of the caller except the one making the request, which keeps its step-up proof. Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
+        "operationId": "AuthSessions_RevokeOthers_delete",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfSessionRevocationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfSessionRevocationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfSessionRevocationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      }
+    },
+    "/api/auth/sessions/{sessionId}": {
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign out one session",
+        "description": "Revokes one of the caller's live sessions; its refresh and access tokens stop working at once. Revoking the current session also clears its browser cookies. Returns 404 for an id that is not one of the caller's live sessions. Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
+        "operationId": "AuthSessions_Revoke_delete",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/String"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfSessionRevocationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfSessionRevocationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfSessionRevocationResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      }
+    },
     "/api/auth/providers": {
       "get": {
         "tags": [
@@ -21748,6 +22088,268 @@
         ],
         "x-authorization": "authenticated"
       }
+    },
+    "/api/auth/devices": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "List the current user's trusted devices",
+        "description": "Returns the devices that skip sign-in verification until their trust expires, 90 days after the verification that granted it, with the requesting device marked `current`. Never returns the device token, its hash, or a full address.",
+        "operationId": "AuthTrustedDevices_List_get",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfTrustedDevicesResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfTrustedDevicesResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfTrustedDevicesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      },
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Forget every trusted device",
+        "description": "Removes every trusted device of the caller and clears the current device's cookie. Signed-in sessions are not ended. Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
+        "operationId": "AuthTrustedDevices_RevokeAll_delete",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfTrustedDeviceRevocationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfTrustedDeviceRevocationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfTrustedDeviceRevocationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      }
+    },
+    "/api/auth/devices/{deviceId}": {
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Forget a trusted device",
+        "description": "Removes one of the caller's trusted devices, so its next sign-in asks for verification again. Forgetting the current device also clears its cookie. Signed-in sessions are not ended. Returns 404 for an id that is not one of the caller's devices. Requires an MFA step-up verified on this session within the last 10 minutes; otherwise returns 403 with error code MFA_REQUIRED.",
+        "operationId": "AuthTrustedDevices_Revoke_delete",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfTrustedDeviceRevocationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfTrustedDeviceRevocationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfTrustedDeviceRevocationResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, validation failure, or CSRF failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required or the access token is invalid/expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated user does not have permission to perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOfObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [ ]
+          }
+        ],
+        "x-authorization": "authenticated"
+      }
     }
   },
   "components": {
@@ -21902,6 +22504,48 @@
               {
                 "description": "Endpoint-specific response payload.",
                 "$ref": "#/components/schemas/AuthenticatedSessionResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
+      "ApiResponseOfAuthSessionsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/AuthSessionsResponse"
               }
             ],
             "description": "Endpoint-specific response payload. `null` on error responses."
@@ -25781,6 +26425,48 @@
         },
         "description": "Standard JSON envelope returned by all API endpoints."
       },
+      "ApiResponseOfSessionRevocationResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/SessionRevocationResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
       "ApiResponseOfStartLoginStepUpResponse": {
         "type": "object",
         "properties": {
@@ -25842,6 +26528,90 @@
               {
                 "description": "Endpoint-specific response payload.",
                 "$ref": "#/components/schemas/TotpEnrollmentStartResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
+      "ApiResponseOfTrustedDeviceRevocationResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/TrustedDeviceRevocationResponse"
+              }
+            ],
+            "description": "Endpoint-specific response payload. `null` on error responses."
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Structured error details when the request fails.",
+                "$ref": "#/components/schemas/ApiError"
+              }
+            ],
+            "description": "Structured error details. Present only when `success` is `false`."
+          },
+          "meta": {
+            "description": "Optional metadata such as pagination or response source details.",
+            "$ref": "#/components/schemas/Object"
+          }
+        },
+        "description": "Standard JSON envelope returned by all API endpoints."
+      },
+      "ApiResponseOfTrustedDevicesResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "description": "Indicates whether the request succeeded.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "message": {
+            "description": "Human-readable message summarizing the outcome.",
+            "$ref": "#/components/schemas/String"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Endpoint-specific response payload.",
+                "$ref": "#/components/schemas/TrustedDevicesResponse"
               }
             ],
             "description": "Endpoint-specific response payload. `null` on error responses."
@@ -26174,6 +26944,74 @@
             ]
           }
         }
+      },
+      "AuthSessionResponse": {
+        "required": [
+          "id",
+          "transport",
+          "client",
+          "deviceClass"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The session id, which revocation takes.",
+            "$ref": "#/components/schemas/String"
+          },
+          "current": {
+            "description": "The session making this request.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "transport": {
+            "description": "`browser` or `api`.",
+            "$ref": "#/components/schemas/String"
+          },
+          "client": {
+            "description": "The client family, e.g. `chrome`, or `unknown`.",
+            "$ref": "#/components/schemas/String"
+          },
+          "deviceClass": {
+            "description": "The device class, e.g. `desktop`, or `unknown`.",
+            "$ref": "#/components/schemas/String"
+          },
+          "network": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The last source network prefix, e.g. `203.0.113.0/24`.",
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          },
+          "rememberMe": {
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "lastSeenAt": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "expiresAt": {
+            "description": "When the session ends unless it is used again.",
+            "$ref": "#/components/schemas/DateTime"
+          }
+        },
+        "description": "One live session. Classification fields are snake_case names from closed sets; token\r\nmaterial and the raw source address are never included."
+      },
+      "AuthSessionsResponse": {
+        "required": [
+          "sessions"
+        ],
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "$ref": "#/components/schemas/ListOfAuthSessionResponse"
+          }
+        },
+        "description": "The caller's signed-in sessions."
       },
       "BatchCreateEventItem": {
         "required": [
@@ -31153,6 +31991,12 @@
         },
         "description": "Optional attendee details captured at join time and carried onto the registration\r\nwhen the entry is promoted, so a promoted user does not have to re-enter them."
       },
+      "ListOfAuthSessionResponse": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AuthSessionResponse"
+        }
+      },
       "ListOfBatchCreateEventItem": {
         "type": "array",
         "items": {
@@ -31253,6 +32097,12 @@
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/TopEventEntry"
+        }
+      },
+      "ListOfTrustedDeviceResponse": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/TrustedDeviceResponse"
         }
       },
       "LoginAuthenticationResponse": {
@@ -33280,6 +34130,19 @@
           }
         }
       },
+      "SessionRevocationResponse": {
+        "type": "object",
+        "properties": {
+          "revokedCount": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "currentSessionRevoked": {
+            "description": "The session making the request was among those revoked: its tokens no longer work, and\r\nits browser cookies were cleared.",
+            "$ref": "#/components/schemas/Boolean"
+          }
+        },
+        "description": "The outcome of a session revocation."
+      },
       "SignUpRequest": {
         "required": [
           "username",
@@ -33529,6 +34392,77 @@
             "$ref": "#/components/schemas/Boolean"
           }
         }
+      },
+      "TrustedDeviceResponse": {
+        "required": [
+          "client",
+          "deviceClass"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "current": {
+            "description": "The device making this request presented this device's token.",
+            "$ref": "#/components/schemas/Boolean"
+          },
+          "client": {
+            "description": "The client family, e.g. `chrome`, or `unknown`.",
+            "$ref": "#/components/schemas/String"
+          },
+          "deviceClass": {
+            "description": "The device class, e.g. `desktop`, or `unknown`.",
+            "$ref": "#/components/schemas/String"
+          },
+          "network": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The last source network prefix, e.g. `203.0.113.0/24`.",
+                "$ref": "#/components/schemas/String"
+              }
+            ]
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "lastSeenAt": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "expiresAt": {
+            "description": "When the trust ends and sign-in asks for verification again.",
+            "$ref": "#/components/schemas/DateTime"
+          }
+        },
+        "description": "One device that skips sign-in verification until DateTime TrustedDeviceResponse.ExpiresAt. The device token,\r\nits hash, and the raw source address are never included."
+      },
+      "TrustedDeviceRevocationResponse": {
+        "type": "object",
+        "properties": {
+          "revokedCount": {
+            "$ref": "#/components/schemas/Int32"
+          },
+          "currentDeviceRevoked": {
+            "description": "The device making the request was among those forgotten, and its cookie was cleared.",
+            "$ref": "#/components/schemas/Boolean"
+          }
+        },
+        "description": "The outcome of forgetting trusted devices."
+      },
+      "TrustedDevicesResponse": {
+        "required": [
+          "devices"
+        ],
+        "type": "object",
+        "properties": {
+          "devices": {
+            "$ref": "#/components/schemas/ListOfTrustedDeviceResponse"
+          }
+        },
+        "description": "The caller's trusted devices."
       },
       "UpdateEventImageRequest": {
         "type": "object",

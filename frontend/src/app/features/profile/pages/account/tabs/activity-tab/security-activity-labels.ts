@@ -38,9 +38,11 @@ const REVOCATION_REASONS: Record<string, string> = {
   password_changed: 'after your password was changed',
   password_reset: 'after your password was reset',
   email_changed: 'after your email address was changed',
+  user_revoked_all_sessions: 'from your account settings',
 };
 
-const CLIENT_LABELS: Record<string, string> = {
+/** Labels for the closed client families the API reports, shared with the Devices tab. */
+export const CLIENT_LABELS: Record<string, string> = {
   chrome: 'Chrome',
   edge: 'Edge',
   firefox: 'Firefox',
@@ -50,7 +52,8 @@ const CLIENT_LABELS: Record<string, string> = {
   other: 'Other app',
 };
 
-const DEVICE_LABELS: Record<string, string> = {
+/** Labels for the closed device classes the API reports, shared with the Devices tab. */
+export const DEVICE_LABELS: Record<string, string> = {
   desktop: 'Desktop',
   mobile: 'Phone',
   tablet: 'Tablet',
@@ -127,6 +130,26 @@ function describe(entry: AccountSecurityEvent): { title: string; detail: string 
           entry.reason && REVOCATION_REASONS[entry.reason]
             ? `Every session was signed out ${REVOCATION_REASONS[entry.reason]}.`
             : 'Every session was signed out.',
+      };
+    case 'session_removed':
+      return {
+        title: 'Signed out a session',
+        detail: 'One session was signed out from your account settings.',
+      };
+    case 'other_sessions_revoked':
+      return {
+        title: 'Signed out other sessions',
+        detail: 'Every session except the one in use was signed out from your account settings.',
+      };
+    case 'trusted_device_removed':
+      return {
+        title: 'Trusted device forgotten',
+        detail: 'That device will be asked to verify the next time it signs in.',
+      };
+    case 'trusted_devices_removed':
+      return {
+        title: 'Trusted devices forgotten',
+        detail: 'Every device will be asked to verify the next time it signs in.',
       };
     case 'session_ended_for_security':
       return {

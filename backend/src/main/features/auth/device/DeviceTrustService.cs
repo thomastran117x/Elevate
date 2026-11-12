@@ -1,3 +1,4 @@
+using backend.main.features.auth.events;
 using backend.main.shared.requests;
 using backend.main.shared.utilities;
 using backend.main.utilities;
@@ -6,20 +7,25 @@ namespace backend.main.features.auth.device
 {
     public sealed class DeviceTrustService : IDeviceTrustService
     {
-        private static readonly TimeSpan TrustedDeviceLifetime = TimeSpan.FromDays(90);
         private readonly IDeviceRepository _deviceRepository;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ClientRequestInfo _requestInfo;
+        private readonly TimeProvider _timeProvider;
+        private readonly IAuthSecurityEventEmitter _securityEvents;
 
         public DeviceTrustService(
             IDeviceRepository deviceRepository,
             IHttpContextAccessor httpContextAccessor,
-            ClientRequestInfo requestInfo
+            ClientRequestInfo requestInfo,
+            TimeProvider? timeProvider = null,
+            IAuthSecurityEventEmitter? securityEvents = null
         )
         {
             _deviceRepository = deviceRepository;
             _httpContextAccessor = httpContextAccessor;
             _requestInfo = requestInfo;
+            _timeProvider = timeProvider ?? TimeProvider.System;
+            _securityEvents = securityEvents ?? NullAuthSecurityEventEmitter.Instance;
         }
 
         public async Task<bool> IsTrustedAsync(int userId, ClientRequestInfo requestInfo)
@@ -33,8 +39,21 @@ namespace backend.main.features.auth.device
                 return false;
 
             var device = await _deviceRepository.GetDeviceAsync(userId, ComputeDeviceTokenHash(trustedDeviceToken));
-            if (device == null)
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            if (device == null || device.ExpiresAt <= now)
             {
+                // The expiry is checked here, not left to the cookie, which the client controls. A
+                // stale cookie is cleared and its row removed, so verification is asked for again.
+                if (device != null && await _deviceRepository.DeleteAsync(userId, device.Id))
+                {
+                    _securityEvents.Emit(new AuthSecurityEvent
+                    {
+                        Definition = AuthSecurityEvents.TrustedDeviceExpired,
+                        Outcome = AuthSecurityOutcome.Succeeded,
+                        UserId = userId,
+                    });
+                }
+
                 if (httpContext != null)
                     HttpUtility.ClearTrustedDeviceToken(httpContext.Response, requestInfo);
 
@@ -46,13 +65,15 @@ namespace backend.main.features.auth.device
             device.ClientName = requestInfo.ClientName;
             await _deviceRepository.UpdateLastSeenAsync(device);
 
+            // Sent again so a client that lost it gets it back, but only for the time the trust has
+            // left: signing in on a trusted device does not extend it.
             if (httpContext != null)
             {
                 HttpUtility.SetTrustedDeviceToken(
                     httpContext.Response,
                     requestInfo,
                     trustedDeviceToken,
-                    TrustedDeviceLifetime
+                    device.ExpiresAt - now
                 );
             }
 
@@ -77,7 +98,8 @@ namespace backend.main.features.auth.device
                     DeviceTokenHash = ComputeDeviceTokenHash(trustedDeviceId),
                     DeviceType = deviceType,
                     ClientName = clientName,
-                    IpAddress = ipAddress
+                    IpAddress = ipAddress,
+                    ExpiresAt = _timeProvider.GetUtcNow().UtcDateTime + Device.TrustLifetime,
                 });
             if (!trusted)
                 return false;
@@ -89,7 +111,7 @@ namespace backend.main.features.auth.device
                     httpContext.Response,
                     _requestInfo,
                     trustedDeviceId,
-                    TrustedDeviceLifetime
+                    Device.TrustLifetime
                 );
             }
 

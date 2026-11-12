@@ -5,6 +5,7 @@ using backend.main.application.bootstrap;
 using backend.main.application.environment;
 using backend.main.features.auth;
 using backend.main.features.auth.events;
+using backend.main.features.auth.sessions;
 using backend.main.features.auth.token;
 using backend.main.shared.exceptions.app;
 using backend.main.shared.other;
@@ -94,18 +95,30 @@ namespace backend.main.application.security
                         {
                             string? idClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                             string? authVersionClaim = context.Principal?.FindFirst(TokenService.AuthVersionClaimType)?.Value;
+                            string? sessionId = context.Principal?.FindFirst(TokenService.SessionIdClaimType)?.Value;
 
                             if (!int.TryParse(idClaim, out var userId)
-                                || !int.TryParse(authVersionClaim, out var authVersion))
+                                || !int.TryParse(authVersionClaim, out var authVersion)
+                                || string.IsNullOrWhiteSpace(sessionId))
                             {
                                 context.Fail("Invalid token payload.");
                                 return;
                             }
 
-                            var userRepository = context.HttpContext.RequestServices.GetRequiredService<IAuthUserRepository>();
-                            var user = await userRepository.GetUserAsync(userId);
+                            // The session registry, not Redis, decides whether the token's session
+                            // is alive, so a revoked session's access token stops working at once
+                            // and keeps being refused through a cache outage. A session from
+                            // before the registry has no row until its next refresh records it.
+                            var services = context.HttpContext.RequestServices;
+                            var now = services.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime;
+                            var state = await services
+                                .GetRequiredService<IAuthSessionRepository>()
+                                .GetAccessTokenStateAsync(userId, sessionId, now);
 
-                            if (user == null || user.IsDisabled || user.AuthVersion != authVersion)
+                            if (state == null
+                                || state.IsDisabled
+                                || state.AuthVersion != authVersion
+                                || !state.SessionActive)
                             {
                                 context.Fail("This access token is no longer valid.");
                             }

@@ -57,7 +57,9 @@ namespace backend.main.features.auth.device
                     }
                     else
                     {
+                        // A completed verification renews the trust; only passive use does not.
                         existing.LastSeenAt = DateTime.UtcNow;
+                        existing.ExpiresAt = device.ExpiresAt;
                         existing.IpAddress = device.IpAddress;
                         existing.DeviceType = device.DeviceType;
                         existing.ClientName = device.ClientName;
@@ -74,6 +76,47 @@ namespace backend.main.features.auth.device
                     throw;
                 }
             });
+        }
+
+        public async Task<List<Device>> ListActiveAsync(int userId, DateTime now)
+        {
+            return await _context.Devices
+                .AsNoTracking()
+                .Where(d => d.UserId == userId && d.ExpiresAt > now)
+                .OrderByDescending(d => d.LastSeenAt)
+                .ThenBy(d => d.Id)
+                .ToListAsync();
+        }
+
+        public async Task<bool> DeleteAsync(int userId, int deviceId)
+        {
+            return await _context.Devices
+                .Where(d => d.Id == deviceId && d.UserId == userId)
+                .ExecuteDeleteAsync() > 0;
+        }
+
+        public async Task<int> DeleteAllAsync(int userId)
+        {
+            return await _context.Devices
+                .Where(d => d.UserId == userId)
+                .ExecuteDeleteAsync();
+        }
+
+        public async Task<int> DeleteExpiredAsync(DateTime now, int batchSize)
+        {
+            var ids = await _context.Devices
+                .AsNoTracking()
+                .Where(d => d.ExpiresAt <= now)
+                .OrderBy(d => d.ExpiresAt)
+                .Take(batchSize)
+                .Select(d => d.Id)
+                .ToListAsync();
+            if (ids.Count == 0)
+                return 0;
+
+            return await _context.Devices
+                .Where(d => ids.Contains(d.Id))
+                .ExecuteDeleteAsync();
         }
 
         public async Task UpdateLastSeenAsync(Device device)

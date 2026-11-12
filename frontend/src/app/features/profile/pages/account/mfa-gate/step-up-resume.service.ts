@@ -10,6 +10,7 @@ const StepUpResumeStorageKey = 'step_up_resume_path';
 export const STEP_UP_RESUME_PATHS: readonly string[] = [
   '/account/profile',
   '/account/security',
+  '/account/devices',
   '/account/password',
   '/account/danger',
 ];
