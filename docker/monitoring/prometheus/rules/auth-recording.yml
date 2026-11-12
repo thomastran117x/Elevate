@@ -52,6 +52,11 @@ groups:
           )
           / auth:operations:rate10m
 
+      # Which environments' APIs are exporting right now. AuthTelemetryAbsent compares it with
+      # the environments seen over the last 7 days, so each silent environment alerts on its own.
+      - record: auth:api_exporting
+        expr: group by (deployment_environment_name) (target_info{job="eventxperience-api"})
+
   - name: auth-security-baselines
     interval: 1h
     rules:

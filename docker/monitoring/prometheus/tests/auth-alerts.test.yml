@@ -383,7 +383,7 @@ tests:
         exp_samples:
           - labels: 'ALERTS{alertname="AuthTelemetryAbsent",alertstate="firing",job="eventxperience-api",severity="ticket",owner="auth-oncall",mode="observe"}'
             value: 1
-  # an API that stopped exporting fires the telemetry alert
+  # an API that stopped exporting fires the telemetry alert for its environment
   - interval: 1m
     input_series:
       - series: 'target_info{job="eventxperience-api",deployment_environment_name="test"}'
@@ -395,7 +395,23 @@ tests:
       - expr: 'ALERTS{alertname="AuthTelemetryAbsent",alertstate="firing"}'
         eval_time: 40m
         exp_samples:
-          - labels: 'ALERTS{alertname="AuthTelemetryAbsent",alertstate="firing",job="eventxperience-api",severity="ticket",owner="auth-oncall",mode="observe"}'
+          - labels: 'ALERTS{alertname="AuthTelemetryAbsent",alertstate="firing",severity="ticket",owner="auth-oncall",mode="observe",deployment_environment_name="test"}'
+            value: 1
+  # one silent environment alerts even while another keeps exporting
+  - interval: 1m
+    input_series:
+      - series: 'target_info{job="eventxperience-api",deployment_environment_name="production"}'
+        values: '1+0x10 _x40'
+      - series: 'target_info{job="eventxperience-api",deployment_environment_name="staging"}'
+        values: '1+0x50'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="AuthTelemetryAbsent",alertstate="firing"}'
+        eval_time: 20m
+        exp_samples: []
+      - expr: 'ALERTS{alertname="AuthTelemetryAbsent",alertstate="firing"}'
+        eval_time: 45m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AuthTelemetryAbsent",alertstate="firing",severity="ticket",owner="auth-oncall",mode="observe",deployment_environment_name="production"}'
             value: 1
   # AuthCredentialStuffing renders its labels and annotations
   - interval: 1m

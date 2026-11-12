@@ -230,16 +230,26 @@ groups:
           dashboard_uid: auth-security
           threshold_rationale: "Each drop or failure is a missing owner-visible entry, so any sustained occurrence matters; the 10-minute hold rides out the outbox retry backoff after a short database blip."
 
+      # Per environment: an environment that exported within the last 7 days but not in the last
+      # ~15 minutes alerts with its own label, whatever the other environments do. The second
+      # branch covers an API that has never exported at all (no environment to name).
       - alert: AuthTelemetryAbsent
-        expr: absent_over_time(target_info{job="eventxperience-api"}[15m])
+        expr: |
+          (
+            group by (deployment_environment_name) (last_over_time(auth:api_exporting[7d]))
+            unless on (deployment_environment_name)
+            group by (deployment_environment_name) (last_over_time(auth:api_exporting[10m]))
+          )
+          or
+          absent_over_time(target_info{job="eventxperience-api"}[7d])
         for: 0m
         labels:
           severity: ticket
           owner: auth-oncall
           mode: observe
         annotations:
-          summary: "The API has stopped exporting metrics"
-          description: "No OTLP export from eventxperience-api has arrived for 15 minutes, so every other auth alert is blind."
+          summary: "The API has stopped exporting metrics in {{ with $labels.deployment_environment_name }}{{ . }}{{ else }}every environment{{ end }}"
+          description: "No OTLP export from eventxperience-api has arrived for about 15 minutes, so every other auth alert for that environment is blind. A deliberately retired environment keeps alerting for 7 days; silence it in Alertmanager."
           runbook_url: "https://github.com/thomastran117x/Elevate/blob/main/docs/operations/runbooks/auth-service-health.md#authtelemetryabsent"
           dashboard_uid: auth-security
-          threshold_rationale: "The exporter pushes every 15 seconds, so 15 minutes of silence is a stopped API, a broken exporter, or a misconfigured endpoint, not a quiet period."
+          threshold_rationale: "The exporter pushes every 15 seconds, so about 15 minutes of silence from an environment that exported this week is a stopped API, a broken exporter, or a misconfigured endpoint, not a quiet period; checked per environment so one healthy environment cannot hide another."

@@ -77,7 +77,7 @@ Record the window, the dropped count, and the cause. Users whose history has a g
 
 ## AuthTelemetryAbsent
 
-**Meaning:** Prometheus has received no OTLP export from `eventxperience-api` for 15 minutes. Every other auth alert is blind.
+**Meaning:** Prometheus has received no OTLP export from `eventxperience-api` in the environment named by `deployment_environment_name` for about 15 minutes, although that environment exported within the last 7 days. Every other auth alert for that environment is blind. Without an environment label, no API has exported at all in the last 7 days.
 
 ### Triage
 
@@ -87,7 +87,7 @@ Record the window, the dropped count, and the cause. Users whose history has a g
 
 ### Contain and close
 
-Restore the API or the export configuration. Record the blind window. Then review the event log for that window by hand, using the triage commands in the other runbooks, because no alert could have fired.
+Restore the API or the export configuration. If the environment was retired on purpose, silence the alert in Alertmanager for 7 days instead. Record the blind window. Then review the event log for that window by hand, using the triage commands in the other runbooks, because no alert could have fired.
 
 ## Rehearse
 

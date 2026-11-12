@@ -103,7 +103,7 @@ Rate alerts compare the current value with **max(3 × baseline, floor)**:
 Four alerts deliberately use fixed thresholds instead, each justified in its rationale:
 - `AuthFaultRate` uses a 2% error budget, because faults are service errors whatever the traffic;
 - `AuthSessionRevocationFaulted`, `AuthEventPipelineBroken`, and `AuthSecurityHistoryNotRecording` fire on any sustained occurrence, because each one is a failed fail-closed control or lost audit data, never an expected refusal;
-- `AuthTelemetryAbsent` fires after 15 minutes without export.
+- `AuthTelemetryAbsent` fires for each environment that exported within the last 7 days but has been silent for about 15 minutes, so one healthy environment cannot hide another. It also fires, with no environment label, when the API has never exported. A deliberately retired environment keeps alerting for 7 days; silence it in Alertmanager.
 
 ## Rollout
 

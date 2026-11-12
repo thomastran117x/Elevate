@@ -54,6 +54,9 @@ public partial class MonitoringDefinitionsTests
         "factor", "operation", "sink", "message_type", "le", "alertname", "alertstate", "mode", "severity", "owner",
     ];
 
+    // Go template actions in annotations, which are not labels.
+    private static readonly HashSet<string> TemplateKeywords = ["else", "end", "with", "if", "range"];
+
     private static readonly Lazy<IReadOnlyList<AlertRule>> Alerts = new(LoadAlerts);
     private static readonly Lazy<JsonDocument> Dashboard = new(() =>
         JsonDocument.Parse(File.ReadAllText(MonitoringPath("grafana", "dashboards", "auth-security.json"))));
@@ -182,7 +185,10 @@ public partial class MonitoringDefinitionsTests
         foreach (var template in DashboardLegends().Concat(Alerts.Value.SelectMany(alert => alert.Annotations.Values)))
         {
             foreach (Match label in TemplateLabel().Matches(template))
-                used.Add(label.Groups["label"].Value);
+            {
+                if (!TemplateKeywords.Contains(label.Groups["label"].Value))
+                    used.Add(label.Groups["label"].Value);
+            }
         }
 
         used.Where(label => label != "__name__").Distinct().Should().BeSubsetOf(
